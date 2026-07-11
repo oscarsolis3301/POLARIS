@@ -721,7 +721,9 @@ cmd_metrics() { # cycle time + throughput + kickbacks from EVENTS.ndjson — pur
 
 cmd_dash() { # launch the read-only live board (single-file stdlib server)
   local PY=""
-  command -v python3 >/dev/null 2>&1 && PY=python3 || { command -v python >/dev/null 2>&1 && PY=python; }
+  # `-c pass` proves a REAL interpreter — `command -v` alone is fooled by the
+  # Windows Store python3 alias stub, which sits on PATH but only prints an ad.
+  python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
   [ -n "$PY" ] || die "dashboard needs python3 (or python) on PATH — everything else in POLARIS runs without it"
   exec "$PY" "$OPS/dashboard.py" --root "$PRIMARY" "$@"
 }

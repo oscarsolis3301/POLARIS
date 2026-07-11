@@ -18,7 +18,9 @@ IN="$(cat)"
 # (old_string is existing file text; scanning it would block edits that REMOVE
 # a forbidden pattern). Covers Write.content, Edit.new_string, NotebookEdit.
 # new_source and MultiEdit edits[].new_string today, and survives field renames.
-PY=""; command -v python3 >/dev/null 2>&1 && PY=python3 || { command -v python >/dev/null 2>&1 && PY=python; }
+# `-c pass` proves a REAL interpreter — the Windows Store python3 alias stub
+# passes `command -v` but cannot run code, which would silently fail this guard open.
+PY=""; python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; }
 [ "${POLARIS_GUARD_TEST_NOPY:-}" = "1" ] && PY=""
 if [ -z "$PY" ]; then
   echo "polaris-guard: python not found — write-guard skipped (verify/handoff gate still enforces ownership + rules)" >&2
@@ -62,11 +64,15 @@ norm() { printf '%s' "$1" | tr '\\' '/' | sed -e 's|^\([A-Za-z]\):/|/\L\1/|'; }
 FILE="$(norm "$FILE")"; CWD="$(norm "$CWD")"
 
 # --- repo + repo-relative path ------------------------------------------------
+# Git on Windows prints toplevel/worktree as `C:/...` while FILE/CWD normalize
+# to `/c/...` — norm() BOTH sides or every in-repo path looks "outside the repo".
 TOP="$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)" || exit 0
+TOP="$(norm "$TOP")"
 [ -x "$TOP/ops/polaris" ] || exit 0            # not a POLARIS repo — stand down
 BR="$(git -C "$CWD" rev-parse --abbrev-ref HEAD 2>/dev/null)" || exit 0
 case "$FILE" in /*) ABS="$FILE";; *) ABS="$CWD/$FILE";; esac
 PRIMARY="$(git -C "$CWD" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
+[ -n "$PRIMARY" ] && PRIMARY="$(norm "$PRIMARY")"
 REL=""
 case "$ABS" in
   "$TOP"/*) REL="${ABS#"$TOP"/}";;
