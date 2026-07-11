@@ -1,0 +1,820 @@
+#!/usr/bin/env bash
+# POLARIS v5 — board CLI. Pure bash + git. No other dependencies.
+# Every board mutation goes through this script. Manual fallback: ops/MANUAL.md
+# Bash >= 3.2 (macOS default) compatible: no mapfile, no assoc arrays.
+set -eu
+POLARIS_V=5
+
+# ---------------------------------------------------------------- resolve env
+die() { printf '⛔ %s\n' "$*" >&2; exit 1; }
+say() { printf '✅ %s\n' "$*"; }
+note() { printf '   %s\n' "$*"; }
+
+git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repo"
+
+GCD="$(cd "$(git rev-parse --git-common-dir)" && pwd)"     # shared across all worktrees
+PRIMARY="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"
+[ -n "$PRIMARY" ] || die "cannot resolve primary checkout"
+OPS="$PRIMARY/ops"
+BOARD="$OPS/board"
+LOCKS="$GCD/polaris-locks"
+CONV="$OPS/CONVENTIONS.md"
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+cfg() { # cfg <key> <default>  — reads "key: value" from CONVENTIONS.md, strips " # comment"
+  local v=""
+  [ -f "$CONV" ] && v="$(sed -n "s/^$1:[[:space:]]*//p" "$CONV" | head -1 \
+      | sed -e 's/[[:space:]]#.*$//' | tr -d '\r' | sed -e 's/[[:space:]]*$//')"
+  [ -n "$v" ] && printf '%s' "$v" || printf '%s' "$2"
+}
+BASE="$(cfg base main)"
+CLAIM_MODE="$(cfg claim local-lock)"
+STALE_H="$(cfg stale_hours 4)"
+WHO="${USER:-${USERNAME:-unknown}}@$(hostname 2>/dev/null || echo host)"
+EVENTS="$BOARD/EVENTS.ndjson"
+
+RULES="$OPS/RULES.tsv"
+
+# ------------------------------------------------------------------ telemetry
+jesc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\n\r'; }
+evt() { # evt <ev> <id> [note] [pts] — append one ndjson line. Call INSIDE the board
+  # mutex, BEFORE board_commit, so the line rides the same board commit.
+  # EVENTS.ndjson is append-only and union-merged (.gitattributes) so parallel
+  # machines never conflict on it. Never edit it by hand.
+  # v5: claim/done lines carry "pts" so `metrics` can calibrate per point bucket.
+  local pts="${4:-}"; case "$pts" in ''|*[!0-9.]*) pts="";; esac
+  printf '{"ts":%s,"ev":"%s","id":"%s","who":"%s","note":"%s"%s}\n' \
+    "$(date +%s)" "$(jesc "$1")" "$(jesc "$2")" "$(jesc "$WHO")" "$(jesc "${3:-}")" \
+    "${pts:+,\"pts\":$pts}" >> "$EVENTS"
+  # optional notify hook: CONVENTIONS `notify: <cmd>` — background, output discarded,
+  # failures ignored. It observes the board; it must never be able to stall or fail it.
+  local ncmd; ncmd="$(cfg notify "")"
+  [ -n "$ncmd" ] && ( POLARIS_EV="$1" POLARIS_ID="$2" POLARIS_NOTE="${3:-}" \
+      bash -c "$ncmd" ) >/dev/null 2>&1 &
+  return 0
+}
+rules_lines() { # normalized RULES.tsv: comments/blank/CR stripped
+  [ -f "$RULES" ] || return 0
+  tr -d '\r' < "$RULES" | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' || true
+}
+
+# ------------------------------------------------------- frontmatter parsing
+fm_get() { # fm_get <key> <file> — scalar value; strips trailing " # comment" and \r
+  awk -v k="$1" '
+    /^---[\r]?$/ { fs++; next }
+    fs==1 && index($0, k":")==1 {
+      s=substr($0, length(k)+2)
+      sub(/^[ \t]*/,"",s); sub(/[ \t]#.*$/,"",s); sub(/[ \t\r]*$/,"",s)
+      print s; exit
+    }' "$2"
+}
+fm_list() { # fm_list <key> <file> — items of a "- x" list (or inline scalar); comment/\r stripped
+  awk -v k="$1" '
+    /^---[\r]?$/ { fs++; next }
+    fs!=1 { next }
+    index($0, k":")==1 {
+      on=1; s=substr($0, length(k)+2)
+      sub(/^[ \t]*/,"",s); sub(/[ \t]#.*$/,"",s); sub(/[ \t\r]*$/,"",s)
+      if (s!="" && s!="[]") print s
+      next
+    }
+    on && /^[ \t]*-[ \t]/ {
+      s=$0; sub(/^[ \t]*-[ \t]+/,"",s); sub(/[ \t]#.*$/,"",s); sub(/[ \t\r]*$/,"",s)
+      if (s!="") print s
+      next
+    }
+    on && /^[A-Za-z_]/ { on=0 }' "$2"
+}
+task_file() { # task_file <ID> [column] — path of the task file, searched or scoped
+  local id="$1" col="${2:-}" f
+  if [ -n "$col" ]; then f="$BOARD/$col/$id.md"; [ -f "$f" ] && printf '%s' "$f"; return; fi
+  for col in active ready review blocked backlog done; do
+    f="$BOARD/$col/$id.md"; [ -f "$f" ] && { printf '%s' "$f"; return; }
+  done
+  return 1
+}
+task_col() { task_file "$1" >/dev/null || return 1; dirname "$(task_file "$1")" | xargs basename; }
+
+# --------------------------------------------------- board mutex + commit ops
+MUTEX="$LOCKS/.board-mutex"
+FAIL_LOCK_ID=""
+mutex_off() { rm -rf "$MUTEX" 2>/dev/null || true; }
+on_die() {  # EXIT trap while a claim/board op is in flight
+  mutex_off
+  if [ -n "$FAIL_LOCK_ID" ]; then
+    lock_drop "$FAIL_LOCK_ID"
+    [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$FAIL_LOCK_ID" || true
+  fi
+}
+mutex_on() {
+  mkdir -p "$LOCKS"
+  local i=0
+  until mkdir "$MUTEX" 2>/dev/null; do
+    i=$((i+1))
+    if [ -f "$MUTEX/epoch" ]; then
+      local e age; e="$(cat "$MUTEX/epoch" 2>/dev/null)"; e="${e:-$(date +%s)}"
+      age=$(( $(date +%s) - e ))
+      if [ "$age" -gt 120 ]; then note "stealing stale board mutex (${age}s)"; rm -rf "$MUTEX"; continue; fi
+    fi
+    [ "$i" -gt 150 ] && die "board mutex timeout — is another session stuck? rm -rf '$MUTEX'"
+    sleep 0.2
+  done
+  date +%s > "$MUTEX/epoch"
+  trap on_die EXIT
+}
+has_remote() { git -C "$PRIMARY" remote get-url origin >/dev/null 2>&1; }
+sync_board() { # push BASE with rebase-retry; no-op without remote
+  has_remote || return 0
+  local i
+  for i in 1 2 3 4 5; do
+    git -C "$PRIMARY" push -q origin "$BASE" 2>/dev/null && return 0
+    git -C "$PRIMARY" pull --rebase -q origin "$BASE" 2>/dev/null || true
+  done
+  die "could not push board to origin/$BASE after 5 attempts"
+}
+board_commit() { # board_commit <msg> — stage+commit the entire ops/ domain; index.lock retry.
+  # Primary checkout is board-only by protocol (invariant 6), and we hold the board mutex here,
+  # so "everything under ops/" is exactly this mutation. Never pass vanished mv-sources as pathspecs.
+  local msg="$1" i
+  for i in 1 2 3 4 5 6 7; do
+    if git -C "$PRIMARY" add -A -- "$OPS" 2>/dev/null \
+       && git -C "$PRIMARY" commit -q -m "$msg" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.3
+  done
+  git -C "$PRIMARY" add -A -- "$OPS" && git -C "$PRIMARY" commit -q -m "$msg" \
+    || die "board commit failed: $msg (error above)"
+}
+
+# --------------------------------------------------------------- lock helpers
+lock_take() { # lock_take <ID> — atomic; returns 1 if already taken
+  mkdir -p "$LOCKS"
+  mkdir "$LOCKS/$1" 2>/dev/null || return 1
+  { date +%s; echo "$WHO"; echo "$1"; } > "$LOCKS/$1/meta"
+}
+lock_drop() { rm -rf "${LOCKS:?}/$1" 2>/dev/null || true; }
+lock_age() { # seconds since lock creation; 0 if no meta
+  local e; e="$(sed -n 1p "$LOCKS/$1/meta" 2>/dev/null | tr -d '\r')"; e="${e:-$(date +%s)}"
+  echo $(( $(date +%s) - e ))
+}
+claim_branch_take() { # multi-machine claim: unique commit via plumbing + push guarded by empty lease
+  local id="$1" sha
+  sha="$(git -C "$PRIMARY" commit-tree "$BASE^{tree}" -p "$BASE" -m "polaris claim $id by $WHO")" \
+    || die "commit-tree failed"
+  git -C "$PRIMARY" push -q origin "$sha:refs/heads/claim/$id" \
+    --force-with-lease="refs/heads/claim/$id:" 2>/dev/null
+}
+claim_branch_drop() { git -C "$PRIMARY" push -q origin ":refs/heads/claim/$1" 2>/dev/null || true; }
+
+# ------------------------------------------------------------------ ownership
+owned_match() { # owned_match <changed-path> ; patterns on stdin. exact | dir/ prefix | glob
+  local f="$1" pat
+  while IFS= read -r pat; do
+    [ -z "$pat" ] && continue
+    case "$pat" in
+      */) case "$f" in "$pat"*) return 0;; esac ;;
+      *)  case "$f" in $pat) return 0;; esac ;;   # unquoted: glob; * crosses slashes
+    esac
+  done
+  return 1
+}
+check_ownership() { # check_ownership <taskfile> <ref> — diff BASE...ref ⊆ files_owned
+  # HEAD must resolve in the CALLER'S worktree; named refs resolve in the shared repo.
+  local tf="$1" ref="$2" owned bad="" f list
+  owned="$(fm_list files_owned "$tf")"
+  [ -n "$owned" ] || die "task has empty files_owned — planning bug"
+  if [ "$ref" = "HEAD" ]; then list="$(git diff --name-only "$BASE...HEAD")"
+  else list="$(git -C "$PRIMARY" diff --name-only "$BASE...$ref")"; fi
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    printf '%s\n' "$owned" | owned_match "$f" || bad="$bad$f\n"
+  done <<EOF
+$list
+EOF
+  if [ -n "$bad" ]; then
+    printf '⛔ ownership violation — changed but NOT in files_owned:\n' >&2
+    printf "$bad" | sed 's/^/     /' >&2
+    return 1
+  fi
+  say "ownership clean: diff ⊆ files_owned"
+}
+run_verify_cmds() { # run_verify_cmds <taskfile> — execute verify: list in CWD
+  local tf="$1" c n=0
+  while IFS= read -r c; do
+    [ -z "$c" ] && continue
+    n=$((n+1)); note "verify[$n]: $c"
+    bash -c "$c" || { printf '⛔ verify command failed: %s\n' "$c" >&2; return 1; }
+  done <<EOF
+$(fm_list verify "$tf")
+EOF
+  [ "$n" -eq 0 ] && note "no verify: commands on task (acceptance is manual)" || say "all $n verify commands green"
+}
+
+# --------------------------------------------------------------------- rules
+# ops/RULES.tsv — repo policy as data, one rule per line, TAB-separated:
+#   <scope pattern> <TAB> path|content <TAB> <ERE or -> <TAB> <message>
+# scope uses the SAME semantics as files_owned (exact · dir/ · glob).
+#   path    = the scope itself is forbidden to write — even inside files_owned.
+#   content = added lines under scope must not match the ERE.
+# Enforced three-deep: write-time guard (Claude Code) → verify/handoff (any
+# model) → audit (Integrator). Deny-only by design: on PreToolUse, exit-0
+# stdout is debug-log-only, so an advisory the model can't see must not exist.
+rule_scan_path() { # rule_scan_path <repo-relative-path> — exit 1 + stderr msg on deny
+  local rel="$1" scope kind pat msg
+  while IFS="$(printf '\t')" read -r scope kind pat msg; do
+    [ "$kind" = "path" ] || continue
+    if printf '%s\n' "$scope" | owned_match "$rel"; then
+      printf '⛔ RULES deny: %s — %s\n' "$rel" "${msg:-forbidden path}" >&2
+      return 1
+    fi
+  done <<EOF
+$(rules_lines)
+EOF
+  return 0
+}
+rule_scan_content_file() { # rule_scan_content_file <rel> <file-with-payload>
+  local rel="$1" body="$2" scope kind pat msg
+  [ -s "$body" ] || return 0
+  while IFS="$(printf '\t')" read -r scope kind pat msg; do
+    [ "$kind" = "content" ] && [ -n "$pat" ] && [ "$pat" != "-" ] || continue
+    printf '%s\n' "$scope" | owned_match "$rel" || continue
+    if grep -E -q -e "$pat" "$body" 2>/dev/null; then
+      printf '⛔ RULES deny in %s: /%s/ — %s\n' "$rel" "$pat" "${msg:-forbidden content}" >&2
+      return 1
+    fi
+  done <<EOF
+$(rules_lines)
+EOF
+  return 0
+}
+check_rules() { # check_rules <ref> — every changed path + its ADDED lines vs RULES
+  # HEAD resolves in the caller's worktree; named refs in the shared repo (as check_ownership).
+  [ -f "$RULES" ] || return 0
+  rules_lines | grep -q . || return 0
+  local ref="$1" f bad=0 tmp list; tmp="$(mktemp)"
+  gdiff() { if [ "$ref" = "HEAD" ]; then git "$@"; else git -C "$PRIMARY" "$@"; fi; }
+  list="$(gdiff diff --name-only "$BASE...$ref" 2>/dev/null)"
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    rule_scan_path "$f" || bad=1
+    gdiff diff -U0 "$BASE...$ref" -- "$f" 2>/dev/null \
+      | grep '^+' | grep -v '^+++' | cut -c2- > "$tmp" || : > "$tmp"
+    rule_scan_content_file "$f" "$tmp" || bad=1
+  done <<EOF
+$list
+EOF
+  rm -f "$tmp"
+  [ "$bad" -eq 0 ] && { rules_lines | grep -q . && say "rules clean: $(rules_lines | grep -c .) rule(s) checked"; return 0; }
+  printf '⛔ RULES violation — see lines above. These block even inside files_owned.\n' >&2
+  return 1
+}
+
+# ----------------------------------------------------------- worktree helpers
+wt_path() { printf '%s/.polaris/wt/%s' "$PRIMARY" "$1"; }
+current_task_id() { # infer <ID> from feat/<ID> branch of CWD
+  local b; b="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 1
+  case "$b" in feat/*) printf '%s' "${b#feat/}";; *) return 1;; esac
+}
+set_fm() { # set_fm <key> <value> <file> — replace scalar frontmatter line, portable (no sed -i)
+  local tmp="$3.tmp.$$"
+  awk -v k="$1" -v v="$2" '
+    /^---[\r]?$/ { fs++ }
+    fs==1 && index($0, k":")==1 { print k": "v; next }
+    { print }' "$3" > "$tmp" && mv "$tmp" "$3"
+}
+
+# ================================================================== commands
+cmd_init_board() {
+  local d
+  for d in backlog ready active review done blocked; do
+    mkdir -p "$BOARD/$d"; touch "$BOARD/$d/.gitkeep"
+  done
+  mkdir -p "$OPS/contracts" "$LOCKS"; touch "$OPS/contracts/.gitkeep"
+  grep -q '^\.polaris/$' "$PRIMARY/.gitignore" 2>/dev/null || echo '.polaris/' >> "$PRIMARY/.gitignore"
+  [ -f "$EVENTS" ] || : > "$EVENTS"
+  if [ ! -f "$RULES" ]; then cat > "$RULES" <<'RUL'
+# POLARIS RULES — repo policy as data. TAB-separated: scope<TAB>kind<TAB>pattern<TAB>message
+#   scope   files_owned semantics: exact path · dir/ prefix · glob
+#   kind    path    = scope is forbidden to write, even inside files_owned (danger zones)
+#           content = added lines under scope must not match the ERE pattern (use - for path kind)
+# Enforced at write time (Claude Code guard), at verify/handoff (any model), and at audit.
+# EVOLVE proposes new lines from kickback/Learned evidence; a human approves; you append one line.
+# Examples (delete the leading # to arm):
+#.env	path	-	secrets never enter the repo
+#migrations/	path	-	schema changes are a human decision (stop-and-ask)
+#src/	content	console\.log\(	no stray console.log in src — use the logger
+RUL
+  fi
+  grep -q 'EVENTS\.ndjson merge=union' "$PRIMARY/.gitattributes" 2>/dev/null \
+    || echo 'ops/board/EVENTS.ndjson merge=union' >> "$PRIMARY/.gitattributes"
+  say "board ready at ops/board/ · worktrees in .polaris/wt/ (gitignored) · locks in $LOCKS"
+  note "telemetry: ops/board/EVENTS.ndjson (union-merged) · live board: ops/polaris dash"
+}
+
+cmd_claim() {
+  local id="${1:-}" f
+  if [ -z "$id" ]; then # pick highest wsjf in ready/
+    local best="" bestv="-1" v
+    for f in "$BOARD/ready/"*.md; do
+      [ -e "$f" ] || break
+      v="$(fm_get wsjf "$f")"; case "$v" in ''|*[!0-9.]*) v=0;; esac
+      if awk "BEGIN{exit !($v > $bestv)}"; then bestv="$v"; best="$f"; fi
+    done
+    [ -n "$best" ] || die "ready/ is empty — nothing to claim"
+    id="$(basename "$best" .md)"
+  fi
+  f="$(task_file "$id" ready)" || die "$id is not in ready/ (state: $(task_col "$id" || echo unknown))"
+
+  if [ "$CLAIM_MODE" = "claim-branch" ]; then
+    has_remote || die "claim: claim-branch requires an origin remote"
+    claim_branch_take "$id" || die "taken — $id claimed on another machine; try: polaris claim"
+    lock_take "$id" || true   # local lock too: visibility for status/sweep on this machine
+  else
+    lock_take "$id" || die "taken — $id is locked by another session; try: polaris claim"
+  fi
+  FAIL_LOCK_ID="$id"; trap on_die EXIT
+
+  local pts; pts="$(fm_get points "$BOARD/ready/$id.md")"
+  mutex_on
+  git -C "$PRIMARY" mv "$BOARD/ready/$id.md" "$BOARD/active/$id.md"
+  set_fm owner "$WHO" "$BOARD/active/$id.md"
+  set_fm branch "feat/$id" "$BOARD/active/$id.md"
+  set_fm status active "$BOARD/active/$id.md"
+  evt claim "$id" "" "$pts"
+  board_commit "chore(board): claim $id"
+  sync_board
+  mutex_off; FAIL_LOCK_ID=""; trap - EXIT
+
+  local wt; wt="$(wt_path "$id")"
+  mkdir -p "$PRIMARY/.polaris/wt"
+  if git -C "$PRIMARY" show-ref --verify -q "refs/heads/feat/$id"; then
+    git -C "$PRIMARY" worktree add -q "$wt" "feat/$id"
+  else
+    git -C "$PRIMARY" worktree add -q "$wt" -b "feat/$id" "$BASE"
+  fi
+  say "claimed $id → cd \"$wt\""
+  note "read: task file + its contract + context_files. Build only inside files_owned."
+  note "when green: polaris handoff   ·   to abort: polaris release $id --to ready"
+}
+
+cmd_verify() {
+  local id="${1:-}"; [ -n "$id" ] || id="$(current_task_id)" || die "not on a feat/<ID> branch — pass the ID"
+  local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
+  check_ownership "$tf" HEAD
+  check_rules HEAD
+  run_verify_cmds "$tf"
+}
+
+cmd_handoff() {
+  local id="${1:-}"; [ -n "$id" ] || id="$(current_task_id)" || die "not on a feat/<ID> branch — pass the ID"
+  local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
+  git diff --quiet && git diff --cached --quiet || die "uncommitted changes — commit on feat/$id first"
+  check_ownership "$tf" "feat/$id"
+  check_rules "feat/$id"
+  run_verify_cmds "$tf"
+  has_remote && git push -q -u origin "feat/$id"
+  mutex_on
+  git -C "$PRIMARY" mv "$BOARD/active/$id.md" "$BOARD/review/$id.md"
+  set_fm status review "$BOARD/review/$id.md"
+  evt handoff "$id"
+  board_commit "chore(board): handoff $id"
+  sync_board
+  mutex_off; trap - EXIT
+  say "$id → review/. Lock stays until the Integrator lands it. Session may close."
+}
+
+cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
+  local id="${1:?usage: polaris release <ID> [--to ready|blocked] [-m note]}"; shift
+  local to="ready" msg=""
+  while [ $# -gt 0 ]; do case "$1" in
+    --to) to="$2"; shift 2;; -m) msg="$2"; shift 2;; *) die "unknown flag $1";;
+  esac; done
+  [ "$to" = "ready" ] || [ "$to" = "blocked" ] || die "--to must be ready or blocked"
+  local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
+  mutex_on
+  git -C "$PRIMARY" mv "$BOARD/active/$id.md" "$BOARD/$to/$id.md"
+  set_fm owner null "$BOARD/$to/$id.md"; set_fm status "$to" "$BOARD/$to/$id.md"
+  [ -n "$msg" ] && printf -- '- ⛔ released by %s: %s\n' "$WHO" "$msg" >> "$BOARD/$to/$id.md"
+  evt release "$id" "→ $to: $msg"
+  board_commit "chore(board): release $id → $to"
+  sync_board
+  mutex_off; trap - EXIT
+  local wt; wt="$(wt_path "$id")"
+  [ -d "$wt" ] && git -C "$PRIMARY" worktree remove --force "$wt" 2>/dev/null || true
+  lock_drop "$id"; [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$id"
+  say "$id → $to/ · lock released · worktree removed (branch feat/$id kept)"
+}
+
+cmd_kickback() { # Integrator: red merge → review→active with the failure note; lock+branch stay
+  local id="${1:?usage: polaris kickback <ID> -m \"failure\"}"; shift
+  local msg=""; [ "${1:-}" = "-m" ] && msg="$2"
+  local tf; tf="$(task_file "$id" review)" || die "$id is not in review/"
+  mutex_on
+  git -C "$PRIMARY" mv "$BOARD/review/$id.md" "$BOARD/active/$id.md"
+  set_fm status active "$BOARD/active/$id.md"
+  [ -n "$msg" ] && printf -- '- ⛔ kicked back by Integrator: %s\n' "$msg" >> "$BOARD/active/$id.md"
+  evt kickback "$id" "$msg"
+  board_commit "chore(board): kickback $id"
+  sync_board
+  mutex_off; trap - EXIT
+  say "$id → active/ (lock, worktree, branch untouched — Builder resumes there)"
+}
+
+cmd_audit() { # Integrator: ownership check of a review branch, from anywhere
+  local id="${1:?usage: polaris audit <ID>}"
+  local tf; tf="$(task_file "$id")" || die "no task file for $id"
+  check_ownership "$tf" "feat/$id"
+  check_rules "feat/$id"
+}
+
+cmd_run_verify() { # Integrator: re-run a task's verify commands in CWD (e.g. on integrate branch)
+  local id="${1:?usage: polaris run-verify <ID>}"
+  local tf; tf="$(task_file "$id")" || die "no task file for $id"
+  run_verify_cmds "$tf"
+}
+
+cmd_done() { # Integrator only, after the branch is merged to BASE
+  local id="${1:?usage: polaris done <ID>}"
+  local tf; tf="$(task_file "$id" review)" || die "$id is not in review/"
+  git -C "$PRIMARY" merge-base --is-ancestor "feat/$id" "$BASE" 2>/dev/null \
+    || die "feat/$id is not merged into $BASE — merge first, then done"
+  local deltas; deltas="$(fm_list map_delta "$tf" 2>/dev/null || true)"   # BEFORE the mv — path vanishes after
+  local pts; pts="$(fm_get points "$tf")"
+  mutex_on
+  git -C "$PRIMARY" mv "$BOARD/review/$id.md" "$BOARD/done/$id.md"
+  set_fm status done "$BOARD/done/$id.md"
+  # apply map_delta so MAP.md never rots (Integrator is its only writer → no conflict)
+  local d applied=0
+  while IFS= read -r d; do
+    [ -z "$d" ] && continue
+    if [ $applied -eq 0 ]; then printf '\n' >> "$OPS/MAP.md"; fi
+    printf -- '- %s  (%s, %s)\n' "$d" "$id" "$(date +%F)" >> "$OPS/MAP.md"; applied=1
+  done <<EOF
+$deltas
+EOF
+  evt done "$id" "" "$pts"
+  board_commit "chore(board): done $id"
+  sync_board
+  mutex_off; trap - EXIT
+  local wt; wt="$(wt_path "$id")"
+  [ -d "$wt" ] && git -C "$PRIMARY" worktree remove --force "$wt" 2>/dev/null || true
+  git -C "$PRIMARY" branch -q -D "feat/$id" 2>/dev/null || true
+  lock_drop "$id"; [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$id"
+  say "$id → done/ · lock, worktree, branch cleaned$( [ $applied -eq 1 ] && echo ' · map_delta applied')"
+}
+
+cmd_status() {
+  local col n
+  printf 'POLARIS board — base: %s · claim: %s\n' "$BASE" "$CLAIM_MODE"
+  for col in backlog ready active review blocked done; do
+    n=$(ls "$BOARD/$col" 2>/dev/null | grep -c '\.md$' || true)
+    printf '  %-8s %s\n' "$col" "$n"
+  done
+  echo 'active:'
+  local f id age
+  for f in "$BOARD/active/"*.md; do
+    [ -e "$f" ] || { echo '  (none)'; break; }
+    id="$(basename "$f" .md)"; age="$(lock_age "$id")"
+    printf '  %s · %s · lock age %ss%s\n' "$id" "$(fm_get owner "$f")" "${age:-?}" \
+      "$( [ -n "${age:-}" ] && [ "$age" -gt $((STALE_H*3600)) ] && echo ' ⚠ STALE?')"
+  done
+  echo 'ready (top by wsjf):'
+  { for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
+      printf '%s\t%s · %spts · wsjf %s\n' "$(fm_get wsjf "$f")" "$(basename "$f" .md)" \
+        "$(fm_get points "$f")" "$(fm_get wsjf "$f")"
+    done; } | sort -rn | cut -f2- | head -5
+}
+
+cmd_sweep() { # report orphans + stale; --fix removes only true orphans (lock w/o active task)
+  local fix="${1:-}" d id found=0
+  for d in "$LOCKS"/*/; do
+    [ -e "$d" ] || break
+    id="$(basename "$d")"; [ "$id" = ".board-mutex" ] && continue
+    if ! task_file "$id" active >/dev/null && ! task_file "$id" review >/dev/null; then
+      found=1; printf '⚠ ORPHAN lock: %s (age %sh, no active/review task)\n' "$id" "$(( $(lock_age "$id") / 3600 ))"
+      [ "$fix" = "--fix" ] && { lock_drop "$id"; note "removed"; }
+    elif task_file "$id" active >/dev/null && [ "$(lock_age "$id")" -gt $((STALE_H*3600)) ]; then
+      found=1; printf '⚠ STALE lock: %s (%ss > %sh) — human decides: polaris release %s --to ready\n' \
+        "$id" "$(lock_age "$id")" "$STALE_H" "$id"
+    fi
+  done
+  if [ $found -eq 0 ]; then say "no orphan or stale locks"; fi
+}
+
+cmd_doctor() {
+  local gv; gv="$(git --version | sed 's/[^0-9.]*\([0-9][0-9.]*\).*/\1/')"
+  say "git $gv · primary: $PRIMARY · locks: $LOCKS"
+  awk -v v="$gv" 'BEGIN{split(v,a,"."); exit !(a[1]>2 || (a[1]==2 && a[2]>=5))}' \
+    || die "git >= 2.5 required for worktrees"
+  git -C "$PRIMARY" show-ref --verify -q "refs/heads/$BASE" || note "⚠ base branch '$BASE' not found — set base: in CONVENTIONS.md"
+  [ -f "$CONV" ] || note "⚠ ops/CONVENTIONS.md missing — run INIT"
+  mkdir -p "$LOCKS" && [ -w "$LOCKS" ] || die "lock dir not writable: $LOCKS"
+  case "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null)" in .*|../*) note "⚠ origin is a RELATIVE path — breaks in worktrees; use an absolute URL";; esac
+  case "$CLAIM_MODE" in local-lock|claim-branch) :;; *) die "claim: must be local-lock or claim-branch";; esac
+  [ "$CLAIM_MODE" = "claim-branch" ] && ! has_remote && note "⚠ claim-branch set but no origin remote"
+  [ -f "$EVENTS" ] && ! grep -q 'EVENTS\.ndjson merge=union' "$PRIMARY/.gitattributes" 2>/dev/null \
+    && note "⚠ EVENTS.ndjson exists without its union-merge gitattribute — run: ops/polaris upgrade"
+  say "doctor: OK"
+  if [ "${1:-}" = "--selftest" ]; then selftest; fi
+}
+
+selftest() { # end-to-end mechanics drill in a throwaway repo — run once per new machine
+  local T; T="$(mktemp -d)"
+  note "selftest in $T"
+  ( set -e; cd "$T"
+    git init -q -b main repo 2>/dev/null || { git init -q repo; git -C repo symbolic-ref HEAD refs/heads/main; }
+    cd repo; git config user.email t@t; git config user.name t
+    mkdir -p ops/board/ready src; echo x > src/a.txt
+    printf -- '---\nid: T-1\npoints: 1\nwsjf: 9\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/a.txt\nverify:\n  - test -f src/a.txt\n---\n' > ops/board/ready/T-1.md
+    git add -A; git commit -qm init
+    "$SELF" init-board >/dev/null
+    git add -A; git commit -qm board
+    # race: 8 parallel claims, exactly one may win
+    local i wins=0
+    for i in 1 2 3 4 5 6 7 8; do ( "$SELF" claim T-1 >/dev/null 2>&1 && echo WIN ) & done > "$T/race" 2>&1
+    wait; wins=$(grep -c WIN "$T/race" || true)
+    [ "$wins" -eq 1 ] || { echo "RACE FAIL: $wins winners"; exit 1; }
+    cd .polaris/wt/T-1; echo y >> src/a.txt; git commit -qam ok
+    "$SELF" verify T-1 >/dev/null || { echo "VERIFY FAIL (should pass)"; exit 1; }
+    echo z > src/illegal.txt; git add -A; git commit -qm bad
+    "$SELF" verify T-1 >/dev/null 2>&1 && { echo "OWNERSHIP FAIL (should reject)"; exit 1; }
+    git reset -q --hard HEAD~1
+    "$SELF" handoff T-1 >/dev/null
+    cd "$T/repo"; git merge -q --no-ff feat/T-1 -m merge
+    "$SELF" done T-1 >/dev/null
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-1" ] && { echo "LOCK CLEANUP FAIL"; exit 1; }
+    for ev in claim handoff done; do
+      grep -q "\"ev\":\"$ev\",\"id\":\"T-1\"" ops/board/EVENTS.ndjson || { echo "EVENTS FAIL: $ev missing"; exit 1; }
+    done
+    "$SELF" metrics | grep -q 'done total: 1' || { echo "METRICS FAIL"; exit 1; }
+    "$SELF" _match src/a.txt T-1 || { echo "_MATCH FAIL (should allow)"; exit 1; }
+    "$SELF" _match src/other.txt T-1 && { echo "_MATCH FAIL (should reject)"; exit 1; }
+    # --- v5: points telemetry + per-point calibration
+    grep -q '"ev":"claim","id":"T-1".*"pts":1' ops/board/EVENTS.ndjson || { echo "PTS EVT FAIL"; exit 1; }
+    "$SELF" metrics | grep -q '1pt p50' || { echo "PTS BUCKET FAIL"; exit 1; }
+    # --- v5: RULES engine — path deny beats ownership; content deny on payload and on diff
+    printf 'src/a.txt\tpath\t-\tfrozen for the drill\n' >> ops/RULES.tsv
+    "$SELF" _rules src/a.txt 2>/dev/null && { echo "RULES PATH FAIL (should deny)"; exit 1; }
+    "$SELF" rules >/dev/null || { echo "RULES HEALTH FAIL"; exit 1; }
+    sed -i.bak '/frozen for the drill/d' ops/RULES.tsv && rm -f ops/RULES.tsv.bak
+    printf 'src/\tcontent\tDO_NOT_SHIP\tblocked marker\n' >> ops/RULES.tsv
+    echo ok > /tmp/pay.$$; "$SELF" _rules src/a.txt /tmp/pay.$$ || { echo "RULES CONTENT FAIL (clean should pass)"; exit 1; }
+    echo DO_NOT_SHIP > /tmp/pay.$$
+    "$SELF" _rules src/a.txt /tmp/pay.$$ 2>/dev/null && { echo "RULES CONTENT FAIL (should deny)"; exit 1; }
+    rm -f /tmp/pay.$$
+    # diff-level: a fresh task committing the marker must fail verify on rules, pass after revert
+    printf -- '---\nid: T-2\npoints: 2\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/b.txt\nverify: []\n---\n' > ops/board/ready/T-2.md
+    git add -A; git commit -qm t2
+    "$SELF" claim T-2 >/dev/null
+    ( cd .polaris/wt/T-2 && echo "x DO_NOT_SHIP x" > src/b.txt && git add -A && git commit -qm bad
+      "$SELF" verify T-2 >/dev/null 2>&1 && { echo "RULES DIFF FAIL (should deny)"; exit 1; }
+      git reset -q --hard HEAD~1 && echo clean > src/b.txt && git add -A && git commit -qm ok
+      "$SELF" verify T-2 >/dev/null || { echo "RULES DIFF FAIL (clean should pass)"; exit 1; } ) || exit 1
+    "$SELF" release T-2 --to ready -m drill >/dev/null
+    # --- v5: drift — seeded overlap must be found; --strict must go red, then green
+    printf -- '---\nid: T-3\npoints: 1\nwsjf: 1\nstatus: ready\nfiles_owned:\n  - src/b.txt\n---\n' > ops/board/ready/T-3.md
+    "$SELF" drift | grep -q 'OWNERSHIP OVERLAP: T-3 ∩ T-2' || { echo "DRIFT OVERLAP FAIL"; exit 1; }
+    ( "$SELF" drift --strict >/dev/null 2>&1 ) && { echo "DRIFT STRICT FAIL (should rc 1)"; exit 1; }
+    rm ops/board/ready/T-3.md ops/board/ready/T-2.md; sed -i.bak '/DO_NOT_SHIP/d' ops/RULES.tsv && rm -f ops/RULES.tsv.bak
+    git add -A; git commit -qm cleanup
+    "$SELF" drift >/dev/null || { echo "DRIFT CLEAN FAIL"; exit 1; }
+    echo SELFTEST-PASS
+  ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
+  rm -rf "$T"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict"
+}
+
+pat_overlap() { # heuristic: can patterns A and B claim a common path?
+  # Proves: identical · exact⊂glob · exact⊂dir/ · dir/⊂dir/. Glob∩glob (non-identical)
+  # is undecidable here — Planner rule: keep globs narrow so this never matters.
+  local a="$1" b="$2"
+  [ "$a" = "$b" ] && return 0
+  printf '%s\n' "$b" | owned_match "$a" && return 0   # pattern B matches A taken as a literal path
+  printf '%s\n' "$a" | owned_match "$b" && return 0   # pattern A matches B taken as a literal path
+  case "$a" in */) case "$b" in "$a"*) return 0;; esac;; esac
+  case "$b" in */) case "$a" in "$b"*) return 0;; esac;; esac
+  return 1
+}
+
+cmd_drift() { # mechanical hygiene audit — the invariants, machine-checked. --strict: rc 1 on findings
+  local strict="${1:-}" n=0 f g id id2 v d
+  finding() { n=$((n+1)); printf '⚠ [%d] %s\n' "$n" "$1"; }
+  # 1) THE invariant: files_owned disjoint across ready ∪ active (heuristic, see pat_overlap)
+  local claimable=""; for d in ready active; do
+    for f in "$BOARD/$d/"*.md; do [ -e "$f" ] || break; claimable="$claimable$f
+"; done; done
+  local seen=""
+  while IFS= read -r f; do [ -z "$f" ] && continue
+    while IFS= read -r g; do [ -z "$g" ] && continue
+      id="$(basename "$f" .md)"; id2="$(basename "$g" .md)"
+      local pa pb
+      while IFS= read -r pa; do [ -z "$pa" ] && continue
+        while IFS= read -r pb; do [ -z "$pb" ] && continue
+          if pat_overlap "$pa" "$pb"; then
+            finding "OWNERSHIP OVERLAP: $id ∩ $id2 on '$pa' / '$pb' — chain them (depends_on), never parallel"
+          fi
+        done <<EOF2
+$(fm_list files_owned "$g")
+EOF2
+      done <<EOF1
+$(fm_list files_owned "$f")
+EOF1
+    done <<EOF0
+$seen
+EOF0
+    seen="$seen$f
+"
+  done <<EOF
+$claimable
+EOF
+  # 2) ready-gate: contract exists · deps all done · ≤5 points
+  for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
+    id="$(basename "$f" .md)"
+    v="$(fm_get contract "$f")"
+    { [ -z "$v" ] || [ ! -f "$PRIMARY/$v" ]; } && finding "READY GATE: $id contract missing (${v:-unset}) — blocked/, not ready/"
+    while IFS= read -r d; do [ -z "$d" ] || [ "$d" = "[]" ] && continue
+      task_file "$d" done >/dev/null || finding "READY GATE: $id depends_on $d which is NOT in done/"
+    done <<EOF
+$(fm_list depends_on "$f")
+EOF
+    v="$(fm_get points "$f")"; case "$v" in 8|13) finding "READY GATE: $id is ${v}pts — must be split before ready/";; esac
+  done
+  # 3) cruft: done tasks whose feat branch survived
+  for f in "$BOARD/done/"*.md; do [ -e "$f" ] || break
+    id="$(basename "$f" .md)"
+    git -C "$PRIMARY" show-ref --verify -q "refs/heads/feat/$id" \
+      && finding "CRUFT: feat/$id still exists though $id is done — git branch -D feat/$id"
+  done
+  # 4) stale forward refs: TODO(T-…) pointing at tasks already done
+  local refs; refs="$(grep -RIn 'TODO([A-Za-z][A-Za-z0-9._-]*-[0-9A-Za-z]' "$BOARD" "$OPS/contracts" "$OPS/SPRINT.md" "$OPS/MAP.md" 2>/dev/null || true)"
+  while IFS= read -r v; do [ -z "$v" ] && continue
+    id="$(printf '%s' "$v" | sed -n 's/.*TODO(\([A-Za-z][A-Za-z0-9._-]*-[0-9A-Za-z][0-9A-Za-z]*\)).*/\1/p')"
+    [ -n "$id" ] && task_file "$id" done >/dev/null \
+      && finding "STALE REF: $(printf '%s' "$v" | cut -d: -f1,2) — $id is done; update the text"
+  done <<EOF
+$refs
+EOF
+  # 5) doc overflow: MAP Deltas tail + Learned log
+  v="$(grep -Ec ' \([A-Za-z0-9._-]+, [0-9]{4}-[0-9]{2}-[0-9]{2}\)$' "$OPS/MAP.md" 2>/dev/null || true)"
+  [ "${v:-0}" -gt 20 ] && finding "MAP: $v delta lines — fold them into the sections (EVOLVE target)"
+  v="$(awk '/^##[ \t]*Learned/{on=1;next} on&&/^## /{exit} on&&/^[ \t]*[-*]/{c++} END{print c+0}' "$OPS/SPRINT.md" 2>/dev/null || true)"
+  [ "${v:-0}" -gt 8 ] && finding "LEARNED: $v bullets — prune to ≤5 carry-overs (EVOLVE target)"
+  # 6) telemetry safety
+  [ -f "$EVENTS" ] && ! grep -q 'EVENTS\.ndjson merge=union' "$PRIMARY/.gitattributes" 2>/dev/null \
+    && finding "TELEMETRY: EVENTS.ndjson without union-merge gitattribute — run: ops/polaris upgrade"
+  if [ "$n" -eq 0 ]; then say "drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry)"
+  else printf '%d finding(s).\n' "$n"; [ "$strict" = "--strict" ] && exit 1; fi
+  return 0
+}
+
+cmd_rules() { # list + health-check ops/RULES.tsv
+  if ! rules_lines | grep -q .; then note "no rules yet — ops/RULES.tsv (INIT seeds danger zones; EVOLVE proposes more)"; return 0; fi
+  local scope kind pat msg n=0 bad=0
+  printf '%-28s %-8s %-24s %s\n' 'SCOPE' 'KIND' 'PATTERN' 'MESSAGE'
+  while IFS="$(printf '\t')" read -r scope kind pat msg; do
+    n=$((n+1)); printf '%-28s %-8s %-24s %s\n' "$scope" "$kind" "${pat:--}" "$msg"
+    case "$kind" in path|content) :;; *) bad=1; printf '   ⛔ bad kind (want path|content)\n';; esac
+    [ -z "$scope" ] && { bad=1; printf '   ⛔ empty scope\n'; }
+    if [ "$kind" = "content" ]; then
+      { [ -z "$pat" ] || [ "$pat" = "-" ]; } && { bad=1; printf '   ⛔ content rule needs an ERE pattern\n'; }
+      local rc=0; grep -E -e "${pat:-x}" /dev/null >/dev/null 2>&1 || rc=$?
+      [ "$rc" -eq 2 ] && { bad=1; printf '   ⛔ pattern does not compile (grep -E)\n'; }
+    fi
+  done <<EOF
+$(rules_lines)
+EOF
+  [ "$bad" -eq 0 ] && say "$n rule(s), all healthy" || die "rules health check failed — fix ops/RULES.tsv"
+}
+
+cmd_metrics() { # cycle time + throughput + kickbacks from EVENTS.ndjson — pure awk
+  [ -s "$EVENTS" ] || { note "no telemetry yet (EVENTS.ndjson empty) — runs accumulate it"; return 0; }
+  awk -v now="$(date +%s)" '
+    function get(k,   m){ m=""; if (match($0, "\""k"\":\"[^\"]*\"")) { m=substr($0,RSTART,RLENGTH); sub("\""k"\":\"","",m); sub("\"$","",m) } return m }
+    function num(k,   m){ m=""; if (match($0, "\""k"\":[0-9]+"))     { m=substr($0,RSTART,RLENGTH); sub("\""k"\":","",m) } return m+0 }
+    { ts=num("ts"); ev=get("ev"); id=get("id")
+      if (ev=="claim"    && !(id in claimed)) { claimed[id]=ts; if (match($0,/"pts":[0-9.]+/)) { m=substr($0,RSTART+6,RLENGTH-6); cpts[id]=m+0 } }
+      if (ev=="kickback") { kb[id]++; kbt++ ; if (now-ts<7*86400) kb7++ }
+      if (ev=="done")    { done[id]=ts; dn++; if (now-ts<7*86400) dn7++ }
+    }
+    END{
+      n=0; for (id in done) if (id in claimed) { c[n++]=done[id]-claimed[id] }
+      # insertion sort (tiny n) for p50
+      for(i=1;i<n;i++){v=c[i];j=i-1;while(j>=0&&c[j]>v){c[j+1]=c[j];j--}c[j+1]=v}
+      printf "done total: %d   done 7d: %d   kickbacks total: %d (7d: %d)\n", dn+0, dn7+0, kbt+0, kb7+0
+      if (n>0) { s=0; for(i=0;i<n;i++) s+=c[i]
+        printf "cycle claim→done  avg: %.1fh   p50: %.1fh   n=%d\n", s/n/3600, c[int((n-1)/2)]/3600, n }
+      # v5 calibration: cycle p50 per point bucket (only for claims that logged pts)
+      for (id in done) if (id in claimed && id in cpts) { b=cpts[id]; bc[b, nb[b]++]=done[id]-claimed[id] }
+      line=""
+      for (b=1; b<=13; b++) if (nb[b]>0) {
+        for(i=1;i<nb[b];i++){v=bc[b,i];j=i-1;while(j>=0&&bc[b,j]>v){bc[b,j+1]=bc[b,j];j--}bc[b,j+1]=v}
+        line=line sprintf("%s%gpt p50 %.1fh n=%d", (line==""?"":"  ·  "), b, bc[b,int((nb[b]-1)/2)]/3600, nb[b])
+      }
+      if (line!="") printf "by points (Planner: point UP any bucket whose p50 dwarfs its size)\n  %s\n", line
+      if (kbt+0>0 && dn+0>0) printf "kickback rate: %.0f%%  (Planner: read this before pointing)\n", 100*kbt/dn
+    }' "$EVENTS"
+  printf 'WIP now: %s active · %s review\n' \
+    "$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)" \
+    "$(ls "$BOARD/review" 2>/dev/null | grep -c '\.md$' || true)"
+}
+
+cmd_dash() { # launch the read-only live board (single-file stdlib server)
+  local PY=""
+  command -v python3 >/dev/null 2>&1 && PY=python3 || { command -v python >/dev/null 2>&1 && PY=python; }
+  [ -n "$PY" ] || die "dashboard needs python3 (or python) on PATH — everything else in POLARIS runs without it"
+  exec "$PY" "$OPS/dashboard.py" --root "$PRIMARY" "$@"
+}
+
+cmd_fleet() { # fleet <N> [--loop] — print N identical Builder kickoffs; launch via tmux if present
+  local n="${1:?usage: polaris fleet <N> [--loop]}" loop="" i
+  [ "${2:-}" = "--loop" ] && loop=" Run in loop mode."
+  case "$n" in ''|*[!0-9]*) die "fleet: N must be a number";; esac
+  local msg="You are a BUILDER. Claim the top ready task and complete it end to end. Stop at the review handoff.$loop"
+  note "kickoff (paste into $n parallel sessions of ANY agent CLI):"
+  printf '   %s\n' "$msg"
+  if command -v tmux >/dev/null 2>&1 && command -v claude >/dev/null 2>&1; then
+    printf 'Launch now in tmux with Claude Code? [y/N] '; local a=""; read -r a || a=""   # non-tty (agent) → default No
+    if [ "$a" = "y" ] || [ "$a" = "Y" ]; then
+      tmux has-session -t polaris 2>/dev/null || tmux new-session -d -s polaris -c "$PRIMARY"
+      for i in $(seq 1 "$n"); do tmux new-window -t polaris -c "$PRIMARY" "claude \"$msg\""; done
+      say "fleet of $n launched — attach: tmux attach -t polaris · watch: ops/polaris dash"
+    fi
+  else
+    note "(auto-launch needs tmux + claude on PATH — open $n terminals and paste the line above)"
+  fi
+}
+
+cmd_upgrade() { # idempotent v3→v4: creates what v4 adds, touches nothing that exists
+  cmd_init_board
+  chmod +x "$OPS/polaris" 2>/dev/null || true
+  [ -f "$OPS/hooks/ownership-guard.sh" ] && chmod +x "$OPS/hooks/ownership-guard.sh" 2>/dev/null || true
+  say "v5 ready. New since v4: RULES.tsv policy engine (danger zones + content guards, 3-deep) · drift (board hygiene audit) · per-point cycle calibration in metrics · uat:/notify: CONVENTIONS keys · dashboard points/drift/notify"
+  note "idempotent from v3 or v4 — board, tasks and locks untouched; no task frontmatter changes"
+  note "commit ops/ + .claude/ + .gitattributes, then: ops/polaris doctor --selftest"
+}
+
+cmd_match() { # _match <repo-relative-path> <ID> — internal: hook guard + tooling share
+  # the ONE ownership matcher. Exit 0 = allowed for this task, 1 = not.
+  local rel="${1:?}" id="${2:?}" tf
+  tf="$(task_file "$id" active)" || tf="$(task_file "$id")" || exit 1
+  case "$rel" in
+    "ops/board/active/$id.md"|"ops/board/backlog/IDEAS.md") exit 0;;   # Notes + ideas are always writable
+  esac
+  fm_list files_owned "$tf" | owned_match "$rel" && exit 0 || exit 1
+}
+
+cmd_rules_check() { # _rules <repo-relative-path> [payload-file] — internal: guard's policy gate.
+  # Exit 0 = clean. Exit 1 = a rule denies (message on stderr). Payload file, when
+  # given, holds the text about to be written (guard extracts it from tool_input).
+  local rel="${1:?}" body="${2:-}"
+  rule_scan_path "$rel" || exit 1
+  [ -n "$body" ] && [ -f "$body" ] && { rule_scan_content_file "$rel" "$body" || exit 1; }
+  exit 0
+}
+
+# ------------------------------------------------------------------- dispatch
+usage() { cat <<'EOF'
+polaris — POLARIS v4 board CLI (run from anywhere inside the repo)
+  init-board                     create board dirs, gitignore .polaris/, lock dir
+  claim [ID]                     lock + ready→active + worktree  (no ID = top wsjf)
+  verify [ID]                    diff ⊆ files_owned + run verify: commands (in worktree)
+  handoff [ID]                   verify + push + active→review   (lock stays)
+  release <ID> [--to ready|blocked] [-m note]   abort: give the task back cleanly
+  kickback <ID> [-m note]        Integrator: red merge → review→active
+  audit <ID>                     Integrator: ownership check of feat/<ID>
+  run-verify <ID>                Integrator: re-run task verify: commands in CWD
+  done <ID>                      Integrator: review→done + apply map_delta + full cleanup
+  status | sweep [--fix] | doctor [--selftest]
+  metrics                        cycle · throughput · kickbacks · per-point calibration (EVENTS.ndjson)
+  drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
+  rules                          list + health-check ops/RULES.tsv (repo policy as data)
+  dash [--port N]                live read-only board at http://127.0.0.1:7373 (needs python3)
+  fleet <N> [--loop]             print/launch N identical Builder kickoffs (tmux+claude optional)
+  upgrade                        idempotent v3/v4→v5 migration on an existing board
+EOF
+}
+case "${1:-}" in
+  init-board) cmd_init_board;;
+  claim)      shift; cmd_claim "$@";;
+  verify)     shift; cmd_verify "$@";;
+  handoff)    shift; cmd_handoff "$@";;
+  release)    shift; cmd_release "$@";;
+  kickback)   shift; cmd_kickback "$@";;
+  audit)      shift; cmd_audit "$@";;
+  run-verify) shift; cmd_run_verify "$@";;
+  done)       shift; cmd_done "$@";;
+  status)     cmd_status;;
+  sweep)      shift 2>/dev/null || true; cmd_sweep "${1:-}";;
+  doctor)     shift 2>/dev/null || true; cmd_doctor "${1:-}";;
+  metrics)    cmd_metrics;;
+  drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
+  rules)      cmd_rules;;
+  _rules)     shift; cmd_rules_check "$@";;
+  dash)       shift; cmd_dash "$@";;
+  fleet)      shift; cmd_fleet "$@";;
+  upgrade)    cmd_upgrade;;
+  _match)     shift; cmd_match "$@";;
+  ''|help|-h|--help) usage;;
+  *) usage; die "unknown command: $1";;
+esac
