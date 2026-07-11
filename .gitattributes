@@ -1,0 +1,9 @@
+# POLARIS — line-ending safety. Bash cannot execute CRLF scripts; Windows
+# checkouts with core.autocrlf=true would otherwise rewrite them on clone.
+* text=auto
+ops/polaris text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.tsv text eol=lf
+# Telemetry: append-only, union-merged, never eol-converted (init-board also arms this line).
+ops/board/EVENTS.ndjson merge=union -text
