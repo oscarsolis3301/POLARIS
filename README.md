@@ -5,6 +5,7 @@ Drop-in parallel-agent operating system for any repo. Any model/CLI that loads a
 New in v5, the guard and the gates enforce **two** things: ownership (diff ⊆ `files_owned`, unchanged since v3) and **RULES** — your repo's policy as data. One TAB-separated line in `ops/RULES.tsv` is a danger zone (`path`: forbidden to write, even inside owned files) or a content guard (`content`: added lines must not match an ERE). INIT turns your "never touch X" interview answers into armed rules instead of prose; EVOLVE proposes new lines from kickback/Learned evidence and a human approves each one. That is "hooks that create themselves" done safely: evidence → proposal → approve → one appended line, zero new scripts.
 
 ## Install (any repo, greenfield or 10k files)
+One command from the kit root: `bash ops/install.sh <target-repo>` — copies the kit, prepends to an existing `CLAUDE.md`, merges an existing `.claude/settings.json` hooks block, sets exec bits, pins scripts to LF; idempotent, and refreshes kit code without touching a live board. Or by hand:
 1. Copy `CLAUDE.md` + `ops/` + `.claude/` into the repo root. `chmod +x ops/polaris ops/hooks/ownership-guard.sh`.
    - Repo already has a `CLAUDE.md`? Paste the POLARIS content at the TOP (constraints early = better adherence).
    - Repo already has `.claude/settings.json`? Merge the `hooks` block instead of overwriting.
