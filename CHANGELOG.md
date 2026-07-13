@@ -8,6 +8,14 @@ commits to `main` deliberately do not.
 
 Portable kit. POLARIS now moves between projects as a single zip with no `.git` attached.
 
+- **Drag-and-run** — `polaris-v5.zip` is a Python zipapp (`__main__.py` at the archive root),
+  so installing is one command with no unzip step: drop the zip in a project and run
+  `python polaris-v5.zip`. It self-extracts to a temp dir, restores the exec bits the archive
+  carries, and hands off to `ops/install.sh`. The target is resolved from your working
+  directory, and it `git init`s only a directory you explicitly named.
+  On Windows it locates Git Bash from git's own install root and probes it before use —
+  `shutil.which("bash")` from native Python finds `System32\bash.exe`, which is WSL's launcher
+  and dies instantly with no distro installed. That bug broke drag-and-run on every Windows box.
 - **`ops/pack.py`** — builds `polaris-v5.zip` from `git ls-files`. Written in Python because
   Git Bash ships no `zip` and PowerShell's `Compress-Archive` cannot store unix permissions:
   three kit files are mode `100755` (`ops/polaris`, `ops/install.sh`,

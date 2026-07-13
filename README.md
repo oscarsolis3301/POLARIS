@@ -5,17 +5,21 @@ Drop-in parallel-agent operating system for any repo. Any model/CLI that loads a
 New in v5, the guard and the gates enforce **two** things: ownership (diff ⊆ `files_owned`, unchanged since v3) and **RULES** — your repo's policy as data. One TAB-separated line in `ops/RULES.tsv` is a danger zone (`path`: forbidden to write, even inside owned files) or a content guard (`content`: added lines must not match an ERE). INIT turns your "never touch X" interview answers into armed rules instead of prose; EVOLVE proposes new lines from kickback/Learned evidence and a human approves each one. That is "hooks that create themselves" done safely: evidence → proposal → approve → one appended line, zero new scripts.
 
 ## Install (any repo, greenfield or 10k files)
-**From the zip — the portable path.** `polaris-v5.zip` is the whole kit and carries no `.git`, so it drops into any project. Grab it from [Releases](https://github.com/oscarsolis3301/POLARIS/releases), unzip it **inside your project**, and run the installer with no arguments — it finds the enclosing repo itself:
+**Drag the zip in, run one command.** `polaris-v5.zip` is the whole kit, carries no `.git`, and is a Python **zipapp** — so there is no unzip step. Drop it in any project and:
 
 ```bash
-unzip polaris-v5.zip          # -> polaris-v5/
-bash polaris-v5/ops/install.sh
-rm -rf polaris-v5             # optional; it's gitignored either way
+cd your-project
+python polaris-v5.zip          # that's it
 ```
 
-Greenfield folder with no `.git` yet? Name it explicitly and the installer runs `git init` for you: `bash polaris-v5/ops/install.sh <target-repo>`. (Zero-arg mode never does that — otherwise unzipping on your Desktop would turn the Desktop into a repo.)
+Greenfield folder with no `.git` yet? Name it and the installer runs `git init` for you: `python polaris-v5.zip <target-repo>`. Standing in a directory that isn't a repo, with no target named, it **refuses** — otherwise running it on your Desktop would turn the Desktop into a git repo.
 
-Either way the install is safe on a 10k-file project: an existing `CLAUDE.md` is **prepended to**, never overwritten; an existing `.claude/settings.json` has the guard hook **merged into** its hooks block; a live board keeps its board, `RULES.tsv`, `CONVENTIONS.md`, `MAP.md` and `SPRINT.md` (kit code is refreshed, then `bash ops/polaris upgrade`). Idempotent — safe to re-run.
+The install is safe on a 10k-file project. An existing `CLAUDE.md` is **prepended to**, never overwritten. An existing `.claude/settings.json` has the guard hook **merged into** its hooks block, leaving your own hooks intact. A live board keeps its board, `RULES.tsv`, `CONVENTIONS.md`, `MAP.md` and `SPRINT.md` — only kit code is refreshed (then `bash ops/polaris upgrade`). Nothing is committed for you. Idempotent — safe to re-run.
+
+Then **start a new session** (CLAUDE.md and the hook are read at session start) and say: **"You are INIT."**
+
+*No Python?* The kit itself doesn't need it — only this bootstrap and the dashboard do. Fall back to `unzip polaris-v5.zip && bash polaris-v5/ops/install.sh`.
+*Windows:* use Git Bash, or run the zipapp straight from PowerShell — it finds Git Bash itself. (It deliberately ignores `System32\bash.exe`, which is WSL, not a shell POLARIS can use.)
 
 **From a clone.** `bash ops/install.sh <target-repo>` from the kit root does the same thing. Or by hand:
 1. Copy `CLAUDE.md` + `ops/` + `.claude/` into the repo root. `chmod +x ops/polaris ops/hooks/ownership-guard.sh`.
