@@ -39,6 +39,18 @@ Before each board commit, append ONE line to `ops/board/EVENTS.ndjson`:
 `{"ts":<epoch>,"ev":"<claim|handoff|release|kickback|done>","id":"<ID>","who":"<you@host>","note":""}`
 Append-only; the file is union-merged (`.gitattributes`) so parallel machines never conflict on it. Never edit existing lines.
 
+## Kit lifecycle by hand (no `ops/polaris`)
+`ops/VERSION` is plain `key: value` text — read it to learn what this repo runs:
+```
+version: <semver>   commit: <sha>   built: <date>
+channel:  <raw URL of ops/VERSION on main>       # what "latest" means
+tarball:  <URL of the kit tarball>               # what `update` downloads
+```
+- **Which version am I on?** `sed -n 's/^version: //p' ops/VERSION`
+- **Is there a newer one?** `curl -fsS "$(sed -n 's/^channel: //p' ops/VERSION)" | sed -n 's/^version: //p'` — compare the two semvers. A newer one means the kit is behind; nothing breaks in the meantime.
+- **Update by hand:** download the `tarball:`, extract it, and run its `ops/install.sh <this-repo>`. That refreshes kit code only — board, `RULES.tsv`, `CONVENTIONS.md`, `MAP.md`, `SPRINT.md` are never touched. Never do this mid-sprint.
+- **The POLARIS section of `CLAUDE.md` is a managed block** between `<!-- POLARIS:BEGIN ... -->` and `<!-- POLARIS:END -->`. An update replaces exactly that block. Put your own rules BELOW the END marker and they survive every update. Never edit inside the block — your edits are overwritten.
+
 ## Notes that keep this safe
 - Board mutations = commits on `<base>` in the primary checkout ONLY; code = `feat/<ID>` in worktrees ONLY.
 - Locks are runtime race-breakers; the task file's `owner:` is the durable record.

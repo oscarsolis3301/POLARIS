@@ -1,0 +1,138 @@
+# Proves the kit on every OS it claims to support. Until this existed, POLARIS had only ever
+# run on one Windows box: ops/polaris's header promises "Bash >= 3.2 (macOS default) compatible"
+# and nothing had ever executed that promise.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  kit:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false            # a macOS-only break must not hide a Windows-only break
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash              # on Windows this is Git Bash — the shell POLARIS actually targets
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Toolchain
+        run: |
+          bash --version | head -1
+          git --version
+          python --version
+          echo "PATH bash: $(command -v bash)"
+
+      - name: Pack the kit
+        run: python ops/pack.py
+
+      - name: Archive integrity — exec bits, LF, zipapp, no .git
+        # Read the mode STORED IN THE ARCHIVE, not the extracted file. Windows has no real exec
+        # bit and Git Bash fakes `test -x`, so an extraction-based check would pass vacuously and
+        # let the dead-on-arrival bug straight back in. The stored mode is the actual invariant
+        # and is identical on all three runners.
+        run: |
+          python - <<'PY'
+          import sys, zipfile
+          NEED_EXEC = {
+              "polaris-v5/ops/polaris",
+              "polaris-v5/ops/install.sh",
+              "polaris-v5/ops/hooks/ownership-guard.sh",
+          }
+          z = zipfile.ZipFile("polaris-v5.zip")
+          names = set(z.namelist())
+          bad = []
+
+          if "__main__.py" not in names:
+              bad.append("__main__.py missing from the archive root — not a zipapp")
+
+          for want in NEED_EXEC:
+              if want not in names:
+                  bad.append(f"{want} missing"); continue
+              mode = (z.getinfo(want).external_attr >> 16) & 0o777
+              if not mode & 0o111:
+                  bad.append(f"{want} lost its exec bit (mode {mode:o}) — kit would be DOA")
+
+          for info in z.infolist():
+              if info.filename.startswith("polaris-v5/.git/"):
+                  bad.append(".git leaked into the archive")
+              if not info.is_dir() and b"\r\n" in z.read(info.filename):
+                  bad.append(f"CRLF in {info.filename} — bash cannot execute a CRLF script")
+
+          print(f"{len(names)} entries; exec: {sorted(n for n in NEED_EXEC if n in names)}")
+          if bad:
+              for b in sorted(set(bad)):
+                  print(f"::error::{b}")
+              sys.exit(1)
+          print("archive OK")
+          PY
+
+      - name: Drag-and-run install into a scratch repo
+        run: |
+          set -e
+          APP="$RUNNER_TEMP/app"
+          mkdir -p "$APP/src"
+          cd "$APP"
+          git init -qb main
+          git config user.email ci@example.com
+          git config user.name ci
+          # a project that already has its own CLAUDE.md and its own hook — the hard case
+          printf '# Existing App\n\nMY_OWN_RULE\n' > CLAUDE.md
+          mkdir -p .claude
+          printf '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"echo MY_OWN_HOOK"}]}]}}\n' > .claude/settings.json
+          echo "print(1)" > src/app.py
+          git add -A && git commit -qm pristine
+          cp "$GITHUB_WORKSPACE/polaris-v5.zip" .
+          python polaris-v5.zip
+
+      - name: Merge was non-destructive
+        run: |
+          set -e
+          cd "$RUNNER_TEMP/app"
+          grep -q MY_OWN_RULE CLAUDE.md            || { echo "::error::user CLAUDE.md content lost"; exit 1; }
+          grep -qF 'POLARIS:BEGIN' CLAUDE.md       || { echo "::error::managed block markers missing"; exit 1; }
+          grep -q MY_OWN_HOOK .claude/settings.json|| { echo "::error::user hook lost"; exit 1; }
+          grep -q ownership-guard .claude/settings.json || { echo "::error::guard hook not merged"; exit 1; }
+          python -c "import json;json.load(open('.claude/settings.json'))"
+          test -f src/app.py                       || { echo "::error::user source lost"; exit 1; }
+          echo "merge OK"
+
+      - name: doctor --selftest  (the full mechanics drill)
+        run: |
+          cd "$RUNNER_TEMP/app"
+          bash ops/polaris doctor --selftest
+
+      - name: macOS — the same drill under /bin/bash 3.2
+        # THE reason macOS is in this matrix. GitHub's macOS image puts a newer Homebrew bash
+        # earlier on PATH, so the step above silently tests bash 5 and proves nothing about the
+        # 3.2 compatibility the script claims. Pin the interpreter and assert the version.
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -e
+          V="$(/bin/bash -c 'echo $BASH_VERSION')"
+          echo "/bin/bash is $V"
+          case "$V" in 3.2*) ;; *) echo "::error::expected bash 3.2 at /bin/bash, got $V"; exit 1;; esac
+          cd "$RUNNER_TEMP/app"
+          /bin/bash ops/polaris doctor --selftest
+
+      - name: Uninstall leaves the repo as it was found
+        run: |
+          set -e
+          cd "$RUNNER_TEMP/app"
+          bash ops/polaris uninstall --yes
+          test ! -d ops                              || { echo "::error::ops/ survived uninstall"; exit 1; }
+          grep -q MY_OWN_RULE CLAUDE.md              || { echo "::error::uninstall ate the user's CLAUDE.md"; exit 1; }
+          ! grep -qF 'POLARIS:BEGIN' CLAUDE.md       || { echo "::error::managed block survived uninstall"; exit 1; }
+          grep -q MY_OWN_HOOK .claude/settings.json  || { echo "::error::uninstall ate the user's hook"; exit 1; }
+          ! grep -q ownership-guard .claude/settings.json || { echo "::error::guard hook survived uninstall"; exit 1; }
+          echo "uninstall OK"

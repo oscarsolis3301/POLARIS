@@ -5,12 +5,21 @@ Drop-in parallel-agent operating system for any repo. Any model/CLI that loads a
 New in v5, the guard and the gates enforce **two** things: ownership (diff ⊆ `files_owned`, unchanged since v3) and **RULES** — your repo's policy as data. One TAB-separated line in `ops/RULES.tsv` is a danger zone (`path`: forbidden to write, even inside owned files) or a content guard (`content`: added lines must not match an ERE). INIT turns your "never touch X" interview answers into armed rules instead of prose; EVOLVE proposes new lines from kickback/Learned evidence and a human approves each one. That is "hooks that create themselves" done safely: evidence → proposal → approve → one appended line, zero new scripts.
 
 ## Install (any repo, greenfield or 10k files)
-**Drag the zip in, run one command.** `polaris-v5.zip` is the whole kit, carries no `.git`, and is a Python **zipapp** — so there is no unzip step. Drop it in any project and:
+**One file. One command.** `polaris-v5.zip` is the whole kit, carries no `.git`, and is a Python **zipapp** — so there is no unzip step:
 
 ```bash
 cd your-project
-python polaris-v5.zip          # that's it
+curl -fsSLO https://github.com/oscarsolis3301/POLARIS/releases/latest/download/polaris-v5.zip
+python polaris-v5.zip
 ```
+
+**Or let Claude do it.** Once per machine:
+
+```bash
+python polaris-v5.zip --claude-skill
+```
+
+From then on, in **any** repo, just say **"install POLARIS"** — Claude fetches the latest release itself and installs it. You never download or drag anything again.
 
 Greenfield folder with no `.git` yet? Name it and the installer runs `git init` for you: `python polaris-v5.zip <target-repo>`. Standing in a directory that isn't a repo, with no target named, it **refuses** — otherwise running it on your Desktop would turn the Desktop into a git repo.
 
@@ -50,7 +59,9 @@ git ≥ 2.5 + bash (+ your test runner). The dashboard needs a stock **Python 3.
 
 ## Verified / unverified — this build
 Verified by execution: v5 selftest end-to-end (8-way claim race → 1 winner · ownership accept/reject · verify commands · handoff · done cleanup · claim/done events **with points** · per-point metrics buckets · `_match` · RULES path deny overriding ownership · RULES content deny on payload AND on the committed diff · drift catching a seeded ownership overlap · `drift --strict` exit code) · guard scenario matrix incl. rules-vs-owned-file, content block from Write/Edit/MultiEdit payloads, fail-open without python, non-POLARIS-repo stand-down · full lifecycle telemetry + metrics math · two-clone EVENTS union-merge (zero conflicts) · dashboard `/state` v5 contract (pts · drift · rules_n), SSE push-on-change, drift rail + points strip + bell markers, extracted script passes `node --check` · notify: fires per event, a failing notify command cannot break a claim · `upgrade` on a live v4 board is purely additive and idempotent · virgin install of this zip passes `doctor --selftest` and boots the dashboard.
-Unverified, on purpose (test on YOUR machines — that's what `doctor --selftest` is for): macOS bash 3.2 · browser-notification permission UX varies per browser · the GitHub Actions wrapper (audit/drift logic verified locally; first CI run is its test).
+**Verified in CI on every push — Linux, macOS and Windows** (`.github/workflows/ci.yml`): the archive keeps its exec bits (checked against the mode *stored in the zip*, because Windows has no exec bit and Git Bash fakes `test -x`) · no CRLF · it is a valid zipapp · drag-and-run installs non-destructively over a repo that already has its own `CLAUDE.md` and its own `PreToolUse` hook · `doctor --selftest` passes · **and the macOS job re-runs the whole drill under an explicit `/bin/bash` 3.2**, since GitHub's image puts a newer Homebrew bash first on `PATH` and a bare `bash` would silently test bash 5 and prove nothing · `uninstall` returns the repo to its original state.
+
+Unverified, on purpose (test on YOUR machines — that's what `doctor --selftest` is for): browser-notification permission UX varies per browser · `ops/ci/polaris-audit.yml`, the audit gate template you copy into *your* repo (its logic is the same `polaris audit` verified locally and in CI; the wrapper's first run in your repo is its test).
 Verified on Windows 11 + Git for Windows 2.53 (2026-07-11), after two fixes this repo carries: `doctor --selftest` green · dashboard boots (python detection no longer fooled by the Windows Store `python3` stub) · 8-scenario guard matrix green with backslash AND forward-slash tool paths (guard now norm()s git-reported toplevel/worktree paths, which Git prints as `C:/...`) · the shipped hook command runs verbatim under Git Bash — the shell Claude Code uses for hooks on Windows.
 
 ## v4 → v5
@@ -60,6 +71,9 @@ Verified on Windows 11 + Git for Windows 2.53 (2026-07-11), after two fixes this
 - **Planner pre-mortem + wired-controls guardrail** · **Integrator `uat:` gate** · **`notify:` event hook** · **dashboard**: points strip, drift rail, rules count, opt-in browser notifications.
 - **Write routing table** (CONVENTIONS skeleton): one fact, one home, one writer — the drift class where two files disagree about the same fact can't start.
 - Unchanged and untouched: v3/v4's race-tested claim/lock/worktree/merge mechanics, all invariants, task format (**zero migration**).
+
+## Removing it
+`bash ops/polaris uninstall --yes` — deletes `ops/`, the managed `CLAUDE.md` block, the guard hook and the POLARIS gitignore lines. **Keeps your own `CLAUDE.md` content and your other hooks.** It refuses while any task sits in `active/` or `review/` (that's unfinished work), commits nothing, and `git checkout -- .` is the undo. Verified in CI: a repo that had its own `CLAUDE.md` and its own `PreToolUse` hook comes back byte-identical.
 
 ## Versions and updates
 `ops/polaris version` prints what this repo runs — version, commit, build date — and what the latest is on the channel. `ops/VERSION` names that channel (raw `ops/VERSION` on `main` in this public repo), so the check is one unauthenticated `curl`: no token, no `gh`, no credentials.

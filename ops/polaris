@@ -870,6 +870,100 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
   note "review the diff, then commit ops/ — nothing was committed for you"
 }
 
+cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and reversible only by git.
+  # Re-exec from a copy FIRST: we are about to delete ops/polaris, and on Windows you cannot
+  # unlink a file that is currently open — bash reads its script lazily, so removing ops/
+  # out from under ourselves would fail mid-run and leave the repo half-stripped.
+  if [ "${POLARIS_UNINSTALL_REEXEC:-}" != "1" ]; then
+    local tmp; tmp="$(mktemp -d)"
+    cp "$SELF" "$tmp/polaris"
+    POLARIS_UNINSTALL_REEXEC=1 exec bash "$tmp/polaris" uninstall "$@"
+  fi
+
+  local yes="" f n
+  [ "${1:-}" = "--yes" ] && yes=1
+
+  # Never strip a repo with work in flight.
+  n="$(ls "$BOARD/active" 2>/dev/null | grep -v '^\.gitkeep$' | wc -l | tr -d ' ')"
+  [ "$n" = "0" ] || die "$n task(s) still in active/ — finish or release them first (this is unfinished work)"
+  n="$(ls "$BOARD/review" 2>/dev/null | grep -v '^\.gitkeep$' | wc -l | tr -d ' ')"
+  [ "$n" = "0" ] || die "$n task(s) still in review/ — land or kick them back first"
+  n="$(git -C "$PRIMARY" worktree list | grep -c '\.polaris[/\\]wt' || true)"
+  [ "$n" = "0" ] || die "$n POLARIS worktree(s) still checked out — run: ops/polaris sweep --fix"
+
+  if [ -z "$yes" ]; then
+    say "polaris uninstall — this DELETES the following from $PRIMARY:"
+    note "ops/                         (board, tasks, contracts, RULES, CONVENTIONS, MAP, SPRINT, telemetry)"
+    note ".claude/skills/polaris/      (the project skill)"
+    note "the write-guard hook entry   (.claude/settings.json — your other hooks are kept)"
+    note "the managed POLARIS block    (CLAUDE.md — your own content is kept)"
+    note "POLARIS lines in .gitignore / .gitattributes · .polaris/ · the lock dir"
+    note ""
+    note "Nothing is committed — you review the diff, and git still has your history."
+    die "re-run with --yes to confirm"
+  fi
+
+  # --- CLAUDE.md: drop only the managed block (+ the separator install.sh wrote after it)
+  local CM="$PRIMARY/CLAUDE.md" B='<!-- POLARIS:BEGIN' E='<!-- POLARIS:END -->'
+  if [ -f "$CM" ] && grep -qF "$E" "$CM"; then
+    awk -v b="$B" 'index($0,b)==1 {exit} {print}' "$CM"  > "$CM.polaris-tmp"
+    # Drop the exact separator install.sh wrote after the block ("\n---\n\n"): leading blanks,
+    # one ---, then blanks. Restores the user's file to how it looked before we prepended.
+    awk -v e="$E" 'after {print} index($0,e)==1 {after=1}' "$CM" | awk '
+      s==0 && $0==""    {next}
+      s==0 && $0=="---" {s=1; next}
+      s==0              {s=2}
+      s==1 && $0==""    {next}
+      s==1              {s=2}
+      s>=2              {print}
+    ' >> "$CM.polaris-tmp"
+    mv "$CM.polaris-tmp" "$CM"
+    if [ -s "$CM" ] && grep -q '[^[:space:]]' "$CM"; then say "CLAUDE.md: managed block removed, your content kept"
+    else rm -f "$CM"; say "CLAUDE.md removed (it held nothing but POLARIS)"; fi
+  elif [ -f "$CM" ] && grep -q 'POLARIS' "$CM"; then
+    note "⚠ CLAUDE.md has an UNMARKED POLARIS block — left as is. Remove it by hand."
+  fi
+
+  # --- .claude/: guard hook out of settings.json (mirror of install.sh's merge-in), skill dir
+  local SJ="$PRIMARY/.claude/settings.json" PY=""
+  python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
+  if [ -f "$SJ" ] && grep -q 'ownership-guard' "$SJ" 2>/dev/null; then
+    if [ -n "$PY" ]; then
+      "$PY" - "$SJ" <<'EOF'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+h = d.get("hooks", {})
+pre = [e for e in h.get("PreToolUse", [])
+       if "ownership-guard" not in json.dumps(e)]        # keep every hook that isn't ours
+if pre: h["PreToolUse"] = pre
+else:   h.pop("PreToolUse", None)
+if not h: d.pop("hooks", None)
+if d: open(p, "w").write(json.dumps(d, indent=2) + "\n")
+else: __import__("os").remove(p)                          # the file held nothing but our hook
+EOF
+      say ".claude/settings.json: guard hook removed (your other hooks kept)"
+    else
+      note "⚠ python unavailable — remove the ownership-guard hook from .claude/settings.json by hand"
+    fi
+  fi
+  rm -rf "$PRIMARY/.claude/skills/polaris"
+  rmdir "$PRIMARY/.claude/skills" "$PRIMARY/.claude" 2>/dev/null || true   # only if now empty
+
+  # --- the lines install.sh appended
+  local GI="$PRIMARY/.gitignore" GA="$PRIMARY/.gitattributes"
+  for f in "$GI" "$GA"; do
+    [ -f "$f" ] || continue
+    grep -vE '^(polaris-v5/|polaris-v5\.zip|\.polaris/|ops/polaris text eol=lf|ops/VERSION text eol=lf|\*\.sh text eol=lf|ops/board/EVENTS\.ndjson merge=union -text)$' "$f" > "$f.polaris-tmp" || true
+    mv "$f.polaris-tmp" "$f"
+    grep -q '[^[:space:]]' "$f" || rm -f "$f"
+  done
+
+  rm -rf "$PRIMARY/ops" "$PRIMARY/.polaris" "$LOCKS"
+  say "POLARIS uninstalled from $PRIMARY"
+  note "review with: git -C \"$PRIMARY\" status   ·   undo with: git -C \"$PRIMARY\" checkout -- ."
+}
+
 cmd_match() { # _match <repo-relative-path> <ID> — internal: hook guard + tooling share
   # the ONE ownership matcher. Exit 0 = allowed for this task, 1 = not.
   local rel="${1:?}" id="${2:?}" tf
@@ -910,6 +1004,7 @@ polaris — POLARIS v4 board CLI (run from anywhere inside the repo)
   upgrade                        idempotent v3/v4→v5 migration on an existing board
   version                        installed version · commit · latest on the channel
   update                         fetch the latest kit from the channel (manual; never automatic)
+  uninstall --yes                remove POLARIS from this repo (keeps your CLAUDE.md + hooks)
 EOF
 }
 # update_check_maybe is wired ONLY into the human-facing commands below — deliberately not
@@ -936,6 +1031,7 @@ case "${1:-}" in
   upgrade)    cmd_upgrade;;
   version)    update_check_maybe || true; cmd_version;;
   update)     cmd_update;;
+  uninstall)  shift; cmd_uninstall "$@";;
   _match)     shift; cmd_match "$@";;
   ''|help|-h|--help) usage;;
   *) usage; die "unknown command: $1";;

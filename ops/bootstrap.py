@@ -5,6 +5,7 @@ makes polaris-v5.zip a Python zipapp — so the whole install is one command, no
     cd your-project
     python polaris-v5.zip                 # installs into the git repo you're standing in
     python polaris-v5.zip <target-repo>   # or name one (git init'd if greenfield)
+    python polaris-v5.zip --claude-skill  # teach Claude Code to do all this for you, everywhere
 
 Self-extracts to a temp dir, restores the exec bits the archive carries, and hands off to
 the same ops/install.sh that a manual unzip would run. Nothing is left behind but the install.
@@ -79,10 +80,40 @@ def git_toplevel(path):
         return None
 
 
+def install_claude_skill(archive):
+    """Teach Claude Code, on this machine, how to install POLARIS into ANY repo.
+
+    The project skill (.claude/skills/polaris/) only exists once POLARIS is installed, so it
+    cannot help you install it. This one is USER-level (~/.claude/skills/) and is therefore
+    opt-in via a flag: it writes outside the project, so it must never be implicit.
+
+    After this, in any repo, "install POLARIS" is all you have to say — Claude will fetch the
+    latest release itself if the zip isn't already sitting there.
+    """
+    src = f"{PREFIX}.claude/skills/polaris-install/SKILL.md"
+    dest_dir = os.path.join(os.path.expanduser("~"), ".claude", "skills", "polaris-install")
+    with zipfile.ZipFile(archive) as z:
+        try:
+            body = z.read(src)
+        except KeyError:
+            die("this archive carries no polaris-install skill — rebuild it with ops/pack.py")
+    os.makedirs(dest_dir, exist_ok=True)
+    dest = os.path.join(dest_dir, "SKILL.md")
+    with open(dest, "wb") as fh:
+        fh.write(body)
+    print(f"✅ Claude skill installed: {dest}")
+    print("   In any repo from now on, just say:  \"install POLARIS\"")
+    print("   Claude fetches the latest release itself — you don't even need the zip.")
+
+
 def main():
     archive = sys.path[0]          # running as a zipapp, sys.path[0] IS the archive
     if not os.path.isfile(archive) or not zipfile.is_zipfile(archive):
         die("run me as:  python polaris-v5.zip [target-repo]")
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--claude-skill":
+        install_claude_skill(archive)
+        return
 
     if not shutil.which("git"):
         die("git not found on PATH — POLARIS is built on git worktrees and branches")

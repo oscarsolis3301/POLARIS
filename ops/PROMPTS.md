@@ -1,9 +1,23 @@
 # PROMPTS — copy, paste, go
 Every kickoff below is complete; do not add context (the role files carry it). Constraints live in the repo, so these stay one line on purpose. In Claude Code the `polaris` skill auto-routes even without these; other CLIs need the paste.
 
+## Getting the kit into a repo
+```bash
+curl -fsSLO https://github.com/oscarsolis3301/POLARIS/releases/latest/download/polaris-v5.zip
+python polaris-v5.zip          # installs into the git repo you're standing in
+```
+One file, no `.git` attached, safe over an existing `CLAUDE.md` and hooks. Run `python polaris-v5.zip --claude-skill` once per machine and Claude Code does it for you from then on — in any repo, just say "install POLARIS".
+
 ## Once per repo
 ```
 You are INIT.
+```
+
+## Kit lifecycle (any session, any time)
+```bash
+ops/polaris version            # which POLARIS this repo runs · what's latest on the channel
+ops/polaris update             # fetch the latest kit — manual, never mid-sprint, commits nothing
+ops/polaris uninstall --yes    # remove POLARIS; keeps your CLAUDE.md content and your other hooks
 ```
 
 ## Every sprint

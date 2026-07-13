@@ -138,6 +138,15 @@ def build(allow_dirty):
                     .replace(b"\r\n", b"\n"), False))
 
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
+        # Archive comment: `unzip -z polaris-v5.zip` prints this. It's the zero-setup fallback
+        # that lets a human (or an agent) discover how to run the kit without opening it.
+        z.comment = (
+            f"POLARIS {version} — parallel-sprint protocol for coding agents.\n"
+            "Install: drop this file in your project and run:  python polaris-v5.zip\n"
+            "Teach Claude Code to do it for you:               python polaris-v5.zip --claude-skill\n"
+            "No Python? unzip polaris-v5.zip && bash polaris-v5/ops/install.sh\n"
+            "https://github.com/oscarsolis3301/POLARIS\n"
+        ).encode()
         for path, blob, is_exec in sorted(entries):
             name = path if path == "__main__.py" else f"{PREFIX}/{path}"
             info = zipfile.ZipInfo(name, date_time=stamp)

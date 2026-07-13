@@ -8,6 +8,24 @@ commits to `main` deliberately do not.
 
 Portable kit. POLARIS now moves between projects as a single zip with no `.git` attached.
 
+- **`CLAUDE.md` is now a managed block** (`<!-- POLARIS:BEGIN -->` … `<!-- POLARIS:END -->`), and
+  `update` replaces exactly that block. **This fixes a real bug:** installs used to bail with
+  *"already carries POLARIS — left as is"*, so the protocol document froze at install time — every
+  kit file was refreshable *except* the protocol itself, and no CLAUDE.md change could ever reach an
+  installed repo. Put your own rules below the END marker; they survive every update. A legacy
+  unmarked block is left alone rather than guessed at.
+- **`polaris uninstall --yes`** — removes `ops/`, the managed block, the guard hook and the POLARIS
+  gitignore lines, while keeping your own `CLAUDE.md` content and your other hooks. Refuses while
+  work sits in `active/` or `review/`. Re-execs from a temp copy first, because it is about to
+  delete the script bash is currently reading — and on Windows you cannot unlink an open file.
+- **`--claude-skill`** — `python polaris-v5.zip --claude-skill` installs a user-level Claude Code
+  skill, after which "install POLARIS" works in any repo and Claude fetches the release itself.
+  The *project* skill can't do this: it only exists after POLARIS is installed.
+- **CI on Linux, macOS and Windows** — the kit had never run outside one Windows box. The macOS job
+  pins `/bin/bash` (3.2) and asserts the version, because GitHub's image puts a newer Homebrew bash
+  first on `PATH` and a bare `bash` would silently test bash 5 and prove nothing. Exec bits are
+  asserted against the mode *stored in the archive*, not the extracted file — Git Bash fakes
+  `test -x` on Windows, so an extraction check would pass vacuously and let a dead kit ship.
 - **Drag-and-run** — `polaris-v5.zip` is a Python zipapp (`__main__.py` at the archive root),
   so installing is one command with no unzip step: drop the zip in a project and run
   `python polaris-v5.zip`. It self-extracts to a temp dir, restores the exec bits the archive

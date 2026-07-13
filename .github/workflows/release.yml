@@ -1,6 +1,6 @@
-# Publishes the draggable kit. Tag a release (`git tag v5.1.0 && git push --tags`) and the
-# zip is built by CI and attached to the GitHub Release — so the kit is one download away
-# for anyone, and the published artifact is never a stale hand-built one.
+# Publishes the draggable kit. Tag a release (`git tag v5.1.0 && git push --tags`) and the zip is
+# built by CI and attached to the GitHub Release — so the kit is one download away for anyone, and
+# the published artifact is never a stale hand-built one.
 #
 # This is convenience only. It does NOT feed the update check: that reads `version:` from
 # ops/VERSION on main via raw.githubusercontent, so there is no second source of truth.
@@ -18,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
 
       - name: Tag must match ops/VERSION
         run: |
@@ -28,22 +31,70 @@ jobs:
             exit 1
           }
 
-      - run: python3 ops/pack.py
+      - run: python ops/pack.py
 
-      - name: Exec bits survived the pack
+      - name: Archive integrity — exec bits, LF, zipapp
+        # Same check as ci.yml: read the mode stored IN the archive. An extracted-file check is
+        # vacuous on Windows and would let a kit that is dead on arrival get published.
         run: |
-          unzip -q polaris-v5.zip -d _check
-          for f in ops/polaris ops/install.sh ops/hooks/ownership-guard.sh; do
-            test -x "_check/polaris-v5/$f" || { echo "::error::$f lost its exec bit"; exit 1; }
-          done
-          ! grep -rlq $'\r' _check/polaris-v5 || { echo "::error::CRLF found in the archive"; exit 1; }
+          python - <<'PY'
+          import sys, zipfile
+          NEED_EXEC = {
+              "polaris-v5/ops/polaris",
+              "polaris-v5/ops/install.sh",
+              "polaris-v5/ops/hooks/ownership-guard.sh",
+          }
+          z = zipfile.ZipFile("polaris-v5.zip")
+          names = set(z.namelist())
+          bad = []
+          if "__main__.py" not in names:
+              bad.append("__main__.py missing — not a zipapp, `python polaris-v5.zip` would fail")
+          for want in NEED_EXEC:
+              if want not in names:
+                  bad.append(f"{want} missing"); continue
+              if not ((z.getinfo(want).external_attr >> 16) & 0o111):
+                  bad.append(f"{want} lost its exec bit — kit would be DOA")
+          for info in z.infolist():
+              if not info.is_dir() and b"\r\n" in z.read(info.filename):
+                  bad.append(f"CRLF in {info.filename}")
+          if bad:
+              for b in sorted(set(bad)):
+                  print(f"::error::{b}")
+              sys.exit(1)
+          print("archive OK")
+          PY
+
+      - name: Smoke — the artifact we are about to publish actually installs
+        run: |
+          set -e
+          APP="$RUNNER_TEMP/app"; mkdir -p "$APP"; cd "$APP"
+          git init -qb main
+          git config user.email ci@example.com && git config user.name ci
+          echo x > file.txt && git add -A && git commit -qm init
+          cp "$GITHUB_WORKSPACE/polaris-v5.zip" .
+          python polaris-v5.zip
+          bash ops/polaris doctor --selftest
 
       - uses: softprops/action-gh-release@v2
         with:
           files: polaris-v5.zip
+          generate_release_notes: true
           body: |
-            Drop-in POLARIS kit. Unzip inside your project, then:
+            **Drop-in POLARIS kit — one file, no `.git`, works in a greenfield folder or a 10k-file repo.**
 
-                bash polaris-v5/ops/install.sh
+            ```bash
+            curl -fsSLO https://github.com/oscarsolis3301/POLARIS/releases/latest/download/polaris-v5.zip
+            python polaris-v5.zip
+            ```
 
-            See CHANGELOG.md for what changed.
+            Or teach Claude Code to do it for you, in any repo, forever:
+
+            ```bash
+            python polaris-v5.zip --claude-skill
+            ```
+
+            Then start a new session and say **"You are INIT."**
+
+            Verified by this run on Linux, macOS (bash 3.2) and Windows: exec bits survive the
+            archive, no CRLF, installs non-destructively over an existing `CLAUDE.md` and hooks,
+            and `doctor --selftest` passes. See `CHANGELOG.md`.

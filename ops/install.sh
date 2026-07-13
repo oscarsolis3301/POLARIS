@@ -73,17 +73,40 @@ if ! grep -q '^commit:' "$V" 2>/dev/null; then
   { printf 'commit: %s\n' "${SHA:-unknown}"; printf 'built: %s\n' "$(date +%Y-%m-%d)"; } >> "$V"
 fi
 
-# --- CLAUDE.md ------------------------------------------------------------------
+# --- CLAUDE.md --------------------------------------------------------------------
+# The POLARIS block is MANAGED: delimited by markers so `polaris update` can replace it in
+# place. Without markers the protocol froze at install time — every kit file was refreshable
+# except the protocol document itself, so no CLAUDE.md change could ever reach an installed
+# repo. The markers are also what make `polaris uninstall` safe: you cannot remove a block
+# you cannot delimit.
+BEGIN_M='<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. -->'
+END_M='<!-- POLARIS:END -->'
 MARK="POLARIS v5 — Parallel Sprint Protocol"
-if [ ! -f "$TARGET/CLAUDE.md" ]; then
-  cp "$KIT/CLAUDE.md" "$TARGET/CLAUDE.md"; say "CLAUDE.md installed"
-elif grep -q "$MARK" "$TARGET/CLAUDE.md"; then
-  note "CLAUDE.md already carries POLARIS — left as is"
+CM="$TARGET/CLAUDE.md"
+TMP="$TARGET/CLAUDE.md.polaris-tmp"
+
+emit_block() { printf '%s\n' "$BEGIN_M"; cat "$KIT/CLAUDE.md"; printf '%s\n' "$END_M"; }
+
+if [ ! -f "$CM" ]; then
+  emit_block > "$CM"
+  say "CLAUDE.md installed (managed block)"
+elif grep -qF "$END_M" "$CM"; then
+  # Rebuild as: everything before BEGIN + a fresh block + everything after END.
+  # Two plain awk passes — no sed -i (BSD needs a backup suffix), no bash 4 features.
+  { awk -v b="$BEGIN_M" 'index($0,b)==1 {exit} {print}' "$CM"
+    emit_block
+    awk -v e="$END_M" 'after {print} index($0,e)==1 {after=1}' "$CM"
+  } > "$TMP"
+  mv "$TMP" "$CM"
+  say "CLAUDE.md: managed POLARIS block refreshed (everything outside it untouched)"
+elif grep -qF "$MARK" "$CM"; then
+  note "CLAUDE.md carries POLARIS but has no markers (installed before they existed) —"
+  note "  left as is. To make it updatable, wrap the POLARIS section by hand in:"
+  note "  $BEGIN_M ... $END_M"
 else
-  TMP="$TARGET/CLAUDE.md.polaris-tmp"
-  { cat "$KIT/CLAUDE.md"; printf '\n---\n\n'; cat "$TARGET/CLAUDE.md"; } > "$TMP"
-  mv "$TMP" "$TARGET/CLAUDE.md"
-  say "CLAUDE.md: POLARIS prepended above existing content"
+  { emit_block; printf '\n---\n\n'; cat "$CM"; } > "$TMP"
+  mv "$TMP" "$CM"
+  say "CLAUDE.md: POLARIS prepended above existing content (managed block)"
 fi
 
 # --- .claude/ (skill + PreToolUse write-guard) ----------------------------------
@@ -112,7 +135,8 @@ fi
 # --- .gitattributes: LF-pin scripts (autocrlf=true clones break CRLF bash) ------
 GA="$TARGET/.gitattributes"
 grep -q '^ops/polaris text eol=lf' "$GA" 2>/dev/null || {
-  { echo 'ops/polaris text eol=lf'; echo '*.sh text eol=lf'; } >> "$GA"
+  # ops/VERSION is parsed by sed in install.sh and ops/polaris — a CRLF clone would feed it \r.
+  { echo 'ops/polaris text eol=lf'; echo 'ops/VERSION text eol=lf'; echo '*.sh text eol=lf'; } >> "$GA"
   say ".gitattributes: kit scripts pinned to LF"
 }
 
