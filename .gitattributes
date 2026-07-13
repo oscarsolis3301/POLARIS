@@ -2,6 +2,7 @@
 # checkouts with core.autocrlf=true would otherwise rewrite them on clone.
 * text=auto
 ops/polaris text eol=lf
+ops/VERSION text eol=lf
 *.sh text eol=lf
 *.py text eol=lf
 *.tsv text eol=lf
