@@ -5,7 +5,7 @@ Drop-in parallel-agent operating system for any repo. Any model/CLI that loads a
 New in v5, the guard and the gates enforce **two** things: ownership (diff ⊆ `files_owned`, unchanged since v3) and **RULES** — your repo's policy as data. One TAB-separated line in `ops/RULES.tsv` is a danger zone (`path`: forbidden to write, even inside owned files) or a content guard (`content`: added lines must not match an ERE). INIT turns your "never touch X" interview answers into armed rules instead of prose; EVOLVE proposes new lines from kickback/Learned evidence and a human approves each one. That is "hooks that create themselves" done safely: evidence → proposal → approve → one appended line, zero new scripts.
 
 ## Install (any repo, greenfield or 10k files)
-**From the zip — the portable path.** `polaris-v5.zip` is the whole kit and carries no `.git`, so it drops into any project. Grab it from [Releases](https://github.com/oscarsolis3301/Polaris/releases), unzip it **inside your project**, and run the installer with no arguments — it finds the enclosing repo itself:
+**From the zip — the portable path.** `polaris-v5.zip` is the whole kit and carries no `.git`, so it drops into any project. Grab it from [Releases](https://github.com/oscarsolis3301/POLARIS/releases), unzip it **inside your project**, and run the installer with no arguments — it finds the enclosing repo itself:
 
 ```bash
 unzip polaris-v5.zip          # -> polaris-v5/
