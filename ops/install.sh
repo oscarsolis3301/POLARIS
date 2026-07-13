@@ -116,12 +116,15 @@ grep -q '^ops/polaris text eol=lf' "$GA" 2>/dev/null || {
   say ".gitattributes: kit scripts pinned to LF"
 }
 
-# --- .gitignore: a leftover kit folder must never be committable -----------------
+# --- .gitignore -------------------------------------------------------------------
+# polaris-v5/ : a leftover kit folder must never be committable.
+# .polaris/   : worktrees + the update cache. init-board arms this too, but the update
+#               check can create .polaris/ on the very first `status` — i.e. before INIT
+#               has ever run — and untracked cruft is one `git add -A` from the repo.
 GI="$TARGET/.gitignore"
-grep -qx 'polaris-v5/' "$GI" 2>/dev/null || {
-  echo 'polaris-v5/' >> "$GI"
-  say ".gitignore: polaris-v5/ excluded — a leftover kit folder can't be committed"
-}
+for p in 'polaris-v5/' '.polaris/'; do
+  grep -qx "$p" "$GI" 2>/dev/null || { echo "$p" >> "$GI"; say ".gitignore: $p excluded"; }
+done
 
 # --- next steps -----------------------------------------------------------------
 say "POLARIS $(sed -n 's/^version: *//p' "$V" | head -1) installed into $TARGET"
