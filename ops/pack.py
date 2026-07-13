@@ -110,8 +110,14 @@ def build(allow_dirty):
     for line in git("ls-files", "-s").splitlines():
         meta, path = line.split("\t", 1)
         mode = meta.split()[0]
-        blob = (KIT / path).read_bytes().replace(b"\r\n", b"\n")
+        blob = (KIT / path).read_bytes()
         is_exec = mode == "100755"
+
+        # LF-normalise text only. A blanket \r\n→\n would corrupt any binary that ever
+        # entered the kit (a stray .pyc did exactly that once). NUL = binary, same
+        # heuristic git uses.
+        if b"\x00" not in blob:
+            blob = blob.replace(b"\r\n", b"\n")
 
         if path == "ops/VERSION":
             # Provenance is stamped into the emitted copy only. Writing the sha into

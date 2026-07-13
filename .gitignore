@@ -1,1 +1,3 @@
 polaris-v5.zip
+__pycache__/
+*.pyc
