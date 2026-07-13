@@ -121,8 +121,9 @@ grep -q '^ops/polaris text eol=lf' "$GA" 2>/dev/null || {
 # .polaris/   : worktrees + the update cache. init-board arms this too, but the update
 #               check can create .polaris/ on the very first `status` — i.e. before INIT
 #               has ever run — and untracked cruft is one `git add -A` from the repo.
+# polaris-v5.zip : the dragged-in kit archive itself is not part of your project either.
 GI="$TARGET/.gitignore"
-for p in 'polaris-v5/' '.polaris/'; do
+for p in 'polaris-v5/' 'polaris-v5.zip' '.polaris/'; do
   grep -qx "$p" "$GI" 2>/dev/null || { echo "$p" >> "$GI"; say ".gitignore: $p excluded"; }
 done
 

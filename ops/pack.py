@@ -131,9 +131,16 @@ def build(allow_dirty):
     if not entries:
         sys.exit("⛔ git ls-files returned nothing — is this the kit repo?")
 
+    # __main__.py at the ARCHIVE ROOT is what makes this a Python zipapp: `python
+    # polaris-v5.zip` then runs it directly, so a drag-and-drop install needs no unzip step.
+    # It must sit at the root, not under the prefix — that's the whole contract.
+    entries.append(("__main__.py", (KIT / "ops" / "bootstrap.py").read_bytes()
+                    .replace(b"\r\n", b"\n"), False))
+
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
         for path, blob, is_exec in sorted(entries):
-            info = zipfile.ZipInfo(f"{PREFIX}/{path}", date_time=stamp)
+            name = path if path == "__main__.py" else f"{PREFIX}/{path}"
+            info = zipfile.ZipInfo(name, date_time=stamp)
             info.create_system = 3                              # Unix — required, or the
             info.external_attr = (EXEC_MODE if is_exec          # permission bits below
                                   else DATA_MODE) << 16         # are ignored on extract
@@ -143,7 +150,7 @@ def build(allow_dirty):
     print(f"✅ {OUT.name}  v{version} @ {sha}  ({len(entries)} files, {OUT.stat().st_size:,} bytes)")
     for path in sorted(execs):
         print(f"   +x {PREFIX}/{path}")
-    print(f"   unzip in a project, then: bash {PREFIX}/ops/install.sh")
+    print("   drop it in any project and run:  python polaris-v5.zip")
 
 
 if __name__ == "__main__":
