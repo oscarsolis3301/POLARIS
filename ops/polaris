@@ -516,7 +516,9 @@ cmd_doctor() {
   [ "$CLAIM_MODE" = "claim-branch" ] && ! has_remote && note "⚠ claim-branch set but no origin remote"
   [ -f "$EVENTS" ] && ! grep -q 'EVENTS\.ndjson merge=union' "$PRIMARY/.gitattributes" 2>/dev/null \
     && note "⚠ EVENTS.ndjson exists without its union-merge gitattribute — run: ops/polaris upgrade"
-  [ -f "$VER" ] && note "POLARIS v$(ver version) ($(ver commit || echo 'unstamped'))"
+  # `ver` exits 0 with empty output when a key is absent, so || can't catch it — grep can.
+  # The kit repo's own VERSION is unstamped on purpose: pack.py stamps the emitted copy.
+  [ -f "$VER" ] && note "POLARIS v$(ver version) ($(ver commit | grep . || echo unstamped))"
   # Kit repo only: the shipped zip going stale is exactly how the last one rotted.
   if [ -f "$OPS/pack.py" ] && [ -f "$PRIMARY/polaris-v5.zip" ] && command -v unzip >/dev/null 2>&1; then
     local zsha head
