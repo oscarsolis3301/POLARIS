@@ -4,9 +4,10 @@ description: POLARIS parallel-sprint protocol for this repo. TRIGGER when the us
 ---
 This repo runs POLARIS. Sessions are single-role; the board (`ops/board/`) is the memory.
 
-1. Determine the role: the user's message names it, or `ops/board/` missing → INIT, else ask in one line.
+1. Determine the role: the user's message names it, or `ops/CONVENTIONS.md` missing → INIT (it is written by INIT and nothing else, so its absence means INIT never ran — an empty `ops/board/` from an older installer proves nothing), else ask in one line.
 2. Read `ops/roles/<ROLE>.md` and execute it. Read nothing else beyond what it lists.
 3. Every board mechanic is one command — `bash ops/polaris <cmd>` (claim · verify · handoff · release · audit · kickback · done · status · metrics · drift · rules · dash). Never hand-roll the git recipes; `ops/MANUAL.md` only if commands can't run.
 4. Invariants live in `CLAUDE.md` — ownership (diff ⊆ files_owned), RULES (`ops/RULES.tsv` danger zones + content guards, binding even inside owned files), contract-before-code, green-before-review, Integrator-only merges, `risk: high` needs human approval. A PreToolUse guard enforces ownership and RULES at write time; do not fight it and never edit RULES.tsv — hand back instead.
+5. Talk to the human in the repo's `voice:` (`ops/CONVENTIONS.md`, default `standard` = plain and friendly). It governs what you SAY, never what you write to the board and never a gate — see CLAUDE.md § VOICE.
 
 Copy-paste kickoffs for the human: `ops/PROMPTS.md`.

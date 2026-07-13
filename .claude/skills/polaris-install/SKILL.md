@@ -1,6 +1,6 @@
 ---
 name: polaris-install
-description: Install, update, or remove the POLARIS parallel-sprint protocol in the current repo. TRIGGER when the user asks to install/add/set up POLARIS, points at a polaris-v5.zip file, or asks to update or uninstall POLARIS. DO NOT TRIGGER inside a repo that already has ops/board/ and a working ops/polaris — there, POLARIS is already installed and the project's own protocol governs.
+description: Install, update, or remove the POLARIS parallel-sprint protocol in the current repo. TRIGGER when the user asks to install/add/set up POLARIS, points at a polaris-v5.zip file, or asks to update or uninstall POLARIS. DO NOT TRIGGER inside a repo that already has a working ops/polaris — there, POLARIS is already installed and the project's own protocol governs.
 ---
 
 # Installing POLARIS into this repo
@@ -11,8 +11,14 @@ installing is one command and needs no unzip step.
 
 ## First: is it already installed?
 
-If `ops/board/` and `ops/polaris` both exist, POLARIS is already here. Do **not** reinstall.
-Run `bash ops/polaris version` to report which version, and stop.
+If `ops/polaris` exists, the kit is already here. Do **not** reinstall — run `bash ops/polaris version`
+to report which version, and stop.
+
+Then check one more thing, because it decides what you tell them next: **`ops/CONVENTIONS.md` is the
+only test for whether INIT has run.** INIT writes it; nothing else does. If the kit is installed but
+that file is missing, the repo is installed-but-uninitialized — tell them to open a new session and
+say **"You are INIT."** Never use `ops/board/` for this test: older installers shipped the six empty
+board columns, so an `ops/board/` can exist in a repo where INIT has never run.
 
 ## Install
 

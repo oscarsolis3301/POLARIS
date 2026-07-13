@@ -79,7 +79,7 @@ jobs:
 
       - name: Drag-and-run install into a scratch repo
         run: |
-          set -e
+          set -eo pipefail          # `| tee` must not swallow a failed install
           APP="$RUNNER_TEMP/app"
           mkdir -p "$APP/src"
           cd "$APP"
@@ -93,7 +93,40 @@ jobs:
           echo "print(1)" > src/app.py
           git add -A && git commit -qm pristine
           cp "$GITHUB_WORKSPACE/polaris-v5.zip" .
-          python polaris-v5.zip
+          python polaris-v5.zip | tee "$RUNNER_TEMP/install.log"
+
+      - name: A fresh install is NOT a live board
+        # The 5.2.0 regression guard. The installer used to ship the six empty board columns, so
+        # every fresh install looked initialized: CLAUDE.md's dispatch never offered INIT, INIT.md's
+        # precondition told the agent to refuse, and a re-run announced "live board detected".
+        # ops/CONVENTIONS.md — written by INIT and by nothing else — is now the only test.
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP/app"
+          test ! -d ops/board          || { echo "::error::installer created ops/board/ — a fresh install must not look initialized"; exit 1; }
+          test ! -f ops/CONVENTIONS.md || { echo "::error::installer wrote CONVENTIONS.md — only INIT may"; exit 1; }
+          grep -q 'You are INIT' "$RUNNER_TEMP/install.log" || { echo "::error::installer did not route a fresh repo to INIT"; exit 1; }
+          bash ops/polaris doctor | grep -q 'INIT has not run' || { echo "::error::doctor does not report the uninitialized repo"; exit 1; }
+          # re-run must STILL route to INIT, not to `polaris upgrade`
+          python polaris-v5.zip | tee "$RUNNER_TEMP/reinstall.log"
+          grep -q 'You are INIT' "$RUNNER_TEMP/reinstall.log" || { echo "::error::re-run misrouted an uninitialized repo"; exit 1; }
+          ! grep -q 'live board'  "$RUNNER_TEMP/reinstall.log" || { echo "::error::re-run called an uninitialized repo a live board"; exit 1; }
+          echo "fresh-install predicate OK"
+
+      - name: A live board IS detected (and never overwritten)
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP/app"
+          bash ops/polaris init-board >/dev/null
+          printf '# CONVENTIONS\nbase: main\nvoice: technical\ntest: echo hi\n' > ops/CONVENTIONS.md
+          python polaris-v5.zip | tee "$RUNNER_TEMP/upgrade.log"
+          grep -q 'live board detected' "$RUNNER_TEMP/upgrade.log" || { echo "::error::live board not detected"; exit 1; }
+          grep -q 'polaris upgrade'     "$RUNNER_TEMP/upgrade.log" || { echo "::error::live board not routed to upgrade"; exit 1; }
+          grep -q 'voice: technical'    ops/CONVENTIONS.md || { echo "::error::installer overwrote CONVENTIONS.md"; exit 1; }
+          bash ops/polaris doctor | grep -q 'voice: technical' || { echo "::error::doctor does not report the configured voice"; exit 1; }
+          # leave the scratch repo uninitialized again, so the steps below see a virgin install
+          rm -rf ops/CONVENTIONS.md ops/board ops/contracts
+          echo "live-board predicate OK"
 
       - name: Merge was non-destructive
         run: |

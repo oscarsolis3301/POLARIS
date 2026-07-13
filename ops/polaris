@@ -509,7 +509,16 @@ cmd_doctor() {
   awk -v v="$gv" 'BEGIN{split(v,a,"."); exit !(a[1]>2 || (a[1]==2 && a[2]>=5))}' \
     || die "git >= 2.5 required for worktrees"
   git -C "$PRIMARY" show-ref --verify -q "refs/heads/$BASE" || note "⚠ base branch '$BASE' not found — set base: in CONVENTIONS.md"
-  [ -f "$CONV" ] || note "⚠ ops/CONVENTIONS.md missing — run INIT"
+  # CONVENTIONS.md is written by INIT and by nothing else — its absence is THE test for
+  # "INIT never ran here". install.sh, CLAUDE.md's role dispatch and INIT.md all use this
+  # same file for that question. Never ops/board/: an older installer shipped it empty.
+  if [ -f "$CONV" ]; then
+    # `update` never rewrites CONVENTIONS.md, so a pre-5.2 board has no voice: line — print the
+    # effective value either way, or the knob is undiscoverable for exactly the repos that want it.
+    note "voice: $(cfg voice standard) — how agents talk to you (standard | technical; set in CONVENTIONS.md)"
+  else
+    note "⚠ ops/CONVENTIONS.md missing — INIT has not run in this repo. Open a session and say: \"You are INIT.\""
+  fi
   mkdir -p "$LOCKS" && [ -w "$LOCKS" ] || die "lock dir not writable: $LOCKS"
   case "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null)" in .*|../*) note "⚠ origin is a RELATIVE path — breaks in worktrees; use an absolute URL";; esac
   case "$CLAIM_MODE" in local-lock|claim-branch) :;; *) die "claim: must be local-lock or claim-branch";; esac

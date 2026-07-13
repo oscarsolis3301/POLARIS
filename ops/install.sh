@@ -7,6 +7,13 @@
 # Existing live board: board state and INIT artifacts are never touched — kit
 # code files are refreshed and you finish with `bash ops/polaris upgrade`.
 # Idempotent: safe to re-run.
+#
+# "Live board" means ops/CONVENTIONS.md exists — i.e. INIT has run. It does NOT mean
+# ops/board/ exists: this installer used to ship the six empty board columns, so every
+# fresh install looked like a live board to itself, to CLAUDE.md's role dispatch and to
+# INIT.md's precondition — which then told INIT to refuse the very job it was handed.
+# The board is now created by `polaris init-board` (INIT runs it), so its existence is
+# once again the truth it was always meant to be.
 set -eu
 
 die() { printf '⛔ %s\n' "$*" >&2; exit 1; }
@@ -41,7 +48,9 @@ PY=""; python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/n
 # --- ops/ ---------------------------------------------------------------------
 KIT_CODE="polaris dashboard.py MANUAL.md PROMPTS.md install.sh VERSION"   # + roles/ templates/ hooks/ ci/
                                                                    # (pack.py stays in the kit — never shipped)
-if [ -d "$TARGET/ops/board" ]; then
+# ops/CONVENTIONS.md is written by INIT and by nothing else — it is THE "has INIT run?" test,
+# the same one `polaris doctor` uses. Never test ops/board/ for this (see header).
+if [ -f "$TARGET/ops/CONVENTIONS.md" ]; then
   note "live board detected — refreshing kit code only (board, RULES, CONVENTIONS, MAP, SPRINT untouched)"
   for f in $KIT_CODE; do cp "$KIT/ops/$f" "$TARGET/ops/$f"; done
   for d in roles templates hooks ci; do mkdir -p "$TARGET/ops/$d"; cp "$KIT/ops/$d/"* "$TARGET/ops/$d/"; done
@@ -49,7 +58,10 @@ if [ -d "$TARGET/ops/board" ]; then
 else
   mkdir -p "$TARGET/ops"
   cp "$KIT"/ops/*.md "$KIT/ops/polaris" "$KIT/ops/dashboard.py" "$KIT/ops/install.sh" "$KIT/ops/VERSION" "$TARGET/ops/"
-  for d in roles templates hooks ci board contracts; do
+  # board/ and contracts/ are deliberately NOT copied — `polaris init-board` creates them during
+  # INIT, together with the lock dir, the .polaris/ gitignore and the EVENTS.ndjson union-merge
+  # gitattribute. Shipping them empty is what made a fresh install indistinguishable from a live one.
+  for d in roles templates hooks ci; do
     mkdir -p "$TARGET/ops/$d"
     cp -R "$KIT/ops/$d/." "$TARGET/ops/$d/"
   done

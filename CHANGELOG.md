@@ -4,6 +4,38 @@ Versions here are the **kit version** (`ops/VERSION`), not the board protocol ve
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.2.0 — 2026-07-13
+
+Two things a real 843-file brownfield install taught us: agents only had one register, and a fresh
+install lied to the kit about its own state.
+
+- **`voice:` — pick how agents talk to you.** A new `ops/CONVENTIONS.md` key: `standard` (plain,
+  friendly English — the default) or `technical` (dense, terse, what every POLARIS agent sounded like
+  until now). INIT asks it **first, alone, before the interview**, then runs the interview itself in
+  that voice — so nobody is asked to choose between `paranoid` and `batch` before they've read a word
+  of the docs; they're asked whether to re-run the tests after every merge or once at the end, and
+  INIT maps the answer. Voice governs **only what an agent says to you** — reports, questions, `✅`
+  and `⛔` lines. What gets written to disk (task frontmatter, contracts, MAP, SPRINT, RULES, commit
+  messages, code) stays exactly as machine-terse as before, because agents read those. And voice
+  changes wording, never content or behavior: a red suite is still reported red, and no gate softens.
+  Existing boards need no migration — `update` never rewrites `CONVENTIONS.md`, so they get the
+  `standard` default, and `polaris doctor` now prints the effective voice so the knob is findable.
+- **Fixed: a fresh install was indistinguishable from a live board, so INIT refused to run.** The kit
+  tested "has INIT run?" by asking whether `ops/board/` existed — but `install.sh` *created*
+  `ops/board/`, shipping the six empty columns and their `.gitkeep`s. So on every fresh install the
+  test was false: `CLAUDE.md`'s role dispatch never offered INIT, `INIT.md`'s precondition told the
+  agent to refuse ("never re-initialize over a live board"), and a second `install.sh` run announced
+  "live board detected" and sent you to `polaris upgrade`. Agents got through it only by overruling
+  their own role file. **`ops/CONVENTIONS.md` is now the single "has INIT run?" test everywhere** —
+  it is written by INIT and by nothing else, and it is the test `doctor` already used. The installer
+  no longer ships `ops/board/` at all: `polaris init-board` creates it during INIT, so the old test
+  is *true* again as well as unused. CI now asserts both (no board before INIT · the installer still
+  routes a re-run to INIT), so the predicate cannot rot back.
+- **INIT flags git-tracked build output** (`.next/`, `dist/`, `build/`, `*.tsbuildinfo`) during the
+  survey. A Builder that runs the build in such a repo dirties hundreds of files it does not own and
+  `polaris verify` rejects its handoff — day one, every time. INIT reports it and proposes the
+  `git rm -r --cached` + `.gitignore` fix; the human runs it, because deleting files is stop-and-ask.
+
 ## 5.1.0 — 2026-07-13
 
 Portable kit. POLARIS now moves between projects as a single zip with no `.git` attached.

@@ -13,8 +13,9 @@ Your kickoff message names your role. Read `ops/roles/<ROLE>.md`, then execute i
 | "You are the INTEGRATOR" | `ops/roles/INTEGRATOR.md` | 1 at a time |
 | "You are EVOLVE" | `ops/roles/EVOLVE.md` | 1, between sprints |
 
-- No role given and `ops/board/` does NOT exist → you are INIT.
-- No role given and `ops/board/` exists → ask in one line: "Which role: PLANNER, BUILDER, or INTEGRATOR?"
+- No role given and `ops/CONVENTIONS.md` does NOT exist → INIT has never run here → you are INIT.
+- No role given and `ops/CONVENTIONS.md` exists → ask in one line: "Which role: PLANNER, BUILDER, or INTEGRATOR?"
+- `ops/CONVENTIONS.md` is the ONLY "has INIT run?" test. An `ops/board/` left by an older installer proves nothing.
 - NEVER act as two roles in one session.
 
 ## THE ONE IDEA
@@ -90,8 +91,18 @@ Deleting any file · adding a dependency · changing DB schema or migrations · 
 - BUILDER: mid tier for tasks ≤3 points; strongest tier for 5-point or `risk: high` tasks.
 - Phrase is tier-relative on purpose: models change, the routing rule doesn't.
 
+## VOICE — how you TALK to the human (`voice:` in `ops/CONVENTIONS.md`, default `standard`)
+| `voice:` | How you speak |
+|---|---|
+| `standard` | Warm, friendly, plain English — like a teammate who knows the code, not a spec sheet. No POLARIS jargon (`wsjf`, `paranoid`, `local-lock`, `files_owned`) unless you explain it in the same breath. Lead with what happened and what it means for them; leave out detail they didn't ask for. |
+| `technical` | Dense, terse, expert-to-expert. Jargon is fine; assume they wrote this kit. |
+
+- **Applies ONLY to what you SAY** — your reports, the questions you ask, your `✅`/`⛔` lines.
+- **NEVER applies to what you WRITE to disk.** Task frontmatter, acceptance criteria, contracts, `ops/MAP.md`, `ops/SPRINT.md`, `ops/RULES.tsv`, commit messages and code stay exactly as terse and machine-precise as they are today — agents read those, and chattiness there costs the next agent tokens and accuracy.
+- **Voice changes wording, NEVER content or behavior.** A red suite is still reported red, an ownership violation is still a hard stop, and nothing on the STOP-AND-ASK list gets softer or skipped. `standard` is the same information a friend would give you — not less of it.
+
 ## PROGRESS FORMAT
-After each meaningful step, output one line: `✅ <what> — <file>`. On any stop: `⛔ <why> — <what you need>`.
+After each meaningful step, output one line: `✅ <what> — <file>`. On any stop: `⛔ <why> — <what you need>`. Keep the shape; the words inside follow `voice:`.
 
 ## MODEL NOTES (whichever model runs this)
 Follow this spec literally. Missing detail means STOP and ask — never guess. Only make changes the task states. Reason as deeply as the task needs; no scaffolding rituals. Front-load: read MAP, CONVENTIONS, and the contract before writing anything.

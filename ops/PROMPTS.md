@@ -12,6 +12,7 @@ One file, no `.git` attached, safe over an existing `CLAUDE.md` and hooks. Run `
 ```
 You are INIT.
 ```
+INIT's first question is how you want agents to talk to you — plain English or dense and technical. It asks the rest of its interview in whichever you pick. Change your mind later: edit `voice:` in `ops/CONVENTIONS.md` (`standard` | `technical`); `bash ops/polaris doctor` prints the one in force.
 
 ## Kit lifecycle (any session, any time)
 ```bash

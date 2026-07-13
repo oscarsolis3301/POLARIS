@@ -119,6 +119,12 @@ def build(allow_dirty):
     for line in git("ls-files", "-s").splitlines():
         meta, path = line.split("\t", 1)
         mode = meta.split()[0]
+
+        # archive/ is where files go when a change retires them — kept in git so nothing is ever
+        # lost (see archive/README.md), but it must NEVER ship into somebody else's project.
+        if path.startswith("archive/"):
+            continue
+
         blob = (KIT / path).read_bytes()
         is_exec = mode == "100755"
 

@@ -51,6 +51,11 @@ The Planner assigns every task a disjoint `files_owned` set — and v5 makes tha
 ## Points, calibrated
 Every `claim` and `done` telemetry line now carries the task's points, so `polaris metrics` reports cycle-p50 **per point bucket** — "your 3-pointers actually take 9h" is the sentence that fixes pointing. The Planner reads it before every sprint; EVOLVE watches it across sprints; the dashboard shows ready/WIP points at a glance.
 
+## Pick how agents talk to you
+`voice: standard | technical` in `ops/CONVENTIONS.md`. **`standard`** (the default) is plain, friendly English — a teammate explaining what they did. **`technical`** is dense and terse, what every POLARIS agent sounded like before v5.2. INIT asks this **first, alone, before its interview**, then asks the interview itself in your voice: you are never made to choose between `paranoid` and `batch` before you've read a word of the docs — you're asked whether to re-run the tests after every merge or once at the end, and INIT maps the answer to the config.
+
+It changes **what agents say**, never what they do. Reports, questions and `✅`/`⛔` lines follow it; task files, contracts, `MAP.md`, `RULES.tsv`, commit messages and code stay machine-terse, because agents read those. And a friendlier voice is not a quieter one — a red suite is still reported red, and no gate softens.
+
 ## Optional per-repo keys (CONVENTIONS.md)
 `uat: <cmd>` — an end-to-end suite the Integrator runs ONCE on the integrate branch (red bisects exactly like a red unit suite). `notify: <cmd>` — runs in the background on every board event with `POLARIS_EV`/`POLARIS_ID`/`POLARIS_NOTE` env vars; wire it to ntfy, Slack, `osascript`, anything — it can observe the board but can never stall or fail it. Both are slots, not dependencies: POLARIS stays language-agnostic and ships neither.
 

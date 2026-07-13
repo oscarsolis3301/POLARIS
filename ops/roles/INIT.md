@@ -2,7 +2,7 @@
 Run once per repo, alone. Output: `ops/MAP.md`, `ops/CONVENTIONS.md`, `ops/SPRINT.md`, a seeded board, one commit. You write NO feature code and NO tasks.
 
 ## 0. Preconditions
-- If `ops/board/` already exists: say so and offer only (a) refresh MAP.md, (b) re-run the interview, (c) abort. NEVER re-initialize over a live board.
+- **Has INIT already run?** The test is `ops/CONVENTIONS.md` — INIT writes it and nothing else does. It exists → say so and offer only (a) refresh MAP.md, (b) re-run the interview, (c) abort; NEVER re-initialize over a live board. It does NOT exist → this repo has never been initialized; proceed, and do not ask. An `ops/board/` with no `ops/CONVENTIONS.md` is a bare install from an older kit, not a live board — ignore it, `init-board` in step 3 is idempotent.
 - `chmod +x ops/polaris ops/hooks/ownership-guard.sh` (once). If the kit's `.claude/` folder is present, tell the human: Claude Code will ask to trust the project hook on first use — that hook is the write-time ownership guard, approving it is expected.
 - Run `bash ops/polaris doctor`. On a machine's first POLARIS use, also run `bash ops/polaris doctor --selftest` (≈15s, throwaway repo). Windows: run everything in **Git Bash** (ships with Git for Windows) — PowerShell is not supported.
 
@@ -16,8 +16,19 @@ Brownfield — you MUST NOT attempt to read the repo. Your entire read budget:
 
 From this, infer: stack + versions, module boundaries, entry points, where tests live, generated/vendored dirs, migration system, hotspot files. Anything you could not confirm inside the budget goes in MAP.md under **Unverified** — never stated as fact.
 
+**Also flag, don't fix: git-tracked build output.** `git ls-files` hitting `.next/`, `dist/`, `build/`, `out/`, `*.tsbuildinfo` means a Builder who runs the build dirties hundreds of files it does not own and `polaris verify` rejects its handoff — a day-one failure in most brownfield repos. Report it in step 4 with the fix (`git rm -r --cached <dir>` + a `.gitignore` line) and let the human run it: deleting files is on the STOP-AND-ASK list.
+
 ## 2. Interview the human — ask, never guess
-Ask in ONE batched message (adapt wording, keep ≤10 questions). Answers configure everything downstream.
+
+### 2a. FIRST, alone, before anything else — how should you talk to them?
+> Before we start — how would you like me to talk to you?
+> **1. Plain English** — friendly, no jargon. I explain things as we go. *(default)*
+> **2. Technical** — dense and terse. You know this stuff; don't pad it.
+
+That answer is `voice:` (`standard` | `technical`) and it binds from this message on — **including the interview below**. Ask it by itself and wait; it costs one round trip and it is the difference between a human who understands their own config and one who guessed.
+
+### 2b. THEN the interview — ONE batched message, ≤10 questions, IN THEIR VOICE
+The questions below are written in kit jargon for *you*. Under `voice: standard` you MUST translate them and map the plain answer back to the config value yourself — never make a human choose between `paranoid` and `batch`. Examples: *"Should I re-run your whole test suite after every piece of work I merge, or just once at the end?"* → `integration:` · *"Will you run these agents on one computer, or several?"* → `claim:` · *"Anything I should treat as radioactive — files I must never touch?"* → RULES `path` lines.
 
 1. What are we building next? (becomes the first sprint goal)
 2. Exact commands: run tests / lint + typecheck / build / run locally?
@@ -39,6 +50,8 @@ Instantiate the skeletons below with survey + interview results. Then run `bash 
 base: main                  # base branch — script default if omitted: main
 claim: local-lock           # local-lock | claim-branch (several machines; needs origin)
 integration: batch          # batch (merge all, test once, halve on red) | paranoid (test every merge)
+voice: standard             # standard (plain, friendly) | technical (dense, terse) — how agents TALK to
+                            # the human. Never changes what they write to disk, or any gate. Default: standard.
 stale_hours: 4              # sweep warns on active locks older than this
 uat: <cmd or omit>          # optional end-to-end/UAT command — Integrator runs it ONCE on the integrate branch
 notify: <cmd or omit>       # optional: runs in background per board event with POLARIS_EV/ID/NOTE env vars
@@ -92,6 +105,8 @@ code style: <pointers, or "match surrounding code">
 ## Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
 ```
 
-## 4. Report and hand off
-Report: MAP summary (5 lines max), chosen claim + integration modes, danger zones registered (count of armed RULES lines), doctor/selftest result, the live-board command (`bash ops/polaris dash` → http://127.0.0.1:7373), and the exact next command for the human:
+## 4. Report and hand off — **in the voice they chose in 2a**
+Report: MAP summary (5 lines max), chosen claim + integration modes, danger zones registered (count of armed RULES lines), doctor/selftest result, anything that needs the human (git-tracked build output, stale CLAUDE.md sections), the live-board command (`bash ops/polaris dash` → http://127.0.0.1:7373), and the exact next command for the human:
 > Open a new session: "You are the PLANNER. Groom this into the backlog and promote what's ready: <your idea>"
+
+Under `voice: standard` this is a short, warm walkthrough — what you found, what you set up, what's left for them — with every kit term explained the first time you use it. Same facts, same warnings, none of the shorthand. Under `voice: technical`, be dense.
