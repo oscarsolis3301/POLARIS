@@ -19,6 +19,7 @@ OPS="$PRIMARY/ops"
 BOARD="$OPS/board"
 LOCKS="$GCD/polaris-locks"
 CONV="$OPS/CONVENTIONS.md"
+VER="$OPS/VERSION"
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 
 cfg() { # cfg <key> <default>  — reads "key: value" from CONVENTIONS.md, strips " # comment"
@@ -515,6 +516,15 @@ cmd_doctor() {
   [ "$CLAIM_MODE" = "claim-branch" ] && ! has_remote && note "⚠ claim-branch set but no origin remote"
   [ -f "$EVENTS" ] && ! grep -q 'EVENTS\.ndjson merge=union' "$PRIMARY/.gitattributes" 2>/dev/null \
     && note "⚠ EVENTS.ndjson exists without its union-merge gitattribute — run: ops/polaris upgrade"
+  [ -f "$VER" ] && note "POLARIS v$(ver version) ($(ver commit || echo 'unstamped'))"
+  # Kit repo only: the shipped zip going stale is exactly how the last one rotted.
+  if [ -f "$OPS/pack.py" ] && [ -f "$PRIMARY/polaris-v5.zip" ] && command -v unzip >/dev/null 2>&1; then
+    local zsha head
+    zsha="$(unzip -p "$PRIMARY/polaris-v5.zip" polaris-v5/ops/VERSION 2>/dev/null | sed -n 's/^commit: *//p' | head -1 || true)"
+    head="$(git -C "$PRIMARY" rev-parse --short HEAD 2>/dev/null || true)"
+    [ -n "$zsha" ] && [ "$zsha" != "$head" ] \
+      && note "⚠ polaris-v5.zip is STALE (built at $zsha, HEAD is $head) — rebuild: python ops/pack.py"
+  fi
   say "doctor: OK"
   if [ "${1:-}" = "--selftest" ]; then selftest; fi
 }
@@ -756,6 +766,108 @@ cmd_upgrade() { # idempotent v3→v4: creates what v4 adds, touches nothing that
   note "commit ops/ + .claude/ + .gitattributes, then: ops/polaris doctor --selftest"
 }
 
+# ------------------------------------------------------- version + update channel
+# Never called from _match/_rules: those fire on EVERY file write via the PreToolUse
+# guard, so a network call there would tax every edit in the repo.
+
+ver() { # ver <key> [file] — read "key: value" from ops/VERSION (or another stamp file)
+  local f="${2:-$VER}"
+  [ -f "$f" ] || return 1
+  sed -n "s/^$1: *//p" "$f" | head -1 | sed 's/ *#.*//' | tr -d ' \r'
+}
+
+semver_gt() { # semver_gt A B — true when A > B. awk, so no `sort -V` dependency.
+  awk -v a="$1" -v b="$2" 'BEGIN{
+    na=split(a,x,"."); nb=split(b,y,".")
+    for(i=1;i<=3;i++){ xi=(i<=na ? x[i]+0 : 0); yi=(i<=nb ? y[i]+0 : 0)
+      if(xi>yi) exit 0; if(xi<yi) exit 1 }
+    exit 1 }'
+}
+
+update_check_maybe() { # notice engine. Throttles the NETWORK to once a day; prints the
+  # NOTICE on every run, so an available update cannot be missed. Fails open, always:
+  # no curl, no network, private/renamed repo, junk response → silent, exit 0.
+  local cur chan cache today prev latest
+  cur="$(ver version 2>/dev/null || true)"; [ -n "$cur" ] || return 0
+  chan="$(ver channel 2>/dev/null || true)"; [ -n "$chan" ] || return 0
+
+  cache="$PRIMARY/.polaris/update-cache"
+  today="$(date +%Y-%m-%d)"
+  prev="$(ver latest "$cache" 2>/dev/null || true)"
+
+  if [ "$(ver checked "$cache" 2>/dev/null || true)" != "$today" ]; then
+    latest=""
+    command -v curl >/dev/null 2>&1 &&
+      latest="$(curl -fsS --max-time 5 "$chan" 2>/dev/null | sed -n 's/^version: *//p' | head -1 | tr -d ' \r' || true)"
+    case "$latest" in ''|*[!0-9.]*) latest="$prev";; esac   # unreachable or junk → keep what we knew
+    mkdir -p "$PRIMARY/.polaris" 2>/dev/null || return 0
+    { printf 'checked: %s\n' "$today"
+      [ -n "$latest" ] && printf 'latest: %s\n' "$latest"
+      true
+    } > "$cache" 2>/dev/null || return 0
+  else
+    latest="$prev"
+  fi
+
+  [ -n "$latest" ] || return 0
+  semver_gt "$latest" "$cur" || return 0
+  printf '⬆ POLARIS %s available — you have %s. Apply: ops/polaris update\n' "$latest" "$cur" >&2
+  return 0
+}
+
+cmd_version() {
+  [ -f "$VER" ] || die "ops/VERSION missing — this kit predates versioning; reinstall from a fresh zip"
+  local cur commit built latest
+  cur="$(ver version)"
+  commit="$(ver commit || true)"; built="$(ver built || true)"
+  say "POLARIS v$cur  ·  board protocol v$POLARIS_V"
+  note "commit:    ${commit:-unknown}"
+  note "built:     ${built:-unknown}"
+  note "channel:   $(ver channel || echo none)"
+  latest="$(ver latest "$PRIMARY/.polaris/update-cache" 2>/dev/null || true)"
+  if [ -z "$latest" ]; then
+    note "latest:    unknown — no successful check yet (offline, or checked today before the channel existed)"
+  elif semver_gt "$latest" "$cur"; then
+    note "latest:    $latest  ⬆ UPDATE AVAILABLE — apply: ops/polaris update"
+    note "changes:   $(ver changelog || echo '—')"
+  else
+    note "latest:    $latest — up to date"
+  fi
+}
+
+cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-board path:
+  # kit code is refreshed; board, RULES, CONVENTIONS, MAP and SPRINT are never touched.
+  [ -f "$VER" ] || die "ops/VERSION missing — this kit predates versioning; reinstall from a fresh zip"
+  command -v curl >/dev/null 2>&1 || die "update needs curl on PATH"
+  command -v tar  >/dev/null 2>&1 || die "update needs tar on PATH"
+  local tarball repo cur sha T K
+  tarball="$(ver tarball || true)"; [ -n "$tarball" ] || die "no tarball: in ops/VERSION"
+  repo="$(ver repo || true)"; cur="$(ver version)"
+
+  [ -z "$(git -C "$PRIMARY" status --porcelain)" ] \
+    || die "worktree is dirty — commit or stash first, so the update lands as a reviewable diff"
+
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  note "fetching $tarball"
+  curl -fsSL --max-time 60 "$tarball" -o "$T/kit.tgz" || die "download failed — check the network and ops/VERSION channel"
+  tar -xzf "$T/kit.tgz" -C "$T" || die "extract failed"
+  K="$(find "$T" -maxdepth 1 -mindepth 1 -type d | head -1)"
+  [ -n "$K" ] && [ -f "$K/ops/install.sh" ] || die "unexpected archive layout — no ops/install.sh inside"
+
+  # The tarball is a branch snapshot and carries no sha. git is already mandatory and the
+  # repo is public, so ls-remote resolves it unauthenticated — install.sh takes it from here.
+  sha=""
+  [ -n "$repo" ] && sha="$(git ls-remote "$repo" HEAD 2>/dev/null | cut -c1-7 || true)"
+
+  POLARIS_SHA="$sha" bash "$K/ops/install.sh" "$PRIMARY" || die "install failed — repo untouched except where noted above"
+  rm -rf "$T"; trap - EXIT
+
+  rm -f "$PRIMARY/.polaris/update-cache"   # force a fresh check on the next command
+  cmd_upgrade
+  say "updated $cur → $(ver version)"
+  note "review the diff, then commit ops/ — nothing was committed for you"
+}
+
 cmd_match() { # _match <repo-relative-path> <ID> — internal: hook guard + tooling share
   # the ONE ownership matcher. Exit 0 = allowed for this task, 1 = not.
   local rel="${1:?}" id="${2:?}" tf
@@ -794,11 +906,15 @@ polaris — POLARIS v4 board CLI (run from anywhere inside the repo)
   dash [--port N]                live read-only board at http://127.0.0.1:7373 (needs python3)
   fleet <N> [--loop]             print/launch N identical Builder kickoffs (tmux+claude optional)
   upgrade                        idempotent v3/v4→v5 migration on an existing board
+  version                        installed version · commit · latest on the channel
+  update                         fetch the latest kit from the channel (manual; never automatic)
 EOF
 }
+# update_check_maybe is wired ONLY into the human-facing commands below — deliberately not
+# into _match/_rules, which the write-guard fires on every single edit.
 case "${1:-}" in
   init-board) cmd_init_board;;
-  claim)      shift; cmd_claim "$@";;
+  claim)      shift; update_check_maybe || true; cmd_claim "$@";;
   verify)     shift; cmd_verify "$@";;
   handoff)    shift; cmd_handoff "$@";;
   release)    shift; cmd_release "$@";;
@@ -806,16 +922,18 @@ case "${1:-}" in
   audit)      shift; cmd_audit "$@";;
   run-verify) shift; cmd_run_verify "$@";;
   done)       shift; cmd_done "$@";;
-  status)     cmd_status;;
+  status)     update_check_maybe || true; cmd_status;;
   sweep)      shift 2>/dev/null || true; cmd_sweep "${1:-}";;
-  doctor)     shift 2>/dev/null || true; cmd_doctor "${1:-}";;
+  doctor)     shift 2>/dev/null || true; update_check_maybe || true; cmd_doctor "${1:-}";;
   metrics)    cmd_metrics;;
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
   rules)      cmd_rules;;
   _rules)     shift; cmd_rules_check "$@";;
-  dash)       shift; cmd_dash "$@";;
+  dash)       shift; update_check_maybe || true; cmd_dash "$@";;
   fleet)      shift; cmd_fleet "$@";;
   upgrade)    cmd_upgrade;;
+  version)    update_check_maybe || true; cmd_version;;
+  update)     cmd_update;;
   _match)     shift; cmd_match "$@";;
   ''|help|-h|--help) usage;;
   *) usage; die "unknown command: $1";;

@@ -34,6 +34,7 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris dash / metrics` | live board at 127.0.0.1:7373 · cycle/kickbacks/per-point calibration |
 | `ops/polaris drift / rules` | mechanical board-hygiene audit (`--strict` for CI) · policy file list + health |
 | `ops/polaris fleet <N> / upgrade` | print or tmux-launch N Builder kickoffs · idempotent v3/v4→v5 |
+| `ops/polaris version / update` | which POLARIS this repo runs · fetch the latest kit (manual — POLARIS never self-updates mid-sprint) |
 
 Board commits stage everything under `ops/` — keep `ops/` clean of unrelated edits or they ride along.
 
@@ -42,6 +43,7 @@ Board commits stage everything under `ops/` — keep `ops/` clean of unrelated e
 ops/
   polaris          # the CLI above
   dashboard.py     # `polaris dash` — read-only live board (stdlib, no pip)
+  VERSION          # kit version + update channel — `polaris version` reads this
   MANUAL.md        # fallback recipes if you cannot execute commands
   PROMPTS.md       # copy-paste kickoffs for every role
   MAP.md           # ≤200-line codebase map. Read THIS, not the repo.

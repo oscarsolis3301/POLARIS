@@ -1,0 +1,49 @@
+# Publishes the draggable kit. Tag a release (`git tag v5.1.0 && git push --tags`) and the
+# zip is built by CI and attached to the GitHub Release — so the kit is one download away
+# for anyone, and the published artifact is never a stale hand-built one.
+#
+# This is convenience only. It does NOT feed the update check: that reads `version:` from
+# ops/VERSION on main via raw.githubusercontent, so there is no second source of truth.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag must match ops/VERSION
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(sed -n 's/^version: *//p' ops/VERSION | head -1)"
+          [ "$tag" = "$ver" ] || {
+            echo "::error::tag $GITHUB_REF_NAME does not match ops/VERSION ($ver) — bump with: python ops/pack.py --bump"
+            exit 1
+          }
+
+      - run: python3 ops/pack.py
+
+      - name: Exec bits survived the pack
+        run: |
+          unzip -q polaris-v5.zip -d _check
+          for f in ops/polaris ops/install.sh ops/hooks/ownership-guard.sh; do
+            test -x "_check/polaris-v5/$f" || { echo "::error::$f lost its exec bit"; exit 1; }
+          done
+          ! grep -rlq $'\r' _check/polaris-v5 || { echo "::error::CRLF found in the archive"; exit 1; }
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: polaris-v5.zip
+          body: |
+            Drop-in POLARIS kit. Unzip inside your project, then:
+
+                bash polaris-v5/ops/install.sh
+
+            See CHANGELOG.md for what changed.

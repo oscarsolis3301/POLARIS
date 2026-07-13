@@ -5,7 +5,19 @@ Drop-in parallel-agent operating system for any repo. Any model/CLI that loads a
 New in v5, the guard and the gates enforce **two** things: ownership (diff ⊆ `files_owned`, unchanged since v3) and **RULES** — your repo's policy as data. One TAB-separated line in `ops/RULES.tsv` is a danger zone (`path`: forbidden to write, even inside owned files) or a content guard (`content`: added lines must not match an ERE). INIT turns your "never touch X" interview answers into armed rules instead of prose; EVOLVE proposes new lines from kickback/Learned evidence and a human approves each one. That is "hooks that create themselves" done safely: evidence → proposal → approve → one appended line, zero new scripts.
 
 ## Install (any repo, greenfield or 10k files)
-One command from the kit root: `bash ops/install.sh <target-repo>` — copies the kit, prepends to an existing `CLAUDE.md`, merges an existing `.claude/settings.json` hooks block, sets exec bits, pins scripts to LF; idempotent, and refreshes kit code without touching a live board. Or by hand:
+**From the zip — the portable path.** `polaris-v5.zip` is the whole kit and carries no `.git`, so it drops into any project. Grab it from [Releases](https://github.com/oscarsolis3301/Polaris/releases), unzip it **inside your project**, and run the installer with no arguments — it finds the enclosing repo itself:
+
+```bash
+unzip polaris-v5.zip          # -> polaris-v5/
+bash polaris-v5/ops/install.sh
+rm -rf polaris-v5             # optional; it's gitignored either way
+```
+
+Greenfield folder with no `.git` yet? Name it explicitly and the installer runs `git init` for you: `bash polaris-v5/ops/install.sh <target-repo>`. (Zero-arg mode never does that — otherwise unzipping on your Desktop would turn the Desktop into a repo.)
+
+Either way the install is safe on a 10k-file project: an existing `CLAUDE.md` is **prepended to**, never overwritten; an existing `.claude/settings.json` has the guard hook **merged into** its hooks block; a live board keeps its board, `RULES.tsv`, `CONVENTIONS.md`, `MAP.md` and `SPRINT.md` (kit code is refreshed, then `bash ops/polaris upgrade`). Idempotent — safe to re-run.
+
+**From a clone.** `bash ops/install.sh <target-repo>` from the kit root does the same thing. Or by hand:
 1. Copy `CLAUDE.md` + `ops/` + `.claude/` into the repo root. `chmod +x ops/polaris ops/hooks/ownership-guard.sh`.
    - Repo already has a `CLAUDE.md`? Paste the POLARIS content at the TOP (constraints early = better adherence).
    - Repo already has `.claude/settings.json`? Merge the `hooks` block instead of overwriting.
@@ -45,8 +57,19 @@ Verified on Windows 11 + Git for Windows 2.53 (2026-07-11), after two fixes this
 - **Write routing table** (CONVENTIONS skeleton): one fact, one home, one writer — the drift class where two files disagree about the same fact can't start.
 - Unchanged and untouched: v3/v4's race-tested claim/lock/worktree/merge mechanics, all invariants, task format (**zero migration**).
 
-## Publish as a repo (optional)
-This folder is repo-ready. From the kit root: `git init && git add -A && git commit -m "POLARIS v5" && gh repo create polaris-kit --private --source=. --push`. (No repo is created for you — run that yourself.)
+## Versions and updates
+`ops/polaris version` prints what this repo runs — version, commit, build date — and what the latest is on the channel. `ops/VERSION` names that channel (raw `ops/VERSION` on `main` in this public repo), so the check is one unauthenticated `curl`: no token, no `gh`, no credentials.
+
+The check hits the network **at most once a day**; the notice prints on **every** command until you act on it, so an update can't slip past you. It fails open — offline, no `curl`, or a junk response and it stays silent — and it never runs inside the write-guard, which fires on every edit.
+
+Nothing ever updates itself. `ops/polaris update` is explicit: it fetches the latest kit, refreshes **kit code only** (board, RULES, CONVENTIONS, MAP, SPRINT untouched), runs `upgrade`, and leaves the diff uncommitted for you to review. It refuses on a dirty worktree. POLARIS will not rewrite `ops/polaris` or the guard out from under a builder mid-sprint.
+
+Only a deliberate `version:` bump notifies installed kits — routine commits to `main` don't nag anyone.
+
+## Releasing the kit (maintainer)
+`python ops/pack.py` builds `polaris-v5.zip` from `git ls-files`. It's Python because Git Bash ships no `zip` and PowerShell's `Compress-Archive` can't store unix permissions — three kit files are mode `100755`, and an archive that drops the exec bit delivers a kit that's dead on arrival. It also normalises to LF, so an `autocrlf=true` checkout can't poison the archive, and it refuses to build from a dirty worktree so the zip always maps to a real commit.
+
+To cut a release: `python ops/pack.py --bump minor` → update `CHANGELOG.md` → commit → `git tag v5.1.0 && git push --tags`. CI builds the zip, asserts the exec bits and LF survived, and attaches it to the Release. `ops/polaris doctor` warns whenever the local zip lags `HEAD` — that's the rot that left the previous zip shipping pre-CRLF-fix code.
 
 ## Safety note
 These prompts drive agents with real filesystem and git access. Keep the stop-and-ask list in `CLAUDE.md` intact when customizing. Deliberately NOT included, and why: agents never auto-install dependencies (supply-chain risk — the stop-and-ask gate stays), agents never edit `ops/RULES.tsv` (append is human-only; EVOLVE proposes), and `notify:`/`uat:` run with your user's permissions like any `verify:` command — treat CONVENTIONS.md as executable config. The hook runs with your user's permissions — read it before approving. The dashboard is read-only and binds localhost; `--host 0.0.0.0` exposes board text to your network.
