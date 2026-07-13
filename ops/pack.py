@@ -24,6 +24,15 @@ import sys
 import zipfile
 from pathlib import Path
 
+# Windows encodes piped stdout with the SYSTEM LOCALE (cp1252 on most machines), not UTF-8, so a
+# plain print("✅ …") dies with UnicodeEncodeError. It only works on boxes with UTF-8 mode enabled —
+# which is why this survived local testing and died the moment CI ran it. Force UTF-8.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):    # pre-3.7, or already-wrapped stream
+        pass
+
 KIT = Path(__file__).resolve().parent.parent
 PREFIX = "polaris-v5"                      # top-level folder inside the zip
 OUT = KIT / f"{PREFIX}.zip"

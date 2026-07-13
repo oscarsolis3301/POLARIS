@@ -10,6 +10,14 @@
 import argparse, hashlib, json, os, re, subprocess, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+# Windows encodes piped stdout with the SYSTEM LOCALE (cp1252 on most machines), not UTF-8 — so the
+# "✦ POLARIS live board" banner below raises UnicodeEncodeError and the dashboard dies on startup.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):    # pre-3.7, or already-wrapped stream
+        pass
+
 COLUMNS = ["backlog", "ready", "active", "review", "blocked", "done"]
 
 # ------------------------------------------------------------------ repo I/O

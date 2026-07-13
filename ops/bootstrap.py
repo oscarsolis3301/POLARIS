@@ -22,6 +22,15 @@ import sys
 import tempfile
 import zipfile
 
+# Windows encodes piped stdout with the SYSTEM LOCALE (cp1252 on most machines), not UTF-8, so a
+# plain print("✅ …") dies with UnicodeEncodeError. Without this, `python polaris-v5.zip` — the
+# whole point of the kit — crashed on any Windows box that doesn't have UTF-8 mode enabled.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):    # pre-3.7, or already-wrapped stream
+        pass
+
 PREFIX = "polaris-v5/"
 
 
