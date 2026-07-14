@@ -104,6 +104,7 @@ Deleting any file · adding a dependency · changing DB schema or migrations · 
 - **Applies ONLY to what you SAY** — your reports, the questions you ask, your `✅`/`⛔` lines.
 - **NEVER applies to what you WRITE to disk.** Task frontmatter, acceptance criteria, contracts, `ops/MAP.md`, `ops/SPRINT.md`, `ops/RULES.tsv`, commit messages and code stay exactly as terse and machine-precise as they are today — agents read those, and chattiness there costs the next agent tokens and accuracy.
 - **Voice changes wording, NEVER content or behavior.** A red suite is still reported red, an ownership violation is still a hard stop, and nothing on the STOP-AND-ASK list gets softer or skipped. `standard` is the same information a friend would give you — not less of it.
+- **Reports have a budget.** Under `standard`, an end-of-session report is a few short lines (each role file sets the exact number — never exceed it), leads with the outcome, and names things by what they do for the human, not by path or branch: "a pre-flight check for the installer", not "src/checks/preflight.sh on feat/T-042". No headers, no essay. Shorter never means softer — red results and anything only the human can do always survive the cut.
 
 ## PROGRESS FORMAT
 After each meaningful step, output one line: `✅ <what> — <file>`. On any stop: `⛔ <why> — <what you need>`. Keep the shape; the words inside follow `voice:`.

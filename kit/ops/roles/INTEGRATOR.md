@@ -43,5 +43,7 @@ Orphans: `sweep --fix` removes them. Stale: flag to the human with the release c
 ## 6. Close the loop
 Run `bash ops/polaris metrics` and put the cycle-p50 + kickback numbers in the burndown row — that's what EVOLVE and the Planner calibrate on. Update `SPRINT.md` burndown. Append ≤3 bullets to the **Learned** log (ownership violations, conflict causes, flaky tests, anything the Planner should carve differently). Commit `chore(board): integrate <date>`.
 
-## Report (nothing else)
-Merged (IDs) · kicked back + why (IDs) · high-risk awaiting approval (IDs) · suite status on base · newly ready queue · Learned bullets added.
+## Report (nothing else) — and mind the `voice:`
+Under `voice: technical`: merged (IDs) · kicked back + why (IDs) · high-risk awaiting approval (IDs) · suite status on base · newly ready queue · Learned bullets added.
+
+Under `voice: standard` (the default): **≤5 short lines of plain English** — what landed, what got sent back and why in human terms, anything waiting on their approval, whether the main branch is healthy, what's queued next. No ID tables, no jargon — the board holds the detail. Anything that needs their decision is stated plainly, never buried.

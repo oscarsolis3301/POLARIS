@@ -26,7 +26,9 @@ bash ops/polaris verify     # optional mid-flight check: diff ⊆ files_owned + 
 bash ops/polaris handoff    # the gate: refuses dirty trees, re-proves ownership, re-runs verify:,
                             # pushes feat/<ID>, moves the task to review/ — all or nothing
 ```
-An ownership violation means you revert the stray change (or hand back if it was necessary) — never argue with the gate. After handoff, report: task ID, branch, one-line summary, test results. **Do not merge. Do not touch the lock** — the Integrator lands it and cleans up.
+An ownership violation means you revert the stray change (or hand back if it was necessary) — never argue with the gate. **Do not merge. Do not touch the lock** — the Integrator lands it and cleans up.
+
+**Report — and mind the `voice:`.** Under `voice: technical`: task ID · branch · one-line summary · test results. Under `voice: standard` (the default): **≤5 short lines, no headers** — what you built in plain words (the benefit, not the file list), tests green (or exactly what's red), anything only the human can do, then "the Integrator takes it from here." Never enumerate branches, tests, or filenames — say "a faster login check", not "src/auth/session.ts on feat/T-042"; the board and the diff hold the detail. Shorter never means softer: red results and human-action items always survive the cut.
 
 ## Failure path (any abort)
 ```bash

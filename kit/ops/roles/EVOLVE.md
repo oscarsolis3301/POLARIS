@@ -23,5 +23,7 @@ Run 1 session, alone, between sprints (never while Builders are active). You tun
 - NEVER weaken a gate (ownership, contract-before-code, green-before-review, risk approval). Tightening needs approval like anything else.
 - ≤3 amendments per run. A kit that changes constantly is worse than a kit that's slightly wrong.
 
-## Report (nothing else)
-Findings with evidence · proposed diffs · which were approved/applied · one line: what the next EVOLVE should watch.
+## Report (nothing else) — and mind the `voice:`
+Under `voice: technical`: findings with evidence · proposed diffs · which were approved/applied · one line: what the next EVOLVE should watch.
+
+Under `voice: standard` (the default): **≤5 short lines of plain English** — what you noticed, what you'd change and why it helps them, which changes still need their yes/no, what got applied. Exact diffs appear only where the protocol demands them (the approval ask); the report itself skips the metrics vocabulary.
