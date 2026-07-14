@@ -8,6 +8,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Daily. This is what catches "bumped ops/VERSION, forgot to tag it" — the 5.2.0 bug, where
+    # every installed kit was nagged for days about an update releases/latest could not deliver.
+    # It has to be a SCHEDULE and not a push check: see the consistency job.
+    - cron: '17 9 * * *'
 
 jobs:
   # A release must land EVERYWHERE or it hasn't happened. This repo has shipped the same class of
@@ -51,26 +56,39 @@ jobs:
           }
           echo "docs:               clean"
 
-          # 3+4. Tag and published release — main only. On a PR the tag does not exist yet and that
-          # is fine; the bump and the tag land together, so it is main that must be self-consistent.
-          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
-            git rev-parse -q --verify "refs/tags/v$ver" >/dev/null || {
-              echo "::error::ops/VERSION says $ver but there is no v$ver tag. Every installed kit is"
-              echo "::error::being told $ver exists while releases/latest still serves the old zip —"
-              echo "::error::exactly the 5.2.0 bug. Cut it:  git tag v$ver && git push origin v$ver"
-              exit 1
-            }
-            echo "git tag:            v$ver"
+          # 3+4. Tag + published release — SCHEDULED runs only, deliberately NOT on push.
+          #
+          # These two are facts about the WORLD, not about the commit, and checking them on a push
+          # races the very release you are cutting: `git push main` necessarily happens before
+          # `git push --tags`, so the tag cannot exist when the push's CI runs. Enforcing it there
+          # turns every legitimate release red — and a guard that cries wolf on every release is a
+          # guard someone deletes, which leaves you with no guard at all. (It did exactly that, once,
+          # before this comment existed.)
+          #
+          # release.yml already hard-asserts tag == ops/VERSION at publish time, so a WRONG release
+          # is impossible. What remains is a MISSING one — "bumped, never tagged", the 5.2.0 bug —
+          # and that is a slow failure, so a daily check catches it long before anyone is hurt.
+          case "$GITHUB_EVENT_NAME" in
+            schedule|workflow_dispatch) ;;
+            *) echo "✅ repo self-consistent at $ver (tag/release checked on the daily run)"; exit 0;;
+          esac
 
-            rel="$(curl -fsSL https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest \
-                    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
-            echo "releases/latest:    ${rel:-<none>}"
-            [ "$rel" = "v$ver" ] || {
-              echo "::error::releases/latest serves ${rel:-nothing}, but ops/VERSION advertises $ver."
-              echo "::error::A fresh machine curls releases/latest — it would install the WRONG kit."
-              exit 1
-            }
-          fi
+          git rev-parse -q --verify "refs/tags/v$ver" >/dev/null || {
+            echo "::error::ops/VERSION says $ver but there is no v$ver tag. Every installed kit is being"
+            echo "::error::told $ver exists while releases/latest still serves the old zip — the 5.2.0 bug."
+            echo "::error::Cut it:  git tag v$ver && git push origin v$ver"
+            exit 1
+          }
+          echo "git tag:            v$ver"
+
+          rel="$(curl -fsSL https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest \
+                  | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
+          echo "releases/latest:    ${rel:-<none>}"
+          [ "$rel" = "v$ver" ] || {
+            echo "::error::releases/latest serves ${rel:-nothing}, but ops/VERSION advertises $ver."
+            echo "::error::A fresh machine curls releases/latest — it would install the WRONG kit."
+            exit 1
+          }
           echo "✅ one version, everywhere: $ver"
 
   kit:
