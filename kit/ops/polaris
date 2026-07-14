@@ -528,6 +528,19 @@ cmd_doctor() {
   # `ver` exits 0 with empty output when a key is absent, so || can't catch it — grep can.
   # The kit repo's own VERSION is unstamped on purpose: pack.py stamps the emitted copy.
   [ -f "$VER" ] && note "POLARIS v$(ver version) ($(ver commit | grep . || echo unstamped))"
+  # Self-hosting repo only (kit/ops/pack.py is the tell — ops/contracts/self-hosting.md): the one
+  # skew that matters here is kit/ops/VERSION ahead of ops/VERSION — a release built but never
+  # run, while the channel keeps serving the old kit. CI catches it daily; this shows the human.
+  if [ -f "$PRIMARY/kit/ops/pack.py" ]; then
+    local kv iv
+    kv="$(ver version "$PRIMARY/kit/ops/VERSION" 2>/dev/null || true)"
+    iv="$(ver version 2>/dev/null || true)"
+    if [ -n "$kv" ] && [ "$kv" = "$iv" ]; then
+      say "self-hosting: kit $kv = installed $iv — this repo runs the POLARIS it ships"
+    else
+      note "⚠ self-hosting: kit/ops/VERSION is ${kv:-missing} but ops/ runs ${iv:-unknown} — that release has NOT been dogfooded. Run: python kit/ops/pack.py --dogfood"
+    fi
+  fi
   # Kit repo only: the shipped zip going stale is exactly how the last one rotted.
   if [ -f "$OPS/pack.py" ] && [ -f "$PRIMARY/polaris-v5.zip" ] && command -v unzip >/dev/null 2>&1; then
     local zsha head
@@ -600,6 +613,17 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     rm ops/board/ready/T-3.md ops/board/ready/T-2.md; sed -i.bak '/DO_NOT_SHIP/d' ops/RULES.tsv && rm -f ops/RULES.tsv.bak
     git add -A; git commit -qm cleanup
     "$SELF" drift >/dev/null || { echo "DRIFT CLEAN FAIL"; exit 1; }
+    # --- self-hosting: this throwaway repo is NOT self-hosting, so doctor must stay quiet...
+    "$SELF" doctor 2>/dev/null | grep -q 'self-hosting' && { echo "SELFHOST MISFIRE FAIL"; exit 1; }
+    # ...and once kit/ops/pack.py exists, update refuses and doctor reports the skew.
+    mkdir -p kit/ops; : > kit/ops/pack.py
+    printf 'version: 9.9.9\n' > kit/ops/VERSION
+    printf 'version: 1.0.0\n' > ops/VERSION
+    "$SELF" update >/dev/null 2>&1 && { echo "SELFHOST UPDATE FAIL (should refuse)"; exit 1; }
+    "$SELF" doctor 2>/dev/null | grep -q 'NOT been dogfooded' || { echo "SELFHOST SKEW FAIL"; exit 1; }
+    printf 'version: 9.9.9\n' > ops/VERSION
+    "$SELF" doctor 2>/dev/null | grep -q 'runs the POLARIS it ships' || { echo "SELFHOST SYNC FAIL"; exit 1; }
+    rm -rf kit ops/VERSION
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
@@ -954,6 +978,16 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
   # kit code is refreshed; board, RULES, CONVENTIONS, MAP and SPRINT are never touched.
   # `update` = fetch a newer KIT from the channel.  `upgrade` = migrate an OLD BOARD to v5.
   # They are one letter apart and unrelated; update runs upgrade at the end, never the reverse.
+
+  # Self-hosting repo (kit/ops/pack.py is the tell — ops/contracts/self-hosting.md): ops/ here
+  # is an INSTALLATION and main's tarball serves that same installation, so update would install
+  # ops/ over itself — a no-op that prints success and ships nothing from kit/. Refuse before
+  # the re-exec below, so we never pay for a temp copy we immediately throw away.
+  if [ -f "$PRIMARY/kit/ops/pack.py" ]; then
+    note "this repo BUILDS POLARIS: ops/ is its installation, and the update tarball serves that same ops/."
+    note "update here would install ops/ over itself and bring across nothing you wrote in kit/."
+    die "self-hosting repo — the command you want is:  python kit/ops/pack.py --dogfood  (installs the published release)"
+  fi
 
   # Re-exec from a copy FIRST — the same guard cmd_uninstall uses, and for the same reason.
   # install.sh is about to OVERWRITE ops/polaris: the very file bash is still reading. Bash reads a
