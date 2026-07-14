@@ -341,16 +341,27 @@ jobs:
           C="$HU/.claude/skills/polaris-install"
           test -f "$C/polaris-v5.zip" || { echo "::error::update did not refresh the machine's cached kit — the next repo would install a stale POLARIS"; exit 1; }
           test -f "$C/SKILL.md"       || { echo "::error::update did not refresh the cached skill"; exit 1; }
-          python - "$C/polaris-v5.zip" <<'PY'
+          python - "$C/polaris-v5.zip" > "$RUNNER_TEMP/cached.ver" <<'PY'
           import sys, zipfile
           z = zipfile.ZipFile(sys.argv[1])
-          v = [n for n in z.namelist() if n.endswith("ops/VERSION")]
-          assert v, "cached kit carries no ops/VERSION — it is not a POLARIS kit"
-          ver = [l for l in z.read(v[0]).decode().splitlines() if l.startswith("version:")]
+          names = z.namelist()
+          assert "polaris-v5/ops/polaris" in names, "cached kit is missing ops/polaris — it is not a kit"
+          v = [n for n in names if n.endswith("ops/VERSION")]
+          assert v, "cached kit carries no ops/VERSION"
+          ver = [l.split(":", 1)[1].strip() for l in z.read(v[0]).decode().splitlines() if l.startswith("version:")]
           assert ver, "cached kit has no version: line"
-          assert "polaris-v5/ops/polaris" in z.namelist(), "cached kit is missing ops/polaris"
-          print("  cached kit OK —", ver[0])
+          print(ver[0])
           PY
+          CACHED="$(cat "$RUNNER_TEMP/cached.ver")"
+          echo "  cached kit is $CACHED"
+
+          # 3. THE MESSAGE MUST NOT LIE. `update` used to announce the version it HOPED it had
+          #    cached (the repo's) rather than the one it actually downloaded. releases/latest lags
+          #    a fresh tag by ~a minute, so an update run right after a release caches the PREVIOUS
+          #    kit while cheerfully claiming otherwise — the same silent skew this feature exists to
+          #    kill. Whatever version it reports must be the version in the bytes on disk.
+          grep -qF "$CACHED" "$RUNNER_TEMP/update.log" \
+            || { echo "::error::update cached $CACHED but never said so — its report does not match what it wrote"; cat "$RUNNER_TEMP/update.log"; exit 1; }
           echo "update OK"
 
       - name: --repo-only leaves the machine cache alone

@@ -4,6 +4,28 @@ Versions here are the **kit version** (`ops/VERSION`), not the board protocol ve
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.5.1 — 2026-07-14
+
+**`update`'s success message could lie about what it had just cached.** Caught within minutes of
+shipping 5.5.0, by running the thing rather than trusting it.
+
+`refresh_machine_kit` announced *"every new install on this box now gets X"* — where X was **the
+repo's** new version, not the version of the zip it had actually downloaded. `releases/latest` takes
+about a minute to start serving a freshly tagged release, so an `update` run right after a release
+caches the **previous** kit. A real run proved it: the repo went to 5.5.0, the message said
+*"now gets 5.5.0"*, and the bytes on disk were 5.4.0. That is precisely the silent version skew this
+whole feature exists to eliminate, reintroduced by the feature itself.
+
+- **It now reads the version back out of the bytes it downloaded** and reports *that*. If the
+  release hasn't propagated yet it says so plainly, names the version you actually got, and tells
+  you to re-run — instead of quietly leaving the next repo on the old kit.
+- **A download is validated before it becomes the cache.** `curl -f` rejects 4xx/5xx, but a
+  truncated fetch is still a file, and a corrupt cached kit is worse than a stale one: every future
+  install on the machine copies from it. Anything that isn't a real POLARIS kit is discarded and
+  the existing cache is left exactly as it was.
+- CI now asserts the report matches the bytes: whatever version `update` claims to have cached must
+  be the version actually inside the cached zip.
+
 ## 5.5.0 — 2026-07-14
 
 **"Can I just tell any chat to upgrade POLARIS?" Nearly — and the gap was the one that nearly

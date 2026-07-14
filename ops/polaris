@@ -856,6 +856,37 @@ cmd_version() {
   fi
 }
 
+kit_zip_version() { # echo the version INSIDE a packed kit · "?" if we cannot tell · rc 1 = not a kit
+  # Never trust a download to be what you asked for. `releases/latest` can lag a fresh tag by a
+  # minute, and a truncated fetch is still a file. Read the version out of the bytes we actually
+  # got, so the "machine refreshed" line states a fact instead of an assumption.
+  # `-c pass` proves a REAL interpreter (the Windows Store python3 stub passes `command -v`).
+  # The path goes as an ARGUMENT, never inside -c: MSYS translates /c/... → C:/... for argv only.
+  local py=""
+  python3 -c pass >/dev/null 2>&1 && py=python3 || { python -c pass >/dev/null 2>&1 && py=python; } || true
+  [ -n "$py" ] || { printf '?'; return 0; }
+  "$py" - "$1" <<'PYEOF'
+import sys, zipfile
+try:
+    z = zipfile.ZipFile(sys.argv[1])
+    names = z.namelist()
+    if "polaris-v5/ops/polaris" not in names:
+        sys.exit(1)                                  # a 404 page, a truncation, someone else's zip
+    v = [n for n in names if n.endswith("ops/VERSION")]
+    if not v:
+        sys.exit(1)
+    for line in z.read(v[0]).decode("utf-8", "replace").splitlines():
+        if line.startswith("version:"):
+            print(line.split(":", 1)[1].strip())
+            sys.exit(0)
+    sys.exit(1)
+except SystemExit:
+    raise
+except Exception:
+    sys.exit(1)
+PYEOF
+}
+
 refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with what we just installed
   # An `update` that fixes ONE repo and leaves the machine's cached kit stale is a trap: the cache
   # is what every FUTURE `"install POLARIS"` copies from, so the next project silently gets the old
@@ -876,14 +907,38 @@ refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with wh
   # The zip cannot be rebuilt here (Git Bash ships no `zip`, and ops/pack.py is never shipped), so
   # fetch the published release — the same pinned URL the installer's own permission rule names.
   [ -n "$zipurl" ] || { note "⚠ no zip: in ops/VERSION — machine cache not refreshed"; return 0; }
-  if curl -fsSL --max-time 60 "$zipurl" -o "$dest/polaris-v5.zip.tmp" 2>/dev/null; then
-    mv -f "$dest/polaris-v5.zip.tmp" "$dest/polaris-v5.zip"
-    say "machine refreshed — every new install on this box now gets $(ver version), offline"
-  else
-    rm -f "$dest/polaris-v5.zip.tmp" 2>/dev/null
+  local tmpzip="$dest/polaris-v5.zip.tmp" got want
+  if ! curl -fsSL --max-time 60 "$zipurl" -o "$tmpzip" 2>/dev/null; then
+    rm -f "$tmpzip" 2>/dev/null
     note "⚠ this repo is updated, but the machine's cached kit could NOT be refreshed (no release zip"
     note "  at the zip: URL yet?). The next \"install POLARIS\" in a new repo would use the OLD kit."
     note "  Fix it once the release is published:  python polaris-v5.zip --claude-skill"
+    return 0
+  fi
+
+  # Validate BEFORE it becomes the cache. `curl -f` rejects 4xx/5xx, but a TRUNCATED download is
+  # still a file — and a corrupt cached kit is worse than a stale one, because every future install
+  # on this machine copies from it.
+  if ! got="$(kit_zip_version "$tmpzip")"; then
+    rm -f "$tmpzip" 2>/dev/null
+    note "⚠ what came back from $zipurl is not a valid POLARIS kit — cache left exactly as it was."
+    return 0
+  fi
+  mv -f "$tmpzip" "$dest/polaris-v5.zip"
+
+  want="$(ver version)"
+  if [ "$got" = "?" ]; then
+    say "machine refreshed from the published release (no python here to read back its version)"
+  elif [ "$got" = "$want" ]; then
+    say "machine refreshed — every new install on this box now gets $got, offline"
+  else
+    # Report what we ACTUALLY cached, never what we hoped for. A fresh tag takes a minute to reach
+    # releases/latest, so an update run seconds after a release caches the PREVIOUS kit — and
+    # claiming otherwise is the exact silent skew this whole feature exists to kill.
+    say "machine cache refreshed to $got — the newest PUBLISHED release"
+    note "⚠ this repo is on $want, but releases/latest still serves $got (a new release takes a minute"
+    note "  to propagate). Until it does, the next repo you install into gets $got, not $want."
+    note "  Re-run  ops/polaris update  shortly, or:  python polaris-v5.zip --claude-skill"
   fi
 }
 
