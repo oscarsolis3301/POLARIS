@@ -1,8 +1,45 @@
 # Changelog
 
-Versions here are the **kit version** (`ops/VERSION`), not the board protocol version.
+Versions here are the **kit version** (`kit/ops/VERSION`), not the board protocol version.
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
+
+## 5.6.0 — 2026-07-14
+
+**POLARIS now builds POLARIS.** The kit runs its own board — parallel Builders, the write-guard, the
+lot — which it could not do before without shipping its own board to every user.
+
+The blocker was that the kit source and a POLARIS installation both wanted the same directory,
+`ops/`. Installing here would have made our `CONVENTIONS.md`, `MAP.md`, `SPRINT.md`, `RULES.tsv` and
+`board/` git-tracked *inside the product*. `pack.py` packs whatever `git ls-files` returns, so all of
+it would have shipped — and a repo that has a `CONVENTIONS.md` **is** a live board by the installer's
+own test, so every fresh install would have arrived pre-initialized and locked INIT out of the repo it
+had just been installed into. Uninstalling would have deleted the product.
+
+- **The product moved to `kit/`.** `kit/CLAUDE.md` + `kit/ops/` + `kit/.claude/` are everything that
+  ships. The repo root is now an ordinary POLARIS installation like any other. `pack.py` runs
+  `git ls-files` *inside* `kit/`, so the board is excluded structurally — not by a blacklist somebody
+  has to remember to extend. The zip's internal layout is unchanged; `.github/` and `archive/` stop
+  shipping as a bonus.
+- **`pack.py --dogfood`** — downloads the zip **from the published release**, installs it here, and
+  runs the board's selftest. It is the release's acceptance test: the only one that walks the path a
+  stranger walks. A release that cannot run our own board is not a release, and CI's daily job now
+  goes red if this repo lags the newest published version — *"we shipped something we never ran."*
+- **`install.sh` no longer copies `ops/*.md` by glob.** Named list. A glob run from a self-hosting
+  checkout — which is exactly what `polaris update` does, since it installs from the branch tarball's
+  root — would have raked our `CONVENTIONS.md`/`MAP.md`/`SPRINT.md` into a stranger's repo.
+- **`emit_block` unwraps a managed source.** Our root `CLAUDE.md` is now itself a managed block, and
+  it is the file `update` reads. Cat it raw and every update nested one more marker pair inside the
+  last, until `uninstall` — which stops at the first marker it meets — could no longer delimit the
+  block it exists to remove. It now emits what lies *between* the markers, which also makes the whole
+  operation idempotent, as it always claimed to be.
+- **`uninstall` takes the installation and leaves the product.** In this repo `rm -rf ops/` is one
+  keystroke from deleting POLARIS itself. CI clones the repo, uninstalls, and asserts `kit/` still
+  builds a working kit.
+- **Already-installed kits keep working.** They poll `main/ops/VERSION` and install from the tarball's
+  `<root>/ops/install.sh` — both of which still resolve, because the installation committed at the
+  root *is* that layout. They now serve the last **published** release rather than an unreleased tip,
+  which makes the whole "bumped but never tagged" class of skew structurally impossible.
 
 ## 5.5.1 — 2026-07-14
 

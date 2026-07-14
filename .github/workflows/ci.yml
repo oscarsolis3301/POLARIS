@@ -32,26 +32,26 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }        # tags, not just the tip
 
-      - name: ops/VERSION == newest CHANGELOG entry == git tag == published release
+      - name: kit/ops/VERSION == newest CHANGELOG entry == git tag == published release
         run: |
           set -eu
-          ver="$(sed -n 's/^version: *//p' ops/VERSION | head -1)"
-          [ -n "$ver" ] || { echo "::error::ops/VERSION has no version: line"; exit 1; }
-          echo "ops/VERSION:        $ver"
+          ver="$(sed -n 's/^version: *//p' kit/ops/VERSION | head -1)"
+          [ -n "$ver" ] || { echo "::error::kit/ops/VERSION has no version: line"; exit 1; }
+          echo "kit/ops/VERSION:    $ver"
 
           # 1. CHANGELOG — the newest `## X.Y.Z` heading must BE this version.
           log="$(grep -m1 -oE '^## [0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | sed 's/^## //')"
           echo "CHANGELOG (newest): $log"
           [ "$ver" = "$log" ] || {
-            echo "::error::ops/VERSION is $ver but the newest CHANGELOG entry is $log — bump both or neither."
+            echo "::error::kit/ops/VERSION is $ver but the newest CHANGELOG entry is $log — bump both or neither."
             exit 1
           }
 
           # 2. Docs must not quote a stale version back at the user.
-          bad=$(grep -rhoE 'POLARIS [0-9]+\.[0-9]+\.[0-9]+' README.md .claude/skills/ ops/*.md 2>/dev/null \
+          bad=$(grep -rhoE 'POLARIS [0-9]+\.[0-9]+\.[0-9]+' README.md kit/.claude/skills/ kit/ops/*.md 2>/dev/null \
                   | sed 's/^POLARIS //' | sort -u | grep -vFx "$ver" || true)
           [ -z "$bad" ] || {
-            echo "::error::docs quote version(s) [$(echo $bad | tr '\n' ' ')] but ops/VERSION is $ver — sweep them."
+            echo "::error::docs quote version(s) [$(echo $bad | tr '\n' ' ')] but kit/ops/VERSION is $ver — sweep them."
             exit 1
           }
           echo "docs:               clean"
@@ -65,16 +65,16 @@ jobs:
           # guard someone deletes, which leaves you with no guard at all. (It did exactly that, once,
           # before this comment existed.)
           #
-          # release.yml already hard-asserts tag == ops/VERSION at publish time, so a WRONG release
+          # release.yml already hard-asserts tag == kit/ops/VERSION at publish time, so a WRONG release
           # is impossible. What remains is a MISSING one — "bumped, never tagged", the 5.2.0 bug —
           # and that is a slow failure, so a daily check catches it long before anyone is hurt.
           case "$GITHUB_EVENT_NAME" in
             schedule|workflow_dispatch) ;;
-            *) echo "✅ repo self-consistent at $ver (tag/release checked on the daily run)"; exit 0;;
+            *) echo "✅ repo self-consistent at $ver (tag/release/dogfood checked on the daily run)"; exit 0;;
           esac
 
           git rev-parse -q --verify "refs/tags/v$ver" >/dev/null || {
-            echo "::error::ops/VERSION says $ver but there is no v$ver tag. Every installed kit is being"
+            echo "::error::kit/ops/VERSION says $ver but there is no v$ver tag. Every installed kit is being"
             echo "::error::told $ver exists while releases/latest still serves the old zip — the 5.2.0 bug."
             echo "::error::Cut it:  git tag v$ver && git push origin v$ver"
             exit 1
@@ -85,11 +85,26 @@ jobs:
                   | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
           echo "releases/latest:    ${rel:-<none>}"
           [ "$rel" = "v$ver" ] || {
-            echo "::error::releases/latest serves ${rel:-nothing}, but ops/VERSION advertises $ver."
+            echo "::error::releases/latest serves ${rel:-nothing}, but kit/ops/VERSION advertises $ver."
             echo "::error::A fresh machine curls releases/latest — it would install the WRONG kit."
             exit 1
           }
-          echo "✅ one version, everywhere: $ver"
+
+          # 5. THE DOGFOOD. This repo self-hosts POLARIS: root ops/ is a real installation, and it is
+          # what `main`'s tarball and the raw channel URL serve to every kit installed before this
+          # layout existed. Refreshing it (python kit/ops/pack.py --dogfood) is not housekeeping — it
+          # is the ONLY test that takes a release through the path a stranger walks: download the
+          # published zip, install it, run a real board with it. Skip it and we are shipping a kit we
+          # never ran, while the compatibility surface at the repo root quietly rots.
+          inst="$(sed -n 's/^version: *//p' ops/VERSION | head -1)"
+          echo "ops/VERSION (ours): $inst"
+          [ "$inst" = "$ver" ] || {
+            echo "::error::we published $ver but this repo still runs $inst — the release was never dogfooded."
+            echo "::error::It also means main's tarball and the raw channel still serve $inst to installed kits."
+            echo "::error::Fix it:  python kit/ops/pack.py --dogfood   (then commit the refreshed ops/)"
+            exit 1
+          }
+          echo "✅ one version, everywhere — and we run it ourselves: $ver"
 
   kit:
     name: ${{ matrix.os }}
@@ -115,7 +130,64 @@ jobs:
           echo "PATH bash: $(command -v bash)"
 
       - name: Pack the kit
-        run: python ops/pack.py
+        run: python kit/ops/pack.py
+
+      - name: The zip carries the PRODUCT, never our board
+        # This repo self-hosts POLARIS, so a live board (tasks, telemetry, MAP, SPRINT, CONVENTIONS,
+        # RULES) sits at the root ops/ — git-tracked, right next to the source. pack.py excludes it
+        # structurally, by listing only what is under kit/. This step is the proof, and it guards two
+        # different disasters at once:
+        #   * we hand every user our board, our sprint goals and our telemetry;
+        #   * worse, they receive a CONVENTIONS.md — and a target that HAS one IS a live board by
+        #     definition (install.sh's own test), so INIT refuses to run and the install is bricked.
+        # It is a one-line fix to reintroduce and invisible until a stranger reports it. Assert it.
+        run: |
+          python - <<'PY'
+          import sys, zipfile
+          FORBIDDEN = ("CONVENTIONS.md", "MAP.md", "SPRINT.md", "RULES.tsv")
+          names = zipfile.ZipFile("polaris-v5.zip").namelist()
+          bad = [n for n in names
+                 if n.rsplit("/", 1)[-1] in FORBIDDEN
+                 or "/board/" in n
+                 or n.startswith("polaris-v5/.github/")]
+          for n in sorted(bad):
+              print(f"::error::{n} is in the kit — that is OUR board leaking into a stranger's repo")
+          if bad:
+              sys.exit(1)
+          print(f"kit is clean: {len(names)} entries, no board artifacts")
+          PY
+
+      - name: Installing from the REPO ROOT — the old-client path — is also clean
+        # `polaris update` downloads the branch tarball and runs `<root>/ops/install.sh`. In a
+        # self-hosting repo that root ops/ is our INSTANCE, so every kit installed before the kit/
+        # split reaches for our board directory and installs FROM it. That path has to be as safe as
+        # the zip, and two things in install.sh had to change for it to be:
+        #   * the copy list is named, not `ops/*.md` — a glob here would rake in CONVENTIONS.md,
+        #     MAP.md and SPRINT.md and lock INIT out of the target;
+        #   * emit_block unwraps the source CLAUDE.md, because ours IS a managed block now — cat it
+        #     raw and every update nests another marker pair until uninstall can no longer delimit it.
+        # Simulate that client exactly: install from the checkout root, not from the zip.
+        run: |
+          set -e
+          OLD="$RUNNER_TEMP/oldclient"; rm -rf "$OLD"; mkdir -p "$OLD"; cd "$OLD"
+          git init -qb main && git config user.email ci@example.com && git config user.name ci
+          printf '# Their Project\n\nTHEIR_RULE: do not break the build.\n' > CLAUDE.md
+          git add -A && git commit -qm init
+
+          bash "$GITHUB_WORKSPACE/ops/install.sh" "$OLD"
+
+          test ! -f ops/CONVENTIONS.md || { echo "::error::our CONVENTIONS.md leaked — the target now looks like a live board and INIT cannot run"; exit 1; }
+          test ! -f ops/MAP.md         || { echo "::error::our MAP.md leaked into a stranger's repo"; exit 1; }
+          test ! -f ops/SPRINT.md      || { echo "::error::our SPRINT.md leaked into a stranger's repo"; exit 1; }
+          test ! -f ops/RULES.tsv      || { echo "::error::our RULES.tsv leaked into a stranger's repo"; exit 1; }
+          test ! -d ops/board          || { echo "::error::our board/ leaked into a stranger's repo"; exit 1; }
+          test -x ops/polaris          || { echo "::error::no runnable ops/polaris — the old-client update path is broken"; exit 1; }
+
+          b=$(grep -cF 'POLARIS:BEGIN' CLAUDE.md); e=$(grep -cF 'POLARIS:END' CLAUDE.md)
+          [ "$b" = 1 ] && [ "$e" = 1 ] || { echo "::error::CLAUDE.md has $b BEGIN / $e END markers — nested block; uninstall could not delimit it"; exit 1; }
+          grep -q THEIR_RULE CLAUDE.md || { echo "::error::install ate the user's CLAUDE.md"; exit 1; }
+          grep -q 'ROLE DISPATCH' CLAUDE.md || { echo "::error::the managed block carries no protocol — emit_block unwrapped too much"; exit 1; }
+          echo "old-client install OK"
 
       - name: Archive integrity — exec bits, LF, zipapp, no .git
         # Read the mode STORED IN THE ARCHIVE, not the extracted file. Windows has no real exec
@@ -454,3 +526,23 @@ jobs:
           grep -q MY_OWN_HOOK .claude/settings.json  || { echo "::error::uninstall ate the user's hook"; exit 1; }
           ! grep -q ownership-guard .claude/settings.json || { echo "::error::guard hook survived uninstall"; exit 1; }
           echo "uninstall OK"
+
+      - name: Uninstall removes the INSTANCE and keeps the PRODUCT
+        # In this repo `uninstall` deletes ops/ — which is also, in every OTHER repo, the whole kit.
+        # Here it must take the installation and leave kit/ standing, or "uninstall POLARIS" in the
+        # POLARIS repo means "delete POLARIS". That is the sharpest edge the self-hosting split has,
+        # so prove it on a throwaway clone of this very repo rather than reasoning about it.
+        run: |
+          set -e
+          SH="$RUNNER_TEMP/selfhost"; rm -rf "$SH"
+          git clone -q "$GITHUB_WORKSPACE" "$SH"
+          cd "$SH"
+          git config user.email ci@example.com && git config user.name ci
+          bash ops/polaris uninstall --yes
+          test ! -d ops               || { echo "::error::the instance survived uninstall"; exit 1; }
+          test -f kit/ops/polaris     || { echo "::error::uninstall DELETED THE PRODUCT — kit/ops/polaris is gone"; exit 1; }
+          test -f kit/ops/pack.py     || { echo "::error::uninstall deleted kit/ops/pack.py"; exit 1; }
+          test -f kit/CLAUDE.md       || { echo "::error::uninstall deleted kit/CLAUDE.md — the protocol source"; exit 1; }
+          test -f kit/.claude/skills/polaris-install/SKILL.md || { echo "::error::uninstall deleted the kit's skills"; exit 1; }
+          python kit/ops/pack.py --allow-dirty >/dev/null || { echo "::error::the kit cannot rebuild itself after uninstall"; exit 1; }
+          echo "uninstall took the instance, left the product"

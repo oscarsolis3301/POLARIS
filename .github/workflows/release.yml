@@ -22,16 +22,19 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Tag must match ops/VERSION
+      - name: Tag must match kit/ops/VERSION
+        # kit/ops/VERSION, not ops/VERSION. This repo self-hosts POLARIS: kit/ is the product, and the
+        # root ops/ is an installation of the last PUBLISHED release — deliberately NOT the version
+        # being cut here. Reading the instance would compare the new tag against the previous release.
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          ver="$(sed -n 's/^version: *//p' ops/VERSION | head -1)"
+          ver="$(sed -n 's/^version: *//p' kit/ops/VERSION | head -1)"
           [ "$tag" = "$ver" ] || {
-            echo "::error::tag $GITHUB_REF_NAME does not match ops/VERSION ($ver) — bump with: python ops/pack.py --bump"
+            echo "::error::tag $GITHUB_REF_NAME does not match kit/ops/VERSION ($ver) — bump with: python kit/ops/pack.py --bump"
             exit 1
           }
 
-      - run: python ops/pack.py
+      - run: python kit/ops/pack.py
 
       - name: Archive integrity — exec bits, LF, zipapp
         # Same check as ci.yml: read the mode stored IN the archive. An extracted-file check is

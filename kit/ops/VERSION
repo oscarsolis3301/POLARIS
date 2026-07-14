@@ -12,5 +12,3 @@ repo: https://github.com/oscarsolis3301/POLARIS.git
 zip: https://github.com/oscarsolis3301/POLARIS/releases/latest/download/polaris-v5.zip
 # `commit:` and `built:` are appended by ops/pack.py (into the zip) and by ops/install.sh
 # (into the target) — never committed here, or stamping the sha would change the sha.
-commit: fd2981d
-built: 2026-07-14

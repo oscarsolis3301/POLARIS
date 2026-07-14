@@ -1,4 +1,3 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 Model-agnostic operating system for running N coding agents in parallel on this repo with zero merge conflicts. This file is small on purpose: it routes you to your role. Read ONLY what your role needs.
@@ -111,4 +110,3 @@ After each meaningful step, output one line: `✅ <what> — <file>`. On any sto
 
 ## MODEL NOTES (whichever model runs this)
 Follow this spec literally. Missing detail means STOP and ask — never guess. Only make changes the task states. Reason as deeply as the task needs; no scaffolding rituals. Front-load: read MAP, CONVENTIONS, and the contract before writing anything.
-<!-- POLARIS:END -->

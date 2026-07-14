@@ -1,0 +1,35 @@
+# POLARIS — optional CI ownership gate.
+# Install: copy to .github/workflows/polaris-audit.yml
+# On every PR from a feat/<ID> branch it re-proves diff ⊆ files_owned server-side,
+# so even a bypassed local gate can't land a rogue path. Logic identical to
+# `ops/polaris audit` (same script, run in CI).
+# NOTE: the audit logic is execution-verified locally; the Actions wrapper itself
+# has not been run in CI — treat the first run as its test.
+name: polaris-audit
+on:
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  audit:
+    if: startsWith(github.head_ref, 'feat/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Re-prove ownership (diff ⊆ files_owned)
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -eu
+          ID="${HEAD_REF#feat/}"
+          git fetch -q origin "$BASE_REF" "$HEAD_REF"
+          git branch -f "$BASE_REF" "origin/$BASE_REF" 2>/dev/null || true
+          git branch -f "feat/$ID" "origin/$HEAD_REF"
+          chmod +x ops/polaris
+          bash ops/polaris audit "$ID"
+      # Optional: also fail the PR on any board-hygiene finding. Arm once your board is clean.
+      # - name: Board hygiene (drift)
+      #   run: bash ops/polaris drift --strict

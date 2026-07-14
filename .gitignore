@@ -4,3 +4,4 @@ __pycache__/
 # The update check writes .polaris/update-cache on any `doctor`/`status`. Untracked, that
 # made pack.py refuse the tree as dirty — the kit could not repack itself after a doctor run.
 .polaris/
+polaris-v5/

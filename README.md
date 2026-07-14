@@ -47,8 +47,8 @@ The install is safe on a 10k-file project. An existing `CLAUDE.md` is **prepende
 *No Python?* The kit itself doesn't need it — only this bootstrap and the dashboard do. Fall back to `unzip polaris-v5.zip && bash polaris-v5/ops/install.sh`.
 *Windows:* use Git Bash, or run the zipapp straight from PowerShell — it finds Git Bash itself. (It deliberately ignores `System32\bash.exe`, which is WSL, not a shell POLARIS can use.)
 
-**From a clone.** `bash ops/install.sh <target-repo>` from the kit root does the same thing. Or by hand:
-1. Copy `CLAUDE.md` + `ops/` + `.claude/` into the repo root. `chmod +x ops/polaris ops/hooks/ownership-guard.sh`.
+**From a clone.** `bash kit/ops/install.sh <target-repo>` does the same thing. (`kit/` — this repo keeps the shipping source there, because it also *runs* POLARIS; see [Eating our own dog food](#eating-our-own-dog-food-this-repo-runs-polaris).) Or by hand:
+1. Copy `kit/CLAUDE.md` + `kit/ops/` + `kit/.claude/` into the repo root — they land as `CLAUDE.md`, `ops/`, `.claude/`. `chmod +x ops/polaris ops/hooks/ownership-guard.sh`.
    - Repo already has a `CLAUDE.md`? Paste the POLARIS content at the TOP (constraints early = better adherence).
    - Repo already has `.claude/settings.json`? Merge the `hooks` block instead of overwriting.
    - Upgrading a live v3 or v4 board? Copy the kit files over, then `bash ops/polaris upgrade` (idempotent; board, tasks and locks untouched — v5 adds no task frontmatter fields, so there is zero task migration).
@@ -106,10 +106,31 @@ Nothing ever updates itself. `ops/polaris update` is explicit: it fetches the la
 
 Only a deliberate `version:` bump notifies installed kits — routine commits to `main` don't nag anyone.
 
-## Releasing the kit (maintainer)
-`python ops/pack.py` builds `polaris-v5.zip` from `git ls-files`. It's Python because Git Bash ships no `zip` and PowerShell's `Compress-Archive` can't store unix permissions — three kit files are mode `100755`, and an archive that drops the exec bit delivers a kit that's dead on arrival. It also normalises to LF, so an `autocrlf=true` checkout can't poison the archive, and it refuses to build from a dirty worktree so the zip always maps to a real commit.
+## Eating our own dog food: this repo runs POLARIS
+POLARIS is built *by* POLARIS — parallel Builders, a board, the write-guard, all of it. That means this one repo is both the product and a user of it, so it keeps them in two trees that never touch:
 
-To cut a release: `python ops/pack.py --bump minor` → update `CHANGELOG.md` → commit → `git tag v5.1.0 && git push --tags`. CI builds the zip, asserts the exec bits and LF survived, and attaches it to the Release. `ops/polaris doctor` warns whenever the local zip lags `HEAD` — that's the rot that left the previous zip shipping pre-CRLF-fix code.
+| | `kit/` | `ops/` |
+|---|---|---|
+| what it is | **the product** — every file that ships | **an installation** — the board running this repo |
+| who edits it | Builders, normally | nobody, ever, by hand |
+| how it changes | you write code | `python kit/ops/pack.py --dogfood` installs a published release |
+| ships to users? | yes | **no** |
+
+The separation is structural, not a blacklist: `pack.py` builds the zip from `git ls-files` run *inside* `kit/`, so the board can only reach a user's machine if somebody moves it into `kit/` on purpose. CI asserts it anyway — a `CONVENTIONS.md` in the zip wouldn't just leak our sprint goals, it would make every fresh install *look* like a live board and lock INIT out of the repo it was just installed into.
+
+Two things fall out of this, and they're the reason it's worth the extra directory. A Builder editing `kit/ops/polaris` **can't brick the board it's standing on** — the board runs the installed snapshot, not the working copy. And because the installed tree sits at the repo root in exactly the layout the shipped installer expects, `main`'s tarball and the raw-`VERSION` channel keep serving every kit installed before the split — now with the *last published release* rather than an unreleased tip.
+
+Uninstalling works here like anywhere else, and takes only the installation: `ops/polaris uninstall --yes` removes `ops/`, leaves `kit/` untouched. CI proves the kit can still rebuild itself afterwards.
+
+## Releasing the kit (maintainer)
+`python kit/ops/pack.py` builds `polaris-v5.zip` from `git ls-files`. It's Python because Git Bash ships no `zip` and PowerShell's `Compress-Archive` can't store unix permissions — three kit files are mode `100755`, and an archive that drops the exec bit delivers a kit that's dead on arrival. It also normalises to LF, so an `autocrlf=true` checkout can't poison the archive, and it refuses to build from a dirty worktree so the zip always maps to a real commit.
+
+To cut a release:
+1. `python kit/ops/pack.py --bump minor` → update `CHANGELOG.md` → commit
+2. `git tag v5.6.0 && git push --tags` — CI builds the zip, asserts the exec bits and LF survived, and attaches it to the Release
+3. **`python kit/ops/pack.py --dogfood`** → commit the refreshed `ops/`
+
+Step 3 is not housekeeping. It downloads the zip *from the published release*, installs it into this repo, and runs the board's selftest — the only check that walks the path a stranger actually walks. A release that can't run our own board is not a release. The daily CI job goes red if `ops/VERSION` ever lags the newest published release, because that means we shipped something we never ran.
 
 ## Safety note
 These prompts drive agents with real filesystem and git access. Keep the stop-and-ask list in `CLAUDE.md` intact when customizing. Deliberately NOT included, and why: agents never auto-install dependencies (supply-chain risk — the stop-and-ask gate stays), agents never edit `ops/RULES.tsv` (append is human-only; EVOLVE proposes), and `notify:`/`uat:` run with your user's permissions like any `verify:` command — treat CONVENTIONS.md as executable config. The hook runs with your user's permissions — read it before approving. The dashboard is read-only and binds localhost; `--host 0.0.0.0` exposes board text to your network.

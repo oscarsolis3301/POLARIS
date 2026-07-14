@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """POLARIS kit packer — builds the single transportable polaris-v5.zip.
 
-    python ops/pack.py                  build polaris-v5.zip from HEAD
-    python ops/pack.py --bump minor     bump ops/VERSION, then commit + re-run
-    python ops/pack.py --allow-dirty    build from a dirty worktree (escape hatch)
+    python kit/ops/pack.py               build polaris-v5.zip from HEAD
+    python kit/ops/pack.py --bump minor  bump kit/ops/VERSION, then commit + re-run
+    python kit/ops/pack.py --allow-dirty build from a dirty worktree (escape hatch)
+    python kit/ops/pack.py --dogfood     install the PUBLISHED release into this repo (see below)
 
 Why this exists as Python and not `zip`:
   * Git Bash ships no `zip` binary, and PowerShell's Compress-Archive cannot store
@@ -12,15 +13,25 @@ Why this exists as Python and not `zip`:
     ops/hooks/ownership-guard.sh). An archive that loses the exec bit delivers a
     kit that is dead on arrival. zipfile can set it; nothing else available here can.
 
-Contents come from `git ls-files -s`, which gives the file list AND the authoritative
-mode in one shot — and excludes .git/ and the ignored zip for free. Bytes are
-normalised to LF, because bash cannot execute a CRLF script and Windows checkouts
-with autocrlf=true would otherwise poison the archive.
+WHAT SHIPS is decided by one fact: this file lives in kit/, and every path comes from
+`git ls-files -s` run with cwd=kit/ — which lists ONLY what is under kit/, already relative
+to it. So kit/ops/polaris packs as polaris-v5/ops/polaris, and the repo's OTHER top-level
+directories are excluded structurally rather than by a blacklist somebody has to remember to
+extend. That matters here more than in most repos, because this one SELF-HOSTS POLARIS: the
+root ops/ is a live board (tasks, MAP, SPRINT, CONVENTIONS, telemetry) and shipping it would
+hand every user our board — and, because a target carrying CONVENTIONS.md IS a live board by
+definition, would lock INIT out of their repo. ls-files gives the authoritative mode in the
+same shot, and excludes .git/ and the ignored zip for free. Bytes are normalised to LF,
+because bash cannot execute a CRLF script and Windows checkouts with autocrlf=true would
+otherwise poison the archive.
 
 Kit-repo tool only: ops/install.sh's copy list is explicit, so this never ships to a target.
 """
+import shutil
 import subprocess
 import sys
+import tempfile
+import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -33,12 +44,13 @@ for _stream in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):    # pre-3.7, or already-wrapped stream
         pass
 
-KIT = Path(__file__).resolve().parent.parent
-PREFIX = "polaris-v5"                      # top-level folder inside the zip
-OUT = KIT / f"{PREFIX}.zip"
+KIT = Path(__file__).resolve().parent.parent     # <repo>/kit — the product's source tree
+REPO = KIT.parent                                # <repo>    — which self-hosts POLARIS at ops/
+PREFIX = "polaris-v5"                            # top-level folder inside the zip
+OUT = REPO / f"{PREFIX}.zip"                     # gitignored; never inside kit/, or it would pack itself
 VERSION_FILE = KIT / "ops" / "VERSION"
-EXEC_MODE = 0o100755                       # S_IFREG | rwxr-xr-x
-DATA_MODE = 0o100644                       # S_IFREG | rw-r--r--
+EXEC_MODE = 0o100755                             # S_IFREG | rwxr-xr-x
+DATA_MODE = 0o100644                             # S_IFREG | rw-r--r--
 
 
 def git(*args):
@@ -48,16 +60,23 @@ def git(*args):
     ).stdout.strip()
 
 
-def read_version(text):
-    """First `version:` line wins. Comments (#) are ignored."""
+def read_field(text, key):
+    """First `<key>: value` line wins. Comments (#) are ignored.
+
+    Values may contain colons (every URL in ops/VERSION does), so partition on the FIRST one only.
+    """
     for line in text.splitlines():
         line = line.strip()
         if line.startswith("#") or ":" not in line:
             continue
-        key, _, val = line.partition(":")
-        if key.strip() == "version":
-            return val.split("#")[0].strip()
+        name, _, val = line.partition(":")
+        if name.strip() == key:
+            return val.split(" #")[0].strip()      # " #" — a bare # is legal inside a URL fragment
     return None
+
+
+def read_version(text):
+    return read_field(text, "version")
 
 
 def bump(part):
@@ -178,12 +197,93 @@ def build(allow_dirty):
     print("   drop it in any project and run:  python polaris-v5.zip")
 
 
+def zip_version(path):
+    """The `version:` inside a packed kit. None if it isn't one."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            return read_version(z.read(f"{PREFIX}/ops/VERSION").decode("utf-8", "replace"))
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return None
+
+
+def dogfood():
+    """Install the PUBLISHED release into this repo, exactly as a stranger would.
+
+    This repo self-hosts POLARIS: kit/ is the product, and the root ops/ is a real installation
+    that runs our own board. Refreshing that installation is not a chore — it is the acceptance
+    test for a release, and the only one taken through the path a user actually walks. We fetch
+    the artifact from releases/latest (not our own working tree, and not the branch tarball,
+    either of which could be ahead of what the world can download), install it, and prove the
+    board still works. A release that cannot run our board is not a release.
+
+    It lands on install.sh's LIVE-BOARD path, so board/, CONVENTIONS.md, MAP.md, SPRINT.md and
+    RULES.tsv are untouched; only kit code and the managed CLAUDE.md block are refreshed.
+    Nothing is committed — you read the diff, like any other change.
+    """
+    if git("status", "--porcelain"):
+        sys.exit("⛔ worktree is dirty — commit or stash first, so the refresh lands as a reviewable diff.")
+
+    text = VERSION_FILE.read_text(encoding="utf-8")
+    want, url = read_version(text), read_field(text, "zip")
+    if not url:
+        sys.exit("no `zip:` line in kit/ops/VERSION — that is the published-release URL")
+
+    tmp = Path(tempfile.mkdtemp(prefix="polaris-dogfood-"))
+    try:
+        print(f"   fetching {url}")
+        archive = tmp / f"{PREFIX}.zip"
+        try:
+            with urllib.request.urlopen(url, timeout=60) as r, open(archive, "wb") as fh:
+                shutil.copyfileobj(r, fh)
+        except OSError as exc:
+            sys.exit(f"⛔ download failed — {exc}\n"
+                     "   Is the release published yet? CI attaches the zip when you push the tag.")
+
+        # Validate before we let it near the repo. A truncated download is still a file, and
+        # `curl -f`-style status checks do not catch that.
+        got = zip_version(archive)
+        if not got:
+            sys.exit(f"⛔ what came back from {url} is not a POLARIS kit — repo untouched.")
+        if got != want:
+            print(f"⚠ kit/ops/VERSION says {want}, but releases/latest still serves {got}.")
+            print("   A fresh tag takes a minute to propagate. Installing what is PUBLISHED —")
+            print("   dogfooding an artifact nobody can download would prove nothing.")
+
+        print(f"   installing {got} into {REPO}")
+        rc = subprocess.run([sys.executable, str(archive), str(REPO)]).returncode
+        if rc != 0:
+            sys.exit("⛔ install failed — see above. The repo was not left half-installed.")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    print("   proving the board still works:  ops/polaris doctor --selftest")
+    sys.path.insert(0, str(KIT / "ops"))
+    from bootstrap import find_bash                    # the Windows-safe resolver, not PATH's `bash`
+    bash = find_bash()
+    if not bash:
+        sys.exit("⛔ no working bash — cannot run the selftest. Install Git for Windows (ships Git Bash).")
+    if subprocess.run([bash, "ops/polaris", "doctor", "--selftest"], cwd=str(REPO)).returncode != 0:
+        sys.exit(f"⛔ {got} installs, but FAILS its own selftest here. Do not ship it — this is\n"
+                 "   exactly the bug --dogfood exists to catch. Undo with: git checkout -- .")
+
+    print(f"\n✅ POLARIS {got} installed from the published release, and it runs our board.")
+    changed = git("status", "--porcelain")
+    if changed:
+        print("   review, then commit the refreshed instance:\n")
+        for line in changed.splitlines():
+            print(f"   {line}")
+    else:
+        print("   no diff — this repo was already running the published release.")
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
     if args and args[0] == "--bump":
         bump(args[1] if len(args) > 1 else "")
     elif args and args[0] == "--allow-dirty":
         build(allow_dirty=True)
+    elif args and args[0] == "--dogfood":
+        dogfood()
     elif args:
         sys.exit(__doc__)
     else:

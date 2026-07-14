@@ -1,6 +1,13 @@
 # POLARIS — line-ending safety. Bash cannot execute CRLF scripts; Windows
 # checkouts with core.autocrlf=true would otherwise rewrite them on clone.
+#
+# `polaris` and `VERSION` carry no extension, so they need path rules rather than a glob — and a
+# pattern containing a slash is anchored to THIS file's directory, i.e. the repo root. That means
+# each one needs naming TWICE: kit/ops/… is the product's source, and ops/… is the installation
+# that runs this repo's own board. Both are real files; both are executed; both must stay LF.
 * text=auto
+kit/ops/polaris text eol=lf
+kit/ops/VERSION text eol=lf
 ops/polaris text eol=lf
 ops/VERSION text eol=lf
 *.sh text eol=lf
