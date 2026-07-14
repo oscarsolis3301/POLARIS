@@ -10,6 +10,69 @@ on:
   workflow_dispatch:
 
 jobs:
+  # A release must land EVERYWHERE or it hasn't happened. This repo has shipped the same class of
+  # bug twice, and both times it was silent:
+  #   5.2.0 — ops/VERSION was bumped on main but never tagged. Every installed kit was told a 5.2.0
+  #           existed; releases/latest still served 5.1.0. The update they were nagged about could
+  #           not be downloaded.
+  #   5.3.0 — the CHANGELOG documented a version that ops/VERSION on main did not yet claim, so
+  #           `polaris version` reported "up to date" while being two minor versions behind.
+  # There are four places a version lives — ops/VERSION (the update channel), the CHANGELOG, the git
+  # tag, and the published release — and a human is not a reliable synchroniser of four things.
+  # So: assert it. Red here means the world is inconsistent, which is exactly what it should mean.
+  consistency:
+    name: one version, everywhere
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }        # tags, not just the tip
+
+      - name: ops/VERSION == newest CHANGELOG entry == git tag == published release
+        run: |
+          set -eu
+          ver="$(sed -n 's/^version: *//p' ops/VERSION | head -1)"
+          [ -n "$ver" ] || { echo "::error::ops/VERSION has no version: line"; exit 1; }
+          echo "ops/VERSION:        $ver"
+
+          # 1. CHANGELOG — the newest `## X.Y.Z` heading must BE this version.
+          log="$(grep -m1 -oE '^## [0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | sed 's/^## //')"
+          echo "CHANGELOG (newest): $log"
+          [ "$ver" = "$log" ] || {
+            echo "::error::ops/VERSION is $ver but the newest CHANGELOG entry is $log — bump both or neither."
+            exit 1
+          }
+
+          # 2. Docs must not quote a stale version back at the user.
+          bad=$(grep -rhoE 'POLARIS [0-9]+\.[0-9]+\.[0-9]+' README.md .claude/skills/ ops/*.md 2>/dev/null \
+                  | sed 's/^POLARIS //' | sort -u | grep -vFx "$ver" || true)
+          [ -z "$bad" ] || {
+            echo "::error::docs quote version(s) [$(echo $bad | tr '\n' ' ')] but ops/VERSION is $ver — sweep them."
+            exit 1
+          }
+          echo "docs:               clean"
+
+          # 3+4. Tag and published release — main only. On a PR the tag does not exist yet and that
+          # is fine; the bump and the tag land together, so it is main that must be self-consistent.
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            git rev-parse -q --verify "refs/tags/v$ver" >/dev/null || {
+              echo "::error::ops/VERSION says $ver but there is no v$ver tag. Every installed kit is"
+              echo "::error::being told $ver exists while releases/latest still serves the old zip —"
+              echo "::error::exactly the 5.2.0 bug. Cut it:  git tag v$ver && git push origin v$ver"
+              exit 1
+            }
+            echo "git tag:            v$ver"
+
+            rel="$(curl -fsSL https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest \
+                    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
+            echo "releases/latest:    ${rel:-<none>}"
+            [ "$rel" = "v$ver" ] || {
+              echo "::error::releases/latest serves ${rel:-nothing}, but ops/VERSION advertises $ver."
+              echo "::error::A fresh machine curls releases/latest — it would install the WRONG kit."
+              exit 1
+            }
+          fi
+          echo "✅ one version, everywhere: $ver"
+
   kit:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
