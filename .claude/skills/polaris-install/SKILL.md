@@ -25,17 +25,43 @@ board columns, so an `ops/board/` can exist in a repo where INIT has never run.
 The repo must be a git repo (POLARIS is built on git worktrees, branches and locks). If it isn't,
 ask the user before running `git init` — never initialise a repo they didn't ask you to.
 
-**If `polaris-v5.zip` is already in the repo root** (the user dragged it in):
+Work down this ladder and stop at the first rung that applies. **Do not skip to the download** —
+rungs 1 and 2 need no network, and rung 3 is the one that can get blocked.
+
+**1. `polaris-v5.zip` is already in the repo root** (the user dragged it in):
 
 ```bash
 python polaris-v5.zip
 ```
 
-**If it isn't**, fetch the latest release first — the repo is public, no auth needed:
+**2. This machine has a cached kit** — `~/.claude/skills/polaris-install/polaris-v5.zip`, put there
+by `--claude-skill`. This is the normal path. Copy it in and run it; the installer gitignores it:
+
+```bash
+cp ~/.claude/skills/polaris-install/polaris-v5.zip . && python polaris-v5.zip
+```
+
+**3. Neither exists** — the kit must be downloaded. **Do not just run `curl`.** Claude Code's
+permission classifier denies fetching code from a source the user never named, so a silent download
+is denied and the install dies half-way. Tell them in one line where it comes from and let them name
+it:
+
+> POLARIS ships from `github.com/oscarsolis3301/POLARIS`. Say the word and I'll pull the latest
+> release from there.
+
+Once they confirm:
 
 ```bash
 curl -fsSLO https://github.com/oscarsolis3301/POLARIS/releases/latest/download/polaris-v5.zip
 python polaris-v5.zip
+```
+
+**If a permission denial happens anyway**, do not hand-roll an install or work around it. Report it
+plainly and give the one-time cure — it caches the kit and pre-authorizes the commands, so no
+install on this machine is ever blocked again:
+
+```bash
+python polaris-v5.zip --claude-skill
 ```
 
 If `python` isn't available, fall back to: `unzip polaris-v5.zip && bash polaris-v5/ops/install.sh`.
@@ -62,10 +88,31 @@ The install does not take effect in the current session: Claude Code reads `CLAU
 4. Claude Code will ask them to trust the project hook on first use. That is the ownership
    write-guard (`ops/hooks/ownership-guard.sh`) — approving it is expected.
 
+## `--claude-skill` — the one-time setup that makes all of this seamless
+
+```bash
+python polaris-v5.zip --claude-skill        # add --no-permissions to skip the settings write
+```
+
+Run once per machine, from any copy of the zip. It writes three things to `~/.claude/`:
+
+1. **the skill** — `skills/polaris-install/SKILL.md`, this file;
+2. **the kit** — `skills/polaris-install/polaris-v5.zip`, so installing is a local copy (rung 2
+   above) and never a download;
+3. **the permission rules** — appended to `permissions.allow` in `settings.json`, so the install
+   commands are pre-authorized and never prompt. Existing settings are preserved; rules are added
+   only if absent. If that file can't be parsed it is left alone and the rules are printed to paste.
+
+Recommend it whenever an install gets blocked, or when the user says they'll be installing POLARIS
+in more than one repo. After it, `"install POLARIS"` works anywhere with no download and no prompts.
+
 ## Update
 
 `bash ops/polaris update` — fetches the latest kit, refreshes kit code only, never touches the
 board, and commits nothing. It refuses on a dirty worktree. Never update while a sprint is running.
+
+The cached kit does **not** auto-refresh — it is whatever zip last ran `--claude-skill`. To refresh
+it, re-run `--claude-skill` from a newer zip.
 
 ## Uninstall
 

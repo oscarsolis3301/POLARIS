@@ -19,7 +19,13 @@ python polaris-v5.zip
 python polaris-v5.zip --claude-skill
 ```
 
-From then on, in **any** repo, just say **"install POLARIS"** — Claude fetches the latest release itself and installs it. You never download or drag anything again.
+From then on, in **any** repo, just say **"install POLARIS"** — and it installs, **offline and without a single permission prompt**. You never download or drag anything again.
+
+That one command writes three things to `~/.claude/`, and it needs all three. The **skill** teaches Claude the procedure. The **kit** is cached beside it, so installing is a local file copy instead of a download. And a few **Bash permission rules** are appended to `permissions.allow` in your `settings.json`, so the commands are pre-authorized.
+
+Why the rules matter: Claude Code refuses to fetch code from a source you never named and execute it — so a skill that has to `curl` the kit first gets **denied in every fresh repo**, which reads as a broken installer when it is really a blocked one. A rule in your own settings *is* you naming the source (the URL is pinned in full, never a wildcard). Existing settings are preserved — rules are appended only if absent, the file is written via a temp file so an interrupted run cannot truncate it, and a `settings.json` that can't be parsed is left alone and the rules printed for you to paste. Don't want it touched at all? `--claude-skill --no-permissions`.
+
+The cached kit doesn't auto-refresh — it's whatever zip last ran `--claude-skill`. Re-run it from a newer zip to update.
 
 Greenfield folder with no `.git` yet? Name it and the installer runs `git init` for you: `python polaris-v5.zip <target-repo>`. Standing in a directory that isn't a repo, with no target named, it **refuses** — otherwise running it on your Desktop would turn the Desktop into a git repo.
 

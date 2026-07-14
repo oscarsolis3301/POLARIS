@@ -4,6 +4,39 @@ Versions here are the **kit version** (`ops/VERSION`), not the board protocol ve
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.3.0 — 2026-07-13
+
+**"Install POLARIS" was getting denied, and it looked like a broken installer.** It was a blocked
+one. The skill told the agent to `curl` the kit from a GitHub release and execute it — and Claude
+Code's permission classifier refuses, by design, to fetch code from a source the user never named
+themselves. Nothing was wrong with the zip, the URL, or `install.sh`. The install simply died on
+that rung, in every fresh repo, every time.
+
+The fix is to stop needing the download at all.
+
+- **`--claude-skill` now caches the kit.** It writes `polaris-v5.zip` next to the skill in
+  `~/.claude/skills/polaris-install/`. Installing into a repo becomes `cp` + `python
+  polaris-v5.zip` — a local file, no network, nothing for the classifier to object to. (Re-running
+  `--claude-skill` *from* the cached copy no longer truncates it — there's a `samefile` guard, and
+  CI proves it.)
+- **`--claude-skill` now pre-authorizes the commands.** Six Bash rules are appended to
+  `permissions.allow` in `~/.claude/settings.json` — the `python polaris-v5.zip` run, the pinned
+  release URL (in full; never a wildcard), and `ops/polaris`, whose `update` curls a tarball
+  internally. A rule in your own settings *is* you naming the source, which is exactly what the
+  classifier asks for. Existing settings are preserved — append-if-absent, written through a temp
+  file so an interrupted run can't truncate it, and a `settings.json` that won't parse is left
+  alone with the rules printed to paste. Opt out with `--no-permissions`.
+- **The skill can no longer dead-end.** Its install section is an explicit ladder: zip in the repo
+  root → cached kit → *ask the user to name the source, then* download. If a denial happens anyway
+  it reports it and prescribes `--claude-skill` instead of hand-rolling an install around the
+  guard.
+- **Fixed: `releases/latest` served 5.1.0 while `main` advertised 5.2.0.** 5.2.0 was never tagged,
+  so every installed kit nagged about an update the release URL couldn't actually deliver, and
+  every fresh download got a version-old kit. This release carries the 5.2.0 work below it.
+
+Net effect: `python polaris-v5.zip --claude-skill`, once per machine, and `"install POLARIS"` works
+in any repo — offline, no download, no prompts.
+
 ## 5.2.0 — 2026-07-13
 
 Two things a real 843-file brownfield install taught us: agents only had one register, and a fresh

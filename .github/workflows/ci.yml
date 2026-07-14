@@ -77,6 +77,71 @@ jobs:
           print("archive OK")
           PY
 
+      - name: --claude-skill — caches the kit, pre-authorizes, clobbers nothing
+        # The path Claude Code actually installs through. Until 5.3.0 the skill told the agent to
+        # curl the zip from GitHub and execute it — which the permission classifier DENIES whenever
+        # the user hasn't named that URL themselves, so every fresh-repo install died and looked
+        # like a broken kit. The cure is a cached kit (no download) plus rules in the user's own
+        # settings (no prompt) — and both must land without harming a settings.json that already
+        # carries someone's hooks, statusline and permissions.
+        #
+        # HOME *and* USERPROFILE: ntpath.expanduser reads USERPROFILE and ignores HOME outright, so
+        # a HOME-only fake would silently test the runner's real profile on Windows and prove nothing.
+        run: |
+          set -e
+          FAKE="$RUNNER_TEMP/home"
+          SK="$FAKE/.claude/skills/polaris-install"
+          mkdir -p "$FAKE/.claude"
+          printf '{"statusLine":{"command":"MY_OWN_STATUSLINE"},"permissions":{"allow":["Bash(MY_OWN_RULE)"],"deny":["Read(./.env)"]}}\n' > "$FAKE/.claude/settings.json"
+
+          HOME="$FAKE" USERPROFILE="$FAKE" python polaris-v5.zip --claude-skill
+          HOME="$FAKE" USERPROFILE="$FAKE" python polaris-v5.zip --claude-skill   # must be idempotent
+
+          test -f "$SK/SKILL.md"       || { echo "::error::--claude-skill did not install SKILL.md"; exit 1; }
+          test -f "$SK/polaris-v5.zip" || { echo "::error::--claude-skill did not cache the kit — installs would still need a download"; exit 1; }
+          cmp -s "$SK/polaris-v5.zip" polaris-v5.zip || { echo "::error::cached kit differs from the built zip"; exit 1; }
+
+          # Re-running FROM the cached copy must not open its own source for writing and truncate it.
+          HOME="$FAKE" USERPROFILE="$FAKE" python "$SK/polaris-v5.zip" --claude-skill
+          cmp -s "$SK/polaris-v5.zip" polaris-v5.zip || { echo "::error::cached kit destroyed itself on a self-run"; exit 1; }
+
+          FAKE="$FAKE" python - <<'PY'
+          import json, os, sys
+          s = json.load(open(os.path.join(os.environ["FAKE"], ".claude", "settings.json")))
+          allow = s["permissions"]["allow"]
+          bad = []
+          if "Bash(MY_OWN_RULE)" not in allow:
+              bad.append("an existing allow rule was lost")
+          if s["permissions"].get("deny") != ["Read(./.env)"]:
+              bad.append("the existing deny list was lost")
+          if s.get("statusLine", {}).get("command") != "MY_OWN_STATUSLINE":
+              bad.append("an unrelated top-level key was lost")
+          if not any(r.startswith("Bash(python polaris-v5.zip") for r in allow):
+              bad.append("POLARIS rules were not merged into permissions.allow")
+          if len(allow) != len(set(allow)):
+              bad.append("duplicate rules — the merge is not idempotent")
+          for b in bad:
+              print(f"::error::{b}")
+          sys.exit(1 if bad else 0)
+          PY
+
+          # --no-permissions: still caches, but settings.json must come out byte-identical.
+          F2="$RUNNER_TEMP/home2"
+          mkdir -p "$F2/.claude"
+          printf '{"permissions":{"allow":[]}}\n' > "$F2/.claude/settings.json"
+          cp "$F2/.claude/settings.json" "$RUNNER_TEMP/before.json"
+          HOME="$F2" USERPROFILE="$F2" python polaris-v5.zip --claude-skill --no-permissions
+          test -f "$F2/.claude/skills/polaris-install/polaris-v5.zip" || { echo "::error::--no-permissions skipped the cache too"; exit 1; }
+          cmp -s "$F2/.claude/settings.json" "$RUNNER_TEMP/before.json" || { echo "::error::--no-permissions wrote to settings.json anyway"; exit 1; }
+
+          # Unparseable settings are left ALONE — never rewritten, never fatal.
+          F3="$RUNNER_TEMP/home3"
+          mkdir -p "$F3/.claude"
+          printf 'this is not json' > "$F3/.claude/settings.json"
+          HOME="$F3" USERPROFILE="$F3" python polaris-v5.zip --claude-skill
+          grep -qx 'this is not json' "$F3/.claude/settings.json" || { echo "::error::a malformed settings.json was overwritten"; exit 1; }
+          echo "--claude-skill OK"
+
       - name: Drag-and-run install into a scratch repo
         run: |
           set -eo pipefail          # `| tee` must not swallow a failed install
