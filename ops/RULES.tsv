@@ -1,0 +1,26 @@
+# POLARIS RULES — repo policy as data. TAB-separated: scope<TAB>kind<TAB>pattern<TAB>message
+#   scope   files_owned semantics: exact path · dir/ prefix · glob
+#   kind    path    = scope is forbidden to write, even inside files_owned (danger zones)
+#           content = added lines under scope must not match the ERE pattern (use - for path kind)
+# Enforced at write time (Claude Code guard), at verify/handoff (any model), and at audit.
+# EVOLVE proposes new lines from kickback/Learned evidence; a human approves; you append one line.
+#
+# THE BIG ONE: ops/ is POLARIS's own INSTALLATION — the board you are standing on. The PRODUCT is
+# kit/. Every kit file below exists twice: once in kit/ (source, edit freely) and once in ops/
+# (installed, never hand-edit). Editing the installed copy is always a mistake: it is silently
+# overwritten the next time we install a release, so the work is lost — and until then the board is
+# running code that exists nowhere in the source. The rules name the installed copy and point at the
+# source. ops/board/, ops/contracts/ and the INIT artifacts are NOT listed: they are board state, and
+# the Planner and Integrator must be able to write them.
+ops/polaris	path	-	installed copy — edit kit/ops/polaris; refresh with: python kit/ops/pack.py --dogfood
+ops/install.sh	path	-	installed copy — edit kit/ops/install.sh
+ops/dashboard.py	path	-	installed copy — edit kit/ops/dashboard.py
+ops/VERSION	path	-	installed copy — it records which release we run; edit kit/ops/VERSION
+ops/MANUAL.md	path	-	installed copy — edit kit/ops/MANUAL.md
+ops/PROMPTS.md	path	-	installed copy — edit kit/ops/PROMPTS.md
+ops/roles/	path	-	installed copy — edit kit/ops/roles/
+ops/hooks/	path	-	installed copy — edit kit/ops/hooks/
+ops/templates/	path	-	installed copy — edit kit/ops/templates/
+ops/ci/	path	-	installed copy — edit kit/ops/ci/
+kit/ops/VERSION	path	-	a version bump is a release act, not a task — it tells every installed kit a new POLARIS exists. Human only.
+.github/	path	-	the CI drills are the last gate between a bad kit and every user — an agent must not edit its own tests
