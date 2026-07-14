@@ -1,6 +1,6 @@
 ---
 name: polaris-install
-description: Install, update, or remove the POLARIS parallel-sprint protocol in the current repo. TRIGGER when the user asks to install/add/set up POLARIS, points at a polaris-v5.zip file, or asks to update or uninstall POLARIS. DO NOT TRIGGER inside a repo that already has a working ops/polaris — there, POLARIS is already installed and the project's own protocol governs.
+description: Install, update, upgrade, or remove the POLARIS parallel-sprint protocol. TRIGGER when the user asks to install/add/set up POLARIS, points at a polaris-v5.zip file, or asks to update/upgrade/uninstall POLARIS or check what version it is on — including inside a repo that already runs POLARIS, because that is the only place update and uninstall can happen. DO NOT TRIGGER for ordinary board work in an installed repo (claiming, building, planning, integrating tasks) — the project's own `polaris` skill governs that.
 ---
 
 # Installing POLARIS
@@ -12,14 +12,22 @@ one file — `polaris-v5.zip`, a Python zipapp — so installing is one command 
 interview them, then you plan their first sprint — all in THIS session. Do not stop halfway and
 tell them to open a new chat. See § After the install, which is the important half of this file.
 
-## First: is it already installed?
+## First: what are they actually asking for?
 
-`ops/polaris` exists → the kit is here. Do **not** reinstall. Run `bash ops/polaris version`,
-report the version in one line, stop.
+`ops/polaris` exists → the kit is already here. Never reinstall over it. Which job is it?
 
-Then one more check, because it decides what you say next: **`ops/CONVENTIONS.md` is the only test
-for whether INIT has run.** INIT writes it; nothing else does. Kit installed but that file missing
-→ the repo is installed-but-unconfigured → go straight to § After the install and set it up now.
+| They said | Do |
+|---|---|
+| "update POLARIS" · "upgrade POLARIS" · "is there a new version" | **§ Update.** `upgrade` and `update` are one letter apart and unrelated — `update` fetches a newer kit, `upgrade` only migrates an old board and downloads nothing. They almost always mean **`update`**. |
+| "install POLARIS" (already installed) | `bash ops/polaris version`, report it in one line, stop. |
+| "uninstall / remove POLARIS" | **§ Uninstall.** |
+| anything about tasks, the board, planning, building | **Not your job** — the project's own `polaris` skill governs. Stand down. |
+
+`ops/polaris` does **not** exist → **§ Install.**
+
+One more check, because it decides what you say next: **`ops/CONVENTIONS.md` is the only test for
+whether INIT has run.** INIT writes it; nothing else does. Kit installed but that file missing →
+the repo is installed-but-unconfigured → go straight to § After the install and set it up now.
 Never test `ops/board/` for this: older installers shipped the six empty columns, so `ops/board/`
 can exist in a repo where INIT never ran.
 
@@ -69,8 +77,8 @@ Exactly one line, and its last token is your routing instruction:
 
 | Line | Means | You do |
 |---|---|---|
-| `POLARIS 5.4.0 installed · fresh` | new repo | § After the install — interview + plan |
-| `POLARIS 5.4.0 installed · live-board` | INIT already ran here | `bash ops/polaris upgrade`, report in one line, **never re-run INIT** |
+| `POLARIS <version> installed · fresh` | new repo | § After the install — interview + plan |
+| `POLARIS <version> installed · live-board` | INIT already ran here | `bash ops/polaris upgrade`, report in one line, **never re-run INIT** |
 
 Full detail is in `.polaris/install.log` (gitignored). Read it only if the install failed.
 
@@ -116,11 +124,28 @@ They typed four words. Everything above is you talking to yourself.
 
 ## Update
 
-`bash ops/polaris update` — fetches the latest kit, refreshes kit code only, never touches the
-board, commits nothing. Refuses on a dirty worktree. Never update mid-sprint.
+```bash
+bash ops/polaris update
+```
 
-The cached kit does **not** auto-refresh — it is whatever zip last ran an install on this machine.
-To refresh it, run a newer zip once.
+One command. It fetches the latest kit, refreshes **kit code only** (board, `RULES.tsv`,
+`CONVENTIONS.md`, `MAP.md` and `SPRINT.md` are never touched), **and re-caches the new kit into
+`~/.claude/`** so the next repo you install into on this machine gets it too. It refuses on a dirty
+worktree and commits nothing — the user reviews the diff. Never update mid-sprint.
+
+Report the result in **one line** (`updated 5.3.0 → 5.4.0`). Do not paste the changelog, list the
+refreshed files, or explain the managed block. If they want to know what changed, they'll ask.
+
+Two traps worth knowing, because both have already caused a bad install:
+
+- **`upgrade` is not `update`.** `ops/polaris upgrade` migrates an old v3/v4 *board* to v5 and
+  downloads nothing. Someone saying "upgrade POLARIS" almost always means `update`. Running
+  `upgrade` prints a wall of green and leaves them on the old kit.
+- **Do not trust `version`'s "up to date" alone if you have reason to doubt it.** It compares
+  `version:` on `main`, and `raw.githubusercontent` caches for ~5 minutes. If a newer kit is
+  genuinely expected, check `git ls-remote` or the releases API rather than assuming.
+
+`--repo-only` updates the repo without touching `~/.claude` — only if they ask for it.
 
 ## Uninstall
 

@@ -301,6 +301,74 @@ jobs:
           grep -q 'polaris upgrade'     .polaris/install.log || { echo "::error::live board not routed to upgrade"; exit 1; }
           grep -q 'voice: technical'    ops/CONVENTIONS.md   || { echo "::error::installer overwrote CONVENTIONS.md"; exit 1; }
 
+      - name: update — refreshes the repo AND the machine, and survives overwriting itself
+        # Two regressions guarded here, both of which shipped:
+        #
+        # 1. SELF-OVERWRITE. install.sh replaces ops/polaris — the file bash is still lazily
+        #    reading, by byte offset. A script swapped mid-run resumes at the old offset inside the
+        #    new bytes and executes garbage. Latent since `update` was written; it only survived
+        #    while the old and new files happened to line up. `update` now re-execs from a temp
+        #    copy first (as `uninstall` always has). Assert BOTH the behaviour and the guard: the
+        #    byte-offset crash only reproduces when the files differ in length, which a same-commit
+        #    update does not, so behaviour alone would silently stop testing anything.
+        #
+        # 2. STALE MACHINE CACHE. `update` used to fix one repo and leave ~/.claude holding the old
+        #    kit — which is what every future "install POLARIS" copies from. So the NEXT repo
+        #    silently got the old kit. That is how a 5.1.0 zip nearly landed on top of a 5.3.0 board.
+        run: |
+          set -eo pipefail
+          grep -q 'POLARIS_UPDATE_REEXEC' ops/polaris \
+            || { echo "::error::cmd_update lost its re-exec guard — it will corrupt itself when install.sh overwrites ops/polaris"; exit 1; }
+
+          U="$RUNNER_TEMP/upd"; HU="$RUNNER_TEMP/home-upd"
+          mkdir -p "$U" "$HU/.claude"
+          cd "$U"
+          git init -qb main; git config user.email ci@example.com; git config user.name ci
+          git commit -q --allow-empty -m init
+          cp "$GITHUB_WORKSPACE/polaris-v5.zip" .
+          HOME="$HU" USERPROFILE="$HU" python polaris-v5.zip --no-machine-setup >/dev/null
+          git add -A && git commit -qm polaris          # update refuses on a dirty worktree
+
+          # Nothing in ~/.claude yet — this is the machine a stale cache would poison.
+          test ! -f "$HU/.claude/skills/polaris-install/polaris-v5.zip" || { echo "::error::test setup wrong: cache already present"; exit 1; }
+
+          HOME="$HU" USERPROFILE="$HU" bash ops/polaris update 2>&1 | tee "$RUNNER_TEMP/update.log"
+          ! grep -qi 'syntax error' "$RUNNER_TEMP/update.log" \
+            || { echo "::error::update corrupted itself while overwriting ops/polaris"; exit 1; }
+          bash ops/polaris version >/dev/null || { echo "::error::ops/polaris is not runnable after update"; exit 1; }
+
+          # ...and the machine is current, so the NEXT repo on this box gets the new kit.
+          C="$HU/.claude/skills/polaris-install"
+          test -f "$C/polaris-v5.zip" || { echo "::error::update did not refresh the machine's cached kit — the next repo would install a stale POLARIS"; exit 1; }
+          test -f "$C/SKILL.md"       || { echo "::error::update did not refresh the cached skill"; exit 1; }
+          python - "$C/polaris-v5.zip" <<'PY'
+          import sys, zipfile
+          z = zipfile.ZipFile(sys.argv[1])
+          v = [n for n in z.namelist() if n.endswith("ops/VERSION")]
+          assert v, "cached kit carries no ops/VERSION — it is not a POLARIS kit"
+          ver = [l for l in z.read(v[0]).decode().splitlines() if l.startswith("version:")]
+          assert ver, "cached kit has no version: line"
+          assert "polaris-v5/ops/polaris" in z.namelist(), "cached kit is missing ops/polaris"
+          print("  cached kit OK —", ver[0])
+          PY
+          echo "update OK"
+
+      - name: --repo-only leaves the machine cache alone
+        run: |
+          set -eo pipefail
+          U2="$RUNNER_TEMP/upd2"; H2="$RUNNER_TEMP/home-upd2"
+          mkdir -p "$U2" "$H2/.claude"
+          cd "$U2"
+          git init -qb main; git config user.email ci@example.com; git config user.name ci
+          git commit -q --allow-empty -m init
+          cp "$GITHUB_WORKSPACE/polaris-v5.zip" .
+          HOME="$H2" USERPROFILE="$H2" python polaris-v5.zip --no-machine-setup >/dev/null
+          git add -A && git commit -qm polaris
+          HOME="$H2" USERPROFILE="$H2" bash ops/polaris update --repo-only >/dev/null 2>&1
+          test ! -f "$H2/.claude/skills/polaris-install/polaris-v5.zip" \
+            || { echo "::error::--repo-only refreshed the machine cache anyway"; exit 1; }
+          echo "--repo-only OK"
+
       - name: --verbose still prints the full install log
         run: |
           set -eo pipefail

@@ -38,7 +38,7 @@ python polaris-v5.zip --no-machine-setup # install into the repo only; ~/.claude
 python polaris-v5.zip --claude-skill     # arm the machine only; install into no repo
 ```
 
-`polaris-v5.zip` is the whole kit — one file, no `.git`, a Python **zipapp**, so there is no unzip step. It prints one line: `POLARIS 5.4.0 installed · fresh` (or `· live-board`). The full log goes to `.polaris/install.log`.
+`polaris-v5.zip` is the whole kit — one file, no `.git`, a Python **zipapp**, so there is no unzip step. It prints one line: `POLARIS <version> installed · fresh` (or `· live-board`). The full log goes to `.polaris/install.log`.
 
 Greenfield folder with no `.git` yet? Name it and the installer runs `git init` for you: `python polaris-v5.zip <target-repo>`. Standing in a directory that isn't a repo, with no target named, it **refuses** — otherwise running it on your Desktop would turn the Desktop into a git repo.
 

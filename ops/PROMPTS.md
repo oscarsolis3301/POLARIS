@@ -25,12 +25,15 @@ You are INIT.
 ```
 INIT asks how you want agents to talk to you (plain English or dense and technical), what you want to build first, and confirms the test/build commands it found in your repo. Three interactions, then it plans your first sprint. Change the voice later: edit `voice:` in `ops/CONVENTIONS.md` (`standard` | `technical`); `bash ops/polaris doctor` prints the one in force.
 
-## Kit lifecycle (any session, any time)
+## Kit lifecycle — just say "update POLARIS" in any chat, in any POLARIS repo
+It fetches the latest kit, refreshes kit code only (your board, RULES, CONVENTIONS, MAP and SPRINT are never touched), **and re-caches the new kit into `~/.claude`** — so the next repo you install into on this machine gets it too. One update, whole machine current.
+
 ```bash
 ops/polaris version            # which POLARIS this repo runs · what's latest on the channel
-ops/polaris update             # fetch the latest kit — manual, never mid-sprint, commits nothing
+ops/polaris update             # ^ the above. --repo-only skips the ~/.claude refresh
 ops/polaris uninstall --yes    # remove POLARIS; keeps your CLAUDE.md content and your other hooks
 ```
+⚠ `upgrade` is **not** `update`. `ops/polaris upgrade` migrates an old v3/v4 *board* to v5 and downloads nothing. If you want the newer POLARIS, you want `update`.
 
 ## Every sprint
 **1 — Plan** (one session):

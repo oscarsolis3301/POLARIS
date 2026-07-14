@@ -777,6 +777,14 @@ cmd_upgrade() { # idempotent v3→v4: creates what v4 adds, touches nothing that
   say "v5 ready. New since v4: RULES.tsv policy engine (danger zones + content guards, 3-deep) · drift (board hygiene audit) · per-point cycle calibration in metrics · uat:/notify: CONVENTIONS keys · dashboard points/drift/notify"
   note "idempotent from v3 or v4 — board, tasks and locks untouched; no task frontmatter changes"
   note "commit ops/ + .claude/ + .gitattributes, then: ops/polaris doctor --selftest"
+
+  # `upgrade` and `update` are one letter apart and do unrelated jobs — upgrade migrates a BOARD
+  # and downloads nothing. A human who says "upgrade POLARIS" almost always means "get the new
+  # version", runs this, sees a wall of green, and walks away still on the old kit. Say so.
+  if [ "${POLARIS_FROM_UPDATE:-}" != "1" ]; then
+    note "NOTE: upgrade migrated your BOARD. It fetched nothing — if you meant \"get the newer POLARIS\","
+    note "      that is:  ops/polaris update"
+  fi
 }
 
 # ------------------------------------------------------- version + update channel
@@ -848,8 +856,60 @@ cmd_version() {
   fi
 }
 
+refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with what we just installed
+  # An `update` that fixes ONE repo and leaves the machine's cached kit stale is a trap: the cache
+  # is what every FUTURE `"install POLARIS"` copies from, so the next project silently gets the old
+  # kit — and the version skew is invisible until it bites. (It bit: a repo ended up with a 5.1.0
+  # zip in its root while the cache held 5.3.0, and following the skill literally would have
+  # downgraded it.) Update the repo, update the machine. Fails OPEN: a machine-cache problem must
+  # never fail a repo update that already succeeded.
+  local kitsrc="$1" zipurl="$2" dest
+  [ -n "${HOME:-}" ] || { note "⚠ no \$HOME — machine cache not refreshed"; return 0; }
+  [ -d "$HOME/.claude" ] || return 0     # Claude Code isn't installed here; nothing to cache for
+  dest="$HOME/.claude/skills/polaris-install"
+  mkdir -p "$dest" 2>/dev/null || { note "⚠ could not create $dest — machine cache not refreshed"; return 0; }
+
+  # The skill text rides along in the tarball we already downloaded — free, no second request.
+  [ -f "$kitsrc/.claude/skills/polaris-install/SKILL.md" ] \
+    && cp "$kitsrc/.claude/skills/polaris-install/SKILL.md" "$dest/SKILL.md" 2>/dev/null
+
+  # The zip cannot be rebuilt here (Git Bash ships no `zip`, and ops/pack.py is never shipped), so
+  # fetch the published release — the same pinned URL the installer's own permission rule names.
+  [ -n "$zipurl" ] || { note "⚠ no zip: in ops/VERSION — machine cache not refreshed"; return 0; }
+  if curl -fsSL --max-time 60 "$zipurl" -o "$dest/polaris-v5.zip.tmp" 2>/dev/null; then
+    mv -f "$dest/polaris-v5.zip.tmp" "$dest/polaris-v5.zip"
+    say "machine refreshed — every new install on this box now gets $(ver version), offline"
+  else
+    rm -f "$dest/polaris-v5.zip.tmp" 2>/dev/null
+    note "⚠ this repo is updated, but the machine's cached kit could NOT be refreshed (no release zip"
+    note "  at the zip: URL yet?). The next \"install POLARIS\" in a new repo would use the OLD kit."
+    note "  Fix it once the release is published:  python polaris-v5.zip --claude-skill"
+  fi
+}
+
 cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-board path:
   # kit code is refreshed; board, RULES, CONVENTIONS, MAP and SPRINT are never touched.
+  # `update` = fetch a newer KIT from the channel.  `upgrade` = migrate an OLD BOARD to v5.
+  # They are one letter apart and unrelated; update runs upgrade at the end, never the reverse.
+
+  # Re-exec from a copy FIRST — the same guard cmd_uninstall uses, and for the same reason.
+  # install.sh is about to OVERWRITE ops/polaris: the very file bash is still reading. Bash reads a
+  # script lazily, in chunks, by BYTE OFFSET — so a script replaced mid-run resumes at the old
+  # offset inside the new bytes and executes garbage ("syntax error near unexpected token"), or
+  # worse, half a command. This was latent from the day `update` was written; it only ever
+  # survived because the old and new files happened to line up. It stopped lining up.
+  if [ "${POLARIS_UPDATE_REEXEC:-}" != "1" ]; then
+    local tmp; tmp="$(mktemp -d)"
+    cp "$SELF" "$tmp/polaris"
+    POLARIS_UPDATE_REEXEC=1 exec bash "$tmp/polaris" update "$@"
+  fi
+
+  local repo_only=0
+  case "${1:-}" in
+    --repo-only) repo_only=1;;
+    "") ;;
+    *) die "update: unknown flag ${1} (only --repo-only)";;
+  esac
   [ -f "$VER" ] || die "ops/VERSION missing — this kit predates versioning; reinstall from a fresh zip"
   command -v curl >/dev/null 2>&1 || die "update needs curl on PATH"
   command -v tar  >/dev/null 2>&1 || die "update needs tar on PATH"
@@ -873,10 +933,17 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
   [ -n "$repo" ] && sha="$(git ls-remote "$repo" HEAD 2>/dev/null | cut -c1-7 || true)"
 
   POLARIS_SHA="$sha" bash "$K/ops/install.sh" "$PRIMARY" || die "install failed — repo untouched except where noted above"
+
+  # AFTER the install, so `ver` reads the NEW VERSION (and its zip: URL), and before $T is gone.
+  if [ "$repo_only" = 1 ]; then
+    note "--repo-only: ~/.claude left alone. The machine's cached kit may now be older than this repo."
+  else
+    refresh_machine_kit "$K" "$(ver zip || true)"
+  fi
   rm -rf "$T"; trap - EXIT
 
   rm -f "$PRIMARY/.polaris/update-cache"   # force a fresh check on the next command
-  cmd_upgrade
+  POLARIS_FROM_UPDATE=1 cmd_upgrade
   say "updated $cur → $(ver version)"
   note "review the diff, then commit ops/ — nothing was committed for you"
 }
@@ -1012,9 +1079,12 @@ polaris — POLARIS v4 board CLI (run from anywhere inside the repo)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
   dash [--port N]                live read-only board at http://127.0.0.1:7373 (needs python3)
   fleet <N> [--loop]             print/launch N identical Builder kickoffs (tmux+claude optional)
-  upgrade                        idempotent v3/v4→v5 migration on an existing board
+  upgrade                        migrate an OLD BOARD (v3/v4→v5). Idempotent. Downloads NOTHING.
+                                   want a newer KIT? that is `update` — one letter, unrelated job.
   version                        installed version · commit · latest on the channel
-  update                         fetch the latest kit from the channel (manual; never automatic)
+  update [--repo-only]           fetch the latest KIT from the channel (manual; never automatic).
+                                   also re-caches it into ~/.claude so the NEXT repo you install
+                                   into gets the new kit too. --repo-only skips that.
   uninstall --yes                remove POLARIS from this repo (keeps your CLAUDE.md + hooks)
 EOF
 }
@@ -1041,7 +1111,7 @@ case "${1:-}" in
   fleet)      shift; cmd_fleet "$@";;
   upgrade)    cmd_upgrade;;
   version)    update_check_maybe || true; cmd_version;;
-  update)     cmd_update;;
+  update)     shift; cmd_update "${1:-}";;
   uninstall)  shift; cmd_uninstall "$@";;
   _match)     shift; cmd_match "$@";;
   ''|help|-h|--help) usage;;

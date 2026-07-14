@@ -4,6 +4,44 @@ Versions here are the **kit version** (`ops/VERSION`), not the board protocol ve
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.5.0 — 2026-07-14
+
+**"Can I just tell any chat to upgrade POLARIS?" Nearly — and the gap was the one that nearly
+downgraded a live board this week.**
+
+- **`update` now updates the MACHINE, not just the repo.** It re-caches the new kit into
+  `~/.claude/skills/polaris-install/` (and refreshes the skill text, which rides along in the
+  tarball it already downloaded — no second request). Before this, you could update ten repos and
+  the machine would still hand the *old* kit to the eleventh, because the cache is what every
+  future `"install POLARIS"` copies from. That is not hypothetical: a repo ended up with a 5.1.0
+  zip in its root while the cache held 5.3.0, and following the install skill literally would have
+  installed the older one over the newer. One `update`, in any repo, now makes the whole box
+  current. `--repo-only` opts out. The zip is fetched from the new `zip:` key in `ops/VERSION` —
+  the same pinned release URL the installer's own permission rule already names. Fails open: a
+  cache problem never fails a repo update that already succeeded.
+- **Fixed: `update` could execute garbage after overwriting itself.** `install.sh` replaces
+  `ops/polaris` — the very file bash is still reading. Bash reads scripts lazily, in chunks, *by
+  byte offset*, so a script replaced mid-run resumes at the old offset inside the new bytes:
+  `syntax error near unexpected token`, or worse, half a command. This was latent from the day
+  `update` was written and only ever survived because the old and new files happened to line up.
+  It stopped lining up. `update` now re-execs from a temp copy before touching anything — the same
+  guard `uninstall` has always had, for exactly the same reason.
+- **`upgrade` is not `update`, and the kit now says so.** They are one letter apart and do
+  unrelated jobs: `update` fetches a newer kit; `upgrade` migrates an old v3/v4 *board* to v5 and
+  downloads nothing. Someone who says "upgrade POLARIS" almost always means `update` — and would
+  get a wall of green ticks and stay on the old kit. `upgrade` now says so when run directly, and
+  the CLI help, `CLAUDE.md` and the install skill spell out the difference.
+- **Fixed: the install skill's trigger contradicted itself.** It said *"TRIGGER when the user asks
+  to update or uninstall POLARIS"* and, in the same sentence, *"DO NOT TRIGGER inside a repo that
+  already has a working `ops/polaris`"* — but update and uninstall **only ever happen** in such a
+  repo. The file documenting update was instructed never to fire when update was possible. It now
+  triggers on install/update/upgrade/uninstall/version anywhere, and stands down only for ordinary
+  board work, which the project's own `polaris` skill governs.
+
+Note: an existing kit updates itself using its OWN `update` code, so a repo on 5.4.0 or older will
+not refresh the machine cache on the way to 5.5.0 — that lands from 5.5.0 onward. Run
+`python polaris-v5.zip --claude-skill` once if you want the cache current immediately.
+
 ## 5.4.0 — 2026-07-14
 
 **Installing POLARIS took four steps across three chats, and buried you in output doing it.** Run

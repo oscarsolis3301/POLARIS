@@ -37,8 +37,9 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris status / sweep / doctor [--selftest]` | board view · stale locks · env check |
 | `ops/polaris dash / metrics` | live board at 127.0.0.1:7373 · cycle/kickbacks/per-point calibration |
 | `ops/polaris drift / rules` | mechanical board-hygiene audit (`--strict` for CI) · policy file list + health |
-| `ops/polaris fleet <N> / upgrade` | print or tmux-launch N Builder kickoffs · idempotent v3/v4→v5 |
-| `ops/polaris version / update` | which POLARIS this repo runs · fetch the latest kit (manual — POLARIS never self-updates mid-sprint) |
+| `ops/polaris fleet <N>` | print or tmux-launch N Builder kickoffs |
+| `ops/polaris version / update` | which POLARIS this repo runs · **fetch the latest kit** — also re-caches it into `~/.claude` so the next repo gets it too (manual; POLARIS never self-updates mid-sprint) |
+| `ops/polaris upgrade` | migrate an OLD BOARD v3/v4→v5. Downloads nothing. **Not** `update` — one letter apart, unrelated jobs; "upgrade POLARIS" almost always means `update`. |
 
 Board commits stage everything under `ops/` — keep `ops/` clean of unrelated edits or they ride along.
 
