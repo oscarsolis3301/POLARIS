@@ -172,9 +172,9 @@ jobs:
           # relays whatever the installer prints, so a chatty installer IS a chatty agent.
           n=$(grep -c . "$RUNNER_TEMP/install.log")
           [ "$n" -le 2 ] || { echo "::error::quiet install printed $n lines (expected <= 2)"; cat "$RUNNER_TEMP/install.log"; exit 1; }
-          test -f .polaris/install.log || { echo "::error::the detailed log was not written to .polaris/install.log"; exit 1; }
-          grep -q '^ops/' .polaris/install.log 2>/dev/null || grep -q 'installed' .polaris/install.log \
-            || { echo "::error::.polaris/install.log is empty — a quiet failure would be undiagnosable"; exit 1; }
+          # Quiet must not mean undiagnosable: every ✅/note line still lands in the log.
+          test -s .polaris/install.log || { echo "::error::.polaris/install.log missing or empty — a quiet failure would be undiagnosable"; exit 1; }
+          grep -q 'ops/ installed' .polaris/install.log || { echo "::error::.polaris/install.log is not capturing the install detail"; exit 1; }
 
           # ...and the machine is now armed, without anyone having to know about --claude-skill.
           test -f "$HI/.claude/skills/polaris-install/SKILL.md"     || { echo "::error::a normal install did not install the skill"; exit 1; }
