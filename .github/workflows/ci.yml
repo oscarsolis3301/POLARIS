@@ -171,7 +171,12 @@ jobs:
           test ! -d ops/board          || { echo "::error::installer created ops/board/ — a fresh install must not look initialized"; exit 1; }
           test ! -f ops/CONVENTIONS.md || { echo "::error::installer wrote CONVENTIONS.md — only INIT may"; exit 1; }
           grep -q 'You are INIT' "$RUNNER_TEMP/install.log" || { echo "::error::installer did not route a fresh repo to INIT"; exit 1; }
-          bash ops/polaris doctor | grep -q 'INIT has not run' || { echo "::error::doctor does not report the uninitialized repo"; exit 1; }
+          # Capture, THEN grep. `doctor | grep -q` is a trap: grep -q exits on the first match and
+          # closes the pipe, doctor dies of SIGPIPE (141), and `pipefail` fails the whole pipeline
+          # even though doctor said exactly what we wanted. That is what has been reddening this
+          # job since the step was written — a bug in the test, never in doctor.
+          bash ops/polaris doctor > "$RUNNER_TEMP/doctor.log"
+          grep -q 'INIT has not run' "$RUNNER_TEMP/doctor.log" || { echo "::error::doctor does not report the uninitialized repo"; exit 1; }
           # re-run must STILL route to INIT, not to `polaris upgrade`
           python polaris-v5.zip | tee "$RUNNER_TEMP/reinstall.log"
           grep -q 'You are INIT' "$RUNNER_TEMP/reinstall.log" || { echo "::error::re-run misrouted an uninitialized repo"; exit 1; }
@@ -188,7 +193,8 @@ jobs:
           grep -q 'live board detected' "$RUNNER_TEMP/upgrade.log" || { echo "::error::live board not detected"; exit 1; }
           grep -q 'polaris upgrade'     "$RUNNER_TEMP/upgrade.log" || { echo "::error::live board not routed to upgrade"; exit 1; }
           grep -q 'voice: technical'    ops/CONVENTIONS.md || { echo "::error::installer overwrote CONVENTIONS.md"; exit 1; }
-          bash ops/polaris doctor | grep -q 'voice: technical' || { echo "::error::doctor does not report the configured voice"; exit 1; }
+          bash ops/polaris doctor > "$RUNNER_TEMP/doctor-voice.log"     # not `| grep -q` — see SIGPIPE note above
+          grep -q 'voice: technical' "$RUNNER_TEMP/doctor-voice.log" || { echo "::error::doctor does not report the configured voice"; exit 1; }
           # leave the scratch repo uninitialized again, so the steps below see a virgin install
           rm -rf ops/CONVENTIONS.md ops/board ops/contracts
           echo "live-board predicate OK"
