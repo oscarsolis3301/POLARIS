@@ -4,6 +4,61 @@ Versions here are the **kit version** (`ops/VERSION`), not the board protocol ve
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.4.0 — 2026-07-14
+
+**Installing POLARIS took four steps across three chats, and buried you in output doing it.** Run
+the installer, read a wall of ✅ lines, open a *new* chat, say "You are INIT", answer ten questions
+written in kit jargon, open *another* chat, say "You are the PLANNER", open *another* chat, say
+"You are a BUILDER. Claim the top ready task and complete it end to end." A protocol for going fast
+that took a quarter of an hour to switch on.
+
+The centrepiece of this release is a deletion. **The "now start a new session" rule was never a
+technical requirement** — it was repeated in seven files and it was wrong in all of them. The
+PreToolUse write-guard only enforces ownership on `feat/*` branches, so it is a no-op for INIT and
+PLANNER, which run on the base branch. `settings.json` — hooks and permissions — hot-reloads
+mid-session. And `CLAUDE.md` never needed re-reading: it is a routing table, and an agent that
+already knows its role can just read `ops/roles/INIT.md`. So the whole thing runs in one chat.
+
+- **Say "install POLARIS" and you end up on a ready board.** The install continues straight into
+  INIT, which interviews you and then chains into the PLANNER, which fills the board — one session,
+  no handoffs. Chaining INIT → PLANNER is now the single sanctioned exception to "never act as two
+  roles in one session": it happens once per repo, before any Builder exists, on the base branch,
+  and writes zero feature code. Every other session stays strictly single-role.
+- **Three questions, not ten.** INIT's survey already reads every package manifest, so it now
+  *derives* what it used to interrogate you for: test/lint/typecheck/build from `package.json`
+  scripts, Makefile targets, `pyproject.toml`, `Cargo.toml`, `go.mod`; base branch and remote from
+  git. It asks only what a repo genuinely cannot answer — how you want to be spoken to, what you
+  want to build first, and one batched confirmation (the commands it found · one machine or several
+  · re-test every merge or once at the end · what's radioactive, pre-ticked from the survey).
+  Suite duration, DoD extras, sprint capacity and past scars are gone from the interview: they are
+  derivable, defaultable, or EVOLVE's job once there is real data. Someone who has just typed
+  "install polaris" does not yet know their sprint capacity in points.
+- **`start`.** Nobody should have to type "You are a BUILDER. Claim the top ready task and complete
+  it end to end" to do the obvious thing. `start` (or `start building`, `go`, `let's build`,
+  `polaris start`) means *take the next piece of work*: it becomes a BUILDER when tasks are queued
+  and a PLANNER when the board is empty, so it always does the right thing instead of erroring. It
+  fires only on a bare start phrase — "start the dev server" is an ordinary request, not a kickoff.
+- **The installer stopped shouting.** Quiet is now the default: one line, and its last token is a
+  routing contract (`POLARIS 5.4.0 installed · fresh` | `· live-board`). The full detail still
+  exists, in `.polaris/install.log`, and `--verbose` puts it back on stdout. Failures always print
+  in full. This mattered more than it looks: an agent relays whatever the installer prints, so a
+  chatty installer *is* a chatty agent — and the role files now carry hard caps on what gets said
+  (INIT: one report, ≤8 lines, at the very end; PLANNER: ≤6 under `voice: standard`; the install
+  skill: an explicit list of things not to narrate).
+- **A normal install now arms the machine** — it caches the kit into
+  `~/.claude/skills/polaris-install/` and appends six pinned Bash rules to `permissions.allow`, so
+  every install after the first is offline and prompt-free. This was `--claude-skill`, an opt-in
+  flag, on the reasoning that writing outside the project must never be implicit. That reasoning
+  was wrong in practice: a per-machine setup step nobody knows about is a step nobody runs, and its
+  absence surfaced as a *denied install in a different repo weeks later*. You still explicitly
+  approve the `python polaris-v5.zip` run that writes them, the curl URL is still pinned in full
+  rather than wildcarded, and `--no-machine-setup` opts out. Net effect: on a machine that has
+  never heard of POLARIS, name the source once — `install POLARIS from
+  github.com/oscarsolis3301/POLARIS` — and never again, in any repo.
+- **Fixed: the cached kit was re-copied on every install.** The `samefile` guard added in 5.3.0
+  stops the archive truncating itself when run *from* the cache, but it never checked whether the
+  cache was already identical — so arming reported "changed" forever. It now compares content.
+
 ## 5.3.0 — 2026-07-13
 
 **"Install POLARIS" was getting denied, and it looked like a broken installer.** It was a blocked

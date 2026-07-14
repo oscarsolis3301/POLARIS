@@ -142,7 +142,12 @@ jobs:
           grep -qx 'this is not json' "$F3/.claude/settings.json" || { echo "::error::a malformed settings.json was overwritten"; exit 1; }
           echo "--claude-skill OK"
 
-      - name: Drag-and-run install into a scratch repo
+      - name: Drag-and-run install into a scratch repo — quiet, and it arms the machine
+        # 5.4.0: a normal install now ALSO arms the machine (skill + cached kit + permission rules
+        # in ~/.claude), because a separate --claude-skill step nobody knew about is a step nobody
+        # ran — and its absence is what made installs get denied in some *other* repo weeks later.
+        # $HOME is faked so this is hermetic AND assertable. USERPROFILE too: ntpath.expanduser
+        # ignores HOME outright, so a HOME-only fake would test the runner's real profile on Windows.
         run: |
           set -eo pipefail          # `| tee` must not swallow a failed install
           APP="$RUNNER_TEMP/app"
@@ -158,19 +163,54 @@ jobs:
           echo "print(1)" > src/app.py
           git add -A && git commit -qm pristine
           cp "$GITHUB_WORKSPACE/polaris-v5.zip" .
-          python polaris-v5.zip | tee "$RUNNER_TEMP/install.log"
+
+          HI="$RUNNER_TEMP/home-install"; mkdir -p "$HI"
+          echo "HI=$HI" >> "$GITHUB_ENV"
+          HOME="$HI" USERPROFILE="$HI" python polaris-v5.zip | tee "$RUNNER_TEMP/install.log"
+
+          # Quiet by default: the marker, plus at most the one-off "machine armed" line. An agent
+          # relays whatever the installer prints, so a chatty installer IS a chatty agent.
+          n=$(grep -c . "$RUNNER_TEMP/install.log")
+          [ "$n" -le 2 ] || { echo "::error::quiet install printed $n lines (expected <= 2)"; cat "$RUNNER_TEMP/install.log"; exit 1; }
+          test -f .polaris/install.log || { echo "::error::the detailed log was not written to .polaris/install.log"; exit 1; }
+          grep -q '^ops/' .polaris/install.log 2>/dev/null || grep -q 'installed' .polaris/install.log \
+            || { echo "::error::.polaris/install.log is empty — a quiet failure would be undiagnosable"; exit 1; }
+
+          # ...and the machine is now armed, without anyone having to know about --claude-skill.
+          test -f "$HI/.claude/skills/polaris-install/SKILL.md"     || { echo "::error::a normal install did not install the skill"; exit 1; }
+          test -f "$HI/.claude/skills/polaris-install/polaris-v5.zip" || { echo "::error::a normal install did not cache the kit — the NEXT repo would need a download"; exit 1; }
+          grep -q 'Bash(bash ops/polaris' "$HI/.claude/settings.json" || { echo "::error::a normal install did not pre-authorize the commands"; exit 1; }
+          echo "quiet install + machine arming OK"
+
+      - name: --no-machine-setup writes nothing outside the repo
+        run: |
+          set -e
+          F4="$RUNNER_TEMP/home4"; T4="$RUNNER_TEMP/app4"
+          mkdir -p "$F4" "$T4"; cd "$T4"
+          git init -qb main; git config user.email ci@example.com; git config user.name ci
+          git commit -q --allow-empty -m init
+          cp "$GITHUB_WORKSPACE/polaris-v5.zip" .
+          HOME="$F4" USERPROFILE="$F4" python polaris-v5.zip --no-machine-setup
+          test ! -d "$F4/.claude" || { echo "::error::--no-machine-setup wrote to ~/.claude anyway"; exit 1; }
+          test -x ops/polaris     || { echo "::error::--no-machine-setup skipped the repo install too"; exit 1; }
+          echo "--no-machine-setup OK"
 
       - name: A fresh install is NOT a live board
         # The 5.2.0 regression guard. The installer used to ship the six empty board columns, so
         # every fresh install looked initialized: CLAUDE.md's dispatch never offered INIT, INIT.md's
         # precondition told the agent to refuse, and a re-run announced "live board detected".
         # ops/CONVENTIONS.md — written by INIT and by nothing else — is now the only test.
+        #
+        # The routing contract is the last token of the installer's one line: `fresh` | `live-board`.
+        # It replaced a grep for "You are INIT" — 5.4.0 deleted that sentence, because the installing
+        # session now runs INIT itself instead of telling you to go open another chat.
         run: |
           set -eo pipefail
           cd "$RUNNER_TEMP/app"
           test ! -d ops/board          || { echo "::error::installer created ops/board/ — a fresh install must not look initialized"; exit 1; }
           test ! -f ops/CONVENTIONS.md || { echo "::error::installer wrote CONVENTIONS.md — only INIT may"; exit 1; }
-          grep -q 'You are INIT' "$RUNNER_TEMP/install.log" || { echo "::error::installer did not route a fresh repo to INIT"; exit 1; }
+          grep -q 'installed · fresh' "$RUNNER_TEMP/install.log" || { echo "::error::installer did not route a fresh repo to INIT (no 'fresh' token)"; exit 1; }
+          ! grep -q 'You are INIT' "$RUNNER_TEMP/install.log" || { echo "::error::the 'open a new session' instruction is back — 5.4.0 removed it deliberately"; exit 1; }
           # Capture, THEN grep. `doctor | grep -q` is a trap: grep -q exits on the first match and
           # closes the pipe, doctor dies of SIGPIPE (141), and `pipefail` fails the whole pipeline
           # even though doctor said exactly what we wanted. That is what has been reddening this
@@ -178,9 +218,11 @@ jobs:
           bash ops/polaris doctor > "$RUNNER_TEMP/doctor.log"
           grep -q 'INIT has not run' "$RUNNER_TEMP/doctor.log" || { echo "::error::doctor does not report the uninitialized repo"; exit 1; }
           # re-run must STILL route to INIT, not to `polaris upgrade`
-          python polaris-v5.zip | tee "$RUNNER_TEMP/reinstall.log"
-          grep -q 'You are INIT' "$RUNNER_TEMP/reinstall.log" || { echo "::error::re-run misrouted an uninitialized repo"; exit 1; }
-          ! grep -q 'live board'  "$RUNNER_TEMP/reinstall.log" || { echo "::error::re-run called an uninitialized repo a live board"; exit 1; }
+          HOME="$HI" USERPROFILE="$HI" python polaris-v5.zip | tee "$RUNNER_TEMP/reinstall.log"
+          grep -q 'installed · fresh' "$RUNNER_TEMP/reinstall.log" || { echo "::error::re-run misrouted an uninitialized repo"; exit 1; }
+          ! grep -q 'live-board'      "$RUNNER_TEMP/reinstall.log" || { echo "::error::re-run called an uninitialized repo a live board"; exit 1; }
+          # The machine is already armed, so a re-run must not nag about it a second time.
+          ! grep -q 'machine armed'   "$RUNNER_TEMP/reinstall.log" || { echo "::error::'machine armed' printed on a re-run — arming is not idempotent"; exit 1; }
           echo "fresh-install predicate OK"
 
       - name: A live board IS detected (and never overwritten)
@@ -189,10 +231,22 @@ jobs:
           cd "$RUNNER_TEMP/app"
           bash ops/polaris init-board >/dev/null
           printf '# CONVENTIONS\nbase: main\nvoice: technical\ntest: echo hi\n' > ops/CONVENTIONS.md
-          python polaris-v5.zip | tee "$RUNNER_TEMP/upgrade.log"
-          grep -q 'live board detected' "$RUNNER_TEMP/upgrade.log" || { echo "::error::live board not detected"; exit 1; }
-          grep -q 'polaris upgrade'     "$RUNNER_TEMP/upgrade.log" || { echo "::error::live board not routed to upgrade"; exit 1; }
-          grep -q 'voice: technical'    ops/CONVENTIONS.md || { echo "::error::installer overwrote CONVENTIONS.md"; exit 1; }
+          HOME="$HI" USERPROFILE="$HI" python polaris-v5.zip | tee "$RUNNER_TEMP/upgrade.log"
+          grep -q 'installed · live-board' "$RUNNER_TEMP/upgrade.log" || { echo "::error::live board not detected"; exit 1; }
+          # the detail still exists — it just moved off the user's screen and into the log
+          grep -q 'live board detected' .polaris/install.log || { echo "::error::live-board detail missing from .polaris/install.log"; exit 1; }
+          grep -q 'polaris upgrade'     .polaris/install.log || { echo "::error::live board not routed to upgrade"; exit 1; }
+          grep -q 'voice: technical'    ops/CONVENTIONS.md   || { echo "::error::installer overwrote CONVENTIONS.md"; exit 1; }
+
+      - name: --verbose still prints the full install log
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP/app"
+          HOME="$HI" USERPROFILE="$HI" python polaris-v5.zip --verbose | tee "$RUNNER_TEMP/verbose.log"
+          n=$(grep -c . "$RUNNER_TEMP/verbose.log")
+          [ "$n" -ge 5 ] || { echo "::error::--verbose printed only $n lines — the escape hatch is broken"; exit 1; }
+          grep -q 'installed · live-board' "$RUNNER_TEMP/verbose.log" || { echo "::error::--verbose lost the routing marker"; exit 1; }
+          echo "--verbose OK"
           bash ops/polaris doctor > "$RUNNER_TEMP/doctor-voice.log"     # not `| grep -q` — see SIGPIPE note above
           grep -q 'voice: technical' "$RUNNER_TEMP/doctor-voice.log" || { echo "::error::doctor does not report the configured voice"; exit 1; }
           # leave the scratch repo uninitialized again, so the steps below see a virgin install

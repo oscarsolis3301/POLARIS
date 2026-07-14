@@ -82,18 +82,22 @@ jobs:
           body: |
             **Drop-in POLARIS kit — one file, no `.git`, works in a greenfield folder or a 10k-file repo.**
 
+            In Claude Code, in your project, say:
+
+            ```
+            install POLARIS from github.com/oscarsolis3301/POLARIS
+            ```
+
+            It installs, arms the machine (so every install after this one is offline and
+            prompt-free), interviews you, and plans your first sprint — **in the same chat**.
+            Then say `start` to build. No second session, no homework.
+
+            By hand:
+
             ```bash
             curl -fsSLO https://github.com/oscarsolis3301/POLARIS/releases/latest/download/polaris-v5.zip
             python polaris-v5.zip
             ```
-
-            Or teach Claude Code to do it for you, in any repo, forever:
-
-            ```bash
-            python polaris-v5.zip --claude-skill
-            ```
-
-            Then start a new session and say **"You are INIT."**
 
             Verified by this run on Linux, macOS (bash 3.2) and Windows: exec bits survive the
             archive, no CRLF, installs non-destructively over an existing `CLAUDE.md` and hooks,

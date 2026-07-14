@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # POLARIS v5 — one-command install into any repo.
-#   bash ops/install.sh <target-repo>
+#   bash ops/install.sh [--quiet] <target-repo>
 # Fresh target: copies CLAUDE.md + ops/ + .claude/, sets exec bits, pins LF.
 # Existing CLAUDE.md: POLARIS content is PREPENDED (constraints early = adherence).
 # Existing .claude/settings.json: the hooks block is MERGED (python stdlib).
@@ -14,21 +14,48 @@
 # INIT.md's precondition — which then told INIT to refuse the very job it was handed.
 # The board is now created by `polaris init-board` (INIT runs it), so its existence is
 # once again the truth it was always meant to be.
+#
+# --quiet: the agent-driven path. Everything below is still written to
+# <target>/.polaris/install.log; stdout gets ONE line, and the last token on it —
+# `fresh` or `live-board` — is how the caller routes (fresh → run INIT; live-board →
+# run `polaris upgrade`, never INIT). An installer that narrates twenty ✅ lines at a
+# human who only said "install polaris" is noise, and the agent relays every word of it.
 set -eu
 
-die() { printf '⛔ %s\n' "$*" >&2; exit 1; }
-say() { printf '✅ %s\n' "$*"; }
-note() { printf '   %s\n' "$*"; }
+LOG=""
+QUIET=0
+
+die() {
+  printf '⛔ %s\n' "$*" >&2
+  # A quiet install that fails must not ALSO be a silent one.
+  [ -n "$LOG" ] && [ -s "$LOG" ] && { printf -- '--- install log ---\n' >&2; cat "$LOG" >&2; }
+  exit 1
+}
+log()  { [ -n "$LOG" ] && printf '%s\n' "$*" >>"$LOG"; return 0; }
+say()  { log "✅ $*"; [ "$QUIET" = 1 ] || printf '✅ %s\n' "$*"; }
+note() { log "   $*"; [ "$QUIET" = 1 ] || printf '   %s\n' "$*"; }
 
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
+
+TARGET_ARG=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --quiet) QUIET=1;;
+    -*)      die "unknown flag: $1   (usage: bash ops/install.sh [--quiet] [target-repo])";;
+    *)       [ -z "$TARGET_ARG" ] || die "too many arguments: $1"; TARGET_ARG="$1";;
+  esac
+  shift
+done
+
+LOG="$(mktemp)" || LOG=""
 
 # Target resolution.
 #   arg given → that directory; `git init` it if it isn't a repo yet (greenfield).
 #   no arg    → the git repo the kit was unzipped inside.
 # The asymmetry is deliberate: zero-arg mode NEVER runs `git init`. A kit unzipped on the
 # Desktop and run with no arg would otherwise turn the whole Desktop into a git repo.
-if [ $# -ge 1 ]; then
-  TARGET="$1"
+if [ -n "$TARGET_ARG" ]; then
+  TARGET="$TARGET_ARG"
   [ -d "$TARGET" ] || die "no such directory: $TARGET"
   TARGET="$(cd "$TARGET" && pwd)"
   git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1 || {
@@ -164,13 +191,27 @@ for p in 'polaris-v5/' 'polaris-v5.zip' '.polaris/'; do
 done
 
 # --- next steps -----------------------------------------------------------------
-say "POLARIS $(sed -n 's/^version: *//p' "$V" | head -1) installed into $TARGET"
+# There is deliberately NO "now open a new session and say 'You are INIT'" here any more.
+# That instruction was never a technical requirement — the write-guard only binds feat/*
+# branches, settings.json hot-reloads, and the installing agent reads ops/roles/INIT.md
+# directly rather than waiting for CLAUDE.md to be re-read. It just cost every user a
+# second chat. The caller (see .claude/skills/polaris-install/SKILL.md) continues straight
+# into INIT in the same session.
+note "target: $TARGET"
 if [ "$UPGRADE" = 1 ]; then
-  note "live board: finish with  cd \"$TARGET\" && bash ops/polaris upgrade"
-else
-  note "commit, then open a session with:  \"You are INIT.\""
+  note "live board: finish with  cd \"$TARGET\" && bash ops/polaris upgrade  (never re-run INIT)"
 fi
 case "$KIT" in
   "$TARGET"/*) note "the kit folder is now redundant (updates come from GitHub) — remove it: rm -rf \"$KIT\"";;
 esac
 note "Claude Code will ask to trust the project hook on first use — that is the write-guard (read ops/hooks/ownership-guard.sh first)."
+
+# The one line stdout always gets, quiet or not. The trailing token is the routing
+# contract: `fresh` → the caller runs INIT · `live-board` → the caller runs `polaris
+# upgrade` and NEVER runs INIT. CI asserts on it; do not reword it casually.
+STATE=fresh; [ "$UPGRADE" = 1 ] && STATE=live-board
+if [ -n "$LOG" ]; then
+  mkdir -p "$TARGET/.polaris" 2>/dev/null && cp "$LOG" "$TARGET/.polaris/install.log" 2>/dev/null || true
+  rm -f "$LOG" 2>/dev/null || true
+fi
+printf 'POLARIS %s installed · %s\n' "$(sed -n 's/^version: *//p' "$V" | head -1)" "$STATE"

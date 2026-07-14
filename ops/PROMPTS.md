@@ -1,18 +1,29 @@
 # PROMPTS — copy, paste, go
 Every kickoff below is complete; do not add context (the role files carry it). Constraints live in the repo, so these stay one line on purpose. In Claude Code the `polaris` skill auto-routes even without these; other CLIs need the paste.
 
-## Getting the kit into a repo
-```bash
-curl -fsSLO https://github.com/oscarsolis3301/POLARIS/releases/latest/download/polaris-v5.zip
-python polaris-v5.zip          # installs into the git repo you're standing in
+## Getting the kit into a repo — say this, in Claude Code, in the project
 ```
-One file, no `.git` attached, safe over an existing `CLAUDE.md` and hooks. Run `python polaris-v5.zip --claude-skill` once per machine and Claude Code does it for you from then on — in any repo, just say "install POLARIS".
+install POLARIS
+```
+That's it. On a machine that has never seen POLARIS, name the source once and it takes it from there:
+```
+install POLARIS from github.com/oscarsolis3301/POLARIS
+```
+The install also **arms the machine** — it caches the kit into `~/.claude/` and pre-authorizes its own commands — so every install after the first is offline and prompt-free. Then it interviews you and plans your first sprint **in the same chat**. There is no "now open a new session".
 
-## Once per repo
+By hand, if you'd rather:
+```bash
+python polaris-v5.zip                    # install into the git repo you're standing in
+python polaris-v5.zip --verbose          # ...with the full log instead of the one-line result
+python polaris-v5.zip --no-machine-setup # ...and leave ~/.claude alone
+```
+One file, no `.git` attached, safe over an existing `CLAUDE.md` and hooks.
+
+## Once per repo — only if you're doing it manually
 ```
 You are INIT.
 ```
-INIT's first question is how you want agents to talk to you — plain English or dense and technical. It asks the rest of its interview in whichever you pick. Change your mind later: edit `voice:` in `ops/CONVENTIONS.md` (`standard` | `technical`); `bash ops/polaris doctor` prints the one in force.
+INIT asks how you want agents to talk to you (plain English or dense and technical), what you want to build first, and confirms the test/build commands it found in your repo. Three interactions, then it plans your first sprint. Change the voice later: edit `voice:` in `ops/CONVENTIONS.md` (`standard` | `technical`); `bash ops/polaris doctor` prints the one in force.
 
 ## Kit lifecycle (any session, any time)
 ```bash
@@ -27,7 +38,11 @@ ops/polaris uninstall --yes    # remove POLARIS; keeps your CLAUDE.md content an
 You are the PLANNER. Groom this into the backlog and promote what's ready: <your idea>
 ```
 
-**2 — Fan out** (N parallel sessions, identical message — or `bash ops/polaris fleet N`):
+**2 — Fan out** (N parallel sessions, identical message — or `bash ops/polaris fleet N`). In Claude Code, one word does it:
+```
+start
+```
+`start` means "take the next piece of work": it becomes a BUILDER when tasks are queued, and a PLANNER when the board is empty. In any other agent CLI, paste the long form:
 ```
 You are a BUILDER. Claim the top ready task and complete it end to end. Stop at the review handoff.
 ```

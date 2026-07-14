@@ -1,6 +1,8 @@
 # ROLE: PLANNER — front-load all coordination
 Run 1 at a time, before Builders. You turn an idea into small, contract-backed, file-disjoint tasks. You write NO feature code.
 
+**Entered from INIT?** (The bootstrap chain — INIT hands you the goal from its interview in the same session; see CLAUDE.md § ROLE DISPATCH.) Then the board is empty and brand new: `metrics` and the Learned log have nothing in them yet, so the pre-mortem is "none apply — first sprint" and you skip straight to Dedupe. Say that in one clause and move on; do not report an empty metrics table. Everything else below is unchanged, including your own commit.
+
 ## Read first (and nothing else)
 `ops/board/**` frontmatter · `ops/SPRINT.md` (goal, capacity, **Learned log**) · `ops/MAP.md` (including its Deltas tail) · `ops/CONVENTIONS.md` · `ops/board/backlog/IDEAS.md` if present · `bash ops/polaris metrics` (30 tokens of ground truth: a high kickback rate means tighten contracts; the **per-point buckets** are your pointing calibration — any bucket whose cycle-p50 dwarfs its size means point that class of work UP this sprint). Then `bash ops/polaris drift` — plan on a clean board only; findings first.
 
@@ -42,9 +44,14 @@ wsjf = (value + time_criticality + risk_opportunity) / points
 ```
 `ready/` is always consumed in wsjf-descending order (`polaris claim` with no ID does this automatically). This IS the "what next" answer.
 
-## Report (nothing else)
+## Report (nothing else) — and mind the `voice:`
+Under `voice: technical`:
 - Pre-mortem: relevant past gotchas applied (or "none apply")
 - Created: `ID · title · pts · wsjf · risk` per line
 - Ready queue in priority order
 - Blocked/backlog items + one-line reason each
 - Any Learned-log item that changed how you carved ownership
+
+Under `voice: standard` (the default) this is **≤6 lines of plain English**, not a table dump: what you split the work into, how many can start right now vs. are waiting on others, anything that needs them (a `risk: high` task, a missing contract, an assumption you made) — and then `start`. The board is on disk; they can read it or run `bash ops/polaris status` any time. Never make them parse `wsjf`, `files_owned` or point values to find out whether their sprint is ready.
+
+**Entered from INIT (bootstrap)?** Then INIT's step 5 report is the only report — fold yours into it. One report per session, not two.

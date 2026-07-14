@@ -5,33 +5,44 @@ Drop-in parallel-agent operating system for any repo. Any model/CLI that loads a
 New in v5, the guard and the gates enforce **two** things: ownership (diff ⊆ `files_owned`, unchanged since v3) and **RULES** — your repo's policy as data. One TAB-separated line in `ops/RULES.tsv` is a danger zone (`path`: forbidden to write, even inside owned files) or a content guard (`content`: added lines must not match an ERE). INIT turns your "never touch X" interview answers into armed rules instead of prose; EVOLVE proposes new lines from kickback/Learned evidence and a human approves each one. That is "hooks that create themselves" done safely: evidence → proposal → approve → one appended line, zero new scripts.
 
 ## Install (any repo, greenfield or 10k files)
-**One file. One command.** `polaris-v5.zip` is the whole kit, carries no `.git`, and is a Python **zipapp** — so there is no unzip step:
+
+Open Claude Code in your project and say:
+
+```
+install POLARIS
+```
+
+On a machine that has never seen POLARIS, name the source once — Claude Code won't fetch and run code from a source you didn't name, and that is the correct behaviour, not a bug to route around:
+
+```
+install POLARIS from github.com/oscarsolis3301/POLARIS
+```
+
+**That is the whole thing.** It installs, then interviews you, then plans your first sprint — **in the same chat**. Three questions: how you'd like to be spoken to, what you want to build first, and a confirmation of the test/build commands it found in your repo. It doesn't ask you to recite your own `package.json`, and it doesn't hand you homework.
+
+You end on a ready board. To build it, open a terminal in the project and say **`start`**.
+
+### Why the first install is the only one that ever asks
+
+Installing **arms the machine**. Three things land in `~/.claude/`, and it needs all three: the **skill** (teaches Claude the procedure), the **kit** cached beside it (so installing is a local file copy, never a download), and six pinned **Bash permission rules** in `permissions.allow` (so the commands are pre-authorized). From then on, in **any** repo on that machine, `"install POLARIS"` works **offline and without a single prompt**.
+
+This used to be a separate `--claude-skill` command, and that was the bug: a per-machine setup step nobody knows about is a setup step nobody runs, and its absence is what made installs mysteriously get denied in some *other* repo weeks later. It is now the default. Existing settings are preserved — rules are appended only if absent, the file is written through a temp file so an interrupted run cannot truncate it, and a `settings.json` that won't parse is left alone with the rules printed for you to paste. Want it left alone entirely? `--no-machine-setup`.
+
+### By hand
 
 ```bash
 cd your-project
-curl -fsSLO https://github.com/oscarsolis3301/POLARIS/releases/latest/download/polaris-v5.zip
-python polaris-v5.zip
+python polaris-v5.zip                    # install here + arm the machine
+python polaris-v5.zip --verbose          # the full log, instead of the one-line result
+python polaris-v5.zip --no-machine-setup # install into the repo only; ~/.claude untouched
+python polaris-v5.zip --claude-skill     # arm the machine only; install into no repo
 ```
 
-**Or let Claude do it.** Once per machine:
-
-```bash
-python polaris-v5.zip --claude-skill
-```
-
-From then on, in **any** repo, just say **"install POLARIS"** — and it installs, **offline and without a single permission prompt**. You never download or drag anything again.
-
-That one command writes three things to `~/.claude/`, and it needs all three. The **skill** teaches Claude the procedure. The **kit** is cached beside it, so installing is a local file copy instead of a download. And a few **Bash permission rules** are appended to `permissions.allow` in your `settings.json`, so the commands are pre-authorized.
-
-Why the rules matter: Claude Code refuses to fetch code from a source you never named and execute it — so a skill that has to `curl` the kit first gets **denied in every fresh repo**, which reads as a broken installer when it is really a blocked one. A rule in your own settings *is* you naming the source (the URL is pinned in full, never a wildcard). Existing settings are preserved — rules are appended only if absent, the file is written via a temp file so an interrupted run cannot truncate it, and a `settings.json` that can't be parsed is left alone and the rules printed for you to paste. Don't want it touched at all? `--claude-skill --no-permissions`.
-
-The cached kit doesn't auto-refresh — it's whatever zip last ran `--claude-skill`. Re-run it from a newer zip to update.
+`polaris-v5.zip` is the whole kit — one file, no `.git`, a Python **zipapp**, so there is no unzip step. It prints one line: `POLARIS 5.4.0 installed · fresh` (or `· live-board`). The full log goes to `.polaris/install.log`.
 
 Greenfield folder with no `.git` yet? Name it and the installer runs `git init` for you: `python polaris-v5.zip <target-repo>`. Standing in a directory that isn't a repo, with no target named, it **refuses** — otherwise running it on your Desktop would turn the Desktop into a git repo.
 
-The install is safe on a 10k-file project. An existing `CLAUDE.md` is **prepended to**, never overwritten. An existing `.claude/settings.json` has the guard hook **merged into** its hooks block, leaving your own hooks intact. A live board keeps its board, `RULES.tsv`, `CONVENTIONS.md`, `MAP.md` and `SPRINT.md` — only kit code is refreshed (then `bash ops/polaris upgrade`). Nothing is committed for you. Idempotent — safe to re-run.
-
-Then **start a new session** (CLAUDE.md and the hook are read at session start) and say: **"You are INIT."**
+The install is safe on a 10k-file project. An existing `CLAUDE.md` is **prepended to**, never overwritten. An existing `.claude/settings.json` has the guard hook **merged into** its hooks block, leaving your own hooks intact. A live board keeps its board, `RULES.tsv`, `CONVENTIONS.md`, `MAP.md` and `SPRINT.md` — only kit code is refreshed (then `bash ops/polaris upgrade`). Nothing is committed for you; INIT does that. Idempotent — safe to re-run.
 
 *No Python?* The kit itself doesn't need it — only this bootstrap and the dashboard do. Fall back to `unzip polaris-v5.zip && bash polaris-v5/ops/install.sh`.
 *Windows:* use Git Bash, or run the zipapp straight from PowerShell — it finds Git Bash itself. (It deliberately ignores `System32\bash.exe`, which is WSL, not a shell POLARIS can use.)
@@ -41,7 +52,7 @@ Then **start a new session** (CLAUDE.md and the hook are read at session start) 
    - Repo already has a `CLAUDE.md`? Paste the POLARIS content at the TOP (constraints early = better adherence).
    - Repo already has `.claude/settings.json`? Merge the `hooks` block instead of overwriting.
    - Upgrading a live v3 or v4 board? Copy the kit files over, then `bash ops/polaris upgrade` (idempotent; board, tasks and locks untouched — v5 adds no task frontmatter fields, so there is zero task migration).
-2. Commit. Open a session: **"You are INIT."** It runs `doctor` (+ `--selftest` on a machine's first use), surveys within a hard read budget, interviews you (~10 questions), writes `ops/MAP.md` / `CONVENTIONS.md` / `SPRINT.md`, and arms `ops/RULES.tsv` from your danger-zone answers.
+2. Say **"You are INIT."** It runs `doctor` (+ `--selftest` on a machine's first use), surveys within a hard read budget, asks you three things (voice · what to build first · a confirmation of the commands it found), writes `ops/MAP.md` / `CONVENTIONS.md` / `SPRINT.md`, arms `ops/RULES.tsv` from your danger-zone answers, commits — then plans your first sprint in the same session. No new chat needed: the write-guard only binds `feat/*` branches, and `settings.json` hot-reloads.
 3. Claude Code will ask to trust the project hook on first use — that's the write-guard; approving it is expected. (Read it first: `ops/hooks/ownership-guard.sh`, ~100 lines.)
 
 ## The loop (every sprint) — kickoffs in `ops/PROMPTS.md`

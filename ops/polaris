@@ -517,7 +517,7 @@ cmd_doctor() {
     # effective value either way, or the knob is undiscoverable for exactly the repos that want it.
     note "voice: $(cfg voice standard) — how agents talk to you (standard | technical; set in CONVENTIONS.md)"
   else
-    note "⚠ ops/CONVENTIONS.md missing — INIT has not run in this repo. Open a session and say: \"You are INIT.\""
+    note "⚠ ops/CONVENTIONS.md missing — INIT has not run in this repo. Say: \"You are INIT.\" (no new session needed)"
   fi
   mkdir -p "$LOCKS" && [ -w "$LOCKS" ] || die "lock dir not writable: $LOCKS"
   case "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null)" in .*|../*) note "⚠ origin is a RELATIVE path — breaks in worktrees; use an absolute URL";; esac
@@ -753,8 +753,10 @@ cmd_fleet() { # fleet <N> [--loop] — print N identical Builder kickoffs; launc
   local n="${1:?usage: polaris fleet <N> [--loop]}" loop="" i
   [ "${2:-}" = "--loop" ] && loop=" Run in loop mode."
   case "$n" in ''|*[!0-9]*) die "fleet: N must be a number";; esac
+  # The long form on purpose: this line is pasted into ANY agent CLI, including ones with no
+  # POLARIS skill to route a bare `start`. In Claude Code, `start` alone does the same thing.
   local msg="You are a BUILDER. Claim the top ready task and complete it end to end. Stop at the review handoff.$loop"
-  note "kickoff (paste into $n parallel sessions of ANY agent CLI):"
+  note "kickoff (paste into $n parallel sessions of ANY agent CLI — in Claude Code, \"start\" alone does it):"
   printf '   %s\n' "$msg"
   if command -v tmux >/dev/null 2>&1 && command -v claude >/dev/null 2>&1; then
     printf 'Launch now in tmux with Claude Code? [y/N] '; local a=""; read -r a || a=""   # non-tty (agent) → default No

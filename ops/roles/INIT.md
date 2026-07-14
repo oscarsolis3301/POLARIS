@@ -1,5 +1,7 @@
-# ROLE: INIT — plug POLARIS into this repo
-Run once per repo, alone. Output: `ops/MAP.md`, `ops/CONVENTIONS.md`, `ops/SPRINT.md`, a seeded board, one commit. You write NO feature code and NO tasks.
+# ROLE: INIT — plug POLARIS into this repo, and leave them with a planned first sprint
+Run once per repo. Output: `ops/MAP.md`, `ops/CONVENTIONS.md`, `ops/SPRINT.md`, armed `ops/RULES.tsv`, a seeded board, one commit — and then, in the same session, a Planner pass that fills that board (step 4). You write NO feature code. You write no tasks *as INIT*; the tasks are the Planner's, under its own rules and its own commit.
+
+The point is that a human says "install polaris" once and ends up ready to build, without opening a second chat. Steps 1–3 are yours; step 4 hands the baton without dropping it.
 
 ## 0. Preconditions
 - **Has INIT already run?** The test is `ops/CONVENTIONS.md` — INIT writes it and nothing else does. It exists → say so and offer only (a) refresh MAP.md, (b) re-run the interview, (c) abort; NEVER re-initialize over a live board. It does NOT exist → this repo has never been initialized; proceed, and do not ask. An `ops/board/` with no `ops/CONVENTIONS.md` is a bare install from an older kit, not a live board — ignore it, `init-board` in step 3 is idempotent.
@@ -18,31 +20,67 @@ From this, infer: stack + versions, module boundaries, entry points, where tests
 
 **Also flag, don't fix: git-tracked build output.** `git ls-files` hitting `.next/`, `dist/`, `build/`, `out/`, `*.tsbuildinfo` means a Builder who runs the build dirties hundreds of files it does not own and `polaris verify` rejects its handoff — a day-one failure in most brownfield repos. Report it in step 4 with the fix (`git rm -r --cached <dir>` + a `.gitignore` line) and let the human run it: deleting files is on the STOP-AND-ASK list.
 
-## 2. Interview the human — ask, never guess
+## 2. Interview — DETECT FIRST, then ask only what the repo cannot answer
 
-### 2a. FIRST, alone, before anything else — how should you talk to them?
+**HARD CAP: 3 interactions.** Most of what INIT used to ask is written down in the repo already.
+Asking a human to recite their own `package.json` is not diligence, it is an interrogation, and it
+is why installing POLARIS felt like a chore. Derive everything derivable; ask the rest; move on.
+
+Where your harness renders choices as clickable options (Claude Code: the `AskUserQuestion` tool),
+use it — it is faster and less intimidating than a wall of numbered markdown. Otherwise, a short
+numbered list. Never more than 4 questions in one call.
+
+### 2a. Interaction 1 — voice. Alone, first, before anything else.
 > Before we start — how would you like me to talk to you?
-> **1. Plain English** — friendly, no jargon. I explain things as we go. *(default)*
-> **2. Technical** — dense and terse. You know this stuff; don't pad it.
+> **Plain English** — friendly, no jargon. I explain as we go. *(default)*
+> **Technical** — dense and terse. You know this stuff; don't pad it.
 
-That answer is `voice:` (`standard` | `technical`) and it binds from this message on — **including the interview below**. Ask it by itself and wait; it costs one round trip and it is the difference between a human who understands their own config and one who guessed.
+That answer is `voice:` (`standard` | `technical`) and it binds **from this moment on**, including
+everything below. Ask it by itself and wait. It is one round trip and it is the difference between
+a human who understands their own config and one who guessed.
 
-### 2b. THEN the interview — ONE batched message, ≤10 questions, IN THEIR VOICE
-The questions below are written in kit jargon for *you*. Under `voice: standard` you MUST translate them and map the plain answer back to the config value yourself — never make a human choose between `paranoid` and `batch`. Examples: *"Should I re-run your whole test suite after every piece of work I merge, or just once at the end?"* → `integration:` · *"Will you run these agents on one computer, or several?"* → `claim:` · *"Anything I should treat as radioactive — files I must never touch?"* → RULES `path` lines.
+### 2b. DERIVE — silently, from the survey you already did. Ask none of this.
+Step 1 already read every manifest. Use it:
 
-1. What are we building next? (becomes the first sprint goal)
-2. Exact commands: run tests / lint + typecheck / build / run locally?
-3. Roughly how long does the full test suite take? (<2 min → `integration: paranoid` is affordable; longer → `integration: batch`)
-4. Base branch (`main`? `master`? `develop`?) and is there an `origin` remote, or local-only?
-5. Danger zones — files or dirs agents must NEVER touch? (each answer becomes a `path` line in `ops/RULES.tsv` — machine-enforced, not prose)
-5b. Any content that must never be written — secrets patterns, forbidden APIs, banned idioms? (each becomes a `content` rule)
-6. How many parallel Builders typically, and all on ONE machine or SEVERAL? (one → `claim: local-lock`; several → `claim: claim-branch`, requires a remote)
-7. Definition-of-done extras beyond green tests? (coverage bar, docs, changelog…)
-8. Sprint capacity in points, and cadence?
-9. Anything that has burned you before that agents should know?
+| Config | Where it comes from — no question needed |
+|---|---|
+| `test:` `lint:` `typecheck:` `build:` | `package.json` scripts · Makefile targets · `pyproject.toml` · `Cargo.toml` · `go.mod` · CI workflow |
+| `base:` | `git symbolic-ref --short refs/remotes/origin/HEAD` (strip `origin/`), else the current branch |
+| origin remote? | `git remote` |
+| candidate danger zones | what the survey saw: `.env*`, migrations dirs, prod config, lockfiles, generated/vendored dirs |
+| `stale_hours:` `uat:` `notify:` | defaults; EVOLVE tunes them later from real data |
 
-## 3. Write the artifacts
+Anything you genuinely cannot find, leave blank and say so in 2c — do not invent a command.
+
+### 2c. Interactions 2 and 3 — the only things a repo cannot tell you
+**Interaction 2 — the goal.** Plain prose, free text, on its own:
+> What do you want to build first?
+
+It becomes the sprint goal AND the Planner's input in step 4. Take it in their words; do not make
+them phrase it as a ticket.
+
+**Interaction 3 — one batched call, ≤4 questions, IN THEIR VOICE.** Under `voice: standard` you
+MUST translate — never make a human choose between `paranoid` and `batch`:
+
+1. **Confirm what you found.** Show it compactly and let them correct it in one move:
+   *"Tests: `pnpm test` · Build: `pnpm build` · Branch: `main`"* → **Looks right** | **Let me fix those**
+2. **`claim:`** — *"Will you run agents on one computer, or several?"* → one → `local-lock` ·
+   several → `claim-branch` (needs an origin remote — if there is none, say so and use `local-lock`)
+3. **`integration:`** — *"After each piece of work lands, should I re-run your whole test suite, or
+   wait and run it once at the end?"* → every → `paranoid` · once → `batch`
+4. **Danger zones** — *"Anything I should treat as radioactive — files I must never touch?"*
+   Multi-select, **pre-ticked with the candidates from 2b**, plus a free-text escape. Each answer
+   becomes an armed `path` line in `ops/RULES.tsv` — machine-enforced, not prose. If they name
+   forbidden *content* (secret patterns, banned APIs), that is a `content` rule.
+
+Everything else INIT used to ask — suite duration, DoD extras, capacity, cadence, past scars — is
+either derivable, defaultable, or EVOLVE's job once there is real data. Do not ask it. A human who
+has just said "install polaris" does not yet know their own sprint capacity in points.
+
+## 3. Write the artifacts — silently. No progress commentary.
 Instantiate the skeletons below with survey + interview results. Then run `bash ops/polaris init-board` (creates board dirs, gitignores `.polaris/`, prepares the lock dir, seeds `EVENTS.ndjson` telemetry with its union-merge gitattribute, and seeds `ops/RULES.tsv`). Turn every danger-zone/content answer from the interview into an armed RULES line (format documented at the top of the file), run `bash ops/polaris rules` to health-check them, and commit everything as `chore(polaris): initialize`.
+
+Values you no longer ask for, so choose them: `stale_hours: 4`; SPRINT capacity — start at **10 points** and let EVOLVE calibrate it from real cycle data; omit `uat:` and `notify:` unless the survey found an obvious end-to-end command. Do not narrate any of this. The human sees one report, in step 4, after the Planner has run.
 
 ### CONVENTIONS.md skeleton — the top block is machine-read by `ops/polaris`; one `key: value` per line
 ```markdown
@@ -105,8 +143,19 @@ code style: <pointers, or "match surrounding code">
 ## Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
 ```
 
-## 4. Report and hand off — **in the voice they chose in 2a**
-Report: MAP summary (5 lines max), chosen claim + integration modes, danger zones registered (count of armed RULES lines), doctor/selftest result, anything that needs the human (git-tracked build output, stale CLAUDE.md sections), the live-board command (`bash ops/polaris dash` → http://127.0.0.1:7373), and the exact next command for the human:
-> Open a new session: "You are the PLANNER. Groom this into the backlog and promote what's ready: <your idea>"
+## 4. Chain straight into the PLANNER — same session, no restart, no handoff message
+Do **not** tell them to open a new session. Read `ops/roles/PLANNER.md` and execute it now, with the goal from 2c as the idea to groom. This is the ONE sanctioned two-role session (see CLAUDE.md § ROLE DISPATCH): it runs before any Builder exists, on the base branch, and writes zero feature code. Every other session stays single-role.
 
-Under `voice: standard` this is a short, warm walkthrough — what you found, what you set up, what's left for them — with every kit term explained the first time you use it. Same facts, same warnings, none of the shorthand. Under `voice: technical`, be dense.
+The Planner's board commit is separate from yours — plan, place, commit as `chore(board): plan <goal>`, exactly as PLANNER.md says.
+
+## 5. ONE report, at the very end, in the voice they chose in 2a
+The human has now waited through an install, an interview and a planning pass. They get **one** report, and under `voice: standard` it is **≤8 lines**. Not a walkthrough. Not a tour of what POLARIS is.
+
+Say only:
+- that it worked, and what you're building (their words, not yours);
+- how the work got split — *"I split X into 6 pieces; 4 can start now, 2 are chained behind them"*;
+- **anything that needs them**: git-tracked build output (step 1), a `risk: high` task, a command you couldn't find, a danger zone you guessed at. This is the one thing you must never trim.
+- how to start: *"Open a terminal here and say **start** — I'll pick up the top task and build it."*
+- how to watch: `bash ops/polaris dash` → http://127.0.0.1:7373
+
+Do NOT list every task, print the board, explain `wsjf`/`files_owned`/worktrees, recap the config you just wrote, or describe the write-guard. It is all on disk and they can ask. Under `voice: technical`, be dense and drop the explanations — but the warnings stay.

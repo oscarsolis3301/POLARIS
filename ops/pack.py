@@ -157,8 +157,9 @@ def build(allow_dirty):
         # that lets a human (or an agent) discover how to run the kit without opening it.
         z.comment = (
             f"POLARIS {version} — parallel-sprint protocol for coding agents.\n"
-            "Install: drop this file in your project and run:  python polaris-v5.zip\n"
-            "Teach Claude Code to do it for you:               python polaris-v5.zip --claude-skill\n"
+            "In Claude Code, in your project, just say:         install POLARIS\n"
+            "By hand: drop this file in your project and run:   python polaris-v5.zip\n"
+            "  ...which also arms this machine, so every install after it is offline + prompt-free.\n"
             "No Python? unzip polaris-v5.zip && bash polaris-v5/ops/install.sh\n"
             "https://github.com/oscarsolis3301/POLARIS\n"
         ).encode()
