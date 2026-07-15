@@ -707,8 +707,12 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     printf -- '---\nid: T-6\npoints: 1\nwsjf: 8\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/f6.txt\nverify: []\n---\n' > ops/board/ready/T-6.md
     git add -A; git commit -qm t56
     "$SELF" claim T-5 >/dev/null                         # session A takes the top wsjf task
-    "$SELF" claim >/dev/null                             # session B, no ID: must skip locked T-5, take T-6
-    [ -f ops/board/active/T-6.md ] || { echo "::error::FANOUT FAIL — no-ID claim did not skip locked top to next task"; exit 1; }
+    aft5="ready=[$(ls ops/board/ready 2>/dev/null | tr '\n' ' ')] active=[$(ls ops/board/active 2>/dev/null | tr '\n' ' ')]"
+    set +e; cout="$("$SELF" claim 2>&1)"; crc=$?; set -e   # session B, no ID: must skip locked T-5, take T-6
+    if [ ! -f ops/board/active/T-6.md ]; then
+      echo "::error::FANOUT FAIL — afterT5{$aft5} noID.rc=$crc out={$(printf '%s' "$cout" | tr '\n' '|')} now.ready=[$(ls ops/board/ready 2>/dev/null | tr '\n' ' ')] now.active=[$(ls ops/board/active 2>/dev/null | tr '\n' ' ')]"
+      exit 1
+    fi
     "$SELF" release T-5 --to ready -m drill >/dev/null; "$SELF" release T-6 --to ready -m drill >/dev/null
     rm -f ops/board/ready/T-5.md ops/board/ready/T-6.md; git add -A; git commit -qm cleanup56
     # drift must catch nested-glob overlap (previously declared 'undecidable')
