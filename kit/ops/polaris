@@ -762,9 +762,9 @@ pat_overlap() { # heuristic: can patterns A and B claim a common path?
 }
 
 dep_ids() { # dep_ids <taskfile> — depends_on entries as clean ids, handling BOTH block lists
-  # ("- T-002") and the inline form ("[T-002, T-003]"). Robust to inline lists NOW, independent of
-  # whatever fm_list does — so the dep checks below never false-flag a real dependency.
-  fm_list depends_on "$1" 2>/dev/null | tr ',' '\n' | tr -d '[]' | sed 's/[[:space:]]//g' | grep -v '^$' || true
+  # ("- T-002") and the inline form ("[T-002, T-003]"). The sed bracket-expression strips [ ] and ,
+  # portably — BSD tr (macOS) mishandles a bare '[]' set, so `tr -d '[]'` is NOT portable here.
+  fm_list depends_on "$1" 2>/dev/null | sed 's/[][,]/ /g' | tr ' ' '\n' | grep -v '^[[:space:]]*$' || true
 }
 dep_reaches() { # dep_reaches <cur-id> <target-id> <visited> — 0 if target is reachable from cur via
   # depends_on. A task that reaches ITSELF sits in a cycle and can never satisfy the ready gate.
