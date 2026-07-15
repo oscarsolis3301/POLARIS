@@ -26,6 +26,14 @@ From this, infer: stack + versions, module boundaries, entry points, where tests
 Asking a human to recite their own `package.json` is not diligence, it is an interrogation, and it
 is why installing POLARIS felt like a chore. Derive everything derivable; ask the rest; move on.
 
+**Express lane — offer it.** After interaction 1 (voice), if the repo is greenfield or small, or the
+human signals they just want to get going ("just set it up", "use sensible defaults"), collapse to a
+SINGLE remaining ask — the goal (interaction 2) — and take defaults for everything else: `claim: local-lock`,
+`integration: batch`, danger zones = only what the survey flagged, `bootstrap:`/`generated:` derived from
+the lockfile and any tracked build output. State the assumed config in one line of the step-5 report so
+they can correct it later. Two hard exceptions: never skip the goal, and never silently default a danger
+zone the survey could not see — on anything touching safety, ask.
+
 Where your harness renders choices as clickable options (Claude Code: the `AskUserQuestion` tool),
 use it — it is faster and less intimidating than a wall of numbered markdown. Otherwise, a short
 numbered list. Never more than 4 questions in one call.
@@ -45,6 +53,8 @@ Step 1 already read every manifest. Use it:
 | Config | Where it comes from — no question needed |
 |---|---|
 | `test:` `lint:` `typecheck:` `build:` | `package.json` scripts · Makefile targets · `pyproject.toml` · `Cargo.toml` · `go.mod` · CI workflow |
+| `bootstrap:` | the lockfile: `package-lock.json`→`npm ci` · `pnpm-lock.yaml`→`pnpm i --frozen-lockfile` · `yarn.lock`→`yarn install --immutable` · `uv.lock`→`uv sync` · `poetry.lock`→`poetry install` · `Cargo.lock`→`cargo fetch`. Omit if none. |
+| `generated:` | the tracked build output the survey flagged in step 1 (`.next/ dist/ build/ out/ *.tsbuildinfo`). Set ONLY if those dirs are actually git-tracked; the better fix is un-tracking them. |
 | `base:` | `git symbolic-ref --short refs/remotes/origin/HEAD` (strip `origin/`), else the current branch |
 | origin remote? | `git remote` |
 | candidate danger zones | what the survey saw: `.env*`, migrations dirs, prod config, lockfiles, generated/vendored dirs |
@@ -96,6 +106,14 @@ autolaunch: ask             # wt (Planner opens a Builder pane per ready task be
 stale_hours: 4              # sweep warns on active locks older than this
 uat: <cmd or omit>          # optional end-to-end/UAT command — Integrator runs it ONCE on the integrate branch
 notify: <cmd or omit>       # optional: runs in background per board event with POLARIS_EV/ID/NOTE env vars
+bootstrap: <cmd or omit>    # optional: install deps in a fresh worktree right after claim (npm ci /
+                            # pnpm i --frozen-lockfile / uv sync / cargo fetch). A worktree is a bare
+                            # checkout — without this, the first `verify:` on a real repo fails on missing
+                            # deps. Derive from the lockfile; omit for repos with no dependency install step.
+generated: <globs or omit>  # optional: git-tracked build output (.next/ dist/ build/ out/ *.tsbuildinfo).
+                            # Paths matching these are excluded from the ownership diff so a Builder that
+                            # runs `build` isn't rejected for dirtying files it doesn't own. Space-separated
+                            # files_owned-style patterns. Prefer un-tracking them (step 1) — this is the fallback.
 test: <cmd>
 lint: <cmd>
 typecheck: <cmd>

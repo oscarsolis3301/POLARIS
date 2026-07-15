@@ -80,7 +80,7 @@ KIT_CODE="polaris dashboard.py MANUAL.md PROMPTS.md install.sh VERSION"   # + ro
 if [ -f "$TARGET/ops/CONVENTIONS.md" ]; then
   note "live board detected — refreshing kit code only (board, RULES, CONVENTIONS, MAP, SPRINT untouched)"
   for f in $KIT_CODE; do cp "$KIT/ops/$f" "$TARGET/ops/$f"; done
-  for d in roles templates hooks ci; do mkdir -p "$TARGET/ops/$d"; cp "$KIT/ops/$d/"* "$TARGET/ops/$d/"; done
+  for d in roles templates hooks ci; do mkdir -p "$TARGET/ops/$d"; cp -R "$KIT/ops/$d/." "$TARGET/ops/$d/"; done   # -R + /. : recursive, dotfile-safe — MATCH the fresh path below, or update silently omits new subdirs/dotfiles
   UPGRADE=1
 else
   mkdir -p "$TARGET/ops"

@@ -245,9 +245,13 @@ def dogfood():
         if not got:
             sys.exit(f"⛔ what came back from {url} is not a POLARIS kit — repo untouched.")
         if got != want:
-            print(f"⚠ kit/ops/VERSION says {want}, but releases/latest still serves {got}.")
-            print("   A fresh tag takes a minute to propagate. Installing what is PUBLISHED —")
-            print("   dogfooding an artifact nobody can download would prove nothing.")
+            sys.exit(
+                f"⛔ kit/ops/VERSION says {want}, but releases/latest still serves {got} — repo untouched.\n"
+                f"   A fresh tag takes a minute for CI to build and publish. Dogfooding the OLD artifact\n"
+                f"   would install the wrong version and then commit it as if it were {want} — only the daily\n"
+                f"   'one version, everywhere' job would catch it, later and confusingly. Wait for CI to\n"
+                f"   publish {want}, then re-run."
+            )
 
         print(f"   installing {got} into {REPO}")
         rc = subprocess.run([sys.executable, str(archive), str(REPO)]).returncode

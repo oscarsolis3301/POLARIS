@@ -61,6 +61,7 @@ trap cleanup EXIT
 
 # --- normalize (best effort for Windows-style paths) -------------------------
 norm() { printf '%s' "$1" | tr '\\' '/' | sed -e 's|^\([A-Za-z]\):/|/\L\1/|'; }
+lc()   { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 FILE="$(norm "$FILE")"; CWD="$(norm "$CWD")"
 
 # --- repo + repo-relative path ------------------------------------------------
@@ -73,10 +74,13 @@ BR="$(git -C "$CWD" rev-parse --abbrev-ref HEAD 2>/dev/null)" || exit 0
 case "$FILE" in /*) ABS="$FILE";; *) ABS="$CWD/$FILE";; esac
 PRIMARY="$(git -C "$CWD" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
 [ -n "$PRIMARY" ] && PRIMARY="$(norm "$PRIMARY")"
-REL=""
-case "$ABS" in
-  "$TOP"/*) REL="${ABS#"$TOP"/}";;
-  *) [ -n "$PRIMARY" ] && case "$ABS" in "$PRIMARY"/*) REL="${ABS#"$PRIMARY"/}";; esac;;
+# Prefix-match case-INSENSITIVELY (Windows + macOS default are case-insensitive filesystems, and
+# Claude Code may hand us a cwd/path whose segments differ in case from git's toplevel). Compare on
+# lowercased copies, but slice REL from the ORIGINAL-case ABS so files_owned matching stays exact.
+REL=""; ABS_LC="$(lc "$ABS")"; TOP_LC="$(lc "$TOP")"
+case "$ABS_LC" in
+  "$TOP_LC"/*) REL="${ABS:$((${#TOP}+1))}";;
+  *) if [ -n "$PRIMARY" ]; then case "$ABS_LC" in "$(lc "$PRIMARY")"/*) REL="${ABS:$((${#PRIMARY}+1))}";; esac; fi;;
 esac
 if [ -z "$REL" ]; then
   case "$BR" in feat/*) ;; *) exit 0;; esac    # non-Builder sessions may write outside the repo
