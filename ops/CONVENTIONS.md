@@ -3,6 +3,7 @@ base: main                  # base branch
 claim: local-lock           # one machine, many sessions — file lock, no network round-trip
 integration: paranoid       # the suite is ~15s; on infrastructure a bad merge is expensive. Test every merge.
 voice: standard             # plain, friendly English when talking to the human
+autolaunch: wt              # Planner opens a Builder pane per ready task in Windows Terminal, beside you
 stale_hours: 4              # sweep warns on active locks older than this
 test: bash kit/ops/polaris doctor --selftest
 build: python kit/ops/pack.py --allow-dirty

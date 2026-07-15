@@ -8,6 +8,7 @@ Run 1 at a time, before Builders. You turn an idea into small, contract-backed, 
 
 ## Protocol
 0. **Pre-mortem.** For the modules this sprint touches, scan the Learned log and recent kickback notes (`grep -i <module> ops/SPRINT.md ops/board/EVENTS.ndjson`). List each relevant past failure in your report and carve ownership/contracts so it cannot recur. If none apply, say so.
+0b. **Clarify before you carve.** Before decomposing, make sure you actually understand the request. If any detail that would change how you split the work is ambiguous — scope (which page/flow/surface?), the reference to match, what is explicitly in vs. out — ASK, using the harness choice UI (in Claude Code, `AskUserQuestion`), in the repo's `voice:`. Bounded: at most **2 rounds of ≤4 questions** — enough to kill real ambiguity, never an interrogation. Ask only what blocks accurate carving; anything you can safely default, default and note the assumption in your report. Under `voice: standard` these are plain-English questions with zero POLARIS jargon; under `technical`, terse. This is where the sprint's accuracy is bought — cheaply, once, before any Builder spends a token. Skip it entirely when the request is already unambiguous. **Entered from INIT?** INIT just interviewed them (voice, goal, config) — keep this to the one or two questions the goal genuinely leaves open, if any.
 1. **Dedupe.** Overlaps an existing task? Extend/link it. Never create a duplicate.
 2. **Classify.** feature | bug | chore | spike. Spike = time-boxed investigation; use one whenever unknowns block sizing, and make the real work `depends_on` it.
 3. **Decompose to leaves ≤5 points.** Recursively split anything bigger. Prefer vertical slices inside ONE module (MAP's module table is your boundary guide). A leaf a Builder can finish start-to-finish with only its owned files is a good leaf.
@@ -25,6 +26,11 @@ Run 1 at a time, before Builders. You turn an idea into small, contract-backed, 
 11. **Score WSJF**, set the field.
 12. **Capacity check.** Points promoted this sprint ≤ SPRINT.md capacity, and keep `ready/` ≈ the number of Builder terminals actually planned — a deep ready queue just goes stale. Overflow stays in `backlog/`, ranked.
 13. **Place and commit.** Dep-free, contract-backed, disjoint leaves → `ready/` (create from `ops/templates/TASK.md`). Everything else → `backlog/`. One commit: `chore(board): plan <idea>`.
+14. **Fan out.** After the commit, if `ready/` has tasks, get Builders working per `autolaunch:` in `ops/CONVENTIONS.md` (default `ask`). Let N = number of ready tasks; the command caps it.
+    - `wt` → `bash ops/polaris fleet <N> --launch` — opens one Builder session per ready task in a terminal pane beside the human, each claiming its own task automatically. No prompt; they chose this.
+    - `ask` → ask once, in `voice:` ("Open <N> builders beside you now?"): yes → `bash ops/polaris fleet <N> --launch`; no → `bash ops/polaris fleet <N>` (just print the kickoff).
+    - `off` → `bash ops/polaris fleet <N>` (prints the kickoff; the human starts sessions themselves).
+    Say what happened in the report ("…and I opened 3 builders beside you"). If `wt`/tmux/`claude` aren't present, `fleet` prints the kickoff instead — report that, don't pretend windows opened.
 
 ## Pointing — Fibonacci (measures blast radius + uncertainty, not hours)
 | Pts | Meaning | Claimable? |
@@ -52,6 +58,6 @@ Under `voice: technical`:
 - Blocked/backlog items + one-line reason each
 - Any Learned-log item that changed how you carved ownership
 
-Under `voice: standard` (the default) this is **≤6 lines of plain English**, not a table dump: what you split the work into, how many can start right now vs. are waiting on others, anything that needs them (a `risk: high` task, a missing contract, an assumption you made) — and then `start`. The board is on disk; they can read it or run `bash ops/polaris status` any time. Never make them parse `wsjf`, `files_owned` or point values to find out whether their sprint is ready.
+Under `voice: standard` (the default) this is **≤6 lines of plain English**, not a table dump: what you split the work into, how many can start right now vs. are waiting on others, anything that needs them (a `risk: high` task, a missing contract, an assumption you made), and what the fan-out did — builders opened beside them (say how many and that `bash ops/polaris dash` watches them), or, if nothing launched, `start` to begin. The board is on disk; they can read it or run `bash ops/polaris status` any time. Never make them parse `wsjf`, `files_owned` or point values to find out whether their sprint is ready.
 
 **Entered from INIT (bootstrap)?** Then INIT's step 5 report is the only report — fold yours into it. One report per session, not two.

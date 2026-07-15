@@ -17,7 +17,8 @@ Your kickoff message names your role. Read `ops/roles/<ROLE>.md`, then execute i
 - **`start` is the everyday kickoff** — nobody should have to type a role name to do the obvious thing. It means "take the next piece of work": Builder if there is work queued, Planner if there isn't (so `start` always does the right thing on an empty board, instead of erroring).
 - **Scope guard on `start`:** it fires only when the message *is* a start phrase. "start the dev server", "start with the login bug", "go fix the header" are ordinary requests, NOT kickoffs. If the message names an object, it is not a `start`.
 - No role given and `ops/CONVENTIONS.md` does NOT exist → INIT has never run here → you are INIT.
-- No role given and `ops/CONVENTIONS.md` exists → ask in one line: "Which role: PLANNER, BUILDER, or INTEGRATOR?"
+- **Unprompted work request → PLANNER.** No role named, not a `start` phrase, but the message asks to *change the product* — add / build / create / implement / improve / redesign / refactor / fix / remove something in this repo → you are the **PLANNER**; groom it exactly as if they'd said "You are the PLANNER: <request>". This is what makes POLARIS feel native: describe what you want, and it plans it — no "which role?" detour. **Guard:** a question about existing code ("what/why/how does X work", "where is…"), an operational command ("start the dev server", "run the tests", "deploy"), or POLARIS meta ("update POLARIS", "status") is NOT a work request — handle it normally. The discriminant is intent to *change* the repo vs. intent to *understand or operate* it.
+- No role given, `ops/CONVENTIONS.md` exists, and it is genuinely unclear whether the message is a work request → ask in one line: "Which role: PLANNER, BUILDER, or INTEGRATOR?"
 - `ops/CONVENTIONS.md` is the ONLY "has INIT run?" test. An `ops/board/` left by an older installer proves nothing.
 - **NEVER act as two roles in one session — one exception: the bootstrap chain INIT → PLANNER**, which runs once per repo, before any Builder exists, on the base branch, and writes zero feature code. It exists so installing POLARIS leaves you with a planned board instead of homework. Every other session is single-role; a Builder is never also a Planner or an Integrator.
 
@@ -37,7 +38,7 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris status / sweep / doctor [--selftest]` | board view · stale locks · env check |
 | `ops/polaris dash / metrics` | live board at 127.0.0.1:7373 · cycle/kickbacks/per-point calibration |
 | `ops/polaris drift / rules` | mechanical board-hygiene audit (`--strict` for CI) · policy file list + health |
-| `ops/polaris fleet <N>` | print or tmux-launch N Builder kickoffs |
+| `ops/polaris fleet <N> [--launch]` | print N Builder kickoffs; `--launch` opens a session per ready task in tmux windows or side-by-side Windows Terminal panes (`--dry-run` previews). Planner runs this per `autolaunch:` |
 | `ops/polaris version / update` | which POLARIS this repo runs · **fetch the latest kit** — also re-caches it into `~/.claude` so the next repo gets it too (manual; POLARIS never self-updates mid-sprint) |
 | `ops/polaris upgrade` | migrate an OLD BOARD v3/v4→v5. Downloads nothing. **Not** `update` — one letter apart, unrelated jobs; "upgrade POLARIS" almost always means `update`. |
 

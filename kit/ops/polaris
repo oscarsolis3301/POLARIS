@@ -749,25 +749,70 @@ cmd_dash() { # launch the read-only live board (single-file stdlib server)
   exec "$PY" "$OPS/dashboard.py" --root "$PRIMARY" "$@"
 }
 
-cmd_fleet() { # fleet <N> [--loop] — print N identical Builder kickoffs; launch via tmux if present
-  local n="${1:?usage: polaris fleet <N> [--loop]}" loop="" i
-  [ "${2:-}" = "--loop" ] && loop=" Run in loop mode."
-  case "$n" in ''|*[!0-9]*) die "fleet: N must be a number";; esac
-  # The long form on purpose: this line is pasted into ANY agent CLI, including ones with no
+cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder kickoffs; --launch opens them
+  local n="" loop="" launch="" dry="" i
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --loop)    loop=" Run in loop mode.";;
+      --launch)  launch=1;;
+      --dry-run) dry=1;;
+      -*)        die "fleet: unknown flag $1";;
+      *)         if [ -z "$n" ]; then n="$1"; else die "fleet: unexpected arg '$1'"; fi;;
+    esac
+    shift
+  done
+  [ -n "$n" ] || die "usage: polaris fleet <N> [--loop] [--launch] [--dry-run]"
+  case "$n" in *[!0-9]*) die "fleet: N must be a number";; esac
+  [ "$n" -ge 1 ] || die "fleet: N must be >= 1"
+
+  # The long form on purpose: this printed line is pasted into ANY agent CLI, including ones with no
   # POLARIS skill to route a bare `start`. In Claude Code, `start` alone does the same thing.
   local msg="You are a BUILDER. Claim the top ready task and complete it end to end. Stop at the review handoff.$loop"
   note "kickoff (paste into $n parallel sessions of ANY agent CLI — in Claude Code, \"start\" alone does it):"
   printf '   %s\n' "$msg"
+
+  # Print-only unless the caller asked to open sessions (--launch) or preview that (--dry-run).
+  # We NEVER spawn windows a caller didn't ask for — the Planner passes --launch per autolaunch:.
+  if [ -z "$launch" ] && [ -z "$dry" ]; then
+    note "(add --launch to open $n Builder sessions automatically, or open $n terminals and paste the line above)"
+    return 0
+  fi
+
+  # Cap auto-launched sessions — screen + cost discipline. The printed kickoff above stays uncapped.
+  local cap launch_n; cap="$(cfg autolaunch_max 3)"; case "$cap" in ''|*[!0-9]*) cap=3;; esac
+  launch_n="$n"; [ "$launch_n" -gt "$cap" ] && launch_n="$cap"
+
   if command -v tmux >/dev/null 2>&1 && command -v claude >/dev/null 2>&1; then
-    printf 'Launch now in tmux with Claude Code? [y/N] '; local a=""; read -r a || a=""   # non-tty (agent) → default No
-    if [ "$a" = "y" ] || [ "$a" = "Y" ]; then
+    if [ -n "$dry" ]; then
+      note "[dry-run] tmux: $launch_n windows, each running: claude \"$msg\""
+    else
       tmux has-session -t polaris 2>/dev/null || tmux new-session -d -s polaris -c "$PRIMARY"
-      for i in $(seq 1 "$n"); do tmux new-window -t polaris -c "$PRIMARY" "claude \"$msg\""; done
-      say "fleet of $n launched — attach: tmux attach -t polaris · watch: ops/polaris dash"
+      for i in $(seq 1 "$launch_n"); do tmux new-window -t polaris -c "$PRIMARY" "claude \"$msg\""; done
+      say "fleet of $launch_n launched in tmux — attach: tmux attach -t polaris · watch: ops/polaris dash"
+    fi
+  elif command -v wt.exe >/dev/null 2>&1 && command -v claude >/dev/null 2>&1; then
+    # Windows Terminal: ONE new window with launch_n VERTICAL split panes (side by side), each running
+    # `claude start` in the repo. Single-token `start` sidesteps wt's arg re-joining; the repo's polaris
+    # skill routes `start` → BUILDER, which atomically claims its own ready task (launch_n panes →
+    # launch_n distinct tasks; the lock breaks any race). `\;` reaches wt as a LITERAL subcommand
+    # separator, never a bash statement separator.
+    [ -n "$loop" ] && note "(loop mode isn't applied to Windows Terminal panes — each does one task; say start again for more)"
+    local dir="$PRIMARY"
+    command -v cygpath >/dev/null 2>&1 && dir="$(cygpath -w "$PRIMARY" 2>/dev/null || printf '%s' "$PRIMARY")"
+    local w=( wt.exe -w new new-tab -d "$dir" claude start )
+    for i in $(seq 2 "$launch_n"); do w+=( \; split-pane -V -d "$dir" claude start ); done
+    if [ -n "$dry" ]; then
+      note "[dry-run] would run:"; printf '  '; printf ' %q' "${w[@]}"; printf '\n'
+    else
+      "${w[@]}" >/dev/null 2>&1 &
+      say "fleet of $launch_n launched in Windows Terminal (side-by-side panes) — watch: ops/polaris dash"
     fi
   else
-    note "(auto-launch needs tmux + claude on PATH — open $n terminals and paste the line above)"
+    note "(auto-launch needs tmux+claude or Windows Terminal+claude on PATH — open $n terminals and paste the line above)"
+    return 0
   fi
+  [ "$n" -gt "$launch_n" ] && note "opened $launch_n of $n (cap autolaunch_max=$cap) — the rest stay claimable; say start in another session"
+  return 0
 }
 
 cmd_upgrade() { # idempotent v3→v4: creates what v4 adds, touches nothing that exists
@@ -1141,7 +1186,9 @@ polaris — POLARIS v4 board CLI (run from anywhere inside the repo)
   drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
   dash [--port N]                live read-only board at http://127.0.0.1:7373 (needs python3)
-  fleet <N> [--loop]             print/launch N identical Builder kickoffs (tmux+claude optional)
+  fleet <N> [--loop] [--launch] [--dry-run]
+                                 print N Builder kickoffs; --launch opens a session per task in
+                                 tmux windows or Windows Terminal panes (--dry-run previews the command)
   upgrade                        migrate an OLD BOARD (v3/v4→v5). Idempotent. Downloads NOTHING.
                                    want a newer KIT? that is `update` — one letter, unrelated job.
   version                        installed version · commit · latest on the channel
