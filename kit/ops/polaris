@@ -339,7 +339,7 @@ RUL
 }
 
 cmd_claim() {
-  local id="${1:-}" f v
+  local id="${1:-}" f
   local explicit=1; [ -z "$id" ] && explicit=0
   # Candidate list: an explicit ID is the only candidate; auto-pick is EVERY ready task, sorted
   # by wsjf desc. We then take the first candidate we can lock. That fan-out is what makes N
@@ -349,10 +349,12 @@ cmd_claim() {
   if [ "$explicit" = 1 ]; then
     candidates="$id"
   else
+    # NO `case` inside this $(...): bash 3.2 (macOS /bin/bash) cannot parse a case pattern's `)`
+    # terminator inside command substitution — it reads it as the closing `)` of the `$(`. sort -rn
+    # already coerces a blank/non-numeric wsjf to 0, so the ordering is identical without a sanitiser.
     candidates="$( { for f in "$BOARD/ready/"*.md; do
         [ -e "$f" ] || break
-        v="$(fm_get wsjf "$f")"; case "$v" in ''|*[!0-9.]*) v=0;; esac
-        printf '%s\t%s\n' "$v" "$(basename "$f" .md)"
+        printf '%s\t%s\n' "$(fm_get wsjf "$f")" "$(basename "$f" .md)"
       done; } | sort -rn | cut -f2- )"
     [ -n "$candidates" ] || die "ready/ is empty — nothing to claim"
   fi
@@ -633,7 +635,7 @@ cmd_doctor() {
 selftest() { # end-to-end mechanics drill in a throwaway repo — run once per new machine
   local T; T="$(mktemp -d)"
   note "selftest in $T"
-  ( set -Ee; trap 'echo "::error::SELFTEST died at: [$BASH_COMMAND]"' ERR; cd "$T"
+  ( set -e; cd "$T"
     git init -q -b main repo 2>/dev/null || { git init -q repo; git -C repo symbolic-ref HEAD refs/heads/main; }
     cd repo; git config user.email t@t; git config user.name t
     mkdir -p ops/board/ready src; echo x > src/a.txt
@@ -697,7 +699,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     git add -A; git commit -qm t4
     "$SELF" claim T-4 >/dev/null
     ( cd .polaris/wt/T-4 && git mv outside.txt pkg/moved.txt && git commit -qm 'smuggle rename'
-      if "$SELF" verify T-4 >/dev/null 2>&1; then echo "::error::RENAME OWNERSHIP FAIL (deletion of outside.txt must reject)"; exit 1; fi ) || exit 1
+      if "$SELF" verify T-4 >/dev/null 2>&1; then echo "RENAME OWNERSHIP FAIL (deletion of outside.txt must reject)"; exit 1; fi ) || exit 1
     "$SELF" release T-4 --to ready -m drill >/dev/null
     rm -f ops/board/ready/T-4.md outside.txt pkg/keep.txt; rmdir pkg 2>/dev/null || true
     git add -A; git commit -qm cleanup4
@@ -707,32 +709,28 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     printf -- '---\nid: T-6\npoints: 1\nwsjf: 8\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/f6.txt\nverify: []\n---\n' > ops/board/ready/T-6.md
     git add -A; git commit -qm t56
     "$SELF" claim T-5 >/dev/null                         # session A takes the top wsjf task
-    aft5="ready=[$(ls ops/board/ready 2>/dev/null | tr '\n' ' ')] active=[$(ls ops/board/active 2>/dev/null | tr '\n' ' ')]"
-    set +e; cout="$("$SELF" claim 2>&1)"; crc=$?; set -e   # session B, no ID: must skip locked T-5, take T-6
-    if [ ! -f ops/board/active/T-6.md ]; then
-      echo "::error::FANOUT FAIL — afterT5{$aft5} noID.rc=$crc out={$(printf '%s' "$cout" | tr '\n' '|')} now.ready=[$(ls ops/board/ready 2>/dev/null | tr '\n' ' ')] now.active=[$(ls ops/board/active 2>/dev/null | tr '\n' ' ')]"
-      exit 1
-    fi
+    "$SELF" claim >/dev/null                             # session B, no ID: takes the next available task
+    [ -f ops/board/active/T-6.md ] || { echo "FANOUT FAIL — no-ID claim did not take the next task"; exit 1; }
     "$SELF" release T-5 --to ready -m drill >/dev/null; "$SELF" release T-6 --to ready -m drill >/dev/null
     rm -f ops/board/ready/T-5.md ops/board/ready/T-6.md; git add -A; git commit -qm cleanup56
     # drift must catch nested-glob overlap (previously declared 'undecidable')
     printf -- '---\nid: T-7\npoints: 1\nwsjf: 2\nstatus: ready\nfiles_owned:\n  - src/api/*\n---\n' > ops/board/ready/T-7.md
     printf -- '---\nid: T-8\npoints: 1\nwsjf: 2\nstatus: ready\nfiles_owned:\n  - src/*/handler.js\n---\n' > ops/board/ready/T-8.md
-    "$SELF" drift | grep -q 'OWNERSHIP OVERLAP: T-8 ∩ T-7' || { echo "::error::GLOB OVERLAP FAIL (nested globs must flag)"; exit 1; }
+    "$SELF" drift | grep -q 'OWNERSHIP OVERLAP: T-8 ∩ T-7' || { echo "GLOB OVERLAP FAIL (nested globs must flag)"; exit 1; }
     rm -f ops/board/ready/T-7.md ops/board/ready/T-8.md
     # `audit` (the logic polaris-audit.yml wraps) must reject an out-of-scope feat branch, from anywhere
     printf -- '---\nid: T-9\npoints: 1\nwsjf: 1\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/f9.txt\nverify: []\n---\n' > ops/board/ready/T-9.md
     git add -A; git commit -qm t9
     "$SELF" claim T-9 >/dev/null
     ( cd .polaris/wt/T-9 && echo x > src/f9.txt && echo y > src/nope.txt && git add -A && git commit -qm 'in+out of scope' )
-    "$SELF" audit T-9 >/dev/null 2>&1 && { echo "::error::AUDIT FAIL (out-of-scope feat branch must reject)"; exit 1; }
+    "$SELF" audit T-9 >/dev/null 2>&1 && { echo "AUDIT FAIL (out-of-scope feat branch must reject)"; exit 1; }
     "$SELF" release T-9 --to ready -m drill >/dev/null
-    "$SELF" why T-9 | grep -q 'release' || { echo "::error::WHY FAIL (release note not surfaced)"; exit 1; }
+    "$SELF" why T-9 | grep -q 'release' || { echo "WHY FAIL (release note not surfaced)"; exit 1; }
     rm -f ops/board/ready/T-9.md; git add -A; git commit -qm cleanup9
     # drift catches a depends_on cycle (a ring never satisfies the ready gate)
     printf -- '---\nid: T-A\npoints: 1\nwsjf: 1\nstatus: backlog\ndepends_on:\n  - T-B\n---\n' > ops/board/backlog/T-A.md
     printf -- '---\nid: T-B\npoints: 1\nwsjf: 1\nstatus: backlog\ndepends_on:\n  - T-A\n---\n' > ops/board/backlog/T-B.md
-    "$SELF" drift | grep -q 'DEP CYCLE' || { echo "::error::DEP CYCLE FAIL"; exit 1; }
+    "$SELF" drift | grep -q 'DEP CYCLE' || { echo "DEP CYCLE FAIL"; exit 1; }
     rm -f ops/board/backlog/T-A.md ops/board/backlog/T-B.md
     # (The write-time guard hook wrapper is validated manually, not here: driving it needs python and
     #  git-canonical paths, which made it fragile across the CI matrix. The guard's allow/block logic is
