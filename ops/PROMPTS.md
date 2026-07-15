@@ -36,12 +36,24 @@ ops/polaris uninstall --yes    # remove POLARIS; keeps your CLAUDE.md content an
 ⚠ `upgrade` is **not** `update`. `ops/polaris upgrade` migrates an old v3/v4 *board* to v5 and downloads nothing. If you want the newer POLARIS, you want `update`.
 
 ## Every sprint
+> In Claude Code you rarely type any of these. Just say what you want in plain English —
+> *"improve the UI/UX of the settings page"*, *"add CSV export to reports"* — and POLARIS
+> recognizes it's a new idea, runs the **Planner** on it (asking you simple questions first),
+> then opens **Builders** in Windows Terminal panes beside you to do the work. The kickoffs below
+> are the manual forms, for other agent CLIs or when you want a specific role. (Ordinary questions —
+> *"what does auth do?"* — and commands — *"start the dev server"* — stay normal; they don't get planned.)
+
 **1 — Plan** (one session):
 ```
 You are the PLANNER. Groom this into the backlog and promote what's ready: <your idea>
 ```
 
-**2 — Fan out** (N parallel sessions, identical message — or `bash ops/polaris fleet N`). In Claude Code, one word does it:
+**2 — Fan out.** The Planner does this for you at the end of planning, per the `autolaunch:` setting in `ops/CONVENTIONS.md`:
+- `wt` — opens a Builder session per ready task in **side-by-side Windows Terminal panes**, each claiming its own task. No prompt.
+- `ask` *(default)* — offers once after planning: "Open N builders beside you?"
+- `off` — just prints the kickoff; you start the sessions.
+
+To do it by hand: `bash ops/polaris fleet N --launch` (drop `--launch` to only print; add `--dry-run` to preview the command; needs tmux or Windows Terminal + `claude` on PATH). Or, in one Claude Code session, one word does it:
 ```
 start
 ```

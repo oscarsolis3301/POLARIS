@@ -15,7 +15,9 @@ Implement strictly against the contract, strictly inside `files_owned`. `context
 
 Under Claude Code, a PreToolUse guard blocks two things the moment you attempt them: writes outside `files_owned`, and anything `ops/RULES.tsv` forbids — danger-zone paths and forbidden content patterns, which apply EVEN INSIDE your owned files. Same matcher and rules as `polaris verify`, so what the guard blocks, handoff would have rejected anyway. A rejection is information, not an obstacle. Never work around it via bash redirection, and never touch RULES.tsv — hand back or flag the human instead.
 
-Hit a wall — ambiguous contract, needed file not owned, hidden dependency? Output `⛔ <why>` and go to Failure path. Do NOT improvise around it.
+Hit a wall? Two kinds, two responses:
+- **Structural block** — a needed file isn't in `files_owned`, a hidden dependency, a missing or self-contradictory contract. Output `⛔ <why>` and go to the Failure path. Do NOT improvise around it.
+- **Spec ambiguity** — a detail of *your own task* is genuinely underspecified (which of two behaviors? what wording? which edge case?) and guessing could ship the wrong thing. Ask the human **one** concise question in the repo's `voice:` (Claude Code: `AskUserQuestion`), then build on the answer. Don't guess — but don't stack up questions either: if it takes more than one or two, the task itself is underspecified, so hand it back to `blocked/` with a note for the Planner.
 
 ## 4. Test
 Write tests covering EVERY acceptance checkbox. Run the full commands from `ops/CONVENTIONS.md` (test + lint + typecheck). All green or you stay in `active/`.

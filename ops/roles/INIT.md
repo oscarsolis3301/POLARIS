@@ -80,7 +80,7 @@ has just said "install polaris" does not yet know their own sprint capacity in p
 ## 3. Write the artifacts — silently. No progress commentary.
 Instantiate the skeletons below with survey + interview results. Then run `bash ops/polaris init-board` (creates board dirs, gitignores `.polaris/`, prepares the lock dir, seeds `EVENTS.ndjson` telemetry with its union-merge gitattribute, and seeds `ops/RULES.tsv`). Turn every danger-zone/content answer from the interview into an armed RULES line (format documented at the top of the file), run `bash ops/polaris rules` to health-check them, and commit everything as `chore(polaris): initialize`.
 
-Values you no longer ask for, so choose them: `stale_hours: 4`; SPRINT capacity — start at **10 points** and let EVOLVE calibrate it from real cycle data; omit `uat:` and `notify:` unless the survey found an obvious end-to-end command. Do not narrate any of this. The human sees one report, in step 4, after the Planner has run.
+Values you no longer ask for, so choose them: `stale_hours: 4`; `autolaunch: ask` (safe default — offers to open Builders after planning rather than surprising a brand-new user with spawned windows); SPRINT capacity — start at **10 points** and let EVOLVE calibrate it from real cycle data; omit `uat:` and `notify:` unless the survey found an obvious end-to-end command. Do not narrate any of this. The human sees one report, in step 4, after the Planner has run.
 
 ### CONVENTIONS.md skeleton — the top block is machine-read by `ops/polaris`; one `key: value` per line
 ```markdown
@@ -90,6 +90,9 @@ claim: local-lock           # local-lock | claim-branch (several machines; needs
 integration: batch          # batch (merge all, test once, halve on red) | paranoid (test every merge)
 voice: standard             # standard (plain, friendly) | technical (dense, terse) — how agents TALK to
                             # the human. Never changes what they write to disk, or any gate. Default: standard.
+autolaunch: ask             # wt (Planner opens a Builder pane per ready task beside you) | ask (offer once
+                            # after planning) | off (just print the kickoff). Windows Terminal only; harmless
+                            # elsewhere — falls back to printing. Default: ask.
 stale_hours: 4              # sweep warns on active locks older than this
 uat: <cmd or omit>          # optional end-to-end/UAT command — Integrator runs it ONCE on the integrate branch
 notify: <cmd or omit>       # optional: runs in background per board event with POLARIS_EV/ID/NOTE env vars
