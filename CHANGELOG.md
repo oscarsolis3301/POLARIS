@@ -4,6 +4,25 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.7.0 — 2026-07-15
+
+**POLARIS takes the wheel.** Describe what you want in plain English and POLARIS routes it to the
+Planner itself, asks a few simple questions to get it right, then opens a Builder per task in
+side-by-side terminal panes — no "which role?" detour, no pasted kickoffs.
+
+- **Auto-route.** A work request ("improve the settings page") with no role and no `start` word now
+  becomes a PLANNER run. A guard keeps questions ("what does auth do?") and operational commands
+  ("start the dev server") as ordinary chat — the discriminant is intent to *change* the repo vs. to
+  *understand or operate* it. `kit/.claude/skills/polaris/SKILL.md` + `kit/CLAUDE.md`.
+- **Clarify before carving.** The Planner asks bounded, voice-appropriate questions up front
+  (≤2 rounds of ≤4) so the sprint's accuracy is bought once; a Builder may ask a single question when
+  a spec detail is genuinely ambiguous, while structural blocks still hard-stop to the failure path.
+- **Auto-launch.** New `autolaunch:` convention key (`wt` | `ask` | `off`, default `ask`). After
+  planning, the Planner fans out builders per that setting: on Windows, side-by-side Windows Terminal
+  panes each running `claude start`, capped at `autolaunch_max` (default 3). `polaris fleet <N>` gains
+  `--launch` and `--dry-run`; the tmux path is unchanged and it falls back to printing the kickoff
+  where neither tmux nor Windows Terminal is present.
+
 ## 5.6.0 — 2026-07-14
 
 **POLARIS now builds POLARIS.** The kit runs its own board — parallel Builders, the write-guard, the
