@@ -4,6 +4,44 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.8.0 — 2026-07-15
+
+**The gates hold, the loop closes.** This sprint makes POLARIS's core promise — many builders, zero
+collisions, machine-enforced — true where it used to lean on a careful Planner or plain luck; clears
+the snags that made a fresh sprint fail before a line of code; and gives the human real visibility
+into a running board.
+
+- **Harder gates.** `verify`/`audit` now diff with `--no-renames`, so a `git mv` can no longer smuggle
+  a non-owned file's deletion past the ownership check. `drift` catches nested-glob overlaps it used to
+  call "undecidable", and the Planner re-runs `drift` on the plan it just wrote before fanning out — an
+  overlap now costs nothing instead of surfacing as an Integrator merge conflict two builds later.
+  `kit/ops/roles/PLANNER.md`, `kit/ops/polaris`.
+- **`claim` fans out for real.** With no ID, `claim` now skips a locked task and takes the next, so a
+  fleet of Builder panes lands on distinct work instead of all grabbing the top one and N-1 dying; the
+  worktree-add step retries under concurrency. Also fixes a hard `claim` parse error on macOS's stock
+  `/bin/bash` 3.2. `kit/ops/polaris`.
+- **A fresh sprint reaches green.** New `bootstrap:` convention installs deps in each Builder's worktree
+  on claim; a blank `map_delta` warns at handoff so `ops/MAP.md` stops silently rotting; and `generated:`
+  keeps git-tracked build output from failing a handoff. `kit/ops/roles/INIT.md`, `kit/ops/polaris`.
+- **See what the board is doing.** `polaris why <ID>` shows why a task bounced or blocked; `polaris
+  resume` takes over a crashed Builder's task; blocked tasks surface in `status` with their reason;
+  `drift` flags dependency cycles and dangling deps; `metrics` splits build time from integration wait
+  and names the oldest task awaiting integration; and the Integrator rules out a pre-existing flake
+  before kicking good work back. `kit/ops/polaris`, `kit/ops/roles/INTEGRATOR.md`.
+- **Windows launch actually fires.** `fleet --launch` resolves the `claude` `.cmd`/`.exe` shim that Git
+  Bash's `command -v` misses, and says so plainly when it truly cannot open panes. The write-guard no
+  longer false-blocks a legitimate edit when the path's case differs from git's.
+  `kit/ops/polaris`, `kit/ops/hooks/ownership-guard.sh`.
+- **Orientation back in the box.** The zip ships a `README.md` again; `pack.py --dogfood` refuses on a
+  version mismatch instead of installing the old artifact and calling it new; the two install paths copy
+  identically. `kit/README.md`, `kit/ops/pack.py`, `kit/ops/install.sh`.
+- **Self-hosting honesty.** `doctor` reports when `kit/ops/VERSION` is ahead of the installed `ops/` —
+  a release built but never dogfooded — and `update` refuses to run in the repo that builds POLARIS,
+  where it would install `ops/` over itself. `kit/ops/polaris`.
+- **An install drill a Builder can run.** `kit/ops/selftest-install.sh` exercises the fresh /
+  live-board / old-client / uninstall paths end to end — the one path CI covered but a Builder could
+  not is now testable by hand.
+
 ## 5.7.0 — 2026-07-15
 
 **POLARIS takes the wheel.** Describe what you want in plain English and POLARIS routes it to the
