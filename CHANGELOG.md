@@ -4,6 +4,16 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.9.2 — 2026-07-16
+
+**The epilogue learns the house rules.** 5.9.1's run-INIT epilogue quoted the retired kickoff
+phrase — once as a "don't say this" and once as a human fallback — and CI's homework tripwire
+(which greps install output for that literal phrase, deliberately unable to tell mention from use)
+correctly went red. The epilogue now describes the job without quoting the phrase; the tripwire
+stays maximally strict; the quiet-line drill counts only the lines above the epilogue and asserts
+the epilogue is present. `kit/ops/install.sh`, `.github/workflows/ci.yml` (owner-approved rule
+lift, restored same commit).
+
 ## 5.9.1 — 2026-07-16
 
 **First-contact installs finish the job.** On a machine that had never seen POLARIS, "install
