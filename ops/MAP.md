@@ -64,3 +64,5 @@ not installed code — they are written normally, by the board scripts and by th
 - `kit/ops/dashboard.py` has no automated test — CI never launches it.
 
 ## Deltas
+
+- kit/ops/selftest-install.sh — local install drill (fresh · old-client · live-board · zip purity · uninstall). The `test:` for any install.sh change.  (T-001, 2026-07-15)
