@@ -23,4 +23,5 @@ ops/hooks/	path	-	installed copy — edit kit/ops/hooks/
 ops/templates/	path	-	installed copy — edit kit/ops/templates/
 ops/ci/	path	-	installed copy — edit kit/ops/ci/
 # kit/ops/VERSION rule LIFTED 2026-07-15 — repo owner authorized assistant-driven releases. Still a release act: bump ONLY as a full release (VERSION + CHANGELOG + tag + dogfood together). Re-enable: restore this as a `path` rule.
+# .github/ rule lifted ONCE 2026-07-16 (owner-approved, single commit) so the quiet-line drill could learn to count above the 5.9.1 install epilogue; restored immediately below.
 .github/	path	-	the CI drills are the last gate between a bad kit and every user — an agent must not edit its own tests

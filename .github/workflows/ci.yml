@@ -322,9 +322,13 @@ jobs:
           HOME="$HI" USERPROFILE="$HI" python polaris-v5.zip | tee "$RUNNER_TEMP/install.log"
 
           # Quiet by default: the marker, plus at most the one-off "machine armed" line. An agent
-          # relays whatever the installer prints, so a chatty installer IS a chatty agent.
-          n=$(grep -c . "$RUNNER_TEMP/install.log")
-          [ "$n" -le 2 ] || { echo "::error::quiet install printed $n lines (expected <= 2)"; cat "$RUNNER_TEMP/install.log"; exit 1; }
+          # relays whatever the installer prints, so a chatty installer IS a chatty agent. The ONE
+          # sanctioned extra block is the "▶ NEXT" run-INIT epilogue on a fresh install (5.9.1) —
+          # a machine's first-ever install has no skill loaded, so the epilogue is the only thing
+          # that chains into INIT. Count the lines above it only, and assert it is present.
+          n=$(sed '/^▶ NEXT/,$d' "$RUNNER_TEMP/install.log" | grep -c .)
+          [ "$n" -le 2 ] || { echo "::error::quiet install printed $n lines before the epilogue (expected <= 2)"; cat "$RUNNER_TEMP/install.log"; exit 1; }
+          grep -q 'read ops/roles/INIT.md' "$RUNNER_TEMP/install.log" || { echo "::error::fresh install is missing the run-INIT agent epilogue"; exit 1; }
           # Quiet must not mean undiagnosable: every ✅/note line still lands in the log.
           test -s .polaris/install.log || { echo "::error::.polaris/install.log missing or empty — a quiet failure would be undiagnosable"; exit 1; }
           grep -q 'ops/ installed' .polaris/install.log || { echo "::error::.polaris/install.log is not capturing the install detail"; exit 1; }
