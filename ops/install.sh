@@ -251,14 +251,16 @@ printf 'POLARIS %s installed · %s\n' "$(sed -n 's/^version: *//p' "$V" | head -
 # Fresh (= INIT never ran) also gets an epilogue ADDRESSED TO THE AGENT running this install.
 # The skill-driven path never needed it, but a machine's FIRST-EVER install has no skill in
 # ~/.claude yet and the repo's skills land too late for the running session to load — so a
-# vanilla agent used to stop here and hand the human "say 'You are INIT'" homework (observed
-# 2026-07-16, atlas). Installer stdout is the ONE channel that reaches every installing agent.
+# vanilla agent used to stop here and hand the human run-INIT homework (observed 2026-07-16,
+# atlas). Installer stdout is the ONE channel that reaches every installing agent.
 # Plain printf on purpose: `note` is quiet-swallowed, and this must never be.
+# NB: CI's homework tripwire greps install output for the literal INIT kickoff phrase — this
+# epilogue must describe the job without ever quoting that phrase.
 if [ "$STATE" = fresh ]; then
   printf '\n'
   printf '▶ NEXT — to the AI agent reading this: the install is NOT the whole job. Setup finishes in\n'
   printf '  THIS chat: read ops/roles/INIT.md and execute it now — it interviews the human (a few\n'
   printf '  quick questions), then plans their first sprint, same session, no restart. Do not tell\n'
-  printf '  the human to open a new chat or to type "You are INIT" — that is your job, now.\n'
-  printf '  (Human running this by hand: open your AI CLI in this repo and say: You are INIT)\n'
+  printf '  the human to open a new chat or hand them a kickoff phrase to type — INIT is your job, now.\n'
+  printf '  (No AI reading this? Open your AI chat in this repo and ask it to set up POLARIS.)\n'
 fi
