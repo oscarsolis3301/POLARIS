@@ -128,6 +128,9 @@ drill_fresh() {
   ( cd "$T_FRESH" && "$PY" "$ZIP" --no-machine-setup ) > "$WORK/fresh.out"
   cat "$WORK/fresh.out"
   grep -q 'installed · fresh' "$WORK/fresh.out"
+  # First-contact routing: fresh output MUST carry the agent epilogue (a machine's first-ever
+  # install has no skill loaded — the epilogue is the only thing that chains into INIT).
+  grep -q 'read ops/roles/INIT.md' "$WORK/fresh.out"
   [ -f "$T_FRESH/ops/polaris" ]
   assert_one_marker_pair "$T_FRESH"
   grep -q THEIR_HOOK "$T_FRESH/.claude/settings.json"
@@ -177,6 +180,8 @@ drill_live_board() {
   ( cd "$T_LIVE" && "$PY" "$ZIP" --no-machine-setup ) > "$WORK/live2.out"
   cat "$WORK/live2.out"
   grep -q 'installed · live-board' "$WORK/live2.out"
+  # A live board must NOT get the run-INIT epilogue — INIT never re-runs over a live board.
+  ! grep -q 'read ops/roles/INIT.md' "$WORK/live2.out"
   ! grep -qx 'corrupted' "$T_LIVE/ops/MANUAL.md"
   board_snapshot "$T_LIVE" > "$WORK/board-after"
   cmp "$WORK/board-before" "$WORK/board-after"

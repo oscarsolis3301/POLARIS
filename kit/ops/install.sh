@@ -238,7 +238,7 @@ case "$KIT" in
 esac
 note "Claude Code will ask to trust the project hook on first use — that is the write-guard (read ops/hooks/ownership-guard.sh first)."
 
-# The one line stdout always gets, quiet or not. The trailing token is the routing
+# The marker line stdout always gets, quiet or not. Its trailing token is the routing
 # contract: `fresh` → the caller runs INIT · `live-board` → the caller runs `polaris
 # upgrade` and NEVER runs INIT. CI asserts on it; do not reword it casually.
 STATE=fresh; [ "$UPGRADE" = 1 ] && STATE=live-board
@@ -247,3 +247,18 @@ if [ -n "$LOG" ]; then
   rm -f "$LOG" 2>/dev/null || true
 fi
 printf 'POLARIS %s installed · %s\n' "$(sed -n 's/^version: *//p' "$V" | head -1)" "$STATE"
+
+# Fresh (= INIT never ran) also gets an epilogue ADDRESSED TO THE AGENT running this install.
+# The skill-driven path never needed it, but a machine's FIRST-EVER install has no skill in
+# ~/.claude yet and the repo's skills land too late for the running session to load — so a
+# vanilla agent used to stop here and hand the human "say 'You are INIT'" homework (observed
+# 2026-07-16, atlas). Installer stdout is the ONE channel that reaches every installing agent.
+# Plain printf on purpose: `note` is quiet-swallowed, and this must never be.
+if [ "$STATE" = fresh ]; then
+  printf '\n'
+  printf '▶ NEXT — to the AI agent reading this: the install is NOT the whole job. Setup finishes in\n'
+  printf '  THIS chat: read ops/roles/INIT.md and execute it now — it interviews the human (a few\n'
+  printf '  quick questions), then plans their first sprint, same session, no restart. Do not tell\n'
+  printf '  the human to open a new chat or to type "You are INIT" — that is your job, now.\n'
+  printf '  (Human running this by hand: open your AI CLI in this repo and say: You are INIT)\n'
+fi

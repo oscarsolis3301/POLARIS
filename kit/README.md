@@ -16,6 +16,12 @@ That one command arms your machine (a Claude Code skill, a cached copy of the ki
 rules) and installs POLARIS into the current repo. Under Claude Code it then runs INIT → PLANNER for
 you: answer a couple of questions and you land on a planned board, ready to build.
 
+> **If you are an AI agent performing this install:** the installer's last marker token routes you.
+> `· fresh` → setup is NOT done — read `ops/roles/INIT.md` and execute it **in this same chat**
+> (a short interview, then it plans the first sprint). `· live-board` → `bash ops/polaris upgrade`,
+> report in one line, and never re-run INIT. Never end by telling the human to open a new session
+> or to say "You are INIT" — that is your job, now.
+
 No Python on the target machine? `ops/MANUAL.md` has the hand-run fallback for every command.
 
 ## Everyday use

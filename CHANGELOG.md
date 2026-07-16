@@ -4,6 +4,26 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.9.1 — 2026-07-16
+
+**First-contact installs finish the job.** On a machine that had never seen POLARIS, "install
+POLARIS" installed correctly and then stopped — the session told the human to *"say 'You are
+INIT'"* instead of running the setup interview itself (observed on a real first install). The
+chain-into-INIT instruction lived only in the `polaris-install` skill, which by definition isn't
+loaded during a machine's first-ever install.
+
+- **The installer now routes the agent itself.** On a `fresh` install (INIT never ran —
+  `ops/CONVENTIONS.md` absent), the installer prints a "▶ NEXT" epilogue addressed to the AI agent
+  running it: read `ops/roles/INIT.md` and execute it in THIS chat; never hand the human "say 'You
+  are INIT'" homework. A `live-board` install stays silent — INIT never re-runs. Installer stdout is
+  the one channel that reaches every installing agent, skill or no skill. `kit/ops/install.sh`,
+  comment truth in `kit/ops/bootstrap.py`.
+- **Both READMEs carry the same routing** for agents that explore before installing (that is
+  exactly what the failing session did). Root `README.md`, `kit/README.md`.
+- **The install drill proves it stays.** `selftest-install.sh` now asserts the fresh output carries
+  the epilogue and the live-board output does not. `kit/ops/selftest-install.sh`,
+  `kit/.claude/skills/polaris-install/SKILL.md`.
+
 ## 5.9.0 — 2026-07-16
 
 **One chat, the whole loop.** Until now every phase needed a fresh chat: plan, then open a window per

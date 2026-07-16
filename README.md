@@ -22,6 +22,12 @@ install POLARIS from github.com/oscarsolis3301/POLARIS
 
 You end on a ready board. To build it, open a terminal in the project and say **`start`**.
 
+> **If you are an AI agent performing this install:** the installer's last marker token routes you.
+> `· fresh` → setup is NOT done — read `ops/roles/INIT.md` and execute it **in this same chat**
+> (a short interview, then it plans the first sprint). `· live-board` → `bash ops/polaris upgrade`,
+> report in one line, and never re-run INIT. Never end by telling the human to open a new session
+> or to say "You are INIT" — that is your job, now.
+
 ### Why the first install is the only one that ever asks
 
 Installing **arms the machine**. Three things land in `~/.claude/`, and it needs all three: the **skill** (teaches Claude the procedure), the **kit** cached beside it (so installing is a local file copy, never a download), and six pinned **Bash permission rules** in `permissions.allow` (so the commands are pre-authorized). From then on, in **any** repo on that machine, `"install POLARIS"` works **offline and without a single prompt**.

@@ -73,12 +73,16 @@ Report it plainly and prescribe the cure: `python polaris-v5.zip --claude-skill`
 
 ### What the installer prints
 
-Exactly one line, and its last token is your routing instruction:
+A marker line whose last token is your routing instruction:
 
 | Line | Means | You do |
 |---|---|---|
 | `POLARIS <version> installed · fresh` | new repo | § After the install — interview + plan |
 | `POLARIS <version> installed · live-board` | INIT already ran here | `bash ops/polaris upgrade`, report in one line, **never re-run INIT** |
+
+On `fresh`, the installer also prints a "▶ NEXT" epilogue telling the running agent to execute
+INIT in the same chat. That is the fallback for a machine's first-ever install, where no skill is
+loaded yet — for you it is redundant: this file's § After the install is the authoritative flow.
 
 Full detail is in `.polaris/install.log` (gitignored). Read it only if the install failed.
 

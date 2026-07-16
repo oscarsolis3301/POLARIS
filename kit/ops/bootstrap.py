@@ -357,11 +357,14 @@ def main():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
-    # stdout ends on `POLARIS <v> installed · fresh|live-board` — the caller's routing contract.
-    # Deliberately NO "open a new session and say 'You are INIT'" epilogue: that restart was never
-    # a technical requirement (the write-guard only binds feat/* branches, settings.json
-    # hot-reloads, and the installing agent reads ops/roles/INIT.md directly). It cost every user
-    # a second chat. The skill continues straight into INIT in the same session.
+    # stdout carries `POLARIS <v> installed · fresh|live-board` — the caller's routing contract —
+    # and, on `fresh`, install.sh appends an epilogue ADDRESSED TO THE INSTALLING AGENT: continue
+    # into INIT in THIS session. The epilogue exists because a machine's first-ever install has no
+    # polaris-install skill to carry that instruction (the repo's skills land too late for the
+    # running session) — without it, vanilla agents stopped and handed the human "say 'You are
+    # INIT'" homework. Still deliberately NO "open a new session" text anywhere: the restart was
+    # never a technical requirement (the write-guard only binds feat/* branches, settings.json
+    # hot-reloads, and the installing agent reads ops/roles/INIT.md directly).
 
 
 if __name__ == "__main__":
