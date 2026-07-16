@@ -37,11 +37,19 @@ ops/polaris uninstall --yes    # remove POLARIS; keeps your CLAUDE.md content an
 
 ## Every sprint
 > In Claude Code you rarely type any of these. Just say what you want in plain English —
-> *"improve the UI/UX of the settings page"*, *"add CSV export to reports"* — and POLARIS
-> recognizes it's a new idea, runs the **Planner** on it (asking you simple questions first),
-> then opens **Builders** in Windows Terminal panes beside you to do the work. The kickoffs below
-> are the manual forms, for other agent CLIs or when you want a specific role. (Ordinary questions —
+> *"improve the UI/UX of the settings page"*, *"add CSV export to reports"* — and POLARIS runs the
+> **whole loop in that one chat**: it asks you simple questions until it truly understands, shows you
+> what it understood, plans, then builds and integrates with live progress — each phase a fresh
+> subagent, so the chat never degrades. That is the **Conductor**. You approve once (the plan);
+> everything after is hands-free except real decisions. Prefer watching Builders in terminal panes
+> beside you instead? Set `builders: panes` in `ops/CONVENTIONS.md`. The kickoffs below are the
+> manual forms, for other agent CLIs or when you want a specific role. (Ordinary questions —
 > *"what does auth do?"* — and commands — *"start the dev server"* — stay normal; they don't get planned.)
+
+**0 — The whole loop** (one session, subagent-capable CLI):
+```
+You are the CONDUCTOR: <your idea>
+```
 
 **1 — Plan** (one session):
 ```
@@ -57,7 +65,7 @@ To do it by hand: `bash ops/polaris fleet N --launch` (drop `--launch` to only p
 ```
 start
 ```
-`start` means "take the next piece of work": it becomes a BUILDER when tasks are queued, and a PLANNER when the board is empty. In any other agent CLI, paste the long form:
+`start` means "take the next piece of work": in a subagent-capable CLI it becomes the CONDUCTOR (drains the queue, integrates, reports); otherwise a BUILDER when tasks are queued, and a PLANNER when the board is empty. In any other agent CLI, paste the long form:
 ```
 You are a BUILDER. Claim the top ready task and complete it end to end. Stop at the review handoff.
 ```

@@ -989,6 +989,24 @@ find_claude() { # resolve the Claude Code CLI the way it will actually be invoke
   done
   return 1
 }
+find_claude_windows() { # pane command wt.exe can actually launch. wt hands its trailing args to
+  # Windows CreateProcess, which CANNOT run the extension-less bash shim that `command -v claude`
+  # finds first under Git Bash — every 5.8.0 pane died with 0x80070002 "file not found" before a
+  # session even started. So resolve a REAL claude.exe/.cmd and print its FULL Windows path (8.3
+  # short form, so "C:\Program Files"-style spaces never break wt's arg re-joining); if only the
+  # bash shim exists, wrap it in bash.exe -lc. Prints TAB-separated pane tokens, or nothing.
+  local c p b
+  for c in claude.exe claude.cmd; do
+    p="$(command -v "$c" 2>/dev/null)" && [ -n "$p" ] || continue
+    if command -v cygpath >/dev/null 2>&1; then p="$(cygpath -ws "$p" 2>/dev/null || cygpath -w "$p" 2>/dev/null || printf '%s' "$p")"; fi
+    printf '%s\tstart' "$p"; return 0
+  done
+  if command -v claude >/dev/null 2>&1 && b="$(command -v bash 2>/dev/null)" && [ -n "$b" ]; then
+    if command -v cygpath >/dev/null 2>&1; then b="$(cygpath -ws "$b" 2>/dev/null || cygpath -w "$b" 2>/dev/null || printf '%s' "$b")"; fi
+    printf '%s\t-lc\tclaude start' "$b"; return 0
+  fi
+  return 1
+}
 cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder kickoffs; --launch opens them
   local n="" loop="" launch="" dry="" i
   while [ $# -gt 0 ]; do
@@ -1023,6 +1041,8 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
   launch_n="$n"; [ "$launch_n" -gt "$cap" ] && launch_n="$cap"
 
   local claude_cmd; claude_cmd="$(find_claude || true)"
+  local wt_pane=""
+  command -v wt.exe >/dev/null 2>&1 && wt_pane="$(find_claude_windows || true)"
   if command -v tmux >/dev/null 2>&1 && [ -n "$claude_cmd" ]; then
     if [ -n "$dry" ]; then
       note "[dry-run] tmux: $launch_n windows, each running: $claude_cmd \"$msg\""
@@ -1031,17 +1051,20 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
       for i in $(seq 1 "$launch_n"); do tmux new-window -t polaris -c "$PRIMARY" "$claude_cmd \"$msg\""; done
       say "fleet of $launch_n launched in tmux — attach: tmux attach -t polaris · watch: ops/polaris dash"
     fi
-  elif command -v wt.exe >/dev/null 2>&1 && [ -n "$claude_cmd" ]; then
+  elif [ -n "$wt_pane" ]; then
     # Windows Terminal: ONE new window with launch_n VERTICAL split panes (side by side), each running
-    # `<claude> start` in the repo. Single-token `start` sidesteps wt's arg re-joining; the repo's polaris
-    # skill routes `start` → BUILDER, whose `claim` (no ID) now SKIPS locked tasks and takes the next —
-    # so launch_n panes land on launch_n distinct tasks, and a pane whose top pick was taken doesn't die.
+    # `<claude> start` in the repo. The pane command comes from find_claude_windows — a full .exe/.cmd
+    # Windows path CreateProcess can start (a bare `claude` resolves to the npm bash shim in Git Bash,
+    # which killed every pane with 0x80070002). The repo's polaris skill routes `start` → BUILDER,
+    # whose `claim` (no ID) SKIPS locked tasks and takes the next — so launch_n panes land on
+    # launch_n distinct tasks, and a pane whose top pick was taken doesn't die.
     # `\;` reaches wt as a LITERAL subcommand separator, never a bash statement separator.
     [ -n "$loop" ] && note "(loop mode isn't applied to Windows Terminal panes — each does one task; say start again for more)"
-    local dir="$PRIMARY"
+    local dir="$PRIMARY" pane=()
     command -v cygpath >/dev/null 2>&1 && dir="$(cygpath -w "$PRIMARY" 2>/dev/null || printf '%s' "$PRIMARY")"
-    local w=( wt.exe -w new new-tab -d "$dir" "$claude_cmd" start )
-    for i in $(seq 2 "$launch_n"); do w+=( \; split-pane -V -d "$dir" "$claude_cmd" start ); done
+    IFS=$'\t' read -r -a pane <<<"$wt_pane"
+    local w=( wt.exe -w new new-tab -d "$dir" "${pane[@]}" )
+    for i in $(seq 2 "$launch_n"); do w+=( \; split-pane -V -d "$dir" "${pane[@]}" ); done
     if [ -n "$dry" ]; then
       note "[dry-run] would run:"; printf '  '; printf ' %q' "${w[@]}"; printf '\n'
     else
@@ -1050,8 +1073,8 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
     fi
   else
     # Say WHY nothing opened, so a silent no-op never masquerades as "windows opened".
-    if [ -z "$claude_cmd" ] && { command -v tmux >/dev/null 2>&1 || command -v wt.exe >/dev/null 2>&1; }; then
-      note "found a terminal but not the 'claude' CLI on PATH here (in Git Bash it is often a .cmd shim). Make 'claude' runnable in this shell, or open $n terminals and paste the line above."
+    if { command -v tmux >/dev/null 2>&1 || command -v wt.exe >/dev/null 2>&1; }; then
+      note "found a terminal but no launchable 'claude' CLI (need claude, claude.cmd, or claude.exe on PATH). Install/repair the Claude CLI, or open $n terminals and paste the line above."
     else
       note "(auto-launch needs tmux+claude or Windows Terminal+claude on PATH — open $n terminals and paste the line above)"
     fi

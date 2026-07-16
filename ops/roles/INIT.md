@@ -103,6 +103,10 @@ voice: standard             # standard (plain, friendly) | technical (dense, ter
 autolaunch: ask             # wt (Planner opens a Builder pane per ready task beside you) | ask (offer once
                             # after planning) | off (just print the kickoff). Windows Terminal only; harmless
                             # elsewhere — falls back to printing. Default: ask.
+builders: subagents         # subagents (a work request runs the whole loop in one chat — interview, plan,
+                            # build, integrate — each role a fresh subagent; needs a harness with a subagent
+                            # tool, e.g. Claude Code) | panes (conductor stops after planning; Builders run
+                            # in terminal sessions per autolaunch:). No subagent tool → behaves as panes.
 stale_hours: 4              # sweep warns on active locks older than this
 uat: <cmd or omit>          # optional end-to-end/UAT command — Integrator runs it ONCE on the integrate branch
 notify: <cmd or omit>       # optional: runs in background per board event with POLARIS_EV/ID/NOTE env vars
@@ -176,7 +180,7 @@ Say only:
 - that it worked, and what you're building (their words, not yours);
 - how the work got split — *"I split X into 6 pieces; 4 can start now, 2 are chained behind them"*;
 - **anything that needs them**: git-tracked build output (step 1), a `risk: high` task, a command you couldn't find, a danger zone you guessed at. This is the one thing you must never trim.
-- how to start: *"Open a terminal here and say **start** — I'll pick up the top task and build it."*
+- how to start: *"From now on, just tell me what you want built — I'll ask a couple of questions, show you the plan, and run the whole thing in this chat. Or say **start** to pick up the queued work."* (Harness without subagents: *"say **start** — I'll pick up the top task and build it."*)
 - how to watch: `bash ops/polaris dash` → http://127.0.0.1:7373
 
 Do NOT list every task, print the board, explain `wsjf`/`files_owned`/worktrees, recap the config you just wrote, or describe the write-guard. It is all on disk and they can ask. Under `voice: technical`, be dense and drop the explanations — but the warnings stay.
