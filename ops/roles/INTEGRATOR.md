@@ -32,6 +32,8 @@ bash ops/polaris run-verify <ID>     # per merged task, on <base>: acceptance st
 bash ops/polaris done <ID>           # review→done · applies map_delta to MAP.md · releases lock ·
                                      # removes worktree + feat branch · refuses if not actually merged
 git branch -d integrate/<date>
+bash ops/polaris qa                  # the whole gate in one shot, on <base>: suite + build + board
+                                     # hygiene + env. Red here = the sprint is NOT done; report it red.
 ```
 
 ## 5. Sweep and promote

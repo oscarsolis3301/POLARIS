@@ -34,6 +34,9 @@ Board commit: task back to `ready/` (or `blocked/` + note). Remove the lock (`rm
 ## Integrate (Integrator)
 Audit each review branch: `git diff --name-only <base>...feat/<ID>` ⊆ `files_owned`. Merge all approved branches onto `integrate/<date>` with `--no-ff` in dependency order; ANY conflict = planning bug → abort that merge, kick the task back. Run the full suite ONCE (batch) or per merge (paranoid). Red in batch → halve: reset to `<base>`, re-merge half, test, recurse (log₂N runs). Land: merge integrate into `<base>`, push, re-run each task's `verify:` commands, move tasks to `done/`, append their `map_delta` lines to `ops/MAP.md`, release locks, `git worktree remove` + delete `feat/<ID>` branches, `git worktree prune`.
 
+## QA — "is everything okay?" by hand
+What `ops/polaris qa` does in one shot. From the repo root on `<base>`, run in order: the `test:` `lint:` `typecheck:` `build:` and `uat:` commands from `ops/CONVENTIONS.md` (skip blank keys), then the board-hygiene audit (Integrate's checks above) and the env sanity checks. Run EVERY check even after one goes red — one pass paints the whole picture — then report red if anything was. The Integrator runs this before reporting; a Conductor runs it after integration and never takes a subagent's "green" on faith.
+
 ## Telemetry (every transition above)
 Before each board commit, append ONE line to `ops/board/EVENTS.ndjson`:
 `{"ts":<epoch>,"ev":"<claim|handoff|release|kickback|done>","id":"<ID>","who":"<you@host>","note":""}`

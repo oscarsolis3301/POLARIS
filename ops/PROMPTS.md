@@ -41,7 +41,10 @@ ops/polaris uninstall --yes    # remove POLARIS; keeps your CLAUDE.md content an
 > **whole loop in that one chat**: it asks you simple questions until it truly understands, shows you
 > what it understood, plans, then builds and integrates with live progress — each phase a fresh
 > subagent, so the chat never degrades. That is the **Conductor**. You approve once (the plan);
-> everything after is hands-free except real decisions. Prefer watching Builders in terminal panes
+> everything after runs to the finish line on its own: it re-checks the landed work itself
+> (`bash ops/polaris qa` — suite, build, board, env in one shot), hunts for runtime errors and
+> fixes what it finds, keeps going until the queue is empty, and signs off with data-backed tuning
+> proposals you can apply with one word. Prefer watching Builders in terminal panes
 > beside you instead? Set `builders: panes` in `ops/CONVENTIONS.md`. The kickoffs below are the
 > manual forms, for other agent CLIs or when you want a specific role. (Ordinary questions —
 > *"what does auth do?"* — and commands — *"start the dev server"* — stay normal; they don't get planned.)
@@ -96,6 +99,7 @@ You are a BUILDER. Resume <ID>: it was kicked back — read its Notes for the fa
 ```
 bash ops/polaris dash        # live board · http://127.0.0.1:7373
 bash ops/polaris status      # terminal view
+bash ops/polaris qa          # is everything okay? suite + build + board + env, one shot
 bash ops/polaris metrics     # cycle · throughput · kickbacks · per-point calibration
 bash ops/polaris drift       # board hygiene audit (add --strict in CI)
 bash ops/polaris rules       # repo policy lines + health
