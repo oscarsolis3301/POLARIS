@@ -26,7 +26,7 @@ You are INIT.
 INIT asks how you want agents to talk to you (plain English or dense and technical), what you want to build first, and confirms the test/build commands it found in your repo. Three interactions, then it plans your first sprint. Change the voice later: edit `voice:` in `ops/CONVENTIONS.md` (`standard` | `technical`); `bash ops/polaris doctor` prints the one in force.
 
 ## Kit lifecycle — just say "update POLARIS" in any chat, in any POLARIS repo
-It fetches the latest kit, refreshes kit code only (your board, RULES, CONVENTIONS, MAP and SPRINT are never touched), **and re-caches the new kit into `~/.claude`** — so the next repo you install into on this machine gets it too. One update, whole machine current.
+It fetches the latest kit, refreshes kit code only (your board, RULES, CONVENTIONS, MAP and SPRINT are never touched), **and re-caches the new kit into `~/.claude`** — so the next repo you install into on this machine gets it too. One update, whole machine current. And if the repo was never set up (the interview never ran), install and update both finish by running that setup **in the same chat** — you are never left holding homework.
 
 ```bash
 ops/polaris version            # which POLARIS this repo runs · what's latest on the channel
