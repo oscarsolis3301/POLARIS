@@ -7,20 +7,21 @@ Your kickoff message names your role. Read `ops/roles/<ROLE>.md`, then execute i
 
 | Kickoff says | Read | Sessions |
 |---|---|---|
-| **`start`** · `start building` · `go` · `let's build` · `polaris start` | `ready/` has tasks → `ops/roles/BUILDER.md` · `ready/` is empty → `ops/roles/PLANNER.md` | N in parallel |
+| **`start`** · `start building` · `go` · `let's build` · `polaris start` | harness can spawn subagents → `ops/roles/CONDUCTOR.md` · else: `ready/` has tasks → `ops/roles/BUILDER.md` · `ready/` empty → `ops/roles/PLANNER.md` | N in parallel |
 | "You are INIT" | `ops/roles/INIT.md` | 1, once per repo |
 | "You are the PLANNER" | `ops/roles/PLANNER.md` | 1 at a time |
 | "You are a BUILDER" | `ops/roles/BUILDER.md` | N in parallel |
 | "You are the INTEGRATOR" | `ops/roles/INTEGRATOR.md` | 1 at a time |
+| "You are the CONDUCTOR" | `ops/roles/CONDUCTOR.md` | 1 — runs the whole loop via role subagents |
 | "You are EVOLVE" | `ops/roles/EVOLVE.md` | 1, between sprints |
 
 - **`start` is the everyday kickoff** — nobody should have to type a role name to do the obvious thing. It means "take the next piece of work": Builder if there is work queued, Planner if there isn't (so `start` always does the right thing on an empty board, instead of erroring).
 - **Scope guard on `start`:** it fires only when the message *is* a start phrase. "start the dev server", "start with the login bug", "go fix the header" are ordinary requests, NOT kickoffs. If the message names an object, it is not a `start`.
 - No role given and `ops/CONVENTIONS.md` does NOT exist → INIT has never run here → you are INIT.
-- **Unprompted work request → PLANNER.** No role named, not a `start` phrase, but the message asks to *change the product* — add / build / create / implement / improve / redesign / refactor / fix / remove something in this repo → you are the **PLANNER**; groom it exactly as if they'd said "You are the PLANNER: <request>". This is what makes POLARIS feel native: describe what you want, and it plans it — no "which role?" detour. **Guard:** a question about existing code ("what/why/how does X work", "where is…"), an operational command ("start the dev server", "run the tests", "deploy"), or POLARIS meta ("update POLARIS", "status") is NOT a work request — handle it normally. The discriminant is intent to *change* the repo vs. intent to *understand or operate* it.
+- **Unprompted work request → CONDUCTOR (or PLANNER).** No role named, not a `start` phrase, but the message asks to *change the product* — add / build / create / implement / improve / redesign / refactor / fix / remove something in this repo → if your harness can spawn subagents you are the **CONDUCTOR** (interview → plan → build → integrate, one chat, roles delegated to subagents); otherwise you are the **PLANNER**, grooming it exactly as if they'd said "You are the PLANNER: <request>". This is what makes POLARIS feel native: describe what you want, and it plans it — no "which role?" detour. **Guard:** a question about existing code ("what/why/how does X work", "where is…"), an operational command ("start the dev server", "run the tests", "deploy"), or POLARIS meta ("update POLARIS", "status") is NOT a work request — handle it normally. The discriminant is intent to *change* the repo vs. intent to *understand or operate* it.
 - No role given, `ops/CONVENTIONS.md` exists, and it is genuinely unclear whether the message is a work request → ask in one line: "Which role: PLANNER, BUILDER, or INTEGRATOR?"
 - `ops/CONVENTIONS.md` is the ONLY "has INIT run?" test. An `ops/board/` left by an older installer proves nothing.
-- **NEVER act as two roles in one session — one exception: the bootstrap chain INIT → PLANNER**, which runs once per repo, before any Builder exists, on the base branch, and writes zero feature code. It exists so installing POLARIS leaves you with a planned board instead of homework. Every other session is single-role; a Builder is never also a Planner or an Integrator.
+- **NEVER act as two roles in one session — one exception: the bootstrap chain INIT → PLANNER**, which runs once per repo, before any Builder exists, on the base branch, and writes zero feature code. It exists so installing POLARIS leaves you with a planned board instead of homework. Every other session is single-role; a Builder is never also a Planner or an Integrator. The CONDUCTOR is not a second exception: it acts as NO role — it delegates each role to a fresh subagent, and roles still never mix within one context.
 
 ## THE ONE IDEA
 All coordination is front-loaded into the Planner. Every task gets a **disjoint set of files it may edit** (`files_owned`). No two claimable tasks ever share a file, so Builders run fully parallel with nothing to negotiate and merges are mechanical. The only runtime race — two Builders grabbing the same task — is broken by an atomic lock. Plan once, fan out. Do NOT rely on runtime self-organization.
@@ -71,7 +72,7 @@ A task's state is the folder its file sits in; moving it (via the script) is the
 2. **Ready gate.** A task enters `ready/` only if: ≤5 points, every `depends_on` is in `done/`, its contract exists, and its `files_owned` overlaps NOTHING in `ready/` or `active/`.
 3. **Contract before code.** Contract missing or ambiguous → `blocked/` with a note. NEVER invent an interface.
 4. **Green before `review/`.** Full test commands from CONVENTIONS green AND `polaris verify` green. Red work never leaves `active/`.
-5. **One task per session.** Finish or hand back before claiming another. Sessions are disposable; the board is the memory. (One *role* per session too — the sole exception is the one-time INIT → PLANNER bootstrap chain; see ROLE DISPATCH.)
+5. **One task per session.** Finish or hand back before claiming another. Sessions are disposable; the board is the memory. (One *role* per session too — the sole exception is the one-time INIT → PLANNER bootstrap chain; see ROLE DISPATCH. A CONDUCTOR session holds no role: each role runs in its own subagent.)
 6. **Board mutations go through `ops/polaris`** (they commit on the base branch in the primary checkout). Code commits go on `feat/<ID>` in your worktree. Never mix the two.
 7. **Claim = `polaris claim`.** Lock exists → task is taken → take the next one. Never edit a task you did not claim.
 8. **Scope = the task.** No drive-by refactors, no extra features, no new dependencies. Want more? One line in `ops/board/backlog/IDEAS.md` for the Planner.

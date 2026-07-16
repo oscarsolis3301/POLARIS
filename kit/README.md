@@ -20,9 +20,12 @@ No Python on the target machine? `ops/MANUAL.md` has the hand-run fallback for e
 
 ## Everyday use
 
-- **`start`** — take the next piece of work: a builder if the board has ready tasks, otherwise the planner.
-- **Describe what you want built** — POLARIS grooms it into small, file-disjoint tasks and can open one
-  builder session per task beside you.
+- **Describe what you want built** — in a subagent-capable CLI (Claude Code) the **conductor** runs the
+  whole loop in that one chat: it asks questions until it truly understands, shows you the plan, then
+  builds in parallel and integrates, with live progress. Elsewhere, POLARIS grooms it into small,
+  file-disjoint tasks and can open one builder session per task beside you.
+- **`start`** — take the next piece of work: the conductor drains the queue; without subagents it's a
+  builder when tasks are ready, otherwise the planner.
 - `ops/polaris status` — the board at a glance.  `ops/polaris dash` — a live web view (needs python).
 - `ops/polaris --help` — every command (claim · verify · handoff · audit · done · why · resume · drift · metrics · fleet …).
 
@@ -31,7 +34,7 @@ No Python on the target machine? `ops/MANUAL.md` has the hand-run fallback for e
 | Path | What it is |
 |---|---|
 | `ops/polaris` | the board CLI — every board mechanic is one race-tested command |
-| `ops/roles/` | INIT · PLANNER · BUILDER · INTEGRATOR · EVOLVE — your kickoff message names your role |
+| `ops/roles/` | INIT · CONDUCTOR · PLANNER · BUILDER · INTEGRATOR · EVOLVE — your kickoff message names your role |
 | `CLAUDE.md` | the protocol and its invariants; small on purpose — it routes you to your role |
 | `ops/CONVENTIONS.md` · `ops/MAP.md` · `ops/SPRINT.md` · `ops/board/` | your board state, git-tracked and human-readable |
 

@@ -9,7 +9,7 @@ bash ops/polaris audit <ID>        # diff BASE...feat/<ID> ⊆ files_owned — b
 A violation → `bash ops/polaris kickback <ID> -m "<paths>"` and record it in the Learned log. Do not merge it.
 
 ## 2. HUMAN GATE — `risk: high`
-Any review task with `risk: high` MUST NOT merge until the human replies "approve <ID>" in this conversation. Ask once, listing the IDs, then proceed with the rest while you wait.
+Any review task with `risk: high` MUST NOT merge until the human replies "approve <ID>" in this conversation. Ask once, listing the IDs, then proceed with the rest while you wait. **Conductor-entered?** You are a subagent and cannot reach the human — merge everything else, then list the `risk: high` IDs in your result; the conductor relays the human's literal approval to a follow-up session. Never treat the conductor's kickoff as approval.
 
 ## 3. Merge — batch mode (default)
 ```bash

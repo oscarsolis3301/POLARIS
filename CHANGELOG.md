@@ -4,6 +4,36 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.9.0 — 2026-07-16
+
+**One chat, the whole loop.** Until now every phase needed a fresh chat: plan, then open a window per
+builder, then another for integration. The new **CONDUCTOR** role runs the entire loop in the one
+conversation you already have — it interviews you until it truly understands, proves it with a brief,
+plans, builds in parallel, integrates, and reports — each phase a fresh subagent, so context never
+degrades and token discipline holds.
+
+- **The Conductor.** In a subagent-capable CLI (Claude Code), a work request or `start` now runs
+  interview → brief → plan gate → parallel builders → integration → report, hands-free after the one
+  plan approval. The conductor acts as NO role itself — every role runs in its own subagent with its
+  classic minimal context, so invariant 5 (one role per session) holds by construction. Live
+  plain-language one-liners as each lane lands; snags surface immediately (decisions go to you, red
+  work gets one fresh-builder retry, then parks in `blocked/`); `risk: high` still never merges
+  without your literal approval. Lanes capped by `autolaunch_max`. New `builders:` convention key
+  (`subagents` default · `panes` keeps the terminal-pane flow); CLIs without subagents fall back to
+  the classic dispatch automatically. `kit/ops/roles/CONDUCTOR.md` + dispatch in `kit/CLAUDE.md`,
+  `kit/.claude/skills/polaris/SKILL.md`, subagent notes in `BUILDER.md`/`INTEGRATOR.md`/`PLANNER.md`.
+- **Planning that proves it understood.** The Planner's interview is no longer capped at 2 rounds: it
+  lists every decision that would change the carving and asks until one more answer wouldn't change
+  it — zero questions for a concrete request, several rounds for "improve the UI/UX" — always as
+  concrete pick-one options in your chosen voice. Then a **brief gate**: "here's what I WILL change,
+  what I WON'T touch, and what DONE looks like" — confirmed by you before a single task exists. A
+  wrong brief costs one message; a wrong sprint costs every builder. `kit/ops/roles/PLANNER.md`.
+- **Windows panes actually open.** 5.8.0's `fleet --launch` resolved `claude` to the npm bash shim,
+  which Windows Terminal's process launcher cannot start — every pane died with `0x80070002 "file
+  not found"`. The launcher now resolves a real `claude.exe`/`claude.cmd` to its full (8.3, space-safe)
+  Windows path, falls back to a `bash -lc` wrapper for bash-only shims, and `--dry-run` prints the
+  exact resolved command. `kit/ops/polaris`.
+
 ## 5.8.0 — 2026-07-15
 
 **The gates hold, the loop closes.** This sprint makes POLARIS's core promise — many builders, zero
