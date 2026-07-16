@@ -22,10 +22,12 @@ CONV="$OPS/CONVENTIONS.md"
 VER="$OPS/VERSION"
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 
-cfg() { # cfg <key> <default>  — reads "key: value" from CONVENTIONS.md, strips " # comment"
+cfg() { # cfg <key> <default>  — reads "key: value" from CONVENTIONS.md, strips " # comment".
+  # A blank key with only a trailing comment ("lint:   # none") must read as EMPTY, not as the
+  # comment text — hence the leading s/^#.*$// (the space-anchored strip can't see it).
   local v=""
   [ -f "$CONV" ] && v="$(sed -n "s/^$1:[[:space:]]*//p" "$CONV" | head -1 \
-      | sed -e 's/[[:space:]]#.*$//' | tr -d '\r' | sed -e 's/[[:space:]]*$//')"
+      | sed -e 's/^#.*$//' -e 's/[[:space:]]#.*$//' | tr -d '\r' | sed -e 's/[[:space:]]*$//')"
   [ -n "$v" ] && printf '%s' "$v" || printf '%s' "$2"
 }
 BASE="$(cfg base main)"
@@ -443,10 +445,26 @@ cmd_handoff() {
   git -C "$PRIMARY" mv "$BOARD/active/$id.md" "$BOARD/review/$id.md"
   set_fm status review "$BOARD/review/$id.md"
   evt handoff "$id"
+  # Last lane landed? Count inside the mutex (post-mv, pre-commit) so the all-review event
+  # rides this same board commit. Without this notice, a fleet of one-task pane sessions
+  # ends and the board sits in review/ silently — nobody integrates.
+  local nact nrdy notice=""
+  nact="$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)"
+  nrdy="$(ls "$BOARD/ready" 2>/dev/null | grep -c '\.md$' || true)"
+  if [ "${nact:-0}" -eq 0 ] && [ "${nrdy:-0}" -eq 0 ]; then
+    evt all-review "$id" "last lane landed — board is all review"
+    notice="integrate"
+  elif [ "${nact:-0}" -eq 0 ]; then
+    notice="queue"
+  fi
   board_commit "chore(board): handoff $id"
   sync_board
   mutex_off; trap - EXIT
   say "$id → review/. Lock stays until the Integrator lands it. Session may close."
+  case "$notice" in
+    integrate) say "all lanes done — nothing left building. Integrate now: \"You are the INTEGRATOR. Land everything in ops/board/review/.\"";;
+    queue)     note "$nrdy ready task(s) still queued — say start (or: bash ops/polaris fleet $nrdy --launch) to build them";;
+  esac
 }
 
 cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
@@ -666,11 +684,12 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     echo z > src/illegal.txt; git add -A; git commit -qm bad
     "$SELF" verify T-1 >/dev/null 2>&1 && { echo "OWNERSHIP FAIL (should reject)"; exit 1; }
     git reset -q --hard HEAD~1
-    "$SELF" handoff T-1 >/dev/null
+    "$SELF" handoff T-1 > "$T/ho.out"
+    grep -q 'Integrate now' "$T/ho.out" || { echo "HANDOFF NOTICE FAIL (last lane must print the integrate hint)"; exit 1; }
     cd "$T/repo"; git merge -q --no-ff feat/T-1 -m merge
     "$SELF" done T-1 >/dev/null
     [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-1" ] && { echo "LOCK CLEANUP FAIL"; exit 1; }
-    for ev in claim handoff done; do
+    for ev in claim handoff all-review done; do
       grep -q "\"ev\":\"$ev\",\"id\":\"T-1\"" ops/board/EVENTS.ndjson || { echo "EVENTS FAIL: $ev missing"; exit 1; }
     done
     "$SELF" metrics | grep -q 'done total: 1' || { echo "METRICS FAIL"; exit 1; }
@@ -759,10 +778,18 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     printf 'version: 9.9.9\n' > ops/VERSION
     "$SELF" doctor 2>/dev/null | grep -q 'runs the POLARIS it ships' || { echo "SELFHOST SYNC FAIL"; exit 1; }
     rm -rf kit ops/VERSION
+    # --- v5.10: qa — one command, the whole picture. Green suite → rc 0 with per-check lines;
+    # a red test: must flip the exit code and name the check.
+    printf 'test: true\n' > ops/CONVENTIONS.md
+    "$SELF" qa > "$T/qa.out" || { cat "$T/qa.out"; echo "QA GREEN FAIL (healthy repo must rc 0)"; exit 1; }
+    grep -q 'test — green' "$T/qa.out" || { echo "QA LINE FAIL (per-check line missing)"; exit 1; }
+    printf 'test: false\n' > ops/CONVENTIONS.md
+    "$SELF" qa >/dev/null 2>&1 && { echo "QA RED FAIL (red suite must rc 1)"; exit 1; }
+    rm -f ops/CONVENTIONS.md
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
@@ -908,6 +935,46 @@ cmd_rules() { # list + health-check ops/RULES.tsv
 $(rules_lines)
 EOF
   [ "$bad" -eq 0 ] && say "$n rule(s), all healthy" || die "rules health check failed — fix ops/RULES.tsv"
+}
+
+cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS suite (test/lint/
+  # typecheck/build, uat if set), then drift --strict, then doctor's env check. Runs EVERY
+  # check even after a red — one pass paints the whole picture — and exits 1 if anything was
+  # red. The Conductor runs it after integration (a subagent's "green" is never taken on
+  # faith), the Integrator runs it before reporting, CI and humans run it whenever.
+  local red=0 ran=0 k c out
+  out="$(mktemp)"
+  for k in test lint typecheck build uat; do
+    c="$(cfg "$k" "")"
+    [ -z "$c" ] && continue
+    ran=$((ran+1))
+    if ( cd "$PRIMARY" && bash -c "$c" ) >"$out" 2>&1; then
+      say "$k — green"
+    else
+      printf '⛔ %s — RED: %s\n' "$k" "$c"
+      tail -15 "$out" | sed 's/^/     /'
+      red=1
+    fi
+  done
+  [ "$ran" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
+  # drift --strict exits the script on findings, so both sub-checks run in subshells.
+  if ( cmd_drift --strict ) >"$out" 2>&1; then
+    say "drift — board clean"
+  else
+    printf '⛔ drift — board hygiene findings:\n'
+    grep '^⚠' "$out" | sed 's/^/     /' || true
+    red=1
+  fi
+  if ( cmd_doctor ) >"$out" 2>&1; then
+    say "doctor — env OK"
+  else
+    printf '⛔ doctor — RED:\n'
+    tail -5 "$out" | sed 's/^/     /'
+    red=1
+  fi
+  rm -f "$out"
+  [ "$red" -eq 0 ] || die "qa: red — fix the ⛔ lines above before calling the work done"
+  say "qa: all green"
 }
 
 cmd_metrics() { # cycle time + throughput + kickbacks from EVENTS.ndjson — pure awk
@@ -1490,6 +1557,9 @@ polaris — POLARIS v4 board CLI (run from anywhere inside the repo)
   why <ID>                       why a task bounced/blocked: kickback + release notes from telemetry + body
   drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
+  qa                             is everything okay, in ONE shot: test/lint/typecheck/build/uat
+                                 from CONVENTIONS + drift --strict + doctor env check. Runs every
+                                 check even after a red; rc 1 if anything was red.
   dash [--port N]                live read-only board at http://127.0.0.1:7373 (needs python3)
   fleet <N> [--loop] [--launch] [--dry-run]
                                  print N Builder kickoffs; --launch opens a session per task in
@@ -1523,6 +1593,7 @@ case "${1:-}" in
   why)        shift; cmd_why "$@";;
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
   rules)      cmd_rules;;
+  qa)         cmd_qa;;
   _rules)     shift; cmd_rules_check "$@";;
   dash)       shift; update_check_maybe || true; cmd_dash "$@";;
   fleet)      shift; cmd_fleet "$@";;

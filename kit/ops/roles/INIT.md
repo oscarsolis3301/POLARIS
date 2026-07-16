@@ -22,17 +22,19 @@ From this, infer: stack + versions, module boundaries, entry points, where tests
 
 ## 2. Interview — DETECT FIRST, then ask only what the repo cannot answer
 
-**HARD CAP: 3 interactions.** Most of what INIT used to ask is written down in the repo already.
-Asking a human to recite their own `package.json` is not diligence, it is an interrogation, and it
-is why installing POLARIS felt like a chore. Derive everything derivable; ask the rest; move on.
+**HARD CAP: 3 interactions — and the default is 2.** Most of what INIT used to ask is written down
+in the repo already. Asking a human to recite their own `package.json` is not diligence, it is an
+interrogation, and it is why installing POLARIS felt like a chore. Derive everything derivable; ask
+the rest; move on.
 
-**Express lane — offer it.** After interaction 1 (voice), if the repo is greenfield or small, or the
-human signals they just want to get going ("just set it up", "use sensible defaults"), collapse to a
-SINGLE remaining ask — the goal (interaction 2) — and take defaults for everything else: `claim: local-lock`,
-`integration: batch`, danger zones = only what the survey flagged, `bootstrap:`/`generated:` derived from
-the lockfile and any tracked build output. State the assumed config in one line of the step-5 report so
-they can correct it later. Two hard exceptions: never skip the goal, and never silently default a danger
-zone the survey could not see — on anything touching safety, ask.
+**Express lane — the DEFAULT, not an offer.** Greenfield or small repo, or a survey that derived
+every command → setup is TWO interactions: voice, then the goal. Take defaults for everything else:
+`claim: local-lock`, `integration: batch`, danger zones = only what the survey flagged,
+`bootstrap:`/`generated:` derived from the lockfile and any tracked build output. State the assumed
+config in one line of the step-5 report so they can correct it later. Interaction 3 then fires ONLY
+for what genuinely cannot default: danger-zone candidates the survey saw but could not classify, or
+a test/build command it could not derive. Two hard exceptions, always: never skip the goal, and
+never silently default a danger zone the survey could not see — on anything touching safety, ask.
 
 Where your harness renders choices as clickable options (Claude Code: the `AskUserQuestion` tool),
 use it — it is faster and less intimidating than a wall of numbered markdown. Otherwise, a short
@@ -69,8 +71,12 @@ Anything you genuinely cannot find, leave blank and say so in 2c — do not inve
 It becomes the sprint goal AND the Planner's input in step 4. Take it in their words; do not make
 them phrase it as a ticket.
 
-**Interaction 3 — one batched call, ≤4 questions, IN THEIR VOICE.** Under `voice: standard` you
-MUST translate — never make a human choose between `paranoid` and `batch`:
+**Interaction 3 — only what could not default.** Express lane active (the default)? Skip this
+entirely, or ask ONLY question 4 when the survey left danger zones unclassified — questions 1–3
+fold into defaults plus one correction line in the step-5 report. The full batch below is for a
+repo that defied derivation or a human who asked for the long form. One batched call, ≤4 questions,
+IN THEIR VOICE — under `voice: standard` you MUST translate, never make a human choose between
+`paranoid` and `batch`:
 
 1. **Confirm what you found.** Show it compactly and let them correct it in one move:
    *"Tests: `pnpm test` · Build: `pnpm build` · Branch: `main`"* → **Looks right** | **Let me fix those**
@@ -107,6 +113,9 @@ builders: subagents         # subagents (a work request runs the whole loop in o
                             # build, integrate — each role a fresh subagent; needs a harness with a subagent
                             # tool, e.g. Claude Code) | panes (conductor stops after planning; Builders run
                             # in terminal sessions per autolaunch:). No subagent tool → behaves as panes.
+drain: queue                # queue (a conductor run also finishes tasks already waiting in ready/ before
+                            # it signs off — the plan gate discloses it) | plan (stop after the approved
+                            # plan's own tasks). Default: queue.
 stale_hours: 4              # sweep warns on active locks older than this
 uat: <cmd or omit>          # optional end-to-end/UAT command — Integrator runs it ONCE on the integrate branch
 notify: <cmd or omit>       # optional: runs in background per board event with POLARIS_EV/ID/NOTE env vars

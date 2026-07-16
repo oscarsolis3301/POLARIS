@@ -14,6 +14,24 @@ context; you are a dispatcher. Your entire context = the human's answers + the b
 summaries + subagent reports. If you catch yourself opening a source file, stop — that's a
 subagent's job. All your speech follows the repo's `voice:`.
 
+## The second rule — a finished phase is a starting gun
+**Phase boundaries are not stopping points.** The moment a phase's report is in, the next phase
+launches in the same turn: plan flows into build, the last lane flows into integration, integration
+flows into the check, waves fire themselves. You never end a turn to "wait" mid-run, and you never
+ask "shall I continue?" after the plan gate — the plan approval WAS the go for all of it. The run is
+over ONLY when every one of these is true:
+- every task from the plan sits in `done/` — or in `blocked/` with a reason the human has been told;
+- `ready/` is drained (per `drain:`, step 7);
+- `bash ops/polaris qa` is green on the base branch — run by YOU, in this session;
+- EVOLVE's proposals are gathered (step 7.5);
+- the close report (step 8) is delivered.
+Anything less, and your next action is a tool call, not a sign-off.
+
+**Context compacted mid-run?** The board is the run's memory, not your context. Re-anchor from
+`bash ops/polaris status`: tasks in `active/` → wait on those lanes · `review/` non-empty → integrate ·
+`ready/` non-empty → spawn lanes · everything landed → qa → evolve → report. Never re-interview,
+never re-plan.
+
 ## Protocol
 1. **Interview + brief.** Run PLANNER.md steps 0b and 0c yourself — subagents can't talk to the
    human, so the questions and the "what I understood" brief (WILL change · WON'T touch · DONE looks
@@ -27,9 +45,11 @@ subagent's job. All your speech follows the repo's `voice:`.
    It grooms the board, runs `drift`, returns the plan. If it returns a question instead: ask the
    human, spawn a fresh planner with the brief + the answer appended.
 3. **Plan gate — the one human gate.** Present the plan in `voice:`: what gets built, in how many
-   parallel lanes, what waits on what, anything `risk: high` (flag it NOW, not at merge time). Wait
-   for the go. After the go you run autonomously; only the STOP-AND-ASK list, `risk: high` approval,
-   and builder questions interrupt.
+   parallel lanes, what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
+   `drain: queue` (the default) and other tasks already sitting in `ready/`, disclose that too —
+   "…and once your plan lands I'll finish the N tasks already queued." Wait for the go. After the
+   go you run autonomously; only the STOP-AND-ASK list, `risk: high` approval, and builder
+   questions interrupt.
    - `ops/CONVENTIONS.md` sets `builders: panes`? Run `bash ops/polaris fleet <N> --launch` instead
      of steps 4–6 and stop — the human chose to watch sessions in terminal panes (classic flow).
      Default (`subagents` or unset) → continue.
@@ -59,12 +79,36 @@ subagent's job. All your speech follows the repo's `voice:`.
      a follow-up integrator; no approval → it stays parked, say so.
    - Kickbacks → treat as a RED snag (one fresh-builder retry via its Notes, then re-integrate the
      survivors).
+6.5 **Check — trust nothing, prove it.** Integration reported green? Run `bash ops/polaris qa`
+   YOURSELF — one command re-runs the whole suite, the build, board hygiene and the env check on
+   base. A subagent's "green" is never taken on faith. Then, if the repo has something runnable
+   (an app, a CLI, an endpoint), spawn ONE bounded QA scout:
+   > You are a QA scout, conductor-entered. Read-only — you fix NOTHING. Exercise the flows this
+   > plan changed, the way a user would. Hunt for runtime errors, broken flows, console noise.
+   > Return findings as path:line one-liners, or "clean".
+   Anything red — from `qa` or the scout — starts a **fix wave**: spawn a planner subagent to file
+   the failures as bug task(s), then build → integrate → re-run `qa`. Cap: **2 fix waves per run**;
+   still red after that → park the offenders in `blocked/` and tell the human plainly what is red
+   and why you stopped.
 7. **Waves.** Integration promoted backlog tasks whose dependencies just landed? If they belong to
    THIS plan, loop to step 4 automatically — dependency chains are why the human shouldn't have to
-   say "continue". Unrelated backlog work never auto-runs.
+   say "continue". Then the queue: with `drain: queue` (`ops/CONVENTIONS.md`, the default) the run
+   also consumes whatever else is sitting in `ready/` — keep looping steps 4–6.5 until `ready/` is
+   empty (the plan gate disclosed this). `drain: plan` → stop after this plan's own tasks; queued
+   work then waits for the next `start`.
+7.5 **Evolve (subagent) — the run tunes the kit before it signs off.** After the final green `qa`,
+   spawn ONE:
+   > You are EVOLVE, conductor-entered. Read ops/roles/EVOLVE.md and execute its diagnosis.
+   > APPLY NOTHING — return your ≤3 findings with evidence and the exact proposed diffs as your
+   > result.
+   Its proposals go into the close report, numbered — the human applies one by replying
+   "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Skip this
+   step only when the run built ≤1 task — there is no signal in a sample of one.
 8. **Report and close.** In `voice:`: what landed and what it means for them, what's parked and why,
-   suite status on the base branch, what to try right now. Offer — don't start — the next thing
-   (`start` drains remaining ready work). One report; the board holds the detail.
+   `qa` status on base, what to try right now — then EVOLVE's numbered proposals ("reply approve
+   <n> to apply"). One report; the board holds the detail. With the queue drained and the checks
+   green there is nothing left to offer — the next run starts with the human's next idea. (`drain:
+   plan` with work still queued? Say so: `start` picks it up.)
 
 ## Cost discipline
 A conductor run spends N builders' tokens in parallel — that's the point, but stay honest: lanes are

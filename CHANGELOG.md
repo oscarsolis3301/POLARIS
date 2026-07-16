@@ -4,6 +4,45 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.10.0 — 2026-07-16
+
+**The loop closes itself.** 5.9.0 promised hands-free after the one plan approval; real runs
+still stalled at phase boundaries, ended without proof the work was green, and left queued work
+and self-tuning for the human to come back for. Now a conductor run has a mechanical finish
+line — and setup got a question shorter.
+
+- **`polaris qa` — "is everything okay?" in one shot.** Runs the full CONVENTIONS suite
+  (test/lint/typecheck/build, `uat:` if set), then `drift --strict`, then doctor's env check —
+  every check even after a red, one line each, rc 1 if anything was red. The Integrator runs it
+  before reporting; the Conductor runs it ITSELF after integration — a subagent's "green" is
+  never taken on faith. Selftest gains green/red qa drills. Building it surfaced a latent config
+  bug, also fixed: a blank CONVENTIONS key with a trailing comment (`lint:  # none`) used to read
+  as the comment text — qa would have run it as a no-op and called it green. `kit/ops/polaris`,
+  `kit/ops/roles/INTEGRATOR.md`, `kit/ops/MANUAL.md`.
+- **Phase boundaries are not stopping points.** The conductor's contract now says it as a rule: a
+  finished phase is a starting gun — the next phase launches in the same turn, and the run is over
+  only when every planned task is done or parked-with-reason, the queue is drained, `qa` is green
+  on base, EVOLVE's proposals are in, and the close report is delivered. Plus a
+  compaction-recovery recipe: the board is the run's memory — re-anchor from `polaris status`,
+  never re-interview. `kit/ops/roles/CONDUCTOR.md`.
+- **The run checks its own work — and fixes it.** New Check phase after integration: `qa` plus one
+  read-only QA scout that exercises the changed flows hunting for runtime errors. Anything red
+  starts a fix wave (a planner files the bugs, builders fix, integrate, re-check), capped at two
+  per run, then parks the offenders and says so plainly. `kit/ops/roles/CONDUCTOR.md`.
+- **The queue drains itself.** New `drain:` convention (default `queue`): after the plan's own
+  tasks land, the run keeps going until `ready/` is empty — disclosed at the plan gate, never a
+  surprise. `drain: plan` restores stop-after-plan. `kit/ops/roles/CONDUCTOR.md`,
+  `kit/ops/roles/INIT.md`.
+- **The run tunes the kit before signing off.** After the final green `qa`, an EVOLVE subagent
+  diagnoses the sprint's data; its ≤3 evidence-backed proposals land numbered in the close report —
+  apply one with "approve <n>"; nothing ever applies itself. `kit/ops/roles/CONDUCTOR.md`.
+- **Terminal panes stop dying silently.** When the last builder hands off and nothing is left to
+  build, `polaris handoff` says so and prints the integrator kickoff (plus an `all-review` event
+  for `notify:`); with work still queued it says how to start it. `kit/ops/polaris`.
+- **Setup is two questions.** INIT's express lane is now the default, not an offer: voice, then
+  the goal — the config-confirm round fires only for what genuinely cannot default (an
+  unclassifiable danger zone, an underivable command). `kit/ops/roles/INIT.md`.
+
 ## 5.9.3 — 2026-07-16
 
 **Setup starts itself, whichever door you came through.** A real "update POLARIS" on a
