@@ -4,6 +4,26 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.9.3 — 2026-07-16
+
+**Setup starts itself, whichever door you came through.** A real "update POLARIS" on a
+never-configured repo showed an agent quoting the run-INIT epilogue and still deferring it as "a
+separate step from the update you asked for". Every install- or update-shaped interaction on an
+unconfigured repo (no `ops/CONVENTIONS.md`) now ends by RUNNING setup in the same chat, not by
+suggesting it.
+
+- **The epilogue closes the loophole**: "this holds whatever the human asked for — install, update,
+  or reinstall: an unconfigured POLARIS is not delivered. Running setup now IS the request."
+  `kit/ops/install.sh`.
+- **`polaris update` finishes the job.** On an unconfigured repo it re-prints the run-INIT epilogue
+  as the LAST thing on stdout (the closing "updated X → Y" lines used to bury it), and its
+  dirty-tree refusal now prescribes the sanctioned path — re-run the cached installer; there is no
+  board to protect — instead of leaving agents to improvise. `kit/ops/polaris`.
+- **The skill's Update section gets the same terminal gate as installs**: after any update, or a
+  refused one, `ops/CONVENTIONS.md` missing → § After the install, now, this session. The
+  "already installed" routing row gains the same check. `kit/.claude/skills/polaris-install/SKILL.md`,
+  one-line promise in `kit/ops/PROMPTS.md`.
+
 ## 5.9.2 — 2026-07-16
 
 **The epilogue learns the house rules.** 5.9.1's run-INIT epilogue quoted the retired kickoff

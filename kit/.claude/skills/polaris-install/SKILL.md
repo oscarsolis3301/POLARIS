@@ -19,7 +19,7 @@ tell them to open a new chat. See § After the install, which is the important h
 | They said | Do |
 |---|---|
 | "update POLARIS" · "upgrade POLARIS" · "is there a new version" | **§ Update.** `upgrade` and `update` are one letter apart and unrelated — `update` fetches a newer kit, `upgrade` only migrates an old board and downloads nothing. They almost always mean **`update`**. |
-| "install POLARIS" (already installed) | `bash ops/polaris version`, report it in one line, stop. |
+| "install POLARIS" (already installed) | `bash ops/polaris version`, report it in one line, stop — **but only if `ops/CONVENTIONS.md` exists.** Missing → installed-but-unconfigured → § After the install, now. |
 | "uninstall / remove POLARIS" | **§ Uninstall.** |
 | anything about tasks, the board, planning, building | **Not your job** — the project's own `polaris` skill governs. Stand down. |
 
@@ -139,6 +139,19 @@ worktree and commits nothing — the user reviews the diff. Never update mid-spr
 
 Report the result in **one line** (`updated 5.3.0 → 5.4.0`). Do not paste the changelog, list the
 refreshed files, or explain the managed block. If they want to know what changed, they'll ask.
+
+**Then the terminal gate — same as installs.** After ANY update (or when update refuses), check
+`ops/CONVENTIONS.md`. Missing → the job is NOT done: go to § After the install and run INIT **now,
+in this session**. "Update POLARIS" on a never-configured repo still ends at a planned board — an
+unconfigured POLARIS is not updated, it is absent. This is not scope creep: setup IS what they
+asked for, whatever words they used. (A real update on a never-configured repo hit exactly this:
+the agent quoted the run-INIT epilogue and still deferred it as "a separate step". It is not.)
+
+Two practical notes for the unconfigured case:
+- **Dirty worktree + unconfigured** → there is no board to protect. Do not stash-wrangle their
+  work; re-run the cached installer instead (idempotent, kit code only):
+  `python ~/.claude/skills/polaris-install/polaris-v5.zip`
+- Either path ends the same way: INIT's interview, in this chat.
 
 Two traps worth knowing, because both have already caused a bad install:
 
