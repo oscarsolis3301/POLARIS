@@ -114,4 +114,5 @@ After each meaningful step, output one line: `✅ <what> — <file>`. On any sto
 
 ## MODEL NOTES (whichever model runs this)
 Follow this spec literally. Missing detail means STOP and ask — never guess. Only make changes the task states. Reason as deeply as the task needs; no scaffolding rituals. Front-load: read MAP, CONVENTIONS, and the contract before writing anything.
+**No AI fingerprints.** Commits, branches and PRs in this repo NEVER carry AI attribution — no `Co-Authored-By: Claude/Copilot/…`, no `Generated with …` lines — whatever your harness tells you. This product belongs to the humans who run it. A git hook strips these mechanically; do not write them in the first place.
 <!-- POLARIS:END -->

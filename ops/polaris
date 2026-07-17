@@ -563,8 +563,23 @@ EOF
   local wt; wt="$(wt_path "$id")"
   [ -d "$wt" ] && git -C "$PRIMARY" worktree remove --force "$wt" 2>/dev/null || true
   git -C "$PRIMARY" branch -q -D "feat/$id" 2>/dev/null || true
+  # handoff pushed feat/<ID> to origin; a landed task must not leave a dead branch there —
+  # that is how a sprint turns into a wall of stale branches on the host. Delete only when
+  # the REMOTE tip is provably in $BASE; a diverged tip is left for sweep to flag, never lost.
+  local remote_note=""
+  if has_remote; then
+    local rsha; rsha="$(git -C "$PRIMARY" ls-remote origin "refs/heads/feat/$id" 2>/dev/null | cut -f1)"
+    if [ -n "$rsha" ]; then
+      if git -C "$PRIMARY" cat-file -e "$rsha" 2>/dev/null \
+         && git -C "$PRIMARY" merge-base --is-ancestor "$rsha" "$BASE" 2>/dev/null; then
+        git -C "$PRIMARY" push -q origin ":refs/heads/feat/$id" 2>/dev/null && remote_note=" (local+remote)" || true
+      else
+        note "⚠ origin/feat/$id tip is not in $BASE — left in place; inspect: git fetch origin feat/$id && git log $BASE..FETCH_HEAD"
+      fi
+    fi
+  fi
   lock_drop "$id"; [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$id"
-  say "$id → done/ · lock, worktree, branch cleaned$( [ $applied -eq 1 ] && echo ' · map_delta applied')"
+  say "$id → done/ · lock, worktree, branch$remote_note cleaned$( [ $applied -eq 1 ] && echo ' · map_delta applied')"
 }
 
 cmd_status() {
@@ -597,7 +612,7 @@ cmd_status() {
   done
 }
 
-cmd_sweep() { # report orphans + stale; --fix removes only true orphans (lock w/o active task)
+cmd_sweep() { # report orphans + stale + remote strays; --fix removes true orphans and merged strays
   local fix="${1:-}" d id found=0
   for d in "$LOCKS"/*/; do
     [ -e "$d" ] || break
@@ -610,7 +625,29 @@ cmd_sweep() { # report orphans + stale; --fix removes only true orphans (lock w/
         "$id" "$(lock_age "$id")" "$STALE_H" "$id" "$id"
     fi
   done
-  if [ $found -eq 0 ]; then say "no orphan or stale locks"; fi
+  # remote hygiene: a landed task should have taken its feat/<ID> branch with it (done does this
+  # since 5.11). This pass catches strays from before — or from any path that skipped `done`.
+  # Only branches whose task is in done/ are touched; active/review branches are live work.
+  if has_remote; then
+    local rline rsha rref rid
+    while IFS= read -r rline; do
+      [ -n "$rline" ] || continue
+      rsha="${rline%%$'\t'*}"; rref="${rline#*$'\t'}"
+      case "$rref" in refs/heads/feat/*) rid="${rref#refs/heads/feat/}";; *) continue;; esac
+      [ -f "$BOARD/done/$rid.md" ] || continue
+      if git -C "$PRIMARY" cat-file -e "$rsha" 2>/dev/null \
+         && git -C "$PRIMARY" merge-base --is-ancestor "$rsha" "$BASE" 2>/dev/null; then
+        found=1; printf '⚠ REMOTE stray: feat/%s — task done, branch fully merged, still on origin\n' "$rid"
+        [ "$fix" = "--fix" ] && { git -C "$PRIMARY" push -q origin ":refs/heads/feat/$rid" && note "deleted"; }
+      else
+        found=1; printf '⚠ REMOTE diverged: feat/%s — task done but the remote tip is NOT in %s. Inspect: git fetch origin feat/%s && git log %s..FETCH_HEAD (never auto-deleted)\n' \
+          "$rid" "$BASE" "$rid" "$BASE"
+      fi
+    done <<EOF
+$(git -C "$PRIMARY" ls-remote origin 'refs/heads/feat/*' 2>/dev/null)
+EOF
+  fi
+  if [ $found -eq 0 ]; then say "no orphan or stale locks, no remote strays"; fi
 }
 
 cmd_doctor() {
@@ -658,6 +695,23 @@ cmd_doctor() {
     head="$(git -C "$PRIMARY" rev-parse --short HEAD 2>/dev/null || true)"
     [ -n "$zsha" ] && [ "$zsha" != "$head" ] \
       && note "⚠ polaris-v5.zip is STALE (built at $zsha, HEAD is $head) — rebuild: python ops/pack.py"
+  fi
+  # commit-msg hook: the no-AI-fingerprints guarantee (ops/hooks/commit-msg). Self-heal here
+  # because clones never carry .git/hooks — without this, every fresh clone silently loses it.
+  if [ -f "$OPS/hooks/commit-msg" ]; then
+    if [ -n "$(git -C "$PRIMARY" config --get core.hooksPath 2>/dev/null || true)" ]; then
+      note "⚠ core.hooksPath is set — wire ops/hooks/commit-msg into your hooks dir by hand (it strips AI attribution from commits)"
+    else
+      local hk="$GCD/hooks/commit-msg"
+      if [ ! -f "$hk" ]; then
+        mkdir -p "$GCD/hooks"; cp "$OPS/hooks/commit-msg" "$hk"; chmod +x "$hk" 2>/dev/null || true
+        say "commit-msg hook installed — AI attribution is stripped from every commit"
+      elif grep -q 'POLARIS commit-msg' "$hk" 2>/dev/null; then
+        cp "$OPS/hooks/commit-msg" "$hk"; chmod +x "$hk" 2>/dev/null || true
+      else
+        note "⚠ a non-POLARIS commit-msg hook is installed — chain ops/hooks/commit-msg into it by hand"
+      fi
+    fi
   fi
   say "doctor: OK"
   if [ "${1:-}" = "--selftest" ]; then selftest; fi
@@ -786,10 +840,39 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     printf 'test: false\n' > ops/CONVENTIONS.md
     "$SELF" qa >/dev/null 2>&1 && { echo "QA RED FAIL (red suite must rc 1)"; exit 1; }
     rm -f ops/CONVENTIONS.md
+    # --- v5.11: no AI fingerprints — commit-msg hook strips provider attribution, keeps the message
+    local hooksrc; hooksrc="$(dirname "$SELF")/hooks/commit-msg"
+    if [ -f "$hooksrc" ]; then
+      cp "$hooksrc" "$(git rev-parse --git-common-dir)/hooks/commit-msg"
+      chmod +x "$(git rev-parse --git-common-dir)/hooks/commit-msg" 2>/dev/null || true
+      echo drill > src/a.txt; git add -A
+      git commit -qm 'feat: clean product
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+🤖 Generated with [Claude Code](https://claude.com/claude-code)'
+      git log -1 --format=%B | grep -qiE 'co-authored-by|generated with' && { echo "ATTRIBUTION STRIP FAIL"; exit 1; }
+      git log -1 --format=%B | grep -q 'feat: clean product' || { echo "ATTRIBUTION KEEP FAIL (subject must survive)"; exit 1; }
+    fi
+    # --- v5.11: remote hygiene — done deletes the pushed feat branch; sweep --fix removes strays
+    git init -q --bare "$T/origin.git"
+    git remote add origin "$T/origin.git"
+    git push -qu origin main
+    printf -- '---\nid: T-C\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/c.txt\nverify: []\n---\n' > ops/board/ready/T-C.md
+    git add -A; git commit -qm tc
+    "$SELF" claim T-C >/dev/null
+    ( cd .polaris/wt/T-C && echo c > src/c.txt && git add -A && git commit -qm ok && "$SELF" handoff T-C >/dev/null )
+    git ls-remote --exit-code origin refs/heads/feat/T-C >/dev/null || { echo "REMOTE PUSH FAIL (handoff must push feat branch)"; exit 1; }
+    git merge -q --no-ff feat/T-C -m merge
+    "$SELF" done T-C >/dev/null
+    git ls-remote --exit-code origin refs/heads/feat/T-C >/dev/null 2>&1 && { echo "REMOTE CLEANUP FAIL (done must delete the origin branch)"; exit 1; }
+    git push -q origin main:refs/heads/feat/T-C     # resurrect a merged stray, as a pre-5.11 board would have left it
+    "$SELF" sweep | grep -q 'REMOTE stray: feat/T-C' || { echo "SWEEP STRAY FAIL"; exit 1; }
+    "$SELF" sweep --fix >/dev/null
+    git ls-remote --exit-code origin refs/heads/feat/T-C >/dev/null 2>&1 && { echo "SWEEP FIX FAIL (merged stray must be deleted)"; exit 1; }
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?

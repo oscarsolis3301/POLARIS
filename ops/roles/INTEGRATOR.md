@@ -30,7 +30,8 @@ git merge --no-ff feat/<ID> -m "merge <ID>"        # repeat per task
 git checkout <base> && git merge integrate/<date> && git push   # plain merge; board commits may have landed meanwhile — expected
 bash ops/polaris run-verify <ID>     # per merged task, on <base>: acceptance stays true post-merge
 bash ops/polaris done <ID>           # review→done · applies map_delta to MAP.md · releases lock ·
-                                     # removes worktree + feat branch · refuses if not actually merged
+                                     # removes worktree + feat branch (local AND origin, so no stale
+                                     # branch pile-up on the host) · refuses if not actually merged
 git branch -d integrate/<date>
 bash ops/polaris qa                  # the whole gate in one shot, on <base>: suite + build + board
                                      # hygiene + env. Red here = the sprint is NOT done; report it red.
