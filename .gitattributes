@@ -8,8 +8,10 @@
 * text=auto
 kit/ops/polaris text eol=lf
 kit/ops/VERSION text eol=lf
+kit/ops/hooks/commit-msg text eol=lf
 ops/polaris text eol=lf
 ops/VERSION text eol=lf
+ops/hooks/commit-msg text eol=lf
 *.sh text eol=lf
 *.py text eol=lf
 *.tsv text eol=lf

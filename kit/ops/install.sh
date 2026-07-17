@@ -99,7 +99,7 @@ else
   done
   UPGRADE=0
 fi
-chmod +x "$TARGET/ops/polaris" "$TARGET/ops/hooks/ownership-guard.sh" "$TARGET/ops/install.sh" 2>/dev/null || true
+chmod +x "$TARGET/ops/polaris" "$TARGET/ops/hooks/ownership-guard.sh" "$TARGET/ops/hooks/commit-msg" "$TARGET/ops/install.sh" 2>/dev/null || true
 say "ops/ installed"
 
 # --- VERSION provenance ---------------------------------------------------------
@@ -194,12 +194,66 @@ else
   note "  add the hooks.PreToolUse entry from $KIT/.claude/settings.json"
 fi
 
+# --- attribution off: the product carries no AI fingerprints ---------------------
+# Fresh installs get these keys from the kit's settings.json copied above. This heals
+# EXISTING settings.json (every pre-5.11 install), where only the guard was ever merged:
+# without it, the harness instructs every session to end commits with a Co-Authored-By
+# trailer. Belt: ops/hooks/commit-msg strips whatever still slips through.
+if [ -f "$SJ" ] && ! grep -q '"includeCoAuthoredBy"' "$SJ"; then
+  if [ -n "$PY" ] && "$PY" - "$SJ" <<'EOF'
+import json, sys
+p = sys.argv[1]
+try:
+    s = json.load(open(p))
+except Exception:
+    sys.exit(1)                    # unreadable settings are never rewritten (same stance as bootstrap)
+if not isinstance(s, dict):
+    sys.exit(1)
+s.setdefault("includeCoAuthoredBy", False)
+s.setdefault("attribution", {"commit": "", "pr": ""})
+open(p, "w").write(json.dumps(s, indent=2) + "\n")
+EOF
+  then
+    say '.claude/settings.json: AI commit attribution disabled ("includeCoAuthoredBy": false)'
+  else
+    note "⚠ could not update .claude/settings.json — add by hand:"
+    note '  "includeCoAuthoredBy": false, "attribution": {"commit": "", "pr": ""}'
+  fi
+fi
+
+# --- git commit-msg hook: no AI fingerprints, mechanically ------------------------
+# Settings only stop harnesses that read them; this hook is the guarantee for the rest.
+# It lives in the repo's shared hooks dir, so every builder worktree runs it too.
+if git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1; then
+  if [ -n "$(git -C "$TARGET" config --get core.hooksPath || true)" ]; then
+    note "⚠ core.hooksPath is set — wire ops/hooks/commit-msg into your own hooks dir by hand"
+  else
+    HK="$(cd "$TARGET" && cd "$(git rev-parse --git-common-dir)" && pwd)/hooks/commit-msg"
+    mkdir -p "$(dirname "$HK")"
+    if [ ! -f "$HK" ]; then
+      cp "$KIT/ops/hooks/commit-msg" "$HK"; chmod +x "$HK" 2>/dev/null || true
+      say "git commit-msg hook installed — AI attribution is stripped from every commit"
+    elif grep -q "POLARIS commit-msg" "$HK"; then
+      cp "$KIT/ops/hooks/commit-msg" "$HK"; chmod +x "$HK" 2>/dev/null || true
+      say "git commit-msg hook refreshed"
+    else
+      note "⚠ a commit-msg hook already exists (not POLARIS's) — chain ops/hooks/commit-msg into it by hand"
+    fi
+  fi
+fi
+
 # --- .gitattributes: LF-pin scripts (autocrlf=true clones break CRLF bash) ------
 GA="$TARGET/.gitattributes"
 grep -q '^ops/polaris text eol=lf' "$GA" 2>/dev/null || {
   # ops/VERSION is parsed by sed in install.sh and ops/polaris — a CRLF clone would feed it \r.
   { echo 'ops/polaris text eol=lf'; echo 'ops/VERSION text eol=lf'; echo '*.sh text eol=lf'; } >> "$GA"
   say ".gitattributes: kit scripts pinned to LF"
+}
+# Own guard: pre-5.11 installs already carry the block above, so a new line inside it
+# would never reach them. commit-msg has no .sh extension — *.sh does not cover it.
+grep -q '^ops/hooks/commit-msg text eol=lf' "$GA" 2>/dev/null || {
+  echo 'ops/hooks/commit-msg text eol=lf' >> "$GA"
+  say ".gitattributes: ops/hooks/commit-msg pinned to LF"
 }
 
 # --- .gitignore -------------------------------------------------------------------

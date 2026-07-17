@@ -9,9 +9,10 @@
 Why this exists as Python and not `zip`:
   * Git Bash ships no `zip` binary, and PowerShell's Compress-Archive cannot store
     unix permissions at all.
-  * Three kit files are mode 100755 (ops/polaris, ops/install.sh,
-    ops/hooks/ownership-guard.sh). An archive that loses the exec bit delivers a
-    kit that is dead on arrival. zipfile can set it; nothing else available here can.
+  * Four kit files are mode 100755 (ops/polaris, ops/install.sh,
+    ops/hooks/ownership-guard.sh, ops/hooks/commit-msg). An archive that loses the
+    exec bit delivers a kit that is dead on arrival. zipfile can set it; nothing
+    else available here can.
 
 WHAT SHIPS is decided by one fact: this file lives in kit/, and every path comes from
 `git ls-files -s` run with cwd=kit/ — which lists ONLY what is under kit/, already relative

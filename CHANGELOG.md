@@ -4,6 +4,37 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.11.0 — 2026-07-17
+
+**Your product carries no AI fingerprints.** Sprints were landing commits stamped
+`Co-Authored-By: Claude … <noreply@anthropic.com>` — written by the coding harness, not by the
+kit, so nothing in the kit prevented them. And every landed task left its `feat/<ID>` branch
+rotting on the remote. Both are now the kit's problem, mechanically.
+
+- **AI attribution is dead, three layers deep.** (1) The shipped `.claude/settings.json` turns
+  the harness behavior off at the source (`"includeCoAuthoredBy": false` + empty `attribution`),
+  and the installer heals EXISTING settings that pre-date the key. (2) A new git `commit-msg`
+  hook — installed into the repo's shared hooks dir, so every builder worktree runs it — strips
+  AI-provider attribution from every commit whatever wrote it: Claude/Anthropic, Copilot,
+  Cursor, Codex/ChatGPT, Gemini, Devin, aider, `[bot]` co-authors, `🤖 Generated with …` badges.
+  Human `Co-Authored-By` trailers pass untouched; the hook cleans, it never blocks. A foreign
+  commit-msg hook or `core.hooksPath` is respected with a chain-by-hand note, never clobbered.
+  `doctor` re-installs the hook on fresh clones (clones don't carry `.git/hooks`). (3) One line
+  in the protocol tells every model, on any harness: no attribution lines, ever.
+  `kit/.claude/settings.json`, `kit/ops/hooks/commit-msg`, `kit/ops/install.sh`,
+  `kit/ops/polaris`, `kit/CLAUDE.md`.
+- **`done` takes the remote branch with it.** `handoff` pushes `feat/<ID>`; `done` now deletes
+  it from origin too — but only after proving the remote tip is fully merged into base. A
+  diverged tip is left in place with a pointer, never lost. `kit/ops/polaris`,
+  `kit/ops/roles/INTEGRATOR.md`, `kit/ops/MANUAL.md`.
+- **`sweep` cleans up the past.** New remote-hygiene pass: any `origin/feat/<ID>` whose task is
+  in `done/` is flagged; `sweep --fix` deletes the fully-merged ones and refuses the diverged
+  ones (those it names, with the exact inspect command). Point it at a board that predates this
+  release and the branch wall comes down. `kit/ops/polaris`.
+- **Selftest proves both.** New drills: a commit stamped with AI trailers must come out clean
+  (subject intact), and a bare-origin fixture proves handoff pushes, `done` deletes, and
+  `sweep --fix` removes a resurrected stray. `kit/ops/polaris`.
+
 ## 5.10.0 — 2026-07-16
 
 **The loop closes itself.** 5.9.0 promised hands-free after the one plan approval; real runs
