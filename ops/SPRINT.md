@@ -14,6 +14,7 @@ kit/ops/polaris chain T-004 → T-013 → T-005 → T-006. Release 5.13.0.
 | 2026-07-18 | 15 (+T-013, wave 2, folded via MANUAL fallback, no tag) | 8 (T-017 ready · T-005, T-006 backlog) · cycle p50 0.5h n=14 · kickbacks 0 · build avg 0.1h / integrate avg 4.5h |
 | 2026-07-18 | 18 (+T-017, wave 3, folded via MANUAL fallback, no tag) | 5 (T-005 ready · T-006 backlog) · cycle p50 0.5h n=15 · kickbacks 0 · build avg 0.1h / integrate avg 4.2h |
 | 2026-07-18 | 21 (+T-005, wave 4, folded via MANUAL fallback, no tag) | 2 (T-006 ready) · cycle p50 0.4h n=16 · kickbacks 0 · build avg 0.1h / integrate avg 3.9h |
+| 2026-07-18 | 23 (+T-006, wave 5, folded via MANUAL fallback, no tag) — SPRINT COMPLETE | 0 · cycle p50 0.5h n=17 · kickbacks 0 · build avg 0.1h / integrate avg 3.7h · qa green on main |
 
 # SPRINT 2 — Clean history          capacity: 13   dates: 2026-07-18–
 
@@ -68,3 +69,6 @@ exercises but a Builder cannot.
 - Wave 2 correction: only `seal` is wave-blocked (tag exists), NOT `done` — MANUAL's fold recipe
   (plain `--no-ff` merge into base, no tag) puts the [ID] commit in base and `done` passes.
   Wave 3 (T-017) needs the same fallback; T-017's fixed seal owns tag semantics from 5.13.0.
+- Since T-006, doctor's stale-zip warning fires on every post-fold run in THIS repo (the zip embeds
+  its pack commit; any merge moves HEAD past it). Warning only — doctor/qa stay green; the rebuild
+  belongs to the release ritual, not integration. Don't read it as a red.
