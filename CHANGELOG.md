@@ -4,7 +4,7 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
-## 5.12.0 — Unreleased
+## 5.12.0 — 2026-07-18
 
 **One clean commit per landed task, one tagged commit per sealed sprint.** A landed task used to
 arrive on `<base>` as a `--no-ff` merge of its whole `feat/<ID>` branch — WIP commits, false
