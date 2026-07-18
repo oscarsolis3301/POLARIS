@@ -1114,13 +1114,16 @@ cmd_doctor() {
       note "⚠ self-hosting: kit/ops/VERSION is ${kv:-missing} but ops/ runs ${iv:-unknown} — that release has NOT been dogfooded. Run: python kit/ops/pack.py --dogfood"
     fi
   fi
-  # Kit repo only: the shipped zip going stale is exactly how the last one rotted.
-  if [ -f "$OPS/pack.py" ] && [ -f "$PRIMARY/polaris-v5.zip" ] && command -v unzip >/dev/null 2>&1; then
+  # Self-hosting repo only (kit/ops/pack.py is the tell — ops/contracts/self-hosting.md): the
+  # shipped zip going stale is exactly how the last one rotted. Was gated on $OPS/pack.py
+  # (ops/pack.py) — a pre-split path that no longer exists post kit/ split, so this warning could
+  # never fire. Gate on the same tell every other self-hosting check uses.
+  if [ -f "$PRIMARY/kit/ops/pack.py" ] && [ -f "$PRIMARY/polaris-v5.zip" ] && command -v unzip >/dev/null 2>&1; then
     local zsha head
     zsha="$(unzip -p "$PRIMARY/polaris-v5.zip" polaris-v5/ops/VERSION 2>/dev/null | sed -n 's/^commit: *//p' | head -1 || true)"
     head="$(git -C "$PRIMARY" rev-parse --short HEAD 2>/dev/null || true)"
     [ -n "$zsha" ] && [ "$zsha" != "$head" ] \
-      && note "⚠ polaris-v5.zip is STALE (built at $zsha, HEAD is $head) — rebuild: python ops/pack.py"
+      && note "⚠ polaris-v5.zip is STALE (built at $zsha, HEAD is $head) — rebuild: python kit/ops/pack.py"
   fi
   # commit-msg hook: the no-AI-fingerprints guarantee (ops/hooks/commit-msg). Self-heal here
   # because clones never carry .git/hooks — without this, every fresh clone silently loses it.
@@ -1468,6 +1471,36 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     rm -f ops/board/ready/T-G.md ops/board/ready/T-H.md
     git add -A; git commit -qm cleanup-gh
     # ================== end T-005 grant drills ==================
+    # ================== T-006 staleness drills (ops/contracts/self-hosting.md) ==================
+    # Fake `unzip`/`curl` on PATH make this deterministic and portable (no real network, no zip
+    # binary needed — Git Bash ships none — matching the fixture style already used for notify-gate).
+    mkdir -p "$T/bin"
+    printf '#!/bin/sh\necho "commit: bbbbbbb"\n' > "$T/bin/unzip"; chmod +x "$T/bin/unzip"
+    # 1) stale-zip check must gate on kit/ops/pack.py, not the dead pre-split ops/pack.py: with the
+    #    tell absent, a present (fake-stale) zip must stay silent.
+    : > polaris-v5.zip
+    PATH="$T/bin:$PATH" "$SELF" doctor 2>/dev/null | grep -q 'polaris-v5.zip is STALE' \
+      && { echo "STALEZIP GATE FAIL (no kit/ops/pack.py — must stay quiet)"; exit 1; }
+    # 2) tell present → warns, naming the correct rebuild command
+    mkdir -p kit/ops; : > kit/ops/pack.py
+    PATH="$T/bin:$PATH" "$SELF" doctor 2>/dev/null > "$T/stale.out"
+    grep -q 'polaris-v5.zip is STALE' "$T/stale.out" || { echo "STALEZIP FIRE FAIL (kit/ops/pack.py present + stale zip must warn)"; exit 1; }
+    grep -q 'rebuild: python kit/ops/pack.py' "$T/stale.out" || { echo "STALEZIP HINT FAIL (rebuild hint must name kit/ops/pack.py)"; exit 1; }
+    rm -f polaris-v5.zip kit/ops/pack.py; rmdir kit/ops kit 2>/dev/null || true
+    # 3) version-cache tell: explicit `version` must query the channel fresh even when a passive
+    #    command already spent today's once-a-day throttle (5.6.0 bug 2 — release-day false "up to
+    #    date"). A fake curl stands in for the channel.
+    printf '#!/bin/sh\necho "version: 8.8.8"\n' > "$T/bin/curl"; chmod +x "$T/bin/curl"
+    printf 'version: 1.0.0\nchannel: http://example.invalid/channel\n' > ops/VERSION
+    mkdir -p .polaris
+    printf 'checked: %s\nlatest: 1.0.0\n' "$(date +%Y-%m-%d)" > .polaris/update-cache
+    PATH="$T/bin:$PATH" "$SELF" doctor >/dev/null 2>&1
+    grep -q '^latest: 1.0.0$' .polaris/update-cache || { echo "THROTTLE FAIL (passive command must keep today's cached value)"; exit 1; }
+    PATH="$T/bin:$PATH" "$SELF" version > "$T/ver.out" 2>&1
+    grep -q '8.8.8' "$T/ver.out" || { echo "VERSION FRESH FAIL (explicit version must bypass the once-a-day throttle)"; exit 1; }
+    grep -q '^latest: 8.8.8$' .polaris/update-cache || { echo "VERSION CACHE FAIL (fresh check must update the cache)"; exit 1; }
+    rm -rf ops/VERSION .polaris/update-cache
+    # ================== end T-006 staleness drills ==================
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
@@ -1868,9 +1901,13 @@ semver_gt() { # semver_gt A B — true when A > B. awk, so no `sort -V` dependen
     exit 1 }'
 }
 
-update_check_maybe() { # notice engine. Throttles the NETWORK to once a day; prints the
-  # NOTICE on every run, so an available update cannot be missed. Fails open, always:
-  # no curl, no network, private/renamed repo, junk response → silent, exit 0.
+update_check_maybe() { # update_check_maybe [force] — notice engine. Throttles the NETWORK to
+  # once a day by default; pass "force" (explicit `version`) to bypass the throttle and query the
+  # channel THIS run — field report, 5.6.0 bug 2: `version` answered from a same-day cache written
+  # BEFORE that day's release and reported "up to date" 3 releases behind. Prints the NOTICE on
+  # every run, so an available update cannot be missed. Fails open, always: no curl, no network,
+  # private/renamed repo, junk response → silent fallback to the cached value, exit 0.
+  local force="${1:-}"
   local cur chan cache today prev latest
   cur="$(ver version 2>/dev/null || true)"; [ -n "$cur" ] || return 0
   chan="$(ver channel 2>/dev/null || true)"; [ -n "$chan" ] || return 0
@@ -1879,7 +1916,7 @@ update_check_maybe() { # notice engine. Throttles the NETWORK to once a day; pri
   today="$(date +%Y-%m-%d)"
   prev="$(ver latest "$cache" 2>/dev/null || true)"
 
-  if [ "$(ver checked "$cache" 2>/dev/null || true)" != "$today" ]; then
+  if [ "$force" = "force" ] || [ "$(ver checked "$cache" 2>/dev/null || true)" != "$today" ]; then
     latest=""
     command -v curl >/dev/null 2>&1 &&
       latest="$(curl -fsS --max-time 5 "$chan" 2>/dev/null | sed -n 's/^version: *//p' | head -1 | tr -d ' \r' || true)"
@@ -2303,7 +2340,7 @@ case "${1:-}" in
   dash)       shift; update_check_maybe || true; cmd_dash "$@";;
   fleet)      shift; cmd_fleet "$@";;
   upgrade)    cmd_upgrade;;
-  version)    update_check_maybe || true; cmd_version;;
+  version)    update_check_maybe force || true; cmd_version;;
   update)     shift; cmd_update "${1:-}";;
   uninstall)  shift; cmd_uninstall "$@";;
   _match)     shift; cmd_match "$@";;
