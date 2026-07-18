@@ -43,6 +43,13 @@ git branch -d integrate/<date>
 bash ops/polaris qa                  # the whole gate in one shot, on <base>: suite + build + board
                                      # hygiene + env. Red here = the sprint is NOT done; report it red.
 ```
+**Seal per wave.** A sprint may integrate in several waves — run land → suite → seal each time. The
+first seal of sprint `<n>` creates tag `sprint/<n>`; a later seal of the same sprint makes the same
+--no-ff merge and MOVES the tag onto it (output logs old → new; the tag pushes compare-and-swap).
+`sprint/<n>` always marks the sprint's latest sealed checkpoint — end of sprint = final checkpoint.
+Rolling back: `rollback sprint/<n>` reverts the LATEST wave only; earlier waves revert by SHA
+(`git revert -m 1 <sha>`). Reusing the integrate branch for a later wave? Keep it (skip the
+`git branch -d` above) and catch it up first: `git checkout integrate/<date> && git merge --ff-only <base>`.
 
 ## 5. Sweep and promote
 ```bash

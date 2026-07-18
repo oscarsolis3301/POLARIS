@@ -769,9 +769,12 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   note "goes red on the suite? unwind: git reset --hard HEAD~1   ·   bounce: polaris kickback $id -m \"<why>\""
 }
 
-cmd_seal() { # seal [<date>] — close the sprint: ONE --no-ff merge of integrate/<date> into $BASE,
-  # tagged sprint/<n>. Message = sprint header + a bullet per landed commit — the changelog entry
-  # `history` shows forever. A merge conflict aborts; a human resolves — never auto-resolved.
+cmd_seal() { # seal [<date>] — close an integration wave: ONE --no-ff merge of integrate/<date>
+  # into $BASE, tagged sprint/<n>. Message = sprint header + a bullet per landed commit — the
+  # changelog entry `history` shows forever. sprint/<n> always marks the sprint's LATEST sealed
+  # checkpoint (contract v2, multi-wave): the first seal of sprint n creates the tag, a later
+  # seal of the same n moves it forward. A merge conflict aborts; a human resolves — never
+  # auto-resolved.
   local date="${1:-}"; [ -n "$date" ] || date="$(date +%F)"
   in_primary || die "seal runs in the primary checkout — cd \"$PRIMARY\" first"
   git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
@@ -788,8 +791,14 @@ cmd_seal() { # seal [<date>] — close the sprint: ONE --no-ff merge of integrat
   [ -n "$n" ] || die "cannot read the sprint number — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header"
   goal="$(printf '%s' "${hdr#"$n"}" | sed -e 's/^[[:space:]]*//' -e 's/^—[[:space:]]*//' -e 's/^-[[:space:]]*//' \
       -e 's/[[:space:]][[:space:]].*$//' -e 's/[[:space:]]*capacity:.*$//' -e 's/[[:space:]]*$//')"
-  git rev-parse -q --verify "refs/tags/sprint/$n" >/dev/null \
-    && die "tag sprint/$n already exists — bump the ops/SPRINT.md header (new sprint, new number)"
+  # tag gate (contract v2): absent → first wave of sprint n. Present AND an ancestor of $BASE →
+  # a previous wave's checkpoint; the tag moves to this wave's merge below. Neither → the number
+  # was REUSED on unrelated history — refuse before anything mutates.
+  local oldtag
+  oldtag="$(git rev-parse -q --verify "refs/tags/sprint/$n" || true)"
+  if [ -n "$oldtag" ] && ! git merge-base --is-ancestor "$oldtag" "$BASE" 2>/dev/null; then
+    die "sprint/$n exists and is not in $BASE history — reused sprint number; bump the ops/SPRINT.md header"
+  fi
   local msg
   msg="Sprint $n — $goal
 
@@ -799,12 +808,31 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
     git merge --abort 2>/dev/null || true
     die "merge conflict sealing integrate/$date into $BASE — resolve by hand; seal never auto-resolves"
   fi
-  git tag "sprint/$n"
-  if has_remote; then
-    git push -q origin "$BASE" "refs/tags/sprint/$n" 2>/dev/null \
-      || note "⚠ push failed — push by hand: git push origin $BASE sprint/$n"
+  local old7="" new7=""
+  if [ -n "$oldtag" ]; then
+    old7="$(git rev-parse --short "$oldtag")"
+    git tag -f "sprint/$n" >/dev/null       # move the checkpoint to this wave's merge
+    new7="$(git rev-parse --short "refs/tags/sprint/$n")"
+  else
+    git tag "sprint/$n"
   fi
-  say "sprint $n sealed — integrate/$date merged into $BASE (--no-ff), tagged sprint/$n"
+  if has_remote; then
+    if [ -n "$oldtag" ]; then
+      # moved tag → compare-and-swap push, leased against the wave we know we're replacing:
+      # the ONLY forced ref update POLARIS ever makes.
+      git push -q origin "$BASE" 2>/dev/null \
+        && git push -q --force-with-lease="refs/tags/sprint/$n:$oldtag" origin "refs/tags/sprint/$n" 2>/dev/null \
+        || note "⚠ push failed — push by hand: git push origin $BASE && git push --force-with-lease=refs/tags/sprint/$n:$oldtag origin refs/tags/sprint/$n"
+    else
+      git push -q origin "$BASE" "refs/tags/sprint/$n" 2>/dev/null \
+        || note "⚠ push failed — push by hand: git push origin $BASE sprint/$n"
+    fi
+  fi
+  if [ -n "$oldtag" ]; then
+    say "sprint $n re-sealed — integrate/$date merged into $BASE (--no-ff); sprint/$n: $old7 → $new7"
+  else
+    say "sprint $n sealed — integrate/$date merged into $BASE (--no-ff), tagged sprint/$n"
+  fi
 }
 
 cmd_history() { # history [--tasks <n>] — read-only changelog view of $BASE: first-parent, board
@@ -815,7 +843,14 @@ cmd_history() { # history [--tasks <n>] — read-only changelog view of $BASE: f
     n="${2:?usage: polaris history --tasks <n>}"
     git -C "$PRIMARY" rev-parse -q --verify "refs/tags/sprint/$n" >/dev/null \
       || die "no tag sprint/$n — only sealed sprints have a task view (polaris history lists them)"
-    git -C "$PRIMARY" log --no-merges --date=short --format='%h %ad %s' "sprint/$n^1..sprint/$n" \
+    # multi-wave sprints (contract v2): the tag marks the LATEST wave's merge, so the range
+    # starts at the OLDEST first-parent "Sprint <n> — " merge — every wave's tasks show. A
+    # single-wave sprint finds its own merge → identical to the old sprint/<n>^1..sprint/<n>.
+    local start
+    start="$(git -C "$PRIMARY" log --first-parent --format='%H %s' "$BASE" 2>/dev/null \
+      | awk -v n="$n" 'BEGIN{p="Sprint " n " — "} index(substr($0,42),p)==1 {sha=$1} END{if (sha) print sha}')"
+    [ -n "$start" ] || start="$(git -C "$PRIMARY" rev-parse "refs/tags/sprint/$n")"
+    git -C "$PRIMARY" log --no-merges --date=short --format='%h %ad %s' "$start^1..sprint/$n" \
       | grep -Ev '^[0-9a-f]+ [0-9-]+ chore\(board\):' || true
     return 0
   fi
@@ -1127,6 +1162,38 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     # --- v5: points telemetry + per-point calibration
     grep -q '"ev":"claim","id":"T-1".*"pts":1' ops/board/EVENTS.ndjson || { echo "PTS EVT FAIL"; exit 1; }
     "$SELF" metrics | grep -q '1pt p50' || { echo "PTS BUCKET FAIL"; exit 1; }
+    # ================ v5.13 second-seal drill (clean-history v2) =================
+    # A sprint's SECOND integration wave: wave 2 lands on the same integrate branch (caught up
+    # to base first), seal runs again → same --no-ff merge, tag sprint/1 MOVES to the new merge
+    # (old → new logged), history --tasks 1 spans both waves, and the wave-2 task passes done
+    # via the rule-1 gate its seal just made true. (State here: main parked ON the sealed merge.)
+    w1tag="$(git rev-parse refs/tags/sprint/1)"
+    printf -- '---\nid: T-W\ntitle: wave two file\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/w.txt\nverify: []\n---\n' > ops/board/ready/T-W.md
+    git add -A; git commit -qm 'chore(board): tw'
+    "$SELF" claim T-W >/dev/null
+    ( cd .polaris/wt/T-W && echo w > src/w.txt && git add -A && git commit -qm ok && "$SELF" handoff T-W >/dev/null )
+    git checkout -q integrate/2026-01-01
+    git merge -q --ff-only main || { echo "SECOND-SEAL FF FAIL (integrate must catch up to base)"; exit 1; }
+    "$SELF" land T-W >/dev/null || { echo "SECOND-SEAL LAND FAIL (wave-2 land on the same integrate branch)"; exit 1; }
+    # reused sprint number: tag exists but is NOT an ancestor of base → die BEFORE the merge,
+    # nothing mutated (a dangling parentless commit stands in for foreign history)
+    mainpre="$(git rev-parse main)"
+    git tag -f sprint/1 "$(git commit-tree -m dangling "HEAD^{tree}" </dev/null)" >/dev/null
+    "$SELF" seal 2026-01-01 > "$T/seal-reuse.out" 2>&1 && { echo "REUSED SPRINT FAIL (non-ancestor tag must die)"; exit 1; }
+    grep -q 'reused sprint number' "$T/seal-reuse.out" || { echo "REUSED SPRINT MSG FAIL (die must name the reuse)"; exit 1; }
+    [ "$(git rev-parse main)" = "$mainpre" ] || { echo "REUSED SPRINT MUTATE FAIL (failed gate must mutate nothing)"; exit 1; }
+    git tag -f sprint/1 "$w1tag" >/dev/null
+    "$SELF" seal 2026-01-01 > "$T/seal2.out" || { echo "SECOND-SEAL FAIL (re-seal of the same sprint must pass)"; exit 1; }
+    w2tag="$(git rev-parse refs/tags/sprint/1)"
+    [ "$w2tag" != "$w1tag" ] || { echo "TAG MOVE FAIL (sprint/1 must leave the wave-1 merge)"; exit 1; }
+    [ "$w2tag" = "$(git rev-parse main)" ] || { echo "TAG MOVE FAIL (sprint/1 must equal the new base HEAD)"; exit 1; }
+    grep -q "sprint/1: $(git rev-parse --short "$w1tag") → $(git rev-parse --short "$w2tag")" "$T/seal2.out" \
+      || { echo "TAG MOVE LOG FAIL (re-seal must name the old → new move)"; exit 1; }
+    "$SELF" history --tasks 1 > "$T/hist2.out"
+    grep -q 'land a file \[T-1\]' "$T/hist2.out" || { echo "HISTORY WAVES FAIL (wave-1 task missing from --tasks)"; exit 1; }
+    grep -q 'wave two file \[T-W\]' "$T/hist2.out" || { echo "HISTORY WAVES FAIL (wave-2 task missing from --tasks)"; exit 1; }
+    "$SELF" done T-W >/dev/null || { echo "SECOND-SEAL DONE FAIL (wave-2 done must pass once its seal lands)"; exit 1; }
+    # ================== end v5.13 second-seal drill ==============================
     # --- v5: RULES engine — path deny beats ownership; content deny on payload and on diff
     printf 'src/a.txt\tpath\t-\tfrozen for the drill\n' >> ops/RULES.tsv
     "$SELF" _rules src/a.txt 2>/dev/null && { echo "RULES PATH FAIL (should deny)"; exit 1; }
@@ -1301,7 +1368,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
@@ -2067,12 +2134,13 @@ polaris — POLARIS v4 board CLI (run from anywhere inside the repo)
   task-commit-msg <task-file>    print the task's landed-commit message (pure; `land` consumes it)
   land <ID>                      Integrator, on integrate/<date>: audit + squash feat/<ID> into
                                  ONE rich commit ([<ID>] subject + Landed-from trailer; no board write)
-  seal [<date>]                  Integrator: close the sprint — merge integrate/<date> into base
-                                 (--no-ff, per-task bullets) + lightweight tag sprint/<n>
+  seal [<date>]                  Integrator: seal the wave — merge integrate/<date> into base
+                                 (--no-ff, per-task bullets) + lightweight tag sprint/<n>; a later
+                                 wave's seal MOVES the tag (sprint's latest sealed checkpoint)
   history [--tasks <n>]          changelog view of base (board noise hidden); --tasks <n> drills
-                                 into one sealed sprint's task commits
-  rollback <ID|sprint/<n>>       revert one landed task (or a whole sprint, -m 1) on base —
-                                 forward-only: never resets, never force-pushes
+                                 into one sealed sprint's task commits, across all its waves
+  rollback <ID|sprint/<n>>       revert one landed task (or the sprint's latest sealed wave, -m 1)
+                                 on base — forward-only: never resets, never force-pushes
   status | sweep [--fix] | doctor [--selftest]
   metrics                        cycle · throughput · kickbacks · build-vs-integrate split (EVENTS.ndjson)
   why <ID>                       why a task bounced/blocked: kickback + release/blocked notes from telemetry + body

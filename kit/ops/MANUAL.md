@@ -64,7 +64,7 @@ Land makes NO board write, NO evt, NO board commit — the board stays clean so 
 
 ## Seal (Integrator) — what `ops/polaris seal [<date>]` does by hand
 Primary checkout, working tree clean, default `<date>` = today. Folds a sprint's `integrate/<date>` into `<base>` as one tagged merge.
-Preconditions (else stop, nothing mutated): `integrate/<date>` exists · `<base>..integrate/<date>` has ≥1 non-`chore(board):` commit (else die "nothing to seal") · tag `sprint/<n>` does not already exist (else die "bump the SPRINT.md header").
+Preconditions (else stop, nothing mutated): `integrate/<date>` exists · `<base>..integrate/<date>` has ≥1 non-`chore(board):` commit (else die "nothing to seal") · tag `sprint/<n>` is absent OR points to an ancestor of `<base>` (an earlier wave's checkpoint — the tag moves after this merge); anything else is a reused sprint number (die "bump the SPRINT.md header").
 ```bash
 git checkout <base>
 git merge --no-ff "integrate/<date>" -m "Sprint <n> — <goal>
@@ -74,6 +74,13 @@ git tag sprint/<n>                       # lightweight, on the merge commit
 git push origin <base> "sprint/<n>"      # only if a remote exists
 ```
 `<n>` and `<goal>` parse from `ops/SPRINT.md`'s header line `# SPRINT <n> — <goal>` (goal ends at 2+ spaces or `capacity:`; `—` or `-` both accepted). Merge conflict → `git merge --abort` → die; a human resolves it, never auto-resolve.
+**Sealing the same sprint again (a later integration wave):** identical merge and message (bullets are naturally the new wave's commits — `<base>..integrate/<date>` excludes prior waves). Then MOVE the tag instead of creating it, and push it compare-and-swap — the only forced ref update POLARIS ever makes, and it is leased:
+```bash
+git tag -f "sprint/<n>"                  # onto the new merge; log the move (old → new SHA)
+git push origin <base>
+git push --force-with-lease=refs/tags/sprint/<n>:<old-sha> origin "refs/tags/sprint/<n>"
+```
+`sprint/<n>` always marks the sprint's latest sealed checkpoint — end of sprint = final checkpoint. `rollback sprint/<n>` reverts the LATEST wave; earlier waves revert by SHA: `git revert --no-edit -m 1 <sha>`.
 
 ## QA — "is everything okay?" by hand
 What `ops/polaris qa` does in one shot. From the repo root on `<base>`, run in order: the `test:` `lint:` `typecheck:` `build:` and `uat:` commands from `ops/CONVENTIONS.md` (skip blank keys), then the board-hygiene audit (the per-task ownership + RULES proof from Integrate above) and the env sanity checks. Run EVERY check even after one goes red — one pass paints the whole picture — then report red if anything was. The Integrator runs this before reporting; a Conductor runs it after integration and never takes a subagent's "green" on faith.
