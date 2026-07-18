@@ -68,3 +68,5 @@ not installed code — they are written normally, by the board scripts and by th
 - kit/ops/selftest-install.sh — local install drill (fresh · old-client · live-board · zip purity · uninstall). The `test:` for any install.sh change.  (T-001, 2026-07-15)
 
 - kit/ops/selftest-dashboard.sh — dashboard smoke drill (start · GET / and /state · kill); clears the MAP "Unverified" dashboard item.  (T-003, 2026-07-18)
+
+- kit/ops/polaris — clean-history commands (task-commit-msg · land · seal · history · rollback); a task lands as ONE rich squash commit, a sprint seals as ONE tagged summary merge  (T-007, 2026-07-18)
