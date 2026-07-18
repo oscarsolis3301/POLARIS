@@ -66,3 +66,5 @@ not installed code — they are written normally, by the board scripts and by th
 ## Deltas
 
 - kit/ops/selftest-install.sh — local install drill (fresh · old-client · live-board · zip purity · uninstall). The `test:` for any install.sh change.  (T-001, 2026-07-15)
+
+- kit/ops/selftest-dashboard.sh — dashboard smoke drill (start · GET / and /state · kill); clears the MAP "Unverified" dashboard item.  (T-003, 2026-07-18)
