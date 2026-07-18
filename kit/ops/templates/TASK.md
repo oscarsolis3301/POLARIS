@@ -2,6 +2,7 @@
 id: XXX-000
 title:
 type: feature            # feature | bug | chore | spike
+scope:                   # optional; conventional-commit scope for type(scope): title — Planner sets it
 epic:                    # optional grouping; epics are never claimed, only leaves
 points:                  # 1,2,3,5 claimable · 8,13 MUST be split
 value:                   # WSJF inputs, Fibonacci 1-13
@@ -22,6 +23,9 @@ verify:                  # shell commands, repo root, each <~10s; `polaris verif
   -                      # Integrator re-runs post-merge. No bare " #" inside a command — quote it.
 map_delta:               # optional, one line per structural change; `polaris done` appends to MAP.md
 ---
+## Why
+<!-- junior-dev-grade: plain enough a junior dev could land this unsupervised — what changes and why. Becomes the commit body verbatim at land. -->
+
 ## Acceptance criteria (binary — each becomes a test; put the runnable ones in verify:)
 - [ ]
 - [ ]
