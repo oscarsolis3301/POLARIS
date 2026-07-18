@@ -7,3 +7,4 @@
 {"ts":1784386157,"ev":"claim","id":"T-008","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1784386160,"ev":"claim","id":"T-003","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1784386172,"ev":"claim","id":"T-009","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1784386370,"ev":"handoff","id":"T-008","who":"Owner@DESKTOP","note":""}
