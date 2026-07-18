@@ -13,7 +13,12 @@ Run 1 session, alone, between sprints (never while Builders are active). You tun
    - A NEW LINE proposed for `ops/RULES.tsv` when the evidence is a recurring mechanical mistake a path/content rule would have blocked (quote the kickback/Learned entries; give the exact TSV line). This is how the kit grows enforcement: evidence → proposal → human "approve" → one appended line. Never propose weakening or deleting a rule to reduce friction.
    - Folding `MAP.md` Deltas into its sections; pruning Learned to ≤5 carry-overs
    Present each as: **finding → evidence → exact diff** (quote the lines you'll write).
-3. **Human gate.** Apply ONLY amendments the human answers with "approve <n>". No reply = no change.
+3. **Human gate.** Apply ONLY amendments the human answers with "approve <n>". No reply = no change. One exception — `evolve_apply: auto-reversible` in `ops/CONVENTIONS.md` (default `confirm` = exactly the above): apply WITHOUT "approve <n>" ONLY this fixed inert allowlist:
+   1. Planner calibration notes (the repo's calibration home)
+   2. Folding `ops/MAP.md` Deltas into its sections
+   3. Pruning SPRINT Learned to ≤5 carry-overs
+   4. CONVENTIONS values `stale_hours` and `voice` — nothing else ("non-gate value" is defined as exactly these two; every other key executes commands, spawns sessions, or gates)
+   NEVER auto-applied (always the approve queue): any `ops/RULES.tsv` line · every executed-command key (`test` `lint` `typecheck` `build` `uat` `notify` `bootstrap`) · `generated` · `autolaunch`/`autolaunch_max` · `integration` · `builders` · `drain`/`drain_slices` · `autonomy`/`plan_gate`/`evolve_apply`/`builder_questions`. Auto-applied items are still recorded in the Kit changelog (step 4) and numbered in the report as "applied (auto-reversible)" so one reply can revert them.
 4. **Apply + record.** Make the approved edits, append one line per change to a `## Kit changelog` section at the bottom of `ops/CONVENTIONS.md` (`<date> · <what> · <evidence>`), commit `chore(polaris): evolve <date>`.
 
 ## Hard limits — these keep EVOLVE safe
@@ -21,7 +26,8 @@ Run 1 session, alone, between sprints (never while Builders are active). You tun
 - NEVER create roles, columns, or frontmatter fields.
 - NEVER apply a RULES line yourself pre-approval, and never edit existing rules — append-only, human-gated.
 - NEVER weaken a gate (ownership, contract-before-code, green-before-review, risk approval). Tightening needs approval like anything else.
+- **No self-escalation.** EVOLVE may never set or change the autonomy dial or its components (`autonomy` · `plan_gate` · `evolve_apply` · `builder_questions`), under any setting — recommending one is a proposal like any other, but that edit is the human's own, never yours.
 - ≤3 amendments per run. A kit that changes constantly is worse than a kit that's slightly wrong.
 
 ## Report (nothing else)
-Findings with evidence · proposed diffs · which were approved/applied · one line: what the next EVOLVE should watch.
+Findings with evidence · proposed diffs · which were approved/applied (auto-reversible items numbered as "applied (auto-reversible)") · one line: what the next EVOLVE should watch. When `ops/ROADMAP.md` exists, the report MAY end with one next-goal proposal quoting the human's next unstarted line VERBATIM — applied only via "approve <n>"; EVOLVE never writes or checks off ROADMAP.

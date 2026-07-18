@@ -38,6 +38,10 @@ never re-plan.
    like · assumptions) happen here, in `voice:`. Scaled to vagueness: a concrete request gets zero
    questions; a vague one gets as many rounds as it takes. Wrong brief → re-interview. Confirmed
    brief → carry it verbatim into the planner kickoff.
+   **No objective in the kickoff + `ready/` empty + `ops/ROADMAP.md` exists?** The next unstarted
+   line (neither checked off by the human nor evidenced done) is the candidate objective — confirm
+   first: "Next on your roadmap: <line> — plan it?". It substitutes ONLY for the typed objective:
+   0b, 0c and the plan gate (step 3) still run in full. Agents never write or check off ROADMAP.md.
 2. **Plan (subagent).** Spawn ONE planner:
    > You are the PLANNER, conductor-entered. Read ops/roles/PLANNER.md and execute it. The interview
    > and brief gate are already done — do not re-ask; if truly blocked, return the question as your
@@ -47,9 +51,18 @@ never re-plan.
 3. **Plan gate — the one human gate.** Present the plan in `voice:`: what gets built, in how many
    parallel lanes, what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
    `drain: queue` (the default) and other tasks already sitting in `ready/`, disclose that too —
-   "…and once your plan lands I'll finish the N tasks already queued." Wait for the go. After the
-   go you run autonomously; only the STOP-AND-ASK list, `risk: high` approval, and builder
-   questions interrupt.
+   "…and once your plan lands I'll finish the N tasks already queued." `drain: backlog` →
+   enumerate the FULL drain depth (every this-plan backlog task the `drain_slices` cap could
+   reach), naming beyond-cap tasks as staying parked, so one "go" covers the whole run. Effective
+   `plan_gate` = the explicit `ops/CONVENTIONS.md` value if set (it beats `autonomy`, both
+   directions) · else `auto` under `autonomy: trusted` · else `confirm`; unknown value →
+   `confirm`, said once. `confirm` → enter the wait: `bash ops/polaris notify-gate plan` (additive
+   to this in-conversation gate, never a substitute) and wait for the go. `auto` → after the SAME
+   full disclosure, proceed WITHOUT waiting ONLY when BOTH hold: no `risk: high` task in the plan
+   or in the disclosed drain depth · nothing on the STOP-AND-ASK list touched by any of it; either
+   present → wait exactly as `confirm`. The proceed line must SAY it proceeded: "plan_gate: auto —
+   proceeding; say stop to halt". After the go you run autonomously; only the STOP-AND-ASK list,
+   `risk: high` approval, and builder questions interrupt.
    - `ops/CONVENTIONS.md` sets `builders: panes`? Run `bash ops/polaris fleet <N> --launch` instead
      of steps 4–6 and stop — the human chose to watch sessions in terminal panes (classic flow).
      Default (`subagents` or unset) → continue.
@@ -64,7 +77,11 @@ never re-plan.
    never a dump. Lane free + ready task left → spawn the next builder immediately.
 5. **Snags — never silently swallow one.**
    - Builder returns a QUESTION → ask the human right away (choice UI, `voice:`; other lanes keep
-     running), then spawn a fresh builder on that task with the answer appended to its kickoff.
+     running; `bash ops/polaris notify-gate question <ID>` fires too — additive, the ask still
+     happens here), then spawn a fresh builder on that task with the answer appended to its
+     kickoff. `builder_questions: default-safe` → fewer questions return: builders default only
+     reversible, low-stakes spec details, each recorded as an `- assumed:` Notes line; a question
+     the run cannot answer still parks the task to `blocked/` — never a stall.
    - Builder returns RED (tests failing, handoff refused) → ONE automatic retry: append the failure
      to the task's Notes, spawn a fresh builder on it ("Resume <ID>: read its Notes for the failure,
      fix, hand off"). Still red → `bash ops/polaris release <ID> --to blocked -m "<why>"`, tell the
@@ -75,8 +92,9 @@ never re-plan.
    > You are the INTEGRATOR, conductor-entered. Read ops/roles/INTEGRATOR.md and execute it. Land
    > everything in ops/board/review/. Do NOT merge `risk: high` tasks — list them in your result.
    > Return your report: merged · kicked back + why · suite status · newly promoted.
-   - `risk: high` in its report → ask the human "approve <ID>?" and relay ONLY a literal approval to
-     a follow-up integrator; no approval → it stays parked, say so.
+   - `risk: high` in its report → `bash ops/polaris notify-gate risk <ID>` (additive — approval
+     happens HERE, in conversation, under every knob), ask the human "approve <ID>?" and relay ONLY
+     a literal approval to a follow-up integrator; no approval → it stays parked, say so.
    - Kickbacks → treat as a RED snag (one fresh-builder retry via its Notes, then re-integrate the
      survivors).
 6.5 **Check — trust nothing, prove it.** Integration reported green? Run `bash ops/polaris qa`
@@ -95,7 +113,14 @@ never re-plan.
    say "continue". Then the queue: with `drain: queue` (`ops/CONVENTIONS.md`, the default) the run
    also consumes whatever else is sitting in `ready/` — keep looping steps 4–6.5 until `ready/` is
    empty (the plan gate disclosed this). `drain: plan` → stop after this plan's own tasks; queued
-   work then waits for the next `start`.
+   work then waits for the next `start`. `drain: backlog` → `queue` behavior first, then loop: ONE
+   planner subagent promotes the next capacity-bounded, ready-gate-passing slice from `backlog/` —
+   ONLY tasks whose `plan:` equals THIS run's plan id (no `plan:` → never drained) — and runs
+   `drift`; then loop steps 4–6.5. Stop when `drain_slices` (default 2) promotion rounds are
+   spent · no this-plan backlog remains · a drift finding blocks promotion. Rounds count
+   planner-promotion passes only; the original ready set and integrator dependency-wave promotions
+   are round 0 (step 3 disclosed this whole depth). No subagent harness → classic `start` per
+   slice, exactly today.
 7.5 **Evolve (subagent) — the run tunes the kit before it signs off.** After the final green `qa`,
    spawn ONE:
    > You are EVOLVE, conductor-entered. Read ops/roles/EVOLVE.md and execute its diagnosis.
@@ -106,9 +131,10 @@ never re-plan.
    step only when the run built ≤1 task — there is no signal in a sample of one.
 8. **Report and close.** In `voice:`: what landed and what it means for them, what's parked and why,
    `qa` status on base, what to try right now — then EVOLVE's numbered proposals ("reply approve
-   <n> to apply"). One report; the board holds the detail. With the queue drained and the checks
-   green there is nothing left to offer — the next run starts with the human's next idea. (`drain:
-   plan` with work still queued? Say so: `start` picks it up.)
+   <n> to apply"). One report; the board holds the detail. After delivering it, run
+   `bash ops/polaris notify-gate done` — additive; the report itself is the close, hook or no hook.
+   With the queue drained and the checks green there is nothing left to offer — the next run starts
+   with the human's next idea. (`drain: plan` with work still queued? Say so: `start` picks it up.)
 
 ## Cost discipline
 A conductor run spends N builders' tokens in parallel — that's the point, but stay honest: lanes are

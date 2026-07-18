@@ -4,6 +4,30 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.13.0 — Unreleased
+
+**Hands-free core: the loop can run past the plan-gate wait, keep draining backlog, read a
+standing roadmap, and page you only at the moments it actually needs a human.** Every knob
+defaults to today's exact behavior — nothing changes until you opt in.
+`ops/contracts/hands-free-knobs.md`.
+
+- **The autonomy dial.** One `autonomy: standard | trusted` composition knob (or `plan_gate`,
+  `builder_questions`, `evolve_apply` set individually) lets the Conductor skip the plan-gate wait
+  on genuinely low-risk plans, Builders default reversible spec details instead of asking, and
+  EVOLVE auto-apply its fixed, reversible allowlist — risk:high approval, STOP-AND-ASK, and RULES
+  stay in force under every setting. `kit/ops/roles/CONDUCTOR.md`, `kit/ops/roles/BUILDER.md`,
+  `kit/ops/roles/EVOLVE.md`.
+- **Backlog drain.** `drain: backlog` (+ `drain_slices`) has the Conductor keep promoting a plan's
+  next ready-gated slice from `backlog/` after the original ready set empties, instead of ending
+  the run with groomed work parked. `kit/ops/roles/CONDUCTOR.md`, `kit/ops/roles/PLANNER.md`.
+- **ROADMAP.** A human-authored, ordered outcome list agents read — never write — when a kickoff
+  carries no objective and the board is empty, offering the next unstarted line as the candidate
+  objective. Skeleton ships at `kit/ops/templates/ROADMAP.md`. `kit/ops/roles/PLANNER.md`.
+- **Notify v2.** `POLARIS_SEVERITY` (`info` / `gate` / `done`) rides every `notify:` hook
+  alongside a distinct `blocked` board event, plus a `notify-gate` shim the Conductor calls at
+  every human wait — so a recipe can page only when the run is actually stuck. Copy-paste
+  ntfy.sh/Slack recipes in `ops/PROMPTS.md`. `kit/ops/polaris`.
+
 ## 5.12.0 — 2026-07-18
 
 **One clean commit per landed task, one tagged commit per sealed sprint.** A landed task used to

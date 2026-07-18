@@ -19,6 +19,8 @@ Hit a wall? Two kinds, two responses:
 - **Structural block** — a needed file isn't in `files_owned`, a hidden dependency, a missing or self-contradictory contract. Output `⛔ <why>` and go to the Failure path. Do NOT improvise around it.
 - **Spec ambiguity** — a detail of *your own task* is genuinely underspecified (which of two behaviors? what wording? which edge case?) and guessing could ship the wrong thing. Ask the human **one** concise question in the repo's `voice:` (Claude Code: `AskUserQuestion`), then build on the answer. **Conductor-entered?** You are a subagent and cannot reach the human — return the question as your result instead; the conductor asks and re-dispatches. Don't guess — but don't stack up questions either: if it takes more than one or two, the task itself is underspecified, so hand it back to `blocked/` with a note for the Planner.
 
+`builder_questions: default-safe` in `ops/CONVENTIONS.md` (default `ask` = exactly the above) narrows ONLY the spec-ambiguity path: you may default the most conventional interpretation instead of asking, ONLY when certain the choice is BOTH reversible AND low-stakes, and MUST append one Notes line: `- assumed: <choice> (default-safe)`. Not certain → ask / return the question exactly as above; a question the run cannot answer degrades to `release --to blocked` — never a stall. Structural blocks and seam/contract gaps keep the invariant-3 `blocked/` path, and `risk: high` tasks ALWAYS ask — those behaviors never change under any setting.
+
 ## 4. Test
 Write tests covering EVERY acceptance checkbox. Run the full commands from `ops/CONVENTIONS.md` (test + lint + typecheck). All green or you stay in `active/`.
 

@@ -71,14 +71,29 @@ fm_get() { # fm_get <key> <file> — scalar value; strips trailing " # comment" 
       print s; exit
     }' "$2"
 }
-fm_list() { # fm_list <key> <file> — items of a "- x" list (or inline scalar); comment/\r stripped
+fm_list() { # fm_list <key> <file> — items of a "- x" block list, an inline "[a, b]" flow list, "[]",
+  # or an inline scalar; comment/\r stripped. Shapes + edge cases: ops/contracts/frontmatter-lists.md
   awk -v k="$1" '
+    function emit(s,   n, i, parts, item) {
+      if (s == "") return
+      if (s ~ /^\[.*\]$/) {                 # inline flow list: strip [ ], split on ",", trim, drop empties
+        s = substr(s, 2, length(s) - 2)
+        n = split(s, parts, ",")
+        for (i = 1; i <= n; i++) {
+          item = parts[i]
+          sub(/^[ \t]*/,"",item); sub(/[ \t]*$/,"",item)
+          if (item != "") print item
+        }
+        return
+      }
+      print s                               # inline scalar — one item
+    }
     /^---[\r]?$/ { fs++; next }
     fs!=1 { next }
     index($0, k":")==1 {
       on=1; s=substr($0, length(k)+2)
       sub(/^[ \t]*/,"",s); sub(/[ \t]#.*$/,"",s); sub(/[ \t\r]*$/,"",s)
-      if (s!="" && s!="[]") print s
+      emit(s)
       next
     }
     on && /^[ \t]*-[ \t]/ {
@@ -974,6 +989,19 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     "$SELF" handoff T-1 > "$T/ho.out"
     grep -q 'Integrate now' "$T/ho.out" || { echo "HANDOFF NOTICE FAIL (last lane must print the integrate hint)"; exit 1; }
     cd "$T/repo"
+    # ========================= fm_list parsing drills =========================
+    # inline scalar · "[]" · populated "[a, b]" flow list · block list — plus edge
+    # stripping (comment/\r/whitespace, empty items). fm_list is a shell function
+    # defined in this same process, so it's called directly (no "$SELF" needed).
+    # ops/contracts/frontmatter-lists.md
+    printf -- '---\r\nid: T-L\r\nscalar: v\r\nempty: []\r\nflow: [a, b, c]  # comment\r\nmessy: [a,, b ,c,]\r\nblock:\r\n  - x\r\n  - y  # comment\r\ndepends_on: [T-A, T-B]\r\n---\r\n' > "$T/fmlist.md"
+    [ "$(fm_list scalar "$T/fmlist.md")" = "v" ] || { echo "FM_LIST SCALAR FAIL"; exit 1; }
+    [ -z "$(fm_list empty "$T/fmlist.md")" ] || { echo "FM_LIST EMPTY FAIL ([] must yield nothing)"; exit 1; }
+    [ "$(fm_list flow "$T/fmlist.md" | tr '\n' ',')" = "a,b,c," ] || { echo "FM_LIST FLOW FAIL (populated inline list must split)"; exit 1; }
+    [ "$(fm_list messy "$T/fmlist.md" | tr '\n' ',')" = "a,b,c," ] || { echo "FM_LIST MESSY FAIL (empty items from ,, and trailing , must drop)"; exit 1; }
+    [ "$(fm_list block "$T/fmlist.md" | tr '\n' ',')" = "x,y," ] || { echo "FM_LIST BLOCK FAIL (block list must stay byte-identical)"; exit 1; }
+    [ "$(fm_list depends_on "$T/fmlist.md" | wc -l | tr -d ' ')" = "2" ] || { echo "FM_LIST DEPENDS_ON COUNT FAIL (inline flow list must yield 2 items, not 1)"; exit 1; }
+    [ "$(fm_list depends_on "$T/fmlist.md" | tr '\n' ',')" = "T-A,T-B," ] || { echo "FM_LIST DEPENDS_ON VALUES FAIL"; exit 1; }
     # ====================== v5.12 clean-history drills =======================
     # land (squash → ONE rich commit) → seal (tagged summary merge) → history →
     # done (rule-1 gate + landed: stamp) → rollback (task + sprint reverts).
@@ -1154,7 +1182,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
