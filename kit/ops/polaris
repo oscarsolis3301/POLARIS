@@ -2260,7 +2260,7 @@ cmd_rules_check() { # _rules <repo-relative-path> [payload-file] — internal: g
 
 # ------------------------------------------------------------------- dispatch
 usage() { cat <<'EOF'
-polaris — POLARIS v4 board CLI (run from anywhere inside the repo)
+polaris — POLARIS board CLI (run from anywhere inside the repo)
   init-board                     create board dirs, gitignore .polaris/, lock dir
   claim [ID]                     lock + ready→active + worktree  (no ID = top wsjf; skips locked)
   resume [ID]                    re-enter an already-claimed active task (crash/kickback/new session)
