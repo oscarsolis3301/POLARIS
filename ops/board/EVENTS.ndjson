@@ -40,3 +40,5 @@
 {"ts":1784402026,"ev":"done","id":"T-014","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1784402032,"ev":"done","id":"T-015","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1784402370,"ev":"claim","id":"T-013","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1784403099,"ev":"handoff","id":"T-013","who":"Owner@DESKTOP","note":""}
+{"ts":1784403100,"ev":"all-review","id":"T-013","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
