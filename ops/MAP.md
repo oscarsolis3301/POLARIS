@@ -68,3 +68,5 @@ not installed code — they are written normally, by the board scripts and by th
 
 
 - templates/ gains ROADMAP.md — human-authored standing-goal skeleton (P3, 5.13.0-unreleased)  (T-016, 2026-07-18)
+
+- polaris gains notify-gate <kind> [ID] + POLARIS_SEVERITY in the notify env contract (5.13.0-unreleased)  (T-013, 2026-07-18)
