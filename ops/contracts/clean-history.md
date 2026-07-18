@@ -164,5 +164,44 @@ Notes:
 Files: src/api/reset.py, src/api/util_bucket.py
 ```
 
+## v2 — multi-wave seal (2026-07-18, owner T-017)
+Motivation: Sprint 3 wave 1 proved v1 conflates sprint with integration wave — `seal` dies once
+tag sprint/<n> exists, and `done` needs the landed [<ID>] commit reachable in $BASE, which only a
+seal merge provides; a sprint with >1 wave could neither seal nor done after wave 1 (SPRINT.md
+Learned + EVENTS.ndjson). v1 stands except as amended below. Tag semantics: `sprint/<n>` ALWAYS
+marks the sprint's latest sealed checkpoint — end of sprint = final checkpoint. The sprint number
+truth stays the ops/SPRINT.md header; a new sprint = the human bumps the header, exactly as today.
+
+`seal [<date>]` — amended:
+- tag precondition REPLACED: refs/tags/sprint/<n> absent, OR it points to an ancestor of $BASE (a
+  previous wave's checkpoint) → proceed. Neither → die "sprint/<n> exists and is not in $BASE
+  history — reused sprint number; bump the ops/SPRINT.md header". Checked BEFORE the merge;
+  nothing mutated on failure. All other v1 preconditions unchanged.
+- every wave seals with the same --no-ff merge + message format (bullets are naturally the new
+  wave's commits — $BASE..integrate excludes prior waves).
+- FIRST seal of sprint n: create tag sprint/<n> (v1, unchanged).
+- LATER seal of the same n: after the merge, MOVE the tag — `git tag -f sprint/<n>` on the new
+  merge; output names the move (`sprint/<n>: <old7> → <new7>`).
+- push: $BASE as v1. A moved tag pushes compare-and-swap:
+  `git push --force-with-lease=refs/tags/sprint/<n>:<old-sha> origin refs/tags/sprint/<n>`
+  — the only forced ref update POLARIS ever makes, and it is leased. Failure → v1's warn-note.
+
+`history --tasks <n>` — amended: range starts at the OLDEST first-parent merge of $BASE whose
+subject starts `Sprint <n> — `: `<oldest>^1..sprint/<n>`, --no-merges, chore(board) filter as v1.
+A single-wave sprint produces byte-identical output to v1.
+
+`done` / `land` / `task-commit-msg` — UNCHANGED. Wave-2+ `done` works because that wave's seal
+makes its [<ID>] commits reachable in $BASE (rule 1 of the v1 gate replacement).
+
+`rollback sprint/<n>` — code UNCHANGED: reverts the tag's merge = the LATEST wave, one atomic
+revert (matches checkpoint semantics). Earlier waves revert by SHA (`git revert --no-edit -m 1
+<sha>`); MANUAL.md documents it. Revert-all-waves was REJECTED: a mid-chain revert conflict would
+strand a half-reverted sprint, and rollback never resets.
+
+Executable check: `doctor --selftest` gains a `second-seal` drill (wave-2 land on the same
+integrate branch → re-seal green → tag moved → `--tasks` spans both waves → wave-2 `done` passes)
+— owned by T-017, listed in T-017's `verify:`.
+
 ## Changelog
 - v1 2026-07-18: created for T-007, T-008, T-009, T-010 (Phase 1, 5.12.0).
+- v2 2026-07-18: multi-wave seal for T-017 (5.13.0) — tag moves per wave; history --tasks spans waves; evidence: Sprint 3 wave 1.
