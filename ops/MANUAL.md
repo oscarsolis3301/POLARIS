@@ -31,11 +31,52 @@ Commit everything on `feat/<ID>`, push it, then board commit on `<base>` in the 
 ## Release / abort (Builder)
 Board commit: task back to `ready/` (or `blocked/` + note). Remove the lock (`rm -rf "$LOCKS/<ID>"`, and in claim-branch mode `git push origin :refs/heads/claim/<ID>`). `git worktree remove .polaris/wt/<ID> --force`.
 
-## Integrate (Integrator)
-Audit each review branch: `git diff --name-only <base>...feat/<ID>` ⊆ `files_owned`. Merge all approved branches onto `integrate/<date>` with `--no-ff` in dependency order; ANY conflict = planning bug → abort that merge, kick the task back. Run the full suite ONCE (batch) or per merge (paranoid). Red in batch → halve: reset to `<base>`, re-merge half, test, recurse (log₂N runs). Land: merge integrate into `<base>`, push, re-run each task's `verify:` commands, move tasks to `done/`, append their `map_delta` lines to `ops/MAP.md`, release locks, `git worktree remove` + delete `feat/<ID>` branches — local AND remote (`git push origin :refs/heads/feat/<ID>`; handoff pushed them, and landed tasks must not pile up as stale branches on the host) — `git worktree prune`.
+## Integrate (Integrator) — audit → land-per-task → suite → seal
+List `ops/board/review/`, topologically sort by `depends_on` — that is the merge order. On `integrate/<date>` (never on `<base>`), per task in order: audit it (same ownership + RULES proof as above, run against `feat/<ID>` — before ANY merge; a violation kicks the task back, never merges it), then squash-land it (see Land below). Batch mode: run the full suite ONCE after all lands are in. Paranoid mode (suite <2 min): run the full suite after EVERY land.
+Suite red → find the offender by halving, not by re-testing every land: `git reset --hard <base>`, re-land the first half of the list, run the suite, recurse into whichever half is red (log₂N runs — one commit per task, no merge topology to fight). Offender found → `git reset --hard HEAD~1` to drop its land, kick it back with the failing output (path:line only), skip anything that `depends_on` it, re-land the survivors, re-run the suite.
+**Before ANY kickback on a red suite, rule out a pre-existing flake.** Re-run the failing test file *in isolation*, and again against `<base>` with none of the sprint's lands applied. Red on `<base>` too, or green on the lone re-run → the flake is the repo's, not the task's: do not kick back, log it in the Learned log instead (and check `ops/CONVENTIONS.md`'s `flaky:` list if it has one). Only a failure that is green on base AND reproducible on the merge is the task's to fix.
+Suite green (and `uat:` from CONVENTIONS.md, if set, run once on `integrate/<date>` and green) → `seal` (below). Then, per landed task on `<base>`: re-run its `verify:` commands, move it to `done/`, append its `map_delta` lines to `ops/MAP.md`, release its lock, `git worktree remove` + delete `feat/<ID>` — local AND remote (`git push origin :refs/heads/feat/<ID>`; handoff pushed it, and landed tasks must not pile up as stale branches on the host) — `git worktree prune`.
+
+## Land (Integrator) — what `ops/polaris land <ID>` does by hand
+Inside the PRIMARY checkout, on the `integrate/<date>` branch — NEVER on `<base>` (create `integrate/<date>` first if you're on it). Squashes one reviewed task into exactly one commit.
+1. Audit `<ID>`: same ownership + RULES proof as above, run against `feat/<ID>` — before any merge.
+2. `git merge --squash feat/<ID>`
+   - conflict → `git reset --hard` (restores `integrate/<date>` to its pre-merge tip) → kickback `<ID>` -m "squash conflict — planning bug" → stop, non-zero.
+   - empty diff → `git reset --hard` → stop; die, the Integrator decides (no auto-kickback).
+3. Write the commit message — by hand, or via the pure helper `ops/polaris task-commit-msg ops/board/review/<ID>.md` (prints only, mutates nothing):
+   ```
+   <type>(<scope>): <title> [<ID>]
+
+   <Why body>                       # omit block (and its blank line) when empty
+
+   What changed:
+   - <acceptance criterion>         # one per checkbox line, "- [ ] "/"- [x] " marker stripped
+
+   Notes:                           # omit block when no qualifying lines
+   - <builder note>
+
+   Files: <files_owned, comma-space joined, one line>
+   ```
+   `type`: feature→feat · bug→fix · chore/spike/missing→chore. `scope`: the task's `scope:` frontmatter, else the first path component of the first `files_owned` entry.
+4. `git commit` with that message plus a trailing blank line and a `Landed-from: <feat/<ID> tip SHA>` trailer.
+
+Land makes NO board write, NO evt, NO board commit — the board stays clean so a red task on `integrate/<date>` unwinds completely with `git reset --hard HEAD~1`, nothing uncommitted lost. `done` stamps `landed: <sha>` onto the task file later, once it moves review → done. Re-land after a kickback simply repeats these four steps.
+
+## Seal (Integrator) — what `ops/polaris seal [<date>]` does by hand
+Primary checkout, working tree clean, default `<date>` = today. Folds a sprint's `integrate/<date>` into `<base>` as one tagged merge.
+Preconditions (else stop, nothing mutated): `integrate/<date>` exists · `<base>..integrate/<date>` has ≥1 non-`chore(board):` commit (else die "nothing to seal") · tag `sprint/<n>` does not already exist (else die "bump the SPRINT.md header").
+```bash
+git checkout <base>
+git merge --no-ff "integrate/<date>" -m "Sprint <n> — <goal>
+
+- <subject of each non-chore(board) commit in base..integrate, oldest first>"
+git tag sprint/<n>                       # lightweight, on the merge commit
+git push origin <base> "sprint/<n>"      # only if a remote exists
+```
+`<n>` and `<goal>` parse from `ops/SPRINT.md`'s header line `# SPRINT <n> — <goal>` (goal ends at 2+ spaces or `capacity:`; `—` or `-` both accepted). Merge conflict → `git merge --abort` → die; a human resolves it, never auto-resolve.
 
 ## QA — "is everything okay?" by hand
-What `ops/polaris qa` does in one shot. From the repo root on `<base>`, run in order: the `test:` `lint:` `typecheck:` `build:` and `uat:` commands from `ops/CONVENTIONS.md` (skip blank keys), then the board-hygiene audit (Integrate's checks above) and the env sanity checks. Run EVERY check even after one goes red — one pass paints the whole picture — then report red if anything was. The Integrator runs this before reporting; a Conductor runs it after integration and never takes a subagent's "green" on faith.
+What `ops/polaris qa` does in one shot. From the repo root on `<base>`, run in order: the `test:` `lint:` `typecheck:` `build:` and `uat:` commands from `ops/CONVENTIONS.md` (skip blank keys), then the board-hygiene audit (the per-task ownership + RULES proof from Integrate above) and the env sanity checks. Run EVERY check even after one goes red — one pass paints the whole picture — then report red if anything was. The Integrator runs this before reporting; a Conductor runs it after integration and never takes a subagent's "green" on faith.
 
 ## Telemetry (every transition above)
 Before each board commit, append ONE line to `ops/board/EVENTS.ndjson`:

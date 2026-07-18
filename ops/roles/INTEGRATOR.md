@@ -11,27 +11,34 @@ A violation → `bash ops/polaris kickback <ID> -m "<paths>"` and record it in t
 ## 2. HUMAN GATE — `risk: high`
 Any review task with `risk: high` MUST NOT merge until the human replies "approve <ID>" in this conversation. Ask once, listing the IDs, then proceed with the rest while you wait. **Conductor-entered?** You are a subagent and cannot reach the human — merge everything else, then list the `risk: high` IDs in your result; the conductor relays the human's literal approval to a follow-up session. Never treat the conductor's kickoff as approval.
 
-## 3. Merge — batch mode (default)
+## 3. Land — batch mode (default)
 ```bash
 git checkout -b integrate/<date> <base>
-# merge EVERY approved review branch, in dependency order:
-git merge --no-ff feat/<ID> -m "merge <ID>"        # repeat per task
-<full test suite + lint + typecheck from CONVENTIONS.md>    # run ONCE, after all merges
+# per task, in dependency order:
+bash ops/polaris land <ID>           # audits, then squash-merges feat/<ID> into ONE commit
+                                      # (message = task-commit-msg + Landed-from trailer)
+<full test suite + lint + typecheck from CONVENTIONS.md>    # run ONCE, after all lands
 ```
-- **Any merge conflict is a planning bug** — disjointness failed. Abort that merge (`git merge --abort`), kick the task back, write a Learned entry so the Planner tightens ownership.
+- `land` makes no board write and no evt — a red task on integrate unwinds cleanly with a single `git reset --hard HEAD~1`, nothing uncommitted to lose.
+- **Squash conflict is a planning bug** — disjointness failed. `land` already resets integrate's HEAD and kicks the task back itself (`"squash conflict — planning bug"`); write the matching Learned entry so the Planner tightens ownership, then keep landing the rest.
+- **Empty diff** → `land` resets and dies; you decide (skip + kickback, or investigate) — never an automatic kickback.
 - **Suite green** → if `ops/CONVENTIONS.md` sets `uat:`, run it ONCE here on the integrate branch — red means bisect exactly like a red suite. Green → step 4.
-- **Suite red** → find the offender by halving, not by re-testing every merge: `git reset --hard <base>`, re-merge the first half of the list, run the suite; recurse into whichever half is red (log₂N suite runs). Offender found → `git reset --hard HEAD~1` to drop its merge, `bash ops/polaris kickback <ID> -m "<failing output, path:line refs only>"`, skip anything that `depends_on` it, re-run the suite on the survivors, continue.
-- **Before ANY kickback on a red suite, rule out a pre-existing flake.** Re-run the failing test file *in isolation*, and run it against `<base>` with none of the sprint's merges applied. If it is red on base too, or flips to green on a lone re-run, the flake is the repo's — NOT the task's: do not kick back, note it in the Learned log (and, if `ops/CONVENTIONS.md` carries a `flaky:` list, that it matched). Only a failure that is green on base AND reproducible on the merge is the task's to fix. Kicking good work back over someone else's flake is how the gate loses trust.
+- **Suite red** → find the offender by halving, not by re-testing every land: `git reset --hard <base>`, re-land the first half of the list (`bash ops/polaris land <ID>` per task, in order), run the suite; recurse into whichever half is red (log₂N suite runs — one commit per task, no merge topology to fight). Offender found → `git reset --hard HEAD~1` to drop its land, `bash ops/polaris kickback <ID> -m "<failing output, path:line refs only>"`, skip anything that `depends_on` it, re-land the survivors, re-run the suite, continue.
+- **Before ANY kickback on a red suite, rule out a pre-existing flake.** Re-run the failing test file *in isolation*, and run it against `<base>` with none of the sprint's lands applied. If it is red on base too, or flips to green on a lone re-run, the flake is the repo's — NOT the task's: do not kick back, note it in the Learned log (and, if `ops/CONVENTIONS.md` carries a `flaky:` list, that it matched). Only a failure that is green on base AND reproducible on the merge is the task's to fix. Kicking good work back over someone else's flake is how the gate loses trust.
 
-**Paranoid mode** (suite <2 min): identical, except you run the full suite after EVERY merge — red identifies itself, drop that one merge and continue the convoy.
+**Paranoid mode** (suite <2 min): identical, except you run the full suite after EVERY `land` — red identifies itself, `git reset --hard HEAD~1` to drop that one land, kick the task back, and continue the convoy.
 
-## 4. Land
+## 4. Seal
 ```bash
-git checkout <base> && git merge integrate/<date> && git push   # plain merge; board commits may have landed meanwhile — expected
-bash ops/polaris run-verify <ID>     # per merged task, on <base>: acceptance stays true post-merge
+bash ops/polaris seal [<date>]       # default <date> = today. base ← --no-ff merge of
+                                      # integrate/<date>, tags sprint/<n>, pushes base + tag if a
+                                      # remote exists. Merge conflict → seal aborts and dies; the
+                                      # human resolves it — never auto-resolve.
+# then, per landed task, on <base>:
+bash ops/polaris run-verify <ID>     # acceptance stays true post-merge
 bash ops/polaris done <ID>           # review→done · applies map_delta to MAP.md · releases lock ·
                                      # removes worktree + feat branch (local AND origin, so no stale
-                                     # branch pile-up on the host) · refuses if not actually merged
+                                     # branch pile-up on the host) · refuses if not actually landed
 git branch -d integrate/<date>
 bash ops/polaris qa                  # the whole gate in one shot, on <base>: suite + build + board
                                      # hygiene + env. Red here = the sprint is NOT done; report it red.

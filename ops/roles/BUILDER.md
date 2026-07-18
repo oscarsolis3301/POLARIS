@@ -11,7 +11,7 @@ One command does it all atomically: lock → board move (ready→active, committ
 The task file (now in `ops/board/active/`) · its contract in `ops/contracts/` · its `context_files` · the relevant `ops/MAP.md` rows · `ops/CONVENTIONS.md`. That is your whole context. Anything else needs a one-line justification appended to the task's Notes.
 
 ## 3. Build
-Implement strictly against the contract, strictly inside `files_owned`. `context_files` are read-only patterns to imitate — copy the local style, don't invent one. Commit on `feat/<ID>` as you go (`feat: <ID> <what>`). Every meaningful step: `✅ <what> — <file>`. Append discoveries to the task's Notes (one line each) instead of re-deriving them later.
+Implement strictly against the contract, strictly inside `files_owned`. `context_files` are read-only patterns to imitate — copy the local style, don't invent one. Commit on `feat/<ID>` as you go (`feat: <ID> <what>`). Every meaningful step: `✅ <what> — <file>`. Append discoveries to the task's Notes (one line each) instead of re-deriving them later — these lines become the squash commit's `Notes:` body verbatim at `land`, so keep each to one real discovery, no chatter; HTML comments and `⛔` lines are filtered out automatically.
 
 Under Claude Code, a PreToolUse guard blocks two things the moment you attempt them: writes outside `files_owned`, and anything `ops/RULES.tsv` forbids — danger-zone paths and forbidden content patterns, which apply EVEN INSIDE your owned files. Same matcher and rules as `polaris verify`, so what the guard blocks, handoff would have rejected anyway. A rejection is information, not an obstacle. Never work around it via bash redirection, and never touch RULES.tsv — hand back or flag the human instead.
 

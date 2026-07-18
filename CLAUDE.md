@@ -37,6 +37,10 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris handoff` | verify + push + active→review (run inside your worktree) |
 | `ops/polaris release <ID> --to ready\|blocked -m "why"` | clean abort |
 | `ops/polaris audit / run-verify / kickback / done <ID>` | Integrator: check, re-check, bounce red work, land |
+| `ops/polaris land <ID>` | Integrator: squash a reviewed task into ONE commit on `integrate/<date>` |
+| `ops/polaris seal [<date>]` | Integrator: fold `integrate/<date>` into `<base>` with one `--no-ff` merge + tag `sprint/<n>` |
+| `ops/polaris history [--tasks <n>]` | read-only: `<base>`'s first-parent log, `chore(board):` commits filtered out |
+| `ops/polaris rollback <ID \| sprint/<n>>` | revert a landed task or a sealed sprint — never resets, never force-pushes |
 | `ops/polaris status / sweep / doctor [--selftest]` | board view · stale locks · env check |
 | `ops/polaris dash / metrics` | live board at 127.0.0.1:7373 · cycle/kickbacks/per-point calibration |
 | `ops/polaris drift / rules` | mechanical board-hygiene audit (`--strict` for CI) · policy file list + health |
@@ -44,6 +48,8 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris fleet <N> [--launch]` | print N Builder kickoffs; `--launch` opens a session per ready task in tmux windows or side-by-side Windows Terminal panes (`--dry-run` previews). Planner runs this per `autolaunch:` |
 | `ops/polaris version / update` | which POLARIS this repo runs · **fetch the latest kit** — also re-caches it into `~/.claude` so the next repo gets it too (manual; POLARIS never self-updates mid-sprint) |
 | `ops/polaris upgrade` | migrate an OLD BOARD v3/v4→v5. Downloads nothing. **Not** `update` — one letter apart, unrelated jobs; "upgrade POLARIS" almost always means `update`. |
+
+History model, in one line: a task lands as one squash commit, a sprint seals as one tagged `--no-ff` merge, and `history` reads it back with board chores filtered out.
 
 Board commits stage everything under `ops/` — keep `ops/` clean of unrelated edits or they ride along.
 
