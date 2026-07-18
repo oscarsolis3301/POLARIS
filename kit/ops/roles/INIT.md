@@ -113,9 +113,27 @@ builders: subagents         # subagents (a work request runs the whole loop in o
                             # build, integrate — each role a fresh subagent; needs a harness with a subagent
                             # tool, e.g. Claude Code) | panes (conductor stops after planning; Builders run
                             # in terminal sessions per autolaunch:). No subagent tool → behaves as panes.
+# autonomy: standard         # standard | trusted — composition macro; nothing reads it directly. trusted =
+                            # plan_gate: auto + builder_questions: default-safe + evolve_apply: auto-reversible,
+                            # applied only where each of those is unset below — an explicit knob always wins
+                            # over autonomy, in both directions. Uncomment and set trusted to switch hands-free
+                            # mode on. Default: standard (today's behavior; commented out on a fresh install).
+# plan_gate: confirm         # confirm | auto — auto proceeds without waiting only when no risk:high task and
+                            # nothing on the STOP-AND-ASK list is touched, by the plan or its full drain depth;
+                            # otherwise it waits exactly like confirm. Default: confirm.
+# builder_questions: ask     # ask | default-safe — default-safe applies ONLY to spec-detail ambiguity that is
+                            # both reversible and low-stakes, and logs the assumption; structural blocks and
+                            # risk:high tasks always ask regardless. Default: ask.
+# evolve_apply: confirm      # confirm | auto-reversible — auto-reversible lets EVOLVE apply ONLY its fixed
+                            # inert allowlist (calibration notes, MAP.md deltas, SPRINT Learned pruning,
+                            # stale_hours/voice) without "approve <n>"; everything else still waits.
+                            # EVOLVE may never set autonomy or its components either way. Default: confirm.
 drain: queue                # queue (a conductor run also finishes tasks already waiting in ready/ before
                             # it signs off — the plan gate discloses it) | plan (stop after the approved
-                            # plan's own tasks). Default: queue.
+                            # plan's own tasks) | backlog (queue, then loop the Planner to promote more from
+                            # backlog/, capacity- and ready-gate-bounded, up to drain_slices rounds).
+                            # Default: queue.
+drain_slices: 2              # backlog mode only: max planner-promotion rounds per run. Default: 2.
 stale_hours: 4              # sweep warns on active locks older than this
 uat: <cmd or omit>          # optional end-to-end/UAT command — Integrator runs it ONCE on the integrate branch
 notify: <cmd or omit>       # optional: runs in background per board event with POLARIS_EV/ID/NOTE env vars
@@ -201,5 +219,6 @@ Say only:
 - **anything that needs them**: git-tracked build output (step 1), a `risk: high` task, a command you couldn't find, a danger zone you guessed at. This is the one thing you must never trim.
 - how to start: *"From now on, just tell me what you want built — I'll ask a couple of questions, show you the plan, and run the whole thing in this chat. Or say **start** to pick up the queued work."* (Harness without subagents: *"say **start** — I'll pick up the top task and build it."*)
 - how to watch: `bash ops/polaris dash` → http://127.0.0.1:7373
+- **two low-key offers, never questions — they do not touch the 3-interaction cap, it already closed**: *"Keep a standing goal list? I can seed `ops/ROADMAP.md` from the shipped skeleton (`ops/templates/ROADMAP.md`)."* and *"Want board events pinged somewhere? Notify recipes live in `ops/PROMPTS.md`."* Skip either line if it doesn't apply — offers, not homework.
 
 Do NOT list every task, print the board, explain `wsjf`/`files_owned`/worktrees, recap the config you just wrote, or describe the write-guard. It is all on disk and they can ask. Under `voice: technical`, be dense and drop the explanations — but the warnings stay.
