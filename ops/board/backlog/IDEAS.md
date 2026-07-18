@@ -10,3 +10,4 @@
 - QA scout 2026-07-18: help banner at kit/ops/polaris:1909 still says "POLARIS v4 board CLI" — one-word fix, parked behind T-004's ownership of kit/ops/polaris.
 - QA scout 2026-07-18: bad-arg errors from `${N:?usage...}` leak raw bash "line NNN" noise instead of the ⛔ format across ~10 subcommands (task-commit-msg/land/rollback/history --tasks inherited it from release/kickback/audit/run-verify/done/why) — worth one systemic usage-guard helper.
 - QA scout 2026-07-18: `history --tasks 1 extra` silently ignores the stray arg while plain `history` rejects strays — align the branches.
+- EVOLVE 2026-07-18: self-hosted repos RULES-guard ops/roles/ and ops/templates/, blocking EVOLVE's own legal targets (PLANNER.md §Pointing notes, TASK.md field guidance) — kit/ops/roles/EVOLVE.md needs a documented fallback home (CONVENTIONS § Planner calibration) for when those paths are guarded.

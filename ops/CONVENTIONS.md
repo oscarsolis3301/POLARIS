@@ -49,8 +49,17 @@ kit to everyone who installed before the `kit/` split existed.
 |---|---|---|
 | burndown row + Learned log | Integrator | ops/SPRINT.md |
 | MAP content | Integrator (via task map_delta) | ops/MAP.md |
-| conventions values + Planner calibration notes | EVOLVE (human-approved) | this file · ops/roles/PLANNER.md |
+| conventions values + Planner calibration notes | EVOLVE (human-approved) | this file, § Planner calibration (ops/roles/ is a RULES-guarded installed copy here) |
 | RULES lines | human (EVOLVE proposes) | ops/RULES.tsv |
 | task truth | the board scripts | ops/board/** frontmatter |
 | kit code + invariants | human only | kit/CLAUDE.md · kit/ops/polaris · kit/ops/dashboard.py · kit/ops/hooks/ |
 | the installed instance | `pack.py --dogfood` only | ops/ (never hand-edited) |
+
+## Planner calibration (appended by EVOLVE, human-approved; Planner reads before pointing)
+- 2026-07-18 · Ignore the 3pt p50 30.4h bucket (n=1 = T-002): review parking during the off-board-edit collision, not build effort (build split avg 0.1h). Do not point up 3-pointers from it.
+- 2026-07-18 · Points do not predict wall-clock here (5pt p50 = 2pt p50 = 0.5h, n=8, 0 kickbacks); they predict scope and merge risk. Wave capacity is planning-bound (carve quality), not build-bound.
+
+## Kit changelog
+- 2026-07-18 · MAP folded: header re-dated, CLI row gains clean-history commands, selftest-install/selftest-dashboard promoted to Modules, dashboard Unverified bullet cleared, Deltas emptied · 3 Deltas lines (T-001, T-003, T-007) + T-003 clearing the untested-dashboard claim
+- 2026-07-18 · SPRINT Learned pruned to ≤5: dropped the zero-conflict/paranoid-cost bullet · content institutionalized in CONVENTIONS integration comment + MAP hotspots
+- 2026-07-18 · Calibration home moved to this file (§ Planner calibration) with two notes; write-routing row updated; fallback-home gap logged to IDEAS · ops/roles/ is RULES-guarded here, blocking EVOLVE's kit-default target (PLANNER.md §Pointing); metrics n=8, 0 kickbacks, T-002 30.4h outlier

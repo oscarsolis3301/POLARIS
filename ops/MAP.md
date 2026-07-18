@@ -1,4 +1,4 @@
-# MAP — POLARIS            (updated: 2026-07-14, by INIT)
+# MAP — POLARIS            (updated: 2026-07-18, by EVOLVE)
 
 ## Stack
 Bash (>= 3.2 — macOS default; no mapfile, no assoc arrays) + Python 3 stdlib only.
@@ -12,7 +12,7 @@ installation running this repo's board. Never hand-edit `ops/` — see ops/CONVE
 ## Entry points
 | Path | What it is |
 |---|---|
-| kit/ops/polaris | THE CLI. ~1180 lines of bash. Every board mechanic. `cmd_*` per subcommand; dispatch at the bottom. |
+| kit/ops/polaris | THE CLI. ~1180 lines of bash. Every board mechanic incl. clean-history (task-commit-msg · land · seal · history · rollback — 5.12.0-unreleased). `cmd_*` per subcommand; dispatch at the bottom. |
 | kit/ops/install.sh | Installs the kit into any repo. Two paths: fresh vs live-board (test = target has ops/CONVENTIONS.md). |
 | kit/ops/bootstrap.py | The zipapp entry — packed to the archive ROOT as `__main__.py`, so `python polaris-v5.zip` just works. Also arms the machine (~/.claude skill + cached kit + permission rules). |
 | kit/ops/pack.py | Kit-repo tool, never shipped. Builds polaris-v5.zip from `git ls-files` run inside kit/. `--dogfood` installs the published release here. |
@@ -29,6 +29,8 @@ installation running this repo's board. Never hand-edit `ops/` — see ops/CONVE
 | kit/ops/PROMPTS.md | Copy-paste kickoffs for every role. | |
 | kit/ops/VERSION | version + the four URLs (channel/tarball/repo/zip) that installed kits poll. | **Human-only.** A bump is a release act. |
 | kit/ops/ci/ | polaris-audit.yml — the OPTIONAL board gate shipped to users. Not our CI. | |
+| kit/ops/selftest-install.sh | Local install drill: fresh · old-client · live-board · zip purity · uninstall. | The `test:` for any install.sh change. |
+| kit/ops/selftest-dashboard.sh | Dashboard smoke drill: start · GET / + /state · kill. | |
 | kit/.claude/ | settings.json (wires the guard) + skills/polaris (project) + skills/polaris-install (user-level, cached to ~/.claude at install). | |
 | .github/workflows/ | OUR CI. ci.yml = 3-OS drills + "one version, everywhere". release.yml = tag → publish the zip. | Danger zone: agents may not edit their own tests. |
 
@@ -61,12 +63,6 @@ not installed code — they are written normally, by the board scripts and by th
 ## Unverified
 - Whether anyone outside this machine has POLARIS installed. The `kit/` split keeps the old
   tarball/raw-channel paths working regardless, so this is untested-in-the-wild, not unsafe.
-- `kit/ops/dashboard.py` has no automated test — CI never launches it.
 
 ## Deltas
 
-- kit/ops/selftest-install.sh — local install drill (fresh · old-client · live-board · zip purity · uninstall). The `test:` for any install.sh change.  (T-001, 2026-07-15)
-
-- kit/ops/selftest-dashboard.sh — dashboard smoke drill (start · GET / and /state · kill); clears the MAP "Unverified" dashboard item.  (T-003, 2026-07-18)
-
-- kit/ops/polaris — clean-history commands (task-commit-msg · land · seal · history · rollback); a task lands as ONE rich squash commit, a sprint seals as ONE tagged summary merge  (T-007, 2026-07-18)

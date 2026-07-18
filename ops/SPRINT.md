@@ -36,8 +36,6 @@ exercises but a Builder cannot.
 - Editing `kit/` files off-board collided with a task parked in `review/` that owned the same file
   (T-002 owned `kit/ops/polaris`). Off-board edits break the disjoint-ownership guarantee like a bad
   plan does — route product changes through tasks, or expect a merge conflict with parked work.
-- Five parallel branches, zero conflicts, zero kickbacks — the script/roles/templates/docs carve of
-  the clean-history epic held; paranoid mode cost 5 runs of a ~15s suite. Keep both.
 - Kit source now has land/seal/history/rollback, but the INSTALLED ops/polaris is 5.11 until a
   release + `pack.py --dogfood` — the next integration on THIS board is still classic --no-ff;
   do not follow the new kit/ops/roles/INTEGRATOR.md recipe here before the dogfood lands.
