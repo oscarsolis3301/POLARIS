@@ -31,6 +31,17 @@ Commit everything on `feat/<ID>`, push it, then board commit on `<base>` in the 
 ## Release / abort (Builder)
 Board commit: task back to `ready/` (or `blocked/` + note). Remove the lock (`rm -rf "$LOCKS/<ID>"`, and in claim-branch mode `git push origin :refs/heads/claim/<ID>`). `git worktree remove .polaris/wt/<ID> --force`.
 
+## Grant (Builder) — amend `files_owned` mid-flight, the sanctioned way
+What `ops/polaris grant <ID> <path> -m "why"` does by hand. Preconditions — ALL must hold, else STOP and change NOTHING (no partial write, no commit):
+- `<ID>` is in `ops/board/active/` — amending unclaimed or finished work is a Planner act, not a grant;
+- you have a non-empty reason (`-m "why"`);
+- `<path>` overlaps NO `files_owned` entry of ANY other task in `ready/` or `active/`, with the same pattern semantics as the ownership proof above (exact · `dir/` prefix · glob) checked in BOTH directions — a granted `dir/` that swallows another task's exact path refuses just like a path under another task's `dir/`. Any overlap → refuse; chain the tasks (`depends_on`) or hand back instead.
+Then ONE board commit on `<base>` in the primary checkout, `chore(board): grant <ID> <path>`, containing all three edits:
+1. append `  - <path>` to the task's `files_owned` list (append-only — never remove or rewrite existing entries);
+2. append `- grant: <path> — <why>` to the task's Notes;
+3. append the telemetry line: `{"ts":<epoch>,"ev":"grant","id":"<ID>","who":"<you@host>","note":"<path>"}`.
+RULES.tsv still binds inside granted paths: granting a danger zone does NOT make it writable — rules are checked independently of ownership at write time, verify, and audit.
+
 ## Integrate (Integrator) — audit → land-per-task → suite → seal
 List `ops/board/review/`, topologically sort by `depends_on` — that is the merge order. On `integrate/<date>` (never on `<base>`), per task in order: audit it (same ownership + RULES proof as above, run against `feat/<ID>` — before ANY merge; a violation kicks the task back, never merges it), then squash-land it (see Land below). Batch mode: run the full suite ONCE after all lands are in. Paranoid mode (suite <2 min): run the full suite after EVERY land.
 Suite red → find the offender by halving, not by re-testing every land: `git reset --hard <base>`, re-land the first half of the list, run the suite, recurse into whichever half is red (log₂N runs — one commit per task, no merge topology to fight). Offender found → `git reset --hard HEAD~1` to drop its land, kick it back with the failing output (path:line only), skip anything that `depends_on` it, re-land the survivors, re-run the suite.
