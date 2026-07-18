@@ -104,3 +104,22 @@ bash ops/polaris metrics     # cycle · throughput · kickbacks · per-point cal
 bash ops/polaris drift       # board hygiene audit (add --strict in CI)
 bash ops/polaris rules       # repo policy lines + health
 ```
+
+## Notify recipes
+Paste one into `notify:` in `ops/CONVENTIONS.md` — it's a single-line shell command (no bare `#`
+in it). Both recipes fire only on `POLARIS_SEVERITY` `gate` (POLARIS is waiting on you) or `done`
+(a run finished), skipping routine `info` noise. Full env contract — `POLARIS_EV`, `POLARIS_ID`,
+`POLARIS_NOTE`, `POLARIS_SEVERITY` — is `ops/contracts/hands-free-knobs.md` § notify v2.
+
+ntfy.sh:
+```
+notify: [ "$POLARIS_SEVERITY" = gate ] || [ "$POLARIS_SEVERITY" = done ] && curl -s -d "$POLARIS_NOTE" https://ntfy.sh/<your-topic>
+```
+
+Slack incoming webhook:
+```
+notify: [ "$POLARIS_SEVERITY" = gate ] || [ "$POLARIS_SEVERITY" = done ] && curl -s -X POST -H 'Content-type: application/json' -d "{\"text\":\"$POLARIS_EV $POLARIS_ID: $POLARIS_NOTE\"}" <your-slack-webhook-url>
+```
+
+Claude Code: a `Notification`/`Stop` hook can read the same `POLARIS_EV`/`POLARIS_SEVERITY` env
+and forward to a push service instead of shelling out from `notify:` directly.
