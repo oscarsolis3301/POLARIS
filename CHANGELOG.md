@@ -4,6 +4,36 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.12.0 — Unreleased
+
+**One clean commit per landed task, one tagged commit per sealed sprint.** A landed task used to
+arrive on `<base>` as a `--no-ff` merge of its whole `feat/<ID>` branch — WIP commits, false
+starts, and all — so `git log` on `<base>` was unreadable as a changelog. History is now
+squash-per-task, tag-per-sprint, and reversible; existing history is never rewritten.
+
+- **`land` / `seal` replace the per-task `--no-ff` merge.** `land <ID>` squashes a reviewed
+  task's branch into ONE commit on `integrate/<date>`, message built from the task file itself
+  (`## Why` body + acceptance criteria + builder Notes, via the new pure helper
+  `task-commit-msg`) plus a `Landed-from:` trailer pointing at the branch tip. `seal [<date>]`
+  folds a sprint's `integrate/<date>` into `<base>` with one `--no-ff` merge and a lightweight
+  `sprint/<n>` tag. `kit/ops/polaris`.
+- **`history` and `rollback` read and undo it.** `history [--tasks <n>]` prints `<base>`'s
+  first-parent log with `chore(board):` commits filtered out — a changelog for free.
+  `rollback <ID | sprint/<n>>` reverts a landed task or a whole sealed sprint, never resetting or
+  force-pushing. `kit/ops/polaris`.
+- **Squash breaks feat-branch ancestry, on purpose.** Everywhere the kit asked "is this task
+  merged?" via `merge-base --is-ancestor`, it now checks for a commit ending `[<ID>]` in `<base>`
+  history first, falling back to the old ancestor check so hand `--no-ff` merges (MANUAL.md) keep
+  working. Covers `done`'s merge gate, its remote-branch cleanup, and `sweep`'s stray detection.
+  `kit/ops/polaris`.
+- **The Integrator recipe moves to land → seal.** Per-task audit + `land` in dependency order on
+  `integrate/<date>`, full suite once the combined tree is green, `seal`, then per-task
+  `run-verify` + `done` on `<base>`. `kit/ops/roles/INTEGRATOR.md`.
+- **Docs catch up.** THE TOOL table gains `land`/`seal`/`history`/`rollback` and the one-line
+  history model; MANUAL.md gains hand-runnable fallback recipes for `land` and `seal`; INIT notes
+  the history model and offers a clean-log git alias for new repos. `kit/CLAUDE.md`,
+  `kit/ops/MANUAL.md`, `kit/ops/roles/INIT.md`.
+
 ## 5.11.0 — 2026-07-17
 
 **Your product carries no AI fingerprints.** Sprints were landing commits stamped

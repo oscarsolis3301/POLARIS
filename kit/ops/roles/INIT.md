@@ -177,6 +177,16 @@ code style: <pointers, or "match surrounding code">
 ## Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
 ```
 
+### History model — tell every new repo how its git log will read
+A task lands as ONE squash commit (`polaris land`); a sprint seals as ONE tagged `--no-ff` merge
+(`polaris seal`, tag `sprint/<n>`) — `feat/<ID>` branches never accumulate as merge commits on
+`<base>`, and `polaris history` reads `<base>` back as a changelog with `chore(board):` commits
+filtered out. Nothing to configure — it applies from the first sprint. Optionally offer a
+clean-log git alias so plain `git log` reads the same way without the CLI:
+```bash
+git config alias.clean-log "log --first-parent --invert-grep --grep=^chore(board):"
+```
+
 ## 4. Chain straight into the PLANNER — same session, no restart, no handoff message
 Do **not** tell them to open a new session. Read `ops/roles/PLANNER.md` and execute it now, with the goal from 2c as the idea to groom. This is the ONE sanctioned two-role session (see CLAUDE.md § ROLE DISPATCH): it runs before any Builder exists, on the base branch, and writes zero feature code. Every other session stays single-role.
 
