@@ -6,6 +6,11 @@ commit, `seal` closes a sprint as ONE tagged merge, `history`/`rollback` read an
 Capacity 13 = points landed last wave (13 pts, 0 kickbacks). Queue: the T-004→T-005→T-006 chain
 on kit/ops/polaris (fm_list · grant · staleness), unblocked now T-007's rework of that file landed.
 
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+| 2026-07-18 | 1 (T-011, fix wave) | 7 (T-004..T-006) · cycle p50 0.5h · kickbacks 0 |
+
 # SPRINT 1 — Finish the self-hosting split          capacity: 10   dates: 2026-07-14–2026-07-18
 
 The refactor landed: `kit/` is the product, `ops/` is a real POLARIS installation running this board,
