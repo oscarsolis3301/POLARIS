@@ -1,3 +1,16 @@
+# SPRINT 3 — Hands-free core          capacity: 13   dates: 2026-07-18–
+
+The loop runs hands-off once a human starts it: an autonomy dial (plan_gate · builder_questions ·
+evolve_apply, composed by autonomy:), a bounded backlog drain (drain: backlog + drain_slices), a
+human-authored ops/ROADMAP.md as the standing objective, and notify severity + gate pings. Every
+knob unset = today's behavior; every hard gate stays. Contract: ops/contracts/hands-free-knobs.md.
+plan: hands-free-core → T-012..T-016 (13 pts). Sprint-2 carryover rides the same run:
+kit/ops/polaris chain T-004 → T-013 → T-005 → T-006. Release 5.13.0.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 2 — Clean history          capacity: 13   dates: 2026-07-18–
 
 Every task one rich commit, every sprint one sealed merge. The model shipped in kit source
