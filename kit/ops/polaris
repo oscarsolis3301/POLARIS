@@ -311,6 +311,14 @@ set_fm() { # set_fm <key> <value> <file> — replace scalar frontmatter line, po
     fs==1 && index($0, k":")==1 { print k": "v; next }
     { print }' "$3" > "$tmp" && mv "$tmp" "$3"
 }
+fm_stamp() { # fm_stamp <key> <value> <file> — set_fm that also ADDS the line (before the closing
+  # ---) when the key is absent. set_fm only replaces; `done` stamps landed:, a key no task has.
+  local tmp="$3.tmp.$$"
+  awk -v k="$1" -v v="$2" '
+    /^---[\r]?$/ { fs++; if (fs==2 && !hit) { print k": "v; hit=1 } print; next }
+    fs==1 && index($0, k":")==1 { print k": "v; hit=1; next }
+    { print }' "$3" > "$tmp" && mv "$tmp" "$3"
+}
 
 # ================================================================== commands
 cmd_init_board() {
@@ -537,16 +545,40 @@ cmd_run_verify() { # Integrator: re-run a task's verify commands in CWD (e.g. on
   run_verify_cmds "$tf"
 }
 
-cmd_done() { # Integrator only, after the branch is merged to BASE
+landed_sha() { # landed_sha <ID> — SHA of the squash commit in $BASE whose subject ENDS with [<ID>]
+  # (what `land` writes). --fixed-strings so the grep is literal; the suffix check below is what
+  # keeps [T-1] from ever matching [T-10]. rc 1 = no landed commit.
+  local id="$1" line sha subj
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    sha="${line%% *}"; subj="${line#* }"
+    case "$subj" in *"[$id]") printf '%s' "$sha"; return 0;; esac
+  done <<EOF
+$(git -C "$PRIMARY" log --fixed-strings --grep "[$id]" --format='%H %s' "$BASE" 2>/dev/null)
+EOF
+  return 1
+}
+
+cmd_done() { # Integrator only, after the task is landed (squash) or merged (legacy) into BASE
   local id="${1:?usage: polaris done <ID>}"
   local tf; tf="$(task_file "$id" review)" || die "$id is not in review/"
-  git -C "$PRIMARY" merge-base --is-ancestor "feat/$id" "$BASE" 2>/dev/null \
-    || die "feat/$id is not merged into $BASE — merge first, then done"
+  # merged? A squash landing (polaris land) is NEVER an ancestor of $BASE, so ancestry alone
+  # went blind the day land shipped. Rule 1: the landed commit record — subject suffix [<ID>]
+  # in $BASE history. Rule 2 (legacy fallback): feat-branch ancestry, so hand --no-ff merges
+  # per MANUAL.md keep working. Both fail → not merged.
+  local landed; landed="$(landed_sha "$id" || true)"
+  if [ -z "$landed" ]; then
+    git -C "$PRIMARY" merge-base --is-ancestor "feat/$id" "$BASE" 2>/dev/null \
+      || die "$id is not in $BASE — land it (or merge it), then done"
+  fi
   local deltas; deltas="$(fm_list map_delta "$tf" 2>/dev/null || true)"   # BEFORE the mv — path vanishes after
   local pts; pts="$(fm_get points "$tf")"
   mutex_on
   git -C "$PRIMARY" mv "$BOARD/review/$id.md" "$BOARD/done/$id.md"
   set_fm status done "$BOARD/done/$id.md"
+  # stamp the landed commit onto the task — the durable, human-readable record (rollback's fast
+  # path; sweep's stray test). Rides this same board commit; legacy merges have no SHA to stamp.
+  [ -n "$landed" ] && fm_stamp landed "$landed" "$BOARD/done/$id.md"
   # apply map_delta so MAP.md never rots (Integrator is its only writer → no conflict)
   local d applied=0
   while IFS= read -r d; do
@@ -562,15 +594,21 @@ EOF
   mutex_off; trap - EXIT
   local wt; wt="$(wt_path "$id")"
   [ -d "$wt" ] && git -C "$PRIMARY" worktree remove --force "$wt" 2>/dev/null || true
+  # LOCAL tip before the branch dies — a squash-landed branch is never an ancestor of $BASE,
+  # so remote cleanup proves the remote is ours by TIP EQUALITY with this SHA instead.
+  local ltip; ltip="$(git -C "$PRIMARY" rev-parse -q --verify "refs/heads/feat/$id" 2>/dev/null || true)"
   git -C "$PRIMARY" branch -q -D "feat/$id" 2>/dev/null || true
   # handoff pushed feat/<ID> to origin; a landed task must not leave a dead branch there —
-  # that is how a sprint turns into a wall of stale branches on the host. Delete only when
-  # the REMOTE tip is provably in $BASE; a diverged tip is left for sweep to flag, never lost.
+  # that is how a sprint turns into a wall of stale branches on the host. Delete only when the
+  # remote tip == the local tip we just landed from (squash landings), or is provably in $BASE
+  # (legacy merges); a diverged tip is left for sweep to flag, never lost.
   local remote_note=""
   if has_remote; then
     local rsha; rsha="$(git -C "$PRIMARY" ls-remote origin "refs/heads/feat/$id" 2>/dev/null | cut -f1)"
     if [ -n "$rsha" ]; then
-      if git -C "$PRIMARY" cat-file -e "$rsha" 2>/dev/null \
+      if [ -n "$ltip" ] && [ "$rsha" = "$ltip" ]; then
+        git -C "$PRIMARY" push -q origin ":refs/heads/feat/$id" 2>/dev/null && remote_note=" (local+remote)" || true
+      elif git -C "$PRIMARY" cat-file -e "$rsha" 2>/dev/null \
          && git -C "$PRIMARY" merge-base --is-ancestor "$rsha" "$BASE" 2>/dev/null; then
         git -C "$PRIMARY" push -q origin ":refs/heads/feat/$id" 2>/dev/null && remote_note=" (local+remote)" || true
       else
@@ -580,6 +618,191 @@ EOF
   fi
   lock_drop "$id"; [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$id"
   say "$id → done/ · lock, worktree, branch$remote_note cleaned$( [ $applied -eq 1 ] && echo ' · map_delta applied')"
+}
+
+# ------------------------------------------------- clean history (land · seal)
+# The history model: one rich squash commit per task (`land`), one tagged --no-ff summary merge
+# per sprint (`seal`). `history` reads it back; `rollback` reverts it. Contract:
+# ops/contracts/clean-history.md — applies forward only; existing history is never rewritten.
+
+cmd_task_commit_msg() { # task-commit-msg <task-file> — the task's landed-commit message on stdout.
+  # PURE: reads one file, mutates NOTHING. `land` is the consumer — commit quality is authored at
+  # grooming time (## Why, scope:, checkboxes, Notes), not improvised at merge time.
+  local tf="${1:?usage: polaris task-commit-msg <task-file>}"
+  [ -f "$tf" ] || die "no such task file: $tf"
+  local id title ttype ctype scope first why crit notes files
+  id="$(fm_get id "$tf")"; [ -n "$id" ] || die "no id: in frontmatter — not a task file? $tf"
+  title="$(fm_get title "$tf")"
+  ttype="$(fm_get type "$tf")"
+  case "$ttype" in            # type map per the contract; a spike or a missing type is a chore
+    feature) ctype=feat;;
+    bug)     ctype=fix;;
+    *)       ctype=chore;;
+  esac
+  scope="$(fm_get scope "$tf")"
+  if [ -z "$scope" ]; then    # fallback: first path component of the first files_owned entry
+    first="$(fm_list files_owned "$tf" | head -1)"
+    scope="${first%%/*}"
+  fi
+  # Why body: between the ## Why heading (legacy ## Why this exists accepted — pre-5.12 boards)
+  # and the next ## heading, blank edges trimmed. Lands in the commit body VERBATIM.
+  why="$(awk '
+    /^## Why[ \t\r]*$/ || /^## Why this exists[ \t\r]*$/ { on=1; next }
+    on && /^## / { exit }
+    on { sub(/\r$/,""); if (!got && $0 ~ /^[ \t]*$/) next; got=1; print }
+  ' "$tf")"
+  # What changed: the acceptance checkboxes, "- [ ] "/"- [x] " marker stripped
+  crit="$(awk '
+    /^## Acceptance/ { on=1; next }
+    on && /^## / { on=0 }
+    on && /^[ \t]*- \[[ xX]\]/ { sub(/\r$/,""); sub(/^[ \t]*- \[[ xX]\][ \t]*/,""); print "- " $0 }
+  ' "$tf")"
+  # Notes: the Builder discoveries — "- " lines only, comment lines and ⛔ traffic filtered out
+  notes="$(awk '
+    /^## Notes/ { on=1; next }
+    on && /^## / { on=0 }
+    on && /^[ \t]*- / {
+      sub(/\r$/,"")
+      if (index($0, "<!--")) next
+      if (index($0, "⛔")) next
+      sub(/^[ \t]*/,""); print
+    }
+  ' "$tf")"
+  files="$(fm_list files_owned "$tf" | awk 'NR>1 {printf ", "} {printf "%s", $0} END {printf "\n"}')"
+  printf '%s(%s): %s [%s]\n\n' "$ctype" "$scope" "$title" "$id"
+  [ -n "$why" ] && printf '%s\n\n' "$why"
+  printf 'What changed:\n'
+  [ -n "$crit" ] && printf '%s\n' "$crit"
+  printf '\n'
+  [ -n "$notes" ] && printf 'Notes:\n%s\n\n' "$notes"
+  printf 'Files: %s\n' "$files"
+}
+
+in_primary() { # land/seal mutate the branch checked out in CWD — only the primary checkout
+  # qualifies (in a Builder worktree they would mangle a feat branch). Both sides go through the
+  # same `cd && pwd -P`, so macOS /tmp symlinks and Git Bash drive-style paths compare equal.
+  local top; top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+  [ "$(cd "$top" 2>/dev/null && pwd -P)" = "$(cd "$PRIMARY" 2>/dev/null && pwd -P)" ]
+}
+
+cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate branch: audit, then
+  # squash feat/<ID> into exactly ONE commit whose message comes from the task file. Makes NO
+  # board write, NO evt, NO board commit — a red task unwinds with a single
+  # `git reset --hard HEAD~1`, nothing uncommitted at stake. The landed record IS the commit
+  # (subject suffix [<ID>] + Landed-from trailer); `done` stamps it onto the task later.
+  local id="${1:?usage: polaris land <ID>}"
+  local tf; tf="$(task_file "$id" review)" || die "$id is not in review/ — only handed-off work lands"
+  in_primary || die "land mutates the checked-out branch — run it in the primary checkout, never a worktree"
+  local br; br="$(git rev-parse --abbrev-ref HEAD)"
+  [ "$br" != "$BASE" ] || die "you are on $BASE — create the integration branch first: git checkout -b integrate/$(date +%F)"
+  git diff --quiet && git diff --cached --quiet || die "working tree not clean — a conflict must be able to reset --hard safely"
+  local tip; tip="$(git rev-parse -q --verify "refs/heads/feat/$id")" || die "no local branch feat/$id"
+  # audit BEFORE any merge — ownership + rules on the feat branch, exactly as `polaris audit`
+  check_ownership "$tf" "feat/$id"
+  check_rules "feat/$id"
+  # build the message BEFORE the merge, so no failure path can strand staged state
+  local msgf; msgf="$(mktemp)"
+  cmd_task_commit_msg "$tf" > "$msgf"
+  printf '\nLanded-from: %s\n' "$tip" >> "$msgf"
+  if ! git merge --squash -q "feat/$id"; then
+    git reset -q --hard                 # restore the integrate HEAD, tree clean
+    rm -f "$msgf"
+    cmd_kickback "$id" -m "squash conflict — planning bug"
+    die "squash conflict — $br restored, $id kicked back to active/"
+  fi
+  if git diff --cached --quiet; then
+    git reset -q --hard; rm -f "$msgf"
+    die "feat/$id brings no changes over $br — nothing to land (your call: kickback it, or done it by hand)"
+  fi
+  git commit -q -F "$msgf" || { rm -f "$msgf"; git reset -q --hard; die "commit failed — squash unwound, $br clean"; }
+  rm -f "$msgf"
+  say "landed $id on $br — $(git log -1 --format=%s)"
+  note "goes red on the suite? unwind: git reset --hard HEAD~1   ·   bounce: polaris kickback $id -m \"<why>\""
+}
+
+cmd_seal() { # seal [<date>] — close the sprint: ONE --no-ff merge of integrate/<date> into $BASE,
+  # tagged sprint/<n>. Message = sprint header + a bullet per landed commit — the changelog entry
+  # `history` shows forever. A merge conflict aborts; a human resolves — never auto-resolved.
+  local date="${1:-}"; [ -n "$date" ] || date="$(date +%F)"
+  in_primary || die "seal runs in the primary checkout — cd \"$PRIMARY\" first"
+  git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
+  git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null \
+    || die "no branch integrate/$date — land tasks on it first (a different day's branch? seal <date>)"
+  local subjects
+  subjects="$(git log --reverse --format=%s "$BASE..integrate/$date" | grep -v '^chore(board):' || true)"
+  [ -n "$subjects" ] || die "nothing to seal — $BASE..integrate/$date has only board commits"
+  # <n> + <goal> from the ops/SPRINT.md header: "# SPRINT <n> — <goal>" (goal ends at 2+ spaces
+  # or capacity:; — or - both accepted)
+  local hdr n goal
+  hdr="$(sed -n 's/^# SPRINT //p' "$OPS/SPRINT.md" 2>/dev/null | head -1 | tr -d '\r')"
+  n="${hdr%%[!0-9]*}"
+  [ -n "$n" ] || die "cannot read the sprint number — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header"
+  goal="$(printf '%s' "${hdr#"$n"}" | sed -e 's/^[[:space:]]*//' -e 's/^—[[:space:]]*//' -e 's/^-[[:space:]]*//' \
+      -e 's/[[:space:]][[:space:]].*$//' -e 's/[[:space:]]*capacity:.*$//' -e 's/[[:space:]]*$//')"
+  git rev-parse -q --verify "refs/tags/sprint/$n" >/dev/null \
+    && die "tag sprint/$n already exists — bump the ops/SPRINT.md header (new sprint, new number)"
+  local msg
+  msg="Sprint $n — $goal
+
+$(printf '%s\n' "$subjects" | sed 's/^/- /')"
+  git checkout -q "$BASE"
+  if ! git merge --no-ff -q "integrate/$date" -m "$msg"; then
+    git merge --abort 2>/dev/null || true
+    die "merge conflict sealing integrate/$date into $BASE — resolve by hand; seal never auto-resolves"
+  fi
+  git tag "sprint/$n"
+  if has_remote; then
+    git push -q origin "$BASE" "refs/tags/sprint/$n" 2>/dev/null \
+      || note "⚠ push failed — push by hand: git push origin $BASE sprint/$n"
+  fi
+  say "sprint $n sealed — integrate/$date merged into $BASE (--no-ff), tagged sprint/$n"
+}
+
+cmd_history() { # history [--tasks <n>] — read-only changelog view of $BASE: first-parent, board
+  # noise hidden. Sealed sprints read as one line each; a never-sealed board degrades to its
+  # plain log minus chore(board): — it never dies.
+  local n
+  if [ "${1:-}" = "--tasks" ]; then
+    n="${2:?usage: polaris history --tasks <n>}"
+    git -C "$PRIMARY" rev-parse -q --verify "refs/tags/sprint/$n" >/dev/null \
+      || die "no tag sprint/$n — only sealed sprints have a task view (polaris history lists them)"
+    git -C "$PRIMARY" log --no-merges --date=short --format='%h %ad %s' "sprint/$n^1..sprint/$n" \
+      | grep -Ev '^[0-9a-f]+ [0-9-]+ chore\(board\):' || true
+    return 0
+  fi
+  [ -z "${1:-}" ] || die "usage: polaris history [--tasks <n>]"
+  git -C "$PRIMARY" log --first-parent --date=short --format='%h %ad %s' "$BASE" 2>/dev/null \
+    | grep -Ev '^[0-9a-f]+ [0-9-]+ chore\(board\):' || true
+  return 0
+}
+
+cmd_rollback() { # rollback <ID | sprint/<n>> — one forward revert commit on $BASE. Never resets,
+  # never force-pushes; a conflicted revert aborts with the tree restored.
+  local target="${1:?usage: polaris rollback <ID | sprint/<n>>}"
+  local br; br="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || die "cannot resolve the current branch"
+  [ "$br" = "$BASE" ] || die "rollback reverts on $BASE — you are on $br"
+  git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
+  local sha
+  case "$target" in
+    sprint/*)
+      git rev-parse -q --verify "refs/tags/$target" >/dev/null || die "no tag $target — sealed sprints only"
+      if ! git revert --no-edit -m 1 "$target" >/dev/null; then
+        git revert --abort 2>/dev/null || true
+        die "conflicted revert of $target — aborted, tree restored; resolve by hand"
+      fi
+      ;;
+    *)
+      sha=""
+      [ -f "$BOARD/done/$target.md" ] && sha="$(fm_get landed "$BOARD/done/$target.md" 2>/dev/null || true)"
+      [ -n "$sha" ] || sha="$(landed_sha "$target" || true)"
+      [ -n "$sha" ] || die "no landed commit for $target — no landed: stamp in done/ and nothing in $BASE with subject suffix [$target]"
+      if ! git revert --no-edit "$sha" >/dev/null; then
+        git revert --abort 2>/dev/null || true
+        die "conflicted revert of $target ($sha) — aborted, tree restored; resolve by hand"
+      fi
+      ;;
+  esac
+  say "reverted $target — one forward commit on $BASE: $(git log -1 --format=%s)"
 }
 
 cmd_status() {
@@ -629,13 +852,23 @@ cmd_sweep() { # report orphans + stale + remote strays; --fix removes true orpha
   # since 5.11). This pass catches strays from before — or from any path that skipped `done`.
   # Only branches whose task is in done/ are touched; active/review branches are live work.
   if has_remote; then
-    local rline rsha rref rid
+    local rline rsha rref rid lsha lf
     while IFS= read -r rline; do
       [ -n "$rline" ] || continue
       rsha="${rline%%$'\t'*}"; rref="${rline#*$'\t'}"
       case "$rref" in refs/heads/feat/*) rid="${rref#refs/heads/feat/}";; *) continue;; esac
       [ -f "$BOARD/done/$rid.md" ] || continue
-      if git -C "$PRIMARY" cat-file -e "$rsha" 2>/dev/null \
+      # deletable iff the remote tip is provably what we landed. Squash landings (polaris land)
+      # are never ancestors of $BASE, so the proof is TIP EQUALITY with the squash commit's
+      # Landed-from trailer; the ancestor check stays as the legacy proof for hand merges.
+      lsha="$(fm_get landed "$BOARD/done/$rid.md" 2>/dev/null || true)"
+      [ -n "$lsha" ] || lsha="$(landed_sha "$rid" || true)"
+      lf=""
+      [ -n "$lsha" ] && lf="$(git -C "$PRIMARY" log -1 --format=%B "$lsha" 2>/dev/null | sed -n 's/^Landed-from: *//p' | head -1 | tr -d ' \r' || true)"
+      if [ -n "$lf" ] && [ "$rsha" = "$lf" ]; then
+        found=1; printf '⚠ REMOTE stray: feat/%s — task done (landed %.7s), branch still on origin\n' "$rid" "$lsha"
+        [ "$fix" = "--fix" ] && { git -C "$PRIMARY" push -q origin ":refs/heads/feat/$rid" && note "deleted"; }
+      elif git -C "$PRIMARY" cat-file -e "$rsha" 2>/dev/null \
          && git -C "$PRIMARY" merge-base --is-ancestor "$rsha" "$BASE" 2>/dev/null; then
         found=1; printf '⚠ REMOTE stray: feat/%s — task done, branch fully merged, still on origin\n' "$rid"
         [ "$fix" = "--fix" ] && { git -C "$PRIMARY" push -q origin ":refs/heads/feat/$rid" && note "deleted"; }
@@ -724,7 +957,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     git init -q -b main repo 2>/dev/null || { git init -q repo; git -C repo symbolic-ref HEAD refs/heads/main; }
     cd repo; git config user.email t@t; git config user.name t
     mkdir -p ops/board/ready src; echo x > src/a.txt
-    printf -- '---\nid: T-1\npoints: 1\nwsjf: 9\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/a.txt\nverify:\n  - test -f src/a.txt\n---\n' > ops/board/ready/T-1.md
+    printf -- '---\nid: T-1\ntitle: land a file\ntype: feature\npoints: 1\nwsjf: 9\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/a.txt\nverify:\n  - test -f src/a.txt\n---\n' > ops/board/ready/T-1.md
     git add -A; git commit -qm init
     "$SELF" init-board >/dev/null
     git add -A; git commit -qm board
@@ -740,9 +973,56 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     git reset -q --hard HEAD~1
     "$SELF" handoff T-1 > "$T/ho.out"
     grep -q 'Integrate now' "$T/ho.out" || { echo "HANDOFF NOTICE FAIL (last lane must print the integrate hint)"; exit 1; }
-    cd "$T/repo"; git merge -q --no-ff feat/T-1 -m merge
+    cd "$T/repo"
+    # ====================== v5.12 clean-history drills =======================
+    # land (squash → ONE rich commit) → seal (tagged summary merge) → history →
+    # done (rule-1 gate + landed: stamp) → rollback (task + sprint reverts).
+    for c in task-commit-msg land seal history rollback; do
+      "$SELF" help | grep -q "$c" || { echo "USAGE FAIL: $c missing from help"; exit 1; }
+    done
+    # task-commit-msg: pure formatter — subject map · Why verbatim · checkbox markers stripped ·
+    # comment + ⛔ notes filtered · Files joined
+    mkdir -p "$T/fmt"
+    printf -- '---\nid: T-X\ntitle: format drill\ntype: bug\nscope: core\nfiles_owned:\n  - src/a.txt\n  - src/b.txt\n---\n## Why\nbecause history should read.\n\n## Acceptance criteria\n- [ ] box one\n- [x] box two\n\n## Notes\n<!-- comment line -->\n- kept note\n- ⛔ dropped note\n' > "$T/fmt/T-X.md"
+    "$SELF" task-commit-msg "$T/fmt/T-X.md" > "$T/fmt/out" || { echo "TCM RUN FAIL"; exit 1; }
+    head -1 "$T/fmt/out" | grep -q '^fix(core): format drill \[T-X\]$' || { echo "TCM SUBJECT FAIL"; exit 1; }
+    grep -q '^because history should read\.$' "$T/fmt/out" || { echo "TCM WHY FAIL"; exit 1; }
+    grep -q '^- box one$' "$T/fmt/out" || { echo "TCM CRIT FAIL (marker must strip)"; exit 1; }
+    grep -q '^- kept note$' "$T/fmt/out" || { echo "TCM NOTE FAIL"; exit 1; }
+    grep -q '⛔' "$T/fmt/out" && { echo "TCM FILTER FAIL (⛔ note must drop)"; exit 1; }
+    grep -q '^Files: src/a.txt, src/b.txt$' "$T/fmt/out" || { echo "TCM FILES FAIL"; exit 1; }
+    # land: one commit, contract subject + Landed-from trailer, clean tree after
+    printf '# SPRINT 1 — selftest sprint  capacity: 5\n' > ops/SPRINT.md
+    git add -A; git commit -qm 'chore(board): sprint header'
+    git checkout -q -b integrate/2026-01-01
+    "$SELF" land T-1 >/dev/null || { echo "LAND FAIL"; exit 1; }
+    git log -1 --format=%s | grep -q '^feat(src): land a file \[T-1\]$' || { echo "LAND SUBJECT FAIL"; exit 1; }
+    [ "$(git log -1 --format=%B | sed -n 's/^Landed-from: //p' | tr -d ' \r')" = "$(git rev-parse feat/T-1)" ] \
+      || { echo "LAND TRAILER FAIL"; exit 1; }
+    git diff --quiet && git diff --cached --quiet || { echo "LAND DIRTY FAIL (must leave zero uncommitted state)"; exit 1; }
+    # seal: one --no-ff merge on main, per-task bullet body, lightweight sprint tag
+    "$SELF" seal 2026-01-01 >/dev/null || { echo "SEAL FAIL"; exit 1; }
+    git rev-parse -q --verify refs/tags/sprint/1 >/dev/null || { echo "SEAL TAG FAIL"; exit 1; }
+    git log -1 --format=%s | grep -q '^Sprint 1 — selftest sprint$' || { echo "SEAL SUBJECT FAIL"; exit 1; }
+    git log -1 --format=%b | grep -q '^- feat(src): land a file \[T-1\]$' || { echo "SEAL BULLET FAIL"; exit 1; }
+    # history: sprint line visible, board noise filtered; --tasks drills into the squash commit
+    "$SELF" history > "$T/hist.out"
+    grep -q 'Sprint 1 — selftest sprint' "$T/hist.out" || { echo "HISTORY FAIL (sprint merge missing)"; exit 1; }
+    grep -q 'chore(board)' "$T/hist.out" && { echo "HISTORY FILTER FAIL (board noise must hide)"; exit 1; }
+    "$SELF" history --tasks 1 | grep -q 'land a file \[T-1\]' || { echo "HISTORY TASKS FAIL"; exit 1; }
+    # done on a squash landing: rule-1 gate accepts (feat/T-1 is NOT an ancestor of main) + landed: stamp
     "$SELF" done T-1 >/dev/null
+    [ "$(sed -n 's/^landed: //p' ops/board/done/T-1.md | tr -d ' \r')" = "$(git rev-parse 'sprint/1^2')" ] \
+      || { echo "LANDED STAMP FAIL (done must stamp the squash SHA)"; exit 1; }
     [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-1" ] && { echo "LOCK CLEANUP FAIL"; exit 1; }
+    # rollback: task revert applies, then (state reset between) the sprint revert applies too
+    "$SELF" rollback T-1 >/dev/null || { echo "ROLLBACK TASK FAIL"; exit 1; }
+    [ "$(cat src/a.txt)" = "x" ] || { echo "ROLLBACK CONTENT FAIL (the y line must go)"; exit 1; }
+    git reset -q --hard HEAD~1        # drop the task revert so the sprint revert sees the same diff
+    "$SELF" rollback sprint/1 >/dev/null || { echo "ROLLBACK SPRINT FAIL"; exit 1; }
+    [ "$(cat src/a.txt)" = "x" ] || { echo "ROLLBACK SPRINT CONTENT FAIL"; exit 1; }
+    git reset -q --hard HEAD~1        # back to the sealed state for the drills below
+    # ==================== end v5.12 clean-history drills =====================
     for ev in claim handoff all-review done; do
       grep -q "\"ev\":\"$ev\",\"id\":\"T-1\"" ops/board/EVENTS.ndjson || { echo "EVENTS FAIL: $ev missing"; exit 1; }
     done
@@ -854,6 +1134,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
       git log -1 --format=%B | grep -q 'feat: clean product' || { echo "ATTRIBUTION KEEP FAIL (subject must survive)"; exit 1; }
     fi
     # --- v5.11: remote hygiene — done deletes the pushed feat branch; sweep --fix removes strays
+    # (T-C is deliberately merged --no-ff, NOT landed: it is the ONE legacy drill proving the
+    #  gate's rule-2 fallback — hand merges per MANUAL.md still pass done + remote cleanup.)
     git init -q --bare "$T/origin.git"
     git remote add origin "$T/origin.git"
     git push -qu origin main
@@ -872,7 +1154,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
@@ -1635,6 +1917,15 @@ polaris — POLARIS v4 board CLI (run from anywhere inside the repo)
   audit <ID>                     Integrator: ownership check of feat/<ID>
   run-verify <ID>                Integrator: re-run task verify: commands in CWD
   done <ID>                      Integrator: review→done + apply map_delta + full cleanup
+  task-commit-msg <task-file>    print the task's landed-commit message (pure; `land` consumes it)
+  land <ID>                      Integrator, on integrate/<date>: audit + squash feat/<ID> into
+                                 ONE rich commit ([<ID>] subject + Landed-from trailer; no board write)
+  seal [<date>]                  Integrator: close the sprint — merge integrate/<date> into base
+                                 (--no-ff, per-task bullets) + lightweight tag sprint/<n>
+  history [--tasks <n>]          changelog view of base (board noise hidden); --tasks <n> drills
+                                 into one sealed sprint's task commits
+  rollback <ID|sprint/<n>>       revert one landed task (or a whole sprint, -m 1) on base —
+                                 forward-only: never resets, never force-pushes
   status | sweep [--fix] | doctor [--selftest]
   metrics                        cycle · throughput · kickbacks · build-vs-integrate split (EVENTS.ndjson)
   why <ID>                       why a task bounced/blocked: kickback + release notes from telemetry + body
@@ -1669,6 +1960,11 @@ case "${1:-}" in
   audit)      shift; cmd_audit "$@";;
   run-verify) shift; cmd_run_verify "$@";;
   done)       shift; cmd_done "$@";;
+  task-commit-msg) shift; cmd_task_commit_msg "$@";;
+  land)       shift; cmd_land "$@";;
+  seal)       shift; cmd_seal "$@";;
+  history)    shift; cmd_history "$@";;
+  rollback)   shift; cmd_rollback "$@";;
   status)     update_check_maybe || true; cmd_status;;
   sweep)      shift 2>/dev/null || true; cmd_sweep "${1:-}";;
   doctor)     shift 2>/dev/null || true; update_check_maybe || true; cmd_doctor "${1:-}";;
