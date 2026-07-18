@@ -10,6 +10,7 @@ kit/ops/polaris chain T-004 → T-013 → T-005 → T-006. Release 5.13.0.
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-07-18 | 12 (T-004, T-012, T-014..T-016, wave 1, sealed sprint/3) | 8 (T-013 ready · T-005, T-006 backlog) · cycle p50 0.5h n=13 · kickbacks 0 · build avg 0.1h / integrate avg 4.8h |
 
 # SPRINT 2 — Clean history          capacity: 13   dates: 2026-07-18–
 
@@ -54,3 +55,10 @@ exercises but a Builder cannot.
   do not follow the new kit/ops/roles/INTEGRATOR.md recipe here before the dogfood lands.
 - integrate(handoff→done) avg 8.4h vs build avg 0.1h — review parking dominates cycle time; run the
   Integrator as soon as a wave finishes handing off.
+- First land/seal run (5 tasks, paranoid): green per land, 0 conflicts. But `seal` tags sprint/<n>
+  ONCE and `done` needs the landed [ID] commit reachable in base — a mid-sprint wave 2 can neither
+  seal (tag exists) nor done. Sprint 3's next wave is blocked on a human call: bump the SPRINT
+  header number per wave, or teach seal multi-wave (kit change).
+- Installed ops/polaris runs pre-T-004 fm_list until 5.13.0 dogfoods: inline `[a, b]` lists on the
+  board parse as ONE literal item everywhere except depends_on (dep_ids special-cases it). Keep
+  board frontmatter lists block-shaped until the dogfood lands.
