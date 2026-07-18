@@ -525,6 +525,82 @@ cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
   say "$id → $to/ · lock released · worktree removed (branch feat/$id kept)"
 }
 
+grant_append_owned() { # grant_append_owned <path> <taskfile> — append ONE files_owned entry, keeping
+  # the list's shape: block list gets a new "  - <path>" item · "[a, b]" flow list gets ", <path>"
+  # before the ] · "[]" is filled · an inline scalar becomes a two-item flow list (the entry itself
+  # passes through verbatim). Append-only by construction: existing entries are never removed or
+  # rewritten. rc 1 + file untouched when files_owned is missing or malformed. POSIX awk, bash 3.2.
+  local p="$1" tf="$2" tmp="$2.tmp.$$"
+  awk -v p="$p" '
+    inblock && /^[ \t]*-[ \t]/ { print; ind=$0; sub(/-.*$/,"",ind); next }
+    inblock { if (ind=="") ind="  "; print ind "- " p; inblock=0; done=1 }
+    /^---[\r]?$/ { fs++; print; next }
+    fs==1 && !done && !inblock && index($0, "files_owned:")==1 {
+      t=substr($0, 13)
+      sub(/^[ \t]*/,"",t); sub(/[ \t]#.*$/,"",t); sub(/[ \t\r]*$/,"",t)
+      if (t == "") { print; inblock=1; next }             # block list opens on the next lines
+      if (t ~ /^\[/) {                                    # inline flow list, incl. []
+        i=index($0, "]"); if (i == 0) { print; next }     # no ] → malformed → refuse via !done
+        if (t ~ /^\[[ \t]*\]$/) ins=p; else ins=", " p
+        print substr($0, 1, i-1) ins substr($0, i)
+      } else {
+        print "files_owned: [" t ", " p "]"               # inline scalar → flow list, entry kept
+      }
+      done=1; next
+    }
+    { print }
+    END {
+      if (inblock) { if (ind=="") ind="  "; print ind "- " p; done=1 }
+      if (!done) exit 3
+    }' "$tf" > "$tmp" || { rm -f "$tmp"; return 1; }
+  mv "$tmp" "$tf"
+}
+
+cmd_grant() { # grant <ID> <path> -m "why" — the SANCTIONED files_owned amendment (ops/contracts/grant.md).
+  # Adds one path to a CLAIMED task's ownership, with the why on the record. Disjointness (the ONE
+  # IDEA) survives mechanically: any overlap with ANOTHER ready/active task's files_owned — checked
+  # with the same pattern semantics as verify (exact · dir/ prefix · glob), in BOTH directions via
+  # pat_overlap — refuses outright, and a refusal mutates NOTHING: no partial write, no commit.
+  # RULES.tsv still binds inside granted paths: granting a danger zone does not make it writable
+  # (the guard and verify check RULES independently of ownership).
+  local id="${1:-}" path="${2:-}" msg=""
+  local u='usage: polaris grant <ID> <path> -m "why"'
+  [ -n "$id" ] && [ -n "$path" ] || die "$u"
+  shift 2
+  while [ $# -gt 0 ]; do case "$1" in
+    -m) msg="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
+    *)  die "unknown flag $1 — $u";;
+  esac; done
+  [ -n "$msg" ] || die "grant needs -m \"why\" — the reason goes on the task's record ($u)"
+  local tf; tf="$(task_file "$id" active)" \
+    || die "$id is not in active/ (state: $(task_col "$id" || echo unknown)) — grant amends CLAIMED work only; anything else is a Planner edit"
+  # the refusal gate: every files_owned entry of every OTHER task in ready/ ∪ active/ (the claimable set)
+  local col f oid pat
+  for col in ready active; do
+    for f in "$BOARD/$col/"*.md; do
+      [ -e "$f" ] || break
+      oid="$(basename "$f" .md)"; [ "$oid" = "$id" ] && continue
+      while IFS= read -r pat; do
+        [ -z "$pat" ] && continue
+        pat_overlap "$path" "$pat" \
+          && die "grant refused: '$path' overlaps $oid ($col/) files_owned '$pat' — ownership stays disjoint; chain the tasks (depends_on) or hand back"
+      done <<EOF
+$(fm_list files_owned "$f")
+EOF
+    done
+  done
+  mutex_on
+  grant_append_owned "$path" "$tf" \
+    || die "grant refused: $tf has no usable files_owned list — planning bug, nothing written"
+  printf -- '- grant: %s — %s\n' "$path" "$msg" >> "$tf"
+  evt grant "$id" "$path"
+  board_commit "chore(board): grant $id $path"
+  sync_board
+  mutex_off; trap - EXIT
+  say "granted: $path → $id files_owned (append-only; why recorded on the task)"
+  note "RULES.tsv still binds inside granted paths · prove it when done: polaris verify"
+}
+
 cmd_notify_gate() { # notify-gate <kind> [ID] — fire the notify: hook at a HUMAN GATE, and do
   # nothing else. Conductor calls it when the run starts waiting on a person; it is ADDITIVE to
   # the in-conversation gate, never a substitute. Kinds (ops/contracts/hands-free-knobs.md):
@@ -1365,10 +1441,37 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     grep -q 'builder_questions=default-safe' "$T/doc.out" || { echo "KNOB TRUSTED FAIL (autonomy: trusted must fill unset knobs)"; exit 1; }
     grep -q "drain: 'bogus' unknown" "$T/doc.out" || { echo "KNOB WARN FAIL (unknown value must warn + behave as default)"; exit 1; }
     git checkout -q -- ops/CONVENTIONS.md
+    # ================== T-005 grant drills (ops/contracts/grant.md) ==================
+    # sanctioned files_owned amendment: refusals (wrong column · missing -m · overlap, each
+    # mutating NOTHING) then one success = append + Notes line + event + ONE board commit.
+    "$SELF" help | grep -q 'grant' || { echo "USAGE FAIL: grant missing from help"; exit 1; }
+    printf -- '---\nid: T-G\npoints: 1\nwsjf: 6\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/g.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-G.md
+    printf -- '---\nid: T-H\npoints: 1\nwsjf: 1\nstatus: ready\nfiles_owned:\n  - src/h/\n---\n' > ops/board/ready/T-H.md
+    git add -A; git commit -qm tg
+    "$SELF" claim T-G >/dev/null
+    "$SELF" grant T-H src/free.txt -m why >/dev/null 2>&1 && { echo "GRANT COLUMN FAIL (ready task must refuse — grant is for active/ only)"; exit 1; }
+    "$SELF" grant T-G src/free.txt >/dev/null 2>&1 && { echo "GRANT -M FAIL (missing -m must refuse)"; exit 1; }
+    gpre="$(git rev-parse HEAD)"
+    "$SELF" grant T-G src/h/inner.txt -m why >/dev/null 2>&1 && { echo "GRANT OVERLAP FAIL (path under another task's dir/ must refuse)"; exit 1; }
+    "$SELF" grant T-G src/ -m why >/dev/null 2>&1 && { echo "GRANT OVERLAP FAIL (dir/ swallowing another task's entry must refuse — both directions)"; exit 1; }
+    [ "$(git rev-parse HEAD)" = "$gpre" ] || { echo "GRANT REFUSE MUTATE FAIL (a refusal must not commit)"; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "GRANT REFUSE DIRTY FAIL (a refusal must leave zero uncommitted state)"; exit 1; }
+    "$SELF" grant T-G src/free.txt -m "discovered during wiring" >/dev/null || { echo "GRANT FAIL (free path must succeed)"; exit 1; }
+    fm_list files_owned ops/board/active/T-G.md | grep -qx 'src/free.txt' || { echo "GRANT APPEND FAIL (path missing from files_owned)"; exit 1; }
+    fm_list files_owned ops/board/active/T-G.md | grep -qx 'src/g.txt' || { echo "GRANT PRESERVE FAIL (existing entries must survive)"; exit 1; }
+    grep -q '^- grant: src/free.txt — discovered during wiring$' ops/board/active/T-G.md || { echo "GRANT NOTE FAIL (Notes line missing)"; exit 1; }
+    grep -q '"ev":"grant","id":"T-G".*"note":"src/free.txt"' ops/board/EVENTS.ndjson || { echo "GRANT EVENT FAIL"; exit 1; }
+    git log -1 --format=%s | grep -q '^chore(board): grant T-G src/free.txt$' || { echo "GRANT COMMIT FAIL (one board commit, contract subject)"; exit 1; }
+    ( cd .polaris/wt/T-G && echo f > src/free.txt && git add -A && git commit -qm ok \
+      && "$SELF" verify T-G >/dev/null ) || { echo "GRANT VERIFY FAIL (granted path must pass ownership)"; exit 1; }
+    "$SELF" release T-G --to ready -m drill >/dev/null
+    rm -f ops/board/ready/T-G.md ops/board/ready/T-H.md
+    git add -A; git commit -qm cleanup-gh
+    # ================== end T-005 grant drills ==================
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways)"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
@@ -2127,6 +2230,9 @@ polaris — POLARIS v4 board CLI (run from anywhere inside the repo)
   verify [ID]                    diff ⊆ files_owned + run verify: commands (in worktree)
   handoff [ID]                   verify + push + active→review   (lock stays)
   release <ID> [--to ready|blocked] [-m note]   abort: give the task back cleanly
+  grant <ID> <path> -m "why"     append one path to a CLAIMED task's files_owned (sanctioned
+                                 amendment; REFUSES any overlap with another ready/active task's
+                                 ownership — refusal mutates nothing; RULES.tsv still binds)
   kickback <ID> [-m note]        Integrator: red merge → review→active
   audit <ID>                     Integrator: ownership check of feat/<ID>
   run-verify <ID>                Integrator: re-run task verify: commands in CWD
@@ -2174,6 +2280,7 @@ case "${1:-}" in
   verify)     shift; cmd_verify "$@";;
   handoff)    shift; cmd_handoff "$@";;
   release)    shift; cmd_release "$@";;
+  grant)      shift; cmd_grant "$@";;
   kickback)   shift; cmd_kickback "$@";;
   audit)      shift; cmd_audit "$@";;
   run-verify) shift; cmd_run_verify "$@";;
