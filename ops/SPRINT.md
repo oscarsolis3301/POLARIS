@@ -11,6 +11,7 @@ kit/ops/polaris chain T-004 → T-013 → T-005 → T-006. Release 5.13.0.
 | date | done pts | remaining |
 |---|---|---|
 | 2026-07-18 | 12 (T-004, T-012, T-014..T-016, wave 1, sealed sprint/3) | 8 (T-013 ready · T-005, T-006 backlog) · cycle p50 0.5h n=13 · kickbacks 0 · build avg 0.1h / integrate avg 4.8h |
+| 2026-07-18 | 15 (+T-013, wave 2, folded via MANUAL fallback, no tag) | 8 (T-017 ready · T-005, T-006 backlog) · cycle p50 0.5h n=14 · kickbacks 0 · build avg 0.1h / integrate avg 4.5h |
 
 # SPRINT 2 — Clean history          capacity: 13   dates: 2026-07-18–
 
@@ -62,3 +63,6 @@ exercises but a Builder cannot.
 - Installed ops/polaris runs pre-T-004 fm_list until 5.13.0 dogfoods: inline `[a, b]` lists on the
   board parse as ONE literal item everywhere except depends_on (dep_ids special-cases it). Keep
   board frontmatter lists block-shaped until the dogfood lands.
+- Wave 2 correction: only `seal` is wave-blocked (tag exists), NOT `done` — MANUAL's fold recipe
+  (plain `--no-ff` merge into base, no tag) puts the [ID] commit in base and `done` passes.
+  Wave 3 (T-017) needs the same fallback; T-017's fixed seal owns tag semantics from 5.13.0.
