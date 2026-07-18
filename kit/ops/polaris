@@ -51,8 +51,18 @@ evt() { # evt <ev> <id> [note] [pts] — append one ndjson line. Call INSIDE the
     "${pts:+,\"pts\":$pts}" >> "$EVENTS"
   # optional notify hook: CONVENTIONS `notify: <cmd>` — background, output discarded,
   # failures ignored. It observes the board; it must never be able to stall or fail it.
+  # v2 (ops/contracts/hands-free-knobs.md): POLARIS_SEVERITY rides along — ev "blocked"
+  # means the run waits on a human (gate); every other board event is FYI (info).
+  local sev="info"; [ "$1" = "blocked" ] && sev="gate"
+  notify_fire "$1" "$2" "${3:-}" "$sev"
+  return 0
+}
+notify_fire() { # notify_fire <ev> <id> <note> <severity> — invoke the CONVENTIONS `notify: <cmd>`
+  # hook: background subshell, output discarded, failures ignored, rc 0 always. Shared by evt()
+  # and cmd_notify_gate so the shim invokes the hook EXACTLY as board events do. Pure observation:
+  # writes nothing, takes no lock, can never stall a run. No notify: configured → silent no-op.
   local ncmd; ncmd="$(cfg notify "")"
-  [ -n "$ncmd" ] && ( POLARIS_EV="$1" POLARIS_ID="$2" POLARIS_NOTE="${3:-}" \
+  [ -n "$ncmd" ] && ( POLARIS_EV="$1" POLARIS_ID="$2" POLARIS_NOTE="$3" POLARIS_SEVERITY="$4" \
       bash -c "$ncmd" ) >/dev/null 2>&1 &
   return 0
 }
@@ -502,7 +512,10 @@ cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
   git -C "$PRIMARY" mv "$BOARD/active/$id.md" "$BOARD/$to/$id.md"
   set_fm owner null "$BOARD/$to/$id.md"; set_fm status "$to" "$BOARD/$to/$id.md"
   [ -n "$msg" ] && printf -- '- ⛔ released by %s: %s\n' "$WHO" "$msg" >> "$BOARD/$to/$id.md"
-  evt release "$id" "→ $to: $msg"
+  # v2: --to blocked is its own board event ("blocked", severity gate at the hook) — a recipe can
+  # now tell "the run waits on you" from an FYI. --to ready keeps ev "release". Note text unchanged.
+  local ev="release"; [ "$to" = "blocked" ] && ev="blocked"
+  evt "$ev" "$id" "→ $to: $msg"
   board_commit "chore(board): release $id → $to"
   sync_board
   mutex_off; trap - EXIT
@@ -510,6 +523,27 @@ cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
   [ -d "$wt" ] && git -C "$PRIMARY" worktree remove --force "$wt" 2>/dev/null || true
   lock_drop "$id"; [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$id"
   say "$id → $to/ · lock released · worktree removed (branch feat/$id kept)"
+}
+
+cmd_notify_gate() { # notify-gate <kind> [ID] — fire the notify: hook at a HUMAN GATE, and do
+  # nothing else. Conductor calls it when the run starts waiting on a person; it is ADDITIVE to
+  # the in-conversation gate, never a substitute. Kinds (ops/contracts/hands-free-knobs.md):
+  #   plan          EV=waiting  NOTE=plan-gate         SEVERITY=gate   (no ID)
+  #   risk <ID>     EV=waiting  NOTE=risk-approval     SEVERITY=gate
+  #   question <ID> EV=waiting  NOTE=builder-question  SEVERITY=gate
+  #   done [ID]     EV=run-done NOTE=run-done          SEVERITY=done
+  # Observe-only by contract: NEVER calls evt(), appends EVENTS.ndjson, takes the board mutex,
+  # moves/edits a board file, or commits. No notify: configured → rc 0, silent.
+  local kind="${1:-}" id="${2:-}" ev nt sev
+  local u="usage: polaris notify-gate <plan | risk <ID> | question <ID> | done [ID]>"
+  case "$kind" in
+    plan)     ev="waiting"; nt="plan-gate"; sev="gate"; id="";;
+    risk)     [ -n "$id" ] || die "$u"; ev="waiting"; nt="risk-approval"; sev="gate";;
+    question) [ -n "$id" ] || die "$u"; ev="waiting"; nt="builder-question"; sev="gate";;
+    done)     ev="run-done"; nt="run-done"; sev="done";;
+    *)        die "$u";;
+  esac
+  notify_fire "$ev" "$id" "$nt" "$sev"
 }
 
 cmd_resume() { # resume [ID] — re-enter an already-claimed active task without re-claiming it: after a
@@ -914,6 +948,39 @@ cmd_doctor() {
   else
     note "⚠ ops/CONVENTIONS.md missing — INIT has not run in this repo. Say: \"You are INIT.\" (no new session needed)"
   fi
+  # v5.13 autonomy knobs (ops/contracts/hands-free-knobs.md). Silence = every default = today's
+  # behavior, so print the EFFECTIVE composition only when a knob is set. Precedence per contract:
+  # explicit knob > autonomy: trusted > default. Unknown values warn and behave as the default
+  # (fail closed to today). `autonomy` composes only the three gate knobs — never drain.
+  local a pg bq ea dr ds trusted=0
+  a="$(cfg autonomy "")"; pg="$(cfg plan_gate "")"; bq="$(cfg builder_questions "")"
+  ea="$(cfg evolve_apply "")"; dr="$(cfg drain "")"; ds="$(cfg drain_slices "")"
+  if [ -n "$a$pg$bq$ea$dr$ds" ]; then
+    if [ "$a" = "trusted" ]; then trusted=1
+    elif [ -n "$a" ] && [ "$a" != "standard" ]; then
+      note "⚠ autonomy: '$a' unknown (standard | trusted) — behaving as standard"; a="standard"
+    fi
+    if [ -n "$pg" ] && [ "$pg" != "confirm" ] && [ "$pg" != "auto" ]; then
+      note "⚠ plan_gate: '$pg' unknown (confirm | auto) — behaving as the default"; pg=""
+    fi
+    if [ -z "$pg" ]; then if [ "$trusted" -eq 1 ]; then pg="auto"; else pg="confirm"; fi; fi
+    if [ -n "$bq" ] && [ "$bq" != "ask" ] && [ "$bq" != "default-safe" ]; then
+      note "⚠ builder_questions: '$bq' unknown (ask | default-safe) — behaving as the default"; bq=""
+    fi
+    if [ -z "$bq" ]; then if [ "$trusted" -eq 1 ]; then bq="default-safe"; else bq="ask"; fi; fi
+    if [ -n "$ea" ] && [ "$ea" != "confirm" ] && [ "$ea" != "auto-reversible" ]; then
+      note "⚠ evolve_apply: '$ea' unknown (confirm | auto-reversible) — behaving as the default"; ea=""
+    fi
+    if [ -z "$ea" ]; then if [ "$trusted" -eq 1 ]; then ea="auto-reversible"; else ea="confirm"; fi; fi
+    note "autonomy: ${a:-standard} → plan_gate=$pg · builder_questions=$bq · evolve_apply=$ea (explicit > autonomy > default)"
+    if [ -n "$dr$ds" ]; then
+      if [ -n "$dr" ] && [ "$dr" != "queue" ] && [ "$dr" != "plan" ] && [ "$dr" != "backlog" ]; then
+        note "⚠ drain: '$dr' unknown (queue | plan | backlog) — behaving as the default"; dr=""
+      fi
+      case "$ds" in *[!0-9]*) note "⚠ drain_slices: '$ds' not a number — behaving as 2"; ds="";; esac
+      note "drain: ${dr:-queue} · drain_slices: ${ds:-2} (autonomy never composes drain)"
+    fi
+  fi
   mkdir -p "$LOCKS" && [ -w "$LOCKS" ] || die "lock dir not writable: $LOCKS"
   case "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null)" in .*|../*) note "⚠ origin is a RELATIVE path — breaks in worktrees; use an absolute URL";; esac
   case "$CLAIM_MODE" in local-lock|claim-branch) :;; *) die "claim: must be local-lock or claim-branch";; esac
@@ -1179,10 +1246,62 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     "$SELF" sweep | grep -q 'REMOTE stray: feat/T-C' || { echo "SWEEP STRAY FAIL"; exit 1; }
     "$SELF" sweep --fix >/dev/null
     git ls-remote --exit-code origin refs/heads/feat/T-C >/dev/null 2>&1 && { echo "SWEEP FIX FAIL (merged stray must be deleted)"; exit 1; }
+    # ================== v5.13 notify v2 drills (hands-free-knobs) ==================
+    # shim listed in help · no notify: configured → rc 0 and SILENT · unknown/missing kind (and a
+    # missing required ID) → usage error, rc≠0
+    "$SELF" help | grep -q 'notify-gate' || { echo "USAGE FAIL: notify-gate missing from help"; exit 1; }
+    "$SELF" notify-gate plan > "$T/ng.out" 2>&1 || { echo "NOTIFY-GATE RC FAIL (no hook must rc 0)"; exit 1; }
+    [ -s "$T/ng.out" ] && { echo "NOTIFY-GATE SILENCE FAIL (no hook must print nothing)"; exit 1; }
+    "$SELF" notify-gate bogus >/dev/null 2>&1 && { echo "NOTIFY-GATE KIND FAIL (unknown kind must rc!=0)"; exit 1; }
+    "$SELF" notify-gate >/dev/null 2>&1 && { echo "NOTIFY-GATE KIND FAIL (missing kind must rc!=0)"; exit 1; }
+    "$SELF" notify-gate risk >/dev/null 2>&1 && { echo "NOTIFY-GATE ID FAIL (risk without ID must rc!=0)"; exit 1; }
+    # a notify: hook that logs its env as EV/SEVERITY/ID/NOTE lines. The shim BACKGROUNDS the
+    # hook, so every assertion polls for its line (bounded, ≤2s) — never races it.
+    printf 'notify: printf "%%s/%%s/%%s/%%s\\n" "$POLARIS_EV" "$POLARIS_SEVERITY" "$POLARIS_ID" "$POLARIS_NOTE" >> %s\n' "$T/notify.log" > ops/CONVENTIONS.md
+    git add -A; git commit -qm notify-hook
+    ngwait() { local i=0; while [ "$i" -lt 20 ]; do grep -q "$1" "$T/notify.log" 2>/dev/null && return 0; sleep 0.1; i=$((i+1)); done; return 1; }
+    evn="$(wc -l < ops/board/EVENTS.ndjson)"
+    "$SELF" notify-gate plan
+    "$SELF" notify-gate risk T-42
+    "$SELF" notify-gate question T-43
+    "$SELF" notify-gate done
+    ngwait '^waiting/gate//plan-gate$' || { echo "NOTIFY-GATE PLAN FAIL (waiting/gate env line missing)"; exit 1; }
+    ngwait '^waiting/gate/T-42/risk-approval$' || { echo "NOTIFY-GATE RISK FAIL (waiting/gate/<ID> env line missing)"; exit 1; }
+    ngwait '^waiting/gate/T-43/builder-question$' || { echo "NOTIFY-GATE QUESTION FAIL"; exit 1; }
+    ngwait '^run-done/done//run-done$' || { echo "NOTIFY-GATE DONE FAIL (run-done/done env line missing)"; exit 1; }
+    [ "$(wc -l < ops/board/EVENTS.ndjson)" = "$evn" ] || { echo "NOTIFY-GATE EVENTS FAIL (shim must never append EVENTS.ndjson)"; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "NOTIFY-GATE CLEAN FAIL (shim must never touch the work tree)"; exit 1; }
+    # blocked is a distinct board event: --to blocked → ev "blocked" + SEVERITY=gate at the hook ·
+    # an ordinary event (claim) carries SEVERITY=info · --to ready keeps ev "release" · `why`
+    # surfaces blocked lines as bounce history
+    printf -- '---\nid: T-D\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/d.txt\nverify: []\n---\n' > ops/board/ready/T-D.md
+    git add -A; git commit -qm td
+    "$SELF" claim T-D >/dev/null
+    ngwait '^claim/info/T-D/' || { echo "SEVERITY INFO FAIL (ordinary event must export SEVERITY=info)"; exit 1; }
+    "$SELF" release T-D --to blocked -m stuck >/dev/null
+    grep -q '"ev":"blocked","id":"T-D"' ops/board/EVENTS.ndjson || { echo "BLOCKED EVENT FAIL (--to blocked must emit ev blocked)"; exit 1; }
+    ngwait '^blocked/gate/T-D/' || { echo "SEVERITY GATE FAIL (blocked must export SEVERITY=gate)"; exit 1; }
+    "$SELF" why T-D | grep -q 'ago  blocked' || { echo "WHY BLOCKED FAIL (why must surface blocked telemetry lines)"; exit 1; }
+    printf -- '---\nid: T-E\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/e.txt\nverify: []\n---\n' > ops/board/ready/T-E.md
+    git add -A; git commit -qm te
+    "$SELF" claim T-E >/dev/null
+    "$SELF" release T-E --to ready -m drill >/dev/null
+    grep -q '"ev":"release","id":"T-E"' ops/board/EVENTS.ndjson || { echo "RELEASE EVENT FAIL (--to ready must keep ev release)"; exit 1; }
+    grep -q '"ev":"blocked","id":"T-E"' ops/board/EVENTS.ndjson && { echo "RELEASE EVENT FAIL (--to ready must not emit blocked)"; exit 1; }
+    rm -f ops/board/blocked/T-D.md ops/board/ready/T-E.md
+    git add -A; git commit -qm cleanup-de
+    # doctor knob awareness: explicit knob beats autonomy: trusted, trusted fills the unset
+    # knobs, unknown values warn and behave as the default
+    printf 'autonomy: trusted\nplan_gate: confirm\ndrain: bogus\n' > ops/CONVENTIONS.md
+    "$SELF" doctor > "$T/doc.out" 2>&1 || { echo "DOCTOR KNOB RC FAIL"; exit 1; }
+    grep -q 'plan_gate=confirm' "$T/doc.out" || { echo "KNOB PRECEDENCE FAIL (explicit knob must beat autonomy: trusted)"; exit 1; }
+    grep -q 'builder_questions=default-safe' "$T/doc.out" || { echo "KNOB TRUSTED FAIL (autonomy: trusted must fill unset knobs)"; exit 1; }
+    grep -q "drain: 'bogus' unknown" "$T/doc.out" || { echo "KNOB WARN FAIL (unknown value must warn + behave as default)"; exit 1; }
+    git checkout -q -- ops/CONVENTIONS.md
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
@@ -1421,7 +1540,7 @@ cmd_why() { # why <ID> — the reasons a task bounced or blocked, from telemetry
     out="$(awk -v id="$id" -v now="$(date +%s)" '
       function g(k,  m){ m=""; if (match($0,"\""k"\":\"[^\"]*\"")){m=substr($0,RSTART,RLENGTH);sub("\""k"\":\"","",m);sub("\"$","",m)} return m }
       function n(k,  m){ m=0; if (match($0,"\""k"\":[0-9]+")){m=substr($0,RSTART,RLENGTH);sub("\""k"\":","",m)} return m+0 }
-      { e=g("ev"); if (g("id")==id && (e=="kickback"||e=="release")) {
+      { e=g("ev"); if (g("id")==id && (e=="kickback"||e=="release"||e=="blocked")) {
           nt=g("note"); printf "  %5dh ago  %-8s %s\n", int((now-n("ts"))/3600), e, (nt==""?"(no note)":nt) } }
     ' "$EVENTS")"
   fi
@@ -1956,7 +2075,10 @@ polaris — POLARIS v4 board CLI (run from anywhere inside the repo)
                                  forward-only: never resets, never force-pushes
   status | sweep [--fix] | doctor [--selftest]
   metrics                        cycle · throughput · kickbacks · build-vs-integrate split (EVENTS.ndjson)
-  why <ID>                       why a task bounced/blocked: kickback + release notes from telemetry + body
+  why <ID>                       why a task bounced/blocked: kickback + release/blocked notes from telemetry + body
+  notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
+                                 plan · risk <ID> · question <ID> · done [ID]  (observe-only:
+                                 never writes the board, EVENTS.ndjson, or any lock)
   drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
   qa                             is everything okay, in ONE shot: test/lint/typecheck/build/uat
@@ -2001,6 +2123,7 @@ case "${1:-}" in
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
   rules)      cmd_rules;;
   qa)         cmd_qa;;
+  notify-gate) shift; cmd_notify_gate "$@";;   # no update_check_maybe: must stay silent + pure
   _rules)     shift; cmd_rules_check "$@";;
   dash)       shift; update_check_maybe || true; cmd_dash "$@";;
   fleet)      shift; cmd_fleet "$@";;
