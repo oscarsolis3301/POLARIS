@@ -47,29 +47,16 @@ exercises but a Builder cannot.
 | 2026-07-18 | 13 (T-003, T-007..T-010) | 7 (T-004..T-006) · cycle p50 0.5h · kickbacks 0 |
 
 ## Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
-- The write-guard binds every `feat/*` branch to a board task. Bootstrap work that is NOT a task must
-  not use that prefix, or the guard blocks every write. (Cost: one rename, mid-refactor.)
 - A `case` statement inside `$(...)` command substitution is a HARD PARSE error on bash 3.2 (macOS
   `/bin/bash`): it reads the case pattern's `)` as the `$(`'s close. Keep `case` out of command
   substitution; only the 3-OS CI's `/bin/bash 3.2` leg catches it. (Cost: 4 CI round-trips to pinpoint.)
-- Editing `kit/` files off-board collided with a task parked in `review/` that owned the same file
-  (T-002 owned `kit/ops/polaris`). Off-board edits break the disjoint-ownership guarantee like a bad
-  plan does — route product changes through tasks, or expect a merge conflict with parked work.
-- Kit source now has land/seal/history/rollback, but the INSTALLED ops/polaris is 5.11 until a
-  release + `pack.py --dogfood` — the next integration on THIS board is still classic --no-ff;
-  do not follow the new kit/ops/roles/INTEGRATOR.md recipe here before the dogfood lands.
-- integrate(handoff→done) avg 8.4h vs build avg 0.1h — review parking dominates cycle time; run the
-  Integrator as soon as a wave finishes handing off.
-- First land/seal run (5 tasks, paranoid): green per land, 0 conflicts. But `seal` tags sprint/<n>
-  ONCE and `done` needs the landed [ID] commit reachable in base — a mid-sprint wave 2 can neither
-  seal (tag exists) nor done. Sprint 3's next wave is blocked on a human call: bump the SPRINT
-  header number per wave, or teach seal multi-wave (kit change).
-- Installed ops/polaris runs pre-T-004 fm_list until 5.13.0 dogfoods: inline `[a, b]` lists on the
+- Installed ops/polaris is 5.12.0; kit source is 5.13.0-unreleased. Until the 5.13.0 dogfood, board
+  integration uses MANUAL's fold recipe (plain `--no-ff` merge into base, no tag): `done` passes,
+  but T-017's per-wave seal tag semantics exist only in kit source — never follow a kit/ops/roles
+  recipe the installed CLI cannot run.
+- Installed ops/polaris runs pre-T-004 fm_list until the 5.13.0 dogfood: inline `[a, b]` lists on the
   board parse as ONE literal item everywhere except depends_on (dep_ids special-cases it). Keep
   board frontmatter lists block-shaped until the dogfood lands.
-- Wave 2 correction: only `seal` is wave-blocked (tag exists), NOT `done` — MANUAL's fold recipe
-  (plain `--no-ff` merge into base, no tag) puts the [ID] commit in base and `done` passes.
-  Wave 3 (T-017) needs the same fallback; T-017's fixed seal owns tag semantics from 5.13.0.
 - Since T-006, doctor's stale-zip warning fires on every post-fold run in THIS repo (the zip embeds
   its pack commit; any merge moves HEAD past it). Warning only — doctor/qa stay green; the rebuild
   belongs to the release ritual, not integration. Don't read it as a red.

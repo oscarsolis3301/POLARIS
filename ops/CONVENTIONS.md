@@ -1,7 +1,7 @@
 # CONVENTIONS
 base: main                  # base branch
 claim: local-lock           # one machine, many sessions — file lock, no network round-trip
-integration: paranoid       # the suite is ~15s; on infrastructure a bad merge is expensive. Test every merge.
+integration: paranoid       # suite ~2-3min (selftest+pack), not the 15s it once was. Kept: a red land self-identifies with zero bisect, and the delta vs batch was ~15min this sprint. Revisit if suite >5min or waves regularly >5 tasks.
 voice: standard             # plain, friendly English when talking to the human
 autolaunch: wt              # Planner opens a Builder pane per ready task in Windows Terminal, beside you
 stale_hours: 4              # sweep warns on active locks older than this
@@ -29,6 +29,11 @@ Every kit file exists twice: `kit/ops/polaris` (source) and `ops/polaris` (insta
 installed copy and the work is lost the next time we install a release — and until then the board is
 running code that exists nowhere in the source. `ops/RULES.tsv` blocks it at write time and names the
 source file to edit instead.
+
+The installed instance also LAGS the source: mid-sprint, `kit/ops/` docs and role files describe
+behavior the installed CLI does not have yet. When they disagree, the installed CLI plus
+`ops/MANUAL.md` are the truth for board mechanics until the next dogfood — check
+`bash ops/polaris version` before following any recipe that landed this sprint.
 
 The board (`ops/board/`, `ops/contracts/`, and this file) IS state, and is written normally.
 
@@ -63,3 +68,6 @@ kit to everyone who installed before the `kit/` split existed.
 - 2026-07-18 · MAP folded: header re-dated, CLI row gains clean-history commands, selftest-install/selftest-dashboard promoted to Modules, dashboard Unverified bullet cleared, Deltas emptied · 3 Deltas lines (T-001, T-003, T-007) + T-003 clearing the untested-dashboard claim
 - 2026-07-18 · SPRINT Learned pruned to ≤5: dropped the zero-conflict/paranoid-cost bullet · content institutionalized in CONVENTIONS integration comment + MAP hotspots
 - 2026-07-18 · Calibration home moved to this file (§ Planner calibration) with two notes; write-routing row updated; fallback-home gap logged to IDEAS · ops/roles/ is RULES-guarded here, blocking EVOLVE's kit-default target (PLANNER.md §Pointing); metrics n=8, 0 kickbacks, T-002 30.4h outlier
+- 2026-07-18 · SPRINT Learned pruned 9→4: dropped write-guard-prefix, off-board-collision, stale 5.11-lag, integrate-lag, seal-blocked bullets; merged the two seal/fold bullets into one corrected installed-vs-source bullet · drift finding LEARNED 9>5; waves 2-6 all folded via MANUAL fallback, sprint 3 complete
+- 2026-07-18 · integration: paranoid comment rewritten with real suite cost (~2-3min), keep-rationale (zero-bisect red lands) and revisit triggers (>5min suite or >5-task waves) · 6 paranoid waves this sprint, 0 kickbacks; old comment claimed 15s
+- 2026-07-18 · THE SPLIT gains installed-LAGS-source paragraph: installed CLI + ops/MANUAL.md are board-mechanics truth until the next dogfood · sprint 3 ran installed 5.12.0 against kit 5.13.0-unreleased; T-017 seal recipe unrunnable, 5 waves needed MANUAL fold
