@@ -28,7 +28,7 @@ Your kickoff message names your role. Read `ops/roles/<ROLE>.md`, then execute i
 All coordination is front-loaded into the Planner. Every task gets a **disjoint set of files it may edit** (`files_owned`). No two claimable tasks ever share a file, so Builders run fully parallel with nothing to negotiate and merges are mechanical. The only runtime race — two Builders grabbing the same task — is broken by an atomic lock. Plan once, fan out. Do NOT rely on runtime self-organization.
 
 ## THE TOOL — `ops/polaris`
-Every board mechanic is one command. You MUST use the script instead of hand-rolling git recipes; it is race-tested. (Environment can't execute commands? Follow `ops/MANUAL.md` literally instead.)
+Every board mechanic is one command. You MUST use the script instead of hand-rolling git recipes; it is race-tested. (Environment can't execute commands? Follow `ops/MANUAL.md` literally instead.) This table is a curated subset for daily board work — `ops/polaris help` prints the full command list, including admin/plumbing left out here on purpose (`init-board`, `resume`, `task-commit-msg`, `why`, `uninstall`).
 
 | Command | Does |
 |---|---|
@@ -36,20 +36,22 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris verify` | proves `diff ⊆ files_owned` + runs the task's `verify:` commands |
 | `ops/polaris handoff` | verify + push + active→review (run inside your worktree) |
 | `ops/polaris release <ID> --to ready\|blocked -m "why"` | clean abort |
+| `ops/polaris grant <ID> <path> -m "why"` | append one path to a CLAIMED task's files_owned; refuses any overlap with another ready/active task's ownership |
 | `ops/polaris audit / run-verify / kickback / done <ID>` | Integrator: check, re-check, bounce red work, land |
 | `ops/polaris land <ID>` | Integrator: squash a reviewed task into ONE commit on `integrate/<date>` |
-| `ops/polaris seal [<date>]` | Integrator: fold `integrate/<date>` into `<base>` with one `--no-ff` merge + tag `sprint/<n>` |
-| `ops/polaris history [--tasks <n>]` | read-only: `<base>`'s first-parent log, `chore(board):` commits filtered out |
-| `ops/polaris rollback <ID \| sprint/<n>>` | revert a landed task or a sealed sprint — never resets, never force-pushes |
+| `ops/polaris seal [<date>]` | Integrator: fold `integrate/<date>` into `<base>` with one `--no-ff` merge + tag `sprint/<n>`; a later seal MOVES the sprint tag — the sprint's latest sealed checkpoint |
+| `ops/polaris history [--tasks <n>]` | read-only: `<base>`'s first-parent log, `chore(board):` commits filtered out; `--tasks <n>` spans all a sprint's waves |
+| `ops/polaris rollback <ID \| sprint/<n>>` | revert a landed task, or `sprint/<n>` for the sprint's latest sealed wave — never resets, never force-pushes |
 | `ops/polaris status / sweep / doctor [--selftest]` | board view · stale locks · env check |
 | `ops/polaris dash / metrics` | live board at 127.0.0.1:7373 · cycle/kickbacks/per-point calibration |
+| `ops/polaris notify-gate <kind> [ID]` | fire the notify: hook at a human gate — kinds `plan` · `risk <ID>` · `question <ID>` · `done [ID]`; observe-only, never writes the board |
 | `ops/polaris drift / rules` | mechanical board-hygiene audit (`--strict` for CI) · policy file list + health |
 | `ops/polaris qa` | "is everything okay?" in ONE shot: CONVENTIONS suite (test/lint/typecheck/build/uat) + `drift --strict` + doctor. Runs every check even after a red; rc 1 on any red. The Conductor/Integrator finish line |
 | `ops/polaris fleet <N> [--launch]` | print N Builder kickoffs; `--launch` opens a session per ready task in tmux windows or side-by-side Windows Terminal panes (`--dry-run` previews). Planner runs this per `autolaunch:` |
 | `ops/polaris version / update` | which POLARIS this repo runs · **fetch the latest kit** — also re-caches it into `~/.claude` so the next repo gets it too (manual; POLARIS never self-updates mid-sprint) |
 | `ops/polaris upgrade` | migrate an OLD BOARD v3/v4→v5. Downloads nothing. **Not** `update` — one letter apart, unrelated jobs; "upgrade POLARIS" almost always means `update`. |
 
-History model, in one line: a task lands as one squash commit, a sprint seals as one tagged `--no-ff` merge, and `history` reads it back with board chores filtered out.
+History model, in one line: a task lands as one squash commit, a sprint seals as one tagged `--no-ff` merge (a later seal moves the tag to the sprint's latest sealed checkpoint), and `history` reads it back with board chores filtered out — `--tasks` spans all a sprint's waves.
 
 Board commits stage everything under `ops/` — keep `ops/` clean of unrelated edits or they ride along.
 

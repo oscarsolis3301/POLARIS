@@ -31,6 +31,17 @@ Commit everything on `feat/<ID>`, push it, then board commit on `<base>` in the 
 ## Release / abort (Builder)
 Board commit: task back to `ready/` (or `blocked/` + note). Remove the lock (`rm -rf "$LOCKS/<ID>"`, and in claim-branch mode `git push origin :refs/heads/claim/<ID>`). `git worktree remove .polaris/wt/<ID> --force`.
 
+## Grant (Builder) — amend `files_owned` mid-flight, the sanctioned way
+What `ops/polaris grant <ID> <path> -m "why"` does by hand. Preconditions — ALL must hold, else STOP and change NOTHING (no partial write, no commit):
+- `<ID>` is in `ops/board/active/` — amending unclaimed or finished work is a Planner act, not a grant;
+- you have a non-empty reason (`-m "why"`);
+- `<path>` overlaps NO `files_owned` entry of ANY other task in `ready/` or `active/`, with the same pattern semantics as the ownership proof above (exact · `dir/` prefix · glob) checked in BOTH directions — a granted `dir/` that swallows another task's exact path refuses just like a path under another task's `dir/`. Any overlap → refuse; chain the tasks (`depends_on`) or hand back instead.
+Then ONE board commit on `<base>` in the primary checkout, `chore(board): grant <ID> <path>`, containing all three edits:
+1. append `  - <path>` to the task's `files_owned` list (append-only — never remove or rewrite existing entries);
+2. append `- grant: <path> — <why>` to the task's Notes;
+3. append the telemetry line: `{"ts":<epoch>,"ev":"grant","id":"<ID>","who":"<you@host>","note":"<path>"}`.
+RULES.tsv still binds inside granted paths: granting a danger zone does NOT make it writable — rules are checked independently of ownership at write time, verify, and audit.
+
 ## Integrate (Integrator) — audit → land-per-task → suite → seal
 List `ops/board/review/`, topologically sort by `depends_on` — that is the merge order. On `integrate/<date>` (never on `<base>`), per task in order: audit it (same ownership + RULES proof as above, run against `feat/<ID>` — before ANY merge; a violation kicks the task back, never merges it), then squash-land it (see Land below). Batch mode: run the full suite ONCE after all lands are in. Paranoid mode (suite <2 min): run the full suite after EVERY land.
 Suite red → find the offender by halving, not by re-testing every land: `git reset --hard <base>`, re-land the first half of the list, run the suite, recurse into whichever half is red (log₂N runs — one commit per task, no merge topology to fight). Offender found → `git reset --hard HEAD~1` to drop its land, kick it back with the failing output (path:line only), skip anything that `depends_on` it, re-land the survivors, re-run the suite.
@@ -64,7 +75,7 @@ Land makes NO board write, NO evt, NO board commit — the board stays clean so 
 
 ## Seal (Integrator) — what `ops/polaris seal [<date>]` does by hand
 Primary checkout, working tree clean, default `<date>` = today. Folds a sprint's `integrate/<date>` into `<base>` as one tagged merge.
-Preconditions (else stop, nothing mutated): `integrate/<date>` exists · `<base>..integrate/<date>` has ≥1 non-`chore(board):` commit (else die "nothing to seal") · tag `sprint/<n>` does not already exist (else die "bump the SPRINT.md header").
+Preconditions (else stop, nothing mutated): `integrate/<date>` exists · `<base>..integrate/<date>` has ≥1 non-`chore(board):` commit (else die "nothing to seal") · tag `sprint/<n>` is absent OR points to an ancestor of `<base>` (an earlier wave's checkpoint — the tag moves after this merge); anything else is a reused sprint number (die "bump the SPRINT.md header").
 ```bash
 git checkout <base>
 git merge --no-ff "integrate/<date>" -m "Sprint <n> — <goal>
@@ -74,6 +85,13 @@ git tag sprint/<n>                       # lightweight, on the merge commit
 git push origin <base> "sprint/<n>"      # only if a remote exists
 ```
 `<n>` and `<goal>` parse from `ops/SPRINT.md`'s header line `# SPRINT <n> — <goal>` (goal ends at 2+ spaces or `capacity:`; `—` or `-` both accepted). Merge conflict → `git merge --abort` → die; a human resolves it, never auto-resolve.
+**Sealing the same sprint again (a later integration wave):** identical merge and message (bullets are naturally the new wave's commits — `<base>..integrate/<date>` excludes prior waves). Then MOVE the tag instead of creating it, and push it compare-and-swap — the only forced ref update POLARIS ever makes, and it is leased:
+```bash
+git tag -f "sprint/<n>"                  # onto the new merge; log the move (old → new SHA)
+git push origin <base>
+git push --force-with-lease=refs/tags/sprint/<n>:<old-sha> origin "refs/tags/sprint/<n>"
+```
+`sprint/<n>` always marks the sprint's latest sealed checkpoint — end of sprint = final checkpoint. `rollback sprint/<n>` reverts the LATEST wave; earlier waves revert by SHA: `git revert --no-edit -m 1 <sha>`.
 
 ## QA — "is everything okay?" by hand
 What `ops/polaris qa` does in one shot. From the repo root on `<base>`, run in order: the `test:` `lint:` `typecheck:` `build:` and `uat:` commands from `ops/CONVENTIONS.md` (skip blank keys), then the board-hygiene audit (the per-task ownership + RULES proof from Integrate above) and the env sanity checks. Run EVERY check even after one goes red — one pass paints the whole picture — then report red if anything was. The Integrator runs this before reporting; a Conductor runs it after integration and never takes a subagent's "green" on faith.
