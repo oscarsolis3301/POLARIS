@@ -4,7 +4,7 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
-## 5.13.0 — Unreleased
+## 5.13.0 — 2026-07-18
 
 **Hands-free core: the loop can run past the plan-gate wait, keep draining backlog, read a
 standing roadmap, and page you only at the moments it actually needs a human.** Every knob
