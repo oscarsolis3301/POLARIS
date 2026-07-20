@@ -14,6 +14,7 @@ Release 5.14.0.
 | 2026-07-20 | 10 (T-020, T-025, T-026, wave 1, sealed sprint/4) | 15 (T-021 ready · T-022..T-024 backlog) · cycle p50 0.5h n=22 · kickbacks 0 · build avg 0.2h / integrate avg 2.9h · qa green on main |
 | 2026-07-20 | 15 (+T-021, wave 2, re-sealed sprint/4 tag 69e3628→c239aa3) | 10 (T-022 ready · T-023, T-024 backlog) · cycle p50 0.5h n=23 · kickbacks 0 · build avg 0.2h / integrate avg 2.8h · qa green on main |
 | 2026-07-20 | 20 (+T-022, wave 3, re-sealed sprint/4 tag c239aa3→be299c9) | 5 (T-023 ready · T-024 backlog) · cycle p50 0.5h n=24 · kickbacks 0 · build avg 0.2h / integrate avg 2.7h · qa green on main |
+| 2026-07-20 | 23 (+T-023, wave 4, re-sealed sprint/4 tag be299c9→1cdfdc2) | 2 (T-024 ready) · cycle p50 0.5h n=25 · kickbacks 0 · build avg 0.2h / integrate avg 2.6h · qa green on main · Learned pruned 9→5 |
 
 # SPRINT 3 — Hands-free core          capacity: 13   dates: 2026-07-18–
 
@@ -67,27 +68,16 @@ exercises but a Builder cannot.
 - A `case` statement inside `$(...)` command substitution is a HARD PARSE error on bash 3.2 (macOS
   `/bin/bash`): it reads the case pattern's `)` as the `$(`'s close. Keep `case` out of command
   substitution; only the 3-OS CI's `/bin/bash 3.2` leg catches it. (Cost: 4 CI round-trips to pinpoint.)
-- Installed ops/polaris is 5.12.0; kit source is 5.13.0-unreleased. Until the 5.13.0 dogfood, board
-  integration uses MANUAL's fold recipe (plain `--no-ff` merge into base, no tag): `done` passes,
-  but T-017's per-wave seal tag semantics exist only in kit source — never follow a kit/ops/roles
-  recipe the installed CLI cannot run.
-- Installed ops/polaris runs pre-T-004 fm_list until the 5.13.0 dogfood: inline `[a, b]` lists on the
-  board parse as ONE literal item everywhere except depends_on (dep_ids special-cases it). Keep
-  board frontmatter lists block-shaped until the dogfood lands.
 - Since T-006, doctor's stale-zip warning fires on every post-fold run in THIS repo (the zip embeds
   its pack commit; any merge moves HEAD past it). Warning only — doctor/qa stay green; the rebuild
   belongs to the release ritual, not integration. Don't read it as a red.
-- Sprint-4 wave 1 (T-020, T-025, T-026): first fully CLI-driven land→seal→done→qa since the 5.13
-  dogfood — no MANUAL fold needed; tag sprint/4 created. Zero conflicts/kickbacks; contract-sourced
-  doc tasks parallel to the CLI chain is a carve pattern to keep.
-- T-020 re-targets board commits in KIT SOURCE only: the installed 5.13 board still commits
-  chore(board) on base until the 5.14 dogfood. Quiet-board expectations (clean base first-parent)
-  start only after that dogfood — waves for T-021..T-024 still write base chores.
+- 5.14 lag: T-020 quiet-board, T-022 pr-mode and T-023 sprint reports live in KIT SOURCE only until
+  the 5.14 dogfood — the installed 5.13 board still writes chore(board) on base, stays
+  publish: direct, and seal does NOT auto-commit docs(sprint-N). Their drills ride the kit selftest,
+  so `test:` already exercises them pre-dogfood.
 - backlog→ready promotion has no CLI command in 5.13 — done by hand (git mv + status frontmatter +
   chore(board) commit), per MANUAL's board-mutation pattern.
-- Sprint-4 wave 2 (T-021): first same-sprint re-seal via installed 5.13 — sprint/4 tag moved
-  69e3628→c239aa3 per the multi-wave contract, no MANUAL fold. Single-task waves on the
-  kit/ops/polaris chain stay cheap (audit→land→seal ~5 min); zero conflicts/kickbacks.
-- Sprint-4 wave 3 (T-022): pr-mode ships in KIT SOURCE only — the installed 5.13 board stays
-  publish: direct until the 5.14 dogfood; its pr-publish drill rides the kit selftest, so `test:`
-  already exercises it pre-dogfood. Zero conflicts/kickbacks; tag moved c239aa3→be299c9.
+- Sprint-4 waves 1-4 all zero-conflict, zero-kickback: single-task waves on the kit/ops/polaris
+  chain cost ~5 min (audit→land→seal), and same-sprint re-seals moved sprint/4 per the multi-wave
+  contract (69e3628→c239aa3→be299c9→1cdfdc2). Contract-sourced doc tasks parallel to a serial CLI
+  chain is a carve pattern to keep.
