@@ -34,15 +34,16 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 |---|---|
 | `ops/polaris claim [ID]` | atomic lock + ready→active + worktree (no ID = top wsjf) |
 | `ops/polaris verify` | proves `diff ⊆ files_owned` + runs the task's `verify:` commands |
-| `ops/polaris handoff` | verify + push + active→review (run inside your worktree) |
+| `ops/polaris handoff` | verify + active→review; `publish: direct` pushes feat/<ID>, `publish: pr` keeps it local (seal pushes only integrate/<date>) — run inside your worktree |
 | `ops/polaris release <ID> --to ready\|blocked -m "why"` | clean abort |
 | `ops/polaris grant <ID> <path> -m "why"` | append one path to a CLAIMED task's files_owned; refuses any overlap with another ready/active task's ownership |
 | `ops/polaris audit / run-verify / kickback / done <ID>` | Integrator: check, re-check, bounce red work, land |
 | `ops/polaris land <ID>` | Integrator: squash a reviewed task into ONE commit on `integrate/<date>` |
-| `ops/polaris seal [<date>]` | Integrator: fold `integrate/<date>` into `<base>` with one `--no-ff` merge + tag `sprint/<n>`; a later seal MOVES the sprint tag — the sprint's latest sealed checkpoint |
+| `ops/polaris seal [<date>]` | Integrator: `publish: direct` — fold `integrate/<date>` into `<base>` with one `--no-ff` merge + tag `sprint/<n>` (a later seal MOVES the tag — the sprint's latest sealed checkpoint). `publish: pr` — push ONLY `integrate/<date>` + print the PR-create URL; the human merges it with a MERGE COMMIT; then `seal --sync` pulls `<base>`, verifies every `[<ID>]` landed, moves/creates the tag, deletes `integrate/<date>` both sides |
+| `ops/polaris report [--sprint <n> \| --all]` | read/write: render the management-readable per-sprint record to `<reports>/sprint-<n>.md` from board state (no flag = current sprint); never commits — `seal` rides the report into the wave |
 | `ops/polaris history [--tasks <n>]` | read-only: `<base>`'s first-parent log, `chore(board):` commits filtered out; `--tasks <n>` spans all a sprint's waves |
 | `ops/polaris rollback <ID \| sprint/<n>>` | revert a landed task, or `sprint/<n>` for the sprint's latest sealed wave — never resets, never force-pushes |
-| `ops/polaris status / sweep / doctor [--selftest]` | board view · stale locks · env check |
+| `ops/polaris status / sweep / doctor [--selftest]` | board view · stale locks + merged `integrate/*` strays · env check |
 | `ops/polaris dash / metrics` | live board at 127.0.0.1:7373 · cycle/kickbacks/per-point calibration |
 | `ops/polaris notify-gate <kind> [ID]` | fire the notify: hook at a human gate — kinds `plan` · `risk <ID>` · `question <ID>` · `done [ID]`; observe-only, never writes the board |
 | `ops/polaris drift / rules` | mechanical board-hygiene audit (`--strict` for CI) · policy file list + health |
@@ -53,7 +54,7 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 
 History model, in one line: a task lands as one squash commit, a sprint seals as one tagged `--no-ff` merge (a later seal moves the tag to the sprint's latest sealed checkpoint), and `history` reads it back with board chores filtered out — `--tasks` spans all a sprint's waves.
 
-Board commits stage everything under `ops/` — keep `ops/` clean of unrelated edits or they ride along.
+Board commits touch only the moved set (`ops/board/**` + `ops/SPRINT.md`) on `refs/heads/polaris/board`; everything else in `ops/` (`MAP.md`, `contracts/`, `CONVENTIONS.md`, `RULES.tsv`) stays on `<base>`.
 
 ## STATE = THE BOARD (git-tracked, human-readable)
 ```
@@ -83,7 +84,7 @@ A task's state is the folder its file sits in; moving it (via the script) is the
 3. **Contract before code.** Contract missing or ambiguous → `blocked/` with a note. NEVER invent an interface.
 4. **Green before `review/`.** Full test commands from CONVENTIONS green AND `polaris verify` green. Red work never leaves `active/`.
 5. **One task per session.** Finish or hand back before claiming another. Sessions are disposable; the board is the memory. (One *role* per session too — the sole exception is the one-time INIT → PLANNER bootstrap chain; see ROLE DISPATCH. A CONDUCTOR session holds no role: each role runs in its own subagent.)
-6. **Board mutations go through `ops/polaris`** (they commit on the base branch in the primary checkout). Code commits go on `feat/<ID>` in your worktree. Never mix the two.
+6. **Board mutations go through `ops/polaris`** (they commit on `refs/heads/polaris/board`, never on `<base>`). Code commits go on `feat/<ID>` in your worktree. Never mix the two.
 7. **Claim = `polaris claim`.** Lock exists → task is taken → take the next one. Never edit a task you did not claim.
 8. **Scope = the task.** No drive-by refactors, no extra features, no new dependencies. Want more? One line in `ops/board/backlog/IDEAS.md` for the Planner.
 9. **Only the Integrator merges**, and a task with `risk: high` NEVER merges without explicit human approval in the conversation.

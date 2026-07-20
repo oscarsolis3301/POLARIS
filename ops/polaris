@@ -151,28 +151,137 @@ mutex_on() {
   trap on_die EXIT
 }
 has_remote() { git -C "$PRIMARY" remote get-url origin >/dev/null 2>&1; }
-sync_board() { # push BASE with rebase-retry; no-op without remote
-  has_remote || return 0
-  local i
-  for i in 1 2 3 4 5; do
-    git -C "$PRIMARY" push -q origin "$BASE" 2>/dev/null && return 0
-    git -C "$PRIMARY" pull --rebase -q origin "$BASE" 2>/dev/null || true
-  done
-  die "could not push board to origin/$BASE after 5 attempts"
+# publish: direct | pr (ops/contracts/publish-modes.md) — HOW a sealed wave reaches origin's $BASE.
+# Read via cfg at command runtime, never cached; unknown value warns ONCE per invocation (stderr,
+# so command substitutions never swallow it) and behaves as direct. Sets $PUB — no command
+# substitution on purpose (bash 3.2: no `case` inside `$(...)`).
+PUB="direct"
+PUBLISH_WARNED=""
+publish_resolve() {
+  local p; p="$(cfg publish direct)"
+  case "$p" in
+    direct|pr) PUB="$p";;
+    *) [ -z "$PUBLISH_WARNED" ] && { printf "   ⚠ publish: '%s' unknown (direct | pr) — behaving as direct\n" "$p" >&2; PUBLISH_WARNED=1; }
+       PUB="direct";;
+  esac
+  return 0
 }
-board_commit() { # board_commit <msg> — stage+commit the entire ops/ domain; index.lock retry.
-  # Primary checkout is board-only by protocol (invariant 6), and we hold the board mutex here,
-  # so "everything under ops/" is exactly this mutation. Never pass vanished mv-sources as pathspecs.
-  local msg="$1" i
+# publish: direct base-push-rejected stamp (ops/contracts/publish-modes.md). A protected $BASE keeps
+# refusing seal's push; the stamp records date + a running count so doctor can recommend publish: pr
+# after >=2 rejections. A successful base push clears it. Lives under $PRIMARY/.polaris (gitignored).
+base_push_reject() {
+  local f="$PRIMARY/.polaris/base-push-rejected" c=0
+  [ -f "$f" ] && c="$(awk 'NR==1{print $2+0}' "$f" 2>/dev/null)"
+  mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+  printf '%s %s\n' "$(date +%F)" "$(( ${c:-0} + 1 ))" > "$f"
+}
+base_push_clear() { rm -f "$PRIMARY/.polaris/base-push-rejected" 2>/dev/null || true; }
+pr_create_url() { # pr_create_url <origin-url> <date> <dest> — Bitbucket PR-create URL on stdout
+  # (ssh or https origin); non-Bitbucket or unparseable → prints nothing, never dies.
+  local url="$1" date="$2" dest="$3" path=""
+  case "$url" in
+    *bitbucket.org*)
+      path="${url#*bitbucket.org}"
+      path="${path#:}"; path="${path#/}"
+      path="${path%/}"
+      case "$path" in *.git) path="${path%.git}";; esac
+      case "$path" in
+        */*) printf 'https://bitbucket.org/%s/pull-requests/new?source=integrate/%s&dest=%s\n' "$path" "$date" "$dest";;
+      esac;;
+  esac
+  return 0
+}
+# Board history lives on its own ref so $BASE first-parent stays clean product history
+# (ops/contracts/quiet-board.md). The moved set — ops/board/** + ops/SPRINT.md — is gitignored on
+# base and committed here via secondary-index plumbing: no second worktree, no branch switch.
+BOARD_REF="refs/heads/polaris/board"
+board_paths() { # the moved set as it exists ON DISK, repo-relative
+  ( cd "$PRIMARY" || exit 0
+    [ -f ops/SPRINT.md ] && printf 'ops/SPRINT.md\n'
+    [ -d ops/board ] && find ops/board -type f
+    exit 0 )
+}
+board_ref_commit() { # board_ref_commit <msg> <parent|""> <idx> — commit the on-disk moved set via a
+  # SECONDARY index; prints the new sha. read-tree --empty + update-index --add per path rebuilds
+  # the tree from disk every time, so a plain `mv` between columns needs no remove call and the
+  # branch's tree always mirrors disk exactly (ONLY the moved set, at on-disk paths). GIT_INDEX_FILE
+  # keeps the primary index and working tree untouched, and update-index bypasses gitignore —
+  # required, the moved set is ignored on base. Empty <parent> = the parentless (orphan) first commit.
+  local msg="$1" parent="$2" idx="$3" tree
+  rm -f "$idx"
+  GIT_INDEX_FILE="$idx" git -C "$PRIMARY" read-tree --empty || return 1
+  # 2>/dev/null: autocrlf's "LF will be replaced by CRLF" advice is per-file noise on Windows
+  # (the old `git add` path silenced it the same way); real failures still return 1 and die upstream.
+  board_paths | GIT_INDEX_FILE="$idx" git -C "$PRIMARY" update-index --add --stdin 2>/dev/null || return 1
+  tree="$(GIT_INDEX_FILE="$idx" git -C "$PRIMARY" write-tree)" || return 1
+  if [ -n "$parent" ]; then git -C "$PRIMARY" commit-tree "$tree" -p "$parent" -m "$msg"
+  else git -C "$PRIMARY" commit-tree "$tree" -m "$msg"; fi
+}
+sync_board() { # push polaris/board (NEVER $BASE), bounded retry. A rejection means another machine
+  # pushed first: fetch its tip, union-append any EVENTS.ndjson lines it has that we lack into the
+  # on-disk file (append-only telemetry — no line is ever lost to a push race), re-commit local
+  # state re-parented on the fetched tip, retry. Every other board file: local wins — same-machine
+  # writers are mutex-serialized. No remote, or no board ref yet → no-op.
+  has_remote || return 0
+  git -C "$PRIMARY" rev-parse -q --verify "$BOARD_REF" >/dev/null || return 0
+  local i rtip ltip subj new idx line
+  for i in 1 2 3 4 5; do
+    git -C "$PRIMARY" push -q origin "$BOARD_REF:$BOARD_REF" 2>/dev/null && return 0
+    git -C "$PRIMARY" fetch -q origin "$BOARD_REF" 2>/dev/null || true
+    rtip="$(git -C "$PRIMARY" rev-parse -q --verify FETCH_HEAD 2>/dev/null || true)"
+    [ -n "$rtip" ] || { sleep 0.3; continue; }
+    while IFS= read -r line; do
+      [ -z "$line" ] && continue
+      grep -qxF -- "$line" "$EVENTS" 2>/dev/null || printf '%s\n' "$line" >> "$EVENTS"
+    done <<EOF
+$(git -C "$PRIMARY" show "$rtip:ops/board/EVENTS.ndjson" 2>/dev/null || true)
+EOF
+    ltip="$(git -C "$PRIMARY" rev-parse -q --verify "$BOARD_REF" 2>/dev/null || true)"
+    subj="$(git -C "$PRIMARY" log -1 --format=%s "$ltip" 2>/dev/null | grep . || echo 'chore(board): sync')"
+    idx="$(mktemp)"
+    if new="$(board_ref_commit "$subj" "$rtip" "$idx")" && [ -n "$new" ]; then
+      git -C "$PRIMARY" update-ref "$BOARD_REF" "$new" 2>/dev/null || true
+    fi
+    rm -f "$idx"
+  done
+  die "could not push polaris/board to origin after 5 attempts"
+}
+board_commit() { # board_commit <msg> — ONE commit of the moved set on refs/heads/polaris/board.
+  # Subjects unchanged (chore(board): …). Contention retry kept: the ref advances by
+  # compare-and-swap (update-ref <new> <old>), so a racing writer costs one loop iteration,
+  # never a lost commit. Working tree, primary index and $BASE gain nothing.
+  local msg="$1" i idx tip new
+  idx="$(mktemp)"
   for i in 1 2 3 4 5 6 7; do
-    if git -C "$PRIMARY" add -A -- "$OPS" 2>/dev/null \
-       && git -C "$PRIMARY" commit -q -m "$msg" 2>/dev/null; then
-      return 0
+    tip="$(git -C "$PRIMARY" rev-parse -q --verify "$BOARD_REF" 2>/dev/null || true)"
+    if new="$(board_ref_commit "$msg" "$tip" "$idx")" && [ -n "$new" ] \
+       && git -C "$PRIMARY" update-ref "$BOARD_REF" "$new" "${tip:-}" 2>/dev/null; then
+      rm -f "$idx"; return 0
     fi
     sleep 0.3
   done
-  git -C "$PRIMARY" add -A -- "$OPS" && git -C "$PRIMARY" commit -q -m "$msg" \
-    || die "board commit failed: $msg (error above)"
+  rm -f "$idx"
+  die "board commit failed: $msg (could not advance $BOARD_REF — another writer stuck?)"
+}
+board_materialize() { # fresh clone: the moved set is ignored on base, so a clone's working tree has
+  # no ops/board/ — its state lives on polaris/board (ops/contracts/quiet-board.md). When the dir
+  # is missing and the ref exists (local, else origin — the local ref is created from origin's),
+  # write the set's files into the working tree via plumbing: read-tree into a SECONDARY index +
+  # checkout-index. NEVER a branch switch; primary index and checked-out branch untouched.
+  # rc 0 = materialized (and said so) · rc 1 = nothing to do (board on disk, or no ref anywhere).
+  [ -d "$BOARD" ] && return 1
+  if ! git -C "$PRIMARY" rev-parse -q --verify "$BOARD_REF" >/dev/null; then
+    git -C "$PRIMARY" rev-parse -q --verify refs/remotes/origin/polaris/board >/dev/null || return 1
+    git -C "$PRIMARY" update-ref "$BOARD_REF" \
+      "$(git -C "$PRIMARY" rev-parse refs/remotes/origin/polaris/board)" || return 1
+  fi
+  local idx; idx="$(mktemp)"
+  if ! GIT_INDEX_FILE="$idx" git -C "$PRIMARY" read-tree "$BOARD_REF" \
+     || ! GIT_INDEX_FILE="$idx" git -C "$PRIMARY" checkout-index -a -f --prefix="$PRIMARY/"; then
+    rm -f "$idx"; return 1
+  fi
+  rm -f "$idx"
+  say "materialized ops/board/ + ops/SPRINT.md from polaris/board (fresh clone — board state lives on that ref)"
 }
 
 # --------------------------------------------------------------- lock helpers
@@ -353,6 +462,10 @@ cmd_init_board() {
   done
   mkdir -p "$OPS/contracts" "$LOCKS"; touch "$OPS/contracts/.gitkeep"
   grep -q '^\.polaris/$' "$PRIMARY/.gitignore" 2>/dev/null || echo '.polaris/' >> "$PRIMARY/.gitignore"
+  # the moved set (ops/contracts/quiet-board.md) is board STATE: ignored on base, committed on
+  # refs/heads/polaris/board by board_commit — the branch is created (orphan) by the first one.
+  grep -q '^ops/board/$' "$PRIMARY/.gitignore" 2>/dev/null || echo 'ops/board/' >> "$PRIMARY/.gitignore"
+  grep -q '^ops/SPRINT\.md$' "$PRIMARY/.gitignore" 2>/dev/null || echo 'ops/SPRINT.md' >> "$PRIMARY/.gitignore"
   [ -f "$EVENTS" ] || : > "$EVENTS"
   if [ ! -f "$RULES" ]; then cat > "$RULES" <<'RUL'
 # POLARIS RULES — repo policy as data. TAB-separated: scope<TAB>kind<TAB>pattern<TAB>message
@@ -371,6 +484,7 @@ RUL
     || echo 'ops/board/EVENTS.ndjson merge=union' >> "$PRIMARY/.gitattributes"
   say "board ready at ops/board/ · worktrees in .polaris/wt/ (gitignored) · locks in $LOCKS"
   note "telemetry: ops/board/EVENTS.ndjson (union-merged) · live board: ops/polaris dash"
+  note "board history: refs/heads/polaris/board (first board commit creates it) — $BASE stays clean"
 }
 
 cmd_claim() {
@@ -417,7 +531,7 @@ EOF
 
   local pts; pts="$(fm_get points "$BOARD/ready/$id.md")"
   mutex_on
-  git -C "$PRIMARY" mv "$BOARD/ready/$id.md" "$BOARD/active/$id.md"
+  mv "$BOARD/ready/$id.md" "$BOARD/active/$id.md"   # plain mv: board paths are untracked on base
   set_fm owner "$WHO" "$BOARD/active/$id.md"
   set_fm branch "feat/$id" "$BOARD/active/$id.md"
   set_fm status active "$BOARD/active/$id.md"
@@ -453,7 +567,10 @@ EOF
       && note "bootstrap ok — deps ready" \
       || note "⚠ bootstrap failed — install deps in the worktree before verify (cmd: $bootstrap)"
   fi
-  note "read: task file + its contract + context_files. Build only inside files_owned."
+  # primary-anchored on purpose (ops/contracts/quiet-board.md): the moved set is ignored on base,
+  # so the Builder's worktree contains NO ops/board — a repo-relative task path would point at
+  # nothing. Contract paths stay repo-relative: contracts live on base, present in every worktree.
+  note "read: task file at \"$BOARD/active/$id.md\" + its contract + context_files. Build only inside files_owned."
   note "when green: polaris handoff   ·   to abort: polaris release $id --to ready"
 }
 
@@ -473,9 +590,14 @@ cmd_handoff() {
   check_rules "feat/$id"
   run_verify_cmds "$tf"
   map_delta_hint "$tf" "feat/$id"
-  has_remote && git push -q -u origin "feat/$id"
+  # publish: pr — feat branches never leave the machine; seal pushes ONE integrate branch instead
+  # (ops/contracts/publish-modes.md). Everything else stays byte-identical to direct mode.
+  publish_resolve
+  if [ "$PUB" != "pr" ] && has_remote; then
+    git push -q -u origin "feat/$id"
+  fi
   mutex_on
-  git -C "$PRIMARY" mv "$BOARD/active/$id.md" "$BOARD/review/$id.md"
+  mv "$BOARD/active/$id.md" "$BOARD/review/$id.md"
   set_fm status review "$BOARD/review/$id.md"
   evt handoff "$id"
   # Last lane landed? Count inside the mutex (post-mv, pre-commit) so the all-review event
@@ -509,7 +631,7 @@ cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
   [ "$to" = "ready" ] || [ "$to" = "blocked" ] || die "--to must be ready or blocked"
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
   mutex_on
-  git -C "$PRIMARY" mv "$BOARD/active/$id.md" "$BOARD/$to/$id.md"
+  mv "$BOARD/active/$id.md" "$BOARD/$to/$id.md"
   set_fm owner null "$BOARD/$to/$id.md"; set_fm status "$to" "$BOARD/$to/$id.md"
   [ -n "$msg" ] && printf -- '- ⛔ released by %s: %s\n' "$WHO" "$msg" >> "$BOARD/$to/$id.md"
   # v2: --to blocked is its own board event ("blocked", severity gate at the hook) — a recipe can
@@ -627,6 +749,7 @@ cmd_resume() { # resume [ID] — re-enter an already-claimed active task without
   # action that takes one over — recreates the worktree if it vanished, refreshes the lock's age+owner.
   local id="${1:-}"
   [ -n "$id" ] || id="$(current_task_id)" || die "usage: polaris resume <ID> (or run inside a feat/<ID> worktree)"
+  board_materialize || true   # fresh clone: rebuild ops/board/ from polaris/board BEFORE the lookup
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/ — only a claimed task can be resumed; for a fresh one: polaris claim"
   mkdir -p "$LOCKS/$id"; { date +%s; echo "$WHO"; echo "$id"; } > "$LOCKS/$id/meta"   # adopt + refresh the lock
   local wt; wt="$(wt_path "$id")"
@@ -638,6 +761,7 @@ cmd_resume() { # resume [ID] — re-enter an already-claimed active task without
       || die "could not recreate the worktree for $id"
   fi
   say "resumed $id → cd \"$wt\""
+  note "task file: \"$BOARD/active/$id.md\" (primary-anchored — worktrees do not contain ops/board)"
   if grep -q '⛔' "$tf" 2>/dev/null; then note "last note on this task (why it is back in active/):"; grep '⛔' "$tf" | tail -1 | sed 's/^[[:space:]]*/     /'; fi
   note "when green: polaris handoff   ·   to abort: polaris release $id --to ready"
 }
@@ -647,7 +771,7 @@ cmd_kickback() { # Integrator: red merge → review→active with the failure no
   local msg=""; [ "${1:-}" = "-m" ] && msg="$2"
   local tf; tf="$(task_file "$id" review)" || die "$id is not in review/"
   mutex_on
-  git -C "$PRIMARY" mv "$BOARD/review/$id.md" "$BOARD/active/$id.md"
+  mv "$BOARD/review/$id.md" "$BOARD/active/$id.md"
   set_fm status active "$BOARD/active/$id.md"
   [ -n "$msg" ] && printf -- '- ⛔ kicked back by Integrator: %s\n' "$msg" >> "$BOARD/active/$id.md"
   evt kickback "$id" "$msg"
@@ -670,16 +794,17 @@ cmd_run_verify() { # Integrator: re-run a task's verify commands in CWD (e.g. on
   run_verify_cmds "$tf"
 }
 
-landed_sha() { # landed_sha <ID> — SHA of the squash commit in $BASE whose subject ENDS with [<ID>]
-  # (what `land` writes). --fixed-strings so the grep is literal; the suffix check below is what
-  # keeps [T-1] from ever matching [T-10]. rc 1 = no landed commit.
-  local id="$1" line sha subj
+landed_sha() { # landed_sha <ID> [ref] — SHA of the squash commit in <ref> (default $BASE) whose
+  # subject ENDS with [<ID>] (what `land` writes). --fixed-strings so the grep is literal; the
+  # suffix check below is what keeps [T-1] from ever matching [T-10]. rc 1 = no landed commit.
+  # The ref parameter lets `report`/`seal` grep integrate/<date> before a wave reaches base.
+  local id="$1" ref="${2:-$BASE}" line sha subj
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     sha="${line%% *}"; subj="${line#* }"
     case "$subj" in *"[$id]") printf '%s' "$sha"; return 0;; esac
   done <<EOF
-$(git -C "$PRIMARY" log --fixed-strings --grep "[$id]" --format='%H %s' "$BASE" 2>/dev/null)
+$(git -C "$PRIMARY" log --fixed-strings --grep "[$id]" --format='%H %s' "$ref" 2>/dev/null)
 EOF
   return 1
 }
@@ -698,21 +823,38 @@ cmd_done() { # Integrator only, after the task is landed (squash) or merged (leg
   fi
   local deltas; deltas="$(fm_list map_delta "$tf" 2>/dev/null || true)"   # BEFORE the mv — path vanishes after
   local pts; pts="$(fm_get points "$tf")"
+  # A non-empty map_delta lands as ONE separate docs(map) commit on $BASE (quiet-board contract) —
+  # the only base commit any board mutation makes. Require the checkout BEFORE mutating anything,
+  # so a wrong branch aborts clean; empty delta commits nothing on $BASE.
+  if [ -n "$deltas" ]; then
+    local br; br="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    [ "$br" = "$BASE" ] || die "done: $id carries a map_delta — it lands as a docs(map) commit on $BASE; check out $BASE in the primary first (currently on ${br:-?})"
+  fi
   mutex_on
-  git -C "$PRIMARY" mv "$BOARD/review/$id.md" "$BOARD/done/$id.md"
+  mv "$BOARD/review/$id.md" "$BOARD/done/$id.md"
   set_fm status done "$BOARD/done/$id.md"
   # stamp the landed commit onto the task — the durable, human-readable record (rollback's fast
   # path; sweep's stray test). Rides this same board commit; legacy merges have no SHA to stamp.
   [ -n "$landed" ] && fm_stamp landed "$landed" "$BOARD/done/$id.md"
   # apply map_delta so MAP.md never rots (Integrator is its only writer → no conflict)
-  local d applied=0
+  local d applied=0 first=""
   while IFS= read -r d; do
     [ -z "$d" ] && continue
-    if [ $applied -eq 0 ]; then printf '\n' >> "$OPS/MAP.md"; fi
+    if [ $applied -eq 0 ]; then printf '\n' >> "$OPS/MAP.md"; first="$d"; fi
     printf -- '- %s  (%s, %s)\n' "$d" "$id" "$(date +%F)" >> "$OPS/MAP.md"; applied=1
   done <<EOF
 $deltas
 EOF
+  if [ "$applied" -eq 1 ]; then   # MAP.md stays on $BASE — pathspec-limited commit, index.lock retry
+    local mi mok=0
+    for mi in 1 2 3 4 5; do
+      if git -C "$PRIMARY" add -- "$OPS/MAP.md" 2>/dev/null \
+         && git -C "$PRIMARY" commit -q -m "docs(map): $id $first" -- "$OPS/MAP.md" 2>/dev/null; then mok=1; break; fi
+      sleep 0.3
+    done
+    [ "$mok" -eq 1 ] || { git -C "$PRIMARY" add -- "$OPS/MAP.md" && git -C "$PRIMARY" commit -q -m "docs(map): $id $first" -- "$OPS/MAP.md"; } \
+      || die "docs(map) commit failed for $id (error above)"
+  fi
   evt done "$id" "" "$pts"
   board_commit "chore(board): done $id"
   sync_board
@@ -845,13 +987,32 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   note "goes red on the suite? unwind: git reset --hard HEAD~1   ·   bounce: polaris kickback $id -m \"<why>\""
 }
 
-cmd_seal() { # seal [<date>] — close an integration wave: ONE --no-ff merge of integrate/<date>
-  # into $BASE, tagged sprint/<n>. Message = sprint header + a bullet per landed commit — the
-  # changelog entry `history` shows forever. sprint/<n> always marks the sprint's LATEST sealed
-  # checkpoint (contract v2, multi-wave): the first seal of sprint n creates the tag, a later
-  # seal of the same n moves it forward. A merge conflict aborts; a human resolves — never
-  # auto-resolved.
+tag_push_recovery_note() { # tag_push_recovery_note <n> — convergent recovery when a moved-tag CAS
+  # push is rejected (clean-history v2.1). The stale LOCAL old-sha lease can NEVER win once origin
+  # missed a prior wave's tag move — so lease from origin's ACTUAL current tag instead. ls-remote
+  # yields the origin value (empty = tag absent → the empty lease correctly expects "not present").
+  local n="$1"
+  note "⚠ tag push failed — origin's sprint/$n lags a prior wave; the local lease can't win. Lease from origin and retry:"
+  note "   git push --force-with-lease=refs/tags/sprint/$n:\$(git ls-remote origin refs/tags/sprint/$n | cut -f1) origin refs/tags/sprint/$n"
+}
+
+cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wave: ONE --no-ff merge
+  # of integrate/<date> into $BASE, tagged sprint/<n>. Message = sprint header + a bullet per landed
+  # commit — the changelog entry `history` shows forever. sprint/<n> always marks the sprint's
+  # LATEST sealed checkpoint (contract v2, multi-wave): the first seal of sprint n creates the tag,
+  # a later seal of the same n moves it forward. A merge conflict aborts; a human resolves — never
+  # auto-resolved. publish: pr (ops/contracts/publish-modes.md): NO local merge — the wave leaves
+  # as ONE pushed integrate branch + a PR-create URL, and `seal --sync` finishes after the human
+  # merges the PR (merge-commit strategy, never squash).
+  local sync=""
+  if [ "${1:-}" = "--sync" ]; then sync=1; shift; fi
   local date="${1:-}"; [ -n "$date" ] || date="$(date +%F)"
+  publish_resolve
+  if [ -n "$sync" ]; then
+    [ "$PUB" = "pr" ] || die "publish: direct seals locally — nothing to sync"
+    seal_sync "$date"
+    return 0
+  fi
   in_primary || die "seal runs in the primary checkout — cd \"$PRIMARY\" first"
   git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
   git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null \
@@ -875,6 +1036,35 @@ cmd_seal() { # seal [<date>] — close an integration wave: ONE --no-ff merge of
   if [ -n "$oldtag" ] && ! git merge-base --is-ancestor "$oldtag" "$BASE" 2>/dev/null; then
     die "sprint/$n exists and is not in $BASE history — reused sprint number; bump the ops/SPRINT.md header"
   fi
+  # T-023: the sprint report rides the wave. Commit it on integrate/<date> BEFORE the merge (direct)
+  # / the push (pr). $subjects was captured above, so the report never appears in the merge bullets;
+  # it is a docs(sprint-N) commit with no [<ID>] suffix (ID resolution ignores it).
+  git checkout -q "integrate/$date"
+  seal_report_commit "$n" "$date"
+  if [ "$PUB" = "pr" ]; then
+    # ---------------- publish: pr — the ENTIRE pr fork (one block, one seam) ----------------
+    # All preconditions + the tag gate above ran check-only. From here: NO local merge, NO tag,
+    # NO $BASE ref change (local or remote) — everything mutating waits for `seal --sync` after
+    # the human merges the PR. Tasks stay in review/, locks stay, integrate/<date> stays.
+    # (T-023: the wave's sprint-report commit lands HERE, on integrate/$date, before the push.)
+    has_remote || die "publish: pr needs an origin remote — nowhere to push integrate/$date"
+    git push -q -u origin "integrate/$date" || die "push of integrate/$date failed — check origin access"
+    local prurl
+    prurl="$(pr_create_url "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null || true)" "$date" "$BASE")"
+    say "wave pushed — ONLY integrate/$date left the machine ($BASE and tags untouched)"
+    if [ -n "$prurl" ]; then
+      note "open the PR: $prurl"
+    else
+      note "open a PR from integrate/$date into $BASE on your host"
+    fi
+    note "suggested title: Sprint $n — $goal"
+    note "suggested description:"
+    printf '%s\n' "$subjects" | sed 's/^/     - /'
+    note "merge with the MERGE COMMIT strategy (never squash — the per-task commits must survive)"
+    note "merged? finish the wave: bash ops/polaris seal --sync $date"
+    cmd_notify_gate done
+    return 0
+  fi
   local msg
   msg="Sprint $n — $goal
 
@@ -893,21 +1083,100 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
     git tag "sprint/$n"
   fi
   if has_remote; then
-    if [ -n "$oldtag" ]; then
-      # moved tag → compare-and-swap push, leased against the wave we know we're replacing:
-      # the ONLY forced ref update POLARIS ever makes.
-      git push -q origin "$BASE" 2>/dev/null \
-        && git push -q --force-with-lease="refs/tags/sprint/$n:$oldtag" origin "refs/tags/sprint/$n" 2>/dev/null \
-        || note "⚠ push failed — push by hand: git push origin $BASE && git push --force-with-lease=refs/tags/sprint/$n:$oldtag origin refs/tags/sprint/$n"
+    # push $BASE on its own so its result is known: success clears the protected-branch stamp,
+    # rejection records it (doctor reads the count). The tag push follows only once base lands.
+    if git push -q origin "$BASE" 2>/dev/null; then
+      base_push_clear
+      if [ -n "$oldtag" ]; then
+        # moved tag → compare-and-swap push, leased against the wave we know we're replacing:
+        # the ONLY forced ref update POLARIS ever makes.
+        git push -q --force-with-lease="refs/tags/sprint/$n:$oldtag" origin "refs/tags/sprint/$n" 2>/dev/null \
+          || tag_push_recovery_note "$n"
+      else
+        git push -q origin "refs/tags/sprint/$n" 2>/dev/null \
+          || note "⚠ tag push failed — push by hand: git push origin sprint/$n"
+      fi
     else
-      git push -q origin "$BASE" "refs/tags/sprint/$n" 2>/dev/null \
-        || note "⚠ push failed — push by hand: git push origin $BASE sprint/$n"
+      base_push_reject
+      if [ -n "$oldtag" ]; then
+        note "⚠ push failed — push $BASE by hand: git push origin $BASE"
+        tag_push_recovery_note "$n"
+      else
+        note "⚠ push failed — push by hand: git push origin $BASE sprint/$n"
+      fi
+      note "origin keeps rejecting $BASE? protected branch — set publish: pr in ops/CONVENTIONS.md and seal opens a PR instead"
     fi
   fi
   if [ -n "$oldtag" ]; then
     say "sprint $n re-sealed — integrate/$date merged into $BASE (--no-ff); sprint/$n: $old7 → $new7"
   else
     say "sprint $n sealed — integrate/$date merged into $BASE (--no-ff), tagged sprint/$n"
+  fi
+}
+
+seal_sync() { # seal --sync <date> — pr mode only: finish the wave AFTER the human merges the PR
+  # (ops/contracts/publish-modes.md). Steps: ff-only pull of $BASE · every [<ID>] subject of the
+  # wave verified in $BASE (an unmerged OR squash-merged PR dies here, by name — the per-task
+  # commits must survive) · sprint/<n> tag create-or-move per clean-history v2 (compare-and-swap
+  # push; failure → by-hand note) · integrate/<date> deleted local+remote · per-task next step.
+  local date="$1"
+  in_primary || die "seal --sync runs in the primary checkout — cd \"$PRIMARY\" first"
+  git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
+  has_remote || die "seal --sync needs an origin remote — the PR merge lives there"
+  git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null \
+    || die "no branch integrate/$date — nothing to sync (a different day's wave? seal --sync <date>)"
+  local hdr n goal
+  hdr="$(sed -n 's/^# SPRINT //p' "$OPS/SPRINT.md" 2>/dev/null | head -1 | tr -d '\r')"
+  n="${hdr%%[!0-9]*}"
+  [ -n "$n" ] || die "cannot read the sprint number — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header"
+  # the wave's commits = integrate past its branch point — capture BEFORE the pull moves $BASE
+  local mb; mb="$(git merge-base "$BASE" "integrate/$date")"
+  # 1. base catches up to the merged PR — ff-only, never rebase, never merge
+  git checkout -q "$BASE"
+  git pull -q --ff-only origin "$BASE" \
+    || die "cannot fast-forward $BASE from origin — resolve by hand (--sync never rebases, never merges)"
+  # 2. every task subject of the wave must now be in $BASE history (rule 1: subject suffix [<ID>]).
+  #    A squash-merged PR collapsed them into one foreign subject → die naming the missing.
+  local subj sid ids="" missing=""
+  while IFS= read -r subj; do
+    [ -n "$subj" ] || continue
+    case "$subj" in
+      *\[*\]) sid="${subj##*\[}"; sid="${sid%]}";;
+      *) continue;;
+    esac
+    if landed_sha "$sid" >/dev/null; then ids="$ids $sid"; else missing="$missing $sid"; fi
+  done <<EOF
+$(git log --no-merges --format=%s "$mb..integrate/$date" | grep -v '^chore(board):' || true)
+EOF
+  [ -z "$missing" ] || die "not in $BASE:$missing — the PR is unmerged, or was squash-merged (per-task commits must survive; merge with the MERGE COMMIT strategy). $BASE is already fast-forwarded to the PR merge; the sprint/$n tag, integrate/$date and the board are untouched"
+  # 3. tag on the new $BASE HEAD — clean-history v2: create, or move an ancestor tag (CAS push)
+  local oldtag old7 new7
+  oldtag="$(git rev-parse -q --verify "refs/tags/sprint/$n" || true)"
+  if [ -n "$oldtag" ] && ! git merge-base --is-ancestor "$oldtag" "$BASE" 2>/dev/null; then
+    die "sprint/$n exists and is not in $BASE history — reused sprint number; bump the ops/SPRINT.md header"
+  fi
+  if [ -n "$oldtag" ]; then
+    old7="$(git rev-parse --short "$oldtag")"
+    git tag -f "sprint/$n" >/dev/null
+    new7="$(git rev-parse --short "refs/tags/sprint/$n")"
+    git push -q --force-with-lease="refs/tags/sprint/$n:$oldtag" origin "refs/tags/sprint/$n" 2>/dev/null \
+      || tag_push_recovery_note "$n"
+    say "sprint $n synced — $BASE fast-forwarded to the PR merge; sprint/$n: $old7 → $new7"
+  else
+    git tag "sprint/$n"
+    git push -q origin "refs/tags/sprint/$n" 2>/dev/null \
+      || note "⚠ tag push failed — push by hand: git push origin sprint/$n"
+    say "sprint $n synced — $BASE fast-forwarded to the PR merge, tagged sprint/$n"
+  fi
+  # 4. the wave is folded into $BASE — the integrate branch is done on both sides
+  git branch -q -D "integrate/$date" 2>/dev/null || true
+  git push -q origin ":refs/heads/integrate/$date" 2>/dev/null \
+    || note "⚠ could not delete origin integrate/$date — by hand: git push origin :refs/heads/integrate/$date"
+  # 5. the [<ID>]-in-$BASE gate now passes — walk each task out
+  if [ -n "$ids" ]; then
+    note "next, per task:$ids — bash ops/polaris run-verify <ID> · bash ops/polaris done <ID>"
+  else
+    note "next: per landed task — bash ops/polaris run-verify <ID> · bash ops/polaris done <ID>"
   fi
 }
 
@@ -927,7 +1196,7 @@ cmd_history() { # history [--tasks <n>] — read-only changelog view of $BASE: f
       | awk -v n="$n" 'BEGIN{p="Sprint " n " — "} index(substr($0,42),p)==1 {sha=$1} END{if (sha) print sha}')"
     [ -n "$start" ] || start="$(git -C "$PRIMARY" rev-parse "refs/tags/sprint/$n")"
     git -C "$PRIMARY" log --no-merges --date=short --format='%h %ad %s' "$start^1..sprint/$n" \
-      | grep -Ev '^[0-9a-f]+ [0-9-]+ chore\(board\):' || true
+      | grep -Ev '^[0-9a-f]+ [0-9-]+ (chore\(board\):|docs\(sprint-[0-9]+\): report)' || true
     return 0
   fi
   [ -z "${1:-}" ] || die "usage: polaris history [--tasks <n>]"
@@ -963,6 +1232,212 @@ cmd_rollback() { # rollback <ID | sprint/<n>> — one forward revert commit on $
       ;;
   esac
   say "reverted $target — one forward commit on $BASE: $(git log -1 --format=%s)"
+}
+
+# --------------------------------------------------- sprint reports (T-023)
+# `report` renders a management-readable per-sprint markdown file from the board + git history;
+# `seal` commits it on the wave so it rides the same merge/PR into base. The report path lives
+# OUTSIDE ops/ (default docs/sprints/) — it ships as product history. Contract:
+# ops/contracts/sprint-report.md.
+report_dir() { # reports directory (CONVENTIONS reports:, default docs/sprints), PRIMARY-anchored
+  local d; d="$(cfg reports docs/sprints)"; d="${d%/}"
+  printf '%s/%s' "$PRIMARY" "$d"
+}
+report_file() { printf '%s/sprint-%s.md' "$(report_dir)" "$1"; }         # absolute, for writing
+report_rel()  { local d; d="$(cfg reports docs/sprints)"; d="${d%/}"; printf '%s/sprint-%s.md' "$d" "$1"; }  # repo-relative, for printing
+
+sprint_hdr() { # sprint_hdr <n> — the '# SPRINT <n> …' header minus '# SPRINT ', '' if absent
+  awk -v n="$1" '
+    /^# SPRINT / { h=$0; sub(/^# SPRINT /,"",h); num=h; sub(/[^0-9].*$/,"",num)
+                   if (num==n) { sub(/\r$/,"",h); print h; exit } }
+  ' "$OPS/SPRINT.md" 2>/dev/null
+}
+sprint_hdr_num() { # the TOP header's number = the current sprint, '' if absent
+  local hdr; hdr="$(sed -n 's/^# SPRINT //p' "$OPS/SPRINT.md" 2>/dev/null | head -1 | tr -d '\r')"
+  printf '%s' "${hdr%%[!0-9]*}"
+}
+all_sprint_numbers() { # every '# SPRINT <n>' number, in file order
+  awk '/^# SPRINT /{h=$0; sub(/^# SPRINT /,"",h); sub(/[^0-9].*$/,"",h); if(h!="") print h}' "$OPS/SPRINT.md" 2>/dev/null
+}
+sprint_goal() { # sprint_goal <n> — the goal text (same trim as seal), '' if the header is absent
+  local hdr num; hdr="$(sprint_hdr "$1")"; [ -n "$hdr" ] || return 0
+  num="${hdr%%[!0-9]*}"
+  printf '%s' "${hdr#"$num"}" | sed -e 's/^[[:space:]]*//' -e 's/^—[[:space:]]*//' -e 's/^-[[:space:]]*//' \
+      -e 's/[[:space:]][[:space:]].*$//' -e 's/[[:space:]]*capacity:.*$//' -e 's/[[:space:]]*$//'
+}
+sprint_dates() { # sprint_dates <n> — the header's 'dates:' value, '' if absent
+  sprint_hdr "$1" | sed -n 's/.*[[:space:]]dates:[[:space:]]*//p' | sed 's/[[:space:]]*$//'
+}
+ts_date() { # ts_date <epoch> — YYYY-MM-DD (local), portable (GNU -d, then BSD -r); '' on failure
+  local e="$1" d=""
+  case "$e" in ''|*[!0-9]*) return 0;; esac
+  d="$(date -d "@$e" +%F 2>/dev/null || date -r "$e" +%F 2>/dev/null || true)"
+  printf '%s' "$d"
+}
+event_ts() { # event_ts <ev> <id> <first|last> — epoch ts of the first/last matching EVENTS line, '' if none
+  [ -f "$EVENTS" ] || return 0
+  awk -v ev="\"ev\":\"$1\"" -v id="\"id\":\"$2\"" -v which="$3" '
+    index($0, ev) && index($0, id) {
+      ts=$0; sub(/.*"ts":/,"",ts); sub(/[^0-9].*/,"",ts)
+      if (which=="first") { print ts; exit }
+      last=ts
+    }
+    END { if (which!="first" && last!="") print last }
+  ' "$EVENTS" 2>/dev/null || true
+}
+
+resolve_sprint_ids() { # resolve_sprint_ids <n> — the sprint's task IDs (layered, degrade-not-die),
+  # one per line, deduped, ID order. Rule 1: [<ID>] bullets of base first-parent merges
+  # 'Sprint <n> — …'. Rule 2: done/ tasks whose landed: sha is in tag sprint/<n> but not sprint/<n-1>.
+  local n="$1" tag="refs/tags/sprint/$n" prev="refs/tags/sprint/$((n-1))" haveprev="" msha f ls
+  {
+    git -C "$PRIMARY" log --first-parent --format='%H%x09%s' "$BASE" 2>/dev/null \
+      | awk -F'\t' -v p="Sprint $n — " 'index($2,p)==1 {print $1}' \
+      | while IFS= read -r msha; do
+          [ -n "$msha" ] || continue
+          git -C "$PRIMARY" log -1 --format='%b' "$msha" 2>/dev/null | sed -n 's/.*\[\([^][]*\)\]$/\1/p'
+        done
+    if git -C "$PRIMARY" rev-parse -q --verify "$tag" >/dev/null 2>&1; then
+      git -C "$PRIMARY" rev-parse -q --verify "$prev" >/dev/null 2>&1 && haveprev=1
+      for f in "$BOARD"/done/*.md; do
+        [ -f "$f" ] || continue
+        ls="$(fm_get landed "$f" 2>/dev/null || true)"; [ -n "$ls" ] || continue
+        git -C "$PRIMARY" merge-base --is-ancestor "$ls" "$tag" 2>/dev/null || continue
+        if [ -n "$haveprev" ] && git -C "$PRIMARY" merge-base --is-ancestor "$ls" "$prev" 2>/dev/null; then continue; fi
+        fm_get id "$f"
+      done
+    fi
+  } | grep . | sort -u
+}
+
+render_task_section() { # render_task_section <id> <ref> — one '## <ID> — <title>' block on stdout.
+  # Every field is best-effort: missing data omits the field, never dies. <ref> is grepped for the
+  # landed sha (base for `report`, integrate/<date> for `seal`, when the task carries no stamp).
+  local id="$1" ref="$2" tf title="" points="" risk="" lsha="" short="" ldate="" \
+        cdate="" ddate="" cts="" dts="" files="" fjoined="" why="" acc="" meta="" cd_part=""
+  tf="$(task_file "$id" 2>/dev/null || true)"; [ -n "$tf" ] || return 0
+  title="$(fm_get title "$tf" 2>/dev/null || true)"
+  points="$(fm_get points "$tf" 2>/dev/null || true)"
+  risk="$(fm_get risk "$tf" 2>/dev/null || true)"
+  lsha="$(fm_get landed "$tf" 2>/dev/null || true)"
+  [ -n "$lsha" ] || lsha="$(landed_sha "$id" "$ref" 2>/dev/null || true)"
+  if [ -n "$lsha" ]; then
+    short="$(git -C "$PRIMARY" rev-parse --short "$lsha" 2>/dev/null || true)"
+    ldate="$(git -C "$PRIMARY" log -1 --date=short --format=%ad "$lsha" 2>/dev/null || true)"
+  fi
+  cts="$(event_ts claim "$id" first)"; [ -n "$cts" ] && cdate="$(ts_date "$cts")"
+  dts="$(event_ts done  "$id" last)";  [ -n "$dts" ] && ddate="$(ts_date "$dts")"
+  [ -n "$points" ] && meta="${meta:+$meta · }points $points"
+  [ -n "$risk" ]   && meta="${meta:+$meta · }risk $risk"
+  [ -n "$short" ]  && meta="${meta:+$meta · }landed $short${ldate:+ ($ldate)}"
+  [ -n "$cdate" ]  && cd_part="claimed $cdate"
+  [ -n "$ddate" ]  && cd_part="${cd_part:+$cd_part → }done $ddate"
+  [ -n "$cd_part" ] && meta="${meta:+$meta · }$cd_part"
+  printf '\n## %s — %s\n' "$id" "$title"
+  [ -n "$meta" ] && printf '%s\n' "$meta"
+  [ -n "$lsha" ] && files="$(git -C "$PRIMARY" diff-tree --no-commit-id --name-only -r "$lsha" 2>/dev/null | grep . || true)"
+  [ -n "$files" ] || files="$(fm_list files_owned "$tf" 2>/dev/null | grep . || true)"
+  if [ -n "$files" ]; then
+    fjoined="$(printf '%s\n' "$files" | awk 'NR>1{printf ", "}{printf "%s",$0}END{if(NR)printf "\n"}')"
+    printf 'files touched: %s\n' "$fjoined"
+  fi
+  why="$(awk '
+    /^## Why[ \t\r]*$/ || /^## Why this exists[ \t\r]*$/ { on=1; next }
+    on && /^## / { exit }
+    on { sub(/\r$/,""); if (!got && $0 ~ /^[ \t]*$/) next; got=1; print }
+  ' "$tf")"
+  [ -n "$why" ] && printf '\n### Why\n%s\n' "$why"
+  acc="$(awk '
+    /^## Acceptance/ { on=1; next }
+    on && /^## / { on=0 }
+    on && /^[ \t]*- \[[ xX]\]/ { sub(/\r$/,""); print }
+  ' "$tf")"
+  [ -n "$acc" ] && printf '\n### Acceptance\n%s\n' "$acc"
+  return 0   # never let a false-y trailing test (no acceptance/why) fail the caller under set -e
+}
+
+render_sprint() { # render_sprint <n> <ref> [id…] — the whole sprint report on stdout. Byte-stable
+  # given the same inputs (NO generation timestamp). Header goal + dates from the SPRINT.md header.
+  local n="$1" ref="$2" goal dates id; shift 2
+  goal="$(sprint_goal "$n")"; dates="$(sprint_dates "$n")"
+  printf '# Sprint %s' "$n"
+  [ -n "$goal" ]  && printf ' — %s' "$goal"
+  [ -n "$dates" ] && printf ' (%s)' "$dates"
+  printf '\n'
+  for id in "$@"; do render_task_section "$id" "$ref"; done
+  return 0
+}
+
+report_dirty_hint() { # report_dirty_hint <n> — report commits NOTHING and never writes the board
+  # (contract sprint-report v1.1). A re-render after `done` adds done-dates the sealed render lacked,
+  # so the file can differ from HEAD; left uncommitted it makes the NEXT land/seal die "working tree
+  # not clean" with no visible cause. If the written file differs from HEAD, name both remedies.
+  local n="$1" rel; rel="$(report_rel "$n")"
+  git -C "$PRIMARY" diff --quiet -- "$rel" && return 0
+  note "$rel differs from HEAD — report commits nothing. Either commit it as \`docs(sprint-$n): report refresh\`,"
+  note "   or discard with \`git checkout -- $rel\`."
+}
+
+report_one() { # report_one <n> — resolve IDs, render, write <reports>/sprint-<n>.md whole, print path
+  local n="$1" ids out
+  ids="$(resolve_sprint_ids "$n")"
+  out="$(report_file "$n")"; mkdir -p "$(dirname "$out")"
+  render_sprint "$n" "$BASE" $ids > "$out"
+  say "wrote $(report_rel "$n")"
+  report_dirty_hint "$n"
+}
+
+cmd_report() { # report [--sprint <n> | --all] — render per-sprint management reports (docs/sprints/
+  # by default) from the board + git history. Writes the file(s) WHOLE (idempotent), prints the
+  # path(s); commits nothing, the board is read-only to it. Contract: ops/contracts/sprint-report.md.
+  local n=""
+  case "${1:-}" in
+    --all)
+      local nums newest allids="" m ids out f tid orphans=""
+      nums="$(all_sprint_numbers)"
+      [ -n "$nums" ] || die "no '# SPRINT <n>' headers in ops/SPRINT.md — nothing to report"
+      newest="$(printf '%s\n' "$nums" | head -1)"
+      for m in $nums; do
+        ids="$(resolve_sprint_ids "$m")"
+        out="$(report_file "$m")"; mkdir -p "$(dirname "$out")"
+        render_sprint "$m" "$BASE" $ids > "$out"
+        allids="$allids
+$ids"
+        say "wrote $(report_rel "$m")"
+      done
+      # done/ tasks attributable to no sealed sprint → the newest sprint's file, under (unsealed)
+      for f in "$BOARD"/done/*.md; do
+        [ -f "$f" ] || continue
+        tid="$(fm_get id "$f" 2>/dev/null || true)"; [ -n "$tid" ] || continue
+        printf '%s\n' "$allids" | grep -qx "$tid" && continue
+        orphans="$orphans $tid"
+      done
+      if [ -n "$orphans" ]; then
+        out="$(report_file "$newest")"
+        { printf '\n## (unsealed)\n'; for tid in $orphans; do render_task_section "$tid" "$BASE"; done; } >> "$out"
+      fi
+      for m in $nums; do report_dirty_hint "$m"; done   # final on-disk state per file (post-orphan append)
+      return 0
+      ;;
+    --sprint) n="${2:-}"; [ -n "$n" ] || die "usage: polaris report --sprint <n>";;
+    "")       n="$(sprint_hdr_num)"; [ -n "$n" ] || die "cannot read the current sprint — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header";;
+    *)        die "usage: polaris report [--sprint <n> | --all]";;
+  esac
+  report_one "$n"
+}
+
+seal_report_commit() { # seal_report_commit <n> <date> — render the sprint report from THIS wave's
+  # known subjects (+ prior sealed waves, resolved from base) and commit it on integrate/<date> as
+  # docs(sprint-N): report — BEFORE the merge (direct) / the push (pr). No [<ID>] suffix. Idempotent:
+  # a re-seal whose render is byte-identical stages nothing and makes no commit.
+  local n="$1" date="$2" wave_ids ids out
+  wave_ids="$(git -C "$PRIMARY" log --format=%s "$BASE..integrate/$date" 2>/dev/null \
+    | grep -v '^chore(board):' | sed -n 's/.*\[\([^][]*\)\]$/\1/p' || true)"
+  ids="$( { printf '%s\n' "$wave_ids"; resolve_sprint_ids "$n"; } | grep . | sort -u || true)"
+  out="$(report_file "$n")"; mkdir -p "$(dirname "$out")"
+  render_sprint "$n" "integrate/$date" $ids > "$out"
+  git add -- "$out"
+  git diff --cached --quiet -- "$out" || git commit -q -m "docs(sprint-$n): report" -- "$out"
 }
 
 cmd_status() {
@@ -1039,6 +1514,25 @@ cmd_sweep() { # report orphans + stale + remote strays; --fix removes true orpha
     done <<EOF
 $(git -C "$PRIMARY" ls-remote origin 'refs/heads/feat/*' 2>/dev/null)
 EOF
+    # integrate/<date> branches on origin: a wave whose merge is already in $BASE (tip an ancestor
+    # of $BASE) is a stray — seal --sync deletes it in pr mode, but direct-mode seals never owned
+    # the push and a skipped --sync leaves it forever. Merged → stray (--fix deletes); tip not in
+    # $BASE → diverged, flagged but NEVER auto-deleted. Same style as the feat/* pass above.
+    while IFS= read -r rline; do
+      [ -n "$rline" ] || continue
+      rsha="${rline%%$'\t'*}"; rref="${rline#*$'\t'}"
+      case "$rref" in refs/heads/integrate/*) rid="${rref#refs/heads/}";; *) continue;; esac
+      if git -C "$PRIMARY" cat-file -e "$rsha" 2>/dev/null \
+         && git -C "$PRIMARY" merge-base --is-ancestor "$rsha" "$BASE" 2>/dev/null; then
+        found=1; printf '⚠ REMOTE stray: %s — wave merged into %s, branch still on origin\n' "$rid" "$BASE"
+        [ "$fix" = "--fix" ] && { git -C "$PRIMARY" push -q origin ":refs/heads/$rid" && note "deleted"; }
+      else
+        found=1; printf '⚠ REMOTE diverged: %s — tip is NOT in %s. Inspect: git fetch origin %s && git log %s..FETCH_HEAD (never auto-deleted)\n' \
+          "$rid" "$BASE" "$rid" "$BASE"
+      fi
+    done <<EOF
+$(git -C "$PRIMARY" ls-remote origin 'refs/heads/integrate/*' 2>/dev/null)
+EOF
   fi
   if [ $found -eq 0 ]; then say "no orphan or stale locks, no remote strays"; fi
 }
@@ -1049,6 +1543,7 @@ cmd_doctor() {
   awk -v v="$gv" 'BEGIN{split(v,a,"."); exit !(a[1]>2 || (a[1]==2 && a[2]>=5))}' \
     || die "git >= 2.5 required for worktrees"
   git -C "$PRIMARY" show-ref --verify -q "refs/heads/$BASE" || note "⚠ base branch '$BASE' not found — set base: in CONVENTIONS.md"
+  board_materialize || true   # fresh clone: ops/board/ missing + polaris/board present → rebuild it
   # CONVENTIONS.md is written by INIT and by nothing else — its absence is THE test for
   # "INIT never ran here". install.sh, CLAUDE.md's role dispatch and INIT.md all use this
   # same file for that question. Never ops/board/: an older installer shipped it empty.
@@ -1096,6 +1591,11 @@ cmd_doctor() {
   case "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null)" in .*|../*) note "⚠ origin is a RELATIVE path — breaks in worktrees; use an absolute URL";; esac
   case "$CLAIM_MODE" in local-lock|claim-branch) :;; *) die "claim: must be local-lock or claim-branch";; esac
   [ "$CLAIM_MODE" = "claim-branch" ] && ! has_remote && note "⚠ claim-branch set but no origin remote"
+  # base-push-rejected stamp (ops/contracts/publish-modes.md): a direct-mode seal that keeps hitting
+  # a protected $BASE records each rejection; >=2 → recommend publish: pr. No stamp / <2 → silent.
+  local bprc=0
+  [ -f "$PRIMARY/.polaris/base-push-rejected" ] && bprc="$(awk 'NR==1{print $2+0}' "$PRIMARY/.polaris/base-push-rejected" 2>/dev/null)"
+  [ "${bprc:-0}" -ge 2 ] && note "⚠ origin keeps rejecting pushes to $BASE — protected branch? set publish: pr in ops/CONVENTIONS.md"
   [ -f "$EVENTS" ] && ! grep -q 'EVENTS\.ndjson merge=union' "$PRIMARY/.gitattributes" 2>/dev/null \
     && note "⚠ EVENTS.ndjson exists without its union-merge gitattribute — run: ops/polaris upgrade"
   # `ver` exits 0 with empty output when a key is absent, so || can't catch it — grep can.
@@ -1152,11 +1652,12 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
   ( set -e; cd "$T"
     git init -q -b main repo 2>/dev/null || { git init -q repo; git -C repo symbolic-ref HEAD refs/heads/main; }
     cd repo; git config user.email t@t; git config user.name t
-    mkdir -p ops/board/ready src; echo x > src/a.txt
-    printf -- '---\nid: T-1\ntitle: land a file\ntype: feature\npoints: 1\nwsjf: 9\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/a.txt\nverify:\n  - test -f src/a.txt\n---\n' > ops/board/ready/T-1.md
+    mkdir -p src; echo x > src/a.txt
     git add -A; git commit -qm init
     "$SELF" init-board >/dev/null
     git add -A; git commit -qm board
+    # board files land AFTER init-board: gitignored on base, disk-only — quiet-board contract
+    printf -- '---\nid: T-1\ntitle: land a file\ntype: feature\npoints: 1\nwsjf: 9\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/a.txt\nverify:\n  - test -f src/a.txt\n---\n## Why\nthe file must land so the sprint report has a story to tell.\n\n## Acceptance criteria\n- [ ] the file lands\n' > ops/board/ready/T-1.md
     # race: 8 parallel claims, exactly one may win
     local i wins=0
     for i in 1 2 3 4 5 6 7 8; do ( "$SELF" claim T-1 >/dev/null 2>&1 && echo WIN ) & done > "$T/race" 2>&1
@@ -1201,8 +1702,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     grep -q '⛔' "$T/fmt/out" && { echo "TCM FILTER FAIL (⛔ note must drop)"; exit 1; }
     grep -q '^Files: src/a.txt, src/b.txt$' "$T/fmt/out" || { echo "TCM FILES FAIL"; exit 1; }
     # land: one commit, contract subject + Landed-from trailer, clean tree after
-    printf '# SPRINT 1 — selftest sprint  capacity: 5\n' > ops/SPRINT.md
-    git add -A; git commit -qm 'chore(board): sprint header'
+    printf '# SPRINT 1 — selftest sprint  capacity: 5\n' > ops/SPRINT.md   # moved set: disk-only, ignored on base
     git checkout -q -b integrate/2026-01-01
     "$SELF" land T-1 >/dev/null || { echo "LAND FAIL"; exit 1; }
     git log -1 --format=%s | grep -q '^feat(src): land a file \[T-1\]$' || { echo "LAND SUBJECT FAIL"; exit 1; }
@@ -1214,15 +1714,41 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     git rev-parse -q --verify refs/tags/sprint/1 >/dev/null || { echo "SEAL TAG FAIL"; exit 1; }
     git log -1 --format=%s | grep -q '^Sprint 1 — selftest sprint$' || { echo "SEAL SUBJECT FAIL"; exit 1; }
     git log -1 --format=%b | grep -q '^- feat(src): land a file \[T-1\]$' || { echo "SEAL BULLET FAIL"; exit 1; }
+    # ==================== T-023 sprint-report drill (ops/contracts/sprint-report.md) ====================
+    # seal committed the wave's report on integrate → it rode the --no-ff merge into base as a
+    # docs(sprint-N) commit (no [<ID>] suffix, off the first-parent chain), and the file carries the
+    # task's ID/title/acceptance/landed sha. Then cmd_report re-renders it, board read-only.
+    git log --format=%s sprint/1 | grep -qx 'docs(sprint-1): report' || { echo "SEAL REPORT COMMIT FAIL (docs(sprint-N) must ride the wave)"; exit 1; }
+    git log --first-parent --format=%s main | grep -q 'docs(sprint-1)' && { echo "SEAL REPORT FIRSTPARENT FAIL (report must not be a base first-parent commit)"; exit 1; }
+    [ -f docs/sprints/sprint-1.md ] || { echo "SEAL REPORT FILE FAIL (report must ride into base)"; exit 1; }
+    grep -q '^## T-1 — land a file$' docs/sprints/sprint-1.md || { echo "REPORT SECTION FAIL (ID + title)"; exit 1; }
+    grep -q 'the file lands' docs/sprints/sprint-1.md || { echo "REPORT ACCEPTANCE FAIL (acceptance line verbatim)"; exit 1; }
+    grep -q 'the sprint report has a story' docs/sprints/sprint-1.md || { echo "REPORT WHY FAIL (Why body verbatim)"; exit 1; }
+    t1short="$(git log --format='%h %s' main | awk '/\[T-1\]$/ {print $1; exit}')"   # the land commit (subject ENDS [T-1]), not the seal merge whose body cites it
+    grep -q "landed $t1short" docs/sprints/sprint-1.md || { echo "REPORT SHA FAIL (landed short sha)"; exit 1; }
+    # cmd_report: explicit + board read-only. Rewrites the file WHOLE, prints the path, commits NOTHING.
+    mainpre_r="$(git rev-parse main)"; boardpre_r="$(git rev-parse refs/heads/polaris/board)"
+    "$SELF" report --sprint 1 > "$T/rep.out" || { echo "REPORT RUN FAIL"; exit 1; }
+    grep -q 'sprint-1.md' "$T/rep.out" || { echo "REPORT PATH FAIL (must print the path)"; exit 1; }
+    "$SELF" report > "$T/rep2.out" || { echo "REPORT CURRENT FAIL (no flag = current sprint)"; exit 1; }
+    grep -q 'sprint-1.md' "$T/rep2.out" || { echo "REPORT CURRENT PATH FAIL"; exit 1; }
+    "$SELF" report --all > "$T/rep3.out" || { echo "REPORT ALL FAIL"; exit 1; }
+    grep -q 'sprint-1.md' "$T/rep3.out" || { echo "REPORT ALL PATH FAIL"; exit 1; }
+    [ "$(git rev-parse main)" = "$mainpre_r" ] || { echo "REPORT COMMIT FAIL (report must not commit on base)"; exit 1; }
+    [ "$(git rev-parse refs/heads/polaris/board)" = "$boardpre_r" ] || { echo "REPORT BOARD FAIL (report must not touch the board)"; exit 1; }
+    git diff --quiet -- docs/sprints/sprint-1.md || { echo "REPORT IDEMPOTENT FAIL (cmd_report must match the sealed render)"; exit 1; }
+    # ==================== end T-023 sprint-report drill ====================
     # history: sprint line visible, board noise filtered; --tasks drills into the squash commit
     "$SELF" history > "$T/hist.out"
     grep -q 'Sprint 1 — selftest sprint' "$T/hist.out" || { echo "HISTORY FAIL (sprint merge missing)"; exit 1; }
     grep -q 'chore(board)' "$T/hist.out" && { echo "HISTORY FILTER FAIL (board noise must hide)"; exit 1; }
-    "$SELF" history --tasks 1 | grep -q 'land a file \[T-1\]' || { echo "HISTORY TASKS FAIL"; exit 1; }
+    "$SELF" history --tasks 1 > "$T/htasks.out"
+    grep -q 'land a file \[T-1\]' "$T/htasks.out" || { echo "HISTORY TASKS FAIL"; exit 1; }
+    grep -q 'docs(sprint-' "$T/htasks.out" && { echo "HISTORY TASKS REPORT FILTER FAIL (docs(sprint-N): report must not appear in the task view)"; exit 1; }
     # done on a squash landing: rule-1 gate accepts (feat/T-1 is NOT an ancestor of main) + landed: stamp
     "$SELF" done T-1 >/dev/null
-    [ "$(sed -n 's/^landed: //p' ops/board/done/T-1.md | tr -d ' \r')" = "$(git rev-parse 'sprint/1^2')" ] \
-      || { echo "LANDED STAMP FAIL (done must stamp the squash SHA)"; exit 1; }
+    [ "$(sed -n 's/^landed: //p' ops/board/done/T-1.md | tr -d ' \r')" = "$(git log --format='%H %s' main | awk '/\[T-1\]$/ {print $1; exit}')" ] \
+      || { echo "LANDED STAMP FAIL (done must stamp the squash SHA)"; exit 1; }   # the land commit (subject ENDS [T-1]); the wave's report commit now tips integrate
     [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-1" ] && { echo "LOCK CLEANUP FAIL"; exit 1; }
     # rollback: task revert applies, then (state reset between) the sprint revert applies too
     "$SELF" rollback T-1 >/dev/null || { echo "ROLLBACK TASK FAIL"; exit 1; }
@@ -1247,8 +1773,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     # (old → new logged), history --tasks 1 spans both waves, and the wave-2 task passes done
     # via the rule-1 gate its seal just made true. (State here: main parked ON the sealed merge.)
     w1tag="$(git rev-parse refs/tags/sprint/1)"
-    printf -- '---\nid: T-W\ntitle: wave two file\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/w.txt\nverify: []\n---\n' > ops/board/ready/T-W.md
-    git add -A; git commit -qm 'chore(board): tw'
+    printf -- '---\nid: T-W\ntitle: wave two file\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nmap_delta: wave two exists\nfiles_owned:\n  - src/w.txt\nverify: []\n---\n' > ops/board/ready/T-W.md
     "$SELF" claim T-W >/dev/null
     ( cd .polaris/wt/T-W && echo w > src/w.txt && git add -A && git commit -qm ok && "$SELF" handoff T-W >/dev/null )
     git checkout -q integrate/2026-01-01
@@ -1273,6 +1798,23 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     grep -q 'wave two file \[T-W\]' "$T/hist2.out" || { echo "HISTORY WAVES FAIL (wave-2 task missing from --tasks)"; exit 1; }
     "$SELF" done T-W >/dev/null || { echo "SECOND-SEAL DONE FAIL (wave-2 done must pass once its seal lands)"; exit 1; }
     # ================== end v5.13 second-seal drill ==============================
+    # ================== T-020 quiet-board drill (ops/contracts/quiet-board.md) ==================
+    # The whole flow above (claim → handoff → land → seal → done, two waves) ran with the moved set
+    # ignored on base: its chore(board) commits live on refs/heads/polaris/board, base first-parent
+    # gained ZERO chore(board) commits, and T-W's map_delta landed as exactly ONE docs(map) commit.
+    git rev-parse -q --verify refs/heads/polaris/board >/dev/null || { echo "QUIET REF FAIL (polaris/board must exist)"; exit 1; }
+    for s in 'claim T-1' 'handoff T-1' 'done T-1' 'claim T-W' 'handoff T-W' 'done T-W'; do
+      git log --format=%s refs/heads/polaris/board | grep -qx "chore(board): $s" || { echo "QUIET LOG FAIL (chore(board): $s missing on polaris/board)"; exit 1; }
+    done
+    [ "$(git rev-list --max-parents=0 refs/heads/polaris/board | wc -l | tr -d ' ')" = "1" ] || { echo "QUIET ORPHAN FAIL (exactly one parentless root)"; exit 1; }
+    git log --first-parent --format=%s main | grep -q '^chore(board):' && { echo "QUIET BASE FAIL (base first-parent must gain ZERO chore(board) commits)"; exit 1; }
+    [ "$(git log --format=%s main | grep -c '^docs(map):')" = "1" ] || { echo "QUIET MAP COUNT FAIL (non-empty map_delta = exactly ONE docs(map) commit on base)"; exit 1; }
+    git log --format=%s main | grep -qx 'docs(map): T-W wave two exists' || { echo "QUIET MAP SUBJECT FAIL"; exit 1; }
+    grep -q 'wave two exists' ops/MAP.md || { echo "QUIET MAP APPLY FAIL (delta line must append to ops/MAP.md)"; exit 1; }
+    git ls-tree -r --name-only refs/heads/polaris/board | grep -v '^ops/board/' | grep -v '^ops/SPRINT\.md$' | grep -q . \
+      && { echo "QUIET TREE FAIL (branch tree = ONLY ops/board/** + ops/SPRINT.md)"; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "QUIET CLEAN FAIL (board mutations must never dirty base status)"; exit 1; }
+    # ================== end T-020 quiet-board drill ==================
     # --- v5: RULES engine — path deny beats ownership; content deny on payload and on diff
     printf 'src/a.txt\tpath\t-\tfrozen for the drill\n' >> ops/RULES.tsv
     "$SELF" _rules src/a.txt 2>/dev/null && { echo "RULES PATH FAIL (should deny)"; exit 1; }
@@ -1314,12 +1856,11 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     # N parallel no-ID claims land on N distinct tasks). Deterministic: pre-take the top, then no-ID.
     printf -- '---\nid: T-5\npoints: 1\nwsjf: 9\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/f5.txt\nverify: []\n---\n' > ops/board/ready/T-5.md
     printf -- '---\nid: T-6\npoints: 1\nwsjf: 8\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/f6.txt\nverify: []\n---\n' > ops/board/ready/T-6.md
-    git add -A; git commit -qm t56
     "$SELF" claim T-5 >/dev/null                         # session A takes the top wsjf task
     "$SELF" claim >/dev/null                             # session B, no ID: takes the next available task
     [ -f ops/board/active/T-6.md ] || { echo "FANOUT FAIL — no-ID claim did not take the next task"; exit 1; }
     "$SELF" release T-5 --to ready -m drill >/dev/null; "$SELF" release T-6 --to ready -m drill >/dev/null
-    rm -f ops/board/ready/T-5.md ops/board/ready/T-6.md; git add -A; git commit -qm cleanup56
+    rm -f ops/board/ready/T-5.md ops/board/ready/T-6.md
     # drift must catch nested-glob overlap (previously declared 'undecidable')
     printf -- '---\nid: T-7\npoints: 1\nwsjf: 2\nstatus: ready\nfiles_owned:\n  - src/api/*\n---\n' > ops/board/ready/T-7.md
     printf -- '---\nid: T-8\npoints: 1\nwsjf: 2\nstatus: ready\nfiles_owned:\n  - src/*/handler.js\n---\n' > ops/board/ready/T-8.md
@@ -1327,13 +1868,12 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     rm -f ops/board/ready/T-7.md ops/board/ready/T-8.md
     # `audit` (the logic polaris-audit.yml wraps) must reject an out-of-scope feat branch, from anywhere
     printf -- '---\nid: T-9\npoints: 1\nwsjf: 1\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/f9.txt\nverify: []\n---\n' > ops/board/ready/T-9.md
-    git add -A; git commit -qm t9
     "$SELF" claim T-9 >/dev/null
     ( cd .polaris/wt/T-9 && echo x > src/f9.txt && echo y > src/nope.txt && git add -A && git commit -qm 'in+out of scope' )
     "$SELF" audit T-9 >/dev/null 2>&1 && { echo "AUDIT FAIL (out-of-scope feat branch must reject)"; exit 1; }
     "$SELF" release T-9 --to ready -m drill >/dev/null
     "$SELF" why T-9 | grep -q 'release' || { echo "WHY FAIL (release note not surfaced)"; exit 1; }
-    rm -f ops/board/ready/T-9.md; git add -A; git commit -qm cleanup9
+    rm -f ops/board/ready/T-9.md
     # drift catches a depends_on cycle (a ring never satisfies the ready gate)
     printf -- '---\nid: T-A\npoints: 1\nwsjf: 1\nstatus: backlog\ndepends_on:\n  - T-B\n---\n' > ops/board/backlog/T-A.md
     printf -- '---\nid: T-B\npoints: 1\nwsjf: 1\nstatus: backlog\ndepends_on:\n  - T-A\n---\n' > ops/board/backlog/T-B.md
@@ -1381,7 +1921,6 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     git remote add origin "$T/origin.git"
     git push -qu origin main
     printf -- '---\nid: T-C\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/c.txt\nverify: []\n---\n' > ops/board/ready/T-C.md
-    git add -A; git commit -qm tc
     "$SELF" claim T-C >/dev/null
     ( cd .polaris/wt/T-C && echo c > src/c.txt && git add -A && git commit -qm ok && "$SELF" handoff T-C >/dev/null )
     git ls-remote --exit-code origin refs/heads/feat/T-C >/dev/null || { echo "REMOTE PUSH FAIL (handoff must push feat branch)"; exit 1; }
@@ -1392,6 +1931,42 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     "$SELF" sweep | grep -q 'REMOTE stray: feat/T-C' || { echo "SWEEP STRAY FAIL"; exit 1; }
     "$SELF" sweep --fix >/dev/null
     git ls-remote --exit-code origin refs/heads/feat/T-C >/dev/null 2>&1 && { echo "SWEEP FIX FAIL (merged stray must be deleted)"; exit 1; }
+    # --- v5.13 T-024: sweep flags a MERGED integrate/* branch as a stray (--fix deletes it) but
+    # KEEPS a diverged one (tip not in $BASE). Same bare origin as the feat/* drill above.
+    git push -q origin main:refs/heads/integrate/2030-01-01                                  # merged wave: tip is in main
+    idvg="$(git commit-tree "$(git rev-parse 'main^{tree}')" -p main -m 'diverged wave')"    # a child of main → tip NOT in main
+    git push -q origin "$idvg:refs/heads/integrate/2030-02-02"
+    "$SELF" sweep > "$T/isweep.out"
+    grep -q 'REMOTE stray: integrate/2030-01-01' "$T/isweep.out" || { echo "SWEEP INTEGRATE STRAY FAIL (merged wave must flag)"; exit 1; }
+    grep -q 'REMOTE diverged: integrate/2030-02-02' "$T/isweep.out" || { echo "SWEEP INTEGRATE DIVERGED FAIL (unmerged wave must flag)"; exit 1; }
+    "$SELF" sweep --fix >/dev/null
+    git ls-remote --exit-code origin refs/heads/integrate/2030-01-01 >/dev/null 2>&1 && { echo "SWEEP INTEGRATE FIX FAIL (merged wave must be deleted)"; exit 1; }
+    git ls-remote --exit-code origin refs/heads/integrate/2030-02-02 >/dev/null || { echo "SWEEP INTEGRATE KEEP FAIL (diverged wave must be kept)"; exit 1; }
+    git push -q origin :refs/heads/integrate/2030-02-02    # clean up so later drills see a bare origin
+    # ============ T-020 quiet-board sync race (EVENTS union — ops/contracts/quiet-board.md) ============
+    # origin/polaris/board moves AHEAD with a foreign machine's EVENTS line; the next local
+    # mutation's push is rejected → sync_board must union the line into the on-disk file,
+    # re-parent on the fetched tip, and land the push — no line lost to the race.
+    git clone -q "$T/origin.git" "$T/peer" 2>/dev/null   # bare origin's HEAD names no branch — harmless
+    ( cd "$T/peer" && git config user.email p@p && git config user.name p
+      ptip="$(git rev-parse origin/polaris/board)"
+      git cat-file -p "$ptip:ops/board/EVENTS.ndjson" > "$T/peer.ev"
+      printf '{"ts":1,"ev":"claim","id":"T-PEER","who":"peer","note":""}\n' >> "$T/peer.ev"
+      pblob="$(git hash-object -w "$T/peer.ev" 2>/dev/null)"
+      GIT_INDEX_FILE="$T/peer.idx" git read-tree "$ptip"
+      GIT_INDEX_FILE="$T/peer.idx" git update-index --add --cacheinfo "100644,$pblob,ops/board/EVENTS.ndjson"
+      ptree="$(GIT_INDEX_FILE="$T/peer.idx" git write-tree)"
+      pnew="$(git commit-tree "$ptree" -p "$ptip" -m 'chore(board): peer claim')"
+      git push -q origin "$pnew:refs/heads/polaris/board" ) || { echo "SYNC RACE SETUP FAIL"; exit 1; }
+    printf -- '---\nid: T-Q\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/q.txt\nverify: []\n---\n' > ops/board/ready/T-Q.md
+    "$SELF" claim T-Q >/dev/null || { echo "SYNC RACE CLAIM FAIL (rejected push must recover via union + re-parent)"; exit 1; }
+    grep -q '"id":"T-PEER"' ops/board/EVENTS.ndjson || { echo "SYNC UNION FAIL (remote-only EVENTS line must append locally)"; exit 1; }
+    [ "$(git ls-remote origin refs/heads/polaris/board | cut -f1)" = "$(git rev-parse refs/heads/polaris/board)" ] \
+      || { echo "SYNC PUSH FAIL (local polaris/board must land on origin)"; exit 1; }
+    git log -1 --format=%s refs/heads/polaris/board | grep -qx 'chore(board): claim T-Q' || { echo "SYNC SUBJECT FAIL (re-parented commit must keep its subject)"; exit 1; }
+    "$SELF" release T-Q --to ready -m drill >/dev/null
+    rm -f ops/board/ready/T-Q.md
+    # ============ end T-020 quiet-board sync race ============
     # ================== v5.13 notify v2 drills (hands-free-knobs) ==================
     # shim listed in help · no notify: configured → rc 0 and SILENT · unknown/missing kind (and a
     # missing required ID) → usage error, rc≠0
@@ -1421,7 +1996,6 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     # an ordinary event (claim) carries SEVERITY=info · --to ready keeps ev "release" · `why`
     # surfaces blocked lines as bounce history
     printf -- '---\nid: T-D\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/d.txt\nverify: []\n---\n' > ops/board/ready/T-D.md
-    git add -A; git commit -qm td
     "$SELF" claim T-D >/dev/null
     ngwait '^claim/info/T-D/' || { echo "SEVERITY INFO FAIL (ordinary event must export SEVERITY=info)"; exit 1; }
     "$SELF" release T-D --to blocked -m stuck >/dev/null
@@ -1429,13 +2003,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     ngwait '^blocked/gate/T-D/' || { echo "SEVERITY GATE FAIL (blocked must export SEVERITY=gate)"; exit 1; }
     "$SELF" why T-D | grep -q 'ago  blocked' || { echo "WHY BLOCKED FAIL (why must surface blocked telemetry lines)"; exit 1; }
     printf -- '---\nid: T-E\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/e.txt\nverify: []\n---\n' > ops/board/ready/T-E.md
-    git add -A; git commit -qm te
     "$SELF" claim T-E >/dev/null
     "$SELF" release T-E --to ready -m drill >/dev/null
     grep -q '"ev":"release","id":"T-E"' ops/board/EVENTS.ndjson || { echo "RELEASE EVENT FAIL (--to ready must keep ev release)"; exit 1; }
     grep -q '"ev":"blocked","id":"T-E"' ops/board/EVENTS.ndjson && { echo "RELEASE EVENT FAIL (--to ready must not emit blocked)"; exit 1; }
     rm -f ops/board/blocked/T-D.md ops/board/ready/T-E.md
-    git add -A; git commit -qm cleanup-de
     # doctor knob awareness: explicit knob beats autonomy: trusted, trusted fills the unset
     # knobs, unknown values warn and behave as the default
     printf 'autonomy: trusted\nplan_gate: confirm\ndrain: bogus\n' > ops/CONVENTIONS.md
@@ -1450,26 +2022,24 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     "$SELF" help | grep -q 'grant' || { echo "USAGE FAIL: grant missing from help"; exit 1; }
     printf -- '---\nid: T-G\npoints: 1\nwsjf: 6\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/g.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-G.md
     printf -- '---\nid: T-H\npoints: 1\nwsjf: 1\nstatus: ready\nfiles_owned:\n  - src/h/\n---\n' > ops/board/ready/T-H.md
-    git add -A; git commit -qm tg
     "$SELF" claim T-G >/dev/null
     "$SELF" grant T-H src/free.txt -m why >/dev/null 2>&1 && { echo "GRANT COLUMN FAIL (ready task must refuse — grant is for active/ only)"; exit 1; }
     "$SELF" grant T-G src/free.txt >/dev/null 2>&1 && { echo "GRANT -M FAIL (missing -m must refuse)"; exit 1; }
-    gpre="$(git rev-parse HEAD)"
+    gpre="$(git rev-parse refs/heads/polaris/board)"
     "$SELF" grant T-G src/h/inner.txt -m why >/dev/null 2>&1 && { echo "GRANT OVERLAP FAIL (path under another task's dir/ must refuse)"; exit 1; }
     "$SELF" grant T-G src/ -m why >/dev/null 2>&1 && { echo "GRANT OVERLAP FAIL (dir/ swallowing another task's entry must refuse — both directions)"; exit 1; }
-    [ "$(git rev-parse HEAD)" = "$gpre" ] || { echo "GRANT REFUSE MUTATE FAIL (a refusal must not commit)"; exit 1; }
+    [ "$(git rev-parse refs/heads/polaris/board)" = "$gpre" ] || { echo "GRANT REFUSE MUTATE FAIL (a refusal must not commit)"; exit 1; }
     [ -z "$(git status --porcelain)" ] || { echo "GRANT REFUSE DIRTY FAIL (a refusal must leave zero uncommitted state)"; exit 1; }
     "$SELF" grant T-G src/free.txt -m "discovered during wiring" >/dev/null || { echo "GRANT FAIL (free path must succeed)"; exit 1; }
     fm_list files_owned ops/board/active/T-G.md | grep -qx 'src/free.txt' || { echo "GRANT APPEND FAIL (path missing from files_owned)"; exit 1; }
     fm_list files_owned ops/board/active/T-G.md | grep -qx 'src/g.txt' || { echo "GRANT PRESERVE FAIL (existing entries must survive)"; exit 1; }
     grep -q '^- grant: src/free.txt — discovered during wiring$' ops/board/active/T-G.md || { echo "GRANT NOTE FAIL (Notes line missing)"; exit 1; }
     grep -q '"ev":"grant","id":"T-G".*"note":"src/free.txt"' ops/board/EVENTS.ndjson || { echo "GRANT EVENT FAIL"; exit 1; }
-    git log -1 --format=%s | grep -q '^chore(board): grant T-G src/free.txt$' || { echo "GRANT COMMIT FAIL (one board commit, contract subject)"; exit 1; }
+    git log -1 --format=%s refs/heads/polaris/board | grep -q '^chore(board): grant T-G src/free.txt$' || { echo "GRANT COMMIT FAIL (one board commit on polaris/board, contract subject)"; exit 1; }
     ( cd .polaris/wt/T-G && echo f > src/free.txt && git add -A && git commit -qm ok \
       && "$SELF" verify T-G >/dev/null ) || { echo "GRANT VERIFY FAIL (granted path must pass ownership)"; exit 1; }
     "$SELF" release T-G --to ready -m drill >/dev/null
     rm -f ops/board/ready/T-G.md ops/board/ready/T-H.md
-    git add -A; git commit -qm cleanup-gh
     # ================== end T-005 grant drills ==================
     # ================== T-006 staleness drills (ops/contracts/self-hosting.md) ==================
     # Fake `unzip`/`curl` on PATH make this deterministic and portable (no real network, no zip
@@ -1501,10 +2071,142 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     grep -q '^latest: 8.8.8$' .polaris/update-cache || { echo "VERSION CACHE FAIL (fresh check must update the cache)"; exit 1; }
     rm -rf ops/VERSION .polaris/update-cache
     # ================== end T-006 staleness drills ==================
+    # ================== T-021 upgrade-migration drill (ops/contracts/quiet-board.md) ==================
+    # A 5.13-shaped repo: moved set TRACKED on base, chore(board) history on base, no polaris/board.
+    # upgrade must migrate ONCE (orphan seed → untrack → ignore → ONE base commit), re-run as a
+    # no-op, and the board must run QUIET afterwards. Then: claim/resume print PRIMARY-anchored
+    # task paths · a fresh clone materializes the board via doctor and via resume · uninstall
+    # deletes the board-history branch locally and on origin.
+    git init -q -b main "$T/mig" 2>/dev/null || { git init -q "$T/mig"; git -C "$T/mig" symbolic-ref HEAD refs/heads/main; }
+    ( set -e; cd "$T/mig"; git config user.email t@t; git config user.name t
+      mkdir -p src ops/board/ready ops/board/active ops/board/review ops/board/done ops/board/blocked ops/board/backlog
+      echo x > src/m0.txt
+      : > ops/board/EVENTS.ndjson
+      printf '# SPRINT 0 — migration drill  capacity: 1\n' > ops/SPRINT.md
+      printf -- '---\nid: T-M\ntitle: migrated task\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/m.txt\nverify: []\n---\n' > ops/board/ready/T-M.md
+      git add -A; git commit -qm init
+      echo bump >> ops/SPRINT.md; git add -A; git commit -qm 'chore(board): claim T-OLD'   # 5.13-shaped: tracked set, chore history on base
+      pre="$(git rev-list --count main)"
+      "$SELF" upgrade > "$T/mig-up.out" 2>&1 || { cat "$T/mig-up.out"; echo "MIGRATION RUN FAIL"; exit 1; }
+      git rev-parse -q --verify refs/heads/polaris/board >/dev/null || { echo "MIGRATION REF FAIL (upgrade must seed polaris/board)"; exit 1; }
+      git ls-tree -r --name-only refs/heads/polaris/board | grep -qx 'ops/board/ready/T-M.md' || { echo "MIGRATION SEED FAIL (current board state must ride the orphan seed)"; exit 1; }
+      git ls-tree -r --name-only refs/heads/polaris/board | grep -v '^ops/board/' | grep -v '^ops/SPRINT\.md$' | grep -q . && { echo "MIGRATION TREE FAIL (seed tree = ONLY the moved set)"; exit 1; }
+      [ "$(git rev-list --max-parents=0 refs/heads/polaris/board | wc -l | tr -d ' ')" = "1" ] || { echo "MIGRATION ORPHAN FAIL"; exit 1; }
+      [ -z "$(git ls-files -- ops/board ops/SPRINT.md)" ] || { echo "MIGRATION UNTRACK FAIL (the set must leave the base index)"; exit 1; }
+      git check-ignore -q ops/SPRINT.md && git check-ignore -q ops/board/ready/T-M.md || { echo "MIGRATION IGNORE FAIL"; exit 1; }
+      [ "$(git rev-list --count main)" = "$((pre+1))" ] || { echo "MIGRATION COMMIT COUNT FAIL (exactly ONE new base commit)"; exit 1; }
+      git log -1 --format=%s main | grep -qx 'chore(board): board moves to polaris/board' || { echo "MIGRATION SUBJECT FAIL"; exit 1; }
+      mig="$(git rev-parse main)"; mtip="$(git rev-parse refs/heads/polaris/board)"
+      "$SELF" upgrade > "$T/mig-up2.out" 2>&1 || { cat "$T/mig-up2.out"; echo "MIGRATION RERUN FAIL"; exit 1; }
+      [ "$(git rev-parse main)" = "$mig" ] || { echo "MIGRATION IDEMPOTENT FAIL (re-run must add no base commit)"; exit 1; }
+      [ "$(git rev-parse refs/heads/polaris/board)" = "$mtip" ] || { echo "MIGRATION IDEMPOTENT FAIL (re-run must not move the ref)"; exit 1; }
+      # claim/resume on the migrated board: green, and the printed task path is PRIMARY-anchored
+      # (the worktree contains no ops/board). mp = PRIMARY exactly as the script computes it.
+      mp="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"
+      "$SELF" claim T-M > "$T/mig-claim.out" || { echo "MIGRATED CLAIM FAIL"; exit 1; }
+      grep -qF "task file at \"$mp/ops/board/active/T-M.md\"" "$T/mig-claim.out" || { echo "CLAIM PATH FAIL (read: hint must name the primary-anchored task file)"; exit 1; }
+      "$SELF" resume T-M > "$T/mig-resume.out" || { echo "MIGRATED RESUME FAIL"; exit 1; }
+      grep -qF "task file: \"$mp/ops/board/active/T-M.md\"" "$T/mig-resume.out" || { echo "RESUME PATH FAIL (resume must print the primary-anchored task file)"; exit 1; }
+      # fresh clones: doctor materializes the board from origin's ref (creating the local ref);
+      # resume does the same BEFORE its task lookup — an active task survives the machine hop.
+      git clone -q . "$T/mig2" 2>/dev/null
+      ( set -e; cd "$T/mig2"; git config user.email t@t; git config user.name t
+        [ ! -d ops/board ] || { echo "CLONE SHAPE FAIL (moved set must be absent from a fresh clone)"; exit 1; }
+        "$SELF" doctor > "$T/mig-doc.out" 2>&1 || { cat "$T/mig-doc.out"; echo "DOCTOR MATERIALIZE RC FAIL"; exit 1; }
+        grep -q 'materialized ops/board/' "$T/mig-doc.out" || { echo "DOCTOR MATERIALIZE SAY FAIL (doctor must say what it did)"; exit 1; }
+        [ -f ops/board/active/T-M.md ] && [ -f ops/SPRINT.md ] || { echo "DOCTOR MATERIALIZE FAIL (moved set must land on disk)"; exit 1; }
+        git rev-parse -q --verify refs/heads/polaris/board >/dev/null || { echo "DOCTOR REF FAIL (local ref must be created from origin's)"; exit 1; } ) || exit 1
+      git clone -q . "$T/mig3" 2>/dev/null
+      ( set -e; cd "$T/mig3"; git config user.email t@t; git config user.name t
+        "$SELF" resume T-M >/dev/null 2>&1 || { echo "RESUME MATERIALIZE FAIL (fresh clone must resume an active task)"; exit 1; }
+        [ -f ops/board/active/T-M.md ] || { echo "RESUME MATERIALIZE DISK FAIL"; exit 1; } ) || exit 1
+      # quiet after migration: handoff → legacy merge → done; base first-parent gains ZERO
+      # chore(board) commits after the migration commit (the migration commit is the LAST)
+      ( set -e; cd .polaris/wt/T-M; echo m > src/m.txt; git add -A; git commit -qm ok
+        "$SELF" handoff T-M >/dev/null ) || exit 1
+      git merge -q --no-ff feat/T-M -m merge
+      "$SELF" done T-M >/dev/null || { echo "MIGRATED DONE FAIL"; exit 1; }
+      git log --first-parent --format=%s "$mig..main" | grep -q '^chore(board):' && { echo "MIGRATED QUIET FAIL (no chore(board) on base after the migration commit)"; exit 1; }
+      # uninstall: names the branch pre-confirm, deletes it locally AND on origin
+      git init -q --bare "$T/mig-origin.git"
+      git remote add origin "$T/mig-origin.git"
+      git push -q origin main refs/heads/polaris/board
+      "$SELF" uninstall > "$T/mig-un.out" 2>&1 && { echo "UNINSTALL CONFIRM FAIL (no --yes must refuse)"; exit 1; }
+      grep -q 'polaris/board' "$T/mig-un.out" || { echo "UNINSTALL SUMMARY FAIL (pre-confirm must name the board-history branch)"; exit 1; }
+      "$SELF" uninstall --yes > "$T/mig-un2.out" 2>&1 || { cat "$T/mig-un2.out"; echo "UNINSTALL RUN FAIL"; exit 1; }
+      git rev-parse -q --verify refs/heads/polaris/board >/dev/null && { echo "UNINSTALL LOCAL REF FAIL (the branch must be deleted)"; exit 1; }
+      git ls-remote "$T/mig-origin.git" refs/heads/polaris/board | grep -q . && { echo "UNINSTALL REMOTE REF FAIL (the deletion must push)"; exit 1; }
+      : ) || exit 1
+    # ================== end T-021 upgrade-migration drill ==================
+    # ================== T-022 pr-publish drill (ops/contracts/publish-modes.md) ==================
+    # publish: pr against a scratch bare origin: handoff keeps feat/* local · seal pushes ONLY
+    # integrate/<date> + prints title/bullets/URL fallback + fires notify done, moving NO ref on
+    # base (local or remote) and no tag · a simulated host PR merge (--no-ff from a temp clone) ·
+    # seal --sync: unmerged wave dies by name, merged wave pulls base, tags, deletes the branch
+    # both sides · done green via the rule-1 gate · direct --sync dies · unknown publish: warns.
+    "$SELF" help | grep -q -- 'seal --sync' || { echo "USAGE FAIL: seal --sync missing from help"; exit 1; }
+    "$SELF" help | grep -q 'publish: pr' || { echo "USAGE FAIL: publish: key missing from help"; exit 1; }
+    printf 'publish: pr\n' >> ops/CONVENTIONS.md
+    git add -A; git commit -qm 'publish pr'
+    git push -q origin main
+    printf '# SPRINT 2 — pr sprint  capacity: 5\n' > ops/SPRINT.md
+    # URL composition is a pure in-process function — drill it directly, like fm_list above
+    [ "$(pr_create_url 'git@bitbucket.org:acme/arc.git' 2026-01-02 main)" = 'https://bitbucket.org/acme/arc/pull-requests/new?source=integrate/2026-01-02&dest=main' ] \
+      || { echo "PR URL SSH FAIL"; exit 1; }
+    [ "$(pr_create_url 'https://u@bitbucket.org/acme/arc.git' 2026-01-02 main)" = 'https://bitbucket.org/acme/arc/pull-requests/new?source=integrate/2026-01-02&dest=main' ] \
+      || { echo "PR URL HTTPS FAIL"; exit 1; }
+    [ -z "$(pr_create_url 'git@github.com:acme/arc.git' 2026-01-02 main)" ] || { echo "PR URL FOREIGN FAIL (non-bitbucket must yield nothing)"; exit 1; }
+    printf -- '---\nid: T-P\ntitle: pr mode file\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/p.txt\nverify: []\n---\n' > ops/board/ready/T-P.md
+    "$SELF" claim T-P >/dev/null
+    ( cd .polaris/wt/T-P && echo p > src/p.txt && git add -A && git commit -qm ok && "$SELF" handoff T-P >/dev/null )
+    git ls-remote origin 'refs/heads/feat/*' | grep -q . && { echo "PR HANDOFF FAIL (feat branches must never leave the machine)"; exit 1; }
+    git checkout -q -b integrate/2026-01-02
+    "$SELF" land T-P >/dev/null || { echo "PR LAND FAIL"; exit 1; }
+    basepre="$(git rev-parse main)"; rbasepre="$(git ls-remote origin refs/heads/main | cut -f1)"
+    # unmerged wave → --sync dies naming the missing task, and tags nothing
+    "$SELF" seal --sync 2026-01-02 > "$T/prsync0.out" 2>&1 && { echo "PR SYNC UNMERGED FAIL (must die before the PR merges)"; exit 1; }
+    grep -q 'T-P' "$T/prsync0.out" || { echo "PR SYNC NAME FAIL (die must name the missing task)"; exit 1; }
+    git rev-parse -q --verify refs/tags/sprint/2 >/dev/null && { echo "PR SYNC MUTATE FAIL (failed sync must not tag)"; exit 1; }
+    : > "$T/notify.log"
+    "$SELF" seal 2026-01-02 > "$T/prseal.out" || { cat "$T/prseal.out"; echo "PR SEAL FAIL"; exit 1; }
+    git ls-remote --exit-code origin refs/heads/integrate/2026-01-02 >/dev/null || { echo "PR SEAL PUSH FAIL (integrate branch must reach origin)"; exit 1; }
+    [ "$(git ls-remote origin refs/heads/main | cut -f1)" = "$rbasepre" ] || { echo "PR SEAL REMOTE BASE FAIL (origin base must not move)"; exit 1; }
+    [ "$(git rev-parse main)" = "$basepre" ] || { echo "PR SEAL LOCAL FAIL (no local merge in pr mode)"; exit 1; }
+    git rev-parse -q --verify refs/tags/sprint/2 >/dev/null && { echo "PR SEAL TAG FAIL (no tag before --sync)"; exit 1; }
+    [ -f ops/board/review/T-P.md ] || { echo "PR SEAL BOARD FAIL (tasks stay in review/)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-P" ] || { echo "PR SEAL LOCK FAIL (locks stay until done)"; exit 1; }
+    grep -q 'open a PR from integrate/2026-01-02 into main on your host' "$T/prseal.out" || { echo "PR SEAL URL FALLBACK FAIL"; exit 1; }
+    grep -q 'Sprint 2 — pr sprint' "$T/prseal.out" || { echo "PR SEAL TITLE FAIL (suggested title missing)"; exit 1; }
+    grep -q -- '- feat(src): pr mode file \[T-P\]' "$T/prseal.out" || { echo "PR SEAL BULLET FAIL (description bullets missing)"; exit 1; }
+    ngwait '^run-done/done//run-done$' || { echo "PR SEAL NOTIFY FAIL (pr seal must fire notify-gate done)"; exit 1; }
+    # the human merges the PR — simulated with a --no-ff merge pushed from a temp clone
+    git clone -q "$T/origin.git" "$T/prhost" 2>/dev/null
+    ( set -e; cd "$T/prhost"; git config user.email t@t; git config user.name t
+      git checkout -q main 2>/dev/null || git checkout -q -b main origin/main
+      git merge -q --no-ff origin/integrate/2026-01-02 -m 'Merged in integrate/2026-01-02 (pull request #1)'
+      git push -q origin main ) || { echo "PR MERGE SIM FAIL"; exit 1; }
+    "$SELF" seal --sync 2026-01-02 > "$T/prsync.out" || { cat "$T/prsync.out"; echo "PR SYNC FAIL"; exit 1; }
+    [ "$(git rev-parse main)" = "$(git ls-remote origin refs/heads/main | cut -f1)" ] || { echo "PR SYNC PULL FAIL (base must fast-forward to the PR merge)"; exit 1; }
+    git rev-parse -q --verify refs/tags/sprint/2 >/dev/null || { echo "PR SYNC TAG FAIL"; exit 1; }
+    [ "$(git ls-remote origin refs/tags/sprint/2 | cut -f1)" = "$(git rev-parse refs/tags/sprint/2)" ] || { echo "PR SYNC TAG PUSH FAIL (tag must land on origin)"; exit 1; }
+    git rev-parse -q --verify refs/heads/integrate/2026-01-02 >/dev/null 2>&1 && { echo "PR SYNC BRANCH FAIL (local integrate branch must go)"; exit 1; }
+    git ls-remote --exit-code origin refs/heads/integrate/2026-01-02 >/dev/null 2>&1 && { echo "PR SYNC REMOTE BRANCH FAIL (origin integrate branch must go)"; exit 1; }
+    "$SELF" done T-P >/dev/null || { echo "PR DONE FAIL (rule-1 gate must pass after --sync)"; exit 1; }
+    # direct mode: --sync has nothing to do · unknown publish: warns once + behaves direct
+    sed -i.bak '/^publish:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    "$SELF" seal --sync 2026-01-02 > "$T/prd.out" 2>&1 && { echo "SYNC DIRECT FAIL (direct mode --sync must die)"; exit 1; }
+    grep -q 'nothing to sync' "$T/prd.out" || { echo "SYNC DIRECT MSG FAIL"; exit 1; }
+    printf 'publish: bogus\n' >> ops/CONVENTIONS.md
+    "$SELF" seal --sync 2026-01-02 > "$T/prb.out" 2>&1 && { echo "PUBLISH UNKNOWN FAIL (bogus must behave direct)"; exit 1; }
+    grep -q "publish: 'bogus' unknown" "$T/prb.out" || { echo "PUBLISH WARN FAIL (unknown value must warn)"; exit 1; }
+    grep -q 'nothing to sync' "$T/prb.out" || { echo "PUBLISH FALLBACK FAIL (unknown value must behave direct)"; exit 1; }
+    sed -i.bak '/^publish:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'publish drill cleanup'
+    # ================== end T-022 pr-publish drill ==================
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways)"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin · pr-publish (feat stays local · seal pushes ONLY integrate + title/bullets/URL + notify done, no ref moved · --sync subject gate/tag/branch cleanup both sides · done via rule 1 · direct --sync dies · unknown publish warns) · sprint report (seal commits docs(sprint-N) riding the wave · cmd_report --sprint/current/--all renders + prints, board read-only + idempotent)"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
@@ -1868,6 +2570,25 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
 
 cmd_upgrade() { # idempotent v3→v4: creates what v4 adds, touches nothing that exists
   cmd_init_board
+  # ---- 5.13→5.14 quiet-board migration (ops/contracts/quiet-board.md) — runs ONCE, only when
+  # polaris/board is absent AND the moved set is still tracked on base. Seeds the ref (orphan)
+  # from the current moved-set state, flips the set tracked→untracked (init_board above appended
+  # the .gitignore entries), then ONE final base commit. Re-run = no-op; history never rewritten.
+  if ! git -C "$PRIMARY" rev-parse -q --verify "$BOARD_REF" >/dev/null \
+     && [ -n "$(git -C "$PRIMARY" ls-files -- ops/board ops/SPRINT.md)" ]; then
+    git -C "$PRIMARY" diff --cached --quiet \
+      || die "upgrade: staged changes present — the migration writes ONE base commit; commit or unstage first"
+    local midx mseed
+    midx="$(mktemp)"
+    mseed="$(board_ref_commit "chore(board): board moves to polaris/board" "" "$midx")" \
+      || { rm -f "$midx"; die "upgrade: could not seed polaris/board from the current board state"; }
+    rm -f "$midx"
+    git -C "$PRIMARY" update-ref "$BOARD_REF" "$mseed" ""
+    git -C "$PRIMARY" rm -r -q --cached --ignore-unmatch ops/board ops/SPRINT.md
+    git -C "$PRIMARY" add -- .gitignore
+    git -C "$PRIMARY" commit -q -m "chore(board): board moves to polaris/board"
+    say "board history migrated → refs/heads/polaris/board (moved set now untracked + ignored on $BASE)"
+  fi
   chmod +x "$OPS/polaris" 2>/dev/null || true
   [ -f "$OPS/hooks/ownership-guard.sh" ] && chmod +x "$OPS/hooks/ownership-guard.sh" 2>/dev/null || true
   say "v5 ready. New since v4: RULES.tsv policy engine (danger zones + content guards, 3-deep) · drift (board hygiene audit) · per-point cycle calibration in metrics · uat:/notify: CONVENTIONS keys · dashboard points/drift/notify"
@@ -2169,6 +2890,7 @@ cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and re
   if [ -z "$yes" ]; then
     say "polaris uninstall — this DELETES the following from $PRIMARY:"
     note "ops/                         (board, tasks, contracts, RULES, CONVENTIONS, MAP, SPRINT, telemetry)"
+    note "refs/heads/polaris/board     (the board-history branch — deleted locally and, with a remote, on origin)"
     note ".claude/skills/polaris/      (the project skill)"
     note "the write-guard hook entry   (.claude/settings.json — your other hooks are kept)"
     note "the managed POLARIS block    (CLAUDE.md — your own content is kept)"
@@ -2229,10 +2951,14 @@ EOF
   local GI="$PRIMARY/.gitignore" GA="$PRIMARY/.gitattributes"
   for f in "$GI" "$GA"; do
     [ -f "$f" ] || continue
-    grep -vE '^(polaris-v5/|polaris-v5\.zip|\.polaris/|ops/polaris text eol=lf|ops/VERSION text eol=lf|\*\.sh text eol=lf|ops/board/EVENTS\.ndjson merge=union -text)$' "$f" > "$f.polaris-tmp" || true
+    grep -vE '^(polaris-v5/|polaris-v5\.zip|\.polaris/|ops/board/|ops/SPRINT\.md|ops/polaris text eol=lf|ops/VERSION text eol=lf|\*\.sh text eol=lf|ops/board/EVENTS\.ndjson merge=union -text)$' "$f" > "$f.polaris-tmp" || true
     mv "$f.polaris-tmp" "$f"
     grep -q '[^[:space:]]' "$f" || rm -f "$f"
   done
+
+  # --- the board-history ref (ops/contracts/quiet-board.md): local branch, then its origin copy
+  git -C "$PRIMARY" update-ref -d "$BOARD_REF" 2>/dev/null || true
+  if has_remote; then git -C "$PRIMARY" push -q origin ":$BOARD_REF" 2>/dev/null || true; fi
 
   rm -rf "$PRIMARY/ops" "$PRIMARY/.polaris" "$LOCKS"
   say "POLARIS uninstalled from $PRIMARY"
@@ -2261,7 +2987,8 @@ cmd_rules_check() { # _rules <repo-relative-path> [payload-file] — internal: g
 # ------------------------------------------------------------------- dispatch
 usage() { cat <<'EOF'
 polaris — POLARIS board CLI (run from anywhere inside the repo)
-  init-board                     create board dirs, gitignore .polaris/, lock dir
+  init-board                     create board dirs, gitignore .polaris/ + the board set, lock dir
+                                 (board state commits to refs/heads/polaris/board — base stays clean)
   claim [ID]                     lock + ready→active + worktree  (no ID = top wsjf; skips locked)
   resume [ID]                    re-enter an already-claimed active task (crash/kickback/new session)
   verify [ID]                    diff ⊆ files_owned + run verify: commands (in worktree)
@@ -2273,13 +3000,21 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   kickback <ID> [-m note]        Integrator: red merge → review→active
   audit <ID>                     Integrator: ownership check of feat/<ID>
   run-verify <ID>                Integrator: re-run task verify: commands in CWD
-  done <ID>                      Integrator: review→done + apply map_delta + full cleanup
+  done <ID>                      Integrator: review→done + map_delta as docs(map): on base + cleanup
   task-commit-msg <task-file>    print the task's landed-commit message (pure; `land` consumes it)
   land <ID>                      Integrator, on integrate/<date>: audit + squash feat/<ID> into
                                  ONE rich commit ([<ID>] subject + Landed-from trailer; no board write)
   seal [<date>]                  Integrator: seal the wave — merge integrate/<date> into base
                                  (--no-ff, per-task bullets) + lightweight tag sprint/<n>; a later
-                                 wave's seal MOVES the tag (sprint's latest sealed checkpoint)
+                                 wave's seal MOVES the tag (sprint's latest sealed checkpoint).
+                                 publish: pr (CONVENTIONS key, default direct): NO local merge —
+                                 pushes ONLY integrate/<date> + prints the PR-create URL
+  seal --sync [<date>]           publish: pr only — finish the wave after the human merges the PR
+                                 (MERGE COMMIT strategy, never squash): verify every [<ID>] subject
+                                 reached base, tag sprint/<n>, delete integrate/<date> local+remote
+  report [--sprint <n> | --all]  render the management-readable per-sprint record (docs/sprints/
+                                 by default) from the board + history; writes the file(s), prints
+                                 the path(s), commits nothing (seal commits it on the wave instead)
   history [--tasks <n>]          changelog view of base (board noise hidden); --tasks <n> drills
                                  into one sealed sprint's task commits, across all its waves
   rollback <ID|sprint/<n>>       revert one landed task (or the sprint's latest sealed wave, -m 1)
@@ -2326,6 +3061,7 @@ case "${1:-}" in
   land)       shift; cmd_land "$@";;
   seal)       shift; cmd_seal "$@";;
   history)    shift; cmd_history "$@";;
+  report)     shift; cmd_report "$@";;
   rollback)   shift; cmd_rollback "$@";;
   status)     update_check_maybe || true; cmd_status;;
   sweep)      shift 2>/dev/null || true; cmd_sweep "${1:-}";;

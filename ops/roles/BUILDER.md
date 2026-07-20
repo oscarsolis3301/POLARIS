@@ -8,7 +8,7 @@ bash ops/polaris claim          # takes the top-wsjf ready task, or: claim <ID>
 One command does it all atomically: lock → board move (ready→active, committed) → worktree at `.polaris/wt/<ID>` on branch `feat/<ID>`. "taken" → just run it again; it picks the next task. `cd` into the printed worktree path — ALL code work happens there, NEVER in the primary checkout.
 
 ## 2. Read — exactly this, nothing more
-The task file (now in `ops/board/active/`) · its contract in `ops/contracts/` · its `context_files` · the relevant `ops/MAP.md` rows · `ops/CONVENTIONS.md`. That is your whole context. Anything else needs a one-line justification appended to the task's Notes.
+The task file — it lives in the PRIMARY checkout, NOT your worktree (worktrees carry no `ops/board`); read it at the primary-anchored path `claim`/`resume` printed · its contract in `ops/contracts/` (repo-relative — contracts stay on base, so they ARE in your worktree) · its `context_files` · the relevant `ops/MAP.md` rows · `ops/CONVENTIONS.md`. That is your whole context. Anything else needs a one-line justification appended to the task's Notes.
 
 ## 3. Build
 Implement strictly against the contract, strictly inside `files_owned`. `context_files` are read-only patterns to imitate — copy the local style, don't invent one. Commit on `feat/<ID>` as you go (`feat: <ID> <what>`). Every meaningful step: `✅ <what> — <file>`. Append discoveries to the task's Notes (one line each) instead of re-deriving them later — these lines become the squash commit's `Notes:` body verbatim at `land`, so keep each to one real discovery, no chatter; HTML comments and `⛔` lines are filtered out automatically.
@@ -28,7 +28,7 @@ Write tests covering EVERY acceptance checkbox. Run the full commands from `ops/
 ```bash
 bash ops/polaris verify     # optional mid-flight check: diff ⊆ files_owned + verify: commands
 bash ops/polaris handoff    # the gate: refuses dirty trees, re-proves ownership, re-runs verify:,
-                            # pushes feat/<ID>, moves the task to review/ — all or nothing
+                            # pushes feat/<ID> under publish: direct (publish: pr keeps it local; seal pushes only integrate/<date>), moves the task to review/ — all or nothing
 ```
 An ownership violation means you revert the stray change (or hand back if it was necessary) — never argue with the gate. After handoff, report: task ID, branch, one-line summary, test results. **Do not merge. Do not touch the lock** — the Integrator lands it and cleans up.
 
