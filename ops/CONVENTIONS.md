@@ -64,6 +64,7 @@ kit to everyone who installed before the `kit/` split existed.
 - 2026-07-18 · Ignore the 3pt p50 30.4h bucket (n=1 = T-002): review parking during the off-board-edit collision, not build effort (build split avg 0.1h). Do not point up 3-pointers from it.
 - 2026-07-18 · Points do not predict wall-clock here (5pt p50 = 2pt p50 = 0.5h, n=8, 0 kickbacks); they predict scope and merge risk. Wave capacity is planning-bound (carve quality), not build-bound.
 - 2026-07-20 · Two carve patterns held at 0 kickbacks across 6 sprint-4 waves (T-020..T-028): (a) serial-chain the hotspot file; run contract-sourced doc tasks parallel to the chain; (b) parallel wording tasks need no depends_on — pin the exact phrase in the contract (T-027/T-028 both cite "already fast-forwarded", merged zero-conflict).
+- 2026-07-20 · Lanes up to 5 when ready tasks are fully disjoint (evidence: 0 kickbacks n=29 at 3 lanes; disjointness held every wave).
 
 ## Kit changelog
 - 2026-07-18 · MAP folded: header re-dated, CLI row gains clean-history commands, selftest-install/selftest-dashboard promoted to Modules, dashboard Unverified bullet cleared, Deltas emptied · 3 Deltas lines (T-001, T-003, T-007) + T-003 clearing the untested-dashboard claim
@@ -77,3 +78,4 @@ kit to everyone who installed before the `kit/` split existed.
 - 2026-07-20 · integration: paranoid → batch · suite ~3min over paranoid's <2min rule; per-land coverage was selftest-only anyway; batch = full suite once per wave + final qa, red lands found by the bisect recipe; revisit if kickbacks appear
 - 2026-07-20 · Planner calibration gains the two sprint-4 carve patterns; SPRINT Learned pruned 8→5 (carve-pattern ×2 + classifier/pack bullets institutionalized) · 0 kickbacks across 6 waves T-020..T-028; T-027/T-028 merged zero-conflict on a contract-pinned phrase
 - 2026-07-20 · integration fallback clause reworded human-anchored: denial → approved qa gate; gate also denied → STOP and ask, never route around a denial · harness security review flag; wording only, no behavior change
+- 2026-07-20 · Planner calibration: lanes up to 5 on fully disjoint ready tasks · 0 kickbacks n=29 at 3 lanes, disjointness held every wave (approved 5.15.0 plan)
