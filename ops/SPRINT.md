@@ -11,6 +11,7 @@ Release 5.14.0.
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-07-20 | 10 (T-020, T-025, T-026, wave 1, sealed sprint/4) | 15 (T-021 ready · T-022..T-024 backlog) · cycle p50 0.5h n=22 · kickbacks 0 · build avg 0.2h / integrate avg 2.9h · qa green on main |
 
 # SPRINT 3 — Hands-free core          capacity: 13   dates: 2026-07-18–
 
@@ -74,3 +75,11 @@ exercises but a Builder cannot.
 - Since T-006, doctor's stale-zip warning fires on every post-fold run in THIS repo (the zip embeds
   its pack commit; any merge moves HEAD past it). Warning only — doctor/qa stay green; the rebuild
   belongs to the release ritual, not integration. Don't read it as a red.
+- Sprint-4 wave 1 (T-020, T-025, T-026): first fully CLI-driven land→seal→done→qa since the 5.13
+  dogfood — no MANUAL fold needed; tag sprint/4 created. Zero conflicts/kickbacks; contract-sourced
+  doc tasks parallel to the CLI chain is a carve pattern to keep.
+- T-020 re-targets board commits in KIT SOURCE only: the installed 5.13 board still commits
+  chore(board) on base until the 5.14 dogfood. Quiet-board expectations (clean base first-parent)
+  start only after that dogfood — waves for T-021..T-024 still write base chores.
+- backlog→ready promotion has no CLI command in 5.13 — done by hand (git mv + status frontmatter +
+  chore(board) commit), per MANUAL's board-mutation pattern.
