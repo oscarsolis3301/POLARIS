@@ -13,6 +13,7 @@ Release 5.14.0.
 |---|---|---|
 | 2026-07-20 | 10 (T-020, T-025, T-026, wave 1, sealed sprint/4) | 15 (T-021 ready · T-022..T-024 backlog) · cycle p50 0.5h n=22 · kickbacks 0 · build avg 0.2h / integrate avg 2.9h · qa green on main |
 | 2026-07-20 | 15 (+T-021, wave 2, re-sealed sprint/4 tag 69e3628→c239aa3) | 10 (T-022 ready · T-023, T-024 backlog) · cycle p50 0.5h n=23 · kickbacks 0 · build avg 0.2h / integrate avg 2.8h · qa green on main |
+| 2026-07-20 | 20 (+T-022, wave 3, re-sealed sprint/4 tag c239aa3→be299c9) | 5 (T-023 ready · T-024 backlog) · cycle p50 0.5h n=24 · kickbacks 0 · build avg 0.2h / integrate avg 2.7h · qa green on main |
 
 # SPRINT 3 — Hands-free core          capacity: 13   dates: 2026-07-18–
 
@@ -87,3 +88,6 @@ exercises but a Builder cannot.
 - Sprint-4 wave 2 (T-021): first same-sprint re-seal via installed 5.13 — sprint/4 tag moved
   69e3628→c239aa3 per the multi-wave contract, no MANUAL fold. Single-task waves on the
   kit/ops/polaris chain stay cheap (audit→land→seal ~5 min); zero conflicts/kickbacks.
+- Sprint-4 wave 3 (T-022): pr-mode ships in KIT SOURCE only — the installed 5.13 board stays
+  publish: direct until the 5.14 dogfood; its pr-publish drill rides the kit selftest, so `test:`
+  already exercises it pre-dogfood. Zero conflicts/kickbacks; tag moved c239aa3→be299c9.
