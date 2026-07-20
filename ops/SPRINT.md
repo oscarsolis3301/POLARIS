@@ -22,6 +22,7 @@ attribution in `report --all`; sealed tasks fell to `(unsealed)` (sprint-report 
 | 2026-07-20 | 23 (+T-023, wave 4, re-sealed sprint/4 tag be299c9→1cdfdc2) | 2 (T-024 ready) · cycle p50 0.5h n=25 · kickbacks 0 · build avg 0.2h / integrate avg 2.6h · qa green on main · Learned pruned 9→5 |
 | 2026-07-20 | 25 (+T-024, wave 5, re-sealed sprint/4 tag 1cdfdc2→9426ce6) — SPRINT COMPLETE | 0 · cycle p50 0.5h n=26 · kickbacks 0 · build avg 0.2h / integrate avg 2.5h · qa green on main |
 | 2026-07-20 | 30 (+T-027, T-028, wave 6, QA fix wave, re-sealed sprint/4 tag 9426ce6→7f7a9d6) | 0 · cycle p50 0.5h n=28 · kickbacks 0 · build avg 0.2h / integrate avg 2.3h · qa green on main |
+| 2026-07-20 | 32 (+T-029, wave 7, patch wave, re-sealed sprint/4 tag 7f7a9d6→47ca6ea) | 0 · cycle p50 0.5h n=29 · kickbacks 0 · build avg 0.2h / integrate avg 2.3h · qa green on main |
 
 # SPRINT 3 — Hands-free core          capacity: 13   dates: 2026-07-18–
 
@@ -94,3 +95,7 @@ exercises but a Builder cannot.
 - Harness permission classifier can block direct `python kit/ops/pack.py --allow-dirty` (Bash AND
   PowerShell); `bash ops/polaris qa` runs the same build green. Paranoid per-land coverage was
   selftest-only this wave — build verified at the qa gate.
+- bash expands EVERY word of a `local` line BEFORE assigning, so `local n="$1" tag=".../$n"` reads
+  the CALLER's `n` (T-029: `report --all` sent sealed tasks to `(unsealed)`; two callers masked it by
+  holding the same `n`). Split `local` decls, and drills must cover the fallback path (Rule-1-blind),
+  not just the fixture's happy path — testbed verify of the PUBLISHED release is what caught it.
