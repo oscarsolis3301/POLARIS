@@ -9,6 +9,9 @@ T-020 → T-021 → T-022 → T-023 → T-024; doc tasks T-025, T-026 parallel (
 Release 5.14.0.
 QA fix wave (2026-07-20, scout on the landed 5.14 kit): T-027 (cli, 3 pts) + T-028 (docs, 2 pts),
 parallel, contract-pinned wording (sprint-report v1.1 · clean-history v2.1 · publish-modes v1.1).
+Patch wave 5.14.1 (2026-07-20, testbed verify of published 5.14.0): T-029 (cli, 2 pts) —
+resolve_sprint_ids expands caller's `n` on its `local` line, silently skipping Rule-2 tag
+attribution in `report --all`; sealed tasks fell to `(unsealed)` (sprint-report v1.2).
 
 ## Burndown
 | date | done pts | remaining |
