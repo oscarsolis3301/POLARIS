@@ -4,6 +4,14 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.14.1 — 2026-07-20
+
+**`report --all` attributes sealed tasks correctly.** A combined `local` declaration in
+`resolve_sprint_ids` expanded `$n` before assigning it, so the `--all` pass resolved sprint tags
+from the caller's variable and quietly filed sealed tasks under "(unsealed)". Caught by the
+testbed verification of the published release, not the fixture's happy path — the selftest now
+carries a Rule-2-blind drill that is red on the unfixed function. `kit/ops/polaris`.
+
 ## 5.14.0 — 2026-07-20
 
 **One PR, clean graph: the shared remote finally reads like a changelog.** Board bookkeeping
