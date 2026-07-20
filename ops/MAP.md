@@ -76,3 +76,5 @@ not installed code — they are written normally, by the board scripts and by th
 - board state lives on refs/heads/polaris/board — board_commit/sync_board use secondary-index plumbing; base first-parent stays chore(board)-free; done's map_delta is a docs(map) base commit (5.14.0-unreleased)  (T-020, 2026-07-20)
 
 - upgrade migrates a 5.13 board to polaris/board; doctor/resume materialize a fresh clone's board from the ref; uninstall deletes the branch (5.14.0-unreleased)  (T-021, 2026-07-20)
+
+- publish direct|pr — pr mode keeps feat branches local, seal pushes ONE integrate branch + prints the Bitbucket PR URL, seal --sync finishes after the human merges (5.14.0-unreleased)  (T-022, 2026-07-20)
