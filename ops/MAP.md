@@ -78,3 +78,5 @@ not installed code — they are written normally, by the board scripts and by th
 - upgrade migrates a 5.13 board to polaris/board; doctor/resume materialize a fresh clone's board from the ref; uninstall deletes the branch (5.14.0-unreleased)  (T-021, 2026-07-20)
 
 - publish direct|pr — pr mode keeps feat branches local, seal pushes ONE integrate branch + prints the Bitbucket PR URL, seal --sync finishes after the human merges (5.14.0-unreleased)  (T-022, 2026-07-20)
+
+- polaris report [--sprint n | --all] renders docs/sprints/sprint-<n>.md from the board; seal commits it on each wave (5.14.0-unreleased)  (T-023, 2026-07-20)
