@@ -7,6 +7,8 @@ hygiene. Contracts: quiet-board · publish-modes · sprint-report.
 plan: one-pr-clean-graph → T-020..T-026 (25 pts). kit/ops/polaris chain
 T-020 → T-021 → T-022 → T-023 → T-024; doc tasks T-025, T-026 parallel (contract-sourced).
 Release 5.14.0.
+QA fix wave (2026-07-20, scout on the landed 5.14 kit): T-027 (cli, 3 pts) + T-028 (docs, 2 pts),
+parallel, contract-pinned wording (sprint-report v1.1 · clean-history v2.1 · publish-modes v1.1).
 
 ## Burndown
 | date | done pts | remaining |

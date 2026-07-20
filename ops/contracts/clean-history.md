@@ -205,3 +205,4 @@ integrate branch → re-seal green → tag moved → `--tasks` spans both waves 
 ## Changelog
 - v1 2026-07-18: created for T-007, T-008, T-009, T-010 (Phase 1, 5.12.0).
 - v2 2026-07-18: multi-wave seal for T-017 (5.13.0) — tag moves per wave; history --tasks spans waves; evidence: Sprint 3 wave 1.
+- v2.1 2026-07-20 (QA fix wave, T-027): (a) `history --tasks <n>` also filters `docs(sprint-<N>): report` subjects — the task-commits view shows task commits only; default view unchanged (first-parent never meets them). (b) tag-push failure notes print a CONVERGENT recovery: lease computed from origin's actual tag (`git ls-remote origin refs/tags/sprint/<n>`), or a fetch-then-retry recipe — never the stale local old-sha lease, which cannot succeed once origin missed a prior wave's tag move.

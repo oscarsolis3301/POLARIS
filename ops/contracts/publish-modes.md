@@ -68,3 +68,4 @@ tagged + pushed, integrate/2026-07-20 gone both sides → `done T-7`, `done T-8`
 
 ## Changelog
 - v1 2026-07-20: created for T-022, T-024 (consumed by T-025, T-026)
+- v1.1 2026-07-20 (QA fix wave, T-027 + T-028): corrects the --sync missing-subject die wording — by the time it fires, step 1 has ALREADY moved local `<base>` (--ff-only pull), so "nothing mutated" is false. The die keeps naming the missing IDs and now states the pinned phrase "already fast-forwarded" plus that tag, integrate/<date> and the board are untouched. `kit/ops/MANUAL.md` --sync step 2 mirrors the same wording (T-028).

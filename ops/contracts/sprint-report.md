@@ -61,3 +61,4 @@ carrying points 3, landed f440bba, its Why paragraph and its checkbox list, verb
 
 ## Changelog
 - v1 2026-07-20: created for T-023 (seal hook), consumed by T-025, T-026
+- v1.1 2026-07-20 (QA fix wave, T-027): report stays board-read-only and never commits — UNCHANGED. Added: after writing a file, if it differs from HEAD (`git diff --quiet -- <file>`), report prints next steps naming both remedies verbatim — commit as `docs(sprint-<n>): report refresh`, or discard with `git checkout -- <file>`. Rationale: a post-`done` re-render adds done-dates the sealed render lacked; the silently dirty file makes the NEXT land/seal die "working tree not clean" with no visible cause.
