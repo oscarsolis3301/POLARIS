@@ -12,6 +12,7 @@ Release 5.14.0.
 | date | done pts | remaining |
 |---|---|---|
 | 2026-07-20 | 10 (T-020, T-025, T-026, wave 1, sealed sprint/4) | 15 (T-021 ready · T-022..T-024 backlog) · cycle p50 0.5h n=22 · kickbacks 0 · build avg 0.2h / integrate avg 2.9h · qa green on main |
+| 2026-07-20 | 15 (+T-021, wave 2, re-sealed sprint/4 tag 69e3628→c239aa3) | 10 (T-022 ready · T-023, T-024 backlog) · cycle p50 0.5h n=23 · kickbacks 0 · build avg 0.2h / integrate avg 2.8h · qa green on main |
 
 # SPRINT 3 — Hands-free core          capacity: 13   dates: 2026-07-18–
 
@@ -83,3 +84,6 @@ exercises but a Builder cannot.
   start only after that dogfood — waves for T-021..T-024 still write base chores.
 - backlog→ready promotion has no CLI command in 5.13 — done by hand (git mv + status frontmatter +
   chore(board) commit), per MANUAL's board-mutation pattern.
+- Sprint-4 wave 2 (T-021): first same-sprint re-seal via installed 5.13 — sprint/4 tag moved
+  69e3628→c239aa3 per the multi-wave contract, no MANUAL fold. Single-task waves on the
+  kit/ops/polaris chain stay cheap (audit→land→seal ~5 min); zero conflicts/kickbacks.
