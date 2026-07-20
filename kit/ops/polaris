@@ -151,6 +151,36 @@ mutex_on() {
   trap on_die EXIT
 }
 has_remote() { git -C "$PRIMARY" remote get-url origin >/dev/null 2>&1; }
+# publish: direct | pr (ops/contracts/publish-modes.md) — HOW a sealed wave reaches origin's $BASE.
+# Read via cfg at command runtime, never cached; unknown value warns ONCE per invocation (stderr,
+# so command substitutions never swallow it) and behaves as direct. Sets $PUB — no command
+# substitution on purpose (bash 3.2: no `case` inside `$(...)`).
+PUB="direct"
+PUBLISH_WARNED=""
+publish_resolve() {
+  local p; p="$(cfg publish direct)"
+  case "$p" in
+    direct|pr) PUB="$p";;
+    *) [ -z "$PUBLISH_WARNED" ] && { printf "   ⚠ publish: '%s' unknown (direct | pr) — behaving as direct\n" "$p" >&2; PUBLISH_WARNED=1; }
+       PUB="direct";;
+  esac
+  return 0
+}
+pr_create_url() { # pr_create_url <origin-url> <date> <dest> — Bitbucket PR-create URL on stdout
+  # (ssh or https origin); non-Bitbucket or unparseable → prints nothing, never dies.
+  local url="$1" date="$2" dest="$3" path=""
+  case "$url" in
+    *bitbucket.org*)
+      path="${url#*bitbucket.org}"
+      path="${path#:}"; path="${path#/}"
+      path="${path%/}"
+      case "$path" in *.git) path="${path%.git}";; esac
+      case "$path" in
+        */*) printf 'https://bitbucket.org/%s/pull-requests/new?source=integrate/%s&dest=%s\n' "$path" "$date" "$dest";;
+      esac;;
+  esac
+  return 0
+}
 # Board history lives on its own ref so $BASE first-parent stays clean product history
 # (ops/contracts/quiet-board.md). The moved set — ops/board/** + ops/SPRINT.md — is gitignored on
 # base and committed here via secondary-index plumbing: no second worktree, no branch switch.
@@ -550,7 +580,12 @@ cmd_handoff() {
   check_rules "feat/$id"
   run_verify_cmds "$tf"
   map_delta_hint "$tf" "feat/$id"
-  has_remote && git push -q -u origin "feat/$id"
+  # publish: pr — feat branches never leave the machine; seal pushes ONE integrate branch instead
+  # (ops/contracts/publish-modes.md). Everything else stays byte-identical to direct mode.
+  publish_resolve
+  if [ "$PUB" != "pr" ] && has_remote; then
+    git push -q -u origin "feat/$id"
+  fi
   mutex_on
   mv "$BOARD/active/$id.md" "$BOARD/review/$id.md"
   set_fm status review "$BOARD/review/$id.md"
@@ -941,13 +976,23 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   note "goes red on the suite? unwind: git reset --hard HEAD~1   ·   bounce: polaris kickback $id -m \"<why>\""
 }
 
-cmd_seal() { # seal [<date>] — close an integration wave: ONE --no-ff merge of integrate/<date>
-  # into $BASE, tagged sprint/<n>. Message = sprint header + a bullet per landed commit — the
-  # changelog entry `history` shows forever. sprint/<n> always marks the sprint's LATEST sealed
-  # checkpoint (contract v2, multi-wave): the first seal of sprint n creates the tag, a later
-  # seal of the same n moves it forward. A merge conflict aborts; a human resolves — never
-  # auto-resolved.
+cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wave: ONE --no-ff merge
+  # of integrate/<date> into $BASE, tagged sprint/<n>. Message = sprint header + a bullet per landed
+  # commit — the changelog entry `history` shows forever. sprint/<n> always marks the sprint's
+  # LATEST sealed checkpoint (contract v2, multi-wave): the first seal of sprint n creates the tag,
+  # a later seal of the same n moves it forward. A merge conflict aborts; a human resolves — never
+  # auto-resolved. publish: pr (ops/contracts/publish-modes.md): NO local merge — the wave leaves
+  # as ONE pushed integrate branch + a PR-create URL, and `seal --sync` finishes after the human
+  # merges the PR (merge-commit strategy, never squash).
+  local sync=""
+  if [ "${1:-}" = "--sync" ]; then sync=1; shift; fi
   local date="${1:-}"; [ -n "$date" ] || date="$(date +%F)"
+  publish_resolve
+  if [ -n "$sync" ]; then
+    [ "$PUB" = "pr" ] || die "publish: direct seals locally — nothing to sync"
+    seal_sync "$date"
+    return 0
+  fi
   in_primary || die "seal runs in the primary checkout — cd \"$PRIMARY\" first"
   git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
   git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null \
@@ -970,6 +1015,30 @@ cmd_seal() { # seal [<date>] — close an integration wave: ONE --no-ff merge of
   oldtag="$(git rev-parse -q --verify "refs/tags/sprint/$n" || true)"
   if [ -n "$oldtag" ] && ! git merge-base --is-ancestor "$oldtag" "$BASE" 2>/dev/null; then
     die "sprint/$n exists and is not in $BASE history — reused sprint number; bump the ops/SPRINT.md header"
+  fi
+  if [ "$PUB" = "pr" ]; then
+    # ---------------- publish: pr — the ENTIRE pr fork (one block, one seam) ----------------
+    # All preconditions + the tag gate above ran check-only. From here: NO local merge, NO tag,
+    # NO $BASE ref change (local or remote) — everything mutating waits for `seal --sync` after
+    # the human merges the PR. Tasks stay in review/, locks stay, integrate/<date> stays.
+    # (T-023: the wave's sprint-report commit lands HERE, on integrate/$date, before the push.)
+    has_remote || die "publish: pr needs an origin remote — nowhere to push integrate/$date"
+    git push -q -u origin "integrate/$date" || die "push of integrate/$date failed — check origin access"
+    local prurl
+    prurl="$(pr_create_url "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null || true)" "$date" "$BASE")"
+    say "wave pushed — ONLY integrate/$date left the machine ($BASE and tags untouched)"
+    if [ -n "$prurl" ]; then
+      note "open the PR: $prurl"
+    else
+      note "open a PR from integrate/$date into $BASE on your host"
+    fi
+    note "suggested title: Sprint $n — $goal"
+    note "suggested description:"
+    printf '%s\n' "$subjects" | sed 's/^/     - /'
+    note "merge with the MERGE COMMIT strategy (never squash — the per-task commits must survive)"
+    note "merged? finish the wave: bash ops/polaris seal --sync $date"
+    cmd_notify_gate done
+    return 0
   fi
   local msg
   msg="Sprint $n — $goal
@@ -994,16 +1063,84 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
       # the ONLY forced ref update POLARIS ever makes.
       git push -q origin "$BASE" 2>/dev/null \
         && git push -q --force-with-lease="refs/tags/sprint/$n:$oldtag" origin "refs/tags/sprint/$n" 2>/dev/null \
-        || note "⚠ push failed — push by hand: git push origin $BASE && git push --force-with-lease=refs/tags/sprint/$n:$oldtag origin refs/tags/sprint/$n"
+        || { note "⚠ push failed — push by hand: git push origin $BASE && git push --force-with-lease=refs/tags/sprint/$n:$oldtag origin refs/tags/sprint/$n"
+             note "origin keeps rejecting $BASE? protected branch — set publish: pr in ops/CONVENTIONS.md and seal opens a PR instead"; }
     else
       git push -q origin "$BASE" "refs/tags/sprint/$n" 2>/dev/null \
-        || note "⚠ push failed — push by hand: git push origin $BASE sprint/$n"
+        || { note "⚠ push failed — push by hand: git push origin $BASE sprint/$n"
+             note "origin keeps rejecting $BASE? protected branch — set publish: pr in ops/CONVENTIONS.md and seal opens a PR instead"; }
     fi
   fi
   if [ -n "$oldtag" ]; then
     say "sprint $n re-sealed — integrate/$date merged into $BASE (--no-ff); sprint/$n: $old7 → $new7"
   else
     say "sprint $n sealed — integrate/$date merged into $BASE (--no-ff), tagged sprint/$n"
+  fi
+}
+
+seal_sync() { # seal --sync <date> — pr mode only: finish the wave AFTER the human merges the PR
+  # (ops/contracts/publish-modes.md). Steps: ff-only pull of $BASE · every [<ID>] subject of the
+  # wave verified in $BASE (an unmerged OR squash-merged PR dies here, by name — the per-task
+  # commits must survive) · sprint/<n> tag create-or-move per clean-history v2 (compare-and-swap
+  # push; failure → by-hand note) · integrate/<date> deleted local+remote · per-task next step.
+  local date="$1"
+  in_primary || die "seal --sync runs in the primary checkout — cd \"$PRIMARY\" first"
+  git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
+  has_remote || die "seal --sync needs an origin remote — the PR merge lives there"
+  git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null \
+    || die "no branch integrate/$date — nothing to sync (a different day's wave? seal --sync <date>)"
+  local hdr n goal
+  hdr="$(sed -n 's/^# SPRINT //p' "$OPS/SPRINT.md" 2>/dev/null | head -1 | tr -d '\r')"
+  n="${hdr%%[!0-9]*}"
+  [ -n "$n" ] || die "cannot read the sprint number — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header"
+  # the wave's commits = integrate past its branch point — capture BEFORE the pull moves $BASE
+  local mb; mb="$(git merge-base "$BASE" "integrate/$date")"
+  # 1. base catches up to the merged PR — ff-only, never rebase, never merge
+  git checkout -q "$BASE"
+  git pull -q --ff-only origin "$BASE" \
+    || die "cannot fast-forward $BASE from origin — resolve by hand (--sync never rebases, never merges)"
+  # 2. every task subject of the wave must now be in $BASE history (rule 1: subject suffix [<ID>]).
+  #    A squash-merged PR collapsed them into one foreign subject → die naming the missing.
+  local subj sid ids="" missing=""
+  while IFS= read -r subj; do
+    [ -n "$subj" ] || continue
+    case "$subj" in
+      *\[*\]) sid="${subj##*\[}"; sid="${sid%]}";;
+      *) continue;;
+    esac
+    if landed_sha "$sid" >/dev/null; then ids="$ids $sid"; else missing="$missing $sid"; fi
+  done <<EOF
+$(git log --no-merges --format=%s "$mb..integrate/$date" | grep -v '^chore(board):' || true)
+EOF
+  [ -z "$missing" ] || die "not in $BASE:$missing — the PR is unmerged, or was squash-merged (per-task commits must survive; merge with the MERGE COMMIT strategy); nothing mutated"
+  # 3. tag on the new $BASE HEAD — clean-history v2: create, or move an ancestor tag (CAS push)
+  local oldtag old7 new7
+  oldtag="$(git rev-parse -q --verify "refs/tags/sprint/$n" || true)"
+  if [ -n "$oldtag" ] && ! git merge-base --is-ancestor "$oldtag" "$BASE" 2>/dev/null; then
+    die "sprint/$n exists and is not in $BASE history — reused sprint number; bump the ops/SPRINT.md header"
+  fi
+  if [ -n "$oldtag" ]; then
+    old7="$(git rev-parse --short "$oldtag")"
+    git tag -f "sprint/$n" >/dev/null
+    new7="$(git rev-parse --short "refs/tags/sprint/$n")"
+    git push -q --force-with-lease="refs/tags/sprint/$n:$oldtag" origin "refs/tags/sprint/$n" 2>/dev/null \
+      || note "⚠ tag push failed — push by hand: git push --force-with-lease=refs/tags/sprint/$n:$oldtag origin refs/tags/sprint/$n"
+    say "sprint $n synced — $BASE fast-forwarded to the PR merge; sprint/$n: $old7 → $new7"
+  else
+    git tag "sprint/$n"
+    git push -q origin "refs/tags/sprint/$n" 2>/dev/null \
+      || note "⚠ tag push failed — push by hand: git push origin sprint/$n"
+    say "sprint $n synced — $BASE fast-forwarded to the PR merge, tagged sprint/$n"
+  fi
+  # 4. the wave is folded into $BASE — the integrate branch is done on both sides
+  git branch -q -D "integrate/$date" 2>/dev/null || true
+  git push -q origin ":refs/heads/integrate/$date" 2>/dev/null \
+    || note "⚠ could not delete origin integrate/$date — by hand: git push origin :refs/heads/integrate/$date"
+  # 5. the [<ID>]-in-$BASE gate now passes — walk each task out
+  if [ -n "$ids" ]; then
+    note "next, per task:$ids — bash ops/polaris run-verify <ID> · bash ops/polaris done <ID>"
+  else
+    note "next: per landed task — bash ops/polaris run-verify <ID> · bash ops/polaris done <ID>"
   fi
 }
 
@@ -1697,10 +1834,75 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
       git ls-remote "$T/mig-origin.git" refs/heads/polaris/board | grep -q . && { echo "UNINSTALL REMOTE REF FAIL (the deletion must push)"; exit 1; }
       : ) || exit 1
     # ================== end T-021 upgrade-migration drill ==================
+    # ================== T-022 pr-publish drill (ops/contracts/publish-modes.md) ==================
+    # publish: pr against a scratch bare origin: handoff keeps feat/* local · seal pushes ONLY
+    # integrate/<date> + prints title/bullets/URL fallback + fires notify done, moving NO ref on
+    # base (local or remote) and no tag · a simulated host PR merge (--no-ff from a temp clone) ·
+    # seal --sync: unmerged wave dies by name, merged wave pulls base, tags, deletes the branch
+    # both sides · done green via the rule-1 gate · direct --sync dies · unknown publish: warns.
+    "$SELF" help | grep -q -- 'seal --sync' || { echo "USAGE FAIL: seal --sync missing from help"; exit 1; }
+    "$SELF" help | grep -q 'publish: pr' || { echo "USAGE FAIL: publish: key missing from help"; exit 1; }
+    printf 'publish: pr\n' >> ops/CONVENTIONS.md
+    git add -A; git commit -qm 'publish pr'
+    git push -q origin main
+    printf '# SPRINT 2 — pr sprint  capacity: 5\n' > ops/SPRINT.md
+    # URL composition is a pure in-process function — drill it directly, like fm_list above
+    [ "$(pr_create_url 'git@bitbucket.org:acme/arc.git' 2026-01-02 main)" = 'https://bitbucket.org/acme/arc/pull-requests/new?source=integrate/2026-01-02&dest=main' ] \
+      || { echo "PR URL SSH FAIL"; exit 1; }
+    [ "$(pr_create_url 'https://u@bitbucket.org/acme/arc.git' 2026-01-02 main)" = 'https://bitbucket.org/acme/arc/pull-requests/new?source=integrate/2026-01-02&dest=main' ] \
+      || { echo "PR URL HTTPS FAIL"; exit 1; }
+    [ -z "$(pr_create_url 'git@github.com:acme/arc.git' 2026-01-02 main)" ] || { echo "PR URL FOREIGN FAIL (non-bitbucket must yield nothing)"; exit 1; }
+    printf -- '---\nid: T-P\ntitle: pr mode file\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/p.txt\nverify: []\n---\n' > ops/board/ready/T-P.md
+    "$SELF" claim T-P >/dev/null
+    ( cd .polaris/wt/T-P && echo p > src/p.txt && git add -A && git commit -qm ok && "$SELF" handoff T-P >/dev/null )
+    git ls-remote origin 'refs/heads/feat/*' | grep -q . && { echo "PR HANDOFF FAIL (feat branches must never leave the machine)"; exit 1; }
+    git checkout -q -b integrate/2026-01-02
+    "$SELF" land T-P >/dev/null || { echo "PR LAND FAIL"; exit 1; }
+    basepre="$(git rev-parse main)"; rbasepre="$(git ls-remote origin refs/heads/main | cut -f1)"
+    # unmerged wave → --sync dies naming the missing task, and tags nothing
+    "$SELF" seal --sync 2026-01-02 > "$T/prsync0.out" 2>&1 && { echo "PR SYNC UNMERGED FAIL (must die before the PR merges)"; exit 1; }
+    grep -q 'T-P' "$T/prsync0.out" || { echo "PR SYNC NAME FAIL (die must name the missing task)"; exit 1; }
+    git rev-parse -q --verify refs/tags/sprint/2 >/dev/null && { echo "PR SYNC MUTATE FAIL (failed sync must not tag)"; exit 1; }
+    : > "$T/notify.log"
+    "$SELF" seal 2026-01-02 > "$T/prseal.out" || { cat "$T/prseal.out"; echo "PR SEAL FAIL"; exit 1; }
+    git ls-remote --exit-code origin refs/heads/integrate/2026-01-02 >/dev/null || { echo "PR SEAL PUSH FAIL (integrate branch must reach origin)"; exit 1; }
+    [ "$(git ls-remote origin refs/heads/main | cut -f1)" = "$rbasepre" ] || { echo "PR SEAL REMOTE BASE FAIL (origin base must not move)"; exit 1; }
+    [ "$(git rev-parse main)" = "$basepre" ] || { echo "PR SEAL LOCAL FAIL (no local merge in pr mode)"; exit 1; }
+    git rev-parse -q --verify refs/tags/sprint/2 >/dev/null && { echo "PR SEAL TAG FAIL (no tag before --sync)"; exit 1; }
+    [ -f ops/board/review/T-P.md ] || { echo "PR SEAL BOARD FAIL (tasks stay in review/)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-P" ] || { echo "PR SEAL LOCK FAIL (locks stay until done)"; exit 1; }
+    grep -q 'open a PR from integrate/2026-01-02 into main on your host' "$T/prseal.out" || { echo "PR SEAL URL FALLBACK FAIL"; exit 1; }
+    grep -q 'Sprint 2 — pr sprint' "$T/prseal.out" || { echo "PR SEAL TITLE FAIL (suggested title missing)"; exit 1; }
+    grep -q -- '- feat(src): pr mode file \[T-P\]' "$T/prseal.out" || { echo "PR SEAL BULLET FAIL (description bullets missing)"; exit 1; }
+    ngwait '^run-done/done//run-done$' || { echo "PR SEAL NOTIFY FAIL (pr seal must fire notify-gate done)"; exit 1; }
+    # the human merges the PR — simulated with a --no-ff merge pushed from a temp clone
+    git clone -q "$T/origin.git" "$T/prhost" 2>/dev/null
+    ( set -e; cd "$T/prhost"; git config user.email t@t; git config user.name t
+      git checkout -q main 2>/dev/null || git checkout -q -b main origin/main
+      git merge -q --no-ff origin/integrate/2026-01-02 -m 'Merged in integrate/2026-01-02 (pull request #1)'
+      git push -q origin main ) || { echo "PR MERGE SIM FAIL"; exit 1; }
+    "$SELF" seal --sync 2026-01-02 > "$T/prsync.out" || { cat "$T/prsync.out"; echo "PR SYNC FAIL"; exit 1; }
+    [ "$(git rev-parse main)" = "$(git ls-remote origin refs/heads/main | cut -f1)" ] || { echo "PR SYNC PULL FAIL (base must fast-forward to the PR merge)"; exit 1; }
+    git rev-parse -q --verify refs/tags/sprint/2 >/dev/null || { echo "PR SYNC TAG FAIL"; exit 1; }
+    [ "$(git ls-remote origin refs/tags/sprint/2 | cut -f1)" = "$(git rev-parse refs/tags/sprint/2)" ] || { echo "PR SYNC TAG PUSH FAIL (tag must land on origin)"; exit 1; }
+    git rev-parse -q --verify refs/heads/integrate/2026-01-02 >/dev/null 2>&1 && { echo "PR SYNC BRANCH FAIL (local integrate branch must go)"; exit 1; }
+    git ls-remote --exit-code origin refs/heads/integrate/2026-01-02 >/dev/null 2>&1 && { echo "PR SYNC REMOTE BRANCH FAIL (origin integrate branch must go)"; exit 1; }
+    "$SELF" done T-P >/dev/null || { echo "PR DONE FAIL (rule-1 gate must pass after --sync)"; exit 1; }
+    # direct mode: --sync has nothing to do · unknown publish: warns once + behaves direct
+    sed -i.bak '/^publish:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    "$SELF" seal --sync 2026-01-02 > "$T/prd.out" 2>&1 && { echo "SYNC DIRECT FAIL (direct mode --sync must die)"; exit 1; }
+    grep -q 'nothing to sync' "$T/prd.out" || { echo "SYNC DIRECT MSG FAIL"; exit 1; }
+    printf 'publish: bogus\n' >> ops/CONVENTIONS.md
+    "$SELF" seal --sync 2026-01-02 > "$T/prb.out" 2>&1 && { echo "PUBLISH UNKNOWN FAIL (bogus must behave direct)"; exit 1; }
+    grep -q "publish: 'bogus' unknown" "$T/prb.out" || { echo "PUBLISH WARN FAIL (unknown value must warn)"; exit 1; }
+    grep -q 'nothing to sync' "$T/prb.out" || { echo "PUBLISH FALLBACK FAIL (unknown value must behave direct)"; exit 1; }
+    sed -i.bak '/^publish:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'publish drill cleanup'
+    # ================== end T-022 pr-publish drill ==================
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin · pr-publish (feat stays local · seal pushes ONLY integrate + title/bullets/URL + notify done, no ref moved · --sync subject gate/tag/branch cleanup both sides · done via rule 1 · direct --sync dies · unknown publish warns)"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
@@ -2500,7 +2702,12 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  ONE rich commit ([<ID>] subject + Landed-from trailer; no board write)
   seal [<date>]                  Integrator: seal the wave — merge integrate/<date> into base
                                  (--no-ff, per-task bullets) + lightweight tag sprint/<n>; a later
-                                 wave's seal MOVES the tag (sprint's latest sealed checkpoint)
+                                 wave's seal MOVES the tag (sprint's latest sealed checkpoint).
+                                 publish: pr (CONVENTIONS key, default direct): NO local merge —
+                                 pushes ONLY integrate/<date> + prints the PR-create URL
+  seal --sync [<date>]           publish: pr only — finish the wave after the human merges the PR
+                                 (MERGE COMMIT strategy, never squash): verify every [<ID>] subject
+                                 reached base, tag sprint/<n>, delete integrate/<date> local+remote
   history [--tasks <n>]          changelog view of base (board noise hidden); --tasks <n> drills
                                  into one sealed sprint's task commits, across all its waves
   rollback <ID|sprint/<n>>       revert one landed task (or the sprint's latest sealed wave, -m 1)
