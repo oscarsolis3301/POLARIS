@@ -16,7 +16,7 @@ subagent's job. All your speech follows the repo's `voice:`.
 
 ## The second rule — a finished phase is a starting gun
 **Phase boundaries are not stopping points.** The moment a phase's report is in, the next phase
-launches in the same turn: plan flows into build, the last lane flows into integration, integration
+launches in the same turn: plan flows into build, the first handoff flows into integration, integration
 flows into the check, waves fire themselves. You never end a turn to "wait" mid-run, and you never
 ask "shall I continue?" after the plan gate — the plan approval WAS the go for all of it. The run is
 over ONLY when every one of these is true:
@@ -46,8 +46,21 @@ never re-plan.
    > You are the PLANNER, conductor-entered. Read ops/roles/PLANNER.md and execute it. The interview
    > and brief gate are already done — do not re-ask; if truly blocked, return the question as your
    > result. Skip fan-out; return your report. CONFIRMED BRIEF: <brief>
+   > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
+   > Run every command in the FOREGROUND; never wait on background notifications.
    It grooms the board, runs `drift`, returns the plan. If it returns a question instead: ask the
    human, spawn a fresh planner with the brief + the answer appended.
+2.5 **Express triage — a single small change skips the full pipeline.** After the planner's report,
+   take the express path ONLY when ALL SIX hold: the plan created exactly ONE task · ≤2 points ·
+   `risk: normal` · nothing on the STOP-AND-ASK list touched · `express:` ≠ off · `publish:` = direct.
+   Any one of the six failing → run the standard full loop (steps 3–8) silently; never announce the
+   path not taken. On the express path: at the plan gate (step 3 — which still runs per `plan_gate`;
+   express changes the build/integrate shape, not the gate) disclose with the verbatim line
+   `small change — taking the express lane`, then spawn ONE builder subagent → ONE integrator subagent
+   whose kickoff names `land --express <ID>` in place of the batch land recipe → and YOU still run
+   `bash ops/polaris qa` yourself as the finish line. Skip the QA scout AND EVOLVE — ≤1 task carries
+   no signal (the EVOLVE skip rule already exists). Both subagents still carry the two standing kickoff
+   lines (brain-first + foreground).
 3. **Plan gate — the one human gate.** Present the plan in `voice:`: what gets built, in how many
    parallel lanes, what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
    `drain: queue` (the default) and other tasks already sitting in `ready/`, disclose that too —
@@ -72,6 +85,8 @@ never re-plan.
    > You are a BUILDER, conductor-entered. Read ops/roles/BUILDER.md and execute it. Claim <ID> and
    > complete it end to end. A spec ambiguity → return the question as your result instead of asking
    > the human. Stop at the review handoff; return: ID · branch · one-line summary · test results.
+   > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
+   > Run every command in the FOREGROUND; never wait on background notifications.
    Say once where to watch (`bash ops/polaris dash` · 127.0.0.1:7373). As each lane reports, relay
    ONE line in `voice:` — "✅ 2 of 5 done — the nav restyle landed, tests green" — useful, plain,
    never a dump. Lane free + ready task left → spawn the next builder immediately.
@@ -86,11 +101,26 @@ never re-plan.
      to the task's Notes, spawn a fresh builder on it ("Resume <ID>: read its Notes for the failure,
      fix, hand off"). Still red → `bash ops/polaris release <ID> --to blocked -m "<why>"`, tell the
      human plainly what's parked and why, keep the other lanes going.
-   - Builder dies without reporting → check `bash ops/polaris status`; a stale `active/` entry gets
-     released back to `ready/` and one fresh builder.
-6. **Integrate (subagent).** When every lane has reported (review/ holds all it will get):
+   - Builder dies without reporting → a lane gone silent past `stale_hours` is a DEAD lane, not a
+     slow one. First try to resume the same agent — its context is intact, so a nudge usually revives
+     it right where it left off. No response → re-anchor from `bash ops/polaris status` +
+     `git status` in its worktree to see how far it got, then release the task back to `ready/` and
+     respawn one fresh builder per the retry path above.
+6. **Integrate (subagent) — pipelined, from the FIRST handoff.** Spawn the integrator the moment the
+   FIRST lane reports its handoff, not after the last one. It audits and lands tasks
+   `as they arrive in review/, in dependency order`: a task whose `depends_on` has not yet arrived
+   waits, everything else lands on arrival — so integration overlaps the still-running lanes instead
+   of trailing the slowest. `handoff`'s existing all-review `Integrate now` notice stays the
+   LAST-LANE signal: it tells the integrator the wave is complete, so the full suite runs once and
+   seal follows. Pipelining changes only WHEN integration starts — never what seal requires before it
+   runs, and no gate weakens.
    > You are the INTEGRATOR, conductor-entered. Read ops/roles/INTEGRATOR.md and execute it. Land
-   > everything in ops/board/review/. Do NOT merge `risk: high` tasks — list them in your result.
+   > tasks as they arrive in review/, in dependency order — a task whose depends_on has not yet landed
+   > waits, everything else lands on arrival. Do NOT merge `risk: high` tasks — list them in your
+   > result. The all-review `Integrate now` notice is your signal the wave is complete: run the suite
+   > once, then seal.
+   > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
+   > Run every command in the FOREGROUND; never wait on background notifications.
    > Return your report: merged · kicked back + why · suite status · newly promoted.
    - `risk: high` in its report → `bash ops/polaris notify-gate risk <ID>` (additive — approval
      happens HERE, in conversation, under every knob), ask the human "approve <ID>?" and relay ONLY
@@ -103,6 +133,8 @@ never re-plan.
    (an app, a CLI, an endpoint), spawn ONE bounded QA scout:
    > You are a QA scout, conductor-entered. Read-only — you fix NOTHING. Exercise the flows this
    > plan changed, the way a user would. Hunt for runtime errors, broken flows, console noise.
+   > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
+   > Run every command in the FOREGROUND; never wait on background notifications.
    > Return findings as path:line one-liners, or "clean".
    Anything red — from `qa` or the scout — starts a **fix wave**: spawn a planner subagent to file
    the failures as bug task(s), then build → integrate → re-run `qa`. Cap: **2 fix waves per run**;
@@ -126,6 +158,8 @@ never re-plan.
    > You are EVOLVE, conductor-entered. Read ops/roles/EVOLVE.md and execute its diagnosis.
    > APPLY NOTHING — return your ≤3 findings with evidence and the exact proposed diffs as your
    > result.
+   > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
+   > Run every command in the FOREGROUND; never wait on background notifications.
    Its proposals go into the close report, numbered — the human applies one by replying
    "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Skip this
    step only when the run built ≤1 task — there is no signal in a sample of one.
