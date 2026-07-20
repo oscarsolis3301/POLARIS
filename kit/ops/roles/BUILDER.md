@@ -28,7 +28,7 @@ Write tests covering EVERY acceptance checkbox. Run the full commands from `ops/
 ```bash
 bash ops/polaris verify     # optional mid-flight check: diff ⊆ files_owned + verify: commands
 bash ops/polaris handoff    # the gate: refuses dirty trees, re-proves ownership, re-runs verify:,
-                            # pushes feat/<ID>, moves the task to review/ — all or nothing
+                            # pushes feat/<ID> under publish: direct (publish: pr keeps it local; seal pushes only integrate/<date>), moves the task to review/ — all or nothing
 ```
 An ownership violation means you revert the stray change (or hand back if it was necessary) — never argue with the gate. After handoff, report: task ID, branch, one-line summary, test results. **Do not merge. Do not touch the lock** — the Integrator lands it and cleans up.
 

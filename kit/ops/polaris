@@ -987,6 +987,15 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   note "goes red on the suite? unwind: git reset --hard HEAD~1   ·   bounce: polaris kickback $id -m \"<why>\""
 }
 
+tag_push_recovery_note() { # tag_push_recovery_note <n> — convergent recovery when a moved-tag CAS
+  # push is rejected (clean-history v2.1). The stale LOCAL old-sha lease can NEVER win once origin
+  # missed a prior wave's tag move — so lease from origin's ACTUAL current tag instead. ls-remote
+  # yields the origin value (empty = tag absent → the empty lease correctly expects "not present").
+  local n="$1"
+  note "⚠ tag push failed — origin's sprint/$n lags a prior wave; the local lease can't win. Lease from origin and retry:"
+  note "   git push --force-with-lease=refs/tags/sprint/$n:\$(git ls-remote origin refs/tags/sprint/$n | cut -f1) origin refs/tags/sprint/$n"
+}
+
 cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wave: ONE --no-ff merge
   # of integrate/<date> into $BASE, tagged sprint/<n>. Message = sprint header + a bullet per landed
   # commit — the changelog entry `history` shows forever. sprint/<n> always marks the sprint's
@@ -1082,7 +1091,7 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
         # moved tag → compare-and-swap push, leased against the wave we know we're replacing:
         # the ONLY forced ref update POLARIS ever makes.
         git push -q --force-with-lease="refs/tags/sprint/$n:$oldtag" origin "refs/tags/sprint/$n" 2>/dev/null \
-          || note "⚠ tag push failed — push by hand: git push --force-with-lease=refs/tags/sprint/$n:$oldtag origin refs/tags/sprint/$n"
+          || tag_push_recovery_note "$n"
       else
         git push -q origin "refs/tags/sprint/$n" 2>/dev/null \
           || note "⚠ tag push failed — push by hand: git push origin sprint/$n"
@@ -1090,7 +1099,8 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
     else
       base_push_reject
       if [ -n "$oldtag" ]; then
-        note "⚠ push failed — push by hand: git push origin $BASE && git push --force-with-lease=refs/tags/sprint/$n:$oldtag origin refs/tags/sprint/$n"
+        note "⚠ push failed — push $BASE by hand: git push origin $BASE"
+        tag_push_recovery_note "$n"
       else
         note "⚠ push failed — push by hand: git push origin $BASE sprint/$n"
       fi
@@ -1138,7 +1148,7 @@ seal_sync() { # seal --sync <date> — pr mode only: finish the wave AFTER the h
   done <<EOF
 $(git log --no-merges --format=%s "$mb..integrate/$date" | grep -v '^chore(board):' || true)
 EOF
-  [ -z "$missing" ] || die "not in $BASE:$missing — the PR is unmerged, or was squash-merged (per-task commits must survive; merge with the MERGE COMMIT strategy); nothing mutated"
+  [ -z "$missing" ] || die "not in $BASE:$missing — the PR is unmerged, or was squash-merged (per-task commits must survive; merge with the MERGE COMMIT strategy). $BASE is already fast-forwarded to the PR merge; the sprint/$n tag, integrate/$date and the board are untouched"
   # 3. tag on the new $BASE HEAD — clean-history v2: create, or move an ancestor tag (CAS push)
   local oldtag old7 new7
   oldtag="$(git rev-parse -q --verify "refs/tags/sprint/$n" || true)"
@@ -1150,7 +1160,7 @@ EOF
     git tag -f "sprint/$n" >/dev/null
     new7="$(git rev-parse --short "refs/tags/sprint/$n")"
     git push -q --force-with-lease="refs/tags/sprint/$n:$oldtag" origin "refs/tags/sprint/$n" 2>/dev/null \
-      || note "⚠ tag push failed — push by hand: git push --force-with-lease=refs/tags/sprint/$n:$oldtag origin refs/tags/sprint/$n"
+      || tag_push_recovery_note "$n"
     say "sprint $n synced — $BASE fast-forwarded to the PR merge; sprint/$n: $old7 → $new7"
   else
     git tag "sprint/$n"
@@ -1186,7 +1196,7 @@ cmd_history() { # history [--tasks <n>] — read-only changelog view of $BASE: f
       | awk -v n="$n" 'BEGIN{p="Sprint " n " — "} index(substr($0,42),p)==1 {sha=$1} END{if (sha) print sha}')"
     [ -n "$start" ] || start="$(git -C "$PRIMARY" rev-parse "refs/tags/sprint/$n")"
     git -C "$PRIMARY" log --no-merges --date=short --format='%h %ad %s' "$start^1..sprint/$n" \
-      | grep -Ev '^[0-9a-f]+ [0-9-]+ chore\(board\):' || true
+      | grep -Ev '^[0-9a-f]+ [0-9-]+ (chore\(board\):|docs\(sprint-[0-9]+\): report)' || true
     return 0
   fi
   [ -z "${1:-}" ] || die "usage: polaris history [--tasks <n>]"
@@ -1358,12 +1368,23 @@ render_sprint() { # render_sprint <n> <ref> [id…] — the whole sprint report 
   return 0
 }
 
+report_dirty_hint() { # report_dirty_hint <n> — report commits NOTHING and never writes the board
+  # (contract sprint-report v1.1). A re-render after `done` adds done-dates the sealed render lacked,
+  # so the file can differ from HEAD; left uncommitted it makes the NEXT land/seal die "working tree
+  # not clean" with no visible cause. If the written file differs from HEAD, name both remedies.
+  local n="$1" rel; rel="$(report_rel "$n")"
+  git -C "$PRIMARY" diff --quiet -- "$rel" && return 0
+  note "$rel differs from HEAD — report commits nothing. Either commit it as \`docs(sprint-$n): report refresh\`,"
+  note "   or discard with \`git checkout -- $rel\`."
+}
+
 report_one() { # report_one <n> — resolve IDs, render, write <reports>/sprint-<n>.md whole, print path
   local n="$1" ids out
   ids="$(resolve_sprint_ids "$n")"
   out="$(report_file "$n")"; mkdir -p "$(dirname "$out")"
   render_sprint "$n" "$BASE" $ids > "$out"
   say "wrote $(report_rel "$n")"
+  report_dirty_hint "$n"
 }
 
 cmd_report() { # report [--sprint <n> | --all] — render per-sprint management reports (docs/sprints/
@@ -1395,6 +1416,7 @@ $ids"
         out="$(report_file "$newest")"
         { printf '\n## (unsealed)\n'; for tid in $orphans; do render_task_section "$tid" "$BASE"; done; } >> "$out"
       fi
+      for m in $nums; do report_dirty_hint "$m"; done   # final on-disk state per file (post-orphan append)
       return 0
       ;;
     --sprint) n="${2:-}"; [ -n "$n" ] || die "usage: polaris report --sprint <n>";;
@@ -1720,7 +1742,9 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     "$SELF" history > "$T/hist.out"
     grep -q 'Sprint 1 — selftest sprint' "$T/hist.out" || { echo "HISTORY FAIL (sprint merge missing)"; exit 1; }
     grep -q 'chore(board)' "$T/hist.out" && { echo "HISTORY FILTER FAIL (board noise must hide)"; exit 1; }
-    "$SELF" history --tasks 1 | grep -q 'land a file \[T-1\]' || { echo "HISTORY TASKS FAIL"; exit 1; }
+    "$SELF" history --tasks 1 > "$T/htasks.out"
+    grep -q 'land a file \[T-1\]' "$T/htasks.out" || { echo "HISTORY TASKS FAIL"; exit 1; }
+    grep -q 'docs(sprint-' "$T/htasks.out" && { echo "HISTORY TASKS REPORT FILTER FAIL (docs(sprint-N): report must not appear in the task view)"; exit 1; }
     # done on a squash landing: rule-1 gate accepts (feat/T-1 is NOT an ancestor of main) + landed: stamp
     "$SELF" done T-1 >/dev/null
     [ "$(sed -n 's/^landed: //p' ops/board/done/T-1.md | tr -d ' \r')" = "$(git log --format='%H %s' main | awk '/\[T-1\]$/ {print $1; exit}')" ] \

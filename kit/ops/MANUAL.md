@@ -179,7 +179,7 @@ NO local merge; `<base>` is untouched (local AND remote); tasks stay in `review/
 The human merges the PR with the host's **MERGE COMMIT** strategy — NEVER squash: the per-task squash commits must survive on `<base>`.
 **`seal --sync [<date>]` (pr mode ONLY — in direct mode it dies "publish: direct seals locally — nothing to sync"), by hand, after the human merges:**
 1. clean tree required; `git pull --ff-only origin <base>` (never rebase, never merge).
-2. verify EVERY `[<ID>]` subject on `integrate/<date>` is now in `<base>` history (`git log <base>`); any missing → die naming them, mutate nothing.
+2. verify EVERY `[<ID>]` subject on `integrate/<date>` is now in `<base>` history (`git log <base>`); any missing → die naming them. Step 1 has already fast-forwarded local `<base>`; the tag, `integrate/<date>` and the board are untouched.
 3. tag the new `<base>` HEAD per clean-history rules: absent → `git tag sprint/<n>`; existing ancestor tag → move (`git tag -f sprint/<n>`) + compare-and-swap push (`git push --force-with-lease=refs/tags/sprint/<n>:<old-sha> origin refs/tags/sprint/<n>`); existing non-ancestor → die (reused number). Tag-push failure → by-hand note, as direct seal does.
 4. delete `integrate/<date>` local + remote: `git branch -D integrate/<date>` and `git push origin :refs/heads/integrate/<date>`.
 5. next: per task, `run-verify` / `done` (done's `[<ID>]`-in-base gate now passes) — see Integrate's done recipe.
