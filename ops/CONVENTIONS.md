@@ -1,7 +1,7 @@
 # CONVENTIONS
 base: main                  # base branch
 claim: local-lock           # one machine, many sessions — file lock, no network round-trip
-integration: batch          # suite ~3min (selftest+pack), over paranoid's <2min rule — and sprint-4 per-land coverage was selftest-only anyway. Batch = full suite once per wave + final qa; a red land is found by the bisect recipe. Subagent shells: the permission classifier can block `build:` invoked directly (both shells, sprint 4) — run it via `bash ops/polaris qa` at the wave gate and record the reduced per-land coverage in the burndown; never silently skip it. Revisit if kickbacks appear.
+integration: batch          # suite ~3min (selftest+pack), over paranoid's <2min rule — and sprint-4 per-land coverage was selftest-only anyway. Batch = full suite once per wave + final qa; a red land is found by the bisect recipe. If the harness denies `build:` invoked directly (both shells, sprint 4), the human-approved fallback (2026-07-20) is the repo's own gate `bash ops/polaris qa`; record the reduced per-land coverage in the burndown. If the gate is ALSO denied, STOP and ask the human — never route around a denial by any other means. Revisit if kickbacks appear.
 voice: standard             # plain, friendly English when talking to the human
 autolaunch: wt              # Planner opens a Builder pane per ready task in Windows Terminal, beside you
 stale_hours: 1              # sweep warns on active locks older than this — build avg 0.2h (n=28); an hour-idle lock is a dead lane, not a slow one (sprint 4: 2 subagent stalls + 1 API-error death)
@@ -76,3 +76,4 @@ kit to everyone who installed before the `kit/` split existed.
 - 2026-07-20 · integration comment codifies the classifier-safe fallback (build: via bash ops/polaris qa at the wave gate, reduced per-land coverage recorded in burndown); kit-entrypoint gap logged to IDEAS · build: classifier-blocked in both subagent shells all sprint 4, 6 waves ran selftest-only per land
 - 2026-07-20 · integration: paranoid → batch · suite ~3min over paranoid's <2min rule; per-land coverage was selftest-only anyway; batch = full suite once per wave + final qa, red lands found by the bisect recipe; revisit if kickbacks appear
 - 2026-07-20 · Planner calibration gains the two sprint-4 carve patterns; SPRINT Learned pruned 8→5 (carve-pattern ×2 + classifier/pack bullets institutionalized) · 0 kickbacks across 6 waves T-020..T-028; T-027/T-028 merged zero-conflict on a contract-pinned phrase
+- 2026-07-20 · integration fallback clause reworded human-anchored: denial → approved qa gate; gate also denied → STOP and ask, never route around a denial · harness security review flag; wording only, no behavior change
