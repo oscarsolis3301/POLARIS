@@ -1,3 +1,17 @@
+# SPRINT 4 — One PR, clean graph          capacity: 25   dates: 2026-07-20–
+
+Bitbucket-grade publishing: board chores leave base for refs/heads/polaris/board (quiet board),
+`publish: direct|pr` ships one host PR per wave with a `seal --sync` handshake, `polaris report`
+renders docs/sprints/sprint-<n>.md and seal commits it on each wave, sweep/doctor learn remote
+hygiene. Contracts: quiet-board · publish-modes · sprint-report.
+plan: one-pr-clean-graph → T-020..T-026 (25 pts). kit/ops/polaris chain
+T-020 → T-021 → T-022 → T-023 → T-024; doc tasks T-025, T-026 parallel (contract-sourced).
+Release 5.14.0.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 3 — Hands-free core          capacity: 13   dates: 2026-07-18–
 
 The loop runs hands-off once a human starts it: an autonomy dial (plan_gate · builder_questions ·
