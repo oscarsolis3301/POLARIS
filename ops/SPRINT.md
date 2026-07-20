@@ -15,6 +15,7 @@ Release 5.14.0.
 | 2026-07-20 | 15 (+T-021, wave 2, re-sealed sprint/4 tag 69e3628→c239aa3) | 10 (T-022 ready · T-023, T-024 backlog) · cycle p50 0.5h n=23 · kickbacks 0 · build avg 0.2h / integrate avg 2.8h · qa green on main |
 | 2026-07-20 | 20 (+T-022, wave 3, re-sealed sprint/4 tag c239aa3→be299c9) | 5 (T-023 ready · T-024 backlog) · cycle p50 0.5h n=24 · kickbacks 0 · build avg 0.2h / integrate avg 2.7h · qa green on main |
 | 2026-07-20 | 23 (+T-023, wave 4, re-sealed sprint/4 tag be299c9→1cdfdc2) | 2 (T-024 ready) · cycle p50 0.5h n=25 · kickbacks 0 · build avg 0.2h / integrate avg 2.6h · qa green on main · Learned pruned 9→5 |
+| 2026-07-20 | 25 (+T-024, wave 5, re-sealed sprint/4 tag 1cdfdc2→9426ce6) — SPRINT COMPLETE | 0 · cycle p50 0.5h n=26 · kickbacks 0 · build avg 0.2h / integrate avg 2.5h · qa green on main |
 
 # SPRINT 3 — Hands-free core          capacity: 13   dates: 2026-07-18–
 
@@ -77,7 +78,7 @@ exercises but a Builder cannot.
   so `test:` already exercises them pre-dogfood.
 - backlog→ready promotion has no CLI command in 5.13 — done by hand (git mv + status frontmatter +
   chore(board) commit), per MANUAL's board-mutation pattern.
-- Sprint-4 waves 1-4 all zero-conflict, zero-kickback: single-task waves on the kit/ops/polaris
+- Sprint-4 waves 1-5 all zero-conflict, zero-kickback: single-task waves on the kit/ops/polaris
   chain cost ~5 min (audit→land→seal), and same-sprint re-seals moved sprint/4 per the multi-wave
-  contract (69e3628→c239aa3→be299c9→1cdfdc2). Contract-sourced doc tasks parallel to a serial CLI
-  chain is a carve pattern to keep.
+  contract (69e3628→c239aa3→be299c9→1cdfdc2→9426ce6). Contract-sourced doc tasks parallel to a
+  serial CLI chain is a carve pattern to keep.
