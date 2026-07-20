@@ -1,10 +1,10 @@
 # CONVENTIONS
 base: main                  # base branch
 claim: local-lock           # one machine, many sessions — file lock, no network round-trip
-integration: paranoid       # suite ~2-3min (selftest+pack), not the 15s it once was. Kept: a red land self-identifies with zero bisect, and the delta vs batch was ~15min this sprint. Revisit if suite >5min or waves regularly >5 tasks.
+integration: batch          # suite ~3min (selftest+pack), over paranoid's <2min rule — and sprint-4 per-land coverage was selftest-only anyway. Batch = full suite once per wave + final qa; a red land is found by the bisect recipe. Subagent shells: the permission classifier can block `build:` invoked directly (both shells, sprint 4) — run it via `bash ops/polaris qa` at the wave gate and record the reduced per-land coverage in the burndown; never silently skip it. Revisit if kickbacks appear.
 voice: standard             # plain, friendly English when talking to the human
 autolaunch: wt              # Planner opens a Builder pane per ready task in Windows Terminal, beside you
-stale_hours: 4              # sweep warns on active locks older than this
+stale_hours: 1              # sweep warns on active locks older than this — build avg 0.2h (n=28); an hour-idle lock is a dead lane, not a slow one (sprint 4: 2 subagent stalls + 1 API-error death)
 test: bash kit/ops/polaris doctor --selftest
 build: python kit/ops/pack.py --allow-dirty
 lint:                       # none — bash + python, no package manager
@@ -63,6 +63,7 @@ kit to everyone who installed before the `kit/` split existed.
 ## Planner calibration (appended by EVOLVE, human-approved; Planner reads before pointing)
 - 2026-07-18 · Ignore the 3pt p50 30.4h bucket (n=1 = T-002): review parking during the off-board-edit collision, not build effort (build split avg 0.1h). Do not point up 3-pointers from it.
 - 2026-07-18 · Points do not predict wall-clock here (5pt p50 = 2pt p50 = 0.5h, n=8, 0 kickbacks); they predict scope and merge risk. Wave capacity is planning-bound (carve quality), not build-bound.
+- 2026-07-20 · Two carve patterns held at 0 kickbacks across 6 sprint-4 waves (T-020..T-028): (a) serial-chain the hotspot file; run contract-sourced doc tasks parallel to the chain; (b) parallel wording tasks need no depends_on — pin the exact phrase in the contract (T-027/T-028 both cite "already fast-forwarded", merged zero-conflict).
 
 ## Kit changelog
 - 2026-07-18 · MAP folded: header re-dated, CLI row gains clean-history commands, selftest-install/selftest-dashboard promoted to Modules, dashboard Unverified bullet cleared, Deltas emptied · 3 Deltas lines (T-001, T-003, T-007) + T-003 clearing the untested-dashboard claim
@@ -71,3 +72,7 @@ kit to everyone who installed before the `kit/` split existed.
 - 2026-07-18 · SPRINT Learned pruned 9→4: dropped write-guard-prefix, off-board-collision, stale 5.11-lag, integrate-lag, seal-blocked bullets; merged the two seal/fold bullets into one corrected installed-vs-source bullet · drift finding LEARNED 9>5; waves 2-6 all folded via MANUAL fallback, sprint 3 complete
 - 2026-07-18 · integration: paranoid comment rewritten with real suite cost (~2-3min), keep-rationale (zero-bisect red lands) and revisit triggers (>5min suite or >5-task waves) · 6 paranoid waves this sprint, 0 kickbacks; old comment claimed 15s
 - 2026-07-18 · THE SPLIT gains installed-LAGS-source paragraph: installed CLI + ops/MANUAL.md are board-mechanics truth until the next dogfood · sprint 3 ran installed 5.12.0 against kit 5.13.0-unreleased; T-017 seal recipe unrunnable, 5 waves needed MANUAL fold
+- 2026-07-20 · stale_hours 4→1 · build avg 0.2h (n=28); sprint 4's stale locks were dead lanes (2 subagent stalls + 1 API-error death), not slow builds
+- 2026-07-20 · integration comment codifies the classifier-safe fallback (build: via bash ops/polaris qa at the wave gate, reduced per-land coverage recorded in burndown); kit-entrypoint gap logged to IDEAS · build: classifier-blocked in both subagent shells all sprint 4, 6 waves ran selftest-only per land
+- 2026-07-20 · integration: paranoid → batch · suite ~3min over paranoid's <2min rule; per-land coverage was selftest-only anyway; batch = full suite once per wave + final qa, red lands found by the bisect recipe; revisit if kickbacks appear
+- 2026-07-20 · Planner calibration gains the two sprint-4 carve patterns; SPRINT Learned pruned 8→5 (carve-pattern ×2 + classifier/pack bullets institutionalized) · 0 kickbacks across 6 waves T-020..T-028; T-027/T-028 merged zero-conflict on a contract-pinned phrase
