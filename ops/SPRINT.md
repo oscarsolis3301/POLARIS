@@ -1,3 +1,19 @@
+# SPRINT 5 — The fast lane          capacity: 25   dates: 2026-07-20–
+
+Requests take hours; telemetry says where: cold-start context re-derivation (~1.6M tokens/day),
+full ceremony for 2-point asks, integration waiting on the slowest lane, repeated full suites.
+5.15.0 ships the fixes with every gate intact: `brain [--refresh]` (generated .polaris/brain/
+knowledge base, ≤4-hop, seal-refreshed, doctor-warned), express lane (`express: auto` +
+`land --express`), pipelined integration + foreground/recovery hardening (docs),
+`--selftest --only` + slow-suite hint, `status --brief` + metrics summary.
+Contracts: brain · express-lane · verification-tiering · status-brief · pipelined-integration.
+plan: fast-lane → T-030..T-037 (25 pts). kit/ops/polaris chain T-030 → T-031 → T-032 → T-033;
+doc tasks T-034..T-037 parallel (contract-pinned wording). Release 5.15.0.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 4 — One PR, clean graph          capacity: 25   dates: 2026-07-20–
 
 Bitbucket-grade publishing: board chores leave base for refs/heads/polaris/board (quiet board),
