@@ -80,3 +80,5 @@ not installed code — they are written normally, by the board scripts and by th
 - publish direct|pr — pr mode keeps feat branches local, seal pushes ONE integrate branch + prints the Bitbucket PR URL, seal --sync finishes after the human merges (5.14.0-unreleased)  (T-022, 2026-07-20)
 
 - polaris report [--sprint n | --all] renders docs/sprints/sprint-<n>.md from the board; seal commits it on each wave (5.14.0-unreleased)  (T-023, 2026-07-20)
+
+- polaris gains brain [--refresh] — generated .polaris/brain/ knowledge base (INDEX + 5 domain files, ≤4-hop); seal auto-refreshes it, done/seal touch board-changed, doctor warns when stale (5.15.0-unreleased)  (T-030, 2026-07-20)
