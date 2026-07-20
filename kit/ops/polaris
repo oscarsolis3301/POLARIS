@@ -223,6 +223,26 @@ board_commit() { # board_commit <msg> — ONE commit of the moved set on refs/he
   rm -f "$idx"
   die "board commit failed: $msg (could not advance $BOARD_REF — another writer stuck?)"
 }
+board_materialize() { # fresh clone: the moved set is ignored on base, so a clone's working tree has
+  # no ops/board/ — its state lives on polaris/board (ops/contracts/quiet-board.md). When the dir
+  # is missing and the ref exists (local, else origin — the local ref is created from origin's),
+  # write the set's files into the working tree via plumbing: read-tree into a SECONDARY index +
+  # checkout-index. NEVER a branch switch; primary index and checked-out branch untouched.
+  # rc 0 = materialized (and said so) · rc 1 = nothing to do (board on disk, or no ref anywhere).
+  [ -d "$BOARD" ] && return 1
+  if ! git -C "$PRIMARY" rev-parse -q --verify "$BOARD_REF" >/dev/null; then
+    git -C "$PRIMARY" rev-parse -q --verify refs/remotes/origin/polaris/board >/dev/null || return 1
+    git -C "$PRIMARY" update-ref "$BOARD_REF" \
+      "$(git -C "$PRIMARY" rev-parse refs/remotes/origin/polaris/board)" || return 1
+  fi
+  local idx; idx="$(mktemp)"
+  if ! GIT_INDEX_FILE="$idx" git -C "$PRIMARY" read-tree "$BOARD_REF" \
+     || ! GIT_INDEX_FILE="$idx" git -C "$PRIMARY" checkout-index -a -f --prefix="$PRIMARY/"; then
+    rm -f "$idx"; return 1
+  fi
+  rm -f "$idx"
+  say "materialized ops/board/ + ops/SPRINT.md from polaris/board (fresh clone — board state lives on that ref)"
+}
 
 # --------------------------------------------------------------- lock helpers
 lock_take() { # lock_take <ID> — atomic; returns 1 if already taken
@@ -507,7 +527,10 @@ EOF
       && note "bootstrap ok — deps ready" \
       || note "⚠ bootstrap failed — install deps in the worktree before verify (cmd: $bootstrap)"
   fi
-  note "read: task file + its contract + context_files. Build only inside files_owned."
+  # primary-anchored on purpose (ops/contracts/quiet-board.md): the moved set is ignored on base,
+  # so the Builder's worktree contains NO ops/board — a repo-relative task path would point at
+  # nothing. Contract paths stay repo-relative: contracts live on base, present in every worktree.
+  note "read: task file at \"$BOARD/active/$id.md\" + its contract + context_files. Build only inside files_owned."
   note "when green: polaris handoff   ·   to abort: polaris release $id --to ready"
 }
 
@@ -681,6 +704,7 @@ cmd_resume() { # resume [ID] — re-enter an already-claimed active task without
   # action that takes one over — recreates the worktree if it vanished, refreshes the lock's age+owner.
   local id="${1:-}"
   [ -n "$id" ] || id="$(current_task_id)" || die "usage: polaris resume <ID> (or run inside a feat/<ID> worktree)"
+  board_materialize || true   # fresh clone: rebuild ops/board/ from polaris/board BEFORE the lookup
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/ — only a claimed task can be resumed; for a fresh one: polaris claim"
   mkdir -p "$LOCKS/$id"; { date +%s; echo "$WHO"; echo "$id"; } > "$LOCKS/$id/meta"   # adopt + refresh the lock
   local wt; wt="$(wt_path "$id")"
@@ -692,6 +716,7 @@ cmd_resume() { # resume [ID] — re-enter an already-claimed active task without
       || die "could not recreate the worktree for $id"
   fi
   say "resumed $id → cd \"$wt\""
+  note "task file: \"$BOARD/active/$id.md\" (primary-anchored — worktrees do not contain ops/board)"
   if grep -q '⛔' "$tf" 2>/dev/null; then note "last note on this task (why it is back in active/):"; grep '⛔' "$tf" | tail -1 | sed 's/^[[:space:]]*/     /'; fi
   note "when green: polaris handoff   ·   to abort: polaris release $id --to ready"
 }
@@ -1120,6 +1145,7 @@ cmd_doctor() {
   awk -v v="$gv" 'BEGIN{split(v,a,"."); exit !(a[1]>2 || (a[1]==2 && a[2]>=5))}' \
     || die "git >= 2.5 required for worktrees"
   git -C "$PRIMARY" show-ref --verify -q "refs/heads/$BASE" || note "⚠ base branch '$BASE' not found — set base: in CONVENTIONS.md"
+  board_materialize || true   # fresh clone: ops/board/ missing + polaris/board present → rebuild it
   # CONVENTIONS.md is written by INIT and by nothing else — its absence is THE test for
   # "INIT never ran here". install.sh, CLAUDE.md's role dispatch and INIT.md all use this
   # same file for that question. Never ops/board/: an older installer shipped it empty.
@@ -1604,10 +1630,77 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     grep -q '^latest: 8.8.8$' .polaris/update-cache || { echo "VERSION CACHE FAIL (fresh check must update the cache)"; exit 1; }
     rm -rf ops/VERSION .polaris/update-cache
     # ================== end T-006 staleness drills ==================
+    # ================== T-021 upgrade-migration drill (ops/contracts/quiet-board.md) ==================
+    # A 5.13-shaped repo: moved set TRACKED on base, chore(board) history on base, no polaris/board.
+    # upgrade must migrate ONCE (orphan seed → untrack → ignore → ONE base commit), re-run as a
+    # no-op, and the board must run QUIET afterwards. Then: claim/resume print PRIMARY-anchored
+    # task paths · a fresh clone materializes the board via doctor and via resume · uninstall
+    # deletes the board-history branch locally and on origin.
+    git init -q -b main "$T/mig" 2>/dev/null || { git init -q "$T/mig"; git -C "$T/mig" symbolic-ref HEAD refs/heads/main; }
+    ( set -e; cd "$T/mig"; git config user.email t@t; git config user.name t
+      mkdir -p src ops/board/ready ops/board/active ops/board/review ops/board/done ops/board/blocked ops/board/backlog
+      echo x > src/m0.txt
+      : > ops/board/EVENTS.ndjson
+      printf '# SPRINT 0 — migration drill  capacity: 1\n' > ops/SPRINT.md
+      printf -- '---\nid: T-M\ntitle: migrated task\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/m.txt\nverify: []\n---\n' > ops/board/ready/T-M.md
+      git add -A; git commit -qm init
+      echo bump >> ops/SPRINT.md; git add -A; git commit -qm 'chore(board): claim T-OLD'   # 5.13-shaped: tracked set, chore history on base
+      pre="$(git rev-list --count main)"
+      "$SELF" upgrade > "$T/mig-up.out" 2>&1 || { cat "$T/mig-up.out"; echo "MIGRATION RUN FAIL"; exit 1; }
+      git rev-parse -q --verify refs/heads/polaris/board >/dev/null || { echo "MIGRATION REF FAIL (upgrade must seed polaris/board)"; exit 1; }
+      git ls-tree -r --name-only refs/heads/polaris/board | grep -qx 'ops/board/ready/T-M.md' || { echo "MIGRATION SEED FAIL (current board state must ride the orphan seed)"; exit 1; }
+      git ls-tree -r --name-only refs/heads/polaris/board | grep -v '^ops/board/' | grep -v '^ops/SPRINT\.md$' | grep -q . && { echo "MIGRATION TREE FAIL (seed tree = ONLY the moved set)"; exit 1; }
+      [ "$(git rev-list --max-parents=0 refs/heads/polaris/board | wc -l | tr -d ' ')" = "1" ] || { echo "MIGRATION ORPHAN FAIL"; exit 1; }
+      [ -z "$(git ls-files -- ops/board ops/SPRINT.md)" ] || { echo "MIGRATION UNTRACK FAIL (the set must leave the base index)"; exit 1; }
+      git check-ignore -q ops/SPRINT.md && git check-ignore -q ops/board/ready/T-M.md || { echo "MIGRATION IGNORE FAIL"; exit 1; }
+      [ "$(git rev-list --count main)" = "$((pre+1))" ] || { echo "MIGRATION COMMIT COUNT FAIL (exactly ONE new base commit)"; exit 1; }
+      git log -1 --format=%s main | grep -qx 'chore(board): board moves to polaris/board' || { echo "MIGRATION SUBJECT FAIL"; exit 1; }
+      mig="$(git rev-parse main)"; mtip="$(git rev-parse refs/heads/polaris/board)"
+      "$SELF" upgrade > "$T/mig-up2.out" 2>&1 || { cat "$T/mig-up2.out"; echo "MIGRATION RERUN FAIL"; exit 1; }
+      [ "$(git rev-parse main)" = "$mig" ] || { echo "MIGRATION IDEMPOTENT FAIL (re-run must add no base commit)"; exit 1; }
+      [ "$(git rev-parse refs/heads/polaris/board)" = "$mtip" ] || { echo "MIGRATION IDEMPOTENT FAIL (re-run must not move the ref)"; exit 1; }
+      # claim/resume on the migrated board: green, and the printed task path is PRIMARY-anchored
+      # (the worktree contains no ops/board). mp = PRIMARY exactly as the script computes it.
+      mp="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"
+      "$SELF" claim T-M > "$T/mig-claim.out" || { echo "MIGRATED CLAIM FAIL"; exit 1; }
+      grep -qF "task file at \"$mp/ops/board/active/T-M.md\"" "$T/mig-claim.out" || { echo "CLAIM PATH FAIL (read: hint must name the primary-anchored task file)"; exit 1; }
+      "$SELF" resume T-M > "$T/mig-resume.out" || { echo "MIGRATED RESUME FAIL"; exit 1; }
+      grep -qF "task file: \"$mp/ops/board/active/T-M.md\"" "$T/mig-resume.out" || { echo "RESUME PATH FAIL (resume must print the primary-anchored task file)"; exit 1; }
+      # fresh clones: doctor materializes the board from origin's ref (creating the local ref);
+      # resume does the same BEFORE its task lookup — an active task survives the machine hop.
+      git clone -q . "$T/mig2" 2>/dev/null
+      ( set -e; cd "$T/mig2"; git config user.email t@t; git config user.name t
+        [ ! -d ops/board ] || { echo "CLONE SHAPE FAIL (moved set must be absent from a fresh clone)"; exit 1; }
+        "$SELF" doctor > "$T/mig-doc.out" 2>&1 || { cat "$T/mig-doc.out"; echo "DOCTOR MATERIALIZE RC FAIL"; exit 1; }
+        grep -q 'materialized ops/board/' "$T/mig-doc.out" || { echo "DOCTOR MATERIALIZE SAY FAIL (doctor must say what it did)"; exit 1; }
+        [ -f ops/board/active/T-M.md ] && [ -f ops/SPRINT.md ] || { echo "DOCTOR MATERIALIZE FAIL (moved set must land on disk)"; exit 1; }
+        git rev-parse -q --verify refs/heads/polaris/board >/dev/null || { echo "DOCTOR REF FAIL (local ref must be created from origin's)"; exit 1; } ) || exit 1
+      git clone -q . "$T/mig3" 2>/dev/null
+      ( set -e; cd "$T/mig3"; git config user.email t@t; git config user.name t
+        "$SELF" resume T-M >/dev/null 2>&1 || { echo "RESUME MATERIALIZE FAIL (fresh clone must resume an active task)"; exit 1; }
+        [ -f ops/board/active/T-M.md ] || { echo "RESUME MATERIALIZE DISK FAIL"; exit 1; } ) || exit 1
+      # quiet after migration: handoff → legacy merge → done; base first-parent gains ZERO
+      # chore(board) commits after the migration commit (the migration commit is the LAST)
+      ( set -e; cd .polaris/wt/T-M; echo m > src/m.txt; git add -A; git commit -qm ok
+        "$SELF" handoff T-M >/dev/null ) || exit 1
+      git merge -q --no-ff feat/T-M -m merge
+      "$SELF" done T-M >/dev/null || { echo "MIGRATED DONE FAIL"; exit 1; }
+      git log --first-parent --format=%s "$mig..main" | grep -q '^chore(board):' && { echo "MIGRATED QUIET FAIL (no chore(board) on base after the migration commit)"; exit 1; }
+      # uninstall: names the branch pre-confirm, deletes it locally AND on origin
+      git init -q --bare "$T/mig-origin.git"
+      git remote add origin "$T/mig-origin.git"
+      git push -q origin main refs/heads/polaris/board
+      "$SELF" uninstall > "$T/mig-un.out" 2>&1 && { echo "UNINSTALL CONFIRM FAIL (no --yes must refuse)"; exit 1; }
+      grep -q 'polaris/board' "$T/mig-un.out" || { echo "UNINSTALL SUMMARY FAIL (pre-confirm must name the board-history branch)"; exit 1; }
+      "$SELF" uninstall --yes > "$T/mig-un2.out" 2>&1 || { cat "$T/mig-un2.out"; echo "UNINSTALL RUN FAIL"; exit 1; }
+      git rev-parse -q --verify refs/heads/polaris/board >/dev/null && { echo "UNINSTALL LOCAL REF FAIL (the branch must be deleted)"; exit 1; }
+      git ls-remote "$T/mig-origin.git" refs/heads/polaris/board | grep -q . && { echo "UNINSTALL REMOTE REF FAIL (the deletion must push)"; exit 1; }
+      : ) || exit 1
+    # ================== end T-021 upgrade-migration drill ==================
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways)"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
@@ -1971,6 +2064,25 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
 
 cmd_upgrade() { # idempotent v3→v4: creates what v4 adds, touches nothing that exists
   cmd_init_board
+  # ---- 5.13→5.14 quiet-board migration (ops/contracts/quiet-board.md) — runs ONCE, only when
+  # polaris/board is absent AND the moved set is still tracked on base. Seeds the ref (orphan)
+  # from the current moved-set state, flips the set tracked→untracked (init_board above appended
+  # the .gitignore entries), then ONE final base commit. Re-run = no-op; history never rewritten.
+  if ! git -C "$PRIMARY" rev-parse -q --verify "$BOARD_REF" >/dev/null \
+     && [ -n "$(git -C "$PRIMARY" ls-files -- ops/board ops/SPRINT.md)" ]; then
+    git -C "$PRIMARY" diff --cached --quiet \
+      || die "upgrade: staged changes present — the migration writes ONE base commit; commit or unstage first"
+    local midx mseed
+    midx="$(mktemp)"
+    mseed="$(board_ref_commit "chore(board): board moves to polaris/board" "" "$midx")" \
+      || { rm -f "$midx"; die "upgrade: could not seed polaris/board from the current board state"; }
+    rm -f "$midx"
+    git -C "$PRIMARY" update-ref "$BOARD_REF" "$mseed" ""
+    git -C "$PRIMARY" rm -r -q --cached --ignore-unmatch ops/board ops/SPRINT.md
+    git -C "$PRIMARY" add -- .gitignore
+    git -C "$PRIMARY" commit -q -m "chore(board): board moves to polaris/board"
+    say "board history migrated → refs/heads/polaris/board (moved set now untracked + ignored on $BASE)"
+  fi
   chmod +x "$OPS/polaris" 2>/dev/null || true
   [ -f "$OPS/hooks/ownership-guard.sh" ] && chmod +x "$OPS/hooks/ownership-guard.sh" 2>/dev/null || true
   say "v5 ready. New since v4: RULES.tsv policy engine (danger zones + content guards, 3-deep) · drift (board hygiene audit) · per-point cycle calibration in metrics · uat:/notify: CONVENTIONS keys · dashboard points/drift/notify"
@@ -2272,6 +2384,7 @@ cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and re
   if [ -z "$yes" ]; then
     say "polaris uninstall — this DELETES the following from $PRIMARY:"
     note "ops/                         (board, tasks, contracts, RULES, CONVENTIONS, MAP, SPRINT, telemetry)"
+    note "refs/heads/polaris/board     (the board-history branch — deleted locally and, with a remote, on origin)"
     note ".claude/skills/polaris/      (the project skill)"
     note "the write-guard hook entry   (.claude/settings.json — your other hooks are kept)"
     note "the managed POLARIS block    (CLAUDE.md — your own content is kept)"
@@ -2332,10 +2445,14 @@ EOF
   local GI="$PRIMARY/.gitignore" GA="$PRIMARY/.gitattributes"
   for f in "$GI" "$GA"; do
     [ -f "$f" ] || continue
-    grep -vE '^(polaris-v5/|polaris-v5\.zip|\.polaris/|ops/polaris text eol=lf|ops/VERSION text eol=lf|\*\.sh text eol=lf|ops/board/EVENTS\.ndjson merge=union -text)$' "$f" > "$f.polaris-tmp" || true
+    grep -vE '^(polaris-v5/|polaris-v5\.zip|\.polaris/|ops/board/|ops/SPRINT\.md|ops/polaris text eol=lf|ops/VERSION text eol=lf|\*\.sh text eol=lf|ops/board/EVENTS\.ndjson merge=union -text)$' "$f" > "$f.polaris-tmp" || true
     mv "$f.polaris-tmp" "$f"
     grep -q '[^[:space:]]' "$f" || rm -f "$f"
   done
+
+  # --- the board-history ref (ops/contracts/quiet-board.md): local branch, then its origin copy
+  git -C "$PRIMARY" update-ref -d "$BOARD_REF" 2>/dev/null || true
+  if has_remote; then git -C "$PRIMARY" push -q origin ":$BOARD_REF" 2>/dev/null || true; fi
 
   rm -rf "$PRIMARY/ops" "$PRIMARY/.polaris" "$LOCKS"
   say "POLARIS uninstalled from $PRIMARY"
