@@ -1289,7 +1289,11 @@ event_ts() { # event_ts <ev> <id> <first|last> — epoch ts of the first/last ma
 resolve_sprint_ids() { # resolve_sprint_ids <n> — the sprint's task IDs (layered, degrade-not-die),
   # one per line, deduped, ID order. Rule 1: [<ID>] bullets of base first-parent merges
   # 'Sprint <n> — …'. Rule 2: done/ tasks whose landed: sha is in tag sprint/<n> but not sprint/<n-1>.
-  local n="$1" tag="refs/tags/sprint/$n" prev="refs/tags/sprint/$((n-1))" haveprev="" msha f ls
+  # bash expands every word of a `local` line BEFORE it assigns, so `tag`/`prev` must be a
+  # SEPARATE `local` after n is bound — a combined decl reads the CALLER's n (empty under
+  # `report --all`, which loops with m while its own n=""), silently no-op'ing Rule 2.
+  local n="$1"
+  local tag="refs/tags/sprint/$n" prev="refs/tags/sprint/$((n-1))" haveprev="" msha f ls
   {
     git -C "$PRIMARY" log --first-parent --format='%H%x09%s' "$BASE" 2>/dev/null \
       | awk -F'\t' -v p="Sprint $n — " 'index($2,p)==1 {print $1}' \
@@ -1750,6 +1754,23 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     [ "$(sed -n 's/^landed: //p' ops/board/done/T-1.md | tr -d ' \r')" = "$(git log --format='%H %s' main | awk '/\[T-1\]$/ {print $1; exit}')" ] \
       || { echo "LANDED STAMP FAIL (done must stamp the squash SHA)"; exit 1; }   # the land commit (subject ENDS [T-1]); the wave's report commit now tips integrate
     [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-1" ] && { echo "LOCK CLEANUP FAIL"; exit 1; }
+    # ---- T-029 Rule-2-blind attribution drill (ops/contracts/sprint-report.md v1.2) ----
+    # T-1 is now a sealed, done, tag-ancestor task. Strip the [T-1] bullet from the seal merge
+    # body (keep the 'Sprint 1 — …' subject) so Rule 1 goes blind, then report --all must STILL
+    # attribute T-1 to sprint 1 via Rule 2 (tag ancestry) — never (unsealed). This is RED against
+    # the pre-fix resolve_sprint_ids, whose combined `local` read tag/prev from cmd_report's own
+    # n (""), so `rev-parse refs/tags/sprint/` failed and Rule 2 silently no-op'd. Save/restore so
+    # the rollback drills below see byte-identical git state.
+    r2save="$(git rev-parse main)"
+    git commit -q --amend -m 'Sprint 1 — selftest sprint'   # drop the [T-1] bullet, keep the subject
+    git tag -f sprint/1 HEAD >/dev/null                      # tag follows the amended merge
+    git log -1 --format=%b HEAD | grep -q '\[T-1\]' && { echo "RULE2 SETUP FAIL (merge body must be [ID]-blind)"; exit 1; }
+    "$SELF" report --all >/dev/null || { echo "REPORT RULE2 RUN FAIL"; exit 1; }
+    grep -q '^## T-1 — land a file$' docs/sprints/sprint-1.md || { echo "REPORT RULE2 ATTR FAIL (task must render under its sprint)"; exit 1; }
+    grep -q '^## (unsealed)$' docs/sprints/sprint-1.md && { echo "REPORT RULE2 UNSEALED FAIL (a tag-ancestor done task must never fall to (unsealed))"; exit 1; }
+    git tag -f sprint/1 "$r2save" >/dev/null                 # restore tag → wave-1 merge
+    git reset -q --hard "$r2save"                            # restore main + the sealed sprint-1.md render
+    # ---- end T-029 Rule-2-blind attribution drill ----
     # rollback: task revert applies, then (state reset between) the sprint revert applies too
     "$SELF" rollback T-1 >/dev/null || { echo "ROLLBACK TASK FAIL"; exit 1; }
     [ "$(cat src/a.txt)" = "x" ] || { echo "ROLLBACK CONTENT FAIL (the y line must go)"; exit 1; }
