@@ -97,7 +97,7 @@ has just said "install polaris" does not yet know their own sprint capacity in p
 ## 3. Write the artifacts — silently. No progress commentary.
 Instantiate the skeletons below with survey + interview results. Then run `bash ops/polaris init-board` (creates board dirs, gitignores `.polaris/`, prepares the lock dir, seeds `EVENTS.ndjson` telemetry with its union-merge gitattribute, and seeds `ops/RULES.tsv`). Turn every danger-zone/content answer from the interview into an armed RULES line (format documented at the top of the file), run `bash ops/polaris rules` to health-check them, and commit everything as `chore(polaris): initialize`.
 
-Values you no longer ask for, so choose them: `stale_hours: 4`; `autolaunch: ask` (safe default — offers to open Builders after planning rather than surprising a brand-new user with spawned windows); SPRINT capacity — start at **10 points** and let EVOLVE calibrate it from real cycle data; omit `uat:` and `notify:` unless the survey found an obvious end-to-end command. Do not narrate any of this. The human sees one report, in step 4, after the Planner has run.
+Values you no longer ask for, so choose them: `stale_hours: 1`; `autolaunch: ask` (safe default — offers to open Builders after planning rather than surprising a brand-new user with spawned windows); SPRINT capacity — start at **10 points** and let EVOLVE calibrate it from real cycle data; omit `uat:` and `notify:` unless the survey found an obvious end-to-end command. Do not narrate any of this. The human sees one report, in step 4, after the Planner has run.
 
 ### CONVENTIONS.md skeleton — the top block is machine-read by `ops/polaris`; one `key: value` per line
 ```markdown
@@ -135,7 +135,7 @@ drain: queue                # queue (a conductor run also finishes tasks already
                             # backlog/, capacity- and ready-gate-bounded, up to drain_slices rounds).
                             # Default: queue.
 drain_slices: 2              # backlog mode only: max planner-promotion rounds per run. Default: 2.
-stale_hours: 4              # sweep warns on active locks older than this
+stale_hours: 1              # sweep warns on active locks older than this
 uat: <cmd or omit>          # optional end-to-end/UAT command — Integrator runs it ONCE on the integrate branch
 notify: <cmd or omit>       # optional: runs in background per board event with POLARIS_EV/ID/NOTE env vars
 bootstrap: <cmd or omit>    # optional: install deps in a fresh worktree right after claim (npm ci /
@@ -150,6 +150,10 @@ publish: direct             # direct (seal merges + pushes <base> locally, tags)
                             # integrate/<date> + prints a PR URL; the human merges with the host's
                             # merge-commit strategy, then seal --sync tags + cleans up). Default direct;
                             # origin on bitbucket.org → suggest pr (a protected <base> rejects direct pushes).
+express: auto               # auto (default; unset = auto) — a lone small task takes the express lane
+                            # (land+suite+seal in one pass) instead of the full pipeline | off (full
+                            # ceremony always). Unknown value → warn once, behave as off (the safe side).
+# ops/polaris brain (re)generates the untracked .polaris/brain/ knowledge base every role reads first — git-ignored, MAP.md the tracked fallback.
 reports: docs/sprints/      # where per-sprint reports are written — seal auto-commits one per wave,
                             # `polaris report` regenerates. Lives OUTSIDE ops/ (ships as history). Default docs/sprints/.
 test: <cmd>
