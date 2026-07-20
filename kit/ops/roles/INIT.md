@@ -59,8 +59,9 @@ Step 1 already read every manifest. Use it:
 | `generated:` | the tracked build output the survey flagged in step 1 (`.next/ dist/ build/ out/ *.tsbuildinfo`). Set ONLY if those dirs are actually git-tracked; the better fix is un-tracking them. |
 | `base:` | `git symbolic-ref --short refs/remotes/origin/HEAD` (strip `origin/`), else the current branch |
 | origin remote? | `git remote` |
+| `publish:` | `git remote get-url origin` matches `bitbucket.org` → suggest `pr` (a protected `<base>` rejects direct pushes); else default `direct` |
 | candidate danger zones | what the survey saw: `.env*`, migrations dirs, prod config, lockfiles, generated/vendored dirs |
-| `stale_hours:` `uat:` `notify:` | defaults; EVOLVE tunes them later from real data |
+| `stale_hours:` `reports:` `uat:` `notify:` | defaults; EVOLVE tunes them later from real data |
 
 Anything you genuinely cannot find, leave blank and say so in 2c — do not invent a command.
 
@@ -145,6 +146,12 @@ generated: <globs or omit>  # optional: git-tracked build output (.next/ dist/ b
                             # Paths matching these are excluded from the ownership diff so a Builder that
                             # runs `build` isn't rejected for dirtying files it doesn't own. Space-separated
                             # files_owned-style patterns. Prefer un-tracking them (step 1) — this is the fallback.
+publish: direct             # direct (seal merges + pushes <base> locally, tags) | pr (seal pushes ONLY
+                            # integrate/<date> + prints a PR URL; the human merges with the host's
+                            # merge-commit strategy, then seal --sync tags + cleans up). Default direct;
+                            # origin on bitbucket.org → suggest pr (a protected <base> rejects direct pushes).
+reports: docs/sprints/      # where per-sprint reports are written — seal auto-commits one per wave,
+                            # `polaris report` regenerates. Lives OUTSIDE ops/ (ships as history). Default docs/sprints/.
 test: <cmd>
 lint: <cmd>
 typecheck: <cmd>
@@ -198,9 +205,12 @@ code style: <pointers, or "match surrounding code">
 ### History model — tell every new repo how its git log will read
 A task lands as ONE squash commit (`polaris land`); a sprint seals as ONE tagged `--no-ff` merge
 (`polaris seal`, tag `sprint/<n>`) — `feat/<ID>` branches never accumulate as merge commits on
-`<base>`, and `polaris history` reads `<base>` back as a changelog with `chore(board):` commits
-filtered out. Nothing to configure — it applies from the first sprint. Optionally offer a
-clean-log git alias so plain `git log` reads the same way without the CLI:
+`<base>`. Board-state churn never touches `<base>` at all: every `chore(board):` mutation commits to
+the `polaris/board` ref, so on a fresh install `<base>`'s first-parent log is already product-only
+and `polaris history` reads it straight back as a changelog. Nothing to configure — it applies from
+the first sprint. The clean-log git alias below is now belt-and-suspenders (a fresh base carries no
+`chore(board):` commits to filter; it still tidies the single `chore(board): board moves to
+polaris/board` migration commit on a repo UPGRADED from an older kit):
 ```bash
 git config alias.clean-log "log --first-parent --invert-grep --grep=^chore(board):"
 ```
