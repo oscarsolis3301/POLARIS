@@ -74,3 +74,5 @@ not installed code — they are written normally, by the board scripts and by th
 - seal is per integration wave — sprint/<n> tag moves to each wave's merge; history --tasks spans waves (5.13.0-unreleased)  (T-017, 2026-07-18)
 
 - board state lives on refs/heads/polaris/board — board_commit/sync_board use secondary-index plumbing; base first-parent stays chore(board)-free; done's map_delta is a docs(map) base commit (5.14.0-unreleased)  (T-020, 2026-07-20)
+
+- upgrade migrates a 5.13 board to polaris/board; doctor/resume materialize a fresh clone's board from the ref; uninstall deletes the branch (5.14.0-unreleased)  (T-021, 2026-07-20)
