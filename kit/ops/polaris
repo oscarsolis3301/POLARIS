@@ -166,6 +166,16 @@ publish_resolve() {
   esac
   return 0
 }
+# publish: direct base-push-rejected stamp (ops/contracts/publish-modes.md). A protected $BASE keeps
+# refusing seal's push; the stamp records date + a running count so doctor can recommend publish: pr
+# after >=2 rejections. A successful base push clears it. Lives under $PRIMARY/.polaris (gitignored).
+base_push_reject() {
+  local f="$PRIMARY/.polaris/base-push-rejected" c=0
+  [ -f "$f" ] && c="$(awk 'NR==1{print $2+0}' "$f" 2>/dev/null)"
+  mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+  printf '%s %s\n' "$(date +%F)" "$(( ${c:-0} + 1 ))" > "$f"
+}
+base_push_clear() { rm -f "$PRIMARY/.polaris/base-push-rejected" 2>/dev/null || true; }
 pr_create_url() { # pr_create_url <origin-url> <date> <dest> — Bitbucket PR-create URL on stdout
   # (ssh or https origin); non-Bitbucket or unparseable → prints nothing, never dies.
   local url="$1" date="$2" dest="$3" path=""
@@ -1064,17 +1074,27 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
     git tag "sprint/$n"
   fi
   if has_remote; then
-    if [ -n "$oldtag" ]; then
-      # moved tag → compare-and-swap push, leased against the wave we know we're replacing:
-      # the ONLY forced ref update POLARIS ever makes.
-      git push -q origin "$BASE" 2>/dev/null \
-        && git push -q --force-with-lease="refs/tags/sprint/$n:$oldtag" origin "refs/tags/sprint/$n" 2>/dev/null \
-        || { note "⚠ push failed — push by hand: git push origin $BASE && git push --force-with-lease=refs/tags/sprint/$n:$oldtag origin refs/tags/sprint/$n"
-             note "origin keeps rejecting $BASE? protected branch — set publish: pr in ops/CONVENTIONS.md and seal opens a PR instead"; }
+    # push $BASE on its own so its result is known: success clears the protected-branch stamp,
+    # rejection records it (doctor reads the count). The tag push follows only once base lands.
+    if git push -q origin "$BASE" 2>/dev/null; then
+      base_push_clear
+      if [ -n "$oldtag" ]; then
+        # moved tag → compare-and-swap push, leased against the wave we know we're replacing:
+        # the ONLY forced ref update POLARIS ever makes.
+        git push -q --force-with-lease="refs/tags/sprint/$n:$oldtag" origin "refs/tags/sprint/$n" 2>/dev/null \
+          || note "⚠ tag push failed — push by hand: git push --force-with-lease=refs/tags/sprint/$n:$oldtag origin refs/tags/sprint/$n"
+      else
+        git push -q origin "refs/tags/sprint/$n" 2>/dev/null \
+          || note "⚠ tag push failed — push by hand: git push origin sprint/$n"
+      fi
     else
-      git push -q origin "$BASE" "refs/tags/sprint/$n" 2>/dev/null \
-        || { note "⚠ push failed — push by hand: git push origin $BASE sprint/$n"
-             note "origin keeps rejecting $BASE? protected branch — set publish: pr in ops/CONVENTIONS.md and seal opens a PR instead"; }
+      base_push_reject
+      if [ -n "$oldtag" ]; then
+        note "⚠ push failed — push by hand: git push origin $BASE && git push --force-with-lease=refs/tags/sprint/$n:$oldtag origin refs/tags/sprint/$n"
+      else
+        note "⚠ push failed — push by hand: git push origin $BASE sprint/$n"
+      fi
+      note "origin keeps rejecting $BASE? protected branch — set publish: pr in ops/CONVENTIONS.md and seal opens a PR instead"
     fi
   fi
   if [ -n "$oldtag" ]; then
@@ -1472,6 +1492,25 @@ cmd_sweep() { # report orphans + stale + remote strays; --fix removes true orpha
     done <<EOF
 $(git -C "$PRIMARY" ls-remote origin 'refs/heads/feat/*' 2>/dev/null)
 EOF
+    # integrate/<date> branches on origin: a wave whose merge is already in $BASE (tip an ancestor
+    # of $BASE) is a stray — seal --sync deletes it in pr mode, but direct-mode seals never owned
+    # the push and a skipped --sync leaves it forever. Merged → stray (--fix deletes); tip not in
+    # $BASE → diverged, flagged but NEVER auto-deleted. Same style as the feat/* pass above.
+    while IFS= read -r rline; do
+      [ -n "$rline" ] || continue
+      rsha="${rline%%$'\t'*}"; rref="${rline#*$'\t'}"
+      case "$rref" in refs/heads/integrate/*) rid="${rref#refs/heads/}";; *) continue;; esac
+      if git -C "$PRIMARY" cat-file -e "$rsha" 2>/dev/null \
+         && git -C "$PRIMARY" merge-base --is-ancestor "$rsha" "$BASE" 2>/dev/null; then
+        found=1; printf '⚠ REMOTE stray: %s — wave merged into %s, branch still on origin\n' "$rid" "$BASE"
+        [ "$fix" = "--fix" ] && { git -C "$PRIMARY" push -q origin ":refs/heads/$rid" && note "deleted"; }
+      else
+        found=1; printf '⚠ REMOTE diverged: %s — tip is NOT in %s. Inspect: git fetch origin %s && git log %s..FETCH_HEAD (never auto-deleted)\n' \
+          "$rid" "$BASE" "$rid" "$BASE"
+      fi
+    done <<EOF
+$(git -C "$PRIMARY" ls-remote origin 'refs/heads/integrate/*' 2>/dev/null)
+EOF
   fi
   if [ $found -eq 0 ]; then say "no orphan or stale locks, no remote strays"; fi
 }
@@ -1530,6 +1569,11 @@ cmd_doctor() {
   case "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null)" in .*|../*) note "⚠ origin is a RELATIVE path — breaks in worktrees; use an absolute URL";; esac
   case "$CLAIM_MODE" in local-lock|claim-branch) :;; *) die "claim: must be local-lock or claim-branch";; esac
   [ "$CLAIM_MODE" = "claim-branch" ] && ! has_remote && note "⚠ claim-branch set but no origin remote"
+  # base-push-rejected stamp (ops/contracts/publish-modes.md): a direct-mode seal that keeps hitting
+  # a protected $BASE records each rejection; >=2 → recommend publish: pr. No stamp / <2 → silent.
+  local bprc=0
+  [ -f "$PRIMARY/.polaris/base-push-rejected" ] && bprc="$(awk 'NR==1{print $2+0}' "$PRIMARY/.polaris/base-push-rejected" 2>/dev/null)"
+  [ "${bprc:-0}" -ge 2 ] && note "⚠ origin keeps rejecting pushes to $BASE — protected branch? set publish: pr in ops/CONVENTIONS.md"
   [ -f "$EVENTS" ] && ! grep -q 'EVENTS\.ndjson merge=union' "$PRIMARY/.gitattributes" 2>/dev/null \
     && note "⚠ EVENTS.ndjson exists without its union-merge gitattribute — run: ops/polaris upgrade"
   # `ver` exits 0 with empty output when a key is absent, so || can't catch it — grep can.
@@ -1863,6 +1907,18 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     "$SELF" sweep | grep -q 'REMOTE stray: feat/T-C' || { echo "SWEEP STRAY FAIL"; exit 1; }
     "$SELF" sweep --fix >/dev/null
     git ls-remote --exit-code origin refs/heads/feat/T-C >/dev/null 2>&1 && { echo "SWEEP FIX FAIL (merged stray must be deleted)"; exit 1; }
+    # --- v5.13 T-024: sweep flags a MERGED integrate/* branch as a stray (--fix deletes it) but
+    # KEEPS a diverged one (tip not in $BASE). Same bare origin as the feat/* drill above.
+    git push -q origin main:refs/heads/integrate/2030-01-01                                  # merged wave: tip is in main
+    idvg="$(git commit-tree "$(git rev-parse 'main^{tree}')" -p main -m 'diverged wave')"    # a child of main → tip NOT in main
+    git push -q origin "$idvg:refs/heads/integrate/2030-02-02"
+    "$SELF" sweep > "$T/isweep.out"
+    grep -q 'REMOTE stray: integrate/2030-01-01' "$T/isweep.out" || { echo "SWEEP INTEGRATE STRAY FAIL (merged wave must flag)"; exit 1; }
+    grep -q 'REMOTE diverged: integrate/2030-02-02' "$T/isweep.out" || { echo "SWEEP INTEGRATE DIVERGED FAIL (unmerged wave must flag)"; exit 1; }
+    "$SELF" sweep --fix >/dev/null
+    git ls-remote --exit-code origin refs/heads/integrate/2030-01-01 >/dev/null 2>&1 && { echo "SWEEP INTEGRATE FIX FAIL (merged wave must be deleted)"; exit 1; }
+    git ls-remote --exit-code origin refs/heads/integrate/2030-02-02 >/dev/null || { echo "SWEEP INTEGRATE KEEP FAIL (diverged wave must be kept)"; exit 1; }
+    git push -q origin :refs/heads/integrate/2030-02-02    # clean up so later drills see a bare origin
     # ============ T-020 quiet-board sync race (EVENTS union — ops/contracts/quiet-board.md) ============
     # origin/polaris/board moves AHEAD with a foreign machine's EVENTS line; the next local
     # mutation's push is rejected → sync_board must union the line into the on-disk file,
