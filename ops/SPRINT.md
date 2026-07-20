@@ -85,16 +85,6 @@ exercises but a Builder cannot.
   so `test:` already exercises them pre-dogfood.
 - backlog→ready promotion has no CLI command in 5.13 — done by hand (git mv + status frontmatter +
   chore(board) commit), per MANUAL's board-mutation pattern.
-- Sprint-4 waves 1-5 all zero-conflict, zero-kickback: single-task waves on the kit/ops/polaris
-  chain cost ~5 min (audit→land→seal), and same-sprint re-seals moved sprint/4 per the multi-wave
-  contract (69e3628→c239aa3→be299c9→1cdfdc2→9426ce6). Contract-sourced doc tasks parallel to a
-  serial CLI chain is a carve pattern to keep.
-- Contract-pinned phrases keep parallel wording tasks in lockstep with NO dependency edge: T-027
-  (CLI) and T-028 (docs) both cite "already fast-forwarded" from publish-modes v1.1 and merged
-  zero-conflict. Pin the phrase in the contract, not a depends_on. Carve pattern to keep.
-- Harness permission classifier can block direct `python kit/ops/pack.py --allow-dirty` (Bash AND
-  PowerShell); `bash ops/polaris qa` runs the same build green. Paranoid per-land coverage was
-  selftest-only this wave — build verified at the qa gate.
 - bash expands EVERY word of a `local` line BEFORE assigning, so `local n="$1" tag=".../$n"` reads
   the CALLER's `n` (T-029: `report --all` sent sealed tasks to `(unsealed)`; two callers masked it by
   holding the same `n`). Split `local` decls, and drills must cover the fallback path (Rule-1-blind),
