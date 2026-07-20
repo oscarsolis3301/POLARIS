@@ -4,6 +4,44 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.14.0 — 2026-07-20
+
+**One PR, clean graph: the shared remote finally reads like a changelog.** Board bookkeeping
+moves off `<base>` onto its own `polaris/board` branch, a wave can ship as ONE pull request on
+a protected main, and every sealed sprint writes a management-readable report that rides the
+same merge. Defaults preserve today's behavior — `publish: direct` until you opt in; existing
+boards migrate with one explicit `polaris upgrade`.
+`ops/contracts/quiet-board.md` · `ops/contracts/publish-modes.md` · `ops/contracts/sprint-report.md`.
+
+- **Quiet board.** `chore(board):` commits leave `<base>` forever: every board mutation now
+  commits the moved set (`ops/board/**` + `ops/SPRINT.md`) to `refs/heads/polaris/board` via
+  secondary-index plumbing — files stay at their on-disk paths, no second worktree, and
+  `sync_board` pushes the board ref (which a protected main can't reject). `done`'s `map_delta`
+  lands as its own `docs(map): <ID>` commit only when non-empty. `upgrade` migrates a 5.13
+  board idempotently; `doctor`/`resume` materialize the board in a fresh clone; `uninstall`
+  removes the branch; `claim`/`resume` print primary-anchored task paths (worktrees no longer
+  carry `ops/board`). `kit/ops/polaris`.
+- **`publish: direct | pr`.** New CONVENTIONS key. Under `pr`, `handoff` keeps `feat/<ID>`
+  local — feature branches never reach the remote — and `seal` pushes ONLY `integrate/<date>`,
+  printing the ready-made Bitbucket PR-create URL plus a suggested title/description. After the
+  human merges the PR (merge commit, never squash), `seal --sync` fast-forwards `<base>`,
+  verifies every `[<ID>]` landed, moves the `sprint/<n>` tag, and deletes the integrate branch
+  both sides. Under `direct`, a rejected base push now suggests `publish: pr` instead of
+  failing quietly. `kit/ops/polaris`, `kit/ops/roles/INTEGRATOR.md`, `kit/ops/roles/INIT.md`.
+- **Sprint reports.** `report [--sprint <n> | --all]` renders `<reports>/sprint-<n>.md`
+  (default `docs/sprints/`) — per task: ID, title, points, risk, the `## Why`, acceptance
+  criteria, files touched, landed sha, dates — from board state and history, including past
+  sprints. `seal` auto-commits the wave's report as `docs(sprint-N): report` on
+  `integrate/<date>`, so the record rides the same merge/PR management will browse.
+  `kit/ops/polaris`.
+- **Remote hygiene.** `sweep` flags merged `integrate/*` strays (`--fix` deletes, diverged ones
+  are never touched); `seal` counts rejected base pushes and `doctor` recommends `publish: pr`
+  once the pattern is clear. `kit/ops/polaris`.
+- **Docs catch up.** Invariant 6 now names the board ref; THE TOOL table covers
+  `report`/`seal --sync`/mode-aware `handoff`; MANUAL gains by-hand recipes for the board
+  commit, both publish modes, migration, and fresh-clone materialization; role files teach the
+  new flow. `kit/CLAUDE.md`, `kit/ops/MANUAL.md`, `kit/ops/roles/`.
+
 ## 5.13.0 — 2026-07-18
 
 **Hands-free core: the loop can run past the plan-gate wait, keep draining backlog, read a
