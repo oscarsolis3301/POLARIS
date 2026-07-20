@@ -33,7 +33,7 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 |---|---|
 | `ops/polaris claim [ID]` | atomic lock + ready→active + worktree (no ID = top wsjf) |
 | `ops/polaris verify` | proves `diff ⊆ files_owned` + runs the task's `verify:` commands |
-| `ops/polaris handoff` | verify + push + active→review (run inside your worktree) |
+| `ops/polaris handoff` | verify + active→review; `publish: direct` pushes feat/<ID>, `publish: pr` keeps it local (seal pushes only integrate/<date>) — run inside your worktree |
 | `ops/polaris release <ID> --to ready\|blocked -m "why"` | clean abort |
 | `ops/polaris grant <ID> <path> -m "why"` | append one path to a CLAIMED task's files_owned; refuses any overlap with another ready/active task's ownership |
 | `ops/polaris audit / run-verify / kickback / done <ID>` | Integrator: check, re-check, bounce red work, land |

@@ -91,7 +91,7 @@ Orphans: `sweep --fix` removes them. Stale: flag to the human with the release c
 **Drain `blocked/`.** Nobody else owns it. `bash ops/polaris status` lists each blocked task with its reason. For each: either regroom it (fix the contract or ownership, then return it to `backlog/` — or `ready/` if it now clears the gate) or, if it needs a human decision, escalate it in your report. A task in `blocked/` sits invisible forever until you do this.
 
 ## 6. Close the loop
-Run `bash ops/polaris metrics` and put the cycle-p50 + kickback numbers in the burndown row — that's what EVOLVE and the Planner calibrate on. Update `SPRINT.md` burndown. Append ≤3 bullets to the **Learned** log (ownership violations, conflict causes, flaky tests, anything the Planner should carve differently). Commit that burndown + Learned update as `chore(board): integrate <date>` — it lands on the `polaris/board` ref, never on `<base>` (`SPRINT.md` is part of the board's moved set).
+Run `bash ops/polaris metrics` and put the cycle-p50 + kickback numbers in the burndown row — that's what EVOLVE and the Planner calibrate on. Update `SPRINT.md` burndown. Append ≤3 bullets to the **Learned** log (ownership violations, conflict causes, flaky tests, anything the Planner should carve differently). Commit that burndown + Learned update as `chore(board): integrate <date>` via the by-hand board-commit recipe in `ops/MANUAL.md` — it lands on the `polaris/board` ref, never on `<base>` (`SPRINT.md` is part of the board's moved set).
 
 ## Report (nothing else)
 Merged (IDs) · kicked back + why (IDs) · high-risk awaiting approval (IDs) · suite status on base · newly ready queue · Learned bullets added.
