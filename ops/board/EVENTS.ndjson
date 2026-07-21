@@ -148,3 +148,4 @@
 {"ts":1784667842,"ev":"done","id":"T-042","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1784668039,"ev":"claim","id":"T-043","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1784668560,"ev":"claim","id":"T-046","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1784669370,"ev":"handoff","id":"T-043","who":"Owner@DESKTOP","note":""}
