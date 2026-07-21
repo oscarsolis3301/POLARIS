@@ -46,7 +46,7 @@ when a paranoid-mode suite exceeds 2 minutes, making INTEGRATOR.md's batch-first
 - [ ] `polaris help` shows the --express form
 
 ## T-032 — status --brief + metrics plain-English summary line
-points 2 · risk normal · landed e09e4e6 (2026-07-20) · claimed 2026-07-20
+points 2 · risk normal · landed e09e4e6 (2026-07-20) · claimed 2026-07-20 → done 2026-07-20
 files touched: kit/ops/polaris
 
 ### Why
@@ -62,6 +62,26 @@ byte-identical.
 - [ ] `metrics` first line starts `In plain English:`; EVENTS empty → existing no-telemetry note, no summary
 - [ ] both drills ride selftest(); existing drills untouched
 - [ ] `polaris help` shows the --brief form
+
+## T-033 — doctor --selftest --only <pattern> — targeted drill subset
+points 3 · risk normal · landed f7566f1 (2026-07-20) · claimed 2026-07-20
+files touched: kit/ops/polaris
+
+### Why
+The full selftest ran ~15 times in one day (~45 min of pure re-checking) because it is the only
+granularity we have. `--only <pattern>` runs the selftest's always-on spine plus just the labeled
+drills matching one shell glob — the per-red re-check and express pre-flight tier. The contract pins
+the spine/label split, the minimum label set, the pre-spine `unknown drill label` failure, and the
+distinct `selftest passed (subset:` pass line so a subset can never impersonate the full gate.
+Runs LAST in the CLI chain so it labels the brain/express/brief drills the earlier tasks added.
+
+### Acceptance
+- [ ] plain `doctor --selftest` is byte-identical in behavior: every drill runs, pass line still starts `selftest passed`
+- [ ] `--only <glob>` runs spine + only matching labeled drills via a `drill_on` helper (plain case match, never inside `$(...)`)
+- [ ] every label of the contract's minimum set exists, including brain · express · brief · hint from T-030..T-032
+- [ ] pattern matching no label → dies BEFORE the spine, listing valid labels, message contains `unknown drill label`
+- [ ] subset pass line starts `selftest passed (subset:` with pattern + counts
+- [ ] two contract drills ride selftest(): nonsense pattern rc 1 · `--only fmlist` rc 0 with subset pass line
 
 ## T-034 — CONDUCTOR.md — express triage, pipelined integration, foreground gates, dead-lane recovery
 points 3 · risk normal · landed c8701a7 (2026-07-20) · claimed 2026-07-20 → done 2026-07-20
