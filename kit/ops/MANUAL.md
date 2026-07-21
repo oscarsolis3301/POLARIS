@@ -126,7 +126,7 @@ Inside the PRIMARY checkout, on the `integrate/<date>` branch — NEVER on `<bas
 
    Files: <files_owned, comma-space joined, one line>
    ```
-   `type`: feature→feat · bug→fix · chore/spike/missing→chore. `scope`: the task's `scope:` frontmatter, else the first path component of the first `files_owned` entry.
+   `type`: feature→feat · bug→fix · test→test · docs→docs · chore/spike/missing→chore. `scope`: the task's `scope:` frontmatter, else the first path component of the first `files_owned` entry.
 4. `git commit` with that message plus a trailing blank line and a `Landed-from: <feat/<ID> tip SHA>` trailer.
 
 Land makes NO board write, NO evt, NO board commit — the board stays clean so a red task on `integrate/<date>` unwinds completely with `git reset --hard HEAD~1`, nothing uncommitted lost. `done` stamps `landed: <sha>` onto the task file later, once it moves review → done. Re-land after a kickback simply repeats these four steps.
@@ -224,19 +224,19 @@ ops/polaris brain --refresh   # incremental: board.md/contracts.md/commands.md/g
                               #   `git diff --name-only <stamp-sha>..HEAD` is non-empty. No brain → full build.
 # exit 0 on success
 ```
-Build these 7 files under `.polaris/brain/`, each capped, mirroring the CLI (where a source is silent, do as the CLI does — invent nothing):
+Build 7 entries — 6 `.md` files + `.stamp` — under `.polaris/brain/`, each capped, mirroring the CLI (where a source is silent, do as the CLI does — invent nothing):
 - `INDEX.md` (≤40 lines) — routing table: one `looking for X → read Y` row per domain file below, plus the hop-guarantee line.
 - `code-map.md` (≤15 lines/dir, ≤300 total) — per directory: purpose (1 line) + key symbols (grep `^cmd_` / `^def ` / `^function` / `^class`) + a hotspot flag from `ops/MAP.md`'s hotspot section.
 - `board.md` (≤80 lines) — live digest: `# SPRINT <n> — <goal>` line · per-column counts · active (id·owner) · ready top 5 by wsjf (id·title·pts) · blocked (id·reason) · last 10 done (id·title·landed sha).
 - `contracts.md` (≤120 lines) — per `ops/contracts/*.md`: `## <name>` + its `## Purpose` first paragraph; no contracts dir → `none`.
-- `commands.md` (≤80 lines) — `ops/polaris help` output + effective CONVENTIONS values (base · claim · integration · publish · express · stale_hours · test · build).
+- `commands.md` (≤80 lines) — effective CONVENTIONS values (base · claim · integration · publish · express · stale_hours · test · build) FIRST, then `ops/polaris help` output; the cap may cut the help tail, NEVER the values.
 - `gotchas.md` (≤60 lines) — SPRINT.md `## Learned` bullets verbatim + CONVENTIONS `## Planner calibration` bullets verbatim.
 - `.stamp` (1 line) — machine line `<epoch> <BASE short sha>`, rewritten by every brain run.
-`INDEX.md` must state the hop guarantee: any fact is reachable in ≤4 file-opens from `INDEX.md` (INDEX = hop 1, domain file = hop 2, the repo file it cites by path = hops 3–4). Scale by SUMMARIZING PER DIRECTORY, never by listing files; a greenfield repo gets the same 6 files, near-empty.
+`INDEX.md` must state the hop guarantee: any fact is reachable in ≤4 file-opens from `INDEX.md` (INDEX = hop 1, domain file = hop 2, the repo file it cites by path = hops 3–4). Scale by SUMMARIZING PER DIRECTORY, never by listing files; a greenfield repo gets the same 6 `.md` files, near-empty.
 
 **Staleness — the two stamp files, what `doctor` checks.** Freshness rides two stamps: `.polaris/brain/.stamp` (rewritten by every brain run) and `.polaris/board-changed` (an epoch line the board bumps):
 - `done <ID>` and `seal` (both publish modes, `--sync` included) `touch` `.polaris/board-changed` AFTER their board/base mutation succeeds — best-effort; a touch failure never fails them.
-- `seal` also auto-refreshes: after a successful fold, `[ -d .polaris/brain ]` → run `brain --refresh`; a failure prints a `⚠` note and never fails the seal. No brain dir → do nothing.
+- `seal` AND `done <ID>` also auto-refresh: after the caller's mutation and its `board-changed` touch, `[ -d .polaris/brain ]` → run `brain --refresh`; a failure prints a `⚠` note and never fails the caller. No brain dir → do nothing. Net effect: the documented wave close (land → seal → run-verify → done) ends FRESH — `doctor` prints no `brain is stale`.
 - `doctor`: `[ -d .polaris/brain ]` AND `.polaris/board-changed` newer (`-nt`) than `.polaris/brain/.stamp` → one warn line containing `brain is stale`, naming `ops/polaris brain --refresh`. No brain dir → silent (the feature is opt-in by the first `brain` run).
 
 ## Telemetry (every transition above)
