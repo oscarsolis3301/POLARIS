@@ -121,8 +121,32 @@ byte-identical.
 - [ ] loader list reads `core ownership builder integrate selftest/…` (contract growth schedule)
 - [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
 
+## T-044 — extract lib/knowledge.sh + lib/observe.sh
+points 3 · risk normal · landed ebc614a (2026-07-21) · claimed 2026-07-21
+files touched: kit/ops/lib/knowledge.sh, kit/ops/lib/observe.sh, kit/ops/polaris
+
+### Why
+Fifth link of the chain, two modules in one pass because they share no seam risk: the knowledge
+generators (report_* and sprint_* helpers, ts_date, event_ts, resolve_sprint_ids, render_*,
+report_dirty_hint, report_one, cmd_report, seal_report_commit, board_changed_touch,
+brain_refresh_if_present, the six brain_* writers, cmd_brain — the contract's 26) move verbatim
+into kit/ops/lib/knowledge.sh, and the read-only observers (cmd_notify_gate, status_brief,
+cmd_status, cmd_sweep, cmd_doctor, pat_overlap, dep_ids, dep_reaches, cmd_drift, cmd_rules,
+cmd_qa, cmd_metrics, cmd_why, cmd_dash, find_claude, find_claude_windows, cmd_fleet — the
+contract's 17) into kit/ops/lib/observe.sh. cmd_doctor keeps calling selftest() across modules —
+free at runtime, everything is sourced before dispatch. seal (integrate.sh, landed last wave)
+keeps calling seal_report_commit/brain_refresh_if_present/board_changed_touch the same way.
+Extend the loader list with `knowledge observe` at their final positions. Original relative
+order, bodies untouched, zero behavior change.
+
+### Acceptance
+- [ ] knowledge.sh holds exactly the contract's 26 functions; observe.sh exactly its 17; nothing else moved
+- [ ] loader list reads `core ownership builder integrate knowledge observe selftest/…` (contract growth schedule)
+- [ ] `report`/`brain`/`status --brief` outputs spot-diffed byte-identical against the pre-task script
+- [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
+
 ## T-046 — hermetic selftest drills — kill the order-coupling between labels
-points 3 · risk normal · landed 1f8c56b (2026-07-21) · claimed 2026-07-21
+points 3 · risk normal · landed 1f8c56b (2026-07-21) · claimed 2026-07-21 → done 2026-07-21
 files touched: kit/ops/lib/selftest/policy.sh
 
 ### Why
