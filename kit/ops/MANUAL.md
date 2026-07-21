@@ -1,6 +1,20 @@
 # MANUAL — raw recipes when you cannot run `ops/polaris`
 The script is the source of truth; these recipes reproduce it by hand. Follow them LITERALLY. `<base>`, the claim mechanism, and `publish:` come from `ops/CONVENTIONS.md`.
 
+## The modular CLI — the entry script and `ops/lib/`
+`ops/polaris` is the entry script and the ONLY entry point: globals + lib-loader + dispatch. Every
+function body lives in `ops/lib/*.sh`, sourced at startup in a fixed order — `core` first, then
+`ownership` · `builder` · `integrate` · `knowledge` · `observe` · `admin`, then the `selftest/` group
+(`spine` · `board` · `history` · `report` · `brain` · `policy` · `remote`). The list is literal, never
+a glob (glob order is locale-dependent), and every module is fully sourced before dispatch runs. A
+missing module refuses before any work — `⛔ POLARIS: ops/lib/<name>.sh is missing — this kit is
+incomplete`, remedy: re-run the installer (`bash ops/install.sh`) or fetch a fresh kit
+(`ops/polaris update`), exit 1. The split is verbatim relocation with zero behavior change, so the
+recipes below are unchanged.
+
+Opt-in: `doctor --selftest --parallel <N>` runs the labeled drills in N parallel shards; serial
+stays the default and CI stays serial.
+
 ## Board commit by hand — the `polaris/board` ref (EVERY mutation below uses this)
 Board state lives on its OWN ref, `refs/heads/polaris/board`, NOT on `<base>`. The MOVED SET —
 `ops/board/**` + `ops/SPRINT.md`, at their on-disk paths — is that branch's whole tree; everything
