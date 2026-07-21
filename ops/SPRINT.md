@@ -20,6 +20,7 @@ MANUAL 7-vs-6 count (brain v1.1 · clean-history v2.2).
 | 2026-07-20 | 20 (+T-031, wave 2, re-sealed sprint/5 tag 03d6919→82bfe37) | 5 (T-032 ready · T-033 backlog) · cycle p50 0.5h n=35 · kickbacks 0 · build avg 0.2h / integrate avg 1.9h · suite green on integrate |
 | 2026-07-20 | 22 (+T-032, wave 3, re-sealed sprint/5 tag 82bfe37→b5cbcc7) | 3 (T-033 ready) · cycle p50 0.5h n=36 · kickbacks 0 · build avg 0.2h / integrate avg 1.9h · suite green on integrate · suite ~7min (drill growth) |
 | 2026-07-20 | 25 (+T-033, wave 4, re-sealed sprint/5 tag b5cbcc7→30903df) — SPRINT COMPLETE | 0 · cycle p50 0.5h n=37 · kickbacks 0 · build avg 0.3h / integrate avg 1.9h · suite green on integrate |
+| 2026-07-20 | 28 (+T-038, wave 5, QA fix wave, re-sealed sprint/5 tag 30903df→2bdc0fe) | 0 · cycle p50 0.5h n=38 · kickbacks 0 · build avg 0.3h / integrate avg 1.8h · suite green on integrate |
 
 # SPRINT 4 — One PR, clean graph          capacity: 25   dates: 2026-07-20–
 
