@@ -108,8 +108,10 @@ After EVERY extraction task, in this order:
   `ops/lib/` mid-`update` cannot corrupt a running process; cmd_update's re-exec guard for the
   entry file itself moves to lib/admin.sh unchanged (.github CI asserts it still exists).
 - Line budgets: entry < 500 (final) · every module ≤ 1,200 · grand total
-  `cat kit/ops/polaris kit/ops/lib/*.sh kit/ops/lib/selftest/*.sh | wc -l` in **[3750, 3985]**
-  (baseline 3826 ± 2%, + ~80-line allowance for loader, module headers, and `--parallel`).
+  `cat kit/ops/polaris kit/ops/lib/*.sh kit/ops/lib/selftest/*.sh | wc -l` in **[3750, 4120]**
+  (relocation band 3826 ± 2% + the `--parallel` sharding feature as MEASURED at ~150 lines —
+  in-scope new code, not relocation drift — + 10 module headers ~25; v1's ~80-line allowance
+  under-counted the sharding implementation: measured total was 3998 pre-T-042, ~4008 expected final).
 
 ## Example
 `bash ops/polaris status` → entry sources 13 lib files in fixed order → dispatch calls
@@ -118,3 +120,6 @@ Delete `ops/lib/core.sh` → `⛔ POLARIS: ops/lib/core.sh is missing — this k
 
 ## Changelog
 - v1 2026-07-21: created for T-039, T-040, T-041, T-042, T-043, T-044, T-045 (plan: many-hands)
+- v1.1 2026-07-21: grand-total band [3750, 3985] → [3750, 4120] — v1 under-counted T-040's
+  deliberate `--parallel` code (~150 measured lines) + 10 module headers; band re-derived itemized
+  (T-042 builder's measurement: 3998 on main pre-T-042). Entry <500 and per-module ≤1,200 UNCHANGED.
