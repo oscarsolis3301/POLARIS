@@ -79,7 +79,7 @@ chain is still landing; cite no line numbers, paste no code.
 - [ ] map_delta line present in frontmatter (lands in MAP via `polaris done`)
 
 ## T-042 — extract lib/ownership.sh + lib/builder.sh
-points 3 · risk normal · landed f8f0fc8 (2026-07-21) · claimed 2026-07-21
+points 3 · risk normal · landed f8f0fc8 (2026-07-21) · claimed 2026-07-21 → done 2026-07-21
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/ownership.sh, kit/ops/polaris
 
 ### Why
@@ -98,4 +98,25 @@ prove. Zero behavior change; serial output byte-identical.
 - [ ] ownership.sh holds exactly the contract's 9 functions; builder.sh exactly its 7; nothing else moved
 - [ ] loader list reads `core ownership builder selftest/…` (final relative order, per contract growth schedule)
 - [ ] the sharding seam check (`--parallel 2 --only 'fmlist,grant'`) still greens post-extraction
+- [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
+
+## T-043 — extract lib/integrate.sh
+points 3 · risk normal · landed 42f1caa (2026-07-21) · claimed 2026-07-21
+files touched: kit/ops/lib/integrate.sh, kit/ops/polaris
+
+### Why
+Fourth link of the chain, and the scariest relocation: the integrator machinery (cmd_kickback,
+cmd_audit, cmd_run_verify, landed_sha, cmd_done, cmd_task_commit_msg, in_primary,
+land_slow_suite_hint, cmd_land, cmd_land_express, tag_push_recovery_note, cmd_seal, seal_sync,
+cmd_history, cmd_rollback — the contract's 15) moves verbatim into kit/ops/lib/integrate.sh.
+These functions rewrite history on land/seal/rollback, so the referee matters most here: the
+spine drills claim→handoff→land→seal end-to-end, tcm covers the generated commit message
+(including the git-for-Windows two-stream squash chatter, clean-history v2.3), express covers
+the one-pass lane. Extend the loader list with `integrate` at its final position. Original
+relative order, bodies untouched, zero behavior change — every land/seal/history output
+byte-identical.
+
+### Acceptance
+- [ ] integrate.sh holds exactly the contract's 15 functions; nothing else moved
+- [ ] loader list reads `core ownership builder integrate selftest/…` (contract growth schedule)
 - [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
