@@ -15,6 +15,7 @@ doc tasks T-034..T-037 parallel (contract-pinned wording). Release 5.15.0.
 |---|---|---|
 | 2026-07-20 | 15 (T-030, T-034..T-037, wave 1, sealed sprint/5) | 10 (T-031 ready · T-032, T-033 backlog) · cycle p50 0.5h n=34 · kickbacks 0 · build avg 0.2h / integrate avg 2.0h · suite green on integrate |
 | 2026-07-20 | 20 (+T-031, wave 2, re-sealed sprint/5 tag 03d6919→82bfe37) | 5 (T-032 ready · T-033 backlog) · cycle p50 0.5h n=35 · kickbacks 0 · build avg 0.2h / integrate avg 1.9h · suite green on integrate |
+| 2026-07-20 | 22 (+T-032, wave 3, re-sealed sprint/5 tag 82bfe37→b5cbcc7) | 3 (T-033 ready) · cycle p50 0.5h n=36 · kickbacks 0 · build avg 0.2h / integrate avg 1.9h · suite green on integrate · suite ~7min (drill growth) |
 
 # SPRINT 4 — One PR, clean graph          capacity: 25   dates: 2026-07-20–
 
@@ -109,4 +110,6 @@ exercises but a Builder cannot.
   not just the fixture's happy path — testbed verify of the PUBLISHED release is what caught it.
 - Pipelined arrival-order landing (sprint 5 w1–2, 6 tasks): 0 kickbacks, 0 squash conflicts,
   integrate avg 2.3h→1.9h. The disjoint carve holds under batch mode with per-arrival lands;
-  spawn the integrator at first handoff, run the suite once per wave.
+  spawn the integrator at first handoff, run the suite once per wave. Batch-mode data point (w3):
+  the full suite is ~7 min on this machine (was ~3) — drill count grows with every CLI task;
+  T-033's `--only` subset is the relief valve, batch stays the right mode.
