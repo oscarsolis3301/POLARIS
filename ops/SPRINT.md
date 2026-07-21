@@ -18,6 +18,7 @@ Release 5.16.0.
 | 2026-07-21 | 12 (+T-040, T-041, wave 2, re-sealed sprint/6 tag 01d250d→13a92e1) | 11 (T-042 ready · T-043..T-045 backlog) · cycle p50 0.6h n=41 · kickbacks 0 · build avg 0.3h / integrate avg 1.7h · suite green on integrate (batch: full suite once + pack) · --parallel sharding live (run-verify used 2 shards) |
 | 2026-07-21 | 15 (+T-042, wave 3, re-sealed sprint/6 tag 13a92e1→41607ed) | 8 (T-043 ready · T-044, T-045 backlog) · cycle p50 0.6h n=42 · kickbacks 0 · build avg 0.3h / integrate avg 1.7h · sharded gate (--parallel 3) RED on pre-existing drill coupling (T-040 seam, red on base, no kickback) → wave gated on SERIAL suite green (backgrounded ~12min, log-polled) + pack green |
 | 2026-07-21 | 18 (+T-043, wave 4, re-sealed sprint/6 tag 41607ed→1ab1ddc) | 5 (T-044 ready · T-045 backlog) · T-046 (hermetic-drills fix, +3) in review · cycle p50 0.6h n=43 · kickbacks 0 · build avg 0.3h / integrate avg 1.7h · wave gated on SERIAL suite green (backgrounded ~12min, foreground log-poll) + pack green |
+| 2026-07-21 | 21 (+T-046, wave 5, hermetic-drills fix, re-sealed sprint/6 tag 1ab1ddc→5c509a6) | 5 (T-044 building · T-045 backlog) · cycle p50 0.6h n=44 · kickbacks 0 · build avg 0.3h / integrate avg 1.7h · wave gated on SERIAL suite green + pack green · T-046 run-verify --parallel 3 green (sharding now hermetic — subsequent gates may shard) |
 
 # SPRINT 5 — The fast lane          capacity: 25   dates: 2026-07-20–
 
