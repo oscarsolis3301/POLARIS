@@ -14,3 +14,5 @@
 - Testbed 2026-07-20: pr-mode seal on a non-bitbucket origin prints title/instructions but no PR URL — verify once against a real bitbucket.org origin before trusting the URL path.
 - Testbed 2026-07-20: quiet-board mode — kit PLANNER.md should state explicitly that the Planner's contract commit on base rides the NEXT wave's PR on protected mains (implicit today, surprises the first pr-mode Planner).
 - EVOLVE 2026-07-20: paranoid per-land `build:` was classifier-blocked in subagent shells all sprint 4 (6 waves ran selftest-only per land; build proven only at qa) — give the kit a classifier-safe entrypoint, e.g. a `polaris build` passthrough running CONVENTIONS `build:`, or arm the installer's permission rule for `python kit/ops/pack.py`.
+- EVOLVE 2026-07-20: update notice — raw.githubusercontent VERSION channel lags main by minutes post-release; version check answers stale "latest"; consider tag/release-asset as the channel of record (testbed, 5.15.0)
+- EVOLVE 2026-07-20: publish: pr — express refusal fires only at land time, after build work is spent; claim/handoff should hint "express needs publish: direct" early (testbed, 5.15.0)

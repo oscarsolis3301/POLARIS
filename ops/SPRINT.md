@@ -103,12 +103,6 @@ exercises but a Builder cannot.
 - Since T-006, doctor's stale-zip warning fires on every post-fold run in THIS repo (the zip embeds
   its pack commit; any merge moves HEAD past it). Warning only — doctor/qa stay green; the rebuild
   belongs to the release ritual, not integration. Don't read it as a red.
-- 5.14 lag: T-020 quiet-board, T-022 pr-mode and T-023 sprint reports live in KIT SOURCE only until
-  the 5.14 dogfood — the installed 5.13 board still writes chore(board) on base, stays
-  publish: direct, and seal does NOT auto-commit docs(sprint-N). Their drills ride the kit selftest,
-  so `test:` already exercises them pre-dogfood.
-- backlog→ready promotion has no CLI command in 5.13 — done by hand (git mv + status frontmatter +
-  chore(board) commit), per MANUAL's board-mutation pattern.
 - bash expands EVERY word of a `local` line BEFORE assigning, so `local n="$1" tag=".../$n"` reads
   the CALLER's `n` (T-029: `report --all` sent sealed tasks to `(unsealed)`; two callers masked it by
   holding the same `n`). Split `local` decls, and drills must cover the fallback path (Rule-1-blind),
@@ -118,7 +112,3 @@ exercises but a Builder cannot.
   spawn the integrator at first handoff, run the suite once per wave. Batch-mode data point (w3):
   the full suite is ~7 min on this machine (was ~3) — drill count grows with every CLI task;
   T-033's `--only` subset is the relief valve, batch stays the right mode.
-- Rescue lane (sprint 5 w4): a stalled lane's draft was CORRECT — timeout mechanics were the
-  failure, not the work (harness caps kill long suites mid-run; background notifications don't
-  reliably reach subagents). Kickoffs MUST carry explicit timeout numbers; long commands log to a
-  file and the session polls that file for the PASS/FAIL line instead of waiting on notifications.
