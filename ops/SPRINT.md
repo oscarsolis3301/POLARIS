@@ -14,6 +14,7 @@ Release 5.16.0.
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-07-21 | 5 (T-039, wave 1, sealed sprint/6) | 18 (T-040, T-041 ready · T-042..T-045 backlog) · cycle p50 0.5h n=39 · kickbacks 0 · build avg 0.3h / integrate avg 1.8h · suite green on integrate (batch: full suite once + pack) |
 
 # SPRINT 5 — The fast lane          capacity: 25   dates: 2026-07-20–
 
@@ -129,3 +130,9 @@ exercises but a Builder cannot.
   spawn the integrator at first handoff, run the suite once per wave. Batch-mode data point (w3):
   the full suite is ~7 min on this machine (was ~3) — drill count grows with every CLI task;
   T-033's `--only` subset is the relief valve, batch stays the right mode.
+- T-039 module split, two carries for T-042..T-045: (a) module-layout's core.sh header says 33 fns
+  but its NAMED list counts 34 — the list is authoritative (34/34 moved, census green at audit);
+  fix the header count on the contract's next version bump. (b) The pinned loader means ANY
+  mktemp re-exec copy of the entry script must carry lib/ beside it — update/uninstall guards now
+  `cp -R "${SELF%/*}/lib"` (drill uninstall caught the miss); movers of admin/integrate code:
+  audit any new copy-and-exec path for the same.
