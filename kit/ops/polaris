@@ -1748,7 +1748,47 @@ cmd_brain() { # brain [--refresh] — generate .polaris/brain/ (ops/contracts/br
   say "brain $kind: .polaris/brain/ (INDEX + code-map$( [ "$build_map" -eq 1 ] || printf ' [unchanged, kept]' ) + board + contracts + commands + gotchas) · stamp $ep $sha"
 }
 
+status_brief() { # `status --brief` — ONE plain-English paragraph, no table (ops/contracts/status-brief.md).
+  # voice: standard, no jargon. Grep-stable markers, written VERBATIM: "Last landed:" and "Next up:".
+  local done_c active_c review_c ready_c ids f parts lead line2 newest ntitle top nextup n
+  done_c=$(ls "$BOARD/done" 2>/dev/null | grep -c '\.md$' || true)
+  active_c=$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)
+  review_c=$(ls "$BOARD/review" 2>/dev/null | grep -c '\.md$' || true)
+  ready_c=$(ls "$BOARD/ready" 2>/dev/null | grep -c '\.md$' || true)
+  ids=""
+  for f in "$BOARD/active/"*.md; do [ -e "$f" ] || break
+    ids="${ids:+$ids, }$(basename "$f" .md)"
+  done
+  # each ·-joined sub-clause is DROPPED when its count is 0 (nothing to say), never zero-padded
+  parts=""
+  [ "$done_c"   -gt 0 ] && parts="${parts:+$parts · }$done_c done"
+  [ "$active_c" -gt 0 ] && parts="${parts:+$parts · }$active_c building${ids:+ ($ids)}"
+  [ "$review_c" -gt 0 ] && parts="${parts:+$parts · }$review_c waiting to land"
+  [ "$ready_c"  -gt 0 ] && parts="${parts:+$parts · }$ready_c queued"
+  [ -n "$parts" ] || parts="Nothing building"
+  n="$(sprint_hdr_num)"
+  if [ -n "$n" ]; then lead="Sprint $n ($(sprint_goal "$n")):"; else lead="No sprint header —"; fi
+  printf '%s %s.\n' "$lead" "$parts"
+  # line two: newest done (highest-mtime file) + top-wsjf ready; each dropped when there is none
+  line2=""
+  newest="$(ls -t "$BOARD/done/"*.md 2>/dev/null | head -1)"
+  if [ -n "$newest" ]; then
+    ntitle="$(fm_get title "$newest")"
+    line2="Last landed: ${ntitle:-$(basename "$newest" .md)}."
+  fi
+  top="$( { for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
+      printf '%s\t%s\n' "$(fm_get wsjf "$f")" "$f"
+    done; } | sort -rn | head -1 | cut -f2- )"
+  if [ -n "$top" ]; then
+    nextup="$(fm_get title "$top")"
+    line2="${line2:+$line2 }Next up: ${nextup:-$(basename "$top" .md)}."
+  fi
+  [ -n "$line2" ] && printf '%s\n' "$line2"
+  return 0
+}
+
 cmd_status() {
+  [ "${1:-}" = "--brief" ] && { status_brief; return; }
   local col n
   printf 'POLARIS board — base: %s · claim: %s\n' "$BASE" "$CLAIM_MODE"
   for col in backlog ready active review blocked done; do
@@ -2674,10 +2714,45 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     sed -i.bak -e '/^integration:/d' -e '/^test: true$/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
     git add -A; git commit -qm 'express drill cleanup'
     # ========= end T-031 express-lane + slow-suite drills =========
+    # ========= T-032 status --brief + metrics summary drills (ops/contracts/status-brief.md) =========
+    # --brief: ONE plain-English paragraph, grep-stable markers, NO table pipe, sprint clause from the
+    # header, active IDs listed · plain `status` keeps its table + gains no brief markers · metrics
+    # opens with an In-plain-English line above the untouched table · EVENTS empty → note, no summary.
+    "$SELF" help | grep -q -- '--brief' || { echo "USAGE FAIL: --brief missing from help"; exit 1; }
+    printf '# SPRINT 7 — the brief lane  capacity: 5\n' > ops/SPRINT.md
+    printf -- '---\nid: T-BR1\ntitle: newest landed thing\ntype: feature\npoints: 1\nwsjf: 3\nstatus: done\nfiles_owned:\n  - src/br1.txt\n---\n' > ops/board/done/T-BR1.md
+    printf -- '---\nid: T-BR2\ntitle: top queued thing\ntype: feature\npoints: 2\nwsjf: 9\nstatus: ready\nfiles_owned:\n  - src/br2.txt\n---\n' > ops/board/ready/T-BR2.md
+    printf -- '---\nid: T-BR3\ntitle: in progress thing\ntype: feature\npoints: 1\nwsjf: 2\nstatus: active\nfiles_owned:\n  - src/br3.txt\n---\n' > ops/board/active/T-BR3.md
+    "$SELF" status --brief > "$T/brief.out" || { echo "BRIEF RUN FAIL"; exit 1; }
+    grep -q 'Last landed:' "$T/brief.out" || { echo "BRIEF MARKER FAIL (Last landed: missing)"; exit 1; }
+    grep -q 'Next up:' "$T/brief.out" || { echo "BRIEF MARKER FAIL (Next up: missing)"; exit 1; }
+    grep -q '|' "$T/brief.out" && { echo "BRIEF PIPE FAIL (a one-paragraph digest carries no table pipe)"; exit 1; }
+    grep -q 'Sprint 7 (the brief lane):' "$T/brief.out" || { echo "BRIEF SPRINT CLAUSE FAIL (header-sourced sprint/goal)"; exit 1; }
+    grep -q 'building (T-BR3)' "$T/brief.out" || { echo "BRIEF ACTIVE IDS FAIL (active ids must ride the building clause)"; exit 1; }
+    grep -q 'Last landed: newest landed thing' "$T/brief.out" || { echo "BRIEF LAST-LANDED FAIL (newest done title)"; exit 1; }
+    grep -q 'Next up: top queued thing' "$T/brief.out" || { echo "BRIEF NEXT-UP FAIL (top-wsjf ready title)"; exit 1; }
+    grep -q 'POLARIS board' "$T/brief.out" && { echo "BRIEF NO-TABLE FAIL (brief must not print the status table header)"; exit 1; }
+    # plain `status` unchanged: keeps its table header, gains NONE of the brief markers
+    "$SELF" status > "$T/plain.out" || { echo "PLAIN STATUS FAIL"; exit 1; }
+    grep -q 'POLARIS board' "$T/plain.out" || { echo "PLAIN HEADER FAIL (plain status must keep its table header)"; exit 1; }
+    grep -q 'Last landed:' "$T/plain.out" && { echo "PLAIN BRIEF LEAK FAIL (plain status must not gain brief markers)"; exit 1; }
+    # metrics: In-plain-English summary as the FIRST line, existing table still below it
+    "$SELF" metrics > "$T/mt.out" || { echo "METRICS RUN FAIL"; exit 1; }
+    head -1 "$T/mt.out" | grep -q '^In plain English:' || { echo "METRICS SUMMARY FIRST-LINE FAIL"; exit 1; }
+    head -1 "$T/mt.out" | grep -q 'tasks done' || { echo "METRICS SUMMARY CONTENT FAIL"; exit 1; }
+    grep -q '^done total:' "$T/mt.out" || { echo "METRICS TABLE FAIL (existing table must stay below the summary)"; exit 1; }
+    # EVENTS empty → the no-telemetry note, and NO summary line
+    mv ops/board/EVENTS.ndjson "$T/ev.save"; : > ops/board/EVENTS.ndjson
+    "$SELF" metrics > "$T/mt-empty.out" 2>&1 || { echo "METRICS EMPTY RC FAIL"; exit 1; }
+    grep -q 'no telemetry yet' "$T/mt-empty.out" || { echo "METRICS EMPTY NOTE FAIL"; exit 1; }
+    grep -q 'In plain English:' "$T/mt-empty.out" && { echo "METRICS EMPTY SUMMARY FAIL (empty EVENTS must print no summary)"; exit 1; }
+    mv "$T/ev.save" ops/board/EVENTS.ndjson
+    rm -f ops/board/done/T-BR1.md ops/board/ready/T-BR2.md ops/board/active/T-BR3.md
+    # ========= end T-032 status --brief + metrics summary drills =========
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin · pr-publish (feat stays local · seal pushes ONLY integrate + title/bullets/URL + notify done, no ref moved · --sync subject gate/tag/branch cleanup both sides · done via rule 1 · direct --sync dies · unknown publish warns) · sprint report (seal commits docs(sprint-N) riding the wave · cmd_report --sprint/current/--all renders + prints, board read-only + idempotent) · brain (7-file build gitignored · INDEX routes all 5 · board digest names the landed task · stale warn → refresh clears · seal auto-refresh · refresh failure = note, never a red seal) · express (help form · qa suite stamp gated+formatted · 4 refusals pre-mutation: solo-review/risk-high/off+unknown/publish-pr · red suite unwind+kickback tail · happy path: done+landed stamp · tag moved · integrate deleted · clean tree · qa finish line) · slow-suite hint (paranoid+180s fires naming integration: batch · batch silent)"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin · pr-publish (feat stays local · seal pushes ONLY integrate + title/bullets/URL + notify done, no ref moved · --sync subject gate/tag/branch cleanup both sides · done via rule 1 · direct --sync dies · unknown publish warns) · sprint report (seal commits docs(sprint-N) riding the wave · cmd_report --sprint/current/--all renders + prints, board read-only + idempotent) · brain (7-file build gitignored · INDEX routes all 5 · board digest names the landed task · stale warn → refresh clears · seal auto-refresh · refresh failure = note, never a red seal) · express (help form · qa suite stamp gated+formatted · 4 refusals pre-mutation: solo-review/risk-high/off+unknown/publish-pr · red suite unwind+kickback tail · happy path: done+landed stamp · tag moved · integrate deleted · clean tree · qa finish line) · slow-suite hint (paranoid+180s fires naming integration: batch · batch silent) · status --brief (one paragraph · Last landed:/Next up: markers · header sprint clause · active ids · no table pipe · plain status unchanged) · metrics In-plain-English summary (first line above the table · silent on empty EVENTS)"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
@@ -2890,6 +2965,11 @@ cmd_metrics() { # cycle time + throughput + kickbacks from EVENTS.ndjson — pur
       n=0; for (id in done) if (id in claimed) { c[n++]=done[id]-claimed[id] }
       # insertion sort (tiny n) for p50
       for(i=1;i<n;i++){v=c[i];j=i-1;while(j>=0&&c[j]>v){c[j+1]=c[j];j--}c[j+1]=v}
+      # T-032 plain-English summary FIRST, above the byte-identical table — same numbers it computes
+      bsum=0; bcnt=0; for (id in ho) if (id in claimed) { bsum+=ho[id]-claimed[id]; bcnt++ }
+      isum=0; icnt=0; for (id in done) if (id in ho) { isum+=done[id]-ho[id]; icnt++ }
+      p50h = (n>0) ? c[int((n-1)/2)]/3600 : 0
+      printf "In plain English: %d tasks done, a typical task takes %.1fh door to door; building averages %.1fh, landing %.1fh; %d bounced.\n", dn+0, p50h, (bcnt?bsum/bcnt/3600:0), (icnt?isum/icnt/3600:0), kbt+0
       printf "done total: %d   done 7d: %d   kickbacks total: %d (7d: %d)\n", dn+0, dn7+0, kbt+0, kb7+0
       if (n>0) { s=0; for(i=0;i<n;i++) s+=c[i]
         printf "cycle claim→done  avg: %.1fh   p50: %.1fh   n=%d\n", s/n/3600, c[int((n-1)/2)]/3600, n }
@@ -3505,12 +3585,15 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  into one sealed sprint's task commits, across all its waves
   rollback <ID|sprint/<n>>       revert one landed task (or the sprint's latest sealed wave, -m 1)
                                  on base — forward-only: never resets, never force-pushes
-  status | sweep [--fix] | doctor [--selftest]
+  status [--brief] | sweep [--fix] | doctor [--selftest]
+                                 status --brief = ONE plain-English paragraph, no table (plain status
+                                 unchanged): Last landed: / Next up: markers + a sprint-column clause
   brain [--refresh]              generate .polaris/brain/ — gitignored knowledge base a cold agent
                                  reads FIRST (INDEX + code-map/board/contracts/commands/gotchas);
                                  --refresh skips code-map when code is unchanged. seal auto-refreshes
                                  an existing brain; doctor warns when it is stale
-  metrics                        cycle · throughput · kickbacks · build-vs-integrate split (EVENTS.ndjson)
+  metrics                        opens with a plain-English summary line, then cycle · throughput ·
+                                 kickbacks · build-vs-integrate split (EVENTS.ndjson)
   why <ID>                       why a task bounced/blocked: kickback + release/blocked notes from telemetry + body
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
@@ -3553,7 +3636,7 @@ case "${1:-}" in
   history)    shift; cmd_history "$@";;
   report)     shift; cmd_report "$@";;
   rollback)   shift; cmd_rollback "$@";;
-  status)     update_check_maybe || true; cmd_status;;
+  status)     shift 2>/dev/null || true; update_check_maybe || true; cmd_status "${1:-}";;
   brain)      shift 2>/dev/null || true; cmd_brain "${1:-}";;   # no update_check_maybe: agents run it cold and often — keep it quiet + pure
   sweep)      shift 2>/dev/null || true; cmd_sweep "${1:-}";;
   doctor)     shift 2>/dev/null || true; update_check_maybe || true; cmd_doctor "${1:-}";;
