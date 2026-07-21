@@ -28,7 +28,7 @@ polaris task-commit-msg <task-file>
     <blank>
     Files: <files_owned, comma-space joined, one line>
 
-  type:  feature→feat · bug→fix · chore→chore · spike→chore · missing→chore
+  type:  feature→feat · bug→fix · test→test · docs→docs · chore→chore · spike→chore · missing→chore   (v2.2)
   scope: `scope:` frontmatter if non-empty, else the first path component of the first
          files_owned entry (kit/ops/polaris → kit). Planners SET scope:; derivation is fallback.
   Why body: text between the `## Why` heading (accept legacy `## Why this exists` too) and the
@@ -206,3 +206,4 @@ integrate branch → re-seal green → tag moved → `--tasks` spans both waves 
 - v1 2026-07-18: created for T-007, T-008, T-009, T-010 (Phase 1, 5.12.0).
 - v2 2026-07-18: multi-wave seal for T-017 (5.13.0) — tag moves per wave; history --tasks spans waves; evidence: Sprint 3 wave 1.
 - v2.1 2026-07-20 (QA fix wave, T-027): (a) `history --tasks <n>` also filters `docs(sprint-<N>): report` subjects — the task-commits view shows task commits only; default view unchanged (first-parent never meets them). (b) tag-push failure notes print a CONVERGENT recovery: lease computed from origin's actual tag (`git ls-remote origin refs/tags/sprint/<n>`), or a fetch-then-retry recipe — never the stale local old-sha lease, which cannot succeed once origin missed a prior wave's tag move.
+- v2.2 2026-07-20 (QA fix wave, T-038): (a) type map gains `test→test · docs→docs` — the two advertised commit types were unreachable (a `type: test` task landed as chore); chore stays the fallback for spike/missing/unknown; drill fail token `COMMIT TYPE MAP FAIL`. (b) `land`'s squash-merge stdout is silenced — `git merge --squash -q` still prints "Squash commit -- not updating HEAD" / "Automatic merge went well; stopped before committing as requested" on git 2.53; redirect that command's stdout only, stderr stays live so real failures surface; `--express` shares the code path; drill fail token `LAND NOISE FAIL`.
