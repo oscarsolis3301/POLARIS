@@ -40,6 +40,11 @@ Owned by T-040; listed in T-042's `verify:` (the seam stays honest across later 
 → 2 shards, one label each, both green, final line `✅ selftest passed — 2 shards`, rc 0.
 
 ## Invariants
+- **Hermeticity (v1.1).** Every labeled drill leaves the shared fixture repo exactly as it found
+  it — board columns, RULES.tsv, CONVENTIONS values, refs, locks — or provisions and removes its
+  own scratch state. No drill may depend on state another label created OR cleaned up. Definition:
+  every single label greens in isolation, every comma-list greens in any order, every partition
+  greens — `--only`/`--parallel` results are partition-invariant.
 - Serial (`--parallel` absent) output byte-identical to pre-split for every input.
 - CI invocations stay serial until a full green week — flipping CI is a HUMAN decision, not this sprint.
 - bash 3.2 only: background jobs + `wait`, no `wait -n`, no mapfile, no `case` inside `$(...)`.
@@ -56,3 +61,7 @@ concurrently (~3 min wall) → `✅ shard 1/3 green — fmlist brain grant …` 
 
 ## Changelog
 - v1 2026-07-21: created for T-040, T-041, T-042 (plan: many-hands)
+- v1.1 2026-07-21: hermeticity clause added for T-046 — drills must be state-neutral in the shared
+  fixture. Evidence (wave-3 integrator): the `rules` drill leaves a contract-less ready task that
+  only an intervening `drift` drill masks → shard 3 red under `--parallel 3`; serial reproducer
+  `--only rules,qa` on pre-T-042 main.
