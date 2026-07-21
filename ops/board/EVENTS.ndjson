@@ -126,3 +126,4 @@
 {"ts":1784598576,"ev":"claim","id":"T-033","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1784604261,"ev":"handoff","id":"T-033","who":"Owner@DESKTOP","note":""}
 {"ts":1784604262,"ev":"all-review","id":"T-033","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
+{"ts":1784605996,"ev":"done","id":"T-033","who":"Owner@DESKTOP","note":"","pts":3}
