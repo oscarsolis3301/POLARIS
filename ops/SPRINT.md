@@ -16,6 +16,7 @@ Release 5.16.0.
 |---|---|---|
 | 2026-07-21 | 5 (T-039, wave 1, sealed sprint/6) | 18 (T-040, T-041 ready · T-042..T-045 backlog) · cycle p50 0.5h n=39 · kickbacks 0 · build avg 0.3h / integrate avg 1.8h · suite green on integrate (batch: full suite once + pack) |
 | 2026-07-21 | 12 (+T-040, T-041, wave 2, re-sealed sprint/6 tag 01d250d→13a92e1) | 11 (T-042 ready · T-043..T-045 backlog) · cycle p50 0.6h n=41 · kickbacks 0 · build avg 0.3h / integrate avg 1.7h · suite green on integrate (batch: full suite once + pack) · --parallel sharding live (run-verify used 2 shards) |
+| 2026-07-21 | 15 (+T-042, wave 3, re-sealed sprint/6 tag 13a92e1→41607ed) | 8 (T-043 ready · T-044, T-045 backlog) · cycle p50 0.6h n=42 · kickbacks 0 · build avg 0.3h / integrate avg 1.7h · sharded gate (--parallel 3) RED on pre-existing drill coupling (T-040 seam, red on base, no kickback) → wave gated on SERIAL suite green (backgrounded ~12min, log-polled) + pack green |
 
 # SPRINT 5 — The fast lane          capacity: 25   dates: 2026-07-20–
 
@@ -128,9 +129,13 @@ exercises but a Builder cannot.
   not just the fixture's happy path — testbed verify of the PUBLISHED release is what caught it.
 - Pipelined arrival-order landing (sprint 5 w1–2, 6 tasks): 0 kickbacks, 0 squash conflicts,
   integrate avg 2.3h→1.9h. The disjoint carve holds under batch mode with per-arrival lands;
-  spawn the integrator at first handoff, run the suite once per wave. Batch-mode data point (w3):
-  the full suite is ~7 min on this machine (was ~3) — drill count grows with every CLI task;
-  T-033's `--only` subset is the relief valve, batch stays the right mode.
+  spawn the integrator at first handoff, run the suite once per wave. Suite cost (sprint 6 w3):
+  serial full suite is now ~12 min — over the 600s harness cap; background to a log + poll works.
+  Sharded full runs are NOT yet a safe substitute: drills are fixture-coupled (`rules` leaves a
+  contract-less ready task that only the intervening `drift` drill masks — any `--only`/shard
+  subset with rules+qa minus drift goes red falsely; proven red on base pre-T-042, so a T-040-seam
+  defect, no kickback). Until a fix task makes drills hermetic, wave gates and qa stay SERIAL;
+  --only subsets beyond the proven-hermetic fmlist,grant need a base-check before trusting a red.
 - T-039 module split, two carries for T-042..T-045: (a) module-layout's core.sh header says 33 fns
   but its NAMED list counts 34 — the list is authoritative (34/34 moved, census green at audit);
   fix the header count on the contract's next version bump. (b) The pinned loader means ANY
