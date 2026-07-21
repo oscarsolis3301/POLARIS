@@ -859,6 +859,9 @@ EOF
   board_commit "chore(board): done $id"
   sync_board
   mutex_off; trap - EXIT
+  board_changed_touch   # freshness beacon for the brain (ops/contracts/brain.md) — best-effort
+  brain_refresh_if_present  # v1.1: done mirrors seal — refresh AFTER the touch so the wave close
+                            # (land → seal → run-verify → done) ends fresh; ⚠ note on failure, never a red done
   local wt; wt="$(wt_path "$id")"
   [ -d "$wt" ] && git -C "$PRIMARY" worktree remove --force "$wt" 2>/dev/null || true
   # LOCAL tip before the branch dies — a squash-landed branch is never an ancestor of $BASE,
@@ -901,9 +904,11 @@ cmd_task_commit_msg() { # task-commit-msg <task-file> — the task's landed-comm
   id="$(fm_get id "$tf")"; [ -n "$id" ] || die "no id: in frontmatter — not a task file? $tf"
   title="$(fm_get title "$tf")"
   ttype="$(fm_get type "$tf")"
-  case "$ttype" in            # type map per the contract; a spike or a missing type is a chore
+  case "$ttype" in            # type map per clean-history v2.2; spike/missing/unknown → chore
     feature) ctype=feat;;
     bug)     ctype=fix;;
+    test)    ctype=test;;
+    docs)    ctype=docs;;
     *)       ctype=chore;;
   esac
   scope="$(fm_get scope "$tf")"
@@ -952,11 +957,32 @@ in_primary() { # land/seal mutate the branch checked out in CWD — only the pri
   [ "$(cd "$top" 2>/dev/null && pwd -P)" = "$(cd "$PRIMARY" 2>/dev/null && pwd -P)" ]
 }
 
+land_slow_suite_hint() { # T-031 (ops/contracts/verification-tiering.md): after a successful land,
+  # ONE advisory note when a paranoid repo's suite has outgrown the per-land re-run rule —
+  # INTEGRATOR.md's batch-first guidance, made mechanical. Print-only: silent when the stamp is
+  # missing/garbled, integration: is not paranoid, or the suite took ≤120s. NEVER changes the
+  # exit status.
+  local stamp="$PRIMARY/.polaris/last-suite-seconds" secs
+  [ "$(cfg integration batch)" = "paranoid" ] || return 0
+  [ -f "$stamp" ] || return 0
+  secs="$(awk 'NR==1{print $1+0}' "$stamp" 2>/dev/null || true)"
+  case "$secs" in ''|*[!0-9]*) return 0;; esac
+  [ "$secs" -gt 120 ] || return 0
+  note "⚠ suite last took ${secs}s (>2 min) — paranoid re-runs it per land; consider integration: batch"
+  return 0
+}
+
 cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate branch: audit, then
   # squash feat/<ID> into exactly ONE commit whose message comes from the task file. Makes NO
   # board write, NO evt, NO board commit — a red task unwinds with a single
   # `git reset --hard HEAD~1`, nothing uncommitted at stake. The landed record IS the commit
   # (subject suffix [<ID>] + Landed-from trailer); `done` stamps it onto the task later.
+  # land --express <ID> routes to the one-pass lane (ops/contracts/express-lane.md).
+  if [ "${1:-}" = "--express" ]; then
+    shift
+    cmd_land_express "${1:?usage: polaris land --express <ID>}"
+    return 0
+  fi
   local id="${1:?usage: polaris land <ID>}"
   local tf; tf="$(task_file "$id" review)" || die "$id is not in review/ — only handed-off work lands"
   in_primary || die "land mutates the checked-out branch — run it in the primary checkout, never a worktree"
@@ -971,12 +997,21 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   local msgf; msgf="$(mktemp)"
   cmd_task_commit_msg "$tf" > "$msgf"
   printf '\nLanded-from: %s\n' "$tip" >> "$msgf"
-  if ! git merge --squash -q "feat/$id"; then
+  # git 2.53 narrates a squash even under -q: "Squash commit -- not updating HEAD" on stdout AND, on a
+  # divergent merge, "Automatic merge went well; stopped before committing as requested" on STDERR.
+  # Silence BOTH on success; on a real conflict re-emit the captured stderr so the failure still
+  # surfaces, then kick back. --express shares this path (one fix, both). (clean-history v2.2)
+  local mergeerr
+  mergeerr="$(mktemp)"
+  if ! git merge --squash -q "feat/$id" >/dev/null 2>"$mergeerr"; then
+    cat "$mergeerr" >&2                 # real conflict output stays visible on the failure path
+    rm -f "$mergeerr"
     git reset -q --hard                 # restore the integrate HEAD, tree clean
     rm -f "$msgf"
     cmd_kickback "$id" -m "squash conflict — planning bug"
     die "squash conflict — $br restored, $id kicked back to active/"
   fi
+  rm -f "$mergeerr"
   if git diff --cached --quiet; then
     git reset -q --hard; rm -f "$msgf"
     die "feat/$id brings no changes over $br — nothing to land (your call: kickback it, or done it by hand)"
@@ -985,6 +1020,85 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   rm -f "$msgf"
   say "landed $id on $br — $(git log -1 --format=%s)"
   note "goes red on the suite? unwind: git reset --hard HEAD~1   ·   bounce: polaris kickback $id -m \"<why>\""
+  land_slow_suite_hint
+}
+
+cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: the integrator's whole
+  # long path for the SINGLE-task case, in one pass: integrate branch → audit+land → ONE full
+  # CONVENTIONS suite → seal → run-verify → done → branch cleanup. Express collapses SESSIONS,
+  # never checks — every gate of the long path runs exactly as it does there. Four pinned
+  # refusals below die BEFORE step 1, mutating nothing; `qa` stays the mandatory finish line.
+  local id="$1"
+  local tf other f ex
+  # refusal: express lands exactly one task — <ID> must be review/'s ONLY occupant
+  tf="$(task_file "$id" review)" || die "express lands exactly one task — $id is not in review/; hand it off first"
+  other=""
+  for f in "$BOARD/review/"*.md; do
+    [ -e "$f" ] || continue
+    case "$f" in */"$id".md) ;; *) other="$(basename "$f" .md)";; esac
+  done
+  [ -z "$other" ] || die "express lands exactly one task — review/ also holds $other; run the full integrate/land/seal path"
+  # refusal: risk: high never rides the express lane — invariant 9's human gate stays human
+  if [ "$(fm_get risk "$tf")" = "high" ]; then
+    die "risk: high never rides the express lane — integrate it by hand with the human in the loop"
+  fi
+  # refusal: the express: knob — auto (default; unset = auto) | off; unknown warns once and
+  # fails to the full ceremony (off is the safe side)
+  ex="$(cfg express auto)"
+  case "$ex" in
+    auto) ;;
+    off)  die "express: off — CONVENTIONS disables the express lane; run the full ceremony";;
+    *)    printf "   ⚠ express: '%s' unknown (auto | off) — behaving as off\n" "$ex" >&2
+          die "express: off (an unknown value behaves as off) — run the full ceremony";;
+  esac
+  # refusal: a pr-mode wave ends at a PR the human merges, never at a one-pass seal
+  publish_resolve
+  [ "$PUB" = "direct" ] || die "express needs publish: direct — publish: pr waves end at a PR, not a seal"
+  # context — the same preconditions land/seal enforce: primary checkout, ON <base>, clean tree
+  in_primary || die "express runs in the primary checkout — cd \"$PRIMARY\" first"
+  local br; br="$(git rev-parse --abbrev-ref HEAD)"
+  [ "$br" = "$BASE" ] || die "express starts ON $BASE — you are on $br"
+  git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
+  # step 1: create/reuse today's integration branch from $BASE
+  local date; date="$(date +%F)"
+  if git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null; then
+    git checkout -q "integrate/$date"
+    git merge -q --ff-only "$BASE" \
+      || { git checkout -q "$BASE"; die "integrate/$date exists and cannot fast-forward to $BASE — finish that wave by hand first"; }
+  else
+    git checkout -q -b "integrate/$date" "$BASE"
+  fi
+  # step 2: audit + land — existing cmd_land semantics, unchanged
+  cmd_land "$id"
+  # step 3: the FULL CONVENTIONS suite, ONCE (same set as qa). Red → unwind the land, kick the
+  # task back carrying the failing tail, die — the board never keeps a green it didn't earn.
+  local k c out tailtxt
+  out="$(mktemp)"
+  for k in test lint typecheck build uat; do
+    c="$(cfg "$k" "")"
+    [ -z "$c" ] && continue
+    if ( cd "$PRIMARY" && bash -c "$c" ) >"$out" 2>&1; then
+      say "$k — green"
+    else
+      printf '⛔ %s — RED: %s\n' "$k" "$c" >&2
+      tail -15 "$out" | sed 's/^/     /' >&2
+      tailtxt="$(tail -3 "$out" | tr '\n' ' ' | cut -c1-200)"
+      rm -f "$out"
+      git reset -q --hard HEAD~1        # unwind the land — integrate/<date> back at $BASE state
+      cmd_kickback "$id" -m "express suite red on $k: $tailtxt"
+      die "express: $k red — land unwound on integrate/$date, $id kicked back with the failing tail"
+    fi
+  done
+  rm -f "$out"
+  # step 4: seal — existing cmd_seal semantics, unchanged (tag sprint/<n>, pushes when remoted)
+  cmd_seal "$date"
+  # step 5: prove + close — verify: commands on the sealed base, done (landed: stamp + cleanup),
+  # then the wave branch goes (its job is finished; a fresh one is cheap tomorrow)
+  cmd_run_verify "$id"
+  cmd_done "$id"
+  git branch -q -D "integrate/$date" 2>/dev/null || true
+  say "express: $id landed · sealed · done — one pass, integrate/$date cleaned"
+  note "finish line: bash ops/polaris qa"
 }
 
 tag_push_recovery_note() { # tag_push_recovery_note <n> — convergent recovery when a moved-tag CAS
@@ -1049,6 +1163,8 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
     # (T-023: the wave's sprint-report commit lands HERE, on integrate/$date, before the push.)
     has_remote || die "publish: pr needs an origin remote — nowhere to push integrate/$date"
     git push -q -u origin "integrate/$date" || die "push of integrate/$date failed — check origin access"
+    board_changed_touch   # brain freshness (ops/contracts/brain.md): the wave left the machine.
+                          # No auto-refresh here — the fold happens at `seal --sync`, not now.
     local prurl
     prurl="$(pr_create_url "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null || true)" "$date" "$BASE")"
     say "wave pushed — ONLY integrate/$date left the machine ($BASE and tags untouched)"
@@ -1107,6 +1223,8 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
       note "origin keeps rejecting $BASE? protected branch — set publish: pr in ops/CONVENTIONS.md and seal opens a PR instead"
     fi
   fi
+  board_changed_touch   # fold succeeded (ops/contracts/brain.md): beacon first, then the brain
+  brain_refresh_if_present  # follows the new base — a refresh failure notes ⚠, never fails the seal
   if [ -n "$oldtag" ]; then
     say "sprint $n re-sealed — integrate/$date merged into $BASE (--no-ff); sprint/$n: $old7 → $new7"
   else
@@ -1172,6 +1290,8 @@ EOF
   git branch -q -D "integrate/$date" 2>/dev/null || true
   git push -q origin ":refs/heads/integrate/$date" 2>/dev/null \
     || note "⚠ could not delete origin integrate/$date — by hand: git push origin :refs/heads/integrate/$date"
+  board_changed_touch   # the fold completed here in pr mode (ops/contracts/brain.md)
+  brain_refresh_if_present  # existing brain follows the fast-forwarded base; failure = ⚠ note only
   # 5. the [<ID>]-in-$BASE gate now passes — walk each task out
   if [ -n "$ids" ]; then
     note "next, per task:$ids — bash ops/polaris run-verify <ID> · bash ops/polaris done <ID>"
@@ -1444,7 +1564,247 @@ seal_report_commit() { # seal_report_commit <n> <date> — render the sprint rep
   git diff --cached --quiet -- "$out" || git commit -q -m "docs(sprint-$n): report" -- "$out"
 }
 
+# ------------------------------------------- brain — generated knowledge base (T-030)
+# ops/contracts/brain.md: .polaris/brain/ (gitignored, any-model-readable) kills cold-start
+# re-derivation — a cold agent finds any fact in ≤4 file-opens from INDEX.md. Generation READS
+# the repo only: never mutates the board, never touches git refs, never writes outside
+# .polaris/brain/ + the two stamp files (.polaris/brain/.stamp · .polaris/board-changed).
+
+board_changed_touch() { # freshness beacon: done/seal call this AFTER their mutation succeeds.
+  # Best-effort by contract — a touch failure never fails the caller.
+  { mkdir -p "$PRIMARY/.polaris" && date +%s > "$PRIMARY/.polaris/board-changed"; } 2>/dev/null || true
+}
+
+brain_refresh_if_present() { # seal/done auto-refresh (ops/contracts/brain.md v1.1): after the
+  # caller's board/base mutation succeeds, an EXISTING brain follows the base. No brain dir →
+  # feature not opted into → silence. Failure → one ⚠ note, never a caller failure.
+  [ -d "$PRIMARY/.polaris/brain" ] || return 0
+  "$SELF" brain --refresh >/dev/null 2>&1 \
+    || note "⚠ brain refresh failed — run by hand: ops/polaris brain --refresh"
+  return 0
+}
+
+brain_index() { # INDEX.md — routing table + the hop guarantee (≤40 lines)
+  cat <<'EOF'
+# BRAIN — generated by `ops/polaris brain` (git-ignored; never edit, never git-add)
+Hop guarantee: any fact is reachable in ≤4 file-opens — this INDEX (hop 1) → one domain file
+below (hop 2) → the repo file it cites by path (hops 3–4). Read this FIRST, repo second.
+
+| looking for | read |
+|---|---|
+| where code lives · key symbols per directory · hotspot files | code-map.md |
+| sprint goal · column counts · active/ready/blocked · recent done | board.md |
+| interface contracts between tasks (the seams) | contracts.md |
+| polaris CLI commands · effective CONVENTIONS values | commands.md |
+| hard-won lessons · planner calibration | gotchas.md |
+
+stale? refresh: ops/polaris brain --refresh
+EOF
+}
+
+brain_code_map() { # code-map.md — per-DIRECTORY digest (≤15 lines/dir; caller caps 300 total).
+  # Scale by summarizing per directory, never by listing files (contract § Hop guarantee).
+  printf '# code map — per-directory digest (files: count · symbols: grepped defs · hotspot: from ops/MAP.md)\n'
+  local hotspots=""
+  [ -f "$OPS/MAP.md" ] && hotspots="$(awk '/^## Hotspot/{f=1;next} /^## /{f=0} f' "$OPS/MAP.md" \
+      | grep -o '`[^`]*`' | tr -d '\140' || true)"
+  local dirs
+  dirs="$( { git -C "$PRIMARY" ls-files 2>/dev/null | sed -n 's|/[^/]*$||p'; \
+             git -C "$PRIMARY" ls-files 2>/dev/null | grep -q '^[^/]*$' && echo . || true; } | sort -u )"
+  local d files n exts purpose syms hs
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    if [ "$d" = "." ]; then
+      files="$(git -C "$PRIMARY" ls-files 2>/dev/null | grep '^[^/]*$' || true)"
+    else
+      files="$(git -C "$PRIMARY" ls-files -- "$d" 2>/dev/null | grep "^$d/[^/]*$" || true)"
+    fi
+    [ -n "$files" ] || continue
+    n="$(printf '%s\n' "$files" | grep -c . || true)"
+    exts="$(printf '%s\n' "$files" | sed -n 's/.*\(\.[A-Za-z0-9_]*\)$/\1/p' | sort | uniq -c \
+        | sort -rn | head -3 | awk '{printf "%s ", $2}' | sed 's/ $//')"
+    purpose=""
+    [ "$d" != "." ] && [ -f "$PRIMARY/$d/README.md" ] \
+      && purpose="$(sed -n 's/^#\{1,\}[[:space:]]\{1,\}//p' "$PRIMARY/$d/README.md" | head -1 || true)"
+    syms="$(printf '%s\n' "$files" | tr '\n' '\0' \
+        | { cd "$PRIMARY" && xargs -0 grep -hIE '^(cmd_[A-Za-z0-9_]+\(\)|[A-Za-z_][A-Za-z0-9_]*\(\)[ \t]*\{|function[ \t]|def[ \t]|class[ \t])' 2>/dev/null; } \
+        | sed -e 's/().*$//' -e 's/^function[ \t]*//' -e 's/^def[ \t]*//' -e 's/^class[ \t]*//' -e 's/[ ({:].*$//' \
+        | grep . | sort -u | head -12 | tr '\n' ' ' | sed 's/ $//' || true)"
+    hs=""
+    if [ -n "$hotspots" ]; then
+      if [ "$d" = "." ]; then hs="$(printf '%s\n' "$hotspots" | grep '^[^/]*$' | head -1 || true)"
+      else hs="$(printf '%s\n' "$hotspots" | grep "^$d/[^/]*$" | head -1 || true)"; fi
+    fi
+    printf '\n## %s/\n' "$d"
+    printf -- '- files: %s%s\n' "$n" "${exts:+ ($exts)}"
+    [ -n "$purpose" ] && printf -- '- purpose: %s\n' "$purpose"
+    [ -n "$syms" ] && printf -- '- symbols: %s\n' "$syms"
+    [ -n "$hs" ] && printf -- '- hotspot: %s — chain edits, never parallel-own (ops/MAP.md)\n' "$hs"
+  done <<EOF
+$dirs
+EOF
+  return 0
+}
+
+brain_board() { # board.md — live digest (caller caps 80 lines)
+  local hdr=""
+  [ -f "$OPS/SPRINT.md" ] && hdr="$(grep '^# SPRINT ' "$OPS/SPRINT.md" 2>/dev/null | head -1 | tr -d '\r' || true)"
+  printf '%s\n' "${hdr:-# SPRINT ? — no ops/SPRINT.md header}"
+  local col n counts=""
+  for col in backlog ready active review blocked done; do
+    n="$(ls "$BOARD/$col" 2>/dev/null | grep -c '\.md$' || true)"
+    counts="$counts$col:$n · "
+  done
+  printf 'counts: %s\n' "${counts% · }"
+  printf '\n## active (id · owner)\n'
+  local f id any=0
+  for f in "$BOARD/active/"*.md; do
+    [ -e "$f" ] || break
+    any=1; id="$(basename "$f" .md)"
+    printf -- '- %s · %s\n' "$id" "$(fm_get owner "$f")"
+  done
+  [ "$any" -eq 0 ] && printf -- '- (none)\n'
+  printf '\n## ready (top 5 by wsjf: id · title · pts)\n'
+  { for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
+      printf '%s\t- %s · %s · %spts\n' "$(fm_get wsjf "$f")" "$(basename "$f" .md)" \
+        "$(fm_get title "$f")" "$(fm_get points "$f")"
+    done; } | sort -rn | cut -f2- | head -5 | grep . || printf -- '- (none)\n'
+  printf '\n## blocked (id · reason)\n'
+  any=0
+  for f in "$BOARD/blocked/"*.md; do
+    [ -e "$f" ] || break
+    any=1; id="$(basename "$f" .md)"
+    printf -- '- %s · %s\n' "$id" \
+      "$(grep '⛔' "$f" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*-*[[:space:]]*//' | grep . || echo 'no reason recorded — open the task')"
+  done
+  [ "$any" -eq 0 ] && printf -- '- (none)\n'
+  printf '\n## done (last 10: id · title · landed sha when stamped)\n'
+  local lsha
+  any=0
+  while IFS= read -r f; do
+    [ -n "$f" ] && [ -e "$f" ] || continue
+    any=1; id="$(basename "$f" .md)"
+    lsha="$(fm_get landed "$f" 2>/dev/null || true)"
+    if [ -n "$lsha" ]; then
+      printf -- '- %s · %s · landed %.7s\n' "$id" "$(fm_get title "$f")" "$lsha"
+    else
+      printf -- '- %s · %s\n' "$id" "$(fm_get title "$f")"
+    fi
+  done <<EOF
+$(ls -t "$BOARD/done/"*.md 2>/dev/null | head -10)
+EOF
+  [ "$any" -eq 0 ] && printf -- '- (none)\n'
+  return 0
+}
+
+brain_contracts() { # contracts.md — per contract: name + its ## Purpose first paragraph (caller caps 120)
+  printf '# contracts — the seams (digest; read the cited file before coding against it)\n'
+  local f name any=0
+  for f in "$OPS/contracts/"*.md; do
+    [ -e "$f" ] || break
+    any=1; name="$(basename "$f" .md)"
+    printf '\n## %s (ops/contracts/%s.md)\n' "$name" "$name"
+    awk '/^## Purpose/{f=1;next} f&&/^#/{exit} f&&NF==0{if(p)exit;next} f{print;p=1}' "$f" 2>/dev/null || true
+  done
+  [ "$any" -eq 0 ] && printf 'none\n'
+  return 0
+}
+
+brain_commands() { # commands.md — effective CONVENTIONS values FIRST, then polaris help (brain v1.1:
+  # caller caps 80 — the cap may cut the help tail, NEVER the values; usage() alone is ~75 lines, so
+  # help-first was cutting 5 of the 8 values off the bottom).
+  printf '# commands — polaris CLI + effective CONVENTIONS\n\n## effective CONVENTIONS\n'
+  printf 'base: %s\nclaim: %s\nintegration: %s\npublish: %s\nexpress: %s\nstale_hours: %s\ntest: %s\nbuild: %s\n' \
+    "$BASE" "$CLAIM_MODE" "$(cfg integration '(unset)')" "$(cfg publish direct)" \
+    "$(cfg express '(unset)')" "$STALE_H" "$(cfg test '(unset)')" "$(cfg build '(unset)')"
+  printf '\n## polaris help\n'
+  usage
+}
+
+brain_gotchas() { # gotchas.md — SPRINT Learned + CONVENTIONS Planner calibration, verbatim (caller caps 60)
+  printf '# gotchas — lessons that already cost tokens (verbatim digests)\n'
+  printf '\n## Learned (ops/SPRINT.md)\n'
+  { [ -f "$OPS/SPRINT.md" ] && awk '/^## Learned/{f=1;next} /^## /{f=0} f' "$OPS/SPRINT.md"; } | grep . \
+    || printf '(none)\n'
+  printf '\n## Planner calibration (ops/CONVENTIONS.md)\n'
+  { [ -f "$CONV" ] && awk '/^## Planner calibration/{f=1;next} /^## /{f=0} f' "$CONV"; } | grep . \
+    || printf '(none)\n'
+  return 0
+}
+
+cmd_brain() { # brain [--refresh] — generate .polaris/brain/ (ops/contracts/brain.md).
+  # Full build by default. --refresh: cheap files (board/contracts/commands/gotchas + INDEX)
+  # always rebuilt; code-map.md ONLY when `git diff --name-only <stamp-sha>..HEAD` is non-empty
+  # (unreadable stamp sha degrades to a rebuild). Missing brain → full build. Exit 0 on success.
+  local mode="${1:-}"
+  { [ -z "$mode" ] || [ "$mode" = "--refresh" ]; } || die "usage: polaris brain [--refresh]"
+  local BR="$PRIMARY/.polaris/brain"
+  local stamp_sha="" build_map=1 kind=built
+  if [ "$mode" = "--refresh" ] && [ -f "$BR/.stamp" ]; then
+    kind=refreshed
+    stamp_sha="$(awk 'NR==1{print $2}' "$BR/.stamp" 2>/dev/null || true)"
+    if [ -n "$stamp_sha" ] && [ -f "$BR/code-map.md" ]; then
+      local changed
+      changed="$(git -C "$PRIMARY" diff --name-only "$stamp_sha..HEAD" 2>/dev/null || echo stamp-sha-unreadable)"
+      [ -z "$changed" ] && build_map=0
+    fi
+  fi
+  mkdir -p "$BR" || die "cannot create $BR"
+  brain_index > "$BR/INDEX.md"
+  if [ "$build_map" -eq 1 ]; then brain_code_map | head -n 300 > "$BR/code-map.md"; fi
+  brain_board     | head -n 80  > "$BR/board.md"
+  brain_contracts | head -n 120 > "$BR/contracts.md"
+  brain_commands  | head -n 80  > "$BR/commands.md"
+  brain_gotchas   | head -n 60  > "$BR/gotchas.md"
+  local ep sha
+  ep="$(date +%s)"
+  sha="$(git -C "$PRIMARY" rev-parse --short "refs/heads/$BASE" 2>/dev/null \
+      || git -C "$PRIMARY" rev-parse --short HEAD 2>/dev/null || echo none)"
+  printf '%s %s\n' "$ep" "$sha" > "$BR/.stamp"
+  say "brain $kind: .polaris/brain/ (INDEX + code-map$( [ "$build_map" -eq 1 ] || printf ' [unchanged, kept]' ) + board + contracts + commands + gotchas) · stamp $ep $sha"
+}
+
+status_brief() { # `status --brief` — ONE plain-English paragraph, no table (ops/contracts/status-brief.md).
+  # voice: standard, no jargon. Grep-stable markers, written VERBATIM: "Last landed:" and "Next up:".
+  local done_c active_c review_c ready_c ids f parts lead line2 newest ntitle top nextup n
+  done_c=$(ls "$BOARD/done" 2>/dev/null | grep -c '\.md$' || true)
+  active_c=$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)
+  review_c=$(ls "$BOARD/review" 2>/dev/null | grep -c '\.md$' || true)
+  ready_c=$(ls "$BOARD/ready" 2>/dev/null | grep -c '\.md$' || true)
+  ids=""
+  for f in "$BOARD/active/"*.md; do [ -e "$f" ] || break
+    ids="${ids:+$ids, }$(basename "$f" .md)"
+  done
+  # each ·-joined sub-clause is DROPPED when its count is 0 (nothing to say), never zero-padded
+  parts=""
+  [ "$done_c"   -gt 0 ] && parts="${parts:+$parts · }$done_c done"
+  [ "$active_c" -gt 0 ] && parts="${parts:+$parts · }$active_c building${ids:+ ($ids)}"
+  [ "$review_c" -gt 0 ] && parts="${parts:+$parts · }$review_c waiting to land"
+  [ "$ready_c"  -gt 0 ] && parts="${parts:+$parts · }$ready_c queued"
+  [ -n "$parts" ] || parts="Nothing building"
+  n="$(sprint_hdr_num)"
+  if [ -n "$n" ]; then lead="Sprint $n ($(sprint_goal "$n")):"; else lead="No sprint header —"; fi
+  printf '%s %s.\n' "$lead" "$parts"
+  # line two: newest done (highest-mtime file) + top-wsjf ready; each dropped when there is none
+  line2=""
+  newest="$(ls -t "$BOARD/done/"*.md 2>/dev/null | head -1)"
+  if [ -n "$newest" ]; then
+    ntitle="$(fm_get title "$newest")"
+    line2="Last landed: ${ntitle:-$(basename "$newest" .md)}."
+  fi
+  top="$( { for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
+      printf '%s\t%s\n' "$(fm_get wsjf "$f")" "$f"
+    done; } | sort -rn | head -1 | cut -f2- )"
+  if [ -n "$top" ]; then
+    nextup="$(fm_get title "$top")"
+    line2="${line2:+$line2 }Next up: ${nextup:-$(basename "$top" .md)}."
+  fi
+  [ -n "$line2" ] && printf '%s\n' "$line2"
+  return 0
+}
+
 cmd_status() {
+  [ "${1:-}" = "--brief" ] && { status_brief; return; }
   local col n
   printf 'POLARIS board — base: %s · claim: %s\n' "$BASE" "$CLAIM_MODE"
   for col in backlog ready active review blocked done; do
@@ -1646,13 +2006,69 @@ cmd_doctor() {
       fi
     fi
   fi
+  # brain freshness (ops/contracts/brain.md): board-changed newer than the brain's stamp → the
+  # digest lies. No brain dir → the feature was never opted into → stay silent.
+  if [ -d "$PRIMARY/.polaris/brain" ] \
+     && [ "$PRIMARY/.polaris/board-changed" -nt "$PRIMARY/.polaris/brain/.stamp" ]; then
+    note "⚠ brain is stale — refresh it: ops/polaris brain --refresh"
+  fi
   say "doctor: OK"
-  if [ "${1:-}" = "--selftest" ]; then selftest; fi
+  # --selftest [--only <pattern>] (ops/contracts/verification-tiering.md): --only runs the
+  # always-on spine + just the labeled drills whose label matches one shell glob.
+  if [ "${1:-}" = "--selftest" ]; then
+    local _only=""
+    case "${2:-}" in
+      "") : ;;
+      --only)   _only="${3:-}"; [ -n "$_only" ] || die "doctor --selftest --only needs a pattern";;
+      --only=*) _only="${2#--only=}"; [ -n "$_only" ] || die "doctor --selftest --only needs a pattern";;
+      *) die "doctor --selftest: unknown option '$2' (only --only <pattern>)";;
+    esac
+    selftest "$_only"
+  fi
 }
 
-selftest() { # end-to-end mechanics drill in a throwaway repo — run once per new machine
+drill_on() { # T-033: is labeled drill $1 selected by the current --only pattern? Reads
+  # selftest()'s local SELFTEST_ONLY (dynamic scope): empty = full run = every drill on.
+  # Plain case, NEVER inside $(...) — bash 3.2 mis-parses `case` in command substitution.
+  if [ -z "${SELFTEST_ONLY:-}" ]; then return 0; fi
+  case "$1" in ${SELFTEST_ONLY:-}) return 0;; esac
+  return 1
+}
+
+ngwait() { # T-033: poll (bounded, ≤2s) for line $1 in the selftest's backgrounded notify.log.
+  # File-scope (reads selftest's $T via dynamic scope) so any drill using it — notify AND
+  # pr-publish — stands alone under --only, not just when the notify drill defined it inline.
+  local i=0; while [ "$i" -lt 20 ]; do grep -q "$1" "$T/notify.log" 2>/dev/null && return 0; sleep 0.1; i=$((i+1)); done; return 1
+}
+
+ensure_origin() { # T-033: self-provision the scratch bare origin that the remote/syncrace/pr-publish
+  # drills share, so each stands alone under --only. No-op once any of them has created it; in the
+  # full run the remote drill makes it first and the rest are no-ops (byte-identical outcome).
+  git remote get-url origin >/dev/null 2>&1 && return 0
+  git init -q --bare "$T/origin.git"
+  git remote add origin "$T/origin.git"
+  git push -qu origin main >/dev/null 2>&1 || true
+  git rev-parse -q --verify refs/heads/polaris/board >/dev/null 2>&1 \
+    && git push -q origin refs/heads/polaris/board >/dev/null 2>&1 || true   # syncrace clones origin/polaris/board
+  return 0
+}
+
+selftest() { # end-to-end mechanics drill in a throwaway repo — run once per new machine.
+  # $1 (optional): --only <pattern>. Empty = full run, byte-identical to the pre-5.15 selftest.
+  local SELFTEST_ONLY="${1:-}"
+  # Every label a drill_on gate below uses, in run order — the contract's minimum set. An --only
+  # pattern matching NONE of these dies HERE, before the throwaway repo is even created.
+  local SELFTEST_LABELS='fmlist tcm report metrics brain rules drift hardening qa remote syncrace notify grant upgrade pr-publish express hint brief'
+  local st_total=0 st_hit=0 st_lbl
+  for st_lbl in $SELFTEST_LABELS; do st_total=$((st_total+1)); done
+  if [ -n "$SELFTEST_ONLY" ]; then
+    for st_lbl in $SELFTEST_LABELS; do
+      case "$st_lbl" in $SELFTEST_ONLY) st_hit=$((st_hit+1));; esac
+    done
+    [ "$st_hit" -gt 0 ] || die "unknown drill label '$SELFTEST_ONLY' — valid labels: $SELFTEST_LABELS"
+  fi
   local T; T="$(mktemp -d)"
-  note "selftest in $T"
+  note "selftest in $T${SELFTEST_ONLY:+  (subset: $SELFTEST_ONLY)}"
   ( set -e; cd "$T"
     git init -q -b main repo 2>/dev/null || { git init -q repo; git -C repo symbolic-ref HEAD refs/heads/main; }
     cd repo; git config user.email t@t; git config user.name t
@@ -1675,6 +2091,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     "$SELF" handoff T-1 > "$T/ho.out"
     grep -q 'Integrate now' "$T/ho.out" || { echo "HANDOFF NOTICE FAIL (last lane must print the integrate hint)"; exit 1; }
     cd "$T/repo"
+    if drill_on fmlist; then
     # ========================= fm_list parsing drills =========================
     # inline scalar · "[]" · populated "[a, b]" flow list · block list — plus edge
     # stripping (comment/\r/whitespace, empty items). fm_list is a shell function
@@ -1688,12 +2105,14 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     [ "$(fm_list block "$T/fmlist.md" | tr '\n' ',')" = "x,y," ] || { echo "FM_LIST BLOCK FAIL (block list must stay byte-identical)"; exit 1; }
     [ "$(fm_list depends_on "$T/fmlist.md" | wc -l | tr -d ' ')" = "2" ] || { echo "FM_LIST DEPENDS_ON COUNT FAIL (inline flow list must yield 2 items, not 1)"; exit 1; }
     [ "$(fm_list depends_on "$T/fmlist.md" | tr '\n' ',')" = "T-A,T-B," ] || { echo "FM_LIST DEPENDS_ON VALUES FAIL"; exit 1; }
+    fi   # drill_on fmlist
     # ====================== v5.12 clean-history drills =======================
     # land (squash → ONE rich commit) → seal (tagged summary merge) → history →
     # done (rule-1 gate + landed: stamp) → rollback (task + sprint reverts).
     for c in task-commit-msg land seal history rollback; do
       "$SELF" help | grep -q "$c" || { echo "USAGE FAIL: $c missing from help"; exit 1; }
     done
+    if drill_on tcm; then
     # task-commit-msg: pure formatter — subject map · Why verbatim · checkbox markers stripped ·
     # comment + ⛔ notes filtered · Files joined
     mkdir -p "$T/fmt"
@@ -1705,10 +2124,23 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     grep -q '^- kept note$' "$T/fmt/out" || { echo "TCM NOTE FAIL"; exit 1; }
     grep -q '⛔' "$T/fmt/out" && { echo "TCM FILTER FAIL (⛔ note must drop)"; exit 1; }
     grep -q '^Files: src/a.txt, src/b.txt$' "$T/fmt/out" || { echo "TCM FILES FAIL"; exit 1; }
+    # T-038 commit-type map (clean-history v2.2): the two advertised types test/docs must be
+    # REACHABLE (they were falling through to chore); spike/missing stay chore.
+    for ctpair in test:test docs:docs spike:chore; do
+      ctin="${ctpair%%:*}"; ctout="${ctpair##*:}"
+      printf -- '---\nid: T-CT\ntitle: t\ntype: %s\nscope: core\nfiles_owned:\n  - src/a.txt\n---\n' "$ctin" > "$T/fmt/ct.md"
+      "$SELF" task-commit-msg "$T/fmt/ct.md" | head -1 | grep -q "^$ctout(core): " || { echo "COMMIT TYPE MAP FAIL (type: $ctin must map to $ctout)"; exit 1; }
+    done
+    printf -- '---\nid: T-CT\ntitle: t\nscope: core\nfiles_owned:\n  - src/a.txt\n---\n' > "$T/fmt/ct.md"   # no type: → chore
+    "$SELF" task-commit-msg "$T/fmt/ct.md" | head -1 | grep -q '^chore(core): ' || { echo "COMMIT TYPE MAP FAIL (missing type must map to chore)"; exit 1; }
+    fi   # drill_on tcm
     # land: one commit, contract subject + Landed-from trailer, clean tree after
     printf '# SPRINT 1 — selftest sprint  capacity: 5\n' > ops/SPRINT.md   # moved set: disk-only, ignored on base
     git checkout -q -b integrate/2026-01-01
-    "$SELF" land T-1 >/dev/null || { echo "LAND FAIL"; exit 1; }
+    "$SELF" land T-1 > "$T/land.out" 2>&1 || { cat "$T/land.out"; echo "LAND FAIL"; exit 1; }
+    # T-038 land noise (clean-history v2.2): git 2.53's squash chatter must not reach land output
+    grep -qi 'Squash commit' "$T/land.out" && { echo "LAND NOISE FAIL (git 'Squash commit' line leaked)"; exit 1; }
+    grep -qi 'stopped before committing' "$T/land.out" && { echo "LAND NOISE FAIL (git 'stopped before committing' line leaked)"; exit 1; }
     git log -1 --format=%s | grep -q '^feat(src): land a file \[T-1\]$' || { echo "LAND SUBJECT FAIL"; exit 1; }
     [ "$(git log -1 --format=%B | sed -n 's/^Landed-from: //p' | tr -d ' \r')" = "$(git rev-parse feat/T-1)" ] \
       || { echo "LAND TRAILER FAIL"; exit 1; }
@@ -1718,6 +2150,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     git rev-parse -q --verify refs/tags/sprint/1 >/dev/null || { echo "SEAL TAG FAIL"; exit 1; }
     git log -1 --format=%s | grep -q '^Sprint 1 — selftest sprint$' || { echo "SEAL SUBJECT FAIL"; exit 1; }
     git log -1 --format=%b | grep -q '^- feat(src): land a file \[T-1\]$' || { echo "SEAL BULLET FAIL"; exit 1; }
+    if drill_on report; then
     # ==================== T-023 sprint-report drill (ops/contracts/sprint-report.md) ====================
     # seal committed the wave's report on integrate → it rode the --no-ff merge into base as a
     # docs(sprint-N) commit (no [<ID>] suffix, off the first-parent chain), and the file carries the
@@ -1741,6 +2174,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     [ "$(git rev-parse main)" = "$mainpre_r" ] || { echo "REPORT COMMIT FAIL (report must not commit on base)"; exit 1; }
     [ "$(git rev-parse refs/heads/polaris/board)" = "$boardpre_r" ] || { echo "REPORT BOARD FAIL (report must not touch the board)"; exit 1; }
     git diff --quiet -- docs/sprints/sprint-1.md || { echo "REPORT IDEMPOTENT FAIL (cmd_report must match the sealed render)"; exit 1; }
+    fi   # drill_on report
     # ==================== end T-023 sprint-report drill ====================
     # history: sprint line visible, board noise filtered; --tasks drills into the squash commit
     "$SELF" history > "$T/hist.out"
@@ -1779,6 +2213,35 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     [ "$(cat src/a.txt)" = "x" ] || { echo "ROLLBACK SPRINT CONTENT FAIL"; exit 1; }
     git reset -q --hard HEAD~1        # back to the sealed state for the drills below
     # ==================== end v5.12 clean-history drills =====================
+    if drill_on brain; then
+    # ==================== T-030 brain drills (ops/contracts/brain.md) ====================
+    # generator: all 7 layout files, gitignored · INDEX routes to all 5 domain files · board
+    # digest names the landed task T-1 · staleness round-trip: board-changed newer → doctor
+    # warns → refresh clears. (Seal auto-refresh + the refresh-failure note ride the
+    # second-seal drill below.)
+    "$SELF" help | grep -q 'brain' || { echo "USAGE FAIL: brain missing from help"; exit 1; }
+    "$SELF" brain >/dev/null || { echo "BRAIN BUILD FAIL"; exit 1; }
+    for bf in INDEX.md code-map.md board.md contracts.md commands.md gotchas.md .stamp; do
+      [ -f ".polaris/brain/$bf" ] || { echo "BRAIN FILE FAIL ($bf missing)"; exit 1; }
+    done
+    git status --porcelain | grep -q 'brain' && { echo "BRAIN GITIGNORE FAIL (no brain path may reach git status)"; exit 1; }
+    for bf in code-map.md board.md contracts.md commands.md gotchas.md; do
+      grep -q "$bf" .polaris/brain/INDEX.md || { echo "BRAIN INDEX FAIL ($bf not routed)"; exit 1; }
+    done
+    grep -q 'T-1' .polaris/brain/board.md || { echo "BRAIN BOARD FAIL (landed task T-1 missing from the digest)"; exit 1; }
+    # T-038 (brain v1.1): all 8 effective-CONVENTIONS keys survive the head-80 cap — values print
+    # BEFORE the ~75-line help dump, so the cap only ever cuts the help tail.
+    for bk in base claim integration publish express stale_hours test build; do
+      grep -q "^$bk:" .polaris/brain/commands.md || { echo "BRAIN COMMANDS KEYS FAIL ($bk: cut by the cap)"; exit 1; }
+    done
+    "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "BRAIN FRESH FAIL (a just-built brain must not warn)"; exit 1; }
+    sleep 1; date +%s > .polaris/board-changed    # sleep: -nt needs strictly-newer mtime on 1s-resolution filesystems
+    "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' || { echo "BRAIN STALE FAIL (board-changed newer than .stamp must warn)"; exit 1; }
+    "$SELF" brain --refresh >/dev/null || { echo "BRAIN REFRESH FAIL"; exit 1; }
+    "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "BRAIN REFRESH STALE FAIL (refresh must clear the warn)"; exit 1; }
+    fi   # drill_on brain
+    # ==================== end T-030 brain drills ====================
+    if drill_on metrics; then
     for ev in claim handoff all-review done; do
       grep -q "\"ev\":\"$ev\",\"id\":\"T-1\"" ops/board/EVENTS.ndjson || { echo "EVENTS FAIL: $ev missing"; exit 1; }
     done
@@ -1788,6 +2251,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     # --- v5: points telemetry + per-point calibration
     grep -q '"ev":"claim","id":"T-1".*"pts":1' ops/board/EVENTS.ndjson || { echo "PTS EVT FAIL"; exit 1; }
     "$SELF" metrics | grep -q '1pt p50' || { echo "PTS BUCKET FAIL"; exit 1; }
+    fi   # drill_on metrics
     # ================ v5.13 second-seal drill (clean-history v2) =================
     # A sprint's SECOND integration wave: wave 2 lands on the same integrate branch (caught up
     # to base first), seal runs again → same --no-ff merge, tag sprint/1 MOVES to the new merge
@@ -1808,16 +2272,47 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     grep -q 'reused sprint number' "$T/seal-reuse.out" || { echo "REUSED SPRINT MSG FAIL (die must name the reuse)"; exit 1; }
     [ "$(git rev-parse main)" = "$mainpre" ] || { echo "REUSED SPRINT MUTATE FAIL (failed gate must mutate nothing)"; exit 1; }
     git tag -f sprint/1 "$w1tag" >/dev/null
+    if drill_on brain; then bstamp1="$(cat .polaris/brain/.stamp)"; fi   # T-030: pre-seal stamp — seal auto-refreshes it (brain-gated: seal itself is spine)
     "$SELF" seal 2026-01-01 > "$T/seal2.out" || { echo "SECOND-SEAL FAIL (re-seal of the same sprint must pass)"; exit 1; }
     w2tag="$(git rev-parse refs/tags/sprint/1)"
     [ "$w2tag" != "$w1tag" ] || { echo "TAG MOVE FAIL (sprint/1 must leave the wave-1 merge)"; exit 1; }
     [ "$w2tag" = "$(git rev-parse main)" ] || { echo "TAG MOVE FAIL (sprint/1 must equal the new base HEAD)"; exit 1; }
     grep -q "sprint/1: $(git rev-parse --short "$w1tag") → $(git rev-parse --short "$w2tag")" "$T/seal2.out" \
       || { echo "TAG MOVE LOG FAIL (re-seal must name the old → new move)"; exit 1; }
+    # T-030 seal auto-refresh: the fold touched board-changed, then refreshed the existing brain —
+    # the stamp follows the new base sha and doctor must NOT read the board as stale.
+    [ -f .polaris/board-changed ] || { echo "SEAL TOUCH FAIL (seal must touch board-changed)"; exit 1; }
+    if drill_on brain; then
+    [ "$(cat .polaris/brain/.stamp)" != "$bstamp1" ] || { echo "SEAL BRAIN REFRESH FAIL (seal must auto-refresh an existing brain)"; exit 1; }
+    "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "SEAL BRAIN STALE FAIL (auto-refresh must leave .stamp newer than board-changed)"; exit 1; }
+    fi   # drill_on brain
     "$SELF" history --tasks 1 > "$T/hist2.out"
     grep -q 'land a file \[T-1\]' "$T/hist2.out" || { echo "HISTORY WAVES FAIL (wave-1 task missing from --tasks)"; exit 1; }
     grep -q 'wave two file \[T-W\]' "$T/hist2.out" || { echo "HISTORY WAVES FAIL (wave-2 task missing from --tasks)"; exit 1; }
+    "$SELF" run-verify T-W >/dev/null 2>&1 || { echo "SECOND-SEAL RUN-VERIFY FAIL (verify: [] must pass)"; exit 1; }
     "$SELF" done T-W >/dev/null || { echo "SECOND-SEAL DONE FAIL (wave-2 done must pass once its seal lands)"; exit 1; }
+    if drill_on brain; then
+    # T-038 (brain v1.1): the documented wave close land → seal → run-verify → done ends FRESH —
+    # done auto-refreshes AFTER its board-changed touch (mirroring seal), so doctor must not warn.
+    "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "DONE BRAIN STALE FAIL (done must auto-refresh; wave close must end fresh)"; exit 1; }
+    fi   # drill_on brain
+    if drill_on brain; then
+    # T-030 seal-refresh-failure note: a BROKEN brain (.stamp is a directory, so the rebuild's
+    # stamp write fails) must cost the wave nothing — seal rc 0, one ⚠ note, board state normal.
+    # Brain-gated: the whole T-Z wave exists only to prove this brain behavior (quiet-board below
+    # references T-1/T-W only, never T-Z, so skipping it leaves the spine self-consistent).
+    printf -- '---\nid: T-Z\ntitle: wave three file\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/z.txt\nverify: []\n---\n' > ops/board/ready/T-Z.md
+    "$SELF" claim T-Z >/dev/null
+    ( cd .polaris/wt/T-Z && echo z > src/z.txt && git add -A && git commit -qm ok && "$SELF" handoff T-Z >/dev/null )
+    git checkout -q integrate/2026-01-01
+    git merge -q --ff-only main || { echo "THIRD-SEAL FF FAIL (integrate must catch up to base)"; exit 1; }
+    "$SELF" land T-Z >/dev/null || { echo "THIRD-SEAL LAND FAIL"; exit 1; }
+    rm -f .polaris/brain/.stamp; mkdir .polaris/brain/.stamp
+    "$SELF" seal 2026-01-01 > "$T/seal3.out" || { cat "$T/seal3.out"; echo "SEAL REFRESH-FAIL RC FAIL (a failed brain refresh must never fail the seal)"; exit 1; }
+    grep -q 'brain refresh failed' "$T/seal3.out" || { echo "SEAL REFRESH NOTE FAIL (the failure must print its ⚠ note)"; exit 1; }
+    "$SELF" done T-Z >/dev/null || { echo "THIRD-SEAL DONE FAIL"; exit 1; }
+    rm -rf .polaris/brain    # brain leaves the drill here — later doctors must run silent again
+    fi   # drill_on brain (T-Z seal-refresh-failure wave)
     # ================== end v5.13 second-seal drill ==============================
     # ================== T-020 quiet-board drill (ops/contracts/quiet-board.md) ==================
     # The whole flow above (claim → handoff → land → seal → done, two waves) ran with the moved set
@@ -1836,6 +2331,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
       && { echo "QUIET TREE FAIL (branch tree = ONLY ops/board/** + ops/SPRINT.md)"; exit 1; }
     [ -z "$(git status --porcelain)" ] || { echo "QUIET CLEAN FAIL (board mutations must never dirty base status)"; exit 1; }
     # ================== end T-020 quiet-board drill ==================
+    if drill_on rules; then
     # --- v5: RULES engine — path deny beats ownership; content deny on payload and on diff
     printf 'src/a.txt\tpath\t-\tfrozen for the drill\n' >> ops/RULES.tsv
     "$SELF" _rules src/a.txt 2>/dev/null && { echo "RULES PATH FAIL (should deny)"; exit 1; }
@@ -1855,13 +2351,20 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
       git reset -q --hard HEAD~1 && echo clean > src/b.txt && git add -A && git commit -qm ok
       "$SELF" verify T-2 >/dev/null || { echo "RULES DIFF FAIL (clean should pass)"; exit 1; } ) || exit 1
     "$SELF" release T-2 --to ready -m drill >/dev/null
+    fi   # drill_on rules
+    if drill_on drift; then
     # --- v5: drift — seeded overlap must be found; --strict must go red, then green
+    # T-033 self-provision: --only drift skips the rules drill above, so re-create the T-2 it
+    # leaves in ready/. Idempotent — a no-op in the full run (rules already released T-2).
+    [ -f ops/board/ready/T-2.md ] || printf -- '---\nid: T-2\npoints: 2\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/b.txt\nverify: []\n---\n' > ops/board/ready/T-2.md
     printf -- '---\nid: T-3\npoints: 1\nwsjf: 1\nstatus: ready\nfiles_owned:\n  - src/b.txt\n---\n' > ops/board/ready/T-3.md
     "$SELF" drift | grep -q 'OWNERSHIP OVERLAP: T-3 ∩ T-2' || { echo "DRIFT OVERLAP FAIL"; exit 1; }
     ( "$SELF" drift --strict >/dev/null 2>&1 ) && { echo "DRIFT STRICT FAIL (should rc 1)"; exit 1; }
     rm ops/board/ready/T-3.md ops/board/ready/T-2.md; sed -i.bak '/DO_NOT_SHIP/d' ops/RULES.tsv && rm -f ops/RULES.tsv.bak
-    git add -A; git commit -qm cleanup
+    git add -A; git commit -qm cleanup || true   # T-033: --only drift has no rules-drill RULES.tsv change to commit
     "$SELF" drift >/dev/null || { echo "DRIFT CLEAN FAIL"; exit 1; }
+    fi   # drill_on drift
+    if drill_on hardening; then
     # ============================ v5.8 hardening drills ============================
     # rename must NOT smuggle a non-owned deletion past the gate (--no-renames)
     mkdir -p pkg; echo keep > pkg/keep.txt; echo out > outside.txt
@@ -1914,6 +2417,8 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     printf 'version: 9.9.9\n' > ops/VERSION
     "$SELF" doctor 2>/dev/null | grep -q 'runs the POLARIS it ships' || { echo "SELFHOST SYNC FAIL"; exit 1; }
     rm -rf kit ops/VERSION
+    fi   # drill_on hardening
+    if drill_on qa; then
     # --- v5.10: qa — one command, the whole picture. Green suite → rc 0 with per-check lines;
     # a red test: must flip the exit code and name the check.
     printf 'test: true\n' > ops/CONVENTIONS.md
@@ -1922,6 +2427,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     printf 'test: false\n' > ops/CONVENTIONS.md
     "$SELF" qa >/dev/null 2>&1 && { echo "QA RED FAIL (red suite must rc 1)"; exit 1; }
     rm -f ops/CONVENTIONS.md
+    fi   # drill_on qa
     # --- v5.11: no AI fingerprints — commit-msg hook strips provider attribution, keeps the message
     local hooksrc; hooksrc="$(dirname "$SELF")/hooks/commit-msg"
     if [ -f "$hooksrc" ]; then
@@ -1935,12 +2441,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
       git log -1 --format=%B | grep -qiE 'co-authored-by|generated with' && { echo "ATTRIBUTION STRIP FAIL"; exit 1; }
       git log -1 --format=%B | grep -q 'feat: clean product' || { echo "ATTRIBUTION KEEP FAIL (subject must survive)"; exit 1; }
     fi
+    if drill_on remote; then
     # --- v5.11: remote hygiene — done deletes the pushed feat branch; sweep --fix removes strays
     # (T-C is deliberately merged --no-ff, NOT landed: it is the ONE legacy drill proving the
     #  gate's rule-2 fallback — hand merges per MANUAL.md still pass done + remote cleanup.)
-    git init -q --bare "$T/origin.git"
-    git remote add origin "$T/origin.git"
-    git push -qu origin main
+    ensure_origin   # T-033: scratch bare origin (self-provisions under --only remote; spine no longer)
     printf -- '---\nid: T-C\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/c.txt\nverify: []\n---\n' > ops/board/ready/T-C.md
     "$SELF" claim T-C >/dev/null
     ( cd .polaris/wt/T-C && echo c > src/c.txt && git add -A && git commit -qm ok && "$SELF" handoff T-C >/dev/null )
@@ -1964,6 +2469,9 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     git ls-remote --exit-code origin refs/heads/integrate/2030-01-01 >/dev/null 2>&1 && { echo "SWEEP INTEGRATE FIX FAIL (merged wave must be deleted)"; exit 1; }
     git ls-remote --exit-code origin refs/heads/integrate/2030-02-02 >/dev/null || { echo "SWEEP INTEGRATE KEEP FAIL (diverged wave must be kept)"; exit 1; }
     git push -q origin :refs/heads/integrate/2030-02-02    # clean up so later drills see a bare origin
+    fi   # drill_on remote
+    if drill_on syncrace; then
+    ensure_origin   # T-033: --only syncrace skips the remote drill above — self-provision origin (+ polaris/board)
     # ============ T-020 quiet-board sync race (EVENTS union — ops/contracts/quiet-board.md) ============
     # origin/polaris/board moves AHEAD with a foreign machine's EVENTS line; the next local
     # mutation's push is rejected → sync_board must union the line into the on-disk file,
@@ -1988,6 +2496,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     "$SELF" release T-Q --to ready -m drill >/dev/null
     rm -f ops/board/ready/T-Q.md
     # ============ end T-020 quiet-board sync race ============
+    fi   # drill_on syncrace
+    if drill_on notify; then
     # ================== v5.13 notify v2 drills (hands-free-knobs) ==================
     # shim listed in help · no notify: configured → rc 0 and SILENT · unknown/missing kind (and a
     # missing required ID) → usage error, rc≠0
@@ -2001,7 +2511,6 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     # hook, so every assertion polls for its line (bounded, ≤2s) — never races it.
     printf 'notify: printf "%%s/%%s/%%s/%%s\\n" "$POLARIS_EV" "$POLARIS_SEVERITY" "$POLARIS_ID" "$POLARIS_NOTE" >> %s\n' "$T/notify.log" > ops/CONVENTIONS.md
     git add -A; git commit -qm notify-hook
-    ngwait() { local i=0; while [ "$i" -lt 20 ]; do grep -q "$1" "$T/notify.log" 2>/dev/null && return 0; sleep 0.1; i=$((i+1)); done; return 1; }
     evn="$(wc -l < ops/board/EVENTS.ndjson)"
     "$SELF" notify-gate plan
     "$SELF" notify-gate risk T-42
@@ -2037,6 +2546,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     grep -q 'builder_questions=default-safe' "$T/doc.out" || { echo "KNOB TRUSTED FAIL (autonomy: trusted must fill unset knobs)"; exit 1; }
     grep -q "drain: 'bogus' unknown" "$T/doc.out" || { echo "KNOB WARN FAIL (unknown value must warn + behave as default)"; exit 1; }
     git checkout -q -- ops/CONVENTIONS.md
+    fi   # drill_on notify
+    if drill_on grant; then
     # ================== T-005 grant drills (ops/contracts/grant.md) ==================
     # sanctioned files_owned amendment: refusals (wrong column · missing -m · overlap, each
     # mutating NOTHING) then one success = append + Notes line + event + ONE board commit.
@@ -2062,6 +2573,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     "$SELF" release T-G --to ready -m drill >/dev/null
     rm -f ops/board/ready/T-G.md ops/board/ready/T-H.md
     # ================== end T-005 grant drills ==================
+    fi   # drill_on grant
     # ================== T-006 staleness drills (ops/contracts/self-hosting.md) ==================
     # Fake `unzip`/`curl` on PATH make this deterministic and portable (no real network, no zip
     # binary needed — Git Bash ships none — matching the fixture style already used for notify-gate).
@@ -2092,6 +2604,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     grep -q '^latest: 8.8.8$' .polaris/update-cache || { echo "VERSION CACHE FAIL (fresh check must update the cache)"; exit 1; }
     rm -rf ops/VERSION .polaris/update-cache
     # ================== end T-006 staleness drills ==================
+    if drill_on upgrade; then
     # ================== T-021 upgrade-migration drill (ops/contracts/quiet-board.md) ==================
     # A 5.13-shaped repo: moved set TRACKED on base, chore(board) history on base, no polaris/board.
     # upgrade must migrate ONCE (orphan seed → untrack → ignore → ONE base commit), re-run as a
@@ -2158,7 +2671,14 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
       git rev-parse -q --verify refs/heads/polaris/board >/dev/null && { echo "UNINSTALL LOCAL REF FAIL (the branch must be deleted)"; exit 1; }
       git ls-remote "$T/mig-origin.git" refs/heads/polaris/board | grep -q . && { echo "UNINSTALL REMOTE REF FAIL (the deletion must push)"; exit 1; }
       : ) || exit 1
+    fi   # drill_on upgrade
     # ================== end T-021 upgrade-migration drill ==================
+    if drill_on pr-publish; then
+    # T-033 self-provision: --only pr-publish skips the remote and notify drills, but it pushes to
+    # origin and its seal fires the notify: hook (ngwait polls the log). Provide both — no-ops in
+    # the full run, where the remote/notify drills already set them up.
+    ensure_origin
+    grep -q '^notify:' ops/CONVENTIONS.md 2>/dev/null || printf 'notify: printf "%%s/%%s/%%s/%%s\\n" "$POLARIS_EV" "$POLARIS_SEVERITY" "$POLARIS_ID" "$POLARIS_NOTE" >> %s\n' "$T/notify.log" >> ops/CONVENTIONS.md
     # ================== T-022 pr-publish drill (ops/contracts/publish-modes.md) ==================
     # publish: pr against a scratch bare origin: handoff keeps feat/* local · seal pushes ONLY
     # integrate/<date> + prints title/bullets/URL fallback + fires notify done, moving NO ref on
@@ -2223,11 +2743,178 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     grep -q 'nothing to sync' "$T/prb.out" || { echo "PUBLISH FALLBACK FAIL (unknown value must behave direct)"; exit 1; }
     sed -i.bak '/^publish:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
     git add -A; git commit -qm 'publish drill cleanup'
+    fi   # drill_on pr-publish
     # ================== end T-022 pr-publish drill ==================
+    if drill_on express; then
+    if [ -n "$SELFTEST_ONLY" ] && ! git rev-parse -q --verify refs/tags/sprint/2 >/dev/null 2>&1; then
+      # T-033: --only express runs on the bare spine (sprint/1 sealed; no sprint/2, no SPRINT 2).
+      # Rebuild the sprint-2 context the pr-publish drill leaves in the full run so express stands
+      # alone. Guarded on SELFTEST_ONLY — skipped entirely in the full run (tested path unchanged).
+      sed -i.bak -e '/^test:/d' -e '/^lint:/d' -e '/^typecheck:/d' -e '/^build:/d' -e '/^uat:/d' ops/CONVENTIONS.md 2>/dev/null || true; rm -f ops/CONVENTIONS.md.bak
+      printf '# SPRINT 2 — express standalone  capacity: 5\n' > ops/SPRINT.md
+      git tag -f sprint/2 main >/dev/null
+      git add -A; git commit -qm 'express standalone: sprint-2 context' >/dev/null 2>&1 || true
+    fi
+    # ========= T-031 express-lane + slow-suite drills (ops/contracts/express-lane.md ·
+    # ops/contracts/verification-tiering.md) =========
+    "$SELF" help | grep -q -- 'land --express' || { echo "USAGE FAIL: land --express missing from help"; exit 1; }
+    # qa stamp: gated on ≥1 suite command — no suite keys → NO stamp; test: true → "<seconds> <epoch>"
+    rm -f .polaris/last-suite-seconds
+    "$SELF" qa >/dev/null 2>&1 || true          # rc is not under test here — only the stamp gate
+    [ -f .polaris/last-suite-seconds ] && { echo "QA STAMP GATE FAIL (no suite command ran — no stamp)"; exit 1; }
+    printf 'test: true\n' >> ops/CONVENTIONS.md
+    "$SELF" qa >/dev/null 2>&1 || true
+    grep -qE '^[0-9]+ [0-9]+$' .polaris/last-suite-seconds || { echo "QA STAMP FORMAT FAIL (want one \"<seconds> <epoch>\" line)"; exit 1; }
+    git add -A; git commit -qm 'express drill: suite on'
+    # a review task + its feat branch, shaped exactly as handoff leaves them (risk: high at birth
+    # so the risk refusal drills on the real frontmatter key)
+    printf -- '---\nid: T-EX\ntitle: express file\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: high\nowner: null\nbranch: feat/T-EX\nstatus: review\nfiles_owned:\n  - src/ex.txt\nverify:\n  - test -f src/ex.txt\n---\n## Why\nexpress drill.\n\n## Acceptance criteria\n- [ ] lands\n' > ops/board/review/T-EX.md
+    git checkout -q -b feat/T-EX main
+    echo ex > src/ex.txt; git add -A; git commit -qm ok
+    git checkout -q main
+    exd="$(date +%F)"
+    expre="$(git rev-parse main)"
+    # refusal: single-task rule — unknown ID, then a second review occupant, both by name
+    "$SELF" land --express T-NOPE > "$T/ex1.out" 2>&1 && { echo "EXPRESS REVIEW FAIL (task not in review/ must refuse)"; exit 1; }
+    grep -q 'express lands exactly one task' "$T/ex1.out" || { echo "EXPRESS REVIEW MSG FAIL"; exit 1; }
+    printf -- '---\nid: T-EX2\npoints: 1\nwsjf: 1\nstatus: review\nfiles_owned:\n  - src/ex2.txt\n---\n' > ops/board/review/T-EX2.md
+    "$SELF" land --express T-EX > "$T/ex2.out" 2>&1 && { echo "EXPRESS SOLO FAIL (a second review task must refuse)"; exit 1; }
+    grep -q 'express lands exactly one task' "$T/ex2.out" || { echo "EXPRESS SOLO MSG FAIL"; exit 1; }
+    rm -f ops/board/review/T-EX2.md
+    # refusal: risk gate
+    "$SELF" land --express T-EX > "$T/ex3.out" 2>&1 && { echo "EXPRESS RISK FAIL (risk: high must refuse)"; exit 1; }
+    grep -q 'risk: high never rides the express lane' "$T/ex3.out" || { echo "EXPRESS RISK MSG FAIL"; exit 1; }
+    set_fm risk normal ops/board/review/T-EX.md
+    # refusal: express: off — and an unknown value warns, then fails the same safe way
+    printf 'express: off\n' >> ops/CONVENTIONS.md
+    "$SELF" land --express T-EX > "$T/ex4.out" 2>&1 && { echo "EXPRESS OFF FAIL"; exit 1; }
+    grep -q 'express: off' "$T/ex4.out" || { echo "EXPRESS OFF MSG FAIL"; exit 1; }
+    sed -i.bak '/^express:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    printf 'express: bogus\n' >> ops/CONVENTIONS.md
+    "$SELF" land --express T-EX > "$T/ex5.out" 2>&1 && { echo "EXPRESS UNKNOWN FAIL (bogus must behave as off)"; exit 1; }
+    grep -q "express: 'bogus' unknown" "$T/ex5.out" || { echo "EXPRESS UNKNOWN WARN FAIL (unknown value must warn)"; exit 1; }
+    grep -q 'express: off' "$T/ex5.out" || { echo "EXPRESS UNKNOWN MSG FAIL (unknown value must fail as off)"; exit 1; }
+    sed -i.bak '/^express:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    # refusal: publish: pr
+    printf 'publish: pr\n' >> ops/CONVENTIONS.md
+    "$SELF" land --express T-EX > "$T/ex6.out" 2>&1 && { echo "EXPRESS PR FAIL (publish: pr must refuse)"; exit 1; }
+    grep -q 'express needs publish: direct' "$T/ex6.out" || { echo "EXPRESS PR MSG FAIL"; exit 1; }
+    git checkout -q -- ops/CONVENTIONS.md       # restore publish: direct (default) for everything below
+    # all four refusals died BEFORE any mutation
+    [ "$(git rev-parse main)" = "$expre" ] || { echo "EXPRESS REFUSE MUTATE FAIL (base moved)"; exit 1; }
+    git rev-parse -q --verify "refs/heads/integrate/$exd" >/dev/null && { echo "EXPRESS REFUSE MUTATE FAIL (integrate branch created)"; exit 1; }
+    [ -f ops/board/review/T-EX.md ] || { echo "EXPRESS REFUSE MUTATE FAIL (task left review/)"; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "EXPRESS REFUSE DIRTY FAIL (a refusal must leave zero uncommitted state)"; exit 1; }
+    # red suite mid-express: land unwinds (integrate back at base), kickback carries the failing tail
+    sed -i.bak 's|^test: true$|test: bash -c "echo EXPRESS-BOOM; exit 1"|' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'express drill: suite red'
+    "$SELF" land --express T-EX > "$T/ex7.out" 2>&1 && { echo "EXPRESS RED FAIL (red suite must die)"; exit 1; }
+    grep -q 'EXPRESS-BOOM' "$T/ex7.out" || { echo "EXPRESS RED TAIL FAIL (output must carry the failing tail)"; exit 1; }
+    [ -f ops/board/active/T-EX.md ] || { echo "EXPRESS RED KICKBACK FAIL (task must bounce to active/)"; exit 1; }
+    grep -q 'EXPRESS-BOOM' ops/board/active/T-EX.md || { echo "EXPRESS RED NOTE FAIL (kickback note must carry the tail)"; exit 1; }
+    [ "$(git rev-parse "refs/heads/integrate/$exd")" = "$(git rev-parse main)" ] || { echo "EXPRESS RED UNWIND FAIL (the land must reset away)"; exit 1; }
+    git checkout -q main
+    mv ops/board/active/T-EX.md ops/board/review/T-EX.md    # back to review + a green suite for the happy path
+    set_fm status review ops/board/review/T-EX.md
+    sed -i.bak 's|^test: .*$|test: true|' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'express drill: suite green'
+    # happy path: one pass → done/ with landed: stamp, sprint tag moved to the new seal,
+    # integrate/<today> deleted (reused from the red run above), tree clean, qa named at the end
+    extagpre="$(git rev-parse refs/tags/sprint/2)"
+    "$SELF" land --express T-EX > "$T/ex8.out" 2>&1 || { cat "$T/ex8.out"; echo "EXPRESS HAPPY FAIL"; exit 1; }
+    # T-038: land --express shares cmd_land's squash path — the same chatter must stay silenced here
+    grep -qi 'Squash commit' "$T/ex8.out" && { echo "LAND NOISE FAIL (express: git 'Squash commit' line leaked)"; exit 1; }
+    grep -qi 'stopped before committing' "$T/ex8.out" && { echo "LAND NOISE FAIL (express: git 'stopped before committing' line leaked)"; exit 1; }
+    [ -f ops/board/done/T-EX.md ] || { echo "EXPRESS DONE FAIL (task must end in done/)"; exit 1; }
+    [ "$(sed -n 's/^landed: //p' ops/board/done/T-EX.md | tr -d ' \r')" = "$(git log --format='%H %s' main | awk '/\[T-EX\]$/ {print $1; exit}')" ] \
+      || { echo "EXPRESS STAMP FAIL (done must stamp the landed sha)"; exit 1; }
+    [ "$(git rev-parse refs/tags/sprint/2)" != "$extagpre" ] || { echo "EXPRESS TAG FAIL (sprint tag must move to the express seal)"; exit 1; }
+    [ "$(git rev-parse refs/tags/sprint/2)" = "$(git rev-parse main)" ] || { echo "EXPRESS TAG FAIL (tag must equal the new base HEAD)"; exit 1; }
+    git rev-parse -q --verify "refs/heads/integrate/$exd" >/dev/null && { echo "EXPRESS BRANCH FAIL (integrate/<today> must be deleted)"; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "EXPRESS CLEAN FAIL (tree must end clean)"; exit 1; }
+    { grep -q 'finish line' "$T/ex8.out" && grep -q 'qa' "$T/ex8.out"; } || { echo "EXPRESS FINISH FAIL (final note must name qa)"; exit 1; }
+    fi   # drill_on express
+    if drill_on hint; then
+    # slow-suite hint: fake stamp 180s + integration: paranoid → land prints it; batch → silent
+    printf -- '---\nid: T-EY\ntitle: hint file\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nowner: null\nbranch: feat/T-EY\nstatus: review\nfiles_owned:\n  - src/ey.txt\nverify: []\n---\n' > ops/board/review/T-EY.md
+    git checkout -q -b feat/T-EY main
+    echo ey > src/ey.txt; git add -A; git commit -qm ok
+    git checkout -q main
+    printf 'integration: paranoid\n' >> ops/CONVENTIONS.md
+    git add -A; git commit -qm 'hint drill: paranoid'
+    printf '180 1700000000\n' > .polaris/last-suite-seconds
+    git checkout -q -b integrate/2026-01-03
+    "$SELF" land T-EY > "$T/hint1.out" || { echo "HINT LAND FAIL"; exit 1; }
+    grep -q 'suite last took 180s' "$T/hint1.out" || { echo "HINT FIRE FAIL (paranoid + 180s stamp must print the note)"; exit 1; }
+    grep -q 'integration: batch' "$T/hint1.out" || { echo "HINT GUIDE FAIL (the note must name integration: batch)"; exit 1; }
+    git reset -q --hard HEAD~1                  # unwind the land so the silent case re-lands the same task
+    sed -i.bak 's/^integration: paranoid$/integration: batch/' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'hint drill: batch'
+    "$SELF" land T-EY > "$T/hint2.out" || { echo "HINT SILENT LAND FAIL"; exit 1; }
+    grep -q 'suite last took' "$T/hint2.out" && { echo "HINT SILENT FAIL (integration: batch must not print the note)"; exit 1; }
+    # cleanup: nothing sealed here — drop the drill refs, restore the pre-drill CONVENTIONS
+    git checkout -q main
+    git branch -q -D integrate/2026-01-03
+    git branch -q -D feat/T-EY
+    rm -f ops/board/review/T-EY.md .polaris/last-suite-seconds
+    sed -i.bak -e '/^integration:/d' -e '/^test: true$/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'express drill cleanup'
+    fi   # drill_on hint
+    # ========= end T-031 express-lane + slow-suite drills =========
+    if drill_on brief; then
+    # ========= T-032 status --brief + metrics summary drills (ops/contracts/status-brief.md) =========
+    # --brief: ONE plain-English paragraph, grep-stable markers, NO table pipe, sprint clause from the
+    # header, active IDs listed · plain `status` keeps its table + gains no brief markers · metrics
+    # opens with an In-plain-English line above the untouched table · EVENTS empty → note, no summary.
+    "$SELF" help | grep -q -- '--brief' || { echo "USAGE FAIL: --brief missing from help"; exit 1; }
+    printf '# SPRINT 7 — the brief lane  capacity: 5\n' > ops/SPRINT.md
+    printf -- '---\nid: T-BR1\ntitle: newest landed thing\ntype: feature\npoints: 1\nwsjf: 3\nstatus: done\nfiles_owned:\n  - src/br1.txt\n---\n' > ops/board/done/T-BR1.md
+    printf -- '---\nid: T-BR2\ntitle: top queued thing\ntype: feature\npoints: 2\nwsjf: 9\nstatus: ready\nfiles_owned:\n  - src/br2.txt\n---\n' > ops/board/ready/T-BR2.md
+    printf -- '---\nid: T-BR3\ntitle: in progress thing\ntype: feature\npoints: 1\nwsjf: 2\nstatus: active\nfiles_owned:\n  - src/br3.txt\n---\n' > ops/board/active/T-BR3.md
+    "$SELF" status --brief > "$T/brief.out" || { echo "BRIEF RUN FAIL"; exit 1; }
+    grep -q 'Last landed:' "$T/brief.out" || { echo "BRIEF MARKER FAIL (Last landed: missing)"; exit 1; }
+    grep -q 'Next up:' "$T/brief.out" || { echo "BRIEF MARKER FAIL (Next up: missing)"; exit 1; }
+    grep -q '|' "$T/brief.out" && { echo "BRIEF PIPE FAIL (a one-paragraph digest carries no table pipe)"; exit 1; }
+    grep -q 'Sprint 7 (the brief lane):' "$T/brief.out" || { echo "BRIEF SPRINT CLAUSE FAIL (header-sourced sprint/goal)"; exit 1; }
+    grep -q 'building (T-BR3)' "$T/brief.out" || { echo "BRIEF ACTIVE IDS FAIL (active ids must ride the building clause)"; exit 1; }
+    grep -q 'Last landed: newest landed thing' "$T/brief.out" || { echo "BRIEF LAST-LANDED FAIL (newest done title)"; exit 1; }
+    grep -q 'Next up: top queued thing' "$T/brief.out" || { echo "BRIEF NEXT-UP FAIL (top-wsjf ready title)"; exit 1; }
+    grep -q 'POLARIS board' "$T/brief.out" && { echo "BRIEF NO-TABLE FAIL (brief must not print the status table header)"; exit 1; }
+    # plain `status` unchanged: keeps its table header, gains NONE of the brief markers
+    "$SELF" status > "$T/plain.out" || { echo "PLAIN STATUS FAIL"; exit 1; }
+    grep -q 'POLARIS board' "$T/plain.out" || { echo "PLAIN HEADER FAIL (plain status must keep its table header)"; exit 1; }
+    grep -q 'Last landed:' "$T/plain.out" && { echo "PLAIN BRIEF LEAK FAIL (plain status must not gain brief markers)"; exit 1; }
+    # metrics: In-plain-English summary as the FIRST line, existing table still below it
+    "$SELF" metrics > "$T/mt.out" || { echo "METRICS RUN FAIL"; exit 1; }
+    head -1 "$T/mt.out" | grep -q '^In plain English:' || { echo "METRICS SUMMARY FIRST-LINE FAIL"; exit 1; }
+    head -1 "$T/mt.out" | grep -q 'tasks done' || { echo "METRICS SUMMARY CONTENT FAIL"; exit 1; }
+    grep -q '^done total:' "$T/mt.out" || { echo "METRICS TABLE FAIL (existing table must stay below the summary)"; exit 1; }
+    # EVENTS empty → the no-telemetry note, and NO summary line
+    mv ops/board/EVENTS.ndjson "$T/ev.save"; : > ops/board/EVENTS.ndjson
+    "$SELF" metrics > "$T/mt-empty.out" 2>&1 || { echo "METRICS EMPTY RC FAIL"; exit 1; }
+    grep -q 'no telemetry yet' "$T/mt-empty.out" || { echo "METRICS EMPTY NOTE FAIL"; exit 1; }
+    grep -q 'In plain English:' "$T/mt-empty.out" && { echo "METRICS EMPTY SUMMARY FAIL (empty EVENTS must print no summary)"; exit 1; }
+    mv "$T/ev.save" ops/board/EVENTS.ndjson
+    rm -f ops/board/done/T-BR1.md ops/board/ready/T-BR2.md ops/board/active/T-BR3.md
+    # ========= end T-032 status --brief + metrics summary drills =========
+    fi   # drill_on brief
+    # ========= T-033 --only self-drills (ops/contracts/verification-tiering.md) — full run ONLY:
+    # a subset run must never re-spawn selftest (infinite recursion), so gate on empty SELFTEST_ONLY.
+    # nonsense pattern dies pre-spine (rc 1); --only fmlist runs spine + the fmlist drill and prints
+    # the distinct subset pass line.
+    if [ -z "$SELFTEST_ONLY" ]; then
+      "$SELF" doctor --selftest --only 'no-such-drill-xyz' >/dev/null 2>&1 && { echo "ONLY UNKNOWN FAIL (nonsense pattern must die rc 1, pre-spine)"; exit 1; }
+      "$SELF" doctor --selftest --only fmlist > "$T/only.out" 2>&1 || { cat "$T/only.out"; echo "ONLY SUBSET FAIL (--only fmlist must pass)"; exit 1; }
+      grep -q 'selftest passed (subset: fmlist' "$T/only.out" || { echo "ONLY SUBSET LINE FAIL (distinct subset pass line missing)"; exit 1; }
+    fi
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin · pr-publish (feat stays local · seal pushes ONLY integrate + title/bullets/URL + notify done, no ref moved · --sync subject gate/tag/branch cleanup both sides · done via rule 1 · direct --sync dies · unknown publish warns) · sprint report (seal commits docs(sprint-N) riding the wave · cmd_report --sprint/current/--all renders + prints, board read-only + idempotent)"
+  if [ -n "$SELFTEST_ONLY" ]; then
+    say "selftest passed (subset: $SELFTEST_ONLY — $st_hit of $st_total labeled drills; spine always runs)"
+    return 0
+  fi
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin · pr-publish (feat stays local · seal pushes ONLY integrate + title/bullets/URL + notify done, no ref moved · --sync subject gate/tag/branch cleanup both sides · done via rule 1 · direct --sync dies · unknown publish warns) · sprint report (seal commits docs(sprint-N) riding the wave · cmd_report --sprint/current/--all renders + prints, board read-only + idempotent) · brain (7-file build gitignored · INDEX routes all 5 · board digest names the landed task · stale warn → refresh clears · seal auto-refresh · refresh failure = note, never a red seal) · express (help form · qa suite stamp gated+formatted · 4 refusals pre-mutation: solo-review/risk-high/off+unknown/publish-pr · red suite unwind+kickback tail · happy path: done+landed stamp · tag moved · integrate deleted · clean tree · qa finish line) · slow-suite hint (paranoid+180s fires naming integration: batch · batch silent) · status --brief (one paragraph · Last landed:/Next up: markers · header sprint clause · active ids · no table pipe · plain status unchanged) · metrics In-plain-English summary (first line above the table · silent on empty EVENTS)"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
@@ -2381,6 +3068,8 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
   # red. The Conductor runs it after integration (a subagent's "green" is never taken on
   # faith), the Integrator runs it before reporting, CI and humans run it whenever.
   local red=0 ran=0 k c out
+  local t0 t1
+  t0="$(date +%s)"
   out="$(mktemp)"
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
@@ -2394,6 +3083,14 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
       red=1
     fi
   done
+  # T-031 (ops/contracts/verification-tiering.md): stamp how long the suite took — one line,
+  # "<seconds> <epoch>", written only when ≥1 suite command actually ran. `land` reads it for
+  # the slow-suite hint; purely advisory, never a gate, best-effort write.
+  if [ "$ran" -ge 1 ]; then
+    t1="$(date +%s)"
+    mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+    printf '%s %s\n' "$((t1 - t0))" "$t1" > "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true
+  fi
   [ "$ran" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
   # drift --strict exits the script on findings, so both sub-checks run in subshells.
   if ( cmd_drift --strict ) >"$out" 2>&1; then
@@ -2430,6 +3127,11 @@ cmd_metrics() { # cycle time + throughput + kickbacks from EVENTS.ndjson — pur
       n=0; for (id in done) if (id in claimed) { c[n++]=done[id]-claimed[id] }
       # insertion sort (tiny n) for p50
       for(i=1;i<n;i++){v=c[i];j=i-1;while(j>=0&&c[j]>v){c[j+1]=c[j];j--}c[j+1]=v}
+      # T-032 plain-English summary FIRST, above the byte-identical table — same numbers it computes
+      bsum=0; bcnt=0; for (id in ho) if (id in claimed) { bsum+=ho[id]-claimed[id]; bcnt++ }
+      isum=0; icnt=0; for (id in done) if (id in ho) { isum+=done[id]-ho[id]; icnt++ }
+      p50h = (n>0) ? c[int((n-1)/2)]/3600 : 0
+      printf "In plain English: %d tasks done, a typical task takes %.1fh door to door; building averages %.1fh, landing %.1fh; %d bounced.\n", dn+0, p50h, (bcnt?bsum/bcnt/3600:0), (icnt?isum/icnt/3600:0), kbt+0
       printf "done total: %d   done 7d: %d   kickbacks total: %d (7d: %d)\n", dn+0, dn7+0, kbt+0, kb7+0
       if (n>0) { s=0; for(i=0;i<n;i++) s+=c[i]
         printf "cycle claim→done  avg: %.1fh   p50: %.1fh   n=%d\n", s/n/3600, c[int((n-1)/2)]/3600, n }
@@ -3025,6 +3727,11 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   task-commit-msg <task-file>    print the task's landed-commit message (pure; `land` consumes it)
   land <ID>                      Integrator, on integrate/<date>: audit + squash feat/<ID> into
                                  ONE rich commit ([<ID>] subject + Landed-from trailer; no board write)
+  land --express <ID>            ONE pass for a single small task, from <base>: integrate branch +
+                                 audit/land + ONE full suite (red → unwind + kickback) + seal +
+                                 run-verify + done + branch cleanup. Refuses: another task in
+                                 review/ · risk: high · express: off · publish: pr. Every gate of
+                                 the long path still runs; `qa` stays the finish line.
   seal [<date>]                  Integrator: seal the wave — merge integrate/<date> into base
                                  (--no-ff, per-task bullets) + lightweight tag sprint/<n>; a later
                                  wave's seal MOVES the tag (sprint's latest sealed checkpoint).
@@ -3040,8 +3747,20 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  into one sealed sprint's task commits, across all its waves
   rollback <ID|sprint/<n>>       revert one landed task (or the sprint's latest sealed wave, -m 1)
                                  on base — forward-only: never resets, never force-pushes
-  status | sweep [--fix] | doctor [--selftest]
-  metrics                        cycle · throughput · kickbacks · build-vs-integrate split (EVENTS.ndjson)
+  status [--brief] | sweep [--fix] | doctor [--selftest [--only <pattern>]]
+                                 status --brief = ONE plain-English paragraph, no table (plain status
+                                 unchanged): Last landed: / Next up: markers + a sprint-column clause
+                                 doctor --selftest --only <glob> = the always-on spine + only the
+                                 labeled drills matching <glob> (fmlist tcm report metrics brain rules
+                                 drift hardening qa remote syncrace notify grant upgrade pr-publish
+                                 express hint brief); a nonsense pattern dies before the spine
+                                 (unknown drill label)
+  brain [--refresh]              generate .polaris/brain/ — gitignored knowledge base a cold agent
+                                 reads FIRST (INDEX + code-map/board/contracts/commands/gotchas);
+                                 --refresh skips code-map when code is unchanged. seal auto-refreshes
+                                 an existing brain; doctor warns when it is stale
+  metrics                        opens with a plain-English summary line, then cycle · throughput ·
+                                 kickbacks · build-vs-integrate split (EVENTS.ndjson)
   why <ID>                       why a task bounced/blocked: kickback + release/blocked notes from telemetry + body
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
@@ -3084,9 +3803,10 @@ case "${1:-}" in
   history)    shift; cmd_history "$@";;
   report)     shift; cmd_report "$@";;
   rollback)   shift; cmd_rollback "$@";;
-  status)     update_check_maybe || true; cmd_status;;
+  status)     shift 2>/dev/null || true; update_check_maybe || true; cmd_status "${1:-}";;
+  brain)      shift 2>/dev/null || true; cmd_brain "${1:-}";;   # no update_check_maybe: agents run it cold and often — keep it quiet + pure
   sweep)      shift 2>/dev/null || true; cmd_sweep "${1:-}";;
-  doctor)     shift 2>/dev/null || true; update_check_maybe || true; cmd_doctor "${1:-}";;
+  doctor)     shift 2>/dev/null || true; update_check_maybe || true; cmd_doctor "$@";;
   metrics)    cmd_metrics;;
   why)        shift; cmd_why "$@";;
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;

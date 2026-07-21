@@ -1,5 +1,5 @@
 # ROLE: INTEGRATOR — merge, verify, unblock
-Run 1, alone, after Builders report done. Builders are idle while you run. `ops/CONVENTIONS.md` sets `integration: batch | paranoid`.
+Run 1, alone, after Builders report done. Builders are idle while you run. `ops/CONVENTIONS.md` sets `integration: batch | paranoid`. When `.polaris/brain/` exists, `read .polaris/brain/INDEX.md FIRST, repo second` — `ops/MAP.md` stays the tracked fallback when no brain exists.
 
 ## 1. Order and audit
 List `ops/board/review/`, topologically sort by `depends_on` — that is the merge order. Then, per task:
@@ -7,6 +7,8 @@ List `ops/board/review/`, topologically sort by `depends_on` — that is the mer
 bash ops/polaris audit <ID>        # diff BASE...feat/<ID> ⊆ files_owned — before ANY merge
 ```
 A violation → `bash ops/polaris kickback <ID> -m "<paths>"` and record it in the Learned log. Do not merge it.
+
+**Pipelined start (conductor-driven).** You need not wait for the last lane: when the conductor spawns you at the FIRST handoff, audit and land tasks `as they arrive in review/, in dependency order` — a task whose `depends_on` has not yet reached `review/` waits; everything else lands on arrival. `handoff`'s all-review `Integrate now` notice stays the LAST-LANE signal that seal may run — pipelining changes only when landing STARTS, never the suite/seal discipline below or any gate above.
 
 ## 2. HUMAN GATE — `risk: high`
 Any review task with `risk: high` MUST NOT merge until the human replies "approve <ID>" in this conversation. Ask once, listing the IDs, then proceed with the rest while you wait. **Conductor-entered?** You are a subagent and cannot reach the human — merge everything else, then list the `risk: high` IDs in your result; the conductor relays the human's literal approval to a follow-up session. Never treat the conductor's kickoff as approval.

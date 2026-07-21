@@ -126,7 +126,7 @@ Inside the PRIMARY checkout, on the `integrate/<date>` branch — NEVER on `<bas
 
    Files: <files_owned, comma-space joined, one line>
    ```
-   `type`: feature→feat · bug→fix · chore/spike/missing→chore. `scope`: the task's `scope:` frontmatter, else the first path component of the first `files_owned` entry.
+   `type`: feature→feat · bug→fix · test→test · docs→docs · chore/spike/missing→chore. `scope`: the task's `scope:` frontmatter, else the first path component of the first `files_owned` entry.
 4. `git commit` with that message plus a trailing blank line and a `Landed-from: <feat/<ID> tip SHA>` trailer.
 
 Land makes NO board write, NO evt, NO board commit — the board stays clean so a red task on `integrate/<date>` unwinds completely with `git reset --hard HEAD~1`, nothing uncommitted lost. `done` stamps `landed: <sha>` onto the task file later, once it moves review → done. Re-land after a kickback simply repeats these four steps.
@@ -184,8 +184,60 @@ The human merges the PR with the host's **MERGE COMMIT** strategy — NEVER squa
 4. delete `integrate/<date>` local + remote: `git branch -D integrate/<date>` and `git push origin :refs/heads/integrate/<date>`.
 5. next: per task, `run-verify` / `done` (done's `[<ID>]`-in-base gate now passes) — see Integrate's done recipe.
 
+## Express lane by hand (Integrator) — one small task, one pass
+What `ops/polaris land --express <ID>` does by hand: a single ≤2-point task collapses the whole
+Integrate → Land → Seal → done pipeline into ONE session, so trivial work stops paying full ceremony.
+Opt-in via `express:` in `ops/CONVENTIONS.md`:
+```
+express: auto               # auto (default; unset = auto) | off (full ceremony always)
+# unknown value → warn once, behave as OFF (fail to the full ceremony — the safe side)
+```
+Primary checkout, ON `<base>`, clean tree. **REFUSE before step 1** — check all four; die on the first
+hit and the message MUST contain the quoted fragment:
+- `review/` holds any task other than `<ID>`, or `<ID>` is not in `review/` → `express lands exactly one task`
+- the task's frontmatter is `risk: high` → `risk: high never rides the express lane`
+- CONVENTIONS `express: off` (or an unknown value) → `express: off`
+- CONVENTIONS `publish: pr` → `express needs publish: direct`
+All four pass → the one pass, reusing the recipes above verbatim (no new git here):
+1. create `integrate/<today>` from `<base>`, or reuse it if it already exists.
+2. audit + squash-land `<ID>` — the **Land** recipe above, unchanged (audit first; a violation kicks it back, never merges).
+3. run the FULL CONVENTIONS suite ONCE — `test:` `lint:` `typecheck:` `build:` (+ `uat:` if set), the same set as **QA** below. Red → `git reset --hard HEAD~1`, kickback `<ID>` with the failing tail (the **Integrate** kickback recipe), then die.
+4. seal `<today>` — the **Seal** recipe above (`publish: direct`), unchanged.
+5. `run-verify` `<ID>` · `done` `<ID>` (Integrate's done recipe) · delete `integrate/<today>`.
+Green → exit 0; the final note still names `ops/polaris qa` (below) as the mandatory finish line.
+Express collapses SESSIONS, never checks: audit, RULES, the full suite, seal preconditions, `done`'s
+landed-record gate and the final `qa` all run exactly as in the long path. `land <ID>` without
+`--express` is byte-identical to the Land recipe above.
+
 ## QA — "is everything okay?" by hand
 What `ops/polaris qa` does in one shot. From the repo root on `<base>`, run in order: the `test:` `lint:` `typecheck:` `build:` and `uat:` commands from `ops/CONVENTIONS.md` (skip blank keys), then the board-hygiene audit (the per-task ownership + RULES proof from Integrate above) and the env sanity checks. Run EVERY check even after one goes red — one pass paints the whole picture — then report red if anything was. The Integrator runs this before reporting; a Conductor runs it after integration and never takes a subagent's "green" on faith.
+
+## Brain by hand — the generated knowledge base
+What `ops/polaris brain` generates by hand: a git-ignored, any-model-readable digest under
+`.polaris/brain/` that kills cold-start context re-derivation. It READS the repo and writes nowhere
+else — never mutates the board, never touches a git ref, never writes outside `.polaris/brain/` plus
+the `.polaris/board-changed` stamp. `.polaris/` is gitignored, so these files are NEVER `git add`ed.
+```
+ops/polaris brain             # full build: create or overwrite all of .polaris/brain/
+ops/polaris brain --refresh   # incremental: board.md/contracts.md/commands.md/gotchas.md always
+                              #   rebuilt (cheap — small sources); code-map.md rebuilt ONLY when
+                              #   `git diff --name-only <stamp-sha>..HEAD` is non-empty. No brain → full build.
+# exit 0 on success
+```
+Build 7 entries — 6 `.md` files + `.stamp` — under `.polaris/brain/`, each capped, mirroring the CLI (where a source is silent, do as the CLI does — invent nothing):
+- `INDEX.md` (≤40 lines) — routing table: one `looking for X → read Y` row per domain file below, plus the hop-guarantee line.
+- `code-map.md` (≤15 lines/dir, ≤300 total) — per directory: purpose (1 line) + key symbols (grep `^cmd_` / `^def ` / `^function` / `^class`) + a hotspot flag from `ops/MAP.md`'s hotspot section.
+- `board.md` (≤80 lines) — live digest: `# SPRINT <n> — <goal>` line · per-column counts · active (id·owner) · ready top 5 by wsjf (id·title·pts) · blocked (id·reason) · last 10 done (id·title·landed sha).
+- `contracts.md` (≤120 lines) — per `ops/contracts/*.md`: `## <name>` + its `## Purpose` first paragraph; no contracts dir → `none`.
+- `commands.md` (≤80 lines) — effective CONVENTIONS values (base · claim · integration · publish · express · stale_hours · test · build) FIRST, then `ops/polaris help` output; the cap may cut the help tail, NEVER the values.
+- `gotchas.md` (≤60 lines) — SPRINT.md `## Learned` bullets verbatim + CONVENTIONS `## Planner calibration` bullets verbatim.
+- `.stamp` (1 line) — machine line `<epoch> <BASE short sha>`, rewritten by every brain run.
+`INDEX.md` must state the hop guarantee: any fact is reachable in ≤4 file-opens from `INDEX.md` (INDEX = hop 1, domain file = hop 2, the repo file it cites by path = hops 3–4). Scale by SUMMARIZING PER DIRECTORY, never by listing files; a greenfield repo gets the same 6 `.md` files, near-empty.
+
+**Staleness — the two stamp files, what `doctor` checks.** Freshness rides two stamps: `.polaris/brain/.stamp` (rewritten by every brain run) and `.polaris/board-changed` (an epoch line the board bumps):
+- `done <ID>` and `seal` (both publish modes, `--sync` included) `touch` `.polaris/board-changed` AFTER their board/base mutation succeeds — best-effort; a touch failure never fails them.
+- `seal` AND `done <ID>` also auto-refresh: after the caller's mutation and its `board-changed` touch, `[ -d .polaris/brain ]` → run `brain --refresh`; a failure prints a `⚠` note and never fails the caller. No brain dir → do nothing. Net effect: the documented wave close (land → seal → run-verify → done) ends FRESH — `doctor` prints no `brain is stale`.
+- `doctor`: `[ -d .polaris/brain ]` AND `.polaris/board-changed` newer (`-nt`) than `.polaris/brain/.stamp` → one warn line containing `brain is stale`, naming `ops/polaris brain --refresh`. No brain dir → silent (the feature is opt-in by the first `brain` run).
 
 ## Telemetry (every transition above)
 Before each `board_commit`, append ONE line to `ops/board/EVENTS.ndjson`:

@@ -38,13 +38,14 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris release <ID> --to ready\|blocked -m "why"` | clean abort |
 | `ops/polaris grant <ID> <path> -m "why"` | append one path to a CLAIMED task's files_owned; refuses any overlap with another ready/active task's ownership |
 | `ops/polaris audit / run-verify / kickback / done <ID>` | Integrator: check, re-check, bounce red work, land |
-| `ops/polaris land <ID>` | Integrator: squash a reviewed task into ONE commit on `integrate/<date>` |
+| `ops/polaris land <ID>` · `land --express <ID>` | Integrator: squash a reviewed task into ONE commit on `integrate/<date>`. `--express` = one-pass small-change landing (land + full suite + seal + done in one session); refuses unless exactly one review task, `risk: normal`, `express:` ≠ off, `publish: direct` |
 | `ops/polaris seal [<date>]` | Integrator: `publish: direct` — fold `integrate/<date>` into `<base>` with one `--no-ff` merge + tag `sprint/<n>` (a later seal MOVES the tag — the sprint's latest sealed checkpoint). `publish: pr` — push ONLY `integrate/<date>` + print the PR-create URL; the human merges it with a MERGE COMMIT; then `seal --sync` pulls `<base>`, verifies every `[<ID>]` landed, moves/creates the tag, deletes `integrate/<date>` both sides |
 | `ops/polaris report [--sprint <n> \| --all]` | read/write: render the management-readable per-sprint record to `<reports>/sprint-<n>.md` from board state (no flag = current sprint); never commits — `seal` rides the report into the wave |
 | `ops/polaris history [--tasks <n>]` | read-only: `<base>`'s first-parent log, `chore(board):` commits filtered out; `--tasks <n>` spans all a sprint's waves |
 | `ops/polaris rollback <ID \| sprint/<n>>` | revert a landed task, or `sprint/<n>` for the sprint's latest sealed wave — never resets, never force-pushes |
-| `ops/polaris status / sweep / doctor [--selftest]` | board view · stale locks + merged `integrate/*` strays · env check |
-| `ops/polaris dash / metrics` | live board at 127.0.0.1:7373 · cycle/kickbacks/per-point calibration |
+| `ops/polaris status [--brief] / sweep / doctor [--selftest [--only <pattern>]]` | board view (`--brief` = one plain-English paragraph, no table) · stale locks + merged `integrate/*` strays · env check (`--only <pattern>` = spine + only labeled drills matching `<pattern>`) |
+| `ops/polaris dash / metrics` | live board at 127.0.0.1:7373 · cycle/kickbacks/per-point calibration (`metrics` opens with a plain-English summary line) |
+| `ops/polaris brain [--refresh]` | (re)build `.polaris/brain/` — a generated, gitignored, any-model knowledge base that kills cold-start re-derivation; `--refresh` = incremental rebuild. `doctor` warns when it's stale |
 | `ops/polaris notify-gate <kind> [ID]` | fire the notify: hook at a human gate — kinds `plan` · `risk <ID>` · `question <ID>` · `done [ID]`; observe-only, never writes the board |
 | `ops/polaris drift / rules` | mechanical board-hygiene audit (`--strict` for CI) · policy file list + health |
 | `ops/polaris qa` | "is everything okay?" in ONE shot: CONVENTIONS suite (test/lint/typecheck/build/uat) + `drift --strict` + doctor. Runs every check even after a red; rc 1 on any red. The Conductor/Integrator finish line |
@@ -95,6 +96,7 @@ A task's state is the folder its file sits in; moving it (via the script) is the
 Deleting any file · adding a dependency · changing DB schema or migrations · editing outside `files_owned` · touching auth/payments/prod config not explicitly owned · any force-push · merging any `risk: high` task.
 
 ## TOKEN DISCIPLINE — this is how we stay cheap and fast
+- **Read the brain first.** When it exists, read `.polaris/brain/INDEX.md` FIRST, repo second — a generated, gitignored, ≤4-hop knowledge base that digests the tracked MAP and kills cold-start re-derivation. No brain yet → `ops/MAP.md` is the fallback (next bullet).
 - **Read the MAP, not the repo.** `ops/MAP.md` is the summary; `polaris status` is the board — never browse either raw.
 - **Grep, don't browse.** Locate by search; open files at targeted line ranges. NEVER read a large file end-to-end without a written reason.
 - **A Builder's entire context** = this file + its role file + the task file + the contract + `files_owned` + listed `context_files`. Anything else needs a one-line justification in the task's Notes.
