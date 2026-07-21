@@ -86,3 +86,5 @@ not installed code — they are written normally, by the board scripts and by th
 - land gains --express <ID> — audit+land+ONE full suite+seal+run-verify+done in one pass, refusals per express-lane contract; qa stamps suite duration, land hints when a paranoid suite ran >2min (5.15.0-unreleased)  (T-031, 2026-07-20)
 
 - status gains --brief (one plain-English paragraph) · metrics opens with an In-plain-English summary line (5.15.0-unreleased)  (T-032, 2026-07-20)
+
+- doctor --selftest gains --only <glob> — spine + matching labeled drills only; full run byte-identical (5.15.0-unreleased)  (T-033, 2026-07-20)
