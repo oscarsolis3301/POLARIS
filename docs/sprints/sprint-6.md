@@ -28,7 +28,7 @@ must survive untouched — the dir loops print nothing, keep it that way.
 - [x] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`) — byte-identical referee
 
 ## T-040 — selftest extraction into lib/selftest/ + opt-in --parallel sharding
-points 5 · risk normal · landed 7ff906f (2026-07-21) · claimed 2026-07-21
+points 5 · risk normal · landed 7ff906f (2026-07-21) · claimed 2026-07-21 → done 2026-07-21
 files touched: kit/ops/lib/selftest/board.sh, kit/ops/lib/selftest/brain.sh, kit/ops/lib/selftest/history.sh, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/remote.sh, kit/ops/lib/selftest/report.sh, kit/ops/lib/selftest/spine.sh, kit/ops/polaris
 
 ### Why
@@ -55,7 +55,7 @@ Serial stays the default and byte-identical; CI stays serial. Update the entry's
 - [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
 
 ## T-041 — docs — modular layout in MANUAL, kit CLAUDE.md STATE tree + THE TOOL note
-points 2 · risk normal · landed 47d1b00 (2026-07-21) · claimed 2026-07-21
+points 2 · risk normal · landed 47d1b00 (2026-07-21) · claimed 2026-07-21 → done 2026-07-21
 files touched: kit/CLAUDE.md, kit/ops/MANUAL.md
 
 ### Why
@@ -77,3 +77,25 @@ chain is still landing; cite no line numbers, paste no code.
 - [ ] kit/CLAUDE.md STATE tree lists `lib/` under ops/ with the 7 module names + selftest/; THE TOOL notes the entry shape
 - [ ] no wording beyond the two contracts; no line numbers, no code blocks copied from the CLI
 - [ ] map_delta line present in frontmatter (lands in MAP via `polaris done`)
+
+## T-042 — extract lib/ownership.sh + lib/builder.sh
+points 3 · risk normal · landed f8f0fc8 (2026-07-21) · claimed 2026-07-21
+files touched: kit/ops/lib/builder.sh, kit/ops/lib/ownership.sh, kit/ops/polaris
+
+### Why
+Third link of the entry-file chain. Move the ownership/verification machinery (owned_match,
+check_ownership, run_verify_cmds, map_delta_hint, rule_scan_path, rule_scan_content_file,
+check_rules, plus the guard entrypoints cmd_match and cmd_rules_check) verbatim into
+kit/ops/lib/ownership.sh, and the builder lifecycle (cmd_claim, cmd_verify, cmd_handoff,
+cmd_release, grant_append_owned, cmd_grant, cmd_resume) verbatim into kit/ops/lib/builder.sh —
+exactly the function-to-module table in the module-layout contract, original relative order,
+bodies untouched. Extend the entry's loader list with `ownership builder` at their final
+positions. The write-guard hook calls `ops/polaris _match/_rules` as a subprocess, so the guard
+path needs no change — but it now crosses the loader, which the --only subset plus the full suite
+prove. Zero behavior change; serial output byte-identical.
+
+### Acceptance
+- [ ] ownership.sh holds exactly the contract's 9 functions; builder.sh exactly its 7; nothing else moved
+- [ ] loader list reads `core ownership builder selftest/…` (final relative order, per contract growth schedule)
+- [ ] the sharding seam check (`--parallel 2 --only 'fmlist,grant'`) still greens post-extraction
+- [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
