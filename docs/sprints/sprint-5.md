@@ -23,7 +23,7 @@ exact layout, caps, stamp files and drill list — build precisely that, nothing
 - [ ] `polaris help` lists brain
 
 ## T-031 — land --express — one-pass small-change landing + slow-suite hint
-points 5 · risk normal · landed d415c1e (2026-07-20) · claimed 2026-07-20
+points 5 · risk normal · landed d415c1e (2026-07-20) · claimed 2026-07-20 → done 2026-07-20
 files touched: kit/ops/polaris
 
 ### Why
@@ -44,6 +44,24 @@ when a paranoid-mode suite exceeds 2 minutes, making INTEGRATOR.md's batch-first
 - [ ] `land` prints the `suite last took` hint ONLY when integration: paranoid AND stamp >120s; exit status never changes
 - [ ] happy-path + 4 refusal + hint/silent drills ride selftest(); existing drills untouched
 - [ ] `polaris help` shows the --express form
+
+## T-032 — status --brief + metrics plain-English summary line
+points 2 · risk normal · landed e09e4e6 (2026-07-20) · claimed 2026-07-20
+files touched: kit/ops/polaris
+
+### Why
+Mid-run, a human wants one sentence — what's done, what's building, what lands next — not a column
+table. `status --brief` prints exactly the contract's one-paragraph skeleton (grep-stable markers
+`Last landed:` / `Next up:`), and `metrics` gains one `In plain English:` line above its existing
+table, built from numbers the awk already computes. Plain `status` and the metrics table stay
+byte-identical.
+
+### Acceptance
+- [ ] `status --brief` prints ONE paragraph per the contract skeleton; empty clauses dropped, no table pipes
+- [ ] plain `status` output unchanged
+- [ ] `metrics` first line starts `In plain English:`; EVENTS empty → existing no-telemetry note, no summary
+- [ ] both drills ride selftest(); existing drills untouched
+- [ ] `polaris help` shows the --brief form
 
 ## T-034 — CONDUCTOR.md — express triage, pipelined integration, foreground gates, dead-lane recovery
 points 3 · risk normal · landed c8701a7 (2026-07-20) · claimed 2026-07-20 → done 2026-07-20
