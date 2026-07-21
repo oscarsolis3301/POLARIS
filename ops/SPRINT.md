@@ -9,6 +9,9 @@ knowledge base, ≤4-hop, seal-refreshed, doctor-warned), express lane (`express
 Contracts: brain · express-lane · verification-tiering · status-brief · pipelined-integration.
 plan: fast-lane → T-030..T-037 (25 pts). kit/ops/polaris chain T-030 → T-031 → T-032 → T-033;
 doc tasks T-034..T-037 parallel (contract-pinned wording). Release 5.15.0.
+QA fix wave (2026-07-20, scout on the sprint-5 kit pre-release): T-038 (cli+manual, 3 pts) — brain
+commands.md truncation · post-done staleness · land squash noise · commit type map test/docs ·
+MANUAL 7-vs-6 count (brain v1.1 · clean-history v2.2).
 
 ## Burndown
 | date | done pts | remaining |
