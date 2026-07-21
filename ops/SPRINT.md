@@ -15,6 +15,7 @@ Release 5.16.0.
 | date | done pts | remaining |
 |---|---|---|
 | 2026-07-21 | 5 (T-039, wave 1, sealed sprint/6) | 18 (T-040, T-041 ready · T-042..T-045 backlog) · cycle p50 0.5h n=39 · kickbacks 0 · build avg 0.3h / integrate avg 1.8h · suite green on integrate (batch: full suite once + pack) |
+| 2026-07-21 | 12 (+T-040, T-041, wave 2, re-sealed sprint/6 tag 01d250d→13a92e1) | 11 (T-042 ready · T-043..T-045 backlog) · cycle p50 0.6h n=41 · kickbacks 0 · build avg 0.3h / integrate avg 1.7h · suite green on integrate (batch: full suite once + pack) · --parallel sharding live (run-verify used 2 shards) |
 
 # SPRINT 5 — The fast lane          capacity: 25   dates: 2026-07-20–
 
