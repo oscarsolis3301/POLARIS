@@ -138,3 +138,5 @@
 {"ts":1784659208,"ev":"claim","id":"T-040","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1784659235,"ev":"claim","id":"T-041","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1784660085,"ev":"handoff","id":"T-041","who":"Owner@DESKTOP","note":""}
+{"ts":1784662504,"ev":"handoff","id":"T-040","who":"Owner@DESKTOP","note":""}
+{"ts":1784662505,"ev":"all-review","id":"T-040","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
