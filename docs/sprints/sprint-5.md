@@ -1,7 +1,7 @@
 # Sprint 5 — The fast lane (2026-07-20–)
 
 ## T-030 — brain command — generated .polaris/brain/ knowledge base + freshness hooks
-points 5 · risk normal · landed 6c07990 (2026-07-20) · claimed 2026-07-20
+points 5 · risk normal · landed 6c07990 (2026-07-20) · claimed 2026-07-20 → done 2026-07-20
 files touched: kit/ops/polaris
 
 ### Why
@@ -22,8 +22,31 @@ exact layout, caps, stamp files and drill list — build precisely that, nothing
 - [ ] the 5 contract drills ride selftest(); plain `--selftest` still runs every existing drill, pass line unchanged
 - [ ] `polaris help` lists brain
 
+## T-031 — land --express — one-pass small-change landing + slow-suite hint
+points 5 · risk normal · landed d415c1e (2026-07-20) · claimed 2026-07-20
+files touched: kit/ops/polaris
+
+### Why
+A 1-file 2-point request pays the same session ceremony as a 25-point sprint — that is why small
+asks take hours. `land --express <ID>` collapses the integrator's long path (integrate branch →
+audit+land → full suite → seal → run-verify → done → branch cleanup) into one command for the
+single-task case, refusing loudly whenever the case is not single/safe (four pinned refusals in the
+contract). Every gate still runs — express collapses sessions, never checks. Same task, second seam:
+`qa` records how long the suite took (.polaris/last-suite-seconds) and `land` prints a one-line hint
+when a paranoid-mode suite exceeds 2 minutes, making INTEGRATOR.md's batch-first rule mechanical.
+
+### Acceptance
+- [ ] `land --express <ID>` runs the contract's 5 steps and exits green on the happy path: task in done/ with a landed: stamp, sprint tag set/moved, integrate branch deleted, tree clean
+- [ ] all four refusals die BEFORE any mutation, each printing its pinned fragment
+- [ ] a red suite mid-express unwinds the land (reset --hard HEAD~1), kicks the task back with the failing tail, and dies
+- [ ] `land <ID>` without --express is byte-identical to today
+- [ ] `qa` writes .polaris/last-suite-seconds ("<seconds> <epoch>") only when ≥1 suite command ran
+- [ ] `land` prints the `suite last took` hint ONLY when integration: paranoid AND stamp >120s; exit status never changes
+- [ ] happy-path + 4 refusal + hint/silent drills ride selftest(); existing drills untouched
+- [ ] `polaris help` shows the --express form
+
 ## T-034 — CONDUCTOR.md — express triage, pipelined integration, foreground gates, dead-lane recovery
-points 3 · risk normal · landed c8701a7 (2026-07-20) · claimed 2026-07-20
+points 3 · risk normal · landed c8701a7 (2026-07-20) · claimed 2026-07-20 → done 2026-07-20
 files touched: kit/ops/roles/CONDUCTOR.md
 
 ### Why
@@ -47,7 +70,7 @@ with zero conflicts.
 - [ ] no other CONDUCTOR.md semantics change (plan gate, drain, snags, cost discipline read as today)
 
 ## T-035 — role files — brain-first reads, INTEGRATOR arrival-order recipe, INIT skeleton keys
-points 3 · risk normal · landed bee62c5 (2026-07-20) · claimed 2026-07-20
+points 3 · risk normal · landed bee62c5 (2026-07-20) · claimed 2026-07-20 → done 2026-07-20
 files touched: kit/ops/roles/BUILDER.md, kit/ops/roles/INIT.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md
 
 ### Why
@@ -68,7 +91,7 @@ base. Wording is contract-pinned so T-034 edits CONDUCTOR.md in parallel with ze
 - [ ] no other semantics change in any of the four files
 
 ## T-036 — kit/CLAUDE.md — tool-table rows for brain/express/--brief/--only + brain-first token discipline
-points 2 · risk normal · landed 6902471 (2026-07-20) · claimed 2026-07-20
+points 2 · risk normal · landed 6902471 (2026-07-20) · claimed 2026-07-20 → done 2026-07-20
 files touched: kit/CLAUDE.md
 
 ### Why
@@ -86,7 +109,7 @@ line, same table voice; change nothing else.
 - [ ] no other section of kit/CLAUDE.md changes
 
 ## T-037 — MANUAL.md — brain and express-lane by-hand recipes
-points 2 · risk normal · landed fe81c1a (2026-07-20) · claimed 2026-07-20
+points 2 · risk normal · landed fe81c1a (2026-07-20) · claimed 2026-07-20 → done 2026-07-20
 files touched: kit/ops/MANUAL.md
 
 ### Why
