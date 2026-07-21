@@ -132,6 +132,7 @@ drill_fresh() {
   # install has no skill loaded — the epilogue is the only thing that chains into INIT).
   grep -q 'read ops/roles/INIT.md' "$WORK/fresh.out"
   [ -f "$T_FRESH/ops/polaris" ]
+  [ -f "$T_FRESH/ops/lib/core.sh" ]
   assert_one_marker_pair "$T_FRESH"
   grep -q THEIR_HOOK "$T_FRESH/.claude/settings.json"
   grep -q ownership-guard "$T_FRESH/.claude/settings.json"
@@ -175,14 +176,17 @@ drill_live_board() {
   printf '# SPRINT — SENTINEL\n' > "$T_LIVE/ops/SPRINT.md"
   printf 'sentinel\trule\n'      > "$T_LIVE/ops/RULES.tsv"
   board_snapshot "$T_LIVE" > "$WORK/board-before"
-  # Corrupt a kit code file: the second install must repair it (proof the refresh happened).
+  # Corrupt kit code files: the second install must repair them (proof the refresh happened —
+  # ops/lib/core.sh rides the live-board dir loop, the loader dies without it).
   printf 'corrupted\n' > "$T_LIVE/ops/MANUAL.md"
+  printf 'corrupted\n' > "$T_LIVE/ops/lib/core.sh"
   ( cd "$T_LIVE" && "$PY" "$ZIP" --no-machine-setup ) > "$WORK/live2.out"
   cat "$WORK/live2.out"
   grep -q 'installed · live-board' "$WORK/live2.out"
   # A live board must NOT get the run-INIT epilogue — INIT never re-runs over a live board.
   ! grep -q 'read ops/roles/INIT.md' "$WORK/live2.out"
   ! grep -qx 'corrupted' "$T_LIVE/ops/MANUAL.md"
+  ! grep -qx 'corrupted' "$T_LIVE/ops/lib/core.sh"
   board_snapshot "$T_LIVE" > "$WORK/board-after"
   cmp "$WORK/board-before" "$WORK/board-after"
 }
