@@ -101,7 +101,7 @@ prove. Zero behavior change; serial output byte-identical.
 - [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
 
 ## T-043 — extract lib/integrate.sh
-points 3 · risk normal · landed 42f1caa (2026-07-21) · claimed 2026-07-21
+points 3 · risk normal · landed 42f1caa (2026-07-21) · claimed 2026-07-21 → done 2026-07-21
 files touched: kit/ops/lib/integrate.sh, kit/ops/polaris
 
 ### Why
@@ -120,3 +120,29 @@ byte-identical.
 - [ ] integrate.sh holds exactly the contract's 15 functions; nothing else moved
 - [ ] loader list reads `core ownership builder integrate selftest/…` (contract growth schedule)
 - [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
+
+## T-046 — hermetic selftest drills — kill the order-coupling between labels
+points 3 · risk normal · landed 1f8c56b (2026-07-21) · claimed 2026-07-21
+files touched: kit/ops/lib/selftest/policy.sh
+
+### Why
+The drills are order-coupled: each labeled drill mutates the ONE fixture repo the spine builds
+and assumes the labels before it ran. Wave-3 evidence: the `rules` drill leaves a contract-less
+ready task in the fixture; when the `drift` drill runs in between it happens to clean/mask it,
+but partition the labels differently and `qa`'s `drift --strict` meets the leftover and reds —
+`--parallel 3` shard 3 red, serial reproducer `--only rules,qa` red on pre-T-042 main. So
+`--only` subsets and `--parallel` shards can silently red OR silently mask depending on the
+partition, which makes the sharding contract's partition-invariance a lie. Fix per
+selftest-sharding v1.1 (Hermeticity): audit all 18 labeled drills; each must leave the shared
+fixture exactly as it found it — board columns, RULES.tsv, CONVENTIONS values, refs, locks —
+or provision and remove its own scratch state, and no drill may depend on state another label
+created or cleaned. Fix lives ONLY in kit/ops/lib/selftest/ (drill bodies + spine helpers if a
+shared snapshot/restore helper earns its keep); the entry script, product commands, and drill
+ASSERTIONS stay untouched — this restores test independence, it does not change what is tested.
+
+### Acceptance
+- [ ] isolation sweep: every one of the 18 labels greens alone — `--only <label>` for each of: fmlist tcm report metrics brain rules drift hardening qa remote syncrace notify grant upgrade pr-publish express hint brief
+- [ ] reproducer dead: `--only 'rules,qa'` green
+- [ ] `--parallel 3` (full set) green on 3 CONSECUTIVE runs
+- [ ] diff touches kit/ops/lib/selftest/ only; no drill assertion weakened or removed
+- [ ] full serial `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
