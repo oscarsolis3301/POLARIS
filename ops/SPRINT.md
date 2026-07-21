@@ -13,6 +13,8 @@ doc tasks T-034..T-037 parallel (contract-pinned wording). Release 5.15.0.
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-07-20 | 15 (T-030, T-034..T-037, wave 1, sealed sprint/5) | 10 (T-031 ready · T-032, T-033 backlog) · cycle p50 0.5h n=34 · kickbacks 0 · build avg 0.2h / integrate avg 2.0h · suite green on integrate |
+| 2026-07-20 | 20 (+T-031, wave 2, re-sealed sprint/5 tag 03d6919→82bfe37) | 5 (T-032 ready · T-033 backlog) · cycle p50 0.5h n=35 · kickbacks 0 · build avg 0.2h / integrate avg 1.9h · suite green on integrate |
 
 # SPRINT 4 — One PR, clean graph          capacity: 25   dates: 2026-07-20–
 
@@ -105,3 +107,6 @@ exercises but a Builder cannot.
   the CALLER's `n` (T-029: `report --all` sent sealed tasks to `(unsealed)`; two callers masked it by
   holding the same `n`). Split `local` decls, and drills must cover the fallback path (Rule-1-blind),
   not just the fixture's happy path — testbed verify of the PUBLISHED release is what caught it.
+- Pipelined arrival-order landing (sprint 5 w1–2, 6 tasks): 0 kickbacks, 0 squash conflicts,
+  integrate avg 2.3h→1.9h. The disjoint carve holds under batch mode with per-arrival lands;
+  spawn the integrator at first handoff, run the suite once per wave.
