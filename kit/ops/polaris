@@ -1997,12 +1997,62 @@ cmd_doctor() {
     note "⚠ brain is stale — refresh it: ops/polaris brain --refresh"
   fi
   say "doctor: OK"
-  if [ "${1:-}" = "--selftest" ]; then selftest; fi
+  # --selftest [--only <pattern>] (ops/contracts/verification-tiering.md): --only runs the
+  # always-on spine + just the labeled drills whose label matches one shell glob.
+  if [ "${1:-}" = "--selftest" ]; then
+    local _only=""
+    case "${2:-}" in
+      "") : ;;
+      --only)   _only="${3:-}"; [ -n "$_only" ] || die "doctor --selftest --only needs a pattern";;
+      --only=*) _only="${2#--only=}"; [ -n "$_only" ] || die "doctor --selftest --only needs a pattern";;
+      *) die "doctor --selftest: unknown option '$2' (only --only <pattern>)";;
+    esac
+    selftest "$_only"
+  fi
 }
 
-selftest() { # end-to-end mechanics drill in a throwaway repo — run once per new machine
+drill_on() { # T-033: is labeled drill $1 selected by the current --only pattern? Reads
+  # selftest()'s local SELFTEST_ONLY (dynamic scope): empty = full run = every drill on.
+  # Plain case, NEVER inside $(...) — bash 3.2 mis-parses `case` in command substitution.
+  if [ -z "${SELFTEST_ONLY:-}" ]; then return 0; fi
+  case "$1" in ${SELFTEST_ONLY:-}) return 0;; esac
+  return 1
+}
+
+ngwait() { # T-033: poll (bounded, ≤2s) for line $1 in the selftest's backgrounded notify.log.
+  # File-scope (reads selftest's $T via dynamic scope) so any drill using it — notify AND
+  # pr-publish — stands alone under --only, not just when the notify drill defined it inline.
+  local i=0; while [ "$i" -lt 20 ]; do grep -q "$1" "$T/notify.log" 2>/dev/null && return 0; sleep 0.1; i=$((i+1)); done; return 1
+}
+
+ensure_origin() { # T-033: self-provision the scratch bare origin that the remote/syncrace/pr-publish
+  # drills share, so each stands alone under --only. No-op once any of them has created it; in the
+  # full run the remote drill makes it first and the rest are no-ops (byte-identical outcome).
+  git remote get-url origin >/dev/null 2>&1 && return 0
+  git init -q --bare "$T/origin.git"
+  git remote add origin "$T/origin.git"
+  git push -qu origin main >/dev/null 2>&1 || true
+  git rev-parse -q --verify refs/heads/polaris/board >/dev/null 2>&1 \
+    && git push -q origin refs/heads/polaris/board >/dev/null 2>&1 || true   # syncrace clones origin/polaris/board
+  return 0
+}
+
+selftest() { # end-to-end mechanics drill in a throwaway repo — run once per new machine.
+  # $1 (optional): --only <pattern>. Empty = full run, byte-identical to the pre-5.15 selftest.
+  local SELFTEST_ONLY="${1:-}"
+  # Every label a drill_on gate below uses, in run order — the contract's minimum set. An --only
+  # pattern matching NONE of these dies HERE, before the throwaway repo is even created.
+  local SELFTEST_LABELS='fmlist tcm report metrics brain rules drift hardening qa remote syncrace notify grant upgrade pr-publish express hint brief'
+  local st_total=0 st_hit=0 st_lbl
+  for st_lbl in $SELFTEST_LABELS; do st_total=$((st_total+1)); done
+  if [ -n "$SELFTEST_ONLY" ]; then
+    for st_lbl in $SELFTEST_LABELS; do
+      case "$st_lbl" in $SELFTEST_ONLY) st_hit=$((st_hit+1));; esac
+    done
+    [ "$st_hit" -gt 0 ] || die "unknown drill label '$SELFTEST_ONLY' — valid labels: $SELFTEST_LABELS"
+  fi
   local T; T="$(mktemp -d)"
-  note "selftest in $T"
+  note "selftest in $T${SELFTEST_ONLY:+  (subset: $SELFTEST_ONLY)}"
   ( set -e; cd "$T"
     git init -q -b main repo 2>/dev/null || { git init -q repo; git -C repo symbolic-ref HEAD refs/heads/main; }
     cd repo; git config user.email t@t; git config user.name t
@@ -2025,6 +2075,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     "$SELF" handoff T-1 > "$T/ho.out"
     grep -q 'Integrate now' "$T/ho.out" || { echo "HANDOFF NOTICE FAIL (last lane must print the integrate hint)"; exit 1; }
     cd "$T/repo"
+    if drill_on fmlist; then
     # ========================= fm_list parsing drills =========================
     # inline scalar · "[]" · populated "[a, b]" flow list · block list — plus edge
     # stripping (comment/\r/whitespace, empty items). fm_list is a shell function
@@ -2038,12 +2089,14 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     [ "$(fm_list block "$T/fmlist.md" | tr '\n' ',')" = "x,y," ] || { echo "FM_LIST BLOCK FAIL (block list must stay byte-identical)"; exit 1; }
     [ "$(fm_list depends_on "$T/fmlist.md" | wc -l | tr -d ' ')" = "2" ] || { echo "FM_LIST DEPENDS_ON COUNT FAIL (inline flow list must yield 2 items, not 1)"; exit 1; }
     [ "$(fm_list depends_on "$T/fmlist.md" | tr '\n' ',')" = "T-A,T-B," ] || { echo "FM_LIST DEPENDS_ON VALUES FAIL"; exit 1; }
+    fi   # drill_on fmlist
     # ====================== v5.12 clean-history drills =======================
     # land (squash → ONE rich commit) → seal (tagged summary merge) → history →
     # done (rule-1 gate + landed: stamp) → rollback (task + sprint reverts).
     for c in task-commit-msg land seal history rollback; do
       "$SELF" help | grep -q "$c" || { echo "USAGE FAIL: $c missing from help"; exit 1; }
     done
+    if drill_on tcm; then
     # task-commit-msg: pure formatter — subject map · Why verbatim · checkbox markers stripped ·
     # comment + ⛔ notes filtered · Files joined
     mkdir -p "$T/fmt"
@@ -2055,6 +2108,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     grep -q '^- kept note$' "$T/fmt/out" || { echo "TCM NOTE FAIL"; exit 1; }
     grep -q '⛔' "$T/fmt/out" && { echo "TCM FILTER FAIL (⛔ note must drop)"; exit 1; }
     grep -q '^Files: src/a.txt, src/b.txt$' "$T/fmt/out" || { echo "TCM FILES FAIL"; exit 1; }
+    fi   # drill_on tcm
     # land: one commit, contract subject + Landed-from trailer, clean tree after
     printf '# SPRINT 1 — selftest sprint  capacity: 5\n' > ops/SPRINT.md   # moved set: disk-only, ignored on base
     git checkout -q -b integrate/2026-01-01
@@ -2068,6 +2122,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     git rev-parse -q --verify refs/tags/sprint/1 >/dev/null || { echo "SEAL TAG FAIL"; exit 1; }
     git log -1 --format=%s | grep -q '^Sprint 1 — selftest sprint$' || { echo "SEAL SUBJECT FAIL"; exit 1; }
     git log -1 --format=%b | grep -q '^- feat(src): land a file \[T-1\]$' || { echo "SEAL BULLET FAIL"; exit 1; }
+    if drill_on report; then
     # ==================== T-023 sprint-report drill (ops/contracts/sprint-report.md) ====================
     # seal committed the wave's report on integrate → it rode the --no-ff merge into base as a
     # docs(sprint-N) commit (no [<ID>] suffix, off the first-parent chain), and the file carries the
@@ -2091,6 +2146,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     [ "$(git rev-parse main)" = "$mainpre_r" ] || { echo "REPORT COMMIT FAIL (report must not commit on base)"; exit 1; }
     [ "$(git rev-parse refs/heads/polaris/board)" = "$boardpre_r" ] || { echo "REPORT BOARD FAIL (report must not touch the board)"; exit 1; }
     git diff --quiet -- docs/sprints/sprint-1.md || { echo "REPORT IDEMPOTENT FAIL (cmd_report must match the sealed render)"; exit 1; }
+    fi   # drill_on report
     # ==================== end T-023 sprint-report drill ====================
     # history: sprint line visible, board noise filtered; --tasks drills into the squash commit
     "$SELF" history > "$T/hist.out"
@@ -2129,6 +2185,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     [ "$(cat src/a.txt)" = "x" ] || { echo "ROLLBACK SPRINT CONTENT FAIL"; exit 1; }
     git reset -q --hard HEAD~1        # back to the sealed state for the drills below
     # ==================== end v5.12 clean-history drills =====================
+    if drill_on brain; then
     # ==================== T-030 brain drills (ops/contracts/brain.md) ====================
     # generator: all 7 layout files, gitignored · INDEX routes to all 5 domain files · board
     # digest names the landed task T-1 · staleness round-trip: board-changed newer → doctor
@@ -2149,7 +2206,9 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' || { echo "BRAIN STALE FAIL (board-changed newer than .stamp must warn)"; exit 1; }
     "$SELF" brain --refresh >/dev/null || { echo "BRAIN REFRESH FAIL"; exit 1; }
     "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "BRAIN REFRESH STALE FAIL (refresh must clear the warn)"; exit 1; }
+    fi   # drill_on brain
     # ==================== end T-030 brain drills ====================
+    if drill_on metrics; then
     for ev in claim handoff all-review done; do
       grep -q "\"ev\":\"$ev\",\"id\":\"T-1\"" ops/board/EVENTS.ndjson || { echo "EVENTS FAIL: $ev missing"; exit 1; }
     done
@@ -2159,6 +2218,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     # --- v5: points telemetry + per-point calibration
     grep -q '"ev":"claim","id":"T-1".*"pts":1' ops/board/EVENTS.ndjson || { echo "PTS EVT FAIL"; exit 1; }
     "$SELF" metrics | grep -q '1pt p50' || { echo "PTS BUCKET FAIL"; exit 1; }
+    fi   # drill_on metrics
     # ================ v5.13 second-seal drill (clean-history v2) =================
     # A sprint's SECOND integration wave: wave 2 lands on the same integrate branch (caught up
     # to base first), seal runs again → same --no-ff merge, tag sprint/1 MOVES to the new merge
@@ -2179,7 +2239,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     grep -q 'reused sprint number' "$T/seal-reuse.out" || { echo "REUSED SPRINT MSG FAIL (die must name the reuse)"; exit 1; }
     [ "$(git rev-parse main)" = "$mainpre" ] || { echo "REUSED SPRINT MUTATE FAIL (failed gate must mutate nothing)"; exit 1; }
     git tag -f sprint/1 "$w1tag" >/dev/null
-    bstamp1="$(cat .polaris/brain/.stamp)"    # T-030: the pre-seal stamp — seal must auto-refresh it
+    if drill_on brain; then bstamp1="$(cat .polaris/brain/.stamp)"; fi   # T-030: pre-seal stamp — seal auto-refreshes it (brain-gated: seal itself is spine)
     "$SELF" seal 2026-01-01 > "$T/seal2.out" || { echo "SECOND-SEAL FAIL (re-seal of the same sprint must pass)"; exit 1; }
     w2tag="$(git rev-parse refs/tags/sprint/1)"
     [ "$w2tag" != "$w1tag" ] || { echo "TAG MOVE FAIL (sprint/1 must leave the wave-1 merge)"; exit 1; }
@@ -2189,14 +2249,19 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     # T-030 seal auto-refresh: the fold touched board-changed, then refreshed the existing brain —
     # the stamp follows the new base sha and doctor must NOT read the board as stale.
     [ -f .polaris/board-changed ] || { echo "SEAL TOUCH FAIL (seal must touch board-changed)"; exit 1; }
+    if drill_on brain; then
     [ "$(cat .polaris/brain/.stamp)" != "$bstamp1" ] || { echo "SEAL BRAIN REFRESH FAIL (seal must auto-refresh an existing brain)"; exit 1; }
     "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "SEAL BRAIN STALE FAIL (auto-refresh must leave .stamp newer than board-changed)"; exit 1; }
+    fi   # drill_on brain
     "$SELF" history --tasks 1 > "$T/hist2.out"
     grep -q 'land a file \[T-1\]' "$T/hist2.out" || { echo "HISTORY WAVES FAIL (wave-1 task missing from --tasks)"; exit 1; }
     grep -q 'wave two file \[T-W\]' "$T/hist2.out" || { echo "HISTORY WAVES FAIL (wave-2 task missing from --tasks)"; exit 1; }
     "$SELF" done T-W >/dev/null || { echo "SECOND-SEAL DONE FAIL (wave-2 done must pass once its seal lands)"; exit 1; }
+    if drill_on brain; then
     # T-030 seal-refresh-failure note: a BROKEN brain (.stamp is a directory, so the rebuild's
     # stamp write fails) must cost the wave nothing — seal rc 0, one ⚠ note, board state normal.
+    # Brain-gated: the whole T-Z wave exists only to prove this brain behavior (quiet-board below
+    # references T-1/T-W only, never T-Z, so skipping it leaves the spine self-consistent).
     printf -- '---\nid: T-Z\ntitle: wave three file\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/z.txt\nverify: []\n---\n' > ops/board/ready/T-Z.md
     "$SELF" claim T-Z >/dev/null
     ( cd .polaris/wt/T-Z && echo z > src/z.txt && git add -A && git commit -qm ok && "$SELF" handoff T-Z >/dev/null )
@@ -2208,6 +2273,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     grep -q 'brain refresh failed' "$T/seal3.out" || { echo "SEAL REFRESH NOTE FAIL (the failure must print its ⚠ note)"; exit 1; }
     "$SELF" done T-Z >/dev/null || { echo "THIRD-SEAL DONE FAIL"; exit 1; }
     rm -rf .polaris/brain    # brain leaves the drill here — later doctors must run silent again
+    fi   # drill_on brain (T-Z seal-refresh-failure wave)
     # ================== end v5.13 second-seal drill ==============================
     # ================== T-020 quiet-board drill (ops/contracts/quiet-board.md) ==================
     # The whole flow above (claim → handoff → land → seal → done, two waves) ran with the moved set
@@ -2226,6 +2292,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
       && { echo "QUIET TREE FAIL (branch tree = ONLY ops/board/** + ops/SPRINT.md)"; exit 1; }
     [ -z "$(git status --porcelain)" ] || { echo "QUIET CLEAN FAIL (board mutations must never dirty base status)"; exit 1; }
     # ================== end T-020 quiet-board drill ==================
+    if drill_on rules; then
     # --- v5: RULES engine — path deny beats ownership; content deny on payload and on diff
     printf 'src/a.txt\tpath\t-\tfrozen for the drill\n' >> ops/RULES.tsv
     "$SELF" _rules src/a.txt 2>/dev/null && { echo "RULES PATH FAIL (should deny)"; exit 1; }
@@ -2245,13 +2312,20 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
       git reset -q --hard HEAD~1 && echo clean > src/b.txt && git add -A && git commit -qm ok
       "$SELF" verify T-2 >/dev/null || { echo "RULES DIFF FAIL (clean should pass)"; exit 1; } ) || exit 1
     "$SELF" release T-2 --to ready -m drill >/dev/null
+    fi   # drill_on rules
+    if drill_on drift; then
     # --- v5: drift — seeded overlap must be found; --strict must go red, then green
+    # T-033 self-provision: --only drift skips the rules drill above, so re-create the T-2 it
+    # leaves in ready/. Idempotent — a no-op in the full run (rules already released T-2).
+    [ -f ops/board/ready/T-2.md ] || printf -- '---\nid: T-2\npoints: 2\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/b.txt\nverify: []\n---\n' > ops/board/ready/T-2.md
     printf -- '---\nid: T-3\npoints: 1\nwsjf: 1\nstatus: ready\nfiles_owned:\n  - src/b.txt\n---\n' > ops/board/ready/T-3.md
     "$SELF" drift | grep -q 'OWNERSHIP OVERLAP: T-3 ∩ T-2' || { echo "DRIFT OVERLAP FAIL"; exit 1; }
     ( "$SELF" drift --strict >/dev/null 2>&1 ) && { echo "DRIFT STRICT FAIL (should rc 1)"; exit 1; }
     rm ops/board/ready/T-3.md ops/board/ready/T-2.md; sed -i.bak '/DO_NOT_SHIP/d' ops/RULES.tsv && rm -f ops/RULES.tsv.bak
-    git add -A; git commit -qm cleanup
+    git add -A; git commit -qm cleanup || true   # T-033: --only drift has no rules-drill RULES.tsv change to commit
     "$SELF" drift >/dev/null || { echo "DRIFT CLEAN FAIL"; exit 1; }
+    fi   # drill_on drift
+    if drill_on hardening; then
     # ============================ v5.8 hardening drills ============================
     # rename must NOT smuggle a non-owned deletion past the gate (--no-renames)
     mkdir -p pkg; echo keep > pkg/keep.txt; echo out > outside.txt
@@ -2304,6 +2378,8 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     printf 'version: 9.9.9\n' > ops/VERSION
     "$SELF" doctor 2>/dev/null | grep -q 'runs the POLARIS it ships' || { echo "SELFHOST SYNC FAIL"; exit 1; }
     rm -rf kit ops/VERSION
+    fi   # drill_on hardening
+    if drill_on qa; then
     # --- v5.10: qa — one command, the whole picture. Green suite → rc 0 with per-check lines;
     # a red test: must flip the exit code and name the check.
     printf 'test: true\n' > ops/CONVENTIONS.md
@@ -2312,6 +2388,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     printf 'test: false\n' > ops/CONVENTIONS.md
     "$SELF" qa >/dev/null 2>&1 && { echo "QA RED FAIL (red suite must rc 1)"; exit 1; }
     rm -f ops/CONVENTIONS.md
+    fi   # drill_on qa
     # --- v5.11: no AI fingerprints — commit-msg hook strips provider attribution, keeps the message
     local hooksrc; hooksrc="$(dirname "$SELF")/hooks/commit-msg"
     if [ -f "$hooksrc" ]; then
@@ -2325,12 +2402,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
       git log -1 --format=%B | grep -qiE 'co-authored-by|generated with' && { echo "ATTRIBUTION STRIP FAIL"; exit 1; }
       git log -1 --format=%B | grep -q 'feat: clean product' || { echo "ATTRIBUTION KEEP FAIL (subject must survive)"; exit 1; }
     fi
+    if drill_on remote; then
     # --- v5.11: remote hygiene — done deletes the pushed feat branch; sweep --fix removes strays
     # (T-C is deliberately merged --no-ff, NOT landed: it is the ONE legacy drill proving the
     #  gate's rule-2 fallback — hand merges per MANUAL.md still pass done + remote cleanup.)
-    git init -q --bare "$T/origin.git"
-    git remote add origin "$T/origin.git"
-    git push -qu origin main
+    ensure_origin   # T-033: scratch bare origin (self-provisions under --only remote; spine no longer)
     printf -- '---\nid: T-C\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/c.txt\nverify: []\n---\n' > ops/board/ready/T-C.md
     "$SELF" claim T-C >/dev/null
     ( cd .polaris/wt/T-C && echo c > src/c.txt && git add -A && git commit -qm ok && "$SELF" handoff T-C >/dev/null )
@@ -2354,6 +2430,9 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     git ls-remote --exit-code origin refs/heads/integrate/2030-01-01 >/dev/null 2>&1 && { echo "SWEEP INTEGRATE FIX FAIL (merged wave must be deleted)"; exit 1; }
     git ls-remote --exit-code origin refs/heads/integrate/2030-02-02 >/dev/null || { echo "SWEEP INTEGRATE KEEP FAIL (diverged wave must be kept)"; exit 1; }
     git push -q origin :refs/heads/integrate/2030-02-02    # clean up so later drills see a bare origin
+    fi   # drill_on remote
+    if drill_on syncrace; then
+    ensure_origin   # T-033: --only syncrace skips the remote drill above — self-provision origin (+ polaris/board)
     # ============ T-020 quiet-board sync race (EVENTS union — ops/contracts/quiet-board.md) ============
     # origin/polaris/board moves AHEAD with a foreign machine's EVENTS line; the next local
     # mutation's push is rejected → sync_board must union the line into the on-disk file,
@@ -2378,6 +2457,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     "$SELF" release T-Q --to ready -m drill >/dev/null
     rm -f ops/board/ready/T-Q.md
     # ============ end T-020 quiet-board sync race ============
+    fi   # drill_on syncrace
+    if drill_on notify; then
     # ================== v5.13 notify v2 drills (hands-free-knobs) ==================
     # shim listed in help · no notify: configured → rc 0 and SILENT · unknown/missing kind (and a
     # missing required ID) → usage error, rc≠0
@@ -2391,7 +2472,6 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     # hook, so every assertion polls for its line (bounded, ≤2s) — never races it.
     printf 'notify: printf "%%s/%%s/%%s/%%s\\n" "$POLARIS_EV" "$POLARIS_SEVERITY" "$POLARIS_ID" "$POLARIS_NOTE" >> %s\n' "$T/notify.log" > ops/CONVENTIONS.md
     git add -A; git commit -qm notify-hook
-    ngwait() { local i=0; while [ "$i" -lt 20 ]; do grep -q "$1" "$T/notify.log" 2>/dev/null && return 0; sleep 0.1; i=$((i+1)); done; return 1; }
     evn="$(wc -l < ops/board/EVENTS.ndjson)"
     "$SELF" notify-gate plan
     "$SELF" notify-gate risk T-42
@@ -2427,6 +2507,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     grep -q 'builder_questions=default-safe' "$T/doc.out" || { echo "KNOB TRUSTED FAIL (autonomy: trusted must fill unset knobs)"; exit 1; }
     grep -q "drain: 'bogus' unknown" "$T/doc.out" || { echo "KNOB WARN FAIL (unknown value must warn + behave as default)"; exit 1; }
     git checkout -q -- ops/CONVENTIONS.md
+    fi   # drill_on notify
+    if drill_on grant; then
     # ================== T-005 grant drills (ops/contracts/grant.md) ==================
     # sanctioned files_owned amendment: refusals (wrong column · missing -m · overlap, each
     # mutating NOTHING) then one success = append + Notes line + event + ONE board commit.
@@ -2452,6 +2534,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     "$SELF" release T-G --to ready -m drill >/dev/null
     rm -f ops/board/ready/T-G.md ops/board/ready/T-H.md
     # ================== end T-005 grant drills ==================
+    fi   # drill_on grant
     # ================== T-006 staleness drills (ops/contracts/self-hosting.md) ==================
     # Fake `unzip`/`curl` on PATH make this deterministic and portable (no real network, no zip
     # binary needed — Git Bash ships none — matching the fixture style already used for notify-gate).
@@ -2482,6 +2565,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     grep -q '^latest: 8.8.8$' .polaris/update-cache || { echo "VERSION CACHE FAIL (fresh check must update the cache)"; exit 1; }
     rm -rf ops/VERSION .polaris/update-cache
     # ================== end T-006 staleness drills ==================
+    if drill_on upgrade; then
     # ================== T-021 upgrade-migration drill (ops/contracts/quiet-board.md) ==================
     # A 5.13-shaped repo: moved set TRACKED on base, chore(board) history on base, no polaris/board.
     # upgrade must migrate ONCE (orphan seed → untrack → ignore → ONE base commit), re-run as a
@@ -2548,7 +2632,14 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
       git rev-parse -q --verify refs/heads/polaris/board >/dev/null && { echo "UNINSTALL LOCAL REF FAIL (the branch must be deleted)"; exit 1; }
       git ls-remote "$T/mig-origin.git" refs/heads/polaris/board | grep -q . && { echo "UNINSTALL REMOTE REF FAIL (the deletion must push)"; exit 1; }
       : ) || exit 1
+    fi   # drill_on upgrade
     # ================== end T-021 upgrade-migration drill ==================
+    if drill_on pr-publish; then
+    # T-033 self-provision: --only pr-publish skips the remote and notify drills, but it pushes to
+    # origin and its seal fires the notify: hook (ngwait polls the log). Provide both — no-ops in
+    # the full run, where the remote/notify drills already set them up.
+    ensure_origin
+    grep -q '^notify:' ops/CONVENTIONS.md 2>/dev/null || printf 'notify: printf "%%s/%%s/%%s/%%s\\n" "$POLARIS_EV" "$POLARIS_SEVERITY" "$POLARIS_ID" "$POLARIS_NOTE" >> %s\n' "$T/notify.log" >> ops/CONVENTIONS.md
     # ================== T-022 pr-publish drill (ops/contracts/publish-modes.md) ==================
     # publish: pr against a scratch bare origin: handoff keeps feat/* local · seal pushes ONLY
     # integrate/<date> + prints title/bullets/URL fallback + fires notify done, moving NO ref on
@@ -2613,7 +2704,18 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     grep -q 'nothing to sync' "$T/prb.out" || { echo "PUBLISH FALLBACK FAIL (unknown value must behave direct)"; exit 1; }
     sed -i.bak '/^publish:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
     git add -A; git commit -qm 'publish drill cleanup'
+    fi   # drill_on pr-publish
     # ================== end T-022 pr-publish drill ==================
+    if drill_on express; then
+    if [ -n "$SELFTEST_ONLY" ] && ! git rev-parse -q --verify refs/tags/sprint/2 >/dev/null 2>&1; then
+      # T-033: --only express runs on the bare spine (sprint/1 sealed; no sprint/2, no SPRINT 2).
+      # Rebuild the sprint-2 context the pr-publish drill leaves in the full run so express stands
+      # alone. Guarded on SELFTEST_ONLY — skipped entirely in the full run (tested path unchanged).
+      sed -i.bak -e '/^test:/d' -e '/^lint:/d' -e '/^typecheck:/d' -e '/^build:/d' -e '/^uat:/d' ops/CONVENTIONS.md 2>/dev/null || true; rm -f ops/CONVENTIONS.md.bak
+      printf '# SPRINT 2 — express standalone  capacity: 5\n' > ops/SPRINT.md
+      git tag -f sprint/2 main >/dev/null
+      git add -A; git commit -qm 'express standalone: sprint-2 context' >/dev/null 2>&1 || true
+    fi
     # ========= T-031 express-lane + slow-suite drills (ops/contracts/express-lane.md ·
     # ops/contracts/verification-tiering.md) =========
     "$SELF" help | grep -q -- 'land --express' || { echo "USAGE FAIL: land --express missing from help"; exit 1; }
@@ -2689,6 +2791,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     git rev-parse -q --verify "refs/heads/integrate/$exd" >/dev/null && { echo "EXPRESS BRANCH FAIL (integrate/<today> must be deleted)"; exit 1; }
     [ -z "$(git status --porcelain)" ] || { echo "EXPRESS CLEAN FAIL (tree must end clean)"; exit 1; }
     { grep -q 'finish line' "$T/ex8.out" && grep -q 'qa' "$T/ex8.out"; } || { echo "EXPRESS FINISH FAIL (final note must name qa)"; exit 1; }
+    fi   # drill_on express
+    if drill_on hint; then
     # slow-suite hint: fake stamp 180s + integration: paranoid → land prints it; batch → silent
     printf -- '---\nid: T-EY\ntitle: hint file\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nowner: null\nbranch: feat/T-EY\nstatus: review\nfiles_owned:\n  - src/ey.txt\nverify: []\n---\n' > ops/board/review/T-EY.md
     git checkout -q -b feat/T-EY main
@@ -2713,7 +2817,9 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     rm -f ops/board/review/T-EY.md .polaris/last-suite-seconds
     sed -i.bak -e '/^integration:/d' -e '/^test: true$/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
     git add -A; git commit -qm 'express drill cleanup'
+    fi   # drill_on hint
     # ========= end T-031 express-lane + slow-suite drills =========
+    if drill_on brief; then
     # ========= T-032 status --brief + metrics summary drills (ops/contracts/status-brief.md) =========
     # --brief: ONE plain-English paragraph, grep-stable markers, NO table pipe, sprint clause from the
     # header, active IDs listed · plain `status` keeps its table + gains no brief markers · metrics
@@ -2749,9 +2855,23 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     mv "$T/ev.save" ops/board/EVENTS.ndjson
     rm -f ops/board/done/T-BR1.md ops/board/ready/T-BR2.md ops/board/active/T-BR3.md
     # ========= end T-032 status --brief + metrics summary drills =========
+    fi   # drill_on brief
+    # ========= T-033 --only self-drills (ops/contracts/verification-tiering.md) — full run ONLY:
+    # a subset run must never re-spawn selftest (infinite recursion), so gate on empty SELFTEST_ONLY.
+    # nonsense pattern dies pre-spine (rc 1); --only fmlist runs spine + the fmlist drill and prints
+    # the distinct subset pass line.
+    if [ -z "$SELFTEST_ONLY" ]; then
+      "$SELF" doctor --selftest --only 'no-such-drill-xyz' >/dev/null 2>&1 && { echo "ONLY UNKNOWN FAIL (nonsense pattern must die rc 1, pre-spine)"; exit 1; }
+      "$SELF" doctor --selftest --only fmlist > "$T/only.out" 2>&1 || { cat "$T/only.out"; echo "ONLY SUBSET FAIL (--only fmlist must pass)"; exit 1; }
+      grep -q 'selftest passed (subset: fmlist' "$T/only.out" || { echo "ONLY SUBSET LINE FAIL (distinct subset pass line missing)"; exit 1; }
+    fi
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
+  if [ -n "$SELFTEST_ONLY" ]; then
+    say "selftest passed (subset: $SELFTEST_ONLY — $st_hit of $st_total labeled drills; spine always runs)"
+    return 0
+  fi
   say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin · pr-publish (feat stays local · seal pushes ONLY integrate + title/bullets/URL + notify done, no ref moved · --sync subject gate/tag/branch cleanup both sides · done via rule 1 · direct --sync dies · unknown publish warns) · sprint report (seal commits docs(sprint-N) riding the wave · cmd_report --sprint/current/--all renders + prints, board read-only + idempotent) · brain (7-file build gitignored · INDEX routes all 5 · board digest names the landed task · stale warn → refresh clears · seal auto-refresh · refresh failure = note, never a red seal) · express (help form · qa suite stamp gated+formatted · 4 refusals pre-mutation: solo-review/risk-high/off+unknown/publish-pr · red suite unwind+kickback tail · happy path: done+landed stamp · tag moved · integrate deleted · clean tree · qa finish line) · slow-suite hint (paranoid+180s fires naming integration: batch · batch silent) · status --brief (one paragraph · Last landed:/Next up: markers · header sprint clause · active ids · no table pipe · plain status unchanged) · metrics In-plain-English summary (first line above the table · silent on empty EVENTS)"
 }
 
@@ -3585,9 +3705,14 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  into one sealed sprint's task commits, across all its waves
   rollback <ID|sprint/<n>>       revert one landed task (or the sprint's latest sealed wave, -m 1)
                                  on base — forward-only: never resets, never force-pushes
-  status [--brief] | sweep [--fix] | doctor [--selftest]
+  status [--brief] | sweep [--fix] | doctor [--selftest [--only <pattern>]]
                                  status --brief = ONE plain-English paragraph, no table (plain status
                                  unchanged): Last landed: / Next up: markers + a sprint-column clause
+                                 doctor --selftest --only <glob> = the always-on spine + only the
+                                 labeled drills matching <glob> (fmlist tcm report metrics brain rules
+                                 drift hardening qa remote syncrace notify grant upgrade pr-publish
+                                 express hint brief); a nonsense pattern dies before the spine
+                                 (unknown drill label)
   brain [--refresh]              generate .polaris/brain/ — gitignored knowledge base a cold agent
                                  reads FIRST (INDEX + code-map/board/contracts/commands/gotchas);
                                  --refresh skips code-map when code is unchanged. seal auto-refreshes
@@ -3639,7 +3764,7 @@ case "${1:-}" in
   status)     shift 2>/dev/null || true; update_check_maybe || true; cmd_status "${1:-}";;
   brain)      shift 2>/dev/null || true; cmd_brain "${1:-}";;   # no update_check_maybe: agents run it cold and often — keep it quiet + pure
   sweep)      shift 2>/dev/null || true; cmd_sweep "${1:-}";;
-  doctor)     shift 2>/dev/null || true; update_check_maybe || true; cmd_doctor "${1:-}";;
+  doctor)     shift 2>/dev/null || true; update_check_maybe || true; cmd_doctor "$@";;
   metrics)    cmd_metrics;;
   why)        shift; cmd_why "$@";;
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
