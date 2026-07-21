@@ -20,11 +20,18 @@ drill_rules() {
       git reset -q --hard HEAD~1 && echo clean > src/b.txt && git add -A && git commit -qm ok
       "$SELF" verify T-2 >/dev/null || { echo "RULES DIFF FAIL (clean should pass)"; exit 1; } ) || exit 1
     "$SELF" release T-2 --to ready -m drill >/dev/null
+    # T-046 hermeticity: leave the fixture exactly as found — remove T-2 (contract-less ready task)
+    # and the DO_NOT_SHIP rule this drill added, so a later label sharing the shard (qa's
+    # drift --strict) meets a clean board + pristine RULES.tsv regardless of partition.
+    rm -f ops/board/ready/T-2.md
+    sed -i.bak '/DO_NOT_SHIP/d' ops/RULES.tsv && rm -f ops/RULES.tsv.bak
+    git add -A; git commit -qm 'rules drill cleanup' >/dev/null 2>&1 || true
 }
 drill_drift() {
     # --- v5: drift — seeded overlap must be found; --strict must go red, then green
-    # T-033 self-provision: --only drift skips the rules drill above, so re-create the T-2 it
-    # leaves in ready/. Idempotent — a no-op in the full run (rules already released T-2).
+    # Self-provision T-2: the rules drill (T-046) now removes its own T-2, and --only drift skips
+    # rules entirely — so drift always seeds its own contract-less ready task here, independent of
+    # any other label. Removed again below, so drift too leaves the fixture as it found it.
     [ -f ops/board/ready/T-2.md ] || printf -- '---\nid: T-2\npoints: 2\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/b.txt\nverify: []\n---\n' > ops/board/ready/T-2.md
     printf -- '---\nid: T-3\npoints: 1\nwsjf: 1\nstatus: ready\nfiles_owned:\n  - src/b.txt\n---\n' > ops/board/ready/T-3.md
     "$SELF" drift | grep -q 'OWNERSHIP OVERLAP: T-3 ∩ T-2' || { echo "DRIFT OVERLAP FAIL"; exit 1; }
