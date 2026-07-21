@@ -64,7 +64,7 @@ byte-identical.
 - [ ] `polaris help` shows the --brief form
 
 ## T-033 — doctor --selftest --only <pattern> — targeted drill subset
-points 3 · risk normal · landed f7566f1 (2026-07-20) · claimed 2026-07-20
+points 3 · risk normal · landed f7566f1 (2026-07-20) · claimed 2026-07-20 → done 2026-07-20
 files touched: kit/ops/polaris
 
 ### Why
@@ -165,3 +165,47 @@ commands). Mirror the CLI exactly; invent nothing.
 - [ ] `## Express lane by hand` lists all four refusal conditions and the 5-step sequence, cross-referencing the existing Land/Seal recipes
 - [ ] both sections match the contracts — no semantics invented beyond them
 - [ ] no other MANUAL.md section changes
+
+## T-038 — QA fix wave — brain commands truncation, post-done freshness, land noise, commit type map, MANUAL count
+points 3 · risk normal · landed b857e92 (2026-07-20) · claimed 2026-07-20
+files touched: kit/ops/MANUAL.md, kit/ops/polaris
+
+### Why
+Five pre-release QA findings on the 5.15 kit, verified in a scratch install. One builder, two files.
+
+1. commands.md truncation — `brain_commands | head -n 80` (kit/ops/polaris:1741) caps the file, but
+the `usage()` dump alone is ~75 lines, so the 8 effective-CONVENTIONS values printed after it are cut
+(publish, express, stale_hours, test, build were missing). Per brain v1.1: print the values BEFORE
+the help dump — the cap may cut the help tail, never the values.
+
+2. Post-done staleness — `cmd_done` touches `.polaris/board-changed` (kit/ops/polaris:862) AFTER
+seal's `brain_seal_refresh` (:1214, :1281) wrote the stamp, so the documented wave close
+(seal → run-verify → done) always ends with doctor warning "brain is stale". Per brain v1.1: `done`
+mirrors seal — brain exists → run the cheap incremental refresh after the touch; failure = one ⚠
+note, never a red done. No brain dir → do nothing.
+
+3. Land noise — `git merge --squash -q feat/<ID>` (kit/ops/polaris:996) still prints "Squash commit
+-- not updating HEAD" and "Automatic merge went well; stopped before committing as requested" on
+git 2.53. Redirect that command's stdout only; stderr stays live so real failures surface. Express
+shares the code path — one fix covers both (clean-history v2.2).
+
+4. Commit type map — `cmd_task_commit_msg` maps feature→feat, bug→fix, else chore
+(kit/ops/polaris:905-909), so the advertised commit types `test` and `docs` are unreachable — a
+`type: test` task lands as chore. Add test→test and docs→docs; chore stays the fallback for
+spike/missing/unknown (clean-history v2.2). Update the map line at kit/ops/MANUAL.md:129 to match.
+
+5. MANUAL count — "Build these 7 files" (kit/ops/MANUAL.md:227) contradicts "the same 6 files"
+(:235). Pinned phrasing (brain v1.1): "7 entries — 6 `.md` files + `.stamp`"; greenfield keeps
+"the same 6 `.md` files, near-empty". Also update the freshness bullet (:239) to say done AND seal
+auto-refresh, per finding 2.
+
+Each fix carries the selftest drill that would have caught it; drill fail tokens are pinned in the
+contracts (brain v1.1 drills 6-7 · clean-history v2.2).
+
+### Acceptance
+- [ ] `.polaris/brain/commands.md` always contains all 8 effective-CONVENTIONS keys (base, claim, integration, publish, express, stale_hours, test, build) — values print before the help dump; new selftest drill asserts all 8 keys, fail token `BRAIN COMMANDS KEYS FAIL`
+- [ ] with a brain present, `done <ID>` auto-refreshes after its `board-changed` touch (⚠ note on failure, exit 0 regardless; no brain dir → no-op); freshness drill runs the REAL order — land → seal → run-verify → done — and asserts `doctor` prints no `brain is stale`, fail token `DONE BRAIN STALE FAIL`
+- [ ] `land` (and `land --express`) output contains neither "Squash commit" nor "stopped before committing"; the merge-failure path still kicks back with stderr visible; drill greps captured land output, fail token `LAND NOISE FAIL`
+- [ ] `task-commit-msg`: `type: test` → `test(scope):`, `type: docs` → `docs(scope):`, spike/missing/unknown → chore; drill proves all three, fail token `COMMIT TYPE MAP FAIL`
+- [ ] kit/ops/MANUAL.md: map line (:129) includes `test→test · docs→docs`; count phrasing is "7 entries — 6 `.md` files + `.stamp`" with greenfield "the same 6 `.md` files, near-empty" and no bare "Build these 7 files" remains; freshness bullet (:239) says done AND seal auto-refresh
+- [ ] full selftest green (`bash kit/ops/polaris doctor --selftest`), pass line still starts `selftest passed`; every pre-existing drill untouched

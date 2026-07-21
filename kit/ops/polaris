@@ -860,6 +860,8 @@ EOF
   sync_board
   mutex_off; trap - EXIT
   board_changed_touch   # freshness beacon for the brain (ops/contracts/brain.md) — best-effort
+  brain_refresh_if_present  # v1.1: done mirrors seal — refresh AFTER the touch so the wave close
+                            # (land → seal → run-verify → done) ends fresh; ⚠ note on failure, never a red done
   local wt; wt="$(wt_path "$id")"
   [ -d "$wt" ] && git -C "$PRIMARY" worktree remove --force "$wt" 2>/dev/null || true
   # LOCAL tip before the branch dies — a squash-landed branch is never an ancestor of $BASE,
@@ -902,9 +904,11 @@ cmd_task_commit_msg() { # task-commit-msg <task-file> — the task's landed-comm
   id="$(fm_get id "$tf")"; [ -n "$id" ] || die "no id: in frontmatter — not a task file? $tf"
   title="$(fm_get title "$tf")"
   ttype="$(fm_get type "$tf")"
-  case "$ttype" in            # type map per the contract; a spike or a missing type is a chore
+  case "$ttype" in            # type map per clean-history v2.2; spike/missing/unknown → chore
     feature) ctype=feat;;
     bug)     ctype=fix;;
+    test)    ctype=test;;
+    docs)    ctype=docs;;
     *)       ctype=chore;;
   esac
   scope="$(fm_get scope "$tf")"
@@ -993,12 +997,21 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   local msgf; msgf="$(mktemp)"
   cmd_task_commit_msg "$tf" > "$msgf"
   printf '\nLanded-from: %s\n' "$tip" >> "$msgf"
-  if ! git merge --squash -q "feat/$id"; then
+  # git 2.53 narrates a squash even under -q: "Squash commit -- not updating HEAD" on stdout AND, on a
+  # divergent merge, "Automatic merge went well; stopped before committing as requested" on STDERR.
+  # Silence BOTH on success; on a real conflict re-emit the captured stderr so the failure still
+  # surfaces, then kick back. --express shares this path (one fix, both). (clean-history v2.2)
+  local mergeerr
+  mergeerr="$(mktemp)"
+  if ! git merge --squash -q "feat/$id" >/dev/null 2>"$mergeerr"; then
+    cat "$mergeerr" >&2                 # real conflict output stays visible on the failure path
+    rm -f "$mergeerr"
     git reset -q --hard                 # restore the integrate HEAD, tree clean
     rm -f "$msgf"
     cmd_kickback "$id" -m "squash conflict — planning bug"
     die "squash conflict — $br restored, $id kicked back to active/"
   fi
+  rm -f "$mergeerr"
   if git diff --cached --quiet; then
     git reset -q --hard; rm -f "$msgf"
     die "feat/$id brings no changes over $br — nothing to land (your call: kickback it, or done it by hand)"
@@ -1211,7 +1224,7 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
     fi
   fi
   board_changed_touch   # fold succeeded (ops/contracts/brain.md): beacon first, then the brain
-  brain_seal_refresh    # follows the new base — a refresh failure notes ⚠, never fails the seal
+  brain_refresh_if_present  # follows the new base — a refresh failure notes ⚠, never fails the seal
   if [ -n "$oldtag" ]; then
     say "sprint $n re-sealed — integrate/$date merged into $BASE (--no-ff); sprint/$n: $old7 → $new7"
   else
@@ -1278,7 +1291,7 @@ EOF
   git push -q origin ":refs/heads/integrate/$date" 2>/dev/null \
     || note "⚠ could not delete origin integrate/$date — by hand: git push origin :refs/heads/integrate/$date"
   board_changed_touch   # the fold completed here in pr mode (ops/contracts/brain.md)
-  brain_seal_refresh    # existing brain follows the fast-forwarded base; failure = ⚠ note only
+  brain_refresh_if_present  # existing brain follows the fast-forwarded base; failure = ⚠ note only
   # 5. the [<ID>]-in-$BASE gate now passes — walk each task out
   if [ -n "$ids" ]; then
     note "next, per task:$ids — bash ops/polaris run-verify <ID> · bash ops/polaris done <ID>"
@@ -1562,8 +1575,9 @@ board_changed_touch() { # freshness beacon: done/seal call this AFTER their muta
   { mkdir -p "$PRIMARY/.polaris" && date +%s > "$PRIMARY/.polaris/board-changed"; } 2>/dev/null || true
 }
 
-brain_seal_refresh() { # seal auto-refresh: after a successful fold, an EXISTING brain follows the
-  # base. No brain dir → feature not opted into → silence. Failure → one ⚠ note, never a seal failure.
+brain_refresh_if_present() { # seal/done auto-refresh (ops/contracts/brain.md v1.1): after the
+  # caller's board/base mutation succeeds, an EXISTING brain follows the base. No brain dir →
+  # feature not opted into → silence. Failure → one ⚠ note, never a caller failure.
   [ -d "$PRIMARY/.polaris/brain" ] || return 0
   "$SELF" brain --refresh >/dev/null 2>&1 \
     || note "⚠ brain refresh failed — run by hand: ops/polaris brain --refresh"
@@ -1696,13 +1710,15 @@ brain_contracts() { # contracts.md — per contract: name + its ## Purpose first
   return 0
 }
 
-brain_commands() { # commands.md — polaris help + effective CONVENTIONS values (caller caps 80)
-  printf '# commands — polaris CLI + effective CONVENTIONS\n\n## polaris help\n'
-  usage
-  printf '\n## effective CONVENTIONS\n'
+brain_commands() { # commands.md — effective CONVENTIONS values FIRST, then polaris help (brain v1.1:
+  # caller caps 80 — the cap may cut the help tail, NEVER the values; usage() alone is ~75 lines, so
+  # help-first was cutting 5 of the 8 values off the bottom).
+  printf '# commands — polaris CLI + effective CONVENTIONS\n\n## effective CONVENTIONS\n'
   printf 'base: %s\nclaim: %s\nintegration: %s\npublish: %s\nexpress: %s\nstale_hours: %s\ntest: %s\nbuild: %s\n' \
     "$BASE" "$CLAIM_MODE" "$(cfg integration '(unset)')" "$(cfg publish direct)" \
     "$(cfg express '(unset)')" "$STALE_H" "$(cfg test '(unset)')" "$(cfg build '(unset)')"
+  printf '\n## polaris help\n'
+  usage
 }
 
 brain_gotchas() { # gotchas.md — SPRINT Learned + CONVENTIONS Planner calibration, verbatim (caller caps 60)
@@ -2108,11 +2124,23 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     grep -q '^- kept note$' "$T/fmt/out" || { echo "TCM NOTE FAIL"; exit 1; }
     grep -q '⛔' "$T/fmt/out" && { echo "TCM FILTER FAIL (⛔ note must drop)"; exit 1; }
     grep -q '^Files: src/a.txt, src/b.txt$' "$T/fmt/out" || { echo "TCM FILES FAIL"; exit 1; }
+    # T-038 commit-type map (clean-history v2.2): the two advertised types test/docs must be
+    # REACHABLE (they were falling through to chore); spike/missing stay chore.
+    for ctpair in test:test docs:docs spike:chore; do
+      ctin="${ctpair%%:*}"; ctout="${ctpair##*:}"
+      printf -- '---\nid: T-CT\ntitle: t\ntype: %s\nscope: core\nfiles_owned:\n  - src/a.txt\n---\n' "$ctin" > "$T/fmt/ct.md"
+      "$SELF" task-commit-msg "$T/fmt/ct.md" | head -1 | grep -q "^$ctout(core): " || { echo "COMMIT TYPE MAP FAIL (type: $ctin must map to $ctout)"; exit 1; }
+    done
+    printf -- '---\nid: T-CT\ntitle: t\nscope: core\nfiles_owned:\n  - src/a.txt\n---\n' > "$T/fmt/ct.md"   # no type: → chore
+    "$SELF" task-commit-msg "$T/fmt/ct.md" | head -1 | grep -q '^chore(core): ' || { echo "COMMIT TYPE MAP FAIL (missing type must map to chore)"; exit 1; }
     fi   # drill_on tcm
     # land: one commit, contract subject + Landed-from trailer, clean tree after
     printf '# SPRINT 1 — selftest sprint  capacity: 5\n' > ops/SPRINT.md   # moved set: disk-only, ignored on base
     git checkout -q -b integrate/2026-01-01
-    "$SELF" land T-1 >/dev/null || { echo "LAND FAIL"; exit 1; }
+    "$SELF" land T-1 > "$T/land.out" 2>&1 || { cat "$T/land.out"; echo "LAND FAIL"; exit 1; }
+    # T-038 land noise (clean-history v2.2): git 2.53's squash chatter must not reach land output
+    grep -qi 'Squash commit' "$T/land.out" && { echo "LAND NOISE FAIL (git 'Squash commit' line leaked)"; exit 1; }
+    grep -qi 'stopped before committing' "$T/land.out" && { echo "LAND NOISE FAIL (git 'stopped before committing' line leaked)"; exit 1; }
     git log -1 --format=%s | grep -q '^feat(src): land a file \[T-1\]$' || { echo "LAND SUBJECT FAIL"; exit 1; }
     [ "$(git log -1 --format=%B | sed -n 's/^Landed-from: //p' | tr -d ' \r')" = "$(git rev-parse feat/T-1)" ] \
       || { echo "LAND TRAILER FAIL"; exit 1; }
@@ -2201,6 +2229,11 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
       grep -q "$bf" .polaris/brain/INDEX.md || { echo "BRAIN INDEX FAIL ($bf not routed)"; exit 1; }
     done
     grep -q 'T-1' .polaris/brain/board.md || { echo "BRAIN BOARD FAIL (landed task T-1 missing from the digest)"; exit 1; }
+    # T-038 (brain v1.1): all 8 effective-CONVENTIONS keys survive the head-80 cap — values print
+    # BEFORE the ~75-line help dump, so the cap only ever cuts the help tail.
+    for bk in base claim integration publish express stale_hours test build; do
+      grep -q "^$bk:" .polaris/brain/commands.md || { echo "BRAIN COMMANDS KEYS FAIL ($bk: cut by the cap)"; exit 1; }
+    done
     "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "BRAIN FRESH FAIL (a just-built brain must not warn)"; exit 1; }
     sleep 1; date +%s > .polaris/board-changed    # sleep: -nt needs strictly-newer mtime on 1s-resolution filesystems
     "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' || { echo "BRAIN STALE FAIL (board-changed newer than .stamp must warn)"; exit 1; }
@@ -2256,7 +2289,13 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     "$SELF" history --tasks 1 > "$T/hist2.out"
     grep -q 'land a file \[T-1\]' "$T/hist2.out" || { echo "HISTORY WAVES FAIL (wave-1 task missing from --tasks)"; exit 1; }
     grep -q 'wave two file \[T-W\]' "$T/hist2.out" || { echo "HISTORY WAVES FAIL (wave-2 task missing from --tasks)"; exit 1; }
+    "$SELF" run-verify T-W >/dev/null 2>&1 || { echo "SECOND-SEAL RUN-VERIFY FAIL (verify: [] must pass)"; exit 1; }
     "$SELF" done T-W >/dev/null || { echo "SECOND-SEAL DONE FAIL (wave-2 done must pass once its seal lands)"; exit 1; }
+    if drill_on brain; then
+    # T-038 (brain v1.1): the documented wave close land → seal → run-verify → done ends FRESH —
+    # done auto-refreshes AFTER its board-changed touch (mirroring seal), so doctor must not warn.
+    "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "DONE BRAIN STALE FAIL (done must auto-refresh; wave close must end fresh)"; exit 1; }
+    fi   # drill_on brain
     if drill_on brain; then
     # T-030 seal-refresh-failure note: a BROKEN brain (.stamp is a directory, so the rebuild's
     # stamp write fails) must cost the wave nothing — seal rc 0, one ⚠ note, board state normal.
@@ -2783,6 +2822,9 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     # integrate/<today> deleted (reused from the red run above), tree clean, qa named at the end
     extagpre="$(git rev-parse refs/tags/sprint/2)"
     "$SELF" land --express T-EX > "$T/ex8.out" 2>&1 || { cat "$T/ex8.out"; echo "EXPRESS HAPPY FAIL"; exit 1; }
+    # T-038: land --express shares cmd_land's squash path — the same chatter must stay silenced here
+    grep -qi 'Squash commit' "$T/ex8.out" && { echo "LAND NOISE FAIL (express: git 'Squash commit' line leaked)"; exit 1; }
+    grep -qi 'stopped before committing' "$T/ex8.out" && { echo "LAND NOISE FAIL (express: git 'stopped before committing' line leaked)"; exit 1; }
     [ -f ops/board/done/T-EX.md ] || { echo "EXPRESS DONE FAIL (task must end in done/)"; exit 1; }
     [ "$(sed -n 's/^landed: //p' ops/board/done/T-EX.md | tr -d ' \r')" = "$(git log --format='%H %s' main | awk '/\[T-EX\]$/ {print $1; exit}')" ] \
       || { echo "EXPRESS STAMP FAIL (done must stamp the landed sha)"; exit 1; }
