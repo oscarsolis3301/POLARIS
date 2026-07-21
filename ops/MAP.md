@@ -84,3 +84,5 @@ not installed code — they are written normally, by the board scripts and by th
 - polaris gains brain [--refresh] — generated .polaris/brain/ knowledge base (INDEX + 5 domain files, ≤4-hop); seal auto-refreshes it, done/seal touch board-changed, doctor warns when stale (5.15.0-unreleased)  (T-030, 2026-07-20)
 
 - land gains --express <ID> — audit+land+ONE full suite+seal+run-verify+done in one pass, refusals per express-lane contract; qa stamps suite duration, land hints when a paranoid suite ran >2min (5.15.0-unreleased)  (T-031, 2026-07-20)
+
+- status gains --brief (one plain-English paragraph) · metrics opens with an In-plain-English summary line (5.15.0-unreleased)  (T-032, 2026-07-20)
