@@ -953,11 +953,32 @@ in_primary() { # land/seal mutate the branch checked out in CWD — only the pri
   [ "$(cd "$top" 2>/dev/null && pwd -P)" = "$(cd "$PRIMARY" 2>/dev/null && pwd -P)" ]
 }
 
+land_slow_suite_hint() { # T-031 (ops/contracts/verification-tiering.md): after a successful land,
+  # ONE advisory note when a paranoid repo's suite has outgrown the per-land re-run rule —
+  # INTEGRATOR.md's batch-first guidance, made mechanical. Print-only: silent when the stamp is
+  # missing/garbled, integration: is not paranoid, or the suite took ≤120s. NEVER changes the
+  # exit status.
+  local stamp="$PRIMARY/.polaris/last-suite-seconds" secs
+  [ "$(cfg integration batch)" = "paranoid" ] || return 0
+  [ -f "$stamp" ] || return 0
+  secs="$(awk 'NR==1{print $1+0}' "$stamp" 2>/dev/null || true)"
+  case "$secs" in ''|*[!0-9]*) return 0;; esac
+  [ "$secs" -gt 120 ] || return 0
+  note "⚠ suite last took ${secs}s (>2 min) — paranoid re-runs it per land; consider integration: batch"
+  return 0
+}
+
 cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate branch: audit, then
   # squash feat/<ID> into exactly ONE commit whose message comes from the task file. Makes NO
   # board write, NO evt, NO board commit — a red task unwinds with a single
   # `git reset --hard HEAD~1`, nothing uncommitted at stake. The landed record IS the commit
   # (subject suffix [<ID>] + Landed-from trailer); `done` stamps it onto the task later.
+  # land --express <ID> routes to the one-pass lane (ops/contracts/express-lane.md).
+  if [ "${1:-}" = "--express" ]; then
+    shift
+    cmd_land_express "${1:?usage: polaris land --express <ID>}"
+    return 0
+  fi
   local id="${1:?usage: polaris land <ID>}"
   local tf; tf="$(task_file "$id" review)" || die "$id is not in review/ — only handed-off work lands"
   in_primary || die "land mutates the checked-out branch — run it in the primary checkout, never a worktree"
@@ -986,6 +1007,85 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   rm -f "$msgf"
   say "landed $id on $br — $(git log -1 --format=%s)"
   note "goes red on the suite? unwind: git reset --hard HEAD~1   ·   bounce: polaris kickback $id -m \"<why>\""
+  land_slow_suite_hint
+}
+
+cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: the integrator's whole
+  # long path for the SINGLE-task case, in one pass: integrate branch → audit+land → ONE full
+  # CONVENTIONS suite → seal → run-verify → done → branch cleanup. Express collapses SESSIONS,
+  # never checks — every gate of the long path runs exactly as it does there. Four pinned
+  # refusals below die BEFORE step 1, mutating nothing; `qa` stays the mandatory finish line.
+  local id="$1"
+  local tf other f ex
+  # refusal: express lands exactly one task — <ID> must be review/'s ONLY occupant
+  tf="$(task_file "$id" review)" || die "express lands exactly one task — $id is not in review/; hand it off first"
+  other=""
+  for f in "$BOARD/review/"*.md; do
+    [ -e "$f" ] || continue
+    case "$f" in */"$id".md) ;; *) other="$(basename "$f" .md)";; esac
+  done
+  [ -z "$other" ] || die "express lands exactly one task — review/ also holds $other; run the full integrate/land/seal path"
+  # refusal: risk: high never rides the express lane — invariant 9's human gate stays human
+  if [ "$(fm_get risk "$tf")" = "high" ]; then
+    die "risk: high never rides the express lane — integrate it by hand with the human in the loop"
+  fi
+  # refusal: the express: knob — auto (default; unset = auto) | off; unknown warns once and
+  # fails to the full ceremony (off is the safe side)
+  ex="$(cfg express auto)"
+  case "$ex" in
+    auto) ;;
+    off)  die "express: off — CONVENTIONS disables the express lane; run the full ceremony";;
+    *)    printf "   ⚠ express: '%s' unknown (auto | off) — behaving as off\n" "$ex" >&2
+          die "express: off (an unknown value behaves as off) — run the full ceremony";;
+  esac
+  # refusal: a pr-mode wave ends at a PR the human merges, never at a one-pass seal
+  publish_resolve
+  [ "$PUB" = "direct" ] || die "express needs publish: direct — publish: pr waves end at a PR, not a seal"
+  # context — the same preconditions land/seal enforce: primary checkout, ON <base>, clean tree
+  in_primary || die "express runs in the primary checkout — cd \"$PRIMARY\" first"
+  local br; br="$(git rev-parse --abbrev-ref HEAD)"
+  [ "$br" = "$BASE" ] || die "express starts ON $BASE — you are on $br"
+  git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
+  # step 1: create/reuse today's integration branch from $BASE
+  local date; date="$(date +%F)"
+  if git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null; then
+    git checkout -q "integrate/$date"
+    git merge -q --ff-only "$BASE" \
+      || { git checkout -q "$BASE"; die "integrate/$date exists and cannot fast-forward to $BASE — finish that wave by hand first"; }
+  else
+    git checkout -q -b "integrate/$date" "$BASE"
+  fi
+  # step 2: audit + land — existing cmd_land semantics, unchanged
+  cmd_land "$id"
+  # step 3: the FULL CONVENTIONS suite, ONCE (same set as qa). Red → unwind the land, kick the
+  # task back carrying the failing tail, die — the board never keeps a green it didn't earn.
+  local k c out tailtxt
+  out="$(mktemp)"
+  for k in test lint typecheck build uat; do
+    c="$(cfg "$k" "")"
+    [ -z "$c" ] && continue
+    if ( cd "$PRIMARY" && bash -c "$c" ) >"$out" 2>&1; then
+      say "$k — green"
+    else
+      printf '⛔ %s — RED: %s\n' "$k" "$c" >&2
+      tail -15 "$out" | sed 's/^/     /' >&2
+      tailtxt="$(tail -3 "$out" | tr '\n' ' ' | cut -c1-200)"
+      rm -f "$out"
+      git reset -q --hard HEAD~1        # unwind the land — integrate/<date> back at $BASE state
+      cmd_kickback "$id" -m "express suite red on $k: $tailtxt"
+      die "express: $k red — land unwound on integrate/$date, $id kicked back with the failing tail"
+    fi
+  done
+  rm -f "$out"
+  # step 4: seal — existing cmd_seal semantics, unchanged (tag sprint/<n>, pushes when remoted)
+  cmd_seal "$date"
+  # step 5: prove + close — verify: commands on the sealed base, done (landed: stamp + cleanup),
+  # then the wave branch goes (its job is finished; a fresh one is cheap tomorrow)
+  cmd_run_verify "$id"
+  cmd_done "$id"
+  git branch -q -D "integrate/$date" 2>/dev/null || true
+  say "express: $id landed · sealed · done — one pass, integrate/$date cleaned"
+  note "finish line: bash ops/polaris qa"
 }
 
 tag_push_recovery_note() { # tag_push_recovery_note <n> — convergent recovery when a moved-tag CAS
@@ -2474,10 +2574,110 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     sed -i.bak '/^publish:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
     git add -A; git commit -qm 'publish drill cleanup'
     # ================== end T-022 pr-publish drill ==================
+    # ========= T-031 express-lane + slow-suite drills (ops/contracts/express-lane.md ·
+    # ops/contracts/verification-tiering.md) =========
+    "$SELF" help | grep -q -- 'land --express' || { echo "USAGE FAIL: land --express missing from help"; exit 1; }
+    # qa stamp: gated on ≥1 suite command — no suite keys → NO stamp; test: true → "<seconds> <epoch>"
+    rm -f .polaris/last-suite-seconds
+    "$SELF" qa >/dev/null 2>&1 || true          # rc is not under test here — only the stamp gate
+    [ -f .polaris/last-suite-seconds ] && { echo "QA STAMP GATE FAIL (no suite command ran — no stamp)"; exit 1; }
+    printf 'test: true\n' >> ops/CONVENTIONS.md
+    "$SELF" qa >/dev/null 2>&1 || true
+    grep -qE '^[0-9]+ [0-9]+$' .polaris/last-suite-seconds || { echo "QA STAMP FORMAT FAIL (want one \"<seconds> <epoch>\" line)"; exit 1; }
+    git add -A; git commit -qm 'express drill: suite on'
+    # a review task + its feat branch, shaped exactly as handoff leaves them (risk: high at birth
+    # so the risk refusal drills on the real frontmatter key)
+    printf -- '---\nid: T-EX\ntitle: express file\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: high\nowner: null\nbranch: feat/T-EX\nstatus: review\nfiles_owned:\n  - src/ex.txt\nverify:\n  - test -f src/ex.txt\n---\n## Why\nexpress drill.\n\n## Acceptance criteria\n- [ ] lands\n' > ops/board/review/T-EX.md
+    git checkout -q -b feat/T-EX main
+    echo ex > src/ex.txt; git add -A; git commit -qm ok
+    git checkout -q main
+    exd="$(date +%F)"
+    expre="$(git rev-parse main)"
+    # refusal: single-task rule — unknown ID, then a second review occupant, both by name
+    "$SELF" land --express T-NOPE > "$T/ex1.out" 2>&1 && { echo "EXPRESS REVIEW FAIL (task not in review/ must refuse)"; exit 1; }
+    grep -q 'express lands exactly one task' "$T/ex1.out" || { echo "EXPRESS REVIEW MSG FAIL"; exit 1; }
+    printf -- '---\nid: T-EX2\npoints: 1\nwsjf: 1\nstatus: review\nfiles_owned:\n  - src/ex2.txt\n---\n' > ops/board/review/T-EX2.md
+    "$SELF" land --express T-EX > "$T/ex2.out" 2>&1 && { echo "EXPRESS SOLO FAIL (a second review task must refuse)"; exit 1; }
+    grep -q 'express lands exactly one task' "$T/ex2.out" || { echo "EXPRESS SOLO MSG FAIL"; exit 1; }
+    rm -f ops/board/review/T-EX2.md
+    # refusal: risk gate
+    "$SELF" land --express T-EX > "$T/ex3.out" 2>&1 && { echo "EXPRESS RISK FAIL (risk: high must refuse)"; exit 1; }
+    grep -q 'risk: high never rides the express lane' "$T/ex3.out" || { echo "EXPRESS RISK MSG FAIL"; exit 1; }
+    set_fm risk normal ops/board/review/T-EX.md
+    # refusal: express: off — and an unknown value warns, then fails the same safe way
+    printf 'express: off\n' >> ops/CONVENTIONS.md
+    "$SELF" land --express T-EX > "$T/ex4.out" 2>&1 && { echo "EXPRESS OFF FAIL"; exit 1; }
+    grep -q 'express: off' "$T/ex4.out" || { echo "EXPRESS OFF MSG FAIL"; exit 1; }
+    sed -i.bak '/^express:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    printf 'express: bogus\n' >> ops/CONVENTIONS.md
+    "$SELF" land --express T-EX > "$T/ex5.out" 2>&1 && { echo "EXPRESS UNKNOWN FAIL (bogus must behave as off)"; exit 1; }
+    grep -q "express: 'bogus' unknown" "$T/ex5.out" || { echo "EXPRESS UNKNOWN WARN FAIL (unknown value must warn)"; exit 1; }
+    grep -q 'express: off' "$T/ex5.out" || { echo "EXPRESS UNKNOWN MSG FAIL (unknown value must fail as off)"; exit 1; }
+    sed -i.bak '/^express:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    # refusal: publish: pr
+    printf 'publish: pr\n' >> ops/CONVENTIONS.md
+    "$SELF" land --express T-EX > "$T/ex6.out" 2>&1 && { echo "EXPRESS PR FAIL (publish: pr must refuse)"; exit 1; }
+    grep -q 'express needs publish: direct' "$T/ex6.out" || { echo "EXPRESS PR MSG FAIL"; exit 1; }
+    git checkout -q -- ops/CONVENTIONS.md       # restore publish: direct (default) for everything below
+    # all four refusals died BEFORE any mutation
+    [ "$(git rev-parse main)" = "$expre" ] || { echo "EXPRESS REFUSE MUTATE FAIL (base moved)"; exit 1; }
+    git rev-parse -q --verify "refs/heads/integrate/$exd" >/dev/null && { echo "EXPRESS REFUSE MUTATE FAIL (integrate branch created)"; exit 1; }
+    [ -f ops/board/review/T-EX.md ] || { echo "EXPRESS REFUSE MUTATE FAIL (task left review/)"; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "EXPRESS REFUSE DIRTY FAIL (a refusal must leave zero uncommitted state)"; exit 1; }
+    # red suite mid-express: land unwinds (integrate back at base), kickback carries the failing tail
+    sed -i.bak 's|^test: true$|test: bash -c "echo EXPRESS-BOOM; exit 1"|' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'express drill: suite red'
+    "$SELF" land --express T-EX > "$T/ex7.out" 2>&1 && { echo "EXPRESS RED FAIL (red suite must die)"; exit 1; }
+    grep -q 'EXPRESS-BOOM' "$T/ex7.out" || { echo "EXPRESS RED TAIL FAIL (output must carry the failing tail)"; exit 1; }
+    [ -f ops/board/active/T-EX.md ] || { echo "EXPRESS RED KICKBACK FAIL (task must bounce to active/)"; exit 1; }
+    grep -q 'EXPRESS-BOOM' ops/board/active/T-EX.md || { echo "EXPRESS RED NOTE FAIL (kickback note must carry the tail)"; exit 1; }
+    [ "$(git rev-parse "refs/heads/integrate/$exd")" = "$(git rev-parse main)" ] || { echo "EXPRESS RED UNWIND FAIL (the land must reset away)"; exit 1; }
+    git checkout -q main
+    mv ops/board/active/T-EX.md ops/board/review/T-EX.md    # back to review + a green suite for the happy path
+    set_fm status review ops/board/review/T-EX.md
+    sed -i.bak 's|^test: .*$|test: true|' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'express drill: suite green'
+    # happy path: one pass → done/ with landed: stamp, sprint tag moved to the new seal,
+    # integrate/<today> deleted (reused from the red run above), tree clean, qa named at the end
+    extagpre="$(git rev-parse refs/tags/sprint/2)"
+    "$SELF" land --express T-EX > "$T/ex8.out" 2>&1 || { cat "$T/ex8.out"; echo "EXPRESS HAPPY FAIL"; exit 1; }
+    [ -f ops/board/done/T-EX.md ] || { echo "EXPRESS DONE FAIL (task must end in done/)"; exit 1; }
+    [ "$(sed -n 's/^landed: //p' ops/board/done/T-EX.md | tr -d ' \r')" = "$(git log --format='%H %s' main | awk '/\[T-EX\]$/ {print $1; exit}')" ] \
+      || { echo "EXPRESS STAMP FAIL (done must stamp the landed sha)"; exit 1; }
+    [ "$(git rev-parse refs/tags/sprint/2)" != "$extagpre" ] || { echo "EXPRESS TAG FAIL (sprint tag must move to the express seal)"; exit 1; }
+    [ "$(git rev-parse refs/tags/sprint/2)" = "$(git rev-parse main)" ] || { echo "EXPRESS TAG FAIL (tag must equal the new base HEAD)"; exit 1; }
+    git rev-parse -q --verify "refs/heads/integrate/$exd" >/dev/null && { echo "EXPRESS BRANCH FAIL (integrate/<today> must be deleted)"; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "EXPRESS CLEAN FAIL (tree must end clean)"; exit 1; }
+    { grep -q 'finish line' "$T/ex8.out" && grep -q 'qa' "$T/ex8.out"; } || { echo "EXPRESS FINISH FAIL (final note must name qa)"; exit 1; }
+    # slow-suite hint: fake stamp 180s + integration: paranoid → land prints it; batch → silent
+    printf -- '---\nid: T-EY\ntitle: hint file\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nowner: null\nbranch: feat/T-EY\nstatus: review\nfiles_owned:\n  - src/ey.txt\nverify: []\n---\n' > ops/board/review/T-EY.md
+    git checkout -q -b feat/T-EY main
+    echo ey > src/ey.txt; git add -A; git commit -qm ok
+    git checkout -q main
+    printf 'integration: paranoid\n' >> ops/CONVENTIONS.md
+    git add -A; git commit -qm 'hint drill: paranoid'
+    printf '180 1700000000\n' > .polaris/last-suite-seconds
+    git checkout -q -b integrate/2026-01-03
+    "$SELF" land T-EY > "$T/hint1.out" || { echo "HINT LAND FAIL"; exit 1; }
+    grep -q 'suite last took 180s' "$T/hint1.out" || { echo "HINT FIRE FAIL (paranoid + 180s stamp must print the note)"; exit 1; }
+    grep -q 'integration: batch' "$T/hint1.out" || { echo "HINT GUIDE FAIL (the note must name integration: batch)"; exit 1; }
+    git reset -q --hard HEAD~1                  # unwind the land so the silent case re-lands the same task
+    sed -i.bak 's/^integration: paranoid$/integration: batch/' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'hint drill: batch'
+    "$SELF" land T-EY > "$T/hint2.out" || { echo "HINT SILENT LAND FAIL"; exit 1; }
+    grep -q 'suite last took' "$T/hint2.out" && { echo "HINT SILENT FAIL (integration: batch must not print the note)"; exit 1; }
+    # cleanup: nothing sealed here — drop the drill refs, restore the pre-drill CONVENTIONS
+    git checkout -q main
+    git branch -q -D integrate/2026-01-03
+    git branch -q -D feat/T-EY
+    rm -f ops/board/review/T-EY.md .polaris/last-suite-seconds
+    sed -i.bak -e '/^integration:/d' -e '/^test: true$/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'express drill cleanup'
+    # ========= end T-031 express-lane + slow-suite drills =========
     echo SELFTEST-PASS
   ) || { rm -rf "$T"; die "selftest FAILED — do not trust this environment until fixed"; }
   rm -rf "$T"
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin · pr-publish (feat stays local · seal pushes ONLY integrate + title/bullets/URL + notify done, no ref moved · --sync subject gate/tag/branch cleanup both sides · done via rule 1 · direct --sync dies · unknown publish warns) · sprint report (seal commits docs(sprint-N) riding the wave · cmd_report --sprint/current/--all renders + prints, board read-only + idempotent) · brain (7-file build gitignored · INDEX routes all 5 · board digest names the landed task · stale warn → refresh clears · seal auto-refresh · refresh failure = note, never a red seal)"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin · pr-publish (feat stays local · seal pushes ONLY integrate + title/bullets/URL + notify done, no ref moved · --sync subject gate/tag/branch cleanup both sides · done via rule 1 · direct --sync dies · unknown publish warns) · sprint report (seal commits docs(sprint-N) riding the wave · cmd_report --sprint/current/--all renders + prints, board read-only + idempotent) · brain (7-file build gitignored · INDEX routes all 5 · board digest names the landed task · stale warn → refresh clears · seal auto-refresh · refresh failure = note, never a red seal) · express (help form · qa suite stamp gated+formatted · 4 refusals pre-mutation: solo-review/risk-high/off+unknown/publish-pr · red suite unwind+kickback tail · happy path: done+landed stamp · tag moved · integrate deleted · clean tree · qa finish line) · slow-suite hint (paranoid+180s fires naming integration: batch · batch silent)"
 }
 
 pat_overlap() { # heuristic: can patterns A and B claim a common path?
@@ -2631,6 +2831,8 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
   # red. The Conductor runs it after integration (a subagent's "green" is never taken on
   # faith), the Integrator runs it before reporting, CI and humans run it whenever.
   local red=0 ran=0 k c out
+  local t0 t1
+  t0="$(date +%s)"
   out="$(mktemp)"
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
@@ -2644,6 +2846,14 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
       red=1
     fi
   done
+  # T-031 (ops/contracts/verification-tiering.md): stamp how long the suite took — one line,
+  # "<seconds> <epoch>", written only when ≥1 suite command actually ran. `land` reads it for
+  # the slow-suite hint; purely advisory, never a gate, best-effort write.
+  if [ "$ran" -ge 1 ]; then
+    t1="$(date +%s)"
+    mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+    printf '%s %s\n' "$((t1 - t0))" "$t1" > "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true
+  fi
   [ "$ran" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
   # drift --strict exits the script on findings, so both sub-checks run in subshells.
   if ( cmd_drift --strict ) >"$out" 2>&1; then
@@ -3275,6 +3485,11 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   task-commit-msg <task-file>    print the task's landed-commit message (pure; `land` consumes it)
   land <ID>                      Integrator, on integrate/<date>: audit + squash feat/<ID> into
                                  ONE rich commit ([<ID>] subject + Landed-from trailer; no board write)
+  land --express <ID>            ONE pass for a single small task, from <base>: integrate branch +
+                                 audit/land + ONE full suite (red → unwind + kickback) + seal +
+                                 run-verify + done + branch cleanup. Refuses: another task in
+                                 review/ · risk: high · express: off · publish: pr. Every gate of
+                                 the long path still runs; `qa` stays the finish line.
   seal [<date>]                  Integrator: seal the wave — merge integrate/<date> into base
                                  (--no-ff, per-task bullets) + lightweight tag sprint/<n>; a later
                                  wave's seal MOVES the tag (sprint's latest sealed checkpoint).
