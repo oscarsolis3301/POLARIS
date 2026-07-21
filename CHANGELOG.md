@@ -4,6 +4,45 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.15.0 — 2026-07-20
+
+**The fast lane: requests stop taking hours.** Telemetry showed building averaged 12 minutes
+while everything around it — serial waves, cold-start context, full-suite re-runs, fixed
+ceremony — consumed the day (integrate avg 2.3h, 92% of cycle time). 5.15.0 attacks each
+cause; every quality gate survives untouched.
+`ops/contracts/brain.md` · `express-lane.md` · `pipelined-integration.md` ·
+`verification-tiering.md` · `status-brief.md`.
+
+- **The brain.** `brain [--refresh]` generates `.polaris/brain/` — a git-ignored, any-model
+  knowledge base (INDEX routing + code map + board digest + contract digests + commands +
+  gotchas) with a ≤4-hop lookup guarantee. `seal` and `done` keep it fresh automatically;
+  `doctor` warns when it's stale. Role files and conductor kickoffs read the brain FIRST,
+  repo second — cold-start re-derivation (measured at ~1.6M duplicated tokens per sprint)
+  stops. Scales from greenfield to multi-thousand-file repos via per-directory
+  summarization. `kit/ops/polaris`, `kit/ops/roles/`.
+- **Express lane.** Small requests stop paying the full pipeline: conductor triage routes a
+  single ≤2-pt normal-risk task to one builder + `land --express <ID>` — audit, land, ONE
+  full suite, seal, run-verify, done in a single pass — skipping the QA scout and EVOLVE
+  (no signal in a sample of one), still ending at the full `qa` gate. Four refusals guard it
+  (>1 task · risk:high · `express: off` · `publish: pr`). New key `express: auto | off`,
+  default auto. `kit/ops/polaris`, `kit/ops/roles/CONDUCTOR.md`.
+- **Pipelined integration.** The integrator spawns at the FIRST handoff and lands tasks as
+  they arrive in review/, in dependency order — a wave's wall-clock is no longer hostage to
+  its slowest lane (measured here: integrate avg 2.3h → 1.8h). Every conductor kickoff
+  template now carries the foreground rule that ends the background-notification stalls,
+  plus dead-lane recovery guidance. `kit/ops/roles/CONDUCTOR.md`, `kit/ops/roles/INTEGRATOR.md`.
+- **Verification tiering.** `doctor --selftest --only <pattern>` runs the always-on spine
+  plus a labeled drill subset for cheap targeted re-checks (distinct subset pass line —
+  it can never impersonate the full gate); `qa` stamps suite duration and `land` hints when
+  a suite outgrows paranoid mode's <2-minute rule. `kit/ops/polaris`.
+- **Readable feedback.** `status --brief` answers "where are things?" in one plain-English
+  paragraph; `metrics` opens with an "In plain English:" line. `kit/ops/polaris`.
+- **Post-scout fixes** (caught in a scratch install before tagging): brain `commands.md` no
+  longer truncates the effective-CONVENTIONS values; a completed wave now ends with the
+  brain FRESH (done refreshes like seal); `land` output is free of git merge chatter on
+  Windows; `type: test`/`docs` tasks land as `test(...)`/`docs(...)`; MANUAL's brain file
+  count reconciled. `kit/ops/polaris`, `kit/ops/MANUAL.md`.
+
 ## 5.14.1 — 2026-07-20
 
 **`report --all` attributes sealed tasks correctly.** A combined `local` declaration in
