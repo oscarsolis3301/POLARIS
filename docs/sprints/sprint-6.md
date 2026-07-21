@@ -1,7 +1,7 @@
 # Sprint 6 — Many hands (2026-07-21–)
 
 ## T-039 — lib-loader + core.sh extraction + install/INIT parity
-points 5 · risk normal · landed d958aee (2026-07-21) · claimed 2026-07-21
+points 5 · risk normal · landed d958aee (2026-07-21) · claimed 2026-07-21 → done 2026-07-21
 files touched: kit/ops/install.sh, kit/ops/lib/core.sh, kit/ops/polaris, kit/ops/roles/INIT.md, kit/ops/selftest-install.sh
 
 ### Why
@@ -26,3 +26,54 @@ must survive untouched — the dir loops print nothing, keep it that way.
 - [x] install.sh: both dir loops say `roles templates hooks ci lib`; KIT_CODE, chmod, output lines all unchanged
 - [x] selftest-install: drill_fresh asserts ops/lib/core.sh installed; drill_live_board corrupts ops/lib/core.sh and asserts repair; all drills green
 - [x] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`) — byte-identical referee
+
+## T-040 — selftest extraction into lib/selftest/ + opt-in --parallel sharding
+points 5 · risk normal · landed 7ff906f (2026-07-21) · claimed 2026-07-21
+files touched: kit/ops/lib/selftest/board.sh, kit/ops/lib/selftest/brain.sh, kit/ops/lib/selftest/history.sh, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/remote.sh, kit/ops/lib/selftest/report.sh, kit/ops/lib/selftest/spine.sh, kit/ops/polaris
+
+### Why
+The ~890-line selftest embedded in kit/ops/polaris is why the full suite (~7 min) outgrew the
+600s harness cap and killed healthy lanes on timeout mechanics (sprint 5). Move it out and make
+it shardable: drill_on/ngwait/ensure_origin plus the selftest() spine go verbatim to
+kit/ops/lib/selftest/spine.sh; each labeled drill block becomes a `drill_<label>` function in its
+group file (board/history/report/brain/policy/remote per the module-layout contract), called from
+the spine at the exact same point behind the same drill_on gate — bodies verbatim, NO new `local`
+lines (spine state reaches drills by dynamic scoping; a stray local shadows it, e.g. bstamp1).
+Then the selftest-sharding contract's opt-in surface: `--only` gains comma-separated patterns
+(single pattern byte-identical to today), and `--parallel <N>` partitions selected labels
+round-robin into N child re-invocations (`"$SELF" doctor --selftest --only <list>`, own logs, own
+throwaway repos), waits, replays red logs, and greens with `✅ selftest passed — <N> shards`.
+Serial stays the default and byte-identical; CI stays serial. Update the entry's loader list
+(+ the 7 selftest/ names) and usage()'s doctor line. Sharding lands EARLY so waves 3–6 iterate fast.
+
+### Acceptance
+- [ ] lib/selftest/ = spine.sh + board.sh + history.sh + report.sh + brain.sh + policy.sh + remote.sh, labels grouped exactly per module-layout contract
+- [ ] plain `doctor --selftest` and every single-pattern `--only` run byte-identical to pre-split (spot-diff one of each against the pre-task script)
+- [ ] `--parallel 2 --only 'fmlist,grant'` → two shards, both green, final line `✅ selftest passed — 2 shards`, rc 0
+- [ ] `--parallel 1` refuses with the pinned message; N > selected labels clamps with the pinned note line
+- [ ] a forced-red shard (nonexistent tool in one drill, locally) replays its log verbatim and exits rc 1 — then revert
+- [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
+
+## T-041 — docs — modular layout in MANUAL, kit CLAUDE.md STATE tree + THE TOOL note
+points 2 · risk normal · landed 47d1b00 (2026-07-21) · claimed 2026-07-21
+files touched: kit/CLAUDE.md, kit/ops/MANUAL.md
+
+### Why
+After the split, a user who opens ops/ meets a lib/ directory no document mentions, and a broken
+lib/ prints a remedy no manual explains. Three contract-sourced edits, wording pinned so this task
+runs parallel to the CLI chain with zero conflicts: (1) kit/ops/MANUAL.md gains a short "The
+modular CLI" section — ops/polaris is the entry (globals + lib-loader + dispatch), function bodies
+live in ops/lib/*.sh sourced in fixed order at startup, a missing module refuses with the
+re-run-installer/update remedy, recipes below are unchanged — plus the pinned sharding phrase from
+the selftest-sharding contract, verbatim: "Opt-in: `doctor --selftest --parallel <N>` runs the
+labeled drills in N parallel shards; serial stays the default and CI stays serial." (2) kit/CLAUDE.md
+STATE tree gains the `lib/` line under ops/ with the module list, and THE TOOL section gains one
+note that the CLI is `globals + lib-loader + dispatch` sourcing ops/lib/. (3) map_delta records the
+new module directory in this repo's MAP at done. Describe only what the contracts pin — the CLI
+chain is still landing; cite no line numbers, paste no code.
+
+### Acceptance
+- [ ] MANUAL "The modular CLI" section present: entry + lib/ + fixed source order + missing-module remedy + recipes-unchanged, and the pinned --parallel phrase verbatim
+- [ ] kit/CLAUDE.md STATE tree lists `lib/` under ops/ with the 7 module names + selftest/; THE TOOL notes the entry shape
+- [ ] no wording beyond the two contracts; no line numbers, no code blocks copied from the CLI
+- [ ] map_delta line present in frontmatter (lands in MAP via `polaris done`)
