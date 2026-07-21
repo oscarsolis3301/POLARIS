@@ -1,3 +1,20 @@
+# SPRINT 6 — Many hands          capacity: 23   dates: 2026-07-21–
+
+One file, eight modules: kit/ops/polaris (3,826 lines) becomes a <500-line entry (globals +
+lib-loader + dispatch) sourcing kit/ops/lib/*.sh — core · ownership · builder · integrate ·
+knowledge · observe · admin + selftest/ groups. ZERO behavior change: verbatim relocation, serial
+output byte-identical, full suite the referee after every extraction; opt-in
+`doctor --selftest --parallel <N>` sharding (serial default, CI serial). install.sh dir loops gain
+`lib` in BOTH paths; INIT skeleton gains the ops/lib/ write-routing row; installer tripwires
+untouched. Contracts: module-layout · selftest-sharding · install-parity.
+plan: many-hands → T-039..T-045 (23 pts). kit/ops/polaris chain
+T-039 → T-040 → T-042 → T-043 → T-044 → T-045; docs T-041 parallel from W2 (contract-pinned).
+Release 5.16.0.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 5 — The fast lane          capacity: 25   dates: 2026-07-20–
 
 Requests take hours; telemetry says where: cold-start context re-derivation (~1.6M tokens/day),
