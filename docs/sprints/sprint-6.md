@@ -122,7 +122,7 @@ byte-identical.
 - [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
 
 ## T-044 — extract lib/knowledge.sh + lib/observe.sh
-points 3 · risk normal · landed ebc614a (2026-07-21) · claimed 2026-07-21
+points 3 · risk normal · landed ebc614a (2026-07-21) · claimed 2026-07-21 → done 2026-07-21
 files touched: kit/ops/lib/knowledge.sh, kit/ops/lib/observe.sh, kit/ops/polaris
 
 ### Why
@@ -143,6 +143,30 @@ order, bodies untouched, zero behavior change.
 - [ ] knowledge.sh holds exactly the contract's 26 functions; observe.sh exactly its 17; nothing else moved
 - [ ] loader list reads `core ownership builder integrate knowledge observe selftest/…` (contract growth schedule)
 - [ ] `report`/`brain`/`status --brief` outputs spot-diffed byte-identical against the pre-task script
+- [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
+
+## T-045 — extract lib/admin.sh — entry under 500 lines, loader complete
+points 2 · risk normal · landed ddd7e17 (2026-07-21) · claimed 2026-07-21
+files touched: kit/ops/lib/admin.sh, kit/ops/polaris
+
+### Why
+Last link: the lifecycle commands (cmd_init_board, cmd_upgrade, ver, semver_gt,
+update_check_maybe, cmd_version, kit_zip_version, refresh_machine_kit, cmd_update,
+cmd_uninstall — the contract's 10) move verbatim into kit/ops/lib/admin.sh, completing the
+loader list to the contract's pinned final block. cmd_update's re-exec guard moves UNCHANGED —
+it protects the entry file bash is still lazily reading; lib files are fully read at startup, so
+overwriting them mid-update is already safe (contract invariant; .github CI asserts the guard
+survives). This task also closes the sprint's line-budget gates: the entry script — globals +
+loader + usage + dispatch, nothing else — under 500 lines, every module ≤1,200, and the grand
+total inside [3750, 4120] (module-layout v1.1: relocation band 3,826 ±2% + the measured
+~150-line --parallel feature + module headers): relocation, not rewrite, proven by wc. selftest-install reruns because uninstall and
+the old-client update path both walk admin code.
+
+### Acceptance
+- [ ] admin.sh holds exactly the contract's 10 functions; nothing else moved; re-exec guard byte-identical
+- [ ] loader list matches the contract's pinned block byte-for-byte (all 13 names, final order)
+- [ ] entry script contains ONLY: header/set -eu/POLARIS_V, loader, git guard, top-level assignments, usage(), dispatch
+- [ ] wc gates green: entry <500 · modules ≤1200 · total in [3750, 4120] (module-layout v1.1)
 - [ ] full `bash kit/ops/polaris doctor --selftest` green (handoff gate `test:`)
 
 ## T-046 — hermetic selftest drills — kill the order-coupling between labels
