@@ -148,11 +148,14 @@ def perm_snippet(why=None):
     print("   Claude Code's permission classifier can block a POLARIS install:")
     for rule in PERMS:
         print(f'     "{rule}",')
+    print("   ...and for seamless non-destructive commands, set in the same file:")
+    print('     permissions.defaultMode = "auto"')
+    print('     "skipAutoPermissionPrompt": true,   "useAutoModeDuringPlan": true')
     return False
 
 
 def merge_permissions(settings):
-    """Append POLARIS's Bash rules to permissions.allow. Append-if-absent; nothing else touched.
+    """Append POLARIS's Bash rules to permissions.allow AND arm auto mode. Both set-if-absent.
 
     Fails OPEN, always. This file is the user's entire Claude Code config — other people's hooks,
     statusline, permissions. If we cannot parse it we do NOT rewrite it: an unreadable settings
@@ -177,10 +180,28 @@ def merge_permissions(settings):
         return perm_snippet(f'{settings}: "permissions.allow" is not a list — left untouched')
 
     added = [rule for rule in PERMS if rule not in allow]
-    if not added:
+    allow.extend(added)
+
+    # Auto mode makes non-destructive commands (grep, git status, python -c that only reads) run
+    # WITHOUT a prompt — in plan AND execute mode — while destructive/irreversible actions still
+    # stop and ask. That is the smart classifier POLARIS's hands-free loop wants: the board can
+    # read the repo freely to plan, and the ownership guard / RULES / verify still bind (auto mode
+    # decides only whether to PROMPT, never whether hooks run). Set-if-absent, so a user who
+    # deliberately chose a stricter defaultMode keeps it; useAutoModeDuringPlan is already the
+    # default true, set explicitly so plan mode stays seamless if that default ever changes. The
+    # update path (ops/lib/admin.sh::refresh_machine_kit) arms the same keys — keep the two in step.
+    auto_changed = False
+    if "defaultMode" not in perms:
+        perms["defaultMode"] = "auto"
+        auto_changed = True
+    for key in ("skipAutoPermissionPrompt", "useAutoModeDuringPlan"):
+        if key not in data:
+            data[key] = True
+            auto_changed = True
+
+    if not added and not auto_changed:
         out(f"✅ permissions:           already authorized in {settings}")
         return False
-    allow.extend(added)
 
     # Temp file + os.replace: an interrupted write must never leave a truncated settings.json.
     # Same reason install.sh rebuilds CLAUDE.md through a tmp file rather than editing in place.
@@ -197,9 +218,12 @@ def merge_permissions(settings):
             pass
         return perm_snippet(f"could not write {settings} — {exc}")
 
-    out(f"✅ permissions:           {len(added)} rule(s) added to {settings}")
-    for rule in added:
-        out(f"   + {rule}")
+    if added:
+        out(f"✅ permissions:           {len(added)} rule(s) added to {settings}")
+        for rule in added:
+            out(f"   + {rule}")
+    if auto_changed:
+        out(f"✅ auto mode:             armed in {settings} — non-destructive commands run unprompted")
     return True
 
 

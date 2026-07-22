@@ -235,6 +235,47 @@ refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with wh
     note "  to propagate). Until it does, the next repo you install into gets $got, not $want."
     note "  Re-run  ops/polaris update  shortly, or:  python polaris-v5.zip --claude-skill"
   fi
+
+  # Arm auto mode in the user's OWN settings, exactly as a fresh install does — so `update` makes
+  # THIS machine seamless too, not just the next fresh repo. Sibling of bootstrap.py::merge_permissions;
+  # keep the key set in step. Set-if-absent (an explicit stricter defaultMode is respected) and SILENT
+  # (no say/note — the quiet-line count above the ▶ NEXT epilogue is load-bearing). Fails OPEN under
+  # `set -eu`: a settings hiccup must never fail an update that already succeeded, so it is guarded and
+  # `|| true`. A present-but-malformed settings.json is left untouched; only an ABSENT one is created.
+  local SJ="$HOME/.claude/settings.json" PY=""
+  python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
+  if [ -n "$PY" ]; then
+    "$PY" - "$SJ" <<'AUTOMODE' || true
+import json, os, sys
+p = sys.argv[1]
+if os.path.exists(p):
+    try:
+        with open(p, encoding="utf-8") as fh:
+            d = json.load(fh)
+    except (OSError, ValueError):
+        sys.exit(0)                      # present but unreadable/malformed → never overwrite
+else:
+    d = {}
+if not isinstance(d, dict):
+    sys.exit(0)                          # someone else's non-object config — leave it be
+changed = False
+perms = d.get("permissions")
+if isinstance(perms, dict):
+    if "defaultMode" not in perms:
+        perms["defaultMode"] = "auto"; changed = True
+elif perms is None:
+    d["permissions"] = {"defaultMode": "auto"}; changed = True
+for k in ("skipAutoPermissionPrompt", "useAutoModeDuringPlan"):
+    if k not in d:
+        d[k] = True; changed = True
+if changed:
+    os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
+    tmp = p + ".polaris-tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(d, indent=2) + "\n")
+    os.replace(tmp, p)
+AUTOMODE
+  fi
 }
 
 cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-board path:

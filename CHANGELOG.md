@@ -4,6 +4,34 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.17.0 — 2026-07-22
+
+**Seamless by default: the board reads the repo without stopping to ask.** Planning meant a
+permission prompt on nearly every bash command — `grep`, `git status`, a `python -c` that only
+reads a file — because a shell command can't be classified read-only ahead of time, and a compound
+or interpreter command can never be safely allow-listed. So POLARIS now arms Claude Code's **auto
+mode** at install AND update time: non-destructive commands run unprompted, in plan and execute
+mode, while anything destructive or irreversible still stops and asks. The hands-free loop can
+finally read freely.
+
+- **Auto mode armed on install.** `bootstrap.py::merge_permissions` sets `permissions.defaultMode
+  = "auto"` plus `skipAutoPermissionPrompt` and `useAutoModeDuringPlan` in `~/.claude/settings.json`,
+  in the same atomic, fail-open pass that pre-authorizes the POLARIS commands. Set-if-absent, and
+  gated by the existing `--no-permissions` flag. `kit/ops/bootstrap.py`.
+- **...and on update.** `ops/polaris update` used to refresh the cached kit but leave settings
+  untouched — so updating an existing machine stayed prompt-heavy. `refresh_machine_kit` now arms
+  the same keys, silently and fail-open under `set -eu`, so updating ANY machine makes it seamless
+  there too, not just the next fresh repo. `kit/ops/lib/admin.sh`.
+- **Guardrails unchanged.** Auto mode decides only whether to PROMPT — it never disables hooks. The
+  ownership write-guard, `ops/RULES.tsv`, and `polaris verify` still hard-block out-of-scope writes
+  and danger zones in every mode, and the STOP-AND-ASK list (delete, add dependency, schema change,
+  force-push, merge `risk: high`) is destructive, so it keeps asking.
+- **Opt-out kept.** `--no-permissions` skips it, and an explicit stricter `defaultMode` you set
+  yourself is respected — arming never overrides a choice already on disk.
+
+Why it matters: a planner that has to ask before every `grep` is a planner nobody lets run
+unattended. This closes the last routine prompt between POLARIS and a genuinely hands-free read.
+
 ## 5.16.0 — 2026-07-21
 
 **Many hands: the CLI is no longer one 3,800-line file.** `ops/polaris` was a single monolith —
