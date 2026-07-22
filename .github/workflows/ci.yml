@@ -411,10 +411,7 @@ jobs:
         #    silently got the old kit. That is how a 5.1.0 zip nearly landed on top of a 5.3.0 board.
         run: |
           set -eo pipefail
-          grep -rq 'POLARIS_UPDATE_REEXEC' ops/polaris ops/lib/ \
-
-            || { echo "::error::cmd_update lost its re-exec guard — it will corrupt itself when install.sh overwrites ops/polaris"; exit 1; }
-
+          grep -rq 'POLARIS_UPDATE_REEXEC' ops/polaris ops/lib/ || { echo "::error::cmd_update lost its re-exec guard — it will corrupt itself when install.sh overwrites ops/polaris"; exit 1; }
           U="$RUNNER_TEMP/upd"; HU="$RUNNER_TEMP/home-upd"
           mkdir -p "$U" "$HU/.claude"
           cd "$U"
