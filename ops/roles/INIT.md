@@ -174,7 +174,7 @@ code style: <pointers, or "match surrounding code">
 | conventions values + Planner calibration notes | EVOLVE (human-approved) | this file · ops/roles/PLANNER.md |
 | RULES lines | human (EVOLVE proposes) | ops/RULES.tsv |
 | task truth | the board scripts | ops/board/** frontmatter |
-| kit code + invariants | human only | CLAUDE.md · ops/polaris · ops/dashboard.py · hooks |
+| kit code + invariants | human only | CLAUDE.md · ops/polaris · ops/lib/ · ops/dashboard.py · hooks |
 ```
 
 ### MAP.md skeleton (HARD CAP 200 lines — it is a map, not documentation)

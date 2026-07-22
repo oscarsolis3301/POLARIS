@@ -28,7 +28,7 @@ Your kickoff message names your role. Read `ops/roles/<ROLE>.md`, then execute i
 All coordination is front-loaded into the Planner. Every task gets a **disjoint set of files it may edit** (`files_owned`). No two claimable tasks ever share a file, so Builders run fully parallel with nothing to negotiate and merges are mechanical. The only runtime race — two Builders grabbing the same task — is broken by an atomic lock. Plan once, fan out. Do NOT rely on runtime self-organization.
 
 ## THE TOOL — `ops/polaris`
-Every board mechanic is one command. You MUST use the script instead of hand-rolling git recipes; it is race-tested. (Environment can't execute commands? Follow `ops/MANUAL.md` literally instead.) This table is a curated subset for daily board work — `ops/polaris help` prints the full command list, including admin/plumbing left out here on purpose (`init-board`, `resume`, `task-commit-msg`, `why`, `uninstall`).
+Every board mechanic is one command. You MUST use the script instead of hand-rolling git recipes; it is race-tested. (Environment can't execute commands? Follow `ops/MANUAL.md` literally instead.) This table is a curated subset for daily board work — `ops/polaris help` prints the full command list, including admin/plumbing left out here on purpose (`init-board`, `resume`, `task-commit-msg`, `why`, `uninstall`). The script itself is `globals + lib-loader + dispatch`: `ops/polaris` is the only entry point, and every function body lives in `ops/lib/*.sh`, sourced in a fixed order at startup (a missing module refuses with a re-run-installer / `ops/polaris update` remedy).
 
 | Command | Does |
 |---|---|
@@ -61,6 +61,7 @@ Board commits touch only the moved set (`ops/board/**` + `ops/SPRINT.md`) on `re
 ```
 ops/
   polaris          # the CLI above
+  lib/             # ops/lib/*.sh — CLI function bodies sourced in fixed order: core·ownership·builder·integrate·knowledge·observe·admin + selftest/
   dashboard.py     # `polaris dash` — read-only live board (stdlib, no pip)
   VERSION          # kit version + update channel — `polaris version` reads this
   MANUAL.md        # fallback recipes if you cannot execute commands
