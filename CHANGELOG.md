@@ -4,6 +4,35 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.16.0 — 2026-07-21
+
+**Many hands: the CLI is no longer one 3,800-line file.** `ops/polaris` was a single monolith —
+the reason every CLI sprint ran serially (one file, one owner at a time) and the reason the
+embedded ~1,800-line selftest pushed the suite past the tool's time limit and stalled healthy
+work. It's now a 163-line entry (globals + lib-loader + dispatch) that sources seven runtime
+modules, with the selftest split into labelled groups that can run sharded. Verbatim relocation —
+zero behavior change, proven byte-identical and by a full command-by-command scout pass on a real
+modular install. `ops/contracts/module-layout.md` · `selftest-sharding.md` · `install-parity.md`.
+
+- **Runtime-sourced modules.** `ops/polaris` loads `ops/lib/{core,ownership,builder,integrate,knowledge,observe,admin}.sh`
+  in fixed order, then dispatches. A missing module dies before anything runs with a remedy that
+  names the installer and `update`. No build step — `install.sh` copies `ops/lib/` recursively and
+  `pack.py` ships every tracked module. `kit/ops/polaris`, `kit/ops/lib/*.sh`, `kit/ops/install.sh`.
+- **Selftest split + opt-in sharding.** The suite moved into `ops/lib/selftest/` (spine + six drill
+  groups, one `drill_<label>` per label). `doctor --selftest --only <labels>` takes comma-lists for
+  targeted re-checks, and `--selftest --parallel <N>` runs the drill set across N shards with an
+  aggregated verdict. Serial stays the default; CI stays serial. `kit/ops/lib/selftest/`.
+- **Hermetic drills.** Every labelled drill now leaves the shared fixture as it found it, so
+  `--only` subsets and `--parallel` shards are order-invariant — the coupling that made sharding
+  unsafe is gone. `kit/ops/lib/selftest/policy.sh`.
+- **Docs track the layout.** `kit/CLAUDE.md` STATE tree + THE TOOL and `kit/ops/MANUAL.md` gain the
+  modular-CLI map and the missing-module remedy. Contracts pin the loader order, module boundaries,
+  sharding semantics, and installer parity.
+
+Why it matters going forward: future CLI sprints get disjoint per-module ownership (real parallel
+lanes instead of a serial chain), every file under review is small, and the suite can be sharded
+back under the time limit. This sprint itself was the last one the monolith forced to run serially.
+
 ## 5.15.0 — 2026-07-20
 
 **The fast lane: requests stop taking hours.** Telemetry showed building averaged 12 minutes
