@@ -20,6 +20,7 @@ Release 5.16.0.
 | 2026-07-21 | 18 (+T-043, wave 4, re-sealed sprint/6 tag 41607ed→1ab1ddc) | 5 (T-044 ready · T-045 backlog) · T-046 (hermetic-drills fix, +3) in review · cycle p50 0.6h n=43 · kickbacks 0 · build avg 0.3h / integrate avg 1.7h · wave gated on SERIAL suite green (backgrounded ~12min, foreground log-poll) + pack green |
 | 2026-07-21 | 21 (+T-046, wave 5, hermetic-drills fix, re-sealed sprint/6 tag 1ab1ddc→5c509a6) | 5 (T-044 building · T-045 backlog) · cycle p50 0.6h n=44 · kickbacks 0 · build avg 0.3h / integrate avg 1.7h · wave gated on SERIAL suite green + pack green · T-046 run-verify --parallel 3 green (sharding now hermetic — subsequent gates may shard) |
 | 2026-07-21 | 24 (+T-044, wave 6, re-sealed sprint/6 tag 5c509a6→f1c96b5) | 2 (T-045 building — final chain link) · cycle p50 0.6h n=45 · kickbacks 0 · build avg 0.3h / integrate avg 1.6h · wave gated on --parallel 3 (3 shards green, hermetic post-T-046) + pack green |
+| 2026-07-21 | 26 (+T-045, wave 7, re-sealed sprint/6 tag f1c96b5→df0df1d) — SPRINT COMPLETE | 0 · module split done: entry kit/ops/polaris 3,826→163 lines (<500) · grand total 4017 in band [3750,4120] · every module ≤1200 (max observe.sh 673) · cycle p50 0.6h n=46 · kickbacks 0 · build avg 0.3h / integrate avg 1.6h · wave gated on --parallel 3 green + pack green · qa green on main |
 
 # SPRINT 5 — The fast lane          capacity: 25   dates: 2026-07-20–
 
@@ -145,3 +146,13 @@ exercises but a Builder cannot.
   mktemp re-exec copy of the entry script must carry lib/ beside it — update/uninstall guards now
   `cp -R "${SELF%/*}/lib"` (drill uninstall caught the miss); movers of admin/integrate code:
   audit any new copy-and-exec path for the same.
+- Sprint 6 module split COMPLETE (T-042→T-043→T-044→T-045 chain + T-046 fix): kit/ops/polaris
+  3,826→163-line entry (globals+loader+dispatch), 7 lib modules + selftest/ group, grand total 4017
+  in band [3750,4120], every module ≤1200 (max observe.sh 673). 0 kickbacks across the chain, audit
+  clean (diff⊆owned, 11 rules) on every land, serial+shard suite outputs byte-identical — verbatim
+  relocation held under the serial-chain-the-hotspot carve (chain on kit/ops/polaris; T-046 parallel
+  on the disjoint lib/selftest/).
+- T-046 (w5) killed the drill order-coupling: --parallel 3 is now a HERMETIC gate — waves 6-7 gated
+  sharded (3 shards, ~7min vs ~12min serial) green, T-046's own run-verify --parallel 3 passed. The
+  sprint-6-w3 "wave gates + qa stay SERIAL until a fix lands" caveat is RESOLVED; integrators may
+  shard once T-046 is done (waves 4-5 correctly ran serial — the fix was landed but not yet done).
