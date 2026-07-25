@@ -73,7 +73,7 @@ fi
 PY=""; python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
 
 # --- ops/ ---------------------------------------------------------------------
-KIT_CODE="polaris dashboard.py index.py MANUAL.md PROMPTS.md install.sh VERSION"   # + roles/ templates/ hooks/ ci/
+KIT_CODE="polaris dashboard.py index.py PROTOCOL.md MANUAL.md PROMPTS.md install.sh VERSION"   # + roles/ templates/ hooks/ ci/
                                                                    # (pack.py stays in the kit — never shipped)
 # ops/CONVENTIONS.md is written by INIT and by nothing else — it is THE "has INIT run?" test,
 # the same one `polaris doctor` uses. Never test ops/board/ for this (see header).

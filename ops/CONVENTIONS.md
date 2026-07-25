@@ -1,14 +1,15 @@
 # CONVENTIONS
 base: main                  # base branch
 claim: local-lock           # one machine, many sessions — file lock, no network round-trip
-integration: batch          # suite MEASURED 820s / 13.7min (.polaris/last-suite-seconds 2026-07-25) — NOT the ~3min this line claimed until then; far over paranoid's <2min rule — and sprint-4 per-land coverage was selftest-only anyway. Batch = full suite once per wave + final qa; a red land is found by the bisect recipe. If the harness denies `build:` invoked directly (both shells, sprint 4), the human-approved fallback (2026-07-20) is the repo's own gate `bash ops/polaris qa`; record the reduced per-land coverage in the burndown. If the gate is ALSO denied, STOP and ask the human — never route around a denial by any other means. Revisit if kickbacks appear.
+integration: batch          # TWO different numbers, do not conflate them (re-measured 2026-07-25, 5.19.0): `test:` alone = 805s/13.4min · the whole `qa` loop (test+build+uat, what `.polaris/last-suite-seconds` stamps) = 1225s/20.4min. This line used to cite 820s AND last-suite-seconds as one figure; they were never the same thing, and the gap only widened as uat: grew. Either way far over paranoid's <2min rule — and sprint-4 per-land coverage was selftest-only anyway. Batch = full suite once per wave + final qa; a red land is found by the bisect recipe. If the harness denies `build:` invoked directly (both shells, sprint 4), the human-approved fallback (2026-07-20) is the repo's own gate `bash ops/polaris qa`; record the reduced per-land coverage in the burndown. If the gate is ALSO denied, STOP and ask the human — never route around a denial by any other means. Revisit if kickbacks appear.
 voice: standard             # plain, friendly English when talking to the human
 autolaunch: wt              # Planner opens a Builder pane per ready task in Windows Terminal, beside you
 stale_hours: 1              # sweep warns on active locks older than this — build avg 0.2h (n=28); an hour-idle lock is a dead lane, not a slow one (sprint 4: 2 subagent stalls + 1 API-error death)
 test: bash kit/ops/polaris doctor --selftest
 test_fast: bash kit/ops/polaris doctor --selftest --only fmlist,tcm,brain,grant
 # ^ the BUILDER's pre-handoff gate. MEASURED 2026-07-25: spine+1 drill 144s · this 4-drill subset
-# 320s · full suite 820s. A 61% cut, and critically it lands UNDER the harness's 600s tool ceiling,
+# 320s · full `test:` 805s (a 3-drill subset re-measured at 289s in 5.19.0, so the ~44s/drill budget
+# below still holds). A 60% cut, and critically it lands UNDER the harness's 600s tool ceiling,
 # so it COMPLETES instead of timing out and being re-run. Budget when editing this list: 144s of
 # unskippable spine (verification-tiering.md:17-19) + ~44s per drill — drills are NOT free, so keep
 # the subset to four and re-measure if you add one.
@@ -16,8 +17,9 @@ test_fast: bash kit/ops/polaris doctor --selftest --only fmlist,tcm,brain,grant
 # often, prove everything once"). `test:` above is the WAVE gate — `qa`, the integrator, and CI
 # still run it in full, so no gate disappears; a defect only the full drill catches now surfaces
 # one wave later instead of one task later. That is a deliberate trade, made because `test:` is
-# MEASURED at 820s (.polaris/last-suite-seconds) against the harness's 600s tool ceiling — every
-# foreground full-suite run was timing out, returning nothing, and being re-run.
+# MEASURED at 805s against the harness's 600s tool ceiling — every foreground full-suite run was
+# timing out, returning nothing, and being re-run. (`.polaris/last-suite-seconds` is NOT this
+# number: it stamps the whole `qa` loop, 1225s. Reading it as `test:` overstates this gate by 50%.)
 # Subset choice is NOT arbitrary: it excludes `rules` and `qa`, which the Learned log records as
 # fixture-coupled (`rules` leaves a contract-less ready task that only an intervening `drift` drill
 # masks). Adding either without `drift` produces FALSE reds — and a false red costs a whole fix wave.

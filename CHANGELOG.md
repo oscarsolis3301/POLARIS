@@ -4,6 +4,46 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.19.0 — 2026-07-25
+
+**Use what we already built.** 5.18.0 shipped a working code index and then never told anyone it
+existed: no role file mentioned `polaris find`, and `CLAUDE.md` still said "Grep, don't browse". The
+index was correct, fast, and dead weight. This release wires it in, makes the hot path actually
+fast, and turns the golden-test harness from a mechanism into a corpus you can generate.
+
+- **`find` / `show` are now the protocol's first move.** `CLAUDE.md`, all four role files, the brain's
+  routing table and `MANUAL.md` say find-first, grep-second. The brain's INDEX gains a top row that
+  routes a symbol lookup to a COMMAND rather than a file — 0 hops, not 2. A selftest drill asserts the
+  row, so the index can never again be built, correct, and unused.
+- **The hot path lost its 1.9s of dead weight.** `find` read none of the globals the entry point
+  resolved for it. Traced: git-common-dir 0.47s, three `cfg` reads 1.0s, hostname 0.07s — on a command
+  an agent runs ten times a task. `find`/`show` now run in a fast path above the loader, one git call
+  deep, and exit. The engine probe is cached in `.polaris/index-engine`. **3.64s → 0.70s**, output
+  byte-identical.
+- **The index is O(changed), not O(repo).** `find` rebuilds incrementally on every lookup, which meant
+  reading and SHA-1ing every tracked file *per lookup* — 0.5s of pure hashing on a 3,000-file repo,
+  every time. Now it stats first and only reads what moved, with git's own racily-clean guard so a
+  same-second same-size edit is still caught. Measured on a 3,000-file repo: **943ms → 628ms** warm.
+  Schema 2; an older index rebuilds itself once.
+- **`polaris check --scaffold` writes the tests.** The harness existed with four goldens and no
+  generator. Scaffold detects the repo's public surface from the index and writes `.cmd`/`.expected`
+  pairs, running each candidate twice and discarding anything that flaps, is empty, or whose command
+  is missing. Never overwrites a reviewed pair. New `find --api <glob>` gives it the one output shape
+  stable enough to lock — sorted `path/kind/name`, with line numbers and churn deliberately excluded.
+  These are regression locks, not correctness proofs, and they say so.
+- **`CLAUDE.md` 17,661 → 8,734 bytes.** The harness injects it into the conductor *and* every
+  subagent, so its size was multiplied by four on every run. Role dispatch, the invariants and
+  stop-and-ask stay; the command table, disk layout, token discipline, model routing and voice move to
+  the new `ops/PROTOCOL.md`, read on demand. Roughly 9k tokens back per run.
+- **The brain accumulates now.** `prefs.md` detects house style by counting — indent, quotes, naming,
+  test layout — and prints the evidence behind every row, saying `mixed` rather than guessing when no
+  majority exists. `learned.md` distills co-change pairs from git history, which is the one fact
+  neither `metrics` nor the Learned log can give the Planner: which files move together, and therefore
+  cannot sit in two different `files_owned` sets. Both zero-LLM. `ops/contracts/brain.md` v2.
+- **A bug worth naming:** `prefs.md` first shipped counting POLARIS's own installed `ops/` bash, and
+  told a fresh TypeScript repo its convention was snake_case on the strength of 165 functions that
+  came with the tool. `ops/`, `kit/ops/` and `.claude/` are now excluded from style detection.
+
 ## 5.18.0 — 2026-07-25
 
 **Stop paying for what you already know.** A run was burning tokens and hours on work no model

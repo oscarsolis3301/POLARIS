@@ -16,6 +16,12 @@ ops/polaris	path	-	installed copy — edit kit/ops/polaris; refresh with: python
 ops/install.sh	path	-	installed copy — edit kit/ops/install.sh
 ops/dashboard.py	path	-	installed copy — edit kit/ops/dashboard.py
 ops/VERSION	path	-	installed copy — it records which release we run; edit kit/ops/VERSION
+# ops/PROTOCOL.md added 2026-07-25 (assistant, owner-authorized under invariant 11). New in 5.19.0:
+# CLAUDE.md was split so the router stays cheap to inject into every subagent, and the command
+# table / token discipline / voice moved here. Same reasoning as every sibling below — it is the
+# installed twin of kit/ops/PROTOCOL.md and ships via install.sh's KIT_CODE manifest, so a hand-edit
+# here is silently lost at the next dogfood.
+ops/PROTOCOL.md	path	-	installed copy — edit kit/ops/PROTOCOL.md
 ops/MANUAL.md	path	-	installed copy — edit kit/ops/MANUAL.md
 ops/PROMPTS.md	path	-	installed copy — edit kit/ops/PROMPTS.md
 ops/roles/	path	-	installed copy — edit kit/ops/roles/

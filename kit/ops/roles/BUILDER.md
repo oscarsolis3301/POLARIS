@@ -10,6 +10,8 @@ One command does it all atomically: lock → board move (ready→active, committ
 ## 2. Read — exactly this, nothing more
 When `.polaris/brain/` exists, `read .polaris/brain/INDEX.md FIRST, repo second` — the generated brain digests the board and MAP into a cheaper cold-start; `ops/MAP.md` stays the tracked fallback when no brain exists. Then: the task file — it lives in the PRIMARY checkout, NOT your worktree (worktrees carry no `ops/board`); read it at the primary-anchored path `claim`/`resume` printed · its contract in `ops/contracts/` (repo-relative — contracts stay on base, so they ARE in your worktree) · its `context_files` · the relevant `ops/MAP.md` rows · `ops/CONVENTIONS.md`. That is your whole context. Anything else needs a one-line justification appended to the task's Notes.
 
+**Looking up code: `find` first, never grep first.** `bash ops/polaris find <symbol>` returns `path:line` + signature in one hop; `bash ops/polaris show <path>#<symbol>` prints that symbol's body without the file around it. Use them for every "where is X / what does X look like" — including reading your `context_files` for style, where `show` beats opening the whole file. Grep only when `find` and `find -t <text>` both miss.
+
 ## 3. Build
 Implement strictly against the contract, strictly inside `files_owned`. `context_files` are read-only patterns to imitate — copy the local style, don't invent one. Commit on `feat/<ID>` as you go (`feat: <ID> <what>`). Every meaningful step: `✅ <what> — <file>`. Append discoveries to the task's Notes (one line each) instead of re-deriving them later — these lines become the squash commit's `Notes:` body verbatim at `land`, so keep each to one real discovery, no chatter; HTML comments and `⛔` lines are filtered out automatically.
 

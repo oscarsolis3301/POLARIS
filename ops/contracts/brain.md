@@ -82,6 +82,30 @@ $ ops/polaris doctor        # after a done, before a refresh
 ⚠ brain is stale — run: ops/polaris brain --refresh
 ```
 
+## v2 — the brain ACCUMULATES (2026-07-25, 5.19.0)
+v1 digested state that already existed; nothing carried forward. v2 adds the two files that make it
+learn from the repo's own history, both **zero-LLM and generated** — a model never writes into the
+brain, or it stops being cheap and starts being opinion.
+
+| File | Content | Cap |
+|---|---|---|
+| `prefs.md` | house style DETECTED by counting, never declared: indent · quotes · longest line (sampled ≤200 tracked source files) · public-function naming (from the index) · test-file layout. Every row prints the count behind it; no majority ⇒ the row says `mixed`. **`ops/`, `kit/ops/` and `.claude/` are excluded** — they are POLARIS's own installed code, and counting them reported a fresh repo's convention as snake_case on the strength of 165 shipped bash functions | ≤40 lines |
+| `learned.md` | co-change pairs from `git log --name-only -n 300` (commits touching >15 files are skipped as releases/mass-refactors; pairs with ≥3 occurrences, top 12) + kickback IDs and reasons from `EVENTS.ndjson`. Deliberately NOT a copy of the Learned log (gotchas.md has that verbatim) nor of `metrics` — it answers only what neither can: which files move together, which is the Planner's `files_owned` carving problem | ≤60 lines |
+
+Both are CHEAP-TIER: `--refresh` always rebuilds them, never gated on the code-map's changed-files
+check, because they read history and the index rather than the tree — and a stale preference is a
+wrong preference.
+
+**Pinned count phrasing supersedes v1.1 (consumer docs copy it VERBATIM):** the layout is
+"9 entries — 8 `.md` files + `.stamp`"; greenfield repos get "the same 8 `.md` files, near-empty".
+
+INDEX.md gains two routing rows for them, plus a row routing symbol lookups to `polaris find` /
+`show` — a COMMAND, not a file, so that lookup costs **0 hops** and the ≤4-hop guarantee is
+unaffected (it bounds file-opens, and this row opens none).
+
+Executable check (extends the v1 drill, same `drill_brain`): all 9 files exist; INDEX routes all 7
+domain files; `prefs.md` names an indent row; `learned.md` carries its co-change heading.
+
 ## Changelog
 - v1 2026-07-20: created for T-030 (generator + hooks) · T-034/T-035/T-036/T-037 (consumers)
 - v1.1 2026-07-20 (QA fix wave, T-038): (a) commands.md prints CONVENTIONS values BEFORE the help
