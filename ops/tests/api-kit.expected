@@ -1,0 +1,421 @@
+kit/.claude/skills/polaris-install/SKILL.md	heading	After the install — DO NOT STOP HERE
+kit/.claude/skills/polaris-install/SKILL.md	heading	Do not
+kit/.claude/skills/polaris-install/SKILL.md	heading	First: what are they actually asking for?
+kit/.claude/skills/polaris-install/SKILL.md	heading	Install
+kit/.claude/skills/polaris-install/SKILL.md	heading	Installing POLARIS
+kit/.claude/skills/polaris-install/SKILL.md	heading	Say exactly this, and nothing else
+kit/.claude/skills/polaris-install/SKILL.md	heading	Uninstall
+kit/.claude/skills/polaris-install/SKILL.md	heading	Update
+kit/.claude/skills/polaris-install/SKILL.md	heading	What the installer prints
+kit/CLAUDE.md	heading	INVARIANTS — NEVER violate
+kit/CLAUDE.md	heading	POLARIS v5 — Parallel Sprint Protocol
+kit/CLAUDE.md	heading	PROGRESS FORMAT
+kit/CLAUDE.md	heading	READ THIS WHEN YOU NEED IT — `ops/PROTOCOL.md`
+kit/CLAUDE.md	heading	ROLE DISPATCH — do this first
+kit/CLAUDE.md	heading	STOP AND ASK THE HUMAN before
+kit/CLAUDE.md	heading	THE ONE IDEA
+kit/CLAUDE.md	heading	THE TOOL — `ops/polaris`
+kit/README.md	heading	Everyday use
+kit/README.md	heading	Install (into any git repo)
+kit/README.md	heading	POLARIS v5 — parallel-sprint protocol
+kit/README.md	heading	The one idea
+kit/README.md	heading	The pieces
+kit/ops/MANUAL.md	heading	<ID> — <title>
+kit/ops/MANUAL.md	heading	Board commit by hand — the `polaris/board` ref (EVERY mutation below uses this)
+kit/ops/MANUAL.md	heading	Board ref lifecycle by hand — fresh install · fresh clone · migrate 5.13→5.14
+kit/ops/MANUAL.md	heading	Brain by hand — the generated knowledge base
+kit/ops/MANUAL.md	heading	Claim (Builder)
+kit/ops/MANUAL.md	heading	Express lane by hand (Integrator) — one small task, one pass
+kit/ops/MANUAL.md	heading	Finding code by hand — what `find` / `show` replace
+kit/ops/MANUAL.md	heading	Grant (Builder) — amend `files_owned` mid-flight, the sanctioned way
+kit/ops/MANUAL.md	heading	Handoff (Builder)
+kit/ops/MANUAL.md	heading	Integrate (Integrator) — audit → land-per-task → suite → seal
+kit/ops/MANUAL.md	heading	Kit lifecycle by hand (no `ops/polaris`)
+kit/ops/MANUAL.md	heading	Land (Integrator) — what `ops/polaris land <ID>` does by hand
+kit/ops/MANUAL.md	heading	MANUAL — raw recipes when you cannot run `ops/polaris`
+kit/ops/MANUAL.md	heading	Notes that keep this safe
+kit/ops/MANUAL.md	heading	Ownership + RULES proof (Builder, before handoff — mandatory)
+kit/ops/MANUAL.md	heading	Plan commit (Planner) — the moved set and `<base>` files split into TWO commits
+kit/ops/MANUAL.md	heading	Push the board — `sync_board` (NEVER `<base>`)
+kit/ops/MANUAL.md	heading	QA — "is everything okay?" by hand
+kit/ops/MANUAL.md	heading	Release / abort (Builder)
+kit/ops/MANUAL.md	heading	Report (Integrator/anyone) — what `ops/polaris report [--sprint <n> | --all]` does by hand
+kit/ops/MANUAL.md	heading	Seal (Integrator) — what `ops/polaris seal [<date>]` does by hand
+kit/ops/MANUAL.md	heading	Sprint <n> — <goal>            (dates from the SPRINT.md header, when present)
+kit/ops/MANUAL.md	heading	Telemetry (every transition above)
+kit/ops/MANUAL.md	heading	The modular CLI — the entry script and `ops/lib/`
+kit/ops/MANUAL.md	heading	`publish: direct` (default) — fold + tag locally
+kit/ops/MANUAL.md	heading	`publish: pr` — one host PR per wave, the human merges
+kit/ops/MANUAL.md	heading	exit 0 on success
+kit/ops/MANUAL.md	heading	unknown value → warn once, behave as OFF (fail to the full ceremony — the safe side)
+kit/ops/PROMPTS.md	heading	Between sprints (optional, data-driven tuning)
+kit/ops/PROMPTS.md	heading	Every sprint
+kit/ops/PROMPTS.md	heading	Getting the kit into a repo — say this, in Claude Code, in the project
+kit/ops/PROMPTS.md	heading	Kit lifecycle — just say "update POLARIS" in any chat, in any POLARIS repo
+kit/ops/PROMPTS.md	heading	Notify recipes
+kit/ops/PROMPTS.md	heading	Once per repo — only if you're doing it manually
+kit/ops/PROMPTS.md	heading	PROMPTS — copy, paste, go
+kit/ops/PROMPTS.md	heading	Replies the human gives mid-run
+kit/ops/PROMPTS.md	heading	Watching
+kit/ops/PROTOCOL.md	heading	MODEL NOTES (whichever model runs this)
+kit/ops/PROTOCOL.md	heading	MODEL ROUTING (cost — set per session by the human)
+kit/ops/PROTOCOL.md	heading	POLARIS v5 — PROTOCOL reference
+kit/ops/PROTOCOL.md	heading	STATE = THE BOARD (git-tracked, human-readable)
+kit/ops/PROTOCOL.md	heading	THE TOOL — `ops/polaris`
+kit/ops/PROTOCOL.md	heading	TOKEN DISCIPLINE — this is how we stay cheap and fast
+kit/ops/PROTOCOL.md	heading	VOICE — how you TALK to the human (`voice:` in `ops/CONVENTIONS.md`, default `standard`)
+kit/ops/bootstrap.py	const	FLAGS
+kit/ops/bootstrap.py	const	PERMS
+kit/ops/bootstrap.py	const	PREFIX
+kit/ops/bootstrap.py	const	VERBOSE
+kit/ops/bootstrap.py	const	ZIP_NAME
+kit/ops/bootstrap.py	fn	arm_machine
+kit/ops/bootstrap.py	fn	die
+kit/ops/bootstrap.py	fn	find_bash
+kit/ops/bootstrap.py	fn	git_toplevel
+kit/ops/bootstrap.py	fn	main
+kit/ops/bootstrap.py	fn	merge_permissions
+kit/ops/bootstrap.py	fn	out
+kit/ops/bootstrap.py	fn	perm_snippet
+kit/ops/ci/polaris-audit.yml	key	jobs
+kit/ops/ci/polaris-audit.yml	key	name
+kit/ops/ci/polaris-audit.yml	key	on
+kit/ops/dashboard.py	class	Handler
+kit/ops/dashboard.py	const	COLUMNS
+kit/ops/dashboard.py	const	PAGE
+kit/ops/dashboard.py	fn	as_list
+kit/ops/dashboard.py	fn	do_GET
+kit/ops/dashboard.py	fn	locks_dir
+kit/ops/dashboard.py	fn	log_message
+kit/ops/dashboard.py	fn	main
+kit/ops/dashboard.py	fn	metrics
+kit/ops/dashboard.py	fn	numf
+kit/ops/dashboard.py	fn	parse_task
+kit/ops/dashboard.py	fn	read_conv
+kit/ops/dashboard.py	fn	read_events
+kit/ops/dashboard.py	fn	read_sprint
+kit/ops/dashboard.py	fn	read_state
+kit/ops/dashboard.py	fn	read_text
+kit/ops/dashboard.py	fn	repo_root
+kit/ops/dashboard.py	fn	sh
+kit/ops/dashboard.py	fn	signature
+kit/ops/hooks/ownership-guard.sh	fn	cleanup
+kit/ops/hooks/ownership-guard.sh	fn	lc
+kit/ops/hooks/ownership-guard.sh	fn	norm
+kit/ops/index.py	const	DDL
+kit/ops/index.py	const	EXT
+kit/ops/index.py	const	FIXTURES
+kit/ops/index.py	const	IMPORTS
+kit/ops/index.py	const	IMP_RE
+kit/ops/index.py	const	KIND_W
+kit/ops/index.py	const	MAXLINE
+kit/ops/index.py	const	SCHEMA
+kit/ops/index.py	const	SHEBANG
+kit/ops/index.py	const	SIGMAX
+kit/ops/index.py	const	SYMS
+kit/ops/index.py	const	SYM_RE
+kit/ops/index.py	const	TESTY
+kit/ops/index.py	const	VENDOR
+kit/ops/index.py	fn	build
+kit/ops/index.py	fn	cmd_find
+kit/ops/index.py	fn	cmd_show
+kit/ops/index.py	fn	cmd_stats
+kit/ops/index.py	fn	connect
+kit/ops/index.py	fn	flags_for
+kit/ops/index.py	fn	fts_ok
+kit/ops/index.py	fn	lang_of
+kit/ops/index.py	fn	main
+kit/ops/index.py	fn	read
+kit/ops/index.py	fn	resolve_import
+kit/ops/index.py	fn	scan_text
+kit/ops/index.py	fn	score
+kit/ops/index.py	fn	selfcheck
+kit/ops/index.py	fn	sh
+kit/ops/index.py	fn	tracked
+kit/ops/index.py	fn	usage
+kit/ops/install.sh	fn	die
+kit/ops/install.sh	fn	emit_block
+kit/ops/install.sh	fn	log
+kit/ops/install.sh	fn	note
+kit/ops/install.sh	fn	protocol_text
+kit/ops/install.sh	fn	say
+kit/ops/lib/admin.sh	fn	cmd_init_board
+kit/ops/lib/admin.sh	fn	cmd_uninstall
+kit/ops/lib/admin.sh	fn	cmd_update
+kit/ops/lib/admin.sh	fn	cmd_upgrade
+kit/ops/lib/admin.sh	fn	cmd_version
+kit/ops/lib/admin.sh	fn	kit_zip_version
+kit/ops/lib/admin.sh	fn	refresh_machine_kit
+kit/ops/lib/admin.sh	fn	semver_gt
+kit/ops/lib/admin.sh	fn	update_check_maybe
+kit/ops/lib/admin.sh	fn	ver
+kit/ops/lib/builder.sh	fn	cmd_claim
+kit/ops/lib/builder.sh	fn	cmd_grant
+kit/ops/lib/builder.sh	fn	cmd_handoff
+kit/ops/lib/builder.sh	fn	cmd_release
+kit/ops/lib/builder.sh	fn	cmd_resume
+kit/ops/lib/builder.sh	fn	cmd_verify
+kit/ops/lib/builder.sh	fn	grant_append_owned
+kit/ops/lib/core.sh	fn	base_push_clear
+kit/ops/lib/core.sh	fn	base_push_reject
+kit/ops/lib/core.sh	fn	board_commit
+kit/ops/lib/core.sh	fn	board_materialize
+kit/ops/lib/core.sh	fn	board_paths
+kit/ops/lib/core.sh	fn	board_ref_commit
+kit/ops/lib/core.sh	fn	cfg
+kit/ops/lib/core.sh	fn	claim_branch_drop
+kit/ops/lib/core.sh	fn	claim_branch_take
+kit/ops/lib/core.sh	fn	current_task_id
+kit/ops/lib/core.sh	fn	die
+kit/ops/lib/core.sh	fn	evt
+kit/ops/lib/core.sh	fn	fm_get
+kit/ops/lib/core.sh	fn	fm_list
+kit/ops/lib/core.sh	fn	fm_stamp
+kit/ops/lib/core.sh	fn	has_remote
+kit/ops/lib/core.sh	fn	jesc
+kit/ops/lib/core.sh	fn	lock_age
+kit/ops/lib/core.sh	fn	lock_drop
+kit/ops/lib/core.sh	fn	lock_take
+kit/ops/lib/core.sh	fn	mutex_off
+kit/ops/lib/core.sh	fn	mutex_on
+kit/ops/lib/core.sh	fn	note
+kit/ops/lib/core.sh	fn	notify_fire
+kit/ops/lib/core.sh	fn	on_die
+kit/ops/lib/core.sh	fn	pr_create_url
+kit/ops/lib/core.sh	fn	publish_resolve
+kit/ops/lib/core.sh	fn	rules_lines
+kit/ops/lib/core.sh	fn	say
+kit/ops/lib/core.sh	fn	set_fm
+kit/ops/lib/core.sh	fn	sync_board
+kit/ops/lib/core.sh	fn	task_col
+kit/ops/lib/core.sh	fn	task_file
+kit/ops/lib/core.sh	fn	wt_path
+kit/ops/lib/integrate.sh	fn	cmd_audit
+kit/ops/lib/integrate.sh	fn	cmd_done
+kit/ops/lib/integrate.sh	fn	cmd_history
+kit/ops/lib/integrate.sh	fn	cmd_kickback
+kit/ops/lib/integrate.sh	fn	cmd_land
+kit/ops/lib/integrate.sh	fn	cmd_land_express
+kit/ops/lib/integrate.sh	fn	cmd_rollback
+kit/ops/lib/integrate.sh	fn	cmd_run_verify
+kit/ops/lib/integrate.sh	fn	cmd_seal
+kit/ops/lib/integrate.sh	fn	cmd_task_commit_msg
+kit/ops/lib/integrate.sh	fn	in_primary
+kit/ops/lib/integrate.sh	fn	land_slow_suite_hint
+kit/ops/lib/integrate.sh	fn	landed_sha
+kit/ops/lib/integrate.sh	fn	seal_sync
+kit/ops/lib/integrate.sh	fn	tag_push_recovery_note
+kit/ops/lib/knowledge.sh	fn	all_sprint_numbers
+kit/ops/lib/knowledge.sh	fn	board_changed_touch
+kit/ops/lib/knowledge.sh	fn	brain_board
+kit/ops/lib/knowledge.sh	fn	brain_code_map
+kit/ops/lib/knowledge.sh	fn	brain_commands
+kit/ops/lib/knowledge.sh	fn	brain_contracts
+kit/ops/lib/knowledge.sh	fn	brain_gotchas
+kit/ops/lib/knowledge.sh	fn	brain_index
+kit/ops/lib/knowledge.sh	fn	brain_learned
+kit/ops/lib/knowledge.sh	fn	brain_prefs
+kit/ops/lib/knowledge.sh	fn	brain_refresh_if_present
+kit/ops/lib/knowledge.sh	fn	cmd_brain
+kit/ops/lib/knowledge.sh	fn	cmd_report
+kit/ops/lib/knowledge.sh	fn	event_ts
+kit/ops/lib/knowledge.sh	fn	render_sprint
+kit/ops/lib/knowledge.sh	fn	render_task_section
+kit/ops/lib/knowledge.sh	fn	report_dir
+kit/ops/lib/knowledge.sh	fn	report_dirty_hint
+kit/ops/lib/knowledge.sh	fn	report_file
+kit/ops/lib/knowledge.sh	fn	report_one
+kit/ops/lib/knowledge.sh	fn	report_rel
+kit/ops/lib/knowledge.sh	fn	resolve_sprint_ids
+kit/ops/lib/knowledge.sh	fn	seal_report_commit
+kit/ops/lib/knowledge.sh	fn	sprint_dates
+kit/ops/lib/knowledge.sh	fn	sprint_goal
+kit/ops/lib/knowledge.sh	fn	sprint_hdr
+kit/ops/lib/knowledge.sh	fn	sprint_hdr_num
+kit/ops/lib/knowledge.sh	fn	ts_date
+kit/ops/lib/observe.sh	fn	cmd_board_fm
+kit/ops/lib/observe.sh	fn	cmd_check
+kit/ops/lib/observe.sh	fn	cmd_dash
+kit/ops/lib/observe.sh	fn	cmd_doctor
+kit/ops/lib/observe.sh	fn	cmd_drift
+kit/ops/lib/observe.sh	fn	cmd_fleet
+kit/ops/lib/observe.sh	fn	cmd_metrics
+kit/ops/lib/observe.sh	fn	cmd_notify_gate
+kit/ops/lib/observe.sh	fn	cmd_qa
+kit/ops/lib/observe.sh	fn	cmd_rules
+kit/ops/lib/observe.sh	fn	cmd_scaffold
+kit/ops/lib/observe.sh	fn	cmd_status
+kit/ops/lib/observe.sh	fn	cmd_sweep
+kit/ops/lib/observe.sh	fn	cmd_why
+kit/ops/lib/observe.sh	fn	dep_ids
+kit/ops/lib/observe.sh	fn	dep_reaches
+kit/ops/lib/observe.sh	fn	find_claude
+kit/ops/lib/observe.sh	fn	find_claude_windows
+kit/ops/lib/observe.sh	fn	finding
+kit/ops/lib/observe.sh	fn	pat_overlap
+kit/ops/lib/observe.sh	fn	scaffold_dirs
+kit/ops/lib/observe.sh	fn	scaffold_try
+kit/ops/lib/observe.sh	fn	status_brief
+kit/ops/lib/ownership.sh	fn	check_ownership
+kit/ops/lib/ownership.sh	fn	check_rules
+kit/ops/lib/ownership.sh	fn	cmd_guard
+kit/ops/lib/ownership.sh	fn	cmd_match
+kit/ops/lib/ownership.sh	fn	cmd_rules_check
+kit/ops/lib/ownership.sh	fn	gdiff
+kit/ops/lib/ownership.sh	fn	map_delta_hint
+kit/ops/lib/ownership.sh	fn	owned_match
+kit/ops/lib/ownership.sh	fn	rule_scan_content_file
+kit/ops/lib/ownership.sh	fn	rule_scan_path
+kit/ops/lib/ownership.sh	fn	run_verify_cmds
+kit/ops/lib/search.sh	fn	index_engine
+kit/ops/lib/search.sh	fn	index_fast
+kit/ops/lib/search.sh	fn	index_root
+kit/ops/lib/selftest/board.sh	fn	drill_fmlist
+kit/ops/lib/selftest/board.sh	fn	drill_grant
+kit/ops/lib/selftest/board.sh	fn	drill_newcmds
+kit/ops/lib/selftest/brain.sh	fn	drill_brain
+kit/ops/lib/selftest/history.sh	fn	drill_express
+kit/ops/lib/selftest/history.sh	fn	drill_pr-publish
+kit/ops/lib/selftest/history.sh	fn	drill_tcm
+kit/ops/lib/selftest/policy.sh	fn	drill_drift
+kit/ops/lib/selftest/policy.sh	fn	drill_hardening
+kit/ops/lib/selftest/policy.sh	fn	drill_qa
+kit/ops/lib/selftest/policy.sh	fn	drill_rules
+kit/ops/lib/selftest/remote.sh	fn	drill_notify
+kit/ops/lib/selftest/remote.sh	fn	drill_remote
+kit/ops/lib/selftest/remote.sh	fn	drill_syncrace
+kit/ops/lib/selftest/remote.sh	fn	drill_upgrade
+kit/ops/lib/selftest/report.sh	fn	drill_brief
+kit/ops/lib/selftest/report.sh	fn	drill_hint
+kit/ops/lib/selftest/report.sh	fn	drill_metrics
+kit/ops/lib/selftest/report.sh	fn	drill_report
+kit/ops/lib/selftest/spine.sh	fn	drill_on
+kit/ops/lib/selftest/spine.sh	fn	ensure_origin
+kit/ops/lib/selftest/spine.sh	fn	ngwait
+kit/ops/lib/selftest/spine.sh	fn	selftest
+kit/ops/pack.py	const	DATA_MODE
+kit/ops/pack.py	const	EXEC_MODE
+kit/ops/pack.py	const	KIT
+kit/ops/pack.py	const	OUT
+kit/ops/pack.py	const	PREFIX
+kit/ops/pack.py	const	REPO
+kit/ops/pack.py	const	VERSION_FILE
+kit/ops/pack.py	fn	build
+kit/ops/pack.py	fn	bump
+kit/ops/pack.py	fn	dogfood
+kit/ops/pack.py	fn	git
+kit/ops/pack.py	fn	read_field
+kit/ops/pack.py	fn	read_version
+kit/ops/pack.py	fn	zip_version
+kit/ops/polaris	fn	usage
+kit/ops/roles/BUILDER.md	heading	1. Claim
+kit/ops/roles/BUILDER.md	heading	2. Read — exactly this, nothing more
+kit/ops/roles/BUILDER.md	heading	3. Build
+kit/ops/roles/BUILDER.md	heading	4. Test
+kit/ops/roles/BUILDER.md	heading	5. Prove and hand off
+kit/ops/roles/BUILDER.md	heading	Failure path (any abort)
+kit/ops/roles/BUILDER.md	heading	Loop mode
+kit/ops/roles/BUILDER.md	heading	ROLE: BUILDER — claim one task, finish it, prove it
+kit/ops/roles/CONDUCTOR.md	heading	Cost discipline
+kit/ops/roles/CONDUCTOR.md	heading	Protocol
+kit/ops/roles/CONDUCTOR.md	heading	ROLE: CONDUCTOR — one chat, the whole loop
+kit/ops/roles/CONDUCTOR.md	heading	The one rule that makes this legal
+kit/ops/roles/CONDUCTOR.md	heading	The second rule — a finished phase is a starting gun
+kit/ops/roles/CONDUCTOR.md	heading	The third rule — a run has a budget, and reaching it is a clean finish
+kit/ops/roles/EVOLVE.md	heading	Hard limits — these keep EVOLVE safe
+kit/ops/roles/EVOLVE.md	heading	Protocol
+kit/ops/roles/EVOLVE.md	heading	ROLE: EVOLVE — make the kit fit THIS repo better, with evidence
+kit/ops/roles/EVOLVE.md	heading	Read (and nothing else)
+kit/ops/roles/EVOLVE.md	heading	Report (nothing else)
+kit/ops/roles/INIT.md	heading	0. Preconditions
+kit/ops/roles/INIT.md	heading	1. Survey — hard token budget, no exceptions
+kit/ops/roles/INIT.md	heading	2. Interview — DETECT FIRST, then ask only what the repo cannot answer
+kit/ops/roles/INIT.md	heading	2a. Interaction 1 — voice. Alone, first, before anything else.
+kit/ops/roles/INIT.md	heading	2b. DERIVE — silently, from the survey you already did. Ask none of this.
+kit/ops/roles/INIT.md	heading	2c. Interactions 2 and 3 — the only things a repo cannot tell you
+kit/ops/roles/INIT.md	heading	3. Write the artifacts — silently. No progress commentary.
+kit/ops/roles/INIT.md	heading	4. Chain straight into the PLANNER — same session, no restart, no handoff message
+kit/ops/roles/INIT.md	heading	5. ONE report, at the very end, in the voice they chose in 2a
+kit/ops/roles/INIT.md	heading	Burndown
+kit/ops/roles/INIT.md	heading	CONVENTIONS
+kit/ops/roles/INIT.md	heading	CONVENTIONS.md skeleton — the top block is machine-read by `ops/polaris`; one `key: value` per line
+kit/ops/roles/INIT.md	heading	Danger zones — agents NEVER edit these
+kit/ops/roles/INIT.md	heading	Entry points
+kit/ops/roles/INIT.md	heading	Generated / vendored — never edit, never read
+kit/ops/roles/INIT.md	heading	History model — tell every new repo how its git log will read
+kit/ops/roles/INIT.md	heading	Hotspot files (conflict magnets: routers, DI registries, index barrels)
+kit/ops/roles/INIT.md	heading	Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
+kit/ops/roles/INIT.md	heading	MAP — <repo name>            (updated: <date>, by INIT)
+kit/ops/roles/INIT.md	heading	MAP.md skeleton (HARD CAP 200 lines — it is a map, not documentation)
+kit/ops/roles/INIT.md	heading	Modules
+kit/ops/roles/INIT.md	heading	ROLE: INIT — plug POLARIS into this repo, and leave them with a planned first sprint
+kit/ops/roles/INIT.md	heading	SPRINT <n> — <goal>          capacity: <pts>   dates: <start>–<end>
+kit/ops/roles/INIT.md	heading	SPRINT.md skeleton
+kit/ops/roles/INIT.md	heading	Stack
+kit/ops/roles/INIT.md	heading	Unverified
+kit/ops/roles/INIT.md	heading	Write routing — one fact, one home (a fact in two files means one is drifting)
+kit/ops/roles/INIT.md	heading	autonomy: standard         # standard | trusted — composition macro; nothing reads it directly. trusted =
+kit/ops/roles/INIT.md	heading	builder_questions: ask     # ask | default-safe — default-safe applies ONLY to spec-detail ambiguity that is
+kit/ops/roles/INIT.md	heading	evolve_apply: confirm      # confirm | auto-reversible — auto-reversible lets EVOLVE apply ONLY its fixed
+kit/ops/roles/INIT.md	heading	ops/polaris brain (re)generates the untracked .polaris/brain/ knowledge base every role reads first — git-ignored, MAP.md the tracked fallback.
+kit/ops/roles/INIT.md	heading	plan_gate: confirm         # confirm | auto — auto proceeds without waiting only when no risk:high task and
+kit/ops/roles/INTEGRATOR.md	heading	1. Order and audit
+kit/ops/roles/INTEGRATOR.md	heading	2. HUMAN GATE — `risk: high`
+kit/ops/roles/INTEGRATOR.md	heading	3. Land — batch mode (default)
+kit/ops/roles/INTEGRATOR.md	heading	4. Seal — one of two publish modes (`publish:` in `ops/CONVENTIONS.md`, default `direct`)
+kit/ops/roles/INTEGRATOR.md	heading	5. Sweep and promote
+kit/ops/roles/INTEGRATOR.md	heading	6. Close the loop
+kit/ops/roles/INTEGRATOR.md	heading	ROLE: INTEGRATOR — merge, verify, unblock
+kit/ops/roles/INTEGRATOR.md	heading	Report (nothing else)
+kit/ops/roles/INTEGRATOR.md	heading	`publish: direct` — the default: seal writes `<base>` locally
+kit/ops/roles/INTEGRATOR.md	heading	`publish: pr` — one host PR per wave: the human's merge writes `<base>`, not you
+kit/ops/roles/INTEGRATOR.md	heading	once the human confirms the PR is merged:
+kit/ops/roles/INTEGRATOR.md	heading	per task, in dependency order:
+kit/ops/roles/INTEGRATOR.md	heading	the per-task squash commits are lost from <base>. (Non-Bitbucket/unparseable origin: seal prints
+kit/ops/roles/INTEGRATOR.md	heading	the source + dest branches instead of a URL — open the PR by hand.)
+kit/ops/roles/INTEGRATOR.md	heading	then, per landed task, on <base>:
+kit/ops/roles/INTEGRATOR.md	heading	then, per landed task, on <base>: run-verify <ID> · done <ID>  (done's [<ID>]-in-base gate now passes)
+kit/ops/roles/INTEGRATOR.md	heading	→ open the printed URL and merge the PR with the host's MERGE-COMMIT strategy — NEVER squash, or
+kit/ops/roles/PLANNER.md	heading	Pointing — Fibonacci (measures blast radius + uncertainty, not hours)
+kit/ops/roles/PLANNER.md	heading	Priority — WSJF
+kit/ops/roles/PLANNER.md	heading	Protocol
+kit/ops/roles/PLANNER.md	heading	ROLE: PLANNER — front-load all coordination
+kit/ops/roles/PLANNER.md	heading	Read first (and nothing else)
+kit/ops/roles/PLANNER.md	heading	Report (nothing else) — and mind the `voice:`
+kit/ops/selftest-dashboard.sh	fn	cleanup
+kit/ops/selftest-dashboard.sh	fn	die
+kit/ops/selftest-dashboard.sh	fn	drill
+kit/ops/selftest-dashboard.sh	fn	drill_get_root
+kit/ops/selftest-dashboard.sh	fn	drill_get_state
+kit/ops/selftest-dashboard.sh	fn	drill_repo_clean
+kit/ops/selftest-dashboard.sh	fn	say
+kit/ops/selftest-install.sh	fn	assert_no_leaks
+kit/ops/selftest-install.sh	fn	assert_one_marker_pair
+kit/ops/selftest-install.sh	fn	board_snapshot
+kit/ops/selftest-install.sh	fn	cleanup
+kit/ops/selftest-install.sh	fn	die
+kit/ops/selftest-install.sh	fn	drill
+kit/ops/selftest-install.sh	fn	drill_fresh
+kit/ops/selftest-install.sh	fn	drill_live_board
+kit/ops/selftest-install.sh	fn	drill_no_leaks
+kit/ops/selftest-install.sh	fn	drill_old_client
+kit/ops/selftest-install.sh	fn	drill_pack
+kit/ops/selftest-install.sh	fn	drill_repo_clean
+kit/ops/selftest-install.sh	fn	drill_uninstall
+kit/ops/selftest-install.sh	fn	drill_zip_purity
+kit/ops/selftest-install.sh	fn	new_target
+kit/ops/selftest-install.sh	fn	say
+kit/ops/templates/CONTRACT.md	heading	CONTRACT: <seam name>            (v1 — <date>)
+kit/ops/templates/CONTRACT.md	heading	Changelog
+kit/ops/templates/CONTRACT.md	heading	Example
+kit/ops/templates/CONTRACT.md	heading	Executable check (when the seam is code-level)
+kit/ops/templates/CONTRACT.md	heading	Interface
+kit/ops/templates/CONTRACT.md	heading	Invariants
+kit/ops/templates/CONTRACT.md	heading	Purpose
+kit/ops/templates/CONTRACT.md	heading	Shared types / schema
+kit/ops/templates/ROADMAP.md	heading	Outcomes (top to bottom = priority)
+kit/ops/templates/ROADMAP.md	heading	ROADMAP
+kit/ops/templates/TASK.md	heading	Acceptance criteria (binary — each becomes a test; put the runnable ones in verify:)
+kit/ops/templates/TASK.md	heading	Notes
+kit/ops/templates/TASK.md	heading	Why
+kit/ops/templates/TASK.md	heading	plan:                  # optional; conductor-run slug for backlog drain, e.g. hands-free-core —

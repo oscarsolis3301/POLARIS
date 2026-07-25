@@ -4,6 +4,26 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.19.1 — 2026-07-25
+
+**What scaffolding this repo taught us.** Running `check --scaffold` on POLARIS itself produced
+three goldens that were worse than nothing, and every repo would have got the same ones. Fixed in
+the generator rather than deleted by hand, because the point is that the next repo gets it right
+without anyone reviewing it twice.
+
+- **Never lock a tree whose job is to change.** `scaffold_dirs` now skips `ops/` and `kit/ops/`
+  (POLARIS's own INSTALLED copy — a 571-line `api-ops` golden would have reddened on every
+  `polaris update`, asserting the opposite of the intended workflow), `docs/` (where `seal` writes a
+  sprint report every wave), and `.github/` (human-owned and RULES-guarded, so an agent could not fix
+  a red there anyway). Same reasoning that already excluded them from `prefs.md`.
+- **No duplicate goldens.** A candidate whose output is byte-identical to an existing golden is
+  skipped and counted. Caught for real: a generated `board-fm-cols` that duplicated the hand-written
+  `board-fm-shape`. Two goldens asserting one thing double the cost of every real change.
+- **`cli-help-parity` counts distinct commands, not matching lines.** Adding `check --scaffold` as a
+  second usage form took the count 8 → 9 and reddened an addition that broke nothing. The assertion
+  was always "all 8 daily commands are documented"; it now measures that, and still drops to 7 the
+  moment one disappears.
+
 ## 5.19.0 — 2026-07-25
 
 **Use what we already built.** 5.18.0 shipped a working code index and then never told anyone it

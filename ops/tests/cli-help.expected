@@ -1,0 +1,98 @@
+polaris — POLARIS board CLI (run from anywhere inside the repo)
+  init-board                     create board dirs, gitignore .polaris/ + the board set, lock dir
+                                 (board state commits to refs/heads/polaris/board — base stays clean)
+  claim [ID]                     lock + ready→active + worktree  (no ID = top wsjf; skips locked)
+  resume [ID]                    re-enter an already-claimed active task (crash/kickback/new session)
+  verify [ID]                    diff ⊆ files_owned + run verify: commands (in worktree)
+  handoff [ID]                   verify + push + active→review   (lock stays)
+  release <ID> [--to ready|blocked] [-m note]   abort: give the task back cleanly
+  grant <ID> <path> -m "why"     append one path to a CLAIMED task's files_owned (sanctioned
+                                 amendment; REFUSES any overlap with another ready/active task's
+                                 ownership — refusal mutates nothing; RULES.tsv still binds)
+  kickback <ID> [-m note]        Integrator: red merge → review→active
+  audit <ID>                     Integrator: ownership check of feat/<ID>
+  run-verify <ID>                Integrator: re-run task verify: commands in CWD
+  done <ID>                      Integrator: review→done + map_delta as docs(map): on base + cleanup
+  task-commit-msg <task-file>    print the task's landed-commit message (pure; `land` consumes it)
+  land <ID>                      Integrator, on integrate/<date>: audit + squash feat/<ID> into
+                                 ONE rich commit ([<ID>] subject + Landed-from trailer; no board write)
+  land --express <ID>            ONE pass for a single small task, from <base>: integrate branch +
+                                 audit/land + ONE full suite (red → unwind + kickback) + seal +
+                                 run-verify + done + branch cleanup. Refuses: another task in
+                                 review/ · risk: high · express: off · publish: pr. Every gate of
+                                 the long path still runs; `qa` stays the finish line.
+  seal [<date>]                  Integrator: seal the wave — merge integrate/<date> into base
+                                 (--no-ff, per-task bullets) + lightweight tag sprint/<n>; a later
+                                 wave's seal MOVES the tag (sprint's latest sealed checkpoint).
+                                 publish: pr (CONVENTIONS key, default direct): NO local merge —
+                                 pushes ONLY integrate/<date> + prints the PR-create URL
+  seal --sync [<date>]           publish: pr only — finish the wave after the human merges the PR
+                                 (MERGE COMMIT strategy, never squash): verify every [<ID>] subject
+                                 reached base, tag sprint/<n>, delete integrate/<date> local+remote
+  report [--sprint <n> | --all]  render the management-readable per-sprint record (docs/sprints/
+                                 by default) from the board + history; writes the file(s), prints
+                                 the path(s), commits nothing (seal commits it on the wave instead)
+  history [--tasks <n>]          changelog view of base (board noise hidden); --tasks <n> drills
+                                 into one sealed sprint's task commits, across all its waves
+  rollback <ID|sprint/<n>>       revert one landed task (or the sprint's latest sealed wave, -m 1)
+                                 on base — forward-only: never resets, never force-pushes
+  status [--brief] | sweep [--fix] | doctor [--selftest [--only <patterns>] [--parallel <N>]]
+                                 status --brief = ONE plain-English paragraph, no table (plain status
+                                 unchanged): Last landed: / Next up: markers + a sprint-column clause
+                                 doctor --selftest --only <patterns> = the always-on spine + only the
+                                 labeled drills matching any comma-separated glob (fmlist tcm report
+                                 metrics brain rules drift hardening qa remote syncrace notify grant
+                                 upgrade pr-publish express hint brief); a nonsense element dies
+                                 before the spine (unknown drill label); --parallel <N> = run the
+                                 selected drills as N parallel child shards (serial stays the default)
+  check [--only <glob>] [--update]
+                                 golden-output acceptance tests, ZERO LLM: ops/tests/<name>.cmd is
+                                 run and its stdout diffed against <name>.expected (optional
+                                 <name>.rc = expected exit code). --update rewrites goldens — a
+                                 human/Builder decision, never automatic. Wire it into qa by setting
+                                 `uat: bash ops/polaris check` in ops/CONVENTIONS.md
+  check --scaffold [--cmd "<shell>"]
+                                 GENERATE the pairs from observed behavior — public API surface per
+                                 source dir (from the index) + this CLI's parsed output shapes. Runs
+                                 each candidate TWICE and discards any that flaps, is empty, or whose
+                                 command is missing. Never overwrites an existing golden. --cmd adds
+                                 ONE behavioural golden for your own command (auto-running an app's
+                                 executables would start servers, so it is opt-in). REVIEW the output:
+                                 a golden records what the code DOES, not what it SHOULD do.
+  find <symbol> | -f <glob> | -t <text> | --importers <path> | --imports <path> | --api <glob> [-n N]
+                                 the 1-hop "where is X": ONE line per hit, path:line first, ranked
+                                 (exact > prefix > substring, boosted by churn + fan-in, tests and
+                                 vendor down-weighted). Backed by a generated .polaris/index.db;
+                                 self-heals on query. No python3 → says so and you fall back to Grep
+  show <path>#<symbol> | <path>:<line>
+                                 print JUST that symbol's body — not the whole file
+  board-fm [<col>…]              one TAB line per task (col id pts wsjf risk deps owns contract
+                                 title) — the Planner's board read without the prose bodies.
+                                 Default columns: ready active backlog blocked (done/ is history,
+                                 pass it explicitly). Non-task files (IDEAS.md) are skipped
+  brain [--refresh]              generate .polaris/brain/ — gitignored knowledge base a cold agent
+                                 reads FIRST (INDEX + code-map/board/contracts/commands/gotchas);
+                                 --refresh skips code-map when code is unchanged. seal auto-refreshes
+                                 an existing brain; doctor warns when it is stale
+  metrics                        opens with a plain-English summary line, then cycle · throughput ·
+                                 kickbacks · build-vs-integrate split (EVENTS.ndjson)
+  why <ID>                       why a task bounced/blocked: kickback + release/blocked notes from telemetry + body
+  notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
+                                 plan · risk <ID> · question <ID> · done [ID]  (observe-only:
+                                 never writes the board, EVENTS.ndjson, or any lock)
+  drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
+  rules                          list + health-check ops/RULES.tsv (repo policy as data)
+  qa                             is everything okay, in ONE shot: test/lint/typecheck/build/uat
+                                 from CONVENTIONS + drift --strict + doctor env check. Runs every
+                                 check even after a red; rc 1 if anything was red.
+  dash [--port N]                live read-only board at http://127.0.0.1:7373 (needs python3)
+  fleet <N> [--loop] [--launch] [--dry-run]
+                                 print N Builder kickoffs; --launch opens a session per task in
+                                 tmux windows or Windows Terminal panes (--dry-run previews the command)
+  upgrade                        migrate an OLD BOARD (v3/v4→v5). Idempotent. Downloads NOTHING.
+                                   want a newer KIT? that is `update` — one letter, unrelated job.
+  version                        installed version · commit · latest on the channel
+  update [--repo-only]           fetch the latest KIT from the channel (manual; never automatic).
+                                   also re-caches it into ~/.claude so the NEXT repo you install
+                                   into gets the new kit too. --repo-only skips that.
+  uninstall --yes                remove POLARIS from this repo (keeps your CLAUDE.md + hooks)

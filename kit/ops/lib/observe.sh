@@ -490,6 +490,16 @@ scaffold_try() { # scaffold_try <name> <cmd-body> — write the pair, but ONLY i
   [ -n "$a" ] || { SC_EMPTY=$((SC_EMPTY+1)); return 0; }
   lines="$(printf '%s\n' "$a" | wc -l)"
   [ "$lines" -gt "$cap" ] && { SC_HUGE=$((SC_HUGE+1)); return 4; }
+  # Already asserted by an existing golden under another name? Two goldens with byte-identical
+  # output test one thing twice and double the cost of every real change. Seen for real: a
+  # generated `board-fm-cols` that duplicated the hand-written `board-fm-shape` exactly.
+  local e
+  for e in "$dir"/*.expected; do
+    [ -e "$e" ] || break
+    if printf '%s\n' "$a" | diff -q - "$e" >/dev/null 2>&1; then
+      SC_DUP=$((SC_DUP+1)); note "skipped $name — same output as $(basename "$e" .expected)"; return 0
+    fi
+  done
   printf '%s\n' "$body" > "$dir/$name.cmd"
   printf '%s\n' "$a"    > "$dir/$name.expected"
   [ "$arc" != "0" ] && printf '%s\n' "$arc" > "$dir/$name.rc"
@@ -498,13 +508,21 @@ scaffold_try() { # scaffold_try <name> <cmd-body> — write the pair, but ONLY i
 }
 
 scaffold_dirs() { # top-level directories carrying a real public surface, newline-separated.
-  # Derived from the INDEX, so it needs no config and works on a repo it has never seen. Skips the
-  # usual vendored/generated trees — locking those asserts someone else's code, not ours.
+  # Derived from the INDEX, so it needs no config and works on a repo it has never seen.
+  # The exclusions are all one idea: NEVER lock a tree whose whole job is to change without us.
+  #   vendored/built  node_modules vendor dist build out target coverage — someone else's code
+  #   ops · kit/ops   POLARIS's own INSTALLED copy. Locking it reds on every `polaris update`,
+  #                   which is the workflow, not a regression — the golden would assert the
+  #                   opposite of what is supposed to happen. (prefs.md excludes it for the
+  #                   same reason.) Seen for real: a 571-line api-ops golden on this repo.
+  #   docs            `seal` writes a sprint report here every wave — reds by construction.
+  #   .github         CI config, human-owned and RULES-guarded; an agent cannot fix a red here.
+  #   archive         dead code kept on purpose.
   "$SELF" find --api '*' 2>/dev/null \
     | awk -F'\t' '{ i=index($1,"/"); if (i>1) print substr($1,1,i-1) }' \
     | sort | uniq -c | sort -rn \
     | awk '$1 >= 5 {print $2}' \
-    | grep -Ev '^(node_modules|vendor|dist|build|out|target|\.git|archive|coverage)$' || true
+    | grep -Ev '^(node_modules|vendor|dist|build|out|target|\.git|\.github|archive|coverage|ops|docs)$' || true
 }
 
 cmd_scaffold() { # check --scaffold [--cmd "<shell>"] — GENERATE goldens from observed behavior.
@@ -525,7 +543,7 @@ cmd_scaffold() { # check --scaffold [--cmd "<shell>"] — GENERATE goldens from 
   done
   local dir="$OPS/tests" d slug
   mkdir -p "$dir"
-  SC_MADE=0; SC_SKIP=0; SC_FLAP=0; SC_EMPTY=0; SC_DEAD=0; SC_HUGE=0
+  SC_MADE=0; SC_SKIP=0; SC_FLAP=0; SC_EMPTY=0; SC_DEAD=0; SC_HUGE=0; SC_DUP=0
   if [ -n "$extra" ]; then
     scaffold_try "cmd-$(printf '%s' "$extra" | tr -cs 'a-zA-Z0-9' '-' | sed 's/^-*//;s/-*$//' | cut -c1-40)" "$extra"
   else
@@ -554,7 +572,7 @@ cmd_scaffold() { # check --scaffold [--cmd "<shell>"] — GENERATE goldens from 
     scaffold_try "rules-health"  "bash ops/polaris rules | tail -1"
   fi
   printf '\n'
-  say "scaffold: $SC_MADE written · $SC_SKIP already existed · $SC_FLAP non-deterministic · $SC_EMPTY empty · $SC_DEAD command missing · $SC_HUGE too large (locked coarser instead)"
+  say "scaffold: $SC_MADE written · $SC_SKIP already existed · $SC_FLAP non-deterministic · $SC_EMPTY empty · $SC_DEAD command missing · $SC_DUP duplicate · $SC_HUGE too large (locked coarser instead)"
   [ "$SC_MADE" -eq 0 ] && { note "nothing new to lock"; return 0; }
   note "REVIEW THESE before committing: $dir — a golden records what the code DOES, not what it SHOULD do."
   note "A wrong behaviour captured here becomes a wrong behaviour defended forever. Then: polaris check"
