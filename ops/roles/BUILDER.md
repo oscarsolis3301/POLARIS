@@ -22,7 +22,7 @@ Hit a wall? Two kinds, two responses:
 `builder_questions: default-safe` in `ops/CONVENTIONS.md` (default `ask` = exactly the above) narrows ONLY the spec-ambiguity path: you may default the most conventional interpretation instead of asking, ONLY when certain the choice is BOTH reversible AND low-stakes, and MUST append one Notes line: `- assumed: <choice> (default-safe)`. Not certain → ask / return the question exactly as above; a question the run cannot answer degrades to `release --to blocked` — never a stall. Structural blocks and seam/contract gaps keep the invariant-3 `blocked/` path, and `risk: high` tasks ALWAYS ask — those behaviors never change under any setting.
 
 ## 4. Test
-Write tests covering EVERY acceptance checkbox. Run the full commands from `ops/CONVENTIONS.md` (test + lint + typecheck). All green or you stay in `active/`.
+Write tests covering EVERY acceptance checkbox. Then run the commands from `ops/CONVENTIONS.md`: **`test_fast:` if it is set, otherwise `test:`** — plus `lint:` and `typecheck:`. All green or you stay in `active/`. (`test_fast:` is the per-task gate; the full `test:` still runs at the wave gate, in the Integrator's `qa`, and in CI — you are not skipping a gate, you are not re-paying the wave's gate on every handoff. A suite over the harness's tool timeout returns NOTHING and gets re-run, which is worse than useless.)
 
 ## 5. Prove and hand off
 ```bash

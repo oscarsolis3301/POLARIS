@@ -129,12 +129,27 @@ builders: subagents         # subagents (a work request runs the whole loop in o
                             # inert allowlist (calibration notes, MAP.md deltas, SPRINT Learned pruning,
                             # stale_hours/voice) without "approve <n>"; everything else still waits.
                             # EVOLVE may never set autonomy or its components either way. Default: confirm.
-drain: queue                # queue (a conductor run also finishes tasks already waiting in ready/ before
-                            # it signs off — the plan gate discloses it) | plan (stop after the approved
-                            # plan's own tasks) | backlog (queue, then loop the Planner to promote more from
-                            # backlog/, capacity- and ready-gate-bounded, up to drain_slices rounds).
-                            # Default: queue.
+drain: plan                 # plan (stop after the approved plan's own tasks — one "go" authorizes the
+                            # plan the human just approved, not the whole board; dependency chains
+                            # INSIDE the plan still loop automatically) | queue (also finish tasks
+                            # already waiting in ready/ before signing off — the plan gate must
+                            # disclose that depth) | backlog (queue, then loop the Planner to promote
+                            # more from backlog/, up to drain_slices rounds). Default: plan.
 drain_slices: 2              # backlog mode only: max planner-promotion rounds per run. Default: 2.
+run_max_tasks: 12           # run bounds — a loop with no ceiling is not autonomy. Tasks a single run
+run_max_minutes: 90         # will BUILD · wall clock since kickoff · cumulative subagent spawns ·
+run_max_agents: 20          # fix waves. 0 = unbounded. Checked at WAVE BOUNDARIES only, never
+run_fix_waves: 2            # mid-task; at a cap the run integrates what landed, runs qa, and reports.
+qa_scout: auto              # auto (spawn the runtime QA scout ONLY when uat: is empty AND the run
+                            # touched a runnable: path — so a repo with no declared runnable surface
+                            # never pays for one) | off | always (webapps where console noise and
+                            # broken flows genuinely evade the suite). Default: auto.
+runnable: <globs or omit>   # optional: this repo's runnable surface (app entry points, CLI, endpoints).
+                            # Unset ⇒ qa_scout: auto resolves to off.
+test_fast: <cmd or omit>    # optional: the BUILDER's pre-handoff gate when the full test: suite is slow.
+                            # test: still runs at the wave gate, in qa, and in CI — no gate disappears.
+                            # Set this the moment test: approaches your harness's tool timeout: a suite
+                            # that times out returns NOTHING and gets re-run, which is worse than slow.
 stale_hours: 1              # sweep warns on active locks older than this
 uat: <cmd or omit>          # optional end-to-end/UAT command — Integrator runs it ONCE on the integrate branch
 notify: <cmd or omit>       # optional: runs in background per board event with POLARIS_EV/ID/NOTE env vars

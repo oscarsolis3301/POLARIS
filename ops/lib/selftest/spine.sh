@@ -43,7 +43,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
   local SELFTEST_PAR="${2:-}"
   # Every label a drill_on gate below uses, in run order — the contract's minimum set. An --only
   # element matching NONE of these dies HERE, before the throwaway repo is even created.
-  local SELFTEST_LABELS='fmlist tcm report metrics brain rules drift hardening qa remote syncrace notify grant upgrade pr-publish express hint brief'
+  local SELFTEST_LABELS='fmlist tcm report metrics brain rules drift hardening qa remote syncrace notify grant upgrade pr-publish express hint brief newcmds'
   local st_total=0 st_hit=0 st_lbl
   local st_sel="" st_pat st_rest st_pat_hit
   for st_lbl in $SELFTEST_LABELS; do st_total=$((st_total+1)); done
@@ -139,6 +139,9 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
     if drill_on fmlist; then
     drill_fmlist
     fi   # drill_on fmlist
+    if drill_on newcmds; then
+    drill_newcmds
+    fi   # drill_on newcmds
     # ====================== v5.12 clean-history drills =======================
     # land (squash → ONE rich commit) → seal (tagged summary merge) → history →
     # done (rule-1 gate + landed: stamp) → rollback (task + sprint reverts).

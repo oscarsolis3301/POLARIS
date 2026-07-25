@@ -6,17 +6,26 @@ set -eu
 POLARIS_V=5
 
 # --- lib loader: every function body lives in lib/ — fixed order, core first ---
+# The write-guard calls _match/_rules on EVERY edit and needs only core+ownership (22KB of 249KB).
+# Sourcing all 14 there cost ~2s/call — twice per write against a 10s hook timeout, which under
+# parallel builders EXCEEDED it and made the guard fail OPEN. Load what the command needs.
+# (ops/contracts/module-layout.md v2 — both lists stay LITERAL, never a glob.)
 OPS_DIR="$(cd "$(dirname "$0")" && pwd)"
-for _m in core ownership builder integrate knowledge observe admin \
-          selftest/spine selftest/board selftest/history selftest/report \
-          selftest/brain selftest/policy selftest/remote; do
+case "${1:-}" in
+  _match|_rules|_guard) _mods="core ownership" ;;
+  find|show)     _mods="core ownership search" ;;
+  *)             _mods="core ownership builder integrate knowledge search observe admin
+                        selftest/spine selftest/board selftest/history selftest/report
+                        selftest/brain selftest/policy selftest/remote" ;;
+esac
+for _m in $_mods; do
   if [ ! -f "$OPS_DIR/lib/$_m.sh" ]; then
     printf '⛔ POLARIS: ops/lib/%s.sh is missing — this kit is incomplete. Re-run the installer (bash ops/install.sh) or fetch a fresh kit: ops/polaris update\n' "$_m" >&2
     exit 1
   fi
   . "$OPS_DIR/lib/$_m.sh"
 done
-unset _m
+unset _m _mods
 
 git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repo"
 
@@ -92,6 +101,23 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  upgrade pr-publish express hint brief); a nonsense element dies
                                  before the spine (unknown drill label); --parallel <N> = run the
                                  selected drills as N parallel child shards (serial stays the default)
+  check [--only <glob>] [--update]
+                                 golden-output acceptance tests, ZERO LLM: ops/tests/<name>.cmd is
+                                 run and its stdout diffed against <name>.expected (optional
+                                 <name>.rc = expected exit code). --update rewrites goldens — a
+                                 human/Builder decision, never automatic. Wire it into qa by setting
+                                 `uat: bash ops/polaris check` in ops/CONVENTIONS.md
+  find <symbol> | -f <glob> | -t <text> | --importers <path> | --imports <path> [-n N]
+                                 the 1-hop "where is X": ONE line per hit, path:line first, ranked
+                                 (exact > prefix > substring, boosted by churn + fan-in, tests and
+                                 vendor down-weighted). Backed by a generated .polaris/index.db;
+                                 self-heals on query. No python3 → says so and you fall back to Grep
+  show <path>#<symbol> | <path>:<line>
+                                 print JUST that symbol's body — not the whole file
+  board-fm [<col>…]              one TAB line per task (col id pts wsjf risk deps owns contract
+                                 title) — the Planner's board read without the prose bodies.
+                                 Default columns: ready active backlog blocked (done/ is history,
+                                 pass it explicitly). Non-task files (IDEAS.md) are skipped
   brain [--refresh]              generate .polaris/brain/ — gitignored knowledge base a cold agent
                                  reads FIRST (INDEX + code-map/board/contracts/commands/gotchas);
                                  --refresh skips code-map when code is unchanged. seal auto-refreshes
@@ -142,6 +168,10 @@ case "${1:-}" in
   rollback)   shift; cmd_rollback "$@";;
   status)     shift 2>/dev/null || true; update_check_maybe || true; cmd_status "${1:-}";;
   brain)      shift 2>/dev/null || true; cmd_brain "${1:-}";;   # no update_check_maybe: agents run it cold and often — keep it quiet + pure
+  find)       shift 2>/dev/null || true; cmd_find "$@";;
+  show)       shift 2>/dev/null || true; cmd_show "$@";;
+  check)      shift 2>/dev/null || true; cmd_check "$@";;
+  board-fm)   shift 2>/dev/null || true; cmd_board_fm "$@";;
   sweep)      shift 2>/dev/null || true; cmd_sweep "${1:-}";;
   doctor)     shift 2>/dev/null || true; update_check_maybe || true; cmd_doctor "$@";;
   metrics)    cmd_metrics;;
@@ -158,6 +188,7 @@ case "${1:-}" in
   update)     shift; cmd_update "${1:-}";;
   uninstall)  shift; cmd_uninstall "$@";;
   _match)     shift; cmd_match "$@";;
+  _guard)     shift; cmd_guard "$@";;
   ''|help|-h|--help) usage;;
   *) usage; die "unknown command: $1";;
 esac

@@ -25,7 +25,29 @@ over ONLY when every one of these is true:
 - `bash ops/polaris qa` is green on the base branch — run by YOU, in this session;
 - EVOLVE's proposals are gathered (step 7.5);
 - the close report (step 8) is delivered.
-Anything less, and your next action is a tool call, not a sign-off.
+Anything less, and your next action is a tool call, not a sign-off — **unless a run budget cap is
+reached (below), which is itself a legitimate ending.**
+
+## The third rule — a run has a budget, and reaching it is a clean finish
+An autonomous loop with no ceiling is not autonomy, it is a runaway. Record `date +%s` once at
+kickoff; these are read from `ops/CONVENTIONS.md` via their defaults, and you check them **only at
+wave boundaries** (end of step 6.5, before looping to step 4, before each `drain: backlog` slice) —
+never mid-task:
+
+| key | default | meaning (`0` = unbounded) |
+|---|---|---|
+| `run_max_tasks` | `12` | tasks this run will BUILD |
+| `run_max_minutes` | `90` | wall clock since kickoff |
+| `run_max_agents` | `20` | cumulative subagents spawned |
+| `run_fix_waves` | `2` | fix waves (was hard-coded in step 6.5) |
+
+**At a cap, stop cleanly — never abort mid-task.** Killing an in-flight lane strands a lock, an
+`active/` task and a worktree, which is strictly worse than the overrun. So: let every in-flight
+builder/SOLO finish · spawn no new wave and promote no new slice · integrate and seal whatever
+reached `review/` · run `bash ops/polaris qa` on base so the run still ends green or honestly red ·
+add ONE line to the close report — `budget: <which cap> reached — N tasks left on the board; say
+start to continue` · fire `notify-gate done`. A budgeted stop is a SUCCESS, not a failure; report it
+in `voice:` as a normal ending, never as an apology.
 
 **Context compacted mid-run?** The board is the run's memory, not your context. Re-anchor from
 `bash ops/polaris status`: tasks in `active/` → wait on those lanes · `review/` non-empty → integrate ·
@@ -36,7 +58,11 @@ never re-plan.
 1. **Interview + brief.** Run PLANNER.md steps 0b and 0c yourself — subagents can't talk to the
    human, so the questions and the "what I understood" brief (WILL change · WON'T touch · DONE looks
    like · assumptions) happen here, in `voice:`. Scaled to vagueness: a concrete request gets zero
-   questions; a vague one gets as many rounds as it takes. Wrong brief → re-interview. Confirmed
+   questions; a vague one gets more. **HARD CAP: 3 rounds** (INIT.md:25 already works this way).
+   Anything still open after 3 becomes a defaulted assumption carried into the 0c brief, or a
+   `spike` task — never a 4th round. The brief gate is what makes that safe: a wrong assumption
+   costs one message, and every round you ask can block on a human who has walked away.
+   Wrong brief → re-interview. Confirmed
    brief → carry it verbatim into the planner kickoff.
    **No objective in the kickoff + `ready/` empty + `ops/ROADMAP.md` exists?** The next unstarted
    line (neither checked off by the human nor evidenced done) is the candidate objective — confirm
@@ -47,7 +73,10 @@ never re-plan.
    > and brief gate are already done — do not re-ask; if truly blocked, return the question as your
    > result. Skip fan-out; return your report. CONFIRMED BRIEF: <brief>
    > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
-   > Run every command in the FOREGROUND; never wait on background notifications.
+   > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
+   > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
+   > that file for the completion line. Polling is foreground work; a suite that times out returns
+   > NOTHING and gets re-run, which is strictly worse than waiting for it.
    It grooms the board, runs `drift`, returns the plan. If it returns a question instead: ask the
    human, spawn a fresh planner with the brief + the answer appended.
 2.5 **Express triage — a single small change skips the full pipeline.** After the planner's report,
@@ -86,7 +115,10 @@ never re-plan.
    > complete it end to end. A spec ambiguity → return the question as your result instead of asking
    > the human. Stop at the review handoff; return: ID · branch · one-line summary · test results.
    > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
-   > Run every command in the FOREGROUND; never wait on background notifications.
+   > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
+   > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
+   > that file for the completion line. Polling is foreground work; a suite that times out returns
+   > NOTHING and gets re-run, which is strictly worse than waiting for it.
    Say once where to watch (`bash ops/polaris dash` · 127.0.0.1:7373). As each lane reports, relay
    ONE line in `voice:` — "✅ 2 of 5 done — the nav restyle landed, tests green" — useful, plain,
    never a dump. Lane free + ready task left → spawn the next builder immediately.
@@ -120,7 +152,10 @@ never re-plan.
    > result. The all-review `Integrate now` notice is your signal the wave is complete: run the suite
    > once, then seal.
    > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
-   > Run every command in the FOREGROUND; never wait on background notifications.
+   > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
+   > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
+   > that file for the completion line. Polling is foreground work; a suite that times out returns
+   > NOTHING and gets re-run, which is strictly worse than waiting for it.
    > Return your report: merged · kicked back + why · suite status · newly promoted.
    - `risk: high` in its report → `bash ops/polaris notify-gate risk <ID>` (additive — approval
      happens HERE, in conversation, under every knob), ask the human "approve <ID>?" and relay ONLY
@@ -129,23 +164,43 @@ never re-plan.
      survivors).
 6.5 **Check — trust nothing, prove it.** Integration reported green? Run `bash ops/polaris qa`
    YOURSELF — one command re-runs the whole suite, the build, board hygiene and the env check on
-   base. A subagent's "green" is never taken on faith. Then, if the repo has something runnable
-   (an app, a CLI, an endpoint), spawn ONE bounded QA scout:
+   base. A subagent's "green" is never taken on faith — and note what that sentence licenses: YOU
+   running the deterministic `qa`, which costs a tool call and no tokens. It does NOT license a
+   second agent to re-check it by hand; those are different mechanisms and the scout was
+   grandfathered in alongside the rule, not by it.
+   **QA scout — `qa_scout:` in `ops/CONVENTIONS.md`, default `auto`.** `auto` spawns the scout ONLY
+   when BOTH hold: `uat:` is empty (no automated runtime check exists at all) AND the run landed a
+   task touching a `runnable:` path. `runnable:` unset ⇒ auto is OFF. `off` never spawns; `always`
+   always does — keep `always` for webapps where console noise and broken flows genuinely evade the
+   suite. The scout is the least bounded agent in this protocol ("exercise the flows a user would"
+   has no token ceiling), so it must be earned, not assumed.
+   The scout is NOT worthless and this is not a cut for its own sake: `ops/contracts/cli-docs-parity.md`
+   exists because a scout caught `polaris help` and `kit/CLAUDE.md` rotting in both directions. That
+   is the whole lifecycle — the scout finds a class of defect ONCE, and the fix converts it into a
+   permanent `verify:` grep, after which it never needs to look again. `auto` encodes exactly that.
+   When it does run (`always`, or `auto` with both conditions met), spawn ONE bounded scout:
    > You are a QA scout, conductor-entered. Read-only — you fix NOTHING. Exercise the flows this
    > plan changed, the way a user would. Hunt for runtime errors, broken flows, console noise.
    > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
-   > Run every command in the FOREGROUND; never wait on background notifications.
+   > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
+   > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
+   > that file for the completion line. Polling is foreground work; a suite that times out returns
+   > NOTHING and gets re-run, which is strictly worse than waiting for it.
    > Return findings as path:line one-liners, or "clean".
    Anything red — from `qa` or the scout — starts a **fix wave**: spawn a planner subagent to file
-   the failures as bug task(s), then build → integrate → re-run `qa`. Cap: **2 fix waves per run**;
+   the failures as bug task(s), then build → integrate → re-run `qa`. Cap: **`run_fix_waves`, default 2**;
    still red after that → park the offenders in `blocked/` and tell the human plainly what is red
    and why you stopped.
 7. **Waves.** Integration promoted backlog tasks whose dependencies just landed? If they belong to
    THIS plan, loop to step 4 automatically — dependency chains are why the human shouldn't have to
-   say "continue". Then the queue: with `drain: queue` (`ops/CONVENTIONS.md`, the default) the run
-   also consumes whatever else is sitting in `ready/` — keep looping steps 4–6.5 until `ready/` is
-   empty (the plan gate disclosed this). `drain: plan` → stop after this plan's own tasks; queued
-   work then waits for the next `start`. `drain: backlog` → `queue` behavior first, then loop: ONE
+   say "continue". Then the queue. **`drain: plan` is the DEFAULT** (`ops/CONVENTIONS.md`): the run
+   stops after this plan's own tasks, and anything else queued waits for the next `start` — one "go"
+   authorizes the plan the human just approved, not the whole board. Say so in one line at close:
+   "N tasks still queued — `start` picks them up." Note this does NOT break dependency chains: the
+   promoted-tasks-belonging-to-THIS-plan loop above is independent of `drain:`, so `plan` only stops
+   the run adopting *foreign* work. `drain: queue` → also consume whatever else sits in `ready/`,
+   looping steps 4–6.5 until it is empty (the plan gate must disclose that depth first).
+   `drain: backlog` → `queue` behavior first, then loop: ONE
    planner subagent promotes the next capacity-bounded, ready-gate-passing slice from `backlog/` —
    ONLY tasks whose `plan:` equals THIS run's plan id (no `plan:` → never drained) — and runs
    `drift`; then loop steps 4–6.5. Stop when `drain_slices` (default 2) promotion rounds are
@@ -159,7 +214,10 @@ never re-plan.
    > APPLY NOTHING — return your ≤3 findings with evidence and the exact proposed diffs as your
    > result.
    > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
-   > Run every command in the FOREGROUND; never wait on background notifications.
+   > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
+   > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
+   > that file for the completion line. Polling is foreground work; a suite that times out returns
+   > NOTHING and gets re-run, which is strictly worse than waiting for it.
    Its proposals go into the close report, numbered — the human applies one by replying
    "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Skip this
    step only when the run built ≤1 task — there is no signal in a sample of one.
