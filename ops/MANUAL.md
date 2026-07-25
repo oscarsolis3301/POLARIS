@@ -226,6 +226,20 @@ landed-record gate and the final `qa` all run exactly as in the long path. `land
 ## QA — "is everything okay?" by hand
 What `ops/polaris qa` does in one shot. From the repo root on `<base>`, run in order: the `test:` `lint:` `typecheck:` `build:` and `uat:` commands from `ops/CONVENTIONS.md` (skip blank keys), then the board-hygiene audit (the per-task ownership + RULES proof from Integrate above) and the env sanity checks. Run EVERY check even after one goes red — one pass paints the whole picture — then report red if anything was. The Integrator runs this before reporting; a Conductor runs it after integration and never takes a subagent's "green" on faith.
 
+## Finding code by hand — what `find` / `show` replace
+`ops/polaris find <symbol>` and `ops/polaris show <path>#<symbol>` are the one-hop answer to "where
+is X". They read a generated SQLite index (`.polaris/index.db`) and need python3 — with neither, or
+with no way to run commands at all, the by-hand equivalent is plain search, and that is the ONLY
+place in this manual where grep is the right first move rather than the fallback:
+```
+find    →  grep -rn "^\(def\|function\|class\|const\) *<symbol>" .   # definition first, then all hits
+show    →  open the printed path at the printed line, read to the end of the block
+```
+Two things the index does that a grep cannot, and which you must do by eye instead: rank hits so the
+DEFINITION comes before its call sites, and answer `--importers <path>` (every file importing a path
+— the blast radius a `files_owned` set has to cover). Do those manually and the answer is the same,
+just slower. The index is an accelerator; nothing in the protocol depends on it existing.
+
 ## Brain by hand — the generated knowledge base
 What `ops/polaris brain` generates by hand: a git-ignored, any-model-readable digest under
 `.polaris/brain/` that kills cold-start context re-derivation. It READS the repo and writes nowhere
@@ -238,15 +252,17 @@ ops/polaris brain --refresh   # incremental: board.md/contracts.md/commands.md/g
                               #   `git diff --name-only <stamp-sha>..HEAD` is non-empty. No brain → full build.
 # exit 0 on success
 ```
-Build 7 entries — 6 `.md` files + `.stamp` — under `.polaris/brain/`, each capped, mirroring the CLI (where a source is silent, do as the CLI does — invent nothing):
-- `INDEX.md` (≤40 lines) — routing table: one `looking for X → read Y` row per domain file below, plus the hop-guarantee line.
+Build 9 entries — 8 `.md` files + `.stamp` — under `.polaris/brain/`, each capped, mirroring the CLI (where a source is silent, do as the CLI does — invent nothing):
+- `INDEX.md` (≤40 lines) — routing table: one `looking for X → read Y` row per domain file below, plus a first row routing symbol lookups to `ops/polaris find` / `show` (a COMMAND, not a file — 0 hops), plus the hop-guarantee line.
 - `code-map.md` (≤15 lines/dir, ≤300 total) — per directory: purpose (1 line) + key symbols (grep `^cmd_` / `^def ` / `^function` / `^class`) + a hotspot flag from `ops/MAP.md`'s hotspot section.
 - `board.md` (≤80 lines) — live digest: `# SPRINT <n> — <goal>` line · per-column counts · active (id·owner) · ready top 5 by wsjf (id·title·pts) · blocked (id·reason) · last 10 done (id·title·landed sha).
 - `contracts.md` (≤120 lines) — per `ops/contracts/*.md`: `## <name>` + its `## Purpose` first paragraph; no contracts dir → `none`.
 - `commands.md` (≤80 lines) — effective CONVENTIONS values (base · claim · integration · publish · express · stale_hours · test · build) FIRST, then `ops/polaris help` output; the cap may cut the help tail, NEVER the values.
 - `gotchas.md` (≤60 lines) — SPRINT.md `## Learned` bullets verbatim + CONVENTIONS `## Planner calibration` bullets verbatim.
+- `prefs.md` (≤40 lines) — house style DETECTED by counting, never declared: indent · quotes · longest line (sample ≤200 tracked source files) · public-function naming · test-file layout. Print the count behind every row; no majority ⇒ say `mixed`. EXCLUDE `ops/`, `kit/ops/` and `.claude/` — that is POLARIS's own installed code, not this repo's style.
+- `learned.md` (≤60 lines) — co-change pairs from `git log --name-only -n 300` (skip commits touching >15 files; keep pairs seen ≥3 times, top 12) + kickback IDs/reasons from `EVENTS.ndjson`. Not a copy of the Learned log or of `metrics`.
 - `.stamp` (1 line) — machine line `<epoch> <BASE short sha>`, rewritten by every brain run.
-`INDEX.md` must state the hop guarantee: any fact is reachable in ≤4 file-opens from `INDEX.md` (INDEX = hop 1, domain file = hop 2, the repo file it cites by path = hops 3–4). Scale by SUMMARIZING PER DIRECTORY, never by listing files; a greenfield repo gets the same 6 `.md` files, near-empty.
+`INDEX.md` must state the hop guarantee: any fact is reachable in ≤4 file-opens from `INDEX.md` (INDEX = hop 1, domain file = hop 2, the repo file it cites by path = hops 3–4). Scale by SUMMARIZING PER DIRECTORY, never by listing files; a greenfield repo gets the same 8 `.md` files, near-empty. Its FIRST row routes symbol lookups to `ops/polaris find` / `show` — a command, not a file, so that answer costs 0 hops.
 
 **Staleness — the two stamp files, what `doctor` checks.** Freshness rides two stamps: `.polaris/brain/.stamp` (rewritten by every brain run) and `.polaris/board-changed` (an epoch line the board bumps):
 - `done <ID>` and `seal` (both publish modes, `--sync` included) `touch` `.polaris/board-changed` AFTER their board/base mutation succeeds — best-effort; a touch failure never fails them.

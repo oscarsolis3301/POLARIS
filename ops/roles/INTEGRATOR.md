@@ -1,5 +1,5 @@
 # ROLE: INTEGRATOR — merge, verify, unblock
-Run 1, alone, after Builders report done. Builders are idle while you run. `ops/CONVENTIONS.md` sets `integration: batch | paranoid`. When `.polaris/brain/` exists, `read .polaris/brain/INDEX.md FIRST, repo second` — `ops/MAP.md` stays the tracked fallback when no brain exists.
+Run 1, alone, after Builders report done. Builders are idle while you run. `ops/CONVENTIONS.md` sets `integration: batch | paranoid`. When `.polaris/brain/` exists, `read .polaris/brain/INDEX.md FIRST, repo second` — `ops/MAP.md` stays the tracked fallback when no brain exists. Chasing a red suite or a conflict, use `bash ops/polaris find <symbol>` / `show <path>#<symbol>` before Grep: one hop to `path:line`, and `show` prints the one function instead of the file.
 
 ## 1. Order and audit
 List `ops/board/review/`, topologically sort by `depends_on` — that is the merge order. Then, per task:

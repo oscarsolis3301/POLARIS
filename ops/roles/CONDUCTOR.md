@@ -73,6 +73,8 @@ never re-plan.
    > and brief gate are already done — do not re-ask; if truly blocked, return the question as your
    > result. Skip fan-out; return your report. CONFIRMED BRIEF: <brief>
    > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
+   > To locate code run `bash ops/polaris find <symbol>` (one hop to path:line) or `show <path>#<symbol>`
+   > (one symbol's body, not the file) BEFORE any Grep.
    > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
    > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
    > that file for the completion line. Polling is foreground work; a suite that times out returns
@@ -115,6 +117,8 @@ never re-plan.
    > complete it end to end. A spec ambiguity → return the question as your result instead of asking
    > the human. Stop at the review handoff; return: ID · branch · one-line summary · test results.
    > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
+   > To locate code run `bash ops/polaris find <symbol>` (one hop to path:line) or `show <path>#<symbol>`
+   > (one symbol's body, not the file) BEFORE any Grep.
    > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
    > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
    > that file for the completion line. Polling is foreground work; a suite that times out returns
@@ -152,6 +156,8 @@ never re-plan.
    > result. The all-review `Integrate now` notice is your signal the wave is complete: run the suite
    > once, then seal.
    > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
+   > To locate code run `bash ops/polaris find <symbol>` (one hop to path:line) or `show <path>#<symbol>`
+   > (one symbol's body, not the file) BEFORE any Grep.
    > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
    > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
    > that file for the completion line. Polling is foreground work; a suite that times out returns
@@ -182,6 +188,8 @@ never re-plan.
    > You are a QA scout, conductor-entered. Read-only — you fix NOTHING. Exercise the flows this
    > plan changed, the way a user would. Hunt for runtime errors, broken flows, console noise.
    > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
+   > To locate code run `bash ops/polaris find <symbol>` (one hop to path:line) or `show <path>#<symbol>`
+   > (one symbol's body, not the file) BEFORE any Grep.
    > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
    > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
    > that file for the completion line. Polling is foreground work; a suite that times out returns
@@ -214,6 +222,8 @@ never re-plan.
    > APPLY NOTHING — return your ≤3 findings with evidence and the exact proposed diffs as your
    > result.
    > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
+   > To locate code run `bash ops/polaris find <symbol>` (one hop to path:line) or `show <path>#<symbol>`
+   > (one symbol's body, not the file) BEFORE any Grep.
    > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
    > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
    > that file for the completion line. Polling is foreground work; a suite that times out returns

@@ -469,7 +469,99 @@ EOF
   [ "$bad" -eq 0 ] && say "$n rule(s), all healthy" || die "rules health check failed — fix ops/RULES.tsv"
 }
 
-cmd_check() { # check [--only <glob>] [--update] — golden-output acceptance tests, ZERO LLM.
+scaffold_try() { # scaffold_try <name> <cmd-body> — write the pair, but ONLY if it is worth locking.
+  # Four refusals, each one a golden that would have been worse than no golden at all:
+  #   exists  — never clobber a reviewed pair; --update is the deliberate way to redo one
+  #   flappy  — output or rc differed across two back-to-back runs (timestamps, ordering, paths)
+  #   empty   — an empty golden asserts nothing and goes green forever
+  #   dead    — rc 127/126: the command isn't installed here, so the lock would be fiction
+  #   huge    — rc 4 to the CALLER, which may then lock a coarser view of the same thing.
+  #             Measured on a 3,000-file repo: one `--api src/*` golden is 75,001 lines / 2.9 MB.
+  #             A golden nobody can read in a diff is a golden nobody maintains.
+  # $3 = max lines (default 2000). Explicit argument, NOT a `VAR=x scaffold_try` prefix: the prefix
+  # form silently failed to reach the function across a line-continued call, capping a 3,000-line
+  # fallback at 2,000 and swallowing the whole scaffold.
+  local name="$1" body="$2" cap="${3:-2000}" dir="$OPS/tests" a b arc brc lines
+  [ -f "$dir/$name.cmd" ] && { SC_SKIP=$((SC_SKIP+1)); return 0; }
+  if a="$( cd "$PRIMARY" && bash -c "$body" 2>/dev/null )"; then arc=0; else arc=$?; fi
+  if b="$( cd "$PRIMARY" && bash -c "$body" 2>/dev/null )"; then brc=0; else brc=$?; fi
+  { [ "$arc" -eq 127 ] || [ "$arc" -eq 126 ]; } && { SC_DEAD=$((SC_DEAD+1)); return 0; }
+  { [ "$a" = "$b" ] && [ "$arc" = "$brc" ]; } || { SC_FLAP=$((SC_FLAP+1)); return 0; }
+  [ -n "$a" ] || { SC_EMPTY=$((SC_EMPTY+1)); return 0; }
+  lines="$(printf '%s\n' "$a" | wc -l)"
+  [ "$lines" -gt "$cap" ] && { SC_HUGE=$((SC_HUGE+1)); return 4; }
+  printf '%s\n' "$body" > "$dir/$name.cmd"
+  printf '%s\n' "$a"    > "$dir/$name.expected"
+  [ "$arc" != "0" ] && printf '%s\n' "$arc" > "$dir/$name.rc"
+  SC_MADE=$((SC_MADE+1)); say "golden: $name"
+  return 0
+}
+
+scaffold_dirs() { # top-level directories carrying a real public surface, newline-separated.
+  # Derived from the INDEX, so it needs no config and works on a repo it has never seen. Skips the
+  # usual vendored/generated trees — locking those asserts someone else's code, not ours.
+  "$SELF" find --api '*' 2>/dev/null \
+    | awk -F'\t' '{ i=index($1,"/"); if (i>1) print substr($1,1,i-1) }' \
+    | sort | uniq -c | sort -rn \
+    | awk '$1 >= 5 {print $2}' \
+    | grep -Ev '^(node_modules|vendor|dist|build|out|target|\.git|archive|coverage)$' || true
+}
+
+cmd_scaffold() { # check --scaffold [--cmd "<shell>"] — GENERATE goldens from observed behavior.
+  # These are REGRESSION LOCKS, not correctness proofs: they assert "this still does what it did
+  # the day we looked", which is exactly the class of check that never needed a model. A human or
+  # Builder reviews them once; from then on every run costs a subprocess instead of a subagent.
+  #
+  # Auto-generated sources are limited to ones that are provably READ-ONLY — the index and this
+  # CLI's own reporting commands. Scaffold does NOT go hunting for executables in bin/ to run with
+  # --help: on a real app that is how you start a server or mutate a database during a test-writing
+  # pass. Behavioural goldens for an app's own commands are opt-in, one at a time, via --cmd.
+  local extra=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --cmd) extra="${2:?--cmd needs a shell command}"; shift 2;;
+      *) die "usage: polaris check --scaffold [--cmd \"<shell command>\"]";;
+    esac
+  done
+  local dir="$OPS/tests" d slug
+  mkdir -p "$dir"
+  SC_MADE=0; SC_SKIP=0; SC_FLAP=0; SC_EMPTY=0; SC_DEAD=0; SC_HUGE=0
+  if [ -n "$extra" ]; then
+    scaffold_try "cmd-$(printf '%s' "$extra" | tr -cs 'a-zA-Z0-9' '-' | sed 's/^-*//;s/-*$//' | cut -c1-40)" "$extra"
+  else
+    # 1. public API surface — one golden per top-level source dir. The generic lock: a renamed,
+    #    deleted or relocated public symbol reds instantly, on any repo, in any language we index.
+    #    Too big to be readable (rc 4) → fall back to one line per FILE with its symbol count. That
+    #    still reds on a deleted file, a new file, or symbols appearing/vanishing from one; it gives
+    #    up only same-file renames. A bounded lock that survives is worth more than a 2.9 MB one
+    #    that gets deleted the first time someone opens the diff.
+    for d in $(scaffold_dirs); do
+      slug="$(printf '%s' "$d" | tr -cs 'a-zA-Z0-9' '-')"
+      # An `if` (not a || chain): scaffold_try's rc 4 is a routing signal, and as the last command
+      # of an OR-list a second rc 4 would trip `set -e` and abort the whole scaffold silently.
+      if scaffold_try "api-$slug" "bash ops/polaris find --api '$d/*'"; then :; elif [ $? -eq 4 ]; then
+        # One line per FILE with its symbol count — bounded by file count, not symbol count, so it
+        # holds where the full surface cannot. Its own higher cap: past ~5k files in ONE top-level
+        # directory, per-directory locking is the wrong tool and saying nothing beats saying 1.7 MB.
+        scaffold_try "api-$slug-counts" \
+          "bash ops/polaris find --api '$d/*' | awk -F'\\t' '{c[\$1]++} END{for(p in c) print p\"\\t\"c[p]}' | sort" \
+          5000 || true
+      fi
+    done
+    # 2. this CLI's own contract surfaces — read-only reporting commands whose SHAPE agents parse.
+    scaffold_try "cli-help"      "bash ops/polaris help"
+    scaffold_try "board-fm-cols" "bash ops/polaris board-fm | head -1"
+    scaffold_try "rules-health"  "bash ops/polaris rules | tail -1"
+  fi
+  printf '\n'
+  say "scaffold: $SC_MADE written · $SC_SKIP already existed · $SC_FLAP non-deterministic · $SC_EMPTY empty · $SC_DEAD command missing · $SC_HUGE too large (locked coarser instead)"
+  [ "$SC_MADE" -eq 0 ] && { note "nothing new to lock"; return 0; }
+  note "REVIEW THESE before committing: $dir — a golden records what the code DOES, not what it SHOULD do."
+  note "A wrong behaviour captured here becomes a wrong behaviour defended forever. Then: polaris check"
+  return 0
+}
+
+cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output acceptance tests, ZERO LLM.
   # ops/tests/<name>.cmd       one or more shell lines, run from the repo root
   # ops/tests/<name>.expected  the golden stdout  (stderr is NOT captured — it is noisy and
   #                            makes goldens flap; assert on stdout, or redirect inside the .cmd)
@@ -479,12 +571,16 @@ cmd_check() { # check [--only <glob>] [--update] — golden-output acceptance te
   # run afterwards costs a subprocess instead of a subagent.
   # --update rewrites goldens from actual output — ALWAYS a human/Builder decision, never automatic,
   # because a golden that regenerates itself asserts nothing.
+  # --scaffold GENERATES the pairs instead of running them; it is a different verb behind one noun
+  # on purpose ("the goldens" are one concept), and it must be the first flag so a mistyped
+  # `--scaffold --update` can never be read as a request to overwrite every reviewed golden.
+  [ "${1:-}" = "--scaffold" ] && { shift; cmd_scaffold "$@"; return $?; }
   local only="*" upd=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --only) only="${2:?--only needs a glob}"; shift 2;;
       --update) upd=1; shift;;
-      *) die "usage: polaris check [--only <glob>] [--update]";;
+      *) die "usage: polaris check [--only <glob>] [--update] | check --scaffold [--cmd \"<shell>\"]";;
     esac
   done
   local dir="$OPS/tests" f name exp rcf want got grc red=0 n=0

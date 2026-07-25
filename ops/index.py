@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 try:
     import sqlite3
@@ -33,7 +34,7 @@ if hasattr(sys.stdout, "reconfigure"):                # Windows cp1252 would man
     except Exception:
         pass
 
-SCHEMA = 1
+SCHEMA = 2        # 2: files.mtime/size — the stat cache that keeps `find` O(changed), not O(repo)
 MAXLINE = 4000        # skip minified/generated monsters
 SIGMAX = 200
 
@@ -276,7 +277,8 @@ CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS files(
   id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE, hash TEXT NOT NULL,
   lang TEXT NOT NULL, loc INTEGER NOT NULL, churn INTEGER DEFAULT 0,
-  fanin INTEGER DEFAULT 0, flags INTEGER DEFAULT 0);
+  fanin INTEGER DEFAULT 0, flags INTEGER DEFAULT 0,
+  mtime REAL DEFAULT 0, size INTEGER DEFAULT -1);
 CREATE INDEX IF NOT EXISTS files_lang ON files(lang);
 CREATE TABLE IF NOT EXISTS symbols(
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, lname TEXT NOT NULL, kind TEXT NOT NULL,
@@ -366,17 +368,52 @@ def build(root, full=False):
     con, have_fts = connect(root)
     cur = con.cursor()
     ver = cur.execute("SELECT v FROM meta WHERE k='schema'").fetchone()
-    if full or not ver or int(ver[0]) != SCHEMA:
+    if not ver or int(ver[0]) != SCHEMA:
+        # A schema change alters the table SHAPE, and `DELETE FROM` cannot add a missing column —
+        # an older db would then fail every query with "no such column". Discard the file and
+        # reconnect: a schema bump means a full rebuild regardless, so nothing is lost but time.
+        con.close()
+        d = os.path.join(root, ".polaris")
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                os.remove(os.path.join(d, "index.db" + suffix))
+            except OSError:
+                pass
+        con, have_fts = connect(root)
+        cur = con.cursor()
+        cur.execute("INSERT OR REPLACE INTO meta VALUES('schema',?)", (str(SCHEMA),))
+    elif full:
         for t in ("symbols", "edges", "files", "ftext"):
             try:
                 cur.execute("DELETE FROM %s" % t)
             except Exception:
                 pass
-        cur.execute("INSERT OR REPLACE INTO meta VALUES('schema',?)", (str(SCHEMA),))
-    known = {p: (i, h) for i, p, h in cur.execute("SELECT id,path,hash FROM files")}
+    known = {p: (i, h, mt, sz) for i, p, h, mt, sz
+             in cur.execute("SELECT id,path,hash,mtime,size FROM files")}
     seen, changed = set(), 0
+    # `find` calls build() on EVERY lookup, so this loop is the hot path and it scales with the
+    # REPO, not the change. Reading + SHA-1ing every tracked file cost 0.100s here (128 files) and
+    # would cost ~4s on a 5k-file repo — per lookup. So: stat() first (~100x cheaper than read+hash)
+    # and skip untouched files entirely. Same trick, same reason, as git's stat cache.
+    now = time.time()
     for rel in tracked(root):
+        # `git ls-files --cached` lists a file DELETED from the worktree but not yet staged. Adding
+        # it to `seen` kept it in the index with all its symbols, so `find` went on reporting code
+        # that no longer existed and a deleted file never reddened a golden. Stat first: no stat,
+        # no `seen`, and the prune below removes it.
+        try:
+            st = os.stat(os.path.join(root, rel))
+        except OSError:
+            continue
         seen.add(rel)
+        prev = known.get(rel)
+        if prev:
+            # "Racily clean" (git's term): a file written in the last second may share its mtime
+            # with the indexed copy while differing in content, and same-second same-size edits do
+            # happen (a scripted sed, a formatter). Below that age we do not trust stat — we hash.
+            if (st.st_size == prev[3] and st.st_mtime == prev[2]
+                    and now - st.st_mtime > 1.0):
+                continue
         text = read(root, rel)
         if text is None:
             continue
@@ -385,8 +422,11 @@ def build(root, full=False):
         if not lang:
             continue
         h = hashlib.sha1(text.encode("utf-8", "replace")).hexdigest()
-        prev = known.get(rel)
         if prev and prev[1] == h:
+            # Content is identical but stat drifted (checkout, touch, clock skew). Re-stamp the
+            # stat pair so the NEXT lookup takes the cheap path instead of re-hashing forever.
+            cur.execute("UPDATE files SET mtime=?,size=? WHERE id=?",
+                        (st.st_mtime, st.st_size, prev[0]))
             continue
         changed += 1
         if prev:
@@ -396,8 +436,8 @@ def build(root, full=False):
             except Exception:
                 pass
         loc = text.count("\n") + 1
-        cur.execute("INSERT INTO files(path,hash,lang,loc,flags) VALUES(?,?,?,?,?)",
-                    (rel, h, lang, loc, flags_for(rel)))
+        cur.execute("INSERT INTO files(path,hash,lang,loc,flags,mtime,size) VALUES(?,?,?,?,?,?,?)",
+                    (rel, h, lang, loc, flags_for(rel), st.st_mtime, st.st_size))
         fid = cur.lastrowid
         syms, imps = scan_text(text, lang)
         if syms:
@@ -491,12 +531,37 @@ def cmd_find(root, args):
     if not args:
         return usage()
     mode = "sym"
-    if args[0] in ("-f", "-t", "--importers", "--imports"):
+    if args[0] in ("-f", "-t", "--importers", "--imports", "--api"):
         mode, args = args[0], args[1:]
     if not args:
         return usage()
     q = args[0]
     rows = []
+    if mode == "--api":
+        # The one output shape STABLE enough to be a golden (ops/tests/): the public symbol surface
+        # of a path glob, `path<TAB>kind<TAB>name`, sorted, with every volatile field left out.
+        # Line numbers move when anything above them is edited and `churn` moves with git history,
+        # so both are excluded on purpose — a lock that reds on unrelated commits gets deleted.
+        # Leading-underscore names are dropped as private (py/js/ts/sh convention alike).
+        # Goes red exactly when a public symbol is added, removed, renamed, or moved file.
+        pat = q.replace("*", "%") if "*" in q else "%" + q + "%"
+        seen = set()
+        for path, kind, name in cur.execute(
+                "SELECT f.path,s.kind,s.name FROM symbols s JOIN files f ON f.id=s.file_id "
+                "WHERE f.path LIKE ?", (pat,)):
+            if name.startswith("_"):
+                continue
+            key = (path, kind, name)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append((0, path, 0, "%s\t%s\t%s" % (path, kind, name)))
+        rows.sort(key=lambda r: r[3])
+        if not rows:
+            return 1
+        for r in rows:                       # NEVER truncated by -n: a partial surface is a lie
+            print(r[3])
+        return 0
     if mode == "sym":
         like = "%" + q.lower() + "%"
         for name, kind, line, sig, path, churn, fanin, flags in cur.execute(
@@ -607,7 +672,8 @@ def cmd_stats(root):
 
 def usage():
     sys.stderr.write(
-        "usage: index.py find <symbol>|-f <glob>|-t <text>|--importers <path>|--imports <path> [-n N]\n"
+        "usage: index.py find <symbol>|-f <glob>|-t <text>|--importers <path>|--imports <path>\n"
+        "                       |--api <glob>   [-n N]\n"
         "       index.py show <path>#<symbol> | <path>:<line>\n"
         "       index.py stats | refresh | rebuild | selfcheck\n")
     return 2
