@@ -6,11 +6,24 @@ say() { printf '✅ %s\n' "$*"; }
 note() { printf '   %s\n' "$*"; }
 
 cfg() { # cfg <key> <default>  — reads "key: value" from CONVENTIONS.md, strips " # comment".
-  # A blank key with only a trailing comment ("lint:   # none") must read as EMPTY, not as the
-  # comment text — hence the leading s/^#.*$// (the space-anchored strip can't see it).
+  # ONE awk, never a pipeline. The old shape was sed|head|sed|tr|sed — five forks per call, and on
+  # Windows/Git Bash a fork costs ~240ms, so every cfg read took ~1.2s. The globals block calls cfg
+  # 4+ times on EVERY polaris invocation, and the PreToolUse write-guard invokes polaris TWICE per
+  # edit: that alone was ~8s per write against a 10s hook timeout, i.e. the guard was on the edge of
+  # failing OPEN and silently dropping the ownership gate. One fork instead of five fixes it.
+  # Semantics are byte-identical to the pipeline, including the two edge cases it existed for:
+  #   - first match wins  (was `head -1`, now `exit`)
+  #   - a blank key carrying only a trailing comment ("lint:   # none") reads EMPTY, not the comment
+  #     text (was the leading `s/^#.*$//`, now the `s ~ /^#/` test after left-trimming)
   local v=""
-  [ -f "$CONV" ] && v="$(sed -n "s/^$1:[[:space:]]*//p" "$CONV" | head -1 \
-      | sed -e 's/^#.*$//' -e 's/[[:space:]]#.*$//' | tr -d '\r' | sed -e 's/[[:space:]]*$//')"
+  [ -f "$CONV" ] && v="$(awk -v k="$1" '
+    index($0, k":")==1 {
+      s=substr($0, length(k)+2)
+      sub(/\r$/,"",s); sub(/^[ \t]*/,"",s)
+      if (s ~ /^#/) s=""; else sub(/[ \t]#.*$/,"",s)
+      sub(/[ \t]*$/,"",s)
+      print s; exit
+    }' "$CONV")"
   [ -n "$v" ] && printf '%s' "$v" || printf '%s' "$2"
 }
 

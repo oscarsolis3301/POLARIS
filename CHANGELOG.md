@@ -4,6 +4,50 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.18.0 — 2026-07-25
+
+**Stop paying for what you already know.** A run was burning tokens and hours on work no model
+needed to do: agents hunted for code with repeated greps, the Planner read the whole board to learn
+nine fields, a QA scout re-checked a green that a deterministic command had already proven, and
+nothing put a ceiling on a run at all. This release moves that work off the model and onto the
+machine — and fixes a guard that was quietly on its way to failing open.
+
+- **`polaris find` / `polaris show` — the one-hop answer to "where is X".** A generated SQLite index
+  (`.polaris/index.db`) over ~15 languages returns `path:line` + signature, one line per hit, ranked
+  exact → prefix → substring and boosted by git churn and import fan-in. `show <path>#<symbol>`
+  prints just that symbol's body instead of the file. Measured on this repo: a lookup that produced
+  an ambiguous 81-token grep dump now costs 36 tokens with the definition first. Stdlib python +
+  sqlite3, three tiers (FTS5 → LIKE → live scan) so it works with no compiler, no pip, and degrades
+  to plain Grep when there is no python at all. New `kit/ops/index.py`, `kit/ops/lib/search.sh`.
+- **`polaris check` — golden-output acceptance, zero LLM.** `ops/tests/<name>.cmd` runs and its
+  stdout is diffed against `<name>.expected` (optional `.rc` for the exit code). A missing golden is
+  RED, never silently green. Rides the existing `uat:` slot, so `qa` needed no change. Write the
+  pair once while the context is already in hand; every run afterwards costs a subprocess instead of
+  a subagent.
+- **`polaris board-fm` — the Planner stops reading the board.** One TAB line per task carrying the
+  nine fields the ready gate and dedupe actually use. Measured here: **159,093 B → 7,999 B, −94%**,
+  and the gap widens with every task you finish.
+- **The write-guard was heading for a silent failure.** It ran two full CLI startups per edit at
+  ~6.7s against a 10s hook timeout; under parallel builders it would exceed that and **fail open**,
+  dropping ownership enforcement with no sign. Root cause was `cfg`: a five-process pipeline costing
+  ~1.2s per config read on Windows, called four-plus times on every single invocation. Now one awk.
+  With a merged `_guard` entry point and a need-scoped module loader: **6,660 → 3,799 ms per write**,
+  18% of a raised 20s budget. A cost fix and a correctness fix in the same change.
+- **Runs are bounded.** `drain: plan` is the new default — one approval authorizes the plan the human
+  approved, not the whole ready queue. Plus `run_max_tasks` / `run_max_minutes` / `run_max_agents` /
+  `run_fix_waves`, checked at wave boundaries, ending in a clean stop that integrates what landed and
+  reports. The interview is capped at 3 rounds, matching INIT.
+- **`qa_scout: auto`** — the runtime scout spawns only where no automated check exists and the run
+  touched a declared `runnable:` path. It found real drift once; the fix became a permanent `verify:`
+  grep, which is the whole lifecycle. It should be earned, not assumed.
+- **`test_fast:`** — a per-task gate for repos whose suite outgrew the harness. This kit's own suite
+  measured 820s against a 600s tool ceiling, so every foreground run was timing out and being re-run;
+  the fast tier is 320s and completes. The full suite still gates the wave, `qa`, and CI.
+- **Rules maintenance is an agent's job** (owner decision). `ops/RULES.tsv` may be added to, edited,
+  and pruned directly, with the reason recorded inline. Removing a rule remains a judgement about
+  policy — never a way to get unstuck. Two long-missing rules landed with it: `ops/lib/` (unguarded
+  since the 5.16.0 split, so every installed module was quietly hand-editable) and `ops/index.py`.
+
 ## 5.17.0 — 2026-07-22
 
 **Seamless by default: the board reads the repo without stopping to ask.** Planning meant a

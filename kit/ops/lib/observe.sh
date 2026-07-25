@@ -92,6 +92,32 @@ cmd_status() {
   done
 }
 
+cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatter a Planner actually
+  # carves against, and nothing else. Default = the LIVE columns; `done/` is history and is opt-in
+  # (on a mature board it is ~98% of the bytes and answers no planning question). Replaces the
+  # PLANNER's "read ops/board/** frontmatter", which has no command behind it today — so the agent
+  # reads whole task files and pays for the prose body, which dwarfs the frontmatter ~4:1.
+  # Non-task files (backlog/IDEAS.md) carry no frontmatter and are skipped.
+  local cols="$*" col f id
+  [ -n "$cols" ] || cols="ready active backlog blocked"
+  for col in $cols; do
+    [ -d "$BOARD/$col" ] || die "no such column: $col (backlog ready active review done blocked)"
+  done
+  printf 'col\tid\tpts\twsjf\trisk\tdeps\towns\tcontract\ttitle\n'
+  for col in $cols; do
+    for f in "$BOARD/$col/"*.md; do
+      [ -e "$f" ] || break
+      head -1 "$f" | tr -d '\r' | grep -q '^---$' || continue
+      id="$(basename "$f" .md)"
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$col" "$id" \
+        "$(fm_get points "$f")" "$(fm_get wsjf "$f")" "$(fm_get risk "$f")" \
+        "$(fm_list depends_on "$f" | tr '\n' ',' | sed 's/,$//')" \
+        "$(fm_list files_owned "$f" | tr '\n' ',' | sed 's/,$//')" \
+        "$(fm_get contract "$f")" "$(fm_get title "$f")"
+    done
+  done
+}
+
 cmd_sweep() { # report orphans + stale + remote strays; --fix removes true orphans and merged strays
   local fix="${1:-}" d id found=0
   for d in "$LOCKS"/*/; do
@@ -441,6 +467,48 @@ cmd_rules() { # list + health-check ops/RULES.tsv
 $(rules_lines)
 EOF
   [ "$bad" -eq 0 ] && say "$n rule(s), all healthy" || die "rules health check failed — fix ops/RULES.tsv"
+}
+
+cmd_check() { # check [--only <glob>] [--update] — golden-output acceptance tests, ZERO LLM.
+  # ops/tests/<name>.cmd       one or more shell lines, run from the repo root
+  # ops/tests/<name>.expected  the golden stdout  (stderr is NOT captured — it is noisy and
+  #                            makes goldens flap; assert on stdout, or redirect inside the .cmd)
+  # ops/tests/<name>.rc        optional expected exit code, default 0
+  # Run it, diff it, done. This is what replaces an agent re-checking every widget/route by hand
+  # on every wave: the Builder writes the pair ONCE while it already has the context, and every
+  # run afterwards costs a subprocess instead of a subagent.
+  # --update rewrites goldens from actual output — ALWAYS a human/Builder decision, never automatic,
+  # because a golden that regenerates itself asserts nothing.
+  local only="*" upd=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --only) only="${2:?--only needs a glob}"; shift 2;;
+      --update) upd=1; shift;;
+      *) die "usage: polaris check [--only <glob>] [--update]";;
+    esac
+  done
+  local dir="$OPS/tests" f name exp rcf want got grc red=0 n=0
+  [ -d "$dir" ] || { note "no ops/tests/ yet — add <name>.cmd + <name>.expected (polaris check --update writes the golden)"; return 0; }
+  for f in "$dir"/*.cmd; do
+    [ -e "$f" ] || break
+    name="$(basename "$f" .cmd)"
+    case "$name" in $only) ;; *) continue;; esac
+    n=$((n+1)); exp="$dir/$name.expected"; rcf="$dir/$name.rc"
+    got="$( cd "$PRIMARY" && bash -c "$(cat "$f")" 2>/dev/null )"; grc=$?
+    want=0; [ -f "$rcf" ] && want="$(tr -d ' \r\n' < "$rcf")"
+    if [ "$upd" -eq 1 ]; then printf '%s\n' "$got" > "$exp"; say "updated golden: $name"; continue; fi
+    if [ ! -f "$exp" ]; then printf '⛔ %s — no golden yet (polaris check --only %s --update)\n' "$name" "$name"; red=1; continue; fi
+    if [ "$grc" != "$want" ]; then printf '⛔ %s — exit %s, expected %s\n' "$name" "$grc" "$want"; red=1; continue; fi
+    if printf '%s\n' "$got" | diff -q - "$exp" >/dev/null 2>&1; then say "$name"
+    else
+      printf '⛔ %s — output differs:\n' "$name"
+      printf '%s\n' "$got" | diff -u "$exp" - 2>/dev/null | sed -n '3,12p' | sed 's/^/     /'
+      red=1
+    fi
+  done
+  [ "$n" -eq 0 ] && { note "no goldens matched '$only'"; return 0; }
+  [ "$red" -eq 0 ] || die "check: $n golden(s) run, at least one red"
+  say "check: $n golden(s), all green"
 }
 
 cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS suite (test/lint/

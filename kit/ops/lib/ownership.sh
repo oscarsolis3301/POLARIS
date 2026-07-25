@@ -139,6 +139,26 @@ cmd_match() { # _match <repo-relative-path> <ID> — internal: hook guard + tool
   fm_list files_owned "$tf" | owned_match "$rel" && exit 0 || exit 1
 }
 
+cmd_guard() { # _guard <repo-relative-path> <ID|-> [payload-file] — internal: BOTH gates in ONE
+  # process. The write-guard fires on every Edit/Write; calling `_rules` then `_match` meant two
+  # full polaris startups per write, and on Windows/Git Bash each is ~3.8s (forks dominate), so a
+  # Builder's write cost ~7.6s against a 10s hook timeout — close enough to the ceiling that under
+  # parallel lanes the hook timed out and FAILED OPEN, silently dropping the ownership gate.
+  # Same two checks, same order, same exit codes, one startup. `-` for ID = rules gate only
+  # (non-Builder session). rc 0 clean · 1 rules deny · 3 ownership deny (distinct so the guard
+  # prints the right remedy without re-running anything).
+  local rel="${1:?}" id="${2:--}" body="${3:-}"
+  rule_scan_path "$rel" || exit 1
+  [ -n "$body" ] && [ -f "$body" ] && { rule_scan_content_file "$rel" "$body" || exit 1; }
+  [ "$id" = "-" ] && exit 0
+  local tf
+  tf="$(task_file "$id" active)" || tf="$(task_file "$id")" || exit 3
+  case "$rel" in
+    "ops/board/active/$id.md"|"ops/board/backlog/IDEAS.md") exit 0;;
+  esac
+  fm_list files_owned "$tf" | owned_match "$rel" && exit 0 || exit 3
+}
+
 cmd_rules_check() { # _rules <repo-relative-path> [payload-file] — internal: guard's policy gate.
   # Exit 0 = clean. Exit 1 = a rule denies (message on stderr). Payload file, when
   # given, holds the text about to be written (guard extracts it from tool_input).

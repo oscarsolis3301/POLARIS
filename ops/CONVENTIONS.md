@@ -1,14 +1,44 @@
 # CONVENTIONS
 base: main                  # base branch
 claim: local-lock           # one machine, many sessions — file lock, no network round-trip
-integration: batch          # suite ~3min (selftest+pack), over paranoid's <2min rule — and sprint-4 per-land coverage was selftest-only anyway. Batch = full suite once per wave + final qa; a red land is found by the bisect recipe. If the harness denies `build:` invoked directly (both shells, sprint 4), the human-approved fallback (2026-07-20) is the repo's own gate `bash ops/polaris qa`; record the reduced per-land coverage in the burndown. If the gate is ALSO denied, STOP and ask the human — never route around a denial by any other means. Revisit if kickbacks appear.
+integration: batch          # suite MEASURED 820s / 13.7min (.polaris/last-suite-seconds 2026-07-25) — NOT the ~3min this line claimed until then; far over paranoid's <2min rule — and sprint-4 per-land coverage was selftest-only anyway. Batch = full suite once per wave + final qa; a red land is found by the bisect recipe. If the harness denies `build:` invoked directly (both shells, sprint 4), the human-approved fallback (2026-07-20) is the repo's own gate `bash ops/polaris qa`; record the reduced per-land coverage in the burndown. If the gate is ALSO denied, STOP and ask the human — never route around a denial by any other means. Revisit if kickbacks appear.
 voice: standard             # plain, friendly English when talking to the human
 autolaunch: wt              # Planner opens a Builder pane per ready task in Windows Terminal, beside you
 stale_hours: 1              # sweep warns on active locks older than this — build avg 0.2h (n=28); an hour-idle lock is a dead lane, not a slow one (sprint 4: 2 subagent stalls + 1 API-error death)
 test: bash kit/ops/polaris doctor --selftest
+test_fast: bash kit/ops/polaris doctor --selftest --only fmlist,tcm,brain,grant
+# ^ the BUILDER's pre-handoff gate. MEASURED 2026-07-25: spine+1 drill 144s · this 4-drill subset
+# 320s · full suite 820s. A 61% cut, and critically it lands UNDER the harness's 600s tool ceiling,
+# so it COMPLETES instead of timing out and being re-run. Budget when editing this list: 144s of
+# unskippable spine (verification-tiering.md:17-19) + ~44s per drill — drills are NOT free, so keep
+# the subset to four and re-measure if you add one.
+# (ops/contracts/verification-tiering.md: "check what changed
+# often, prove everything once"). `test:` above is the WAVE gate — `qa`, the integrator, and CI
+# still run it in full, so no gate disappears; a defect only the full drill catches now surfaces
+# one wave later instead of one task later. That is a deliberate trade, made because `test:` is
+# MEASURED at 820s (.polaris/last-suite-seconds) against the harness's 600s tool ceiling — every
+# foreground full-suite run was timing out, returning nothing, and being re-run.
+# Subset choice is NOT arbitrary: it excludes `rules` and `qa`, which the Learned log records as
+# fixture-coupled (`rules` leaves a contract-less ready task that only an intervening `drift` drill
+# masks). Adding either without `drift` produces FALSE reds — and a false red costs a whole fix wave.
 build: python kit/ops/pack.py --allow-dirty
 lint:                       # none — bash + python, no package manager
 typecheck:                  # none
+uat: bash kit/ops/polaris check
+# ^ golden-output acceptance (ops/tests/<name>.cmd vs <name>.expected). Rides the EXISTING uat:
+# slot that `qa` already loops over, so qa needs no change and verification-tiering.md needs no
+# amendment. This is the tier that replaces an agent re-checking behavior by hand every wave:
+# write the pair once, then it costs a subprocess forever after. Add a golden whenever a bug
+# escapes — that is how the suite grows without anyone budgeting time to "write tests".
+
+# --- run bounds (2026-07-25 token/wall-clock audit) — a loop with no ceiling is not autonomy ---
+drain: plan                 # plan | queue | backlog. CHANGED DEFAULT: one "go" authorizes the plan the human just approved, not the whole ready queue. Dependency chains inside the plan still loop automatically
+run_max_tasks: 12           # tasks a single run will BUILD (0 = unbounded)
+run_max_minutes: 90         # wall clock since kickoff; checked at wave boundaries only, never mid-task
+run_max_agents: 20          # cumulative subagent spawns per run
+run_fix_waves: 2            # was hard-coded in CONDUCTOR step 6.5
+qa_scout: auto              # auto | off | always. auto spawns the scout ONLY when uat: is empty AND the run touched a runnable: path. runnable: unset ⇒ off
+runnable:                   # globs of this repo's runnable surface. Deliberately UNSET: `test:` already drives the whole CLI end-to-end across 18 drills, so a scout here is pure duplication
 
 branch format: feat/<ID> · integration branch: integrate/<date>
 commit format: type(scope): message   # types: feat fix chore test docs

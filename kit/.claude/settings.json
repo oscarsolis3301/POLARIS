@@ -12,7 +12,7 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/ownership-guard.sh\"",
-            "timeout": 10
+            "timeout": 20
           }
         ]
       }

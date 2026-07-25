@@ -15,6 +15,45 @@ drill_fmlist() {
     [ "$(fm_list depends_on "$T/fmlist.md" | wc -l | tr -d ' ')" = "2" ] || { echo "FM_LIST DEPENDS_ON COUNT FAIL (inline flow list must yield 2 items, not 1)"; exit 1; }
     [ "$(fm_list depends_on "$T/fmlist.md" | tr '\n' ',')" = "T-A,T-B," ] || { echo "FM_LIST DEPENDS_ON VALUES FAIL"; exit 1; }
 }
+drill_newcmds() {
+    # board-fm · check · _guard — the 2026-07-25 token/wall-clock commands.
+    # HERMETIC (ops/contracts/selftest-sharding.md v1.1): every artifact created here is removed
+    # before returning, so any --only/--parallel subset containing this drill stays honest.
+    "$SELF" board-fm > "$T/bfm.out" 2>&1 || { echo "BOARD-FM RC FAIL"; exit 1; }
+    head -1 "$T/bfm.out" | grep -q '^col	id	pts' || { echo "BOARD-FM HEADER FAIL (agents parse this header)"; exit 1; }
+    "$SELF" board-fm nosuchcolumn >/dev/null 2>&1 && { echo "BOARD-FM BADCOL FAIL (must reject)"; exit 1; }
+    printf '# not a task\n' > ops/board/backlog/IDEAS.md
+    "$SELF" board-fm backlog | grep -q 'IDEAS' && { echo "BOARD-FM IDEAS FAIL (frontmatter-less files must be skipped)"; exit 1; }
+    # _guard: 0 clean · 1 rules deny · 3 not owned. One call replaces _rules + _match.
+    # Seed our OWN rule (drill_rules pattern) — the throwaway repo's RULES.tsv is whatever
+    # init-board wrote, NOT this repo's, so asserting on ops/polaris would be a false premise.
+    "$SELF" _guard src/newcmds-ok.txt - >/dev/null 2>&1 || { echo "GUARD CLEAN FAIL (want rc 0)"; exit 1; }
+    printf 'src/newcmds-deny.txt\tpath\t-\tnewcmds drill\n' >> ops/RULES.tsv
+    "$SELF" _guard src/newcmds-deny.txt - >/dev/null 2>&1; [ $? -eq 1 ] || { echo "GUARD RULES FAIL (want rc 1)"; exit 1; }
+    sed -i.bak '/newcmds drill/d' ops/RULES.tsv && rm -f ops/RULES.tsv.bak
+    "$SELF" _guard src/newcmds-ok.txt T-NOPE >/dev/null 2>&1; [ $? -eq 3 ] || { echo "GUARD OWN FAIL (want rc 3)"; exit 1; }
+    # RULES.tsv is agent-maintainable (CLAUDE.md invariant 11, owner decision 2026-07-25): writes
+    # to it are NOT specially gated. Assert that, so a future guard change cannot silently re-lock
+    # policy maintenance without this drill going red and forcing the decision back into the open.
+    { cat ops/RULES.tsv; printf 'src/ao-new.txt\tpath\t-\tdrill\n'; } > "$T/ao.add"
+    "$SELF" _guard ops/RULES.tsv - "$T/ao.add" >/dev/null 2>&1 || { echo "RULES ADD FAIL (adding a rule must be allowed)"; exit 1; }
+    grep -v 'installed copy' ops/RULES.tsv > "$T/ao.del" 2>/dev/null || cp ops/RULES.tsv "$T/ao.del"
+    "$SELF" _guard ops/RULES.tsv - "$T/ao.del" >/dev/null 2>&1 || { echo "RULES EDIT FAIL (editing rules must be allowed)"; exit 1; }
+    rm -f "$T/ao.add" "$T/ao.del"
+    # check: missing golden is RED (never silently green) · matching is green · differing is red
+    mkdir -p ops/tests
+    printf 'echo hello\n' > ops/tests/st.cmd
+    "$SELF" check --only st >/dev/null 2>&1 && { echo "CHECK NOGOLDEN FAIL (missing golden must be red)"; exit 1; }
+    "$SELF" check --only st --update >/dev/null 2>&1 || { echo "CHECK UPDATE FAIL"; exit 1; }
+    grep -q '^hello$' ops/tests/st.expected || { echo "CHECK GOLDEN CONTENT FAIL"; exit 1; }
+    "$SELF" check --only st >/dev/null 2>&1 || { echo "CHECK GREEN FAIL"; exit 1; }
+    printf 'goodbye\n' > ops/tests/st.expected
+    "$SELF" check --only st >/dev/null 2>&1 && { echo "CHECK RED FAIL (a differing golden must be red)"; exit 1; }
+    printf 'echo hi\n' > ops/tests/st.cmd; printf 'hi\n' > ops/tests/st.expected; printf '3\n' > ops/tests/st.rc
+    "$SELF" check --only st >/dev/null 2>&1 && { echo "CHECK RC FAIL (wrong exit code must be red)"; exit 1; }
+    rm -rf ops/tests                                  # hermetic: leave the fixture as found
+    rm -f ops/board/backlog/IDEAS.md
+}
 drill_grant() {
     # ================== T-005 grant drills (ops/contracts/grant.md) ==================
     # sanctioned files_owned amendment: refusals (wrong column · missing -m · overlap, each

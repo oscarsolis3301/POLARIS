@@ -88,19 +88,21 @@ if [ -z "$REL" ]; then
   exit 2
 fi
 
-# --- gate 1: RULES — every session, every branch ------------------------------
-MSG="$("$TOP/ops/polaris" _rules "$REL" "$BODY" 2>&1 >/dev/null)" || {
+# --- both gates in ONE polaris startup ----------------------------------------
+# RULES (every session, every branch) then OWNERSHIP (only inside a Builder worktree, feat/<ID>).
+# Same checks, same order as the old two-call form — but one process. Each polaris startup is
+# ~3.8s on Windows/Git Bash, so two calls put a Builder's write at ~7.6s against this hook's
+# timeout; at the ceiling the hook is killed and FAILS OPEN, dropping the ownership gate silently.
+# rc: 0 clean · 1 a rule denies · 3 not in files_owned.
+case "$BR" in feat/*) ID="${BR#feat/}";; *) ID="-";; esac
+MSG="$("$TOP/ops/polaris" _guard "$REL" "$ID" "$BODY" 2>&1 >/dev/null)"; RC=$?
+[ "$RC" -eq 0 ] && exit 0
+if [ "$RC" -eq 1 ]; then
   { printf '%s\n' "$MSG"
     echo "polaris-guard BLOCKED by ops/RULES.tsv. Rules bind even inside files_owned."
     echo "If the rule is wrong, that is a HUMAN decision: propose the change, do not work around it."
   } >&2
   exit 2
-}
-
-# --- gate 2: OWNERSHIP — only inside a Builder worktree (branch feat/<ID>) ----
-case "$BR" in feat/*) ID="${BR#feat/}";; *) exit 0;; esac
-if "$TOP/ops/polaris" _match "$REL" "$ID" 2>/dev/null; then
-  exit 0
 fi
 {
   echo "polaris-guard BLOCKED: '$REL' is NOT in task $ID's files_owned."

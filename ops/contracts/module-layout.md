@@ -118,7 +118,75 @@ After EVERY extraction task, in this order:
 `cmd_status` (lib/observe.sh) → which calls `cfg`/`fm_get` (lib/core.sh) — output identical to 5.15.0.
 Delete `ops/lib/core.sh` → `⛔ POLARIS: ops/lib/core.sh is missing — this kit is incomplete. …` rc 1.
 
+## v2 — the loader becomes need-scoped (2026-07-25, token/wall-clock audit)
+
+**Why v1's verbatim pin had to move.** The PreToolUse write-guard (`ops/hooks/ownership-guard.sh`)
+calls `polaris _rules` AND `polaris _match` on **every** Edit/Write/MultiEdit. Under v1 each call
+sourced all 14 modules — **248,879 B, of which those two commands need 22,704 B (core + ownership):
+90% waste.** Measured cost ~2 s per invocation, ~4.4 s per write. `.claude/settings.json` gives the
+guard a **10 s** timeout, so with parallel builders it exceeded the budget and the guard **failed
+open** — silently dropping the ownership gate mid-wave. This is therefore a CORRECTNESS fix that
+happens to also be a cost fix; v1's pin was actively unsafe.
+
+`_match`/`_rules` call exactly: `fm_list` `task_file` (core) · `owned_match` `rule_scan_path`
+`rule_scan_content_file` (ownership). Nothing else. Verified by reading both function bodies.
+
+**The loader — pinned verbatim, v2:**
+```bash
+# --- lib loader: every function body lives in lib/ — fixed order, core first ---
+# The write-guard calls _match/_rules on EVERY edit and needs only core+ownership (22KB of 249KB).
+# Sourcing all 14 there cost ~2s/call — twice per write against a 10s hook timeout, which under
+# parallel builders EXCEEDED it and made the guard fail OPEN. Load what the command needs.
+OPS_DIR="$(cd "$(dirname "$0")" && pwd)"
+case "${1:-}" in
+  _match|_rules) _mods="core ownership" ;;
+  *)             _mods="core ownership builder integrate knowledge observe admin
+                        selftest/spine selftest/board selftest/history selftest/report
+                        selftest/brain selftest/policy selftest/remote" ;;
+esac
+for _m in $_mods; do
+  if [ ! -f "$OPS_DIR/lib/$_m.sh" ]; then
+    printf '⛔ POLARIS: ops/lib/%s.sh is missing — this kit is incomplete. Re-run the installer (bash ops/install.sh) or fetch a fresh kit: ops/polaris update\n' "$_m" >&2
+    exit 1
+  fi
+  . "$OPS_DIR/lib/$_m.sh"
+done
+unset _m _mods
+```
+- Both v1 rules survive: the missing-lib message is still raw `printf` (core.sh may be what's
+  missing), and both lists are still LITERAL, never a glob.
+- The `case` is at top level, NOT inside `$(...)` — the bash 3.2 restriction is unaffected.
+- `_mods` is unquoted on purpose in `for _m in $_mods` (word-splitting is the mechanism); this is
+  the one place `set -u` word-splitting is intended. Names contain no globs or spaces.
+- **Scope discipline:** ONLY `_match`/`_rules` get the short list. Every other command keeps the
+  full 14 — a subcommand that silently lost a module would fail far from its cause.
+
+### v2 grand-total band: [3750, 4120] → [3750, 4300]
+
+v1.1's ceiling was derived before the 2026-07-25 performance work and is now exceeded. Itemized
+re-derivation from the measured 4058 at v1.1:
+
+| delta | lines | why |
+|---|---|---|
+| `cfg` one-awk rewrite (`core.sh`) | +12 | was a 5-fork pipeline at ~1.2s/call on Windows; the globals block calls it 4+ times on EVERY invocation |
+| need-scoped loader `case` (entry) | +9 | this contract's v2 above |
+| `cmd_guard` (`ownership.sh`) | +18 | merges the write-guard's two polaris startups into one |
+| `cmd_board_fm` (`observe.sh`) | +24 | kills the Planner's ~40k-token board read |
+| **measured total** | **4131** | over v1.1's 4120 |
+| planned: `search.sh` shim | +90 | `polaris find`/`show`; all real logic lives in `ops/index.py`, which this band does NOT count |
+| planned: `selftest/search.sh` | +45 | its drills |
+| **projected** | **~4266** | +34 headroom under the new 4300 |
+
+The band exists to stop logic creeping back into the entry script and to keep modules readable — it
+is not a cap on the CLI's capability. Entry `< 500 lines` and per-module `≤ 1,200` are UNCHANGED and
+remain the real structural guards. **Design consequence, and the right one:** because `ops/index.py`
+is not counted, the band actively pushes indexing logic into python and keeps `search.sh` a thin
+shim — which is also what makes a native engine a drop-in later.
+
 ## Changelog
+- v2 2026-07-25: loader is need-scoped for `_match`/`_rules`/`_guard` (guard hot path) — correctness
+  fix, the guard was exceeding its 10s hook timeout and failing open. Grand-total band
+  [3750, 4120] → [3750, 4300], itemized above. Entry <500 and per-module ≤1,200 UNCHANGED.
 - v1 2026-07-21: created for T-039, T-040, T-041, T-042, T-043, T-044, T-045 (plan: many-hands)
 - v1.1 2026-07-21: grand-total band [3750, 3985] → [3750, 4120] — v1 under-counted T-040's
   deliberate `--parallel` code (~150 measured lines) + 10 module headers; band re-derived itemized
