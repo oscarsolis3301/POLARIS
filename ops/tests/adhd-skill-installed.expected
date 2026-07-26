@@ -1,0 +1,11 @@
+kit has SKILL.md
+kit has LICENSE
+kit has SOURCE.md
+install.sh copies it
+uninstall removes it
+name: i-have-adhd
+opt-in flag intact
+MIT licence present
+attribution intact
+rules: 10
+PROTOCOL carries the always-on layer

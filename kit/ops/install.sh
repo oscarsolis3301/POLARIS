@@ -171,9 +171,22 @@ else
   say "CLAUDE.md: POLARIS prepended above existing content (managed block)"
 fi
 
-# --- .claude/ (skill + PreToolUse write-guard) ----------------------------------
+# --- .claude/ (skills + PreToolUse write-guard) ---------------------------------
 mkdir -p "$TARGET/.claude/skills/polaris"
 cp "$KIT/.claude/skills/polaris/SKILL.md" "$TARGET/.claude/skills/polaris/SKILL.md"
+# i-have-adhd (MIT, github.com/ayghri/i-have-adhd) — vendored so `/i-have-adhd` works the moment
+# POLARIS is installed, with no `claude plugin install` step and no network call. Its LICENSE and
+# SOURCE.md ship beside it; see kit/.claude/skills/i-have-adhd/SOURCE.md for why it is vendored and
+# why ops/PROTOCOL.md § VOICE also carries the discipline (the skill is opt-in by its own
+# frontmatter, so on its own it would never fire). Copied whole — never partially.
+if [ -f "$KIT/.claude/skills/i-have-adhd/SKILL.md" ]; then
+  mkdir -p "$TARGET/.claude/skills/i-have-adhd"
+  for _f in SKILL.md LICENSE SOURCE.md; do
+    [ -f "$KIT/.claude/skills/i-have-adhd/$_f" ] \
+      && cp "$KIT/.claude/skills/i-have-adhd/$_f" "$TARGET/.claude/skills/i-have-adhd/$_f"
+  done
+  unset _f
+fi
 SJ="$TARGET/.claude/settings.json"
 if [ ! -f "$SJ" ]; then
   cp "$KIT/.claude/settings.json" "$SJ"; say ".claude/ installed (skill + hooks + read-only permissions)"

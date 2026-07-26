@@ -21,15 +21,17 @@ is reading points, risk, `express:`, `publish:` and the RULES-guarded paths dire
 If `triage` says `full` because the board is empty and the human just asked for something small,
 you may author the single task yourself (step 1) and re-run `triage` to confirm `solo`.
 
-## Context — brain first, repo second
-Read `.polaris/brain/INDEX.md` FIRST, then only what it routes you to. Fall back to `ops/MAP.md`
-when no brain exists. Use `bash ops/polaris find <symbol>` before any Grep — one hop, ~0.7s.
+## Context — ONE command
+Once the task exists, `bash ops/polaris pack <ID>` returns all of it in a single call: the task, its
+contract, the house style to match, what you own, the API surface not to break, the traps recorded
+against those paths, and your `verify:` list. Before the task exists, `.polaris/brain/INDEX.md`
+first and `ops/MAP.md` as the fallback. `bash ops/polaris find <symbol>` before any Grep — one hop.
 Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 
 ## The path
 1. **Author the task** (skip if one already sits in `ready/`). From `ops/templates/TASK.md`, into
    `ops/board/ready/<ID>.md`. Keep it honest and small:
-   - `points:` 1 or 2 · `risk: normal` · `files_owned:` the exact paths you will touch, nothing
+   - `points:` 1 to 3 · `risk: normal` · `files_owned:` the exact paths you will touch, nothing
      speculative · `context_files:` the nearest existing example · `contract:` only if there is a
      real seam — a change this size usually has none.
    - `verify:` the NARROW check that proves THIS change, each under ~10s. **Never the full suite**

@@ -4,6 +4,88 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.21.0 — 2026-07-26
+
+**The phases were never the expense. The contexts were.**
+
+The standing theory was that POLARIS burns tokens because every change — even a one-line change — is
+dragged through planner → builder → integrator → QA, paying at each phase. Measured, that is half
+right, and the wrong half is the expensive one. `qa`, `verify`, `check`, `triage` and `drift` are
+pure shell with zero LLM calls; cutting a phase removes a gate and saves nothing.
+
+What costs is that every context carries a passenger. Measured on the author's machine: **251
+skill/agent/command definition files under `~/.claude` inject 34,119 B (~8,500 tokens) into the
+system prompt of every session and every subagent it spawns**, invoked or not. A conductor run
+opens 6–8 contexts. 197 of those files were the claude-flow/RuFlo agent library, which POLARIS has
+never called once.
+
+| | before | after |
+|---|---|---|
+| unused definitions per context | 24,393 B (~6,100 tok) | **0, archived** |
+| …per 6–8 context run | 36,588–48,784 tok | **0** |
+| `ownership-guard.sh` (every Edit/Write) | 4,045ms | **976ms** |
+| `kit/CLAUDE.md` (injected into every subagent) | 9,340 B | **7,607 B** |
+| a Builder's context assembly | 6–15 tool calls | **1** |
+| `polaris slim` itself | 1m52s | **2.7s** |
+
+- **`polaris slim` — the token tax, measured and recoverable.** Reports what every context pays,
+  per family, and what a run pays for it. `--apply` MOVES the identified machinery into
+  `~/.claude/.polaris-archived/`; `--restore` puts it back (verified byte-identical). It is
+  deny-by-default about *archiving*: three classes, not two, and anything it cannot positively
+  identify as claude-flow machinery is reported and left alone. The first cut had two classes and
+  would have archived `apple-design`, `frontend-design` and `emil-design-eng` — craft skills a human
+  installed on purpose. The installer prints the report and never applies it.
+- **`polaris pack <ID>` — one call replaces a Builder's whole cold start.** Task `## Why` and
+  acceptance, the contract verbatim, the repo's *detected* house style, owned vs read-only files,
+  the code-map for every owned directory, the public API surface not to break, the traps recorded
+  against those exact paths, and the `verify:` list. "Read the brain first, `find` before Grep" was
+  prose in five role files and every kickoff — prose a model can skip, and that an obedient model
+  spends 6–15 round trips obeying. Now it is a command whose output *is* the context.
+  Contract: `ops/contracts/context-pack.md`.
+- **`polaris harness` — the app's test suite, generated once, run forever.** The behaviour tier above
+  `check --scaffold --app`, which locks shape by reading files and so cannot tell you the app still
+  boots. Detects the stack, writes ONE runnable suite (pytest or `node --test`), and captures a
+  baseline inventory. Three sweeps — every module imports · every parameterless GET route answers
+  non-5xx · every declared entry point runs `--help` — plus "nothing disappeared" against the
+  baseline. **A sweep that cannot find what it needs SKIPS and says why; it never passes by
+  asserting nothing, and never invents an app factory's arguments.** Verified against a Flask
+  fixture (broken route caught, fixed route green, deleted module caught, deleted route caught) and
+  a Node fixture (removed npm script caught). Contract: `ops/contracts/app-harness.md`.
+- **The write-guard was failing open, and now it does not.** It cost 4,045ms per Edit, of which
+  2,900ms was proving Python exists (`python3 -c pass` 559ms + `python -c pass` 920ms) and starting
+  it to parse one JSON object. At twice that cost it exceeded its 10s hook timeout under parallel
+  builders, got killed, and **silently dropped all three gates**. Now: the interpreter answer is
+  cached (as `index_engine()` has always done for the index), `file_path`/`cwd` are read by the same
+  pure-bash JSON parser `readonly-allow.sh` uses, and Python is not started at all unless a
+  `content` rule could actually match — most repos have none. On a machine with no Python the path
+  and ownership gates are now **enforced** rather than skipped entirely.
+- **`find … -exec <read-only verb>` stops asking permission.** `-exec` is a launcher, so it is
+  exactly as safe as what it launches — the same reasoning `xargs` has always had. It now recurses
+  through the verb gate. `find . -exec rm`, `-exec sed -i`, `-exec sort -o`, `-exec python`,
+  `-exec bash -c`, `-execdir`, and a `-o -delete` tail all still stop and ask. `{}` is accepted as a
+  literal because bash requires whitespace after `{` to open a group, so `{}` can never be command
+  syntax. The golden battery grew 47 → 63 cases.
+- **SOLO is the default lane, and the lane is a command.** `start` and any unprompted work request
+  now run `bash ops/polaris triage` and take line 1 — no more guessing SOLO-vs-CONDUCTOR from prose,
+  where a wrong guess toward `full` costs a whole sprint of contexts. The SOLO envelope widens from
+  ≤2 to ≤3 points: this repo's own calibration records that points predict scope and merge risk, not
+  wall clock (5pt p50 = 2pt p50 = 0.5h, n=8, 0 kickbacks). Every gate still runs — SOLO collapses
+  sessions, never checks.
+- **`i-have-adhd` ships with the kit** (MIT, github.com/ayghri/i-have-adhd), vendored verbatim with
+  its licence and a `SOURCE.md`, so `/i-have-adhd` works the moment POLARIS is installed with no
+  `claude plugin install` step. Its frontmatter sets `disable-model-invocation: true`, so on its own
+  it would never fire — `ops/PROTOCOL.md` § VOICE therefore carries the same discipline as seven
+  always-on rules under BOTH voices. Less preamble is directly fewer output tokens.
+  `ops/tests/adhd-skill-installed` proves it landed, licence and opt-in flag intact.
+- **`bench.sh --context`** reports injected-context bytes per source, so the claims above are
+  reproducible rather than asserted. `ops/PROTOCOL.md` gains § LANES (why a lane is a command, why
+  one role never does two jobs) — moved out of the router, which every subagent pays for.
+- **Answered, with numbers: no, a native C/Rust search engine is not the fix.** `bash -c true` costs
+  115ms on this machine; `find`'s 810ms is ~115ms bash + ~500ms Python start + ~100ms of query, and
+  `grep -rn` beats it outright at this repo size. A native binary would save ~600ms of wall clock
+  and **zero tokens**. The win is cutting the NUMBER of calls, which is what `pack` does. The
+  `index_engine()` seam stays for the day a repo is large enough to change that arithmetic.
+
 ## 5.20.0 — 2026-07-25
 
 **Measure first, then fix what the measurement actually found.** Every performance claim in this

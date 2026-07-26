@@ -57,6 +57,7 @@ kit/ops/PROMPTS.md	heading	Once per repo — only if you're doing it manually
 kit/ops/PROMPTS.md	heading	PROMPTS — copy, paste, go
 kit/ops/PROMPTS.md	heading	Replies the human gives mid-run
 kit/ops/PROMPTS.md	heading	Watching
+kit/ops/PROTOCOL.md	heading	LANES — why the lane is a command, and why a role never does two jobs
 kit/ops/PROTOCOL.md	heading	MODEL NOTES (whichever model runs this)
 kit/ops/PROTOCOL.md	heading	MODEL ROUTING (cost — set per session by the human)
 kit/ops/PROTOCOL.md	heading	POLARIS v5 — PROTOCOL reference
@@ -64,6 +65,7 @@ kit/ops/PROTOCOL.md	heading	STATE = THE BOARD (git-tracked, human-readable)
 kit/ops/PROTOCOL.md	heading	THE TOOL — `ops/polaris`
 kit/ops/PROTOCOL.md	heading	TOKEN DISCIPLINE — this is how we stay cheap and fast
 kit/ops/PROTOCOL.md	heading	VOICE — how you TALK to the human (`voice:` in `ops/CONVENTIONS.md`, default `standard`)
+kit/ops/bench.sh	fn	ctx_b
 kit/ops/bench.sh	fn	ms
 kit/ops/bootstrap.py	const	FLAGS
 kit/ops/bootstrap.py	const	PERMS
@@ -101,6 +103,7 @@ kit/ops/dashboard.py	fn	repo_root
 kit/ops/dashboard.py	fn	sh
 kit/ops/dashboard.py	fn	signature
 kit/ops/hooks/ownership-guard.sh	fn	cleanup
+kit/ops/hooks/ownership-guard.sh	fn	jstr
 kit/ops/hooks/ownership-guard.sh	fn	lc
 kit/ops/hooks/ownership-guard.sh	fn	norm
 kit/ops/hooks/readonly-allow.sh	fn	awk_ok
@@ -150,7 +153,9 @@ kit/ops/install.sh	fn	log
 kit/ops/install.sh	fn	note
 kit/ops/install.sh	fn	protocol_text
 kit/ops/install.sh	fn	say
+kit/ops/lib/admin.sh	fn	claude_home
 kit/ops/lib/admin.sh	fn	cmd_init_board
+kit/ops/lib/admin.sh	fn	cmd_slim
 kit/ops/lib/admin.sh	fn	cmd_uninstall
 kit/ops/lib/admin.sh	fn	cmd_update
 kit/ops/lib/admin.sh	fn	cmd_upgrade
@@ -158,15 +163,19 @@ kit/ops/lib/admin.sh	fn	cmd_version
 kit/ops/lib/admin.sh	fn	kit_zip_version
 kit/ops/lib/admin.sh	fn	refresh_machine_kit
 kit/ops/lib/admin.sh	fn	semver_gt
+kit/ops/lib/admin.sh	fn	slim_scan
 kit/ops/lib/admin.sh	fn	update_check_maybe
 kit/ops/lib/admin.sh	fn	ver
 kit/ops/lib/builder.sh	fn	cmd_claim
 kit/ops/lib/builder.sh	fn	cmd_grant
 kit/ops/lib/builder.sh	fn	cmd_handoff
+kit/ops/lib/builder.sh	fn	cmd_pack
 kit/ops/lib/builder.sh	fn	cmd_release
 kit/ops/lib/builder.sh	fn	cmd_resume
 kit/ops/lib/builder.sh	fn	cmd_verify
 kit/ops/lib/builder.sh	fn	grant_append_owned
+kit/ops/lib/builder.sh	fn	pack_brain_grep
+kit/ops/lib/builder.sh	fn	pack_section
 kit/ops/lib/core.sh	fn	base_push_clear
 kit/ops/lib/core.sh	fn	base_push_reject
 kit/ops/lib/core.sh	fn	board_commit
@@ -246,12 +255,14 @@ kit/ops/lib/knowledge.sh	fn	sprint_goal
 kit/ops/lib/knowledge.sh	fn	sprint_hdr
 kit/ops/lib/knowledge.sh	fn	sprint_hdr_num
 kit/ops/lib/knowledge.sh	fn	ts_date
+kit/ops/lib/observe.sh	fn	baseline
 kit/ops/lib/observe.sh	fn	cmd_board_fm
 kit/ops/lib/observe.sh	fn	cmd_check
 kit/ops/lib/observe.sh	fn	cmd_dash
 kit/ops/lib/observe.sh	fn	cmd_doctor
 kit/ops/lib/observe.sh	fn	cmd_drift
 kit/ops/lib/observe.sh	fn	cmd_fleet
+kit/ops/lib/observe.sh	fn	cmd_harness
 kit/ops/lib/observe.sh	fn	cmd_metrics
 kit/ops/lib/observe.sh	fn	cmd_notify_gate
 kit/ops/lib/observe.sh	fn	cmd_qa
@@ -266,6 +277,11 @@ kit/ops/lib/observe.sh	fn	dep_reaches
 kit/ops/lib/observe.sh	fn	find_claude
 kit/ops/lib/observe.sh	fn	find_claude_windows
 kit/ops/lib/observe.sh	fn	finding
+kit/ops/lib/observe.sh	fn	harness_baseline
+kit/ops/lib/observe.sh	fn	harness_stack
+kit/ops/lib/observe.sh	fn	harness_testdir
+kit/ops/lib/observe.sh	fn	harness_write_node
+kit/ops/lib/observe.sh	fn	harness_write_python
 kit/ops/lib/observe.sh	fn	pat_overlap
 kit/ops/lib/observe.sh	fn	scaffold_dirs
 kit/ops/lib/observe.sh	fn	scaffold_try
@@ -324,7 +340,7 @@ kit/ops/pack.py	fn	read_version
 kit/ops/pack.py	fn	zip_version
 kit/ops/polaris	fn	usage
 kit/ops/roles/BUILDER.md	heading	1. Claim
-kit/ops/roles/BUILDER.md	heading	2. Read — exactly this, nothing more
+kit/ops/roles/BUILDER.md	heading	2. Read — ONE command, then stop
 kit/ops/roles/BUILDER.md	heading	3. Build
 kit/ops/roles/BUILDER.md	heading	4. Test
 kit/ops/roles/BUILDER.md	heading	5. Prove and hand off
@@ -397,7 +413,7 @@ kit/ops/roles/PLANNER.md	heading	Protocol
 kit/ops/roles/PLANNER.md	heading	ROLE: PLANNER — front-load all coordination
 kit/ops/roles/PLANNER.md	heading	Read first (and nothing else)
 kit/ops/roles/PLANNER.md	heading	Report (nothing else) — and mind the `voice:`
-kit/ops/roles/SOLO.md	heading	Context — brain first, repo second
+kit/ops/roles/SOLO.md	heading	Context — ONE command
 kit/ops/roles/SOLO.md	heading	Entry — mechanical, not a judgement call
 kit/ops/roles/SOLO.md	heading	Hard limits — these end the session, not the gate
 kit/ops/roles/SOLO.md	heading	SOLO — one small change, one context, zero subagents

