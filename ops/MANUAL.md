@@ -218,13 +218,35 @@ All four pass → the one pass, reusing the recipes above verbatim (no new git h
 3. run the FULL CONVENTIONS suite ONCE — `test:` `lint:` `typecheck:` `build:` (+ `uat:` if set), the same set as **QA** below. Red → `git reset --hard HEAD~1`, kickback `<ID>` with the failing tail (the **Integrate** kickback recipe), then die.
 4. seal `<today>` — the **Seal** recipe above (`publish: direct`), unchanged.
 5. `run-verify` `<ID>` · `done` `<ID>` (Integrate's done recipe) · delete `integrate/<today>`.
-Green → exit 0; the final note still names `ops/polaris qa` (below) as the mandatory finish line.
+Green → exit 0; the final note names `ops/polaris finish` (below) as the mandatory finish line.
 Express collapses SESSIONS, never checks: audit, RULES, the full suite, seal preconditions, `done`'s
-landed-record gate and the final `qa` all run exactly as in the long path. `land <ID>` without
+landed-record gate and the final `finish` all run exactly as in the long path. `land <ID>` without
 `--express` is byte-identical to the Land recipe above.
 
 ## QA — "is everything okay?" by hand
-What `ops/polaris qa` does in one shot. From the repo root on `<base>`, run in order: the `test:` `lint:` `typecheck:` `build:` and `uat:` commands from `ops/CONVENTIONS.md` (skip blank keys), then the board-hygiene audit (the per-task ownership + RULES proof from Integrate above) and the env sanity checks. Run EVERY check even after one goes red — one pass paints the whole picture — then report red if anything was. The Integrator runs this before reporting; a Conductor runs it after integration and never takes a subagent's "green" on faith.
+What `ops/polaris qa` does in one shot. From the repo root on `<base>`, run in order: the `test:` `lint:` `typecheck:` `build:` and `uat:` commands from `ops/CONVENTIONS.md` (skip blank keys), then the board-hygiene audit (the per-task ownership + RULES proof from Integrate above) and the env sanity checks. Run EVERY check even after one goes red — one pass paints the whole picture — then report red if anything was. `finish` (above) runs this for you at the close; a Conductor never takes a subagent's "green" on faith.
+
+## Finish — "is the run over?" by hand
+What `ops/polaris finish` does in one shot, and the reason it exists: an agent deciding for itself
+that it feels done is the one claim POLARIS never accepts. From the repo root, in order — stop at the
+first group that fails and report exactly what it was, never a summary:
+1. **Where you are.** You must be in the primary checkout (not a `.polaris/wt/<ID>` worktree — a
+   Builder may not end a run) and on `<base>` with a clean `git status --porcelain`.
+2. **The board.** `ops/board/active/` and `ops/board/review/` must both be empty (`ls`). `ready/`
+   must be empty too **unless** `drain: plan` is set in `ops/CONVENTIONS.md`, in which case queued
+   work is a caveat to report, not a blocker. `blocked/` is NEVER a blocker — count it and name every
+   parked task in your close, with why.
+3. **The branches.** No `integrate/*` branch may be outside `<base>`:
+   `git for-each-ref --format='%(refname:short)' 'refs/heads/integrate/*'`, then for each,
+   `git merge-base --is-ancestor <branch> <base>`. Not an ancestor → that wave was never sealed.
+   Merged but undeleted is only cruft: `git branch -d`.
+4. **The locks.** No lock dir under the lock path (see § Locks) whose task is absent from `active/`
+   and `review/`, and no board mutex left holding.
+5. **The suite.** The **QA** recipe below, green.
+All five → the run is over. Report it, and open that reply with `# 🎉 Complete!` on its own line —
+a markdown H1, because it renders large in the human's client where a command's stdout cannot. Any
+one of them failing → no H1 and no `🎉`: say warmly and briefly what landed, name the ONE thing that
+is pending, and give the single next command.
 
 ## Finding code by hand — what `find` / `show` replace
 `ops/polaris find <symbol>` and `ops/polaris show <path>#<symbol>` are the one-hop answer to "where

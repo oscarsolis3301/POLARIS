@@ -28,7 +28,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  audit/land + ONE full suite (red → unwind + kickback) + seal +
                                  run-verify + done + branch cleanup. Refuses: another task in
                                  review/ · risk: high · express: off · publish: pr. Every gate of
-                                 the long path still runs; `qa` stays the finish line.
+                                 the long path still runs; `finish` stays the finish line.
   seal [<date>]                  Integrator: seal the wave — merge integrate/<date> into base
                                  (--no-ff, per-task bullets) + lightweight tag sprint/<n>; a later
                                  wave's seal MOVES the tag (sprint's latest sealed checkpoint).
@@ -49,8 +49,8 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  unchanged): Last landed: / Next up: markers + a sprint-column clause
                                  doctor --selftest --only <patterns> = the always-on spine + only the
                                  labeled drills matching any comma-separated glob (fmlist tcm report
-                                 metrics brain rules drift hardening qa remote syncrace notify grant
-                                 upgrade pr-publish express hint brief); a nonsense element dies
+                                 metrics brain rules drift hardening qa finish remote syncrace notify
+                                 grant upgrade pr-publish express hint brief); a nonsense element dies
                                  before the spine (unknown drill label); --parallel <N> = run the
                                  selected drills as N parallel child shards (serial stays the default)
   check [--only <glob>] [--update]
@@ -119,6 +119,14 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  SKIPS the suite when HEAD is unchanged since the last green run
                                  and the tree is clean (.polaris/suite-stamp) — drift and doctor
                                  still run every time. --force always re-runs the suite.
+                                 `finish` runs this for you at the close.
+  finish [--force]               is the RUN over? The LAST command of every lane. Nothing building,
+                                 nothing waiting to land, ready/ drained per drain:, no unmerged
+                                 integrate/<date>, no orphan lock, clean tree on base, qa green.
+                                 rc 0 = complete (the notify: done hook fires, exactly once per
+                                 finished state) and the agent may open its reply with the
+                                 `# 🎉 Complete!` H1; rc 1 names every pending thing, and there is
+                                 no H1. `caveat:` lines are not gates — the close must mention them.
   dash [--port N]                live read-only board at http://127.0.0.1:7373 (needs python3)
   fleet <N> [--loop] [--launch] [--dry-run]
                                  print N Builder kickoffs; --launch opens a session per task in

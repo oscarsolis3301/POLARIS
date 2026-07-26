@@ -110,4 +110,6 @@ any `risk: high` task.
 ## PROGRESS FORMAT
 After each meaningful step, one line: `✅ <what> — <file>`. On any stop: `⛔ <why> — <what you need>`.
 Keep the shape; the words inside follow `voice:`.
+Run over? `bash ops/polaris finish` FIRST. Exit 0 → open your LAST reply with `# 🎉 Complete!`.
+Non-zero, or you are a subagent → no H1: name what `finish` says is pending + one next step.
 <!-- POLARIS:END -->

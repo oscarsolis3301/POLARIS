@@ -28,6 +28,10 @@ over ONLY when every one of these is true:
 Anything less, and your next action is a tool call, not a sign-off — **unless a run budget cap is
 reached (below), which is itself a legitimate ending.**
 
+`bash ops/polaris finish` (step 8) is the mechanical half of that list, in ONE call — board, branch
+and `qa` — and it exits 0 only when all of them hold. It knows nothing about EVOLVE or the report:
+those two are yours, and they come FIRST.
+
 ## The third rule — a run has a budget, and reaching it is a clean finish
 An autonomous loop with no ceiling is not autonomy, it is a runaway. Record `date +%s` once at
 kickoff; these are read from `ops/CONVENTIONS.md` via their defaults, and you check them **only at
@@ -46,8 +50,12 @@ never mid-task:
 builder/SOLO finish · spawn no new wave and promote no new slice · integrate and seal whatever
 reached `review/` · run `bash ops/polaris qa` on base so the run still ends green or honestly red ·
 add ONE line to the close report — `budget: <which cap> reached — N tasks left on the board; say
-start to continue` · fire `notify-gate done`. A budgeted stop is a SUCCESS, not a failure; report it
-in `voice:` as a normal ending, never as an apology.
+start to continue` · then run `bash ops/polaris finish`. A budgeted stop is the one ending where a
+**non-zero** `finish` is correct and expected: the board still holds queued work, so there is **no
+`# 🎉 Complete!` H1** — you close warm and SHORT in `voice:`, naming the cap, what landed, and
+`start` as the single next step. A budgeted stop is a SUCCESS, not a failure; report it in `voice:`
+as a normal ending, never as an apology. (`finish` exiting 0 at a cap means the board really is
+clear — then celebrate.)
 
 **Context compacted mid-run?** The board is the run's memory, not your context. Re-anchor from
 `bash ops/polaris status`: tasks in `active/` → wait on those lanes · `review/` non-empty → integrate ·
@@ -87,7 +95,7 @@ never re-plan.
    express changes the build/integrate shape, not the gate) disclose with the verbatim line
    `small change — taking the express lane`, then spawn ONE builder subagent → ONE integrator subagent
    whose kickoff names `land --express <ID>` in place of the batch land recipe → and YOU still run
-   `bash ops/polaris qa` yourself as the finish line. Skip the QA scout AND EVOLVE — ≤1 task carries
+   `bash ops/polaris finish` yourself as the finish line. Skip the QA scout AND EVOLVE — ≤1 task carries
    no signal (the EVOLVE skip rule already exists). Both subagents still carry the two standing kickoff
    lines (brain-first + foreground).
 3. **Plan gate — the one human gate.** Present the plan in `voice:`: what gets built, in how many
@@ -193,7 +201,8 @@ never re-plan.
    and why you stopped.
 7. **Waves.** Integration promoted backlog tasks whose dependencies just landed? If they belong to
    THIS plan, loop to step 4 automatically — dependency chains are why the human shouldn't have to
-   say "continue". Then the queue. **`drain: plan` is the DEFAULT** (`ops/CONVENTIONS.md`): the run
+   say "continue". Then the queue. **`drain: plan` is what INIT seeds** (`ops/CONVENTIONS.md`; the
+   CLI's own fallback for an unset key is `queue`, and `finish` reads the same key): the run
    stops after this plan's own tasks, and anything else queued waits for the next `start` — one "go"
    authorizes the plan the human just approved, not the whole board. Say so in one line at close:
    "N tasks still queued — `start` picks them up." Note this does NOT break dependency chains: the
@@ -221,12 +230,28 @@ never re-plan.
    Its proposals go into the close report, numbered — the human applies one by replying
    "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Skip this
    step only when the run built ≤1 task — there is no signal in a sample of one.
-8. **Report and close.** In `voice:`: what landed and what it means for them, what's parked and why,
+8. **Report, then close.** In `voice:`: what landed and what it means for them, what's parked and why,
    `qa` status on base, what to try right now — then EVOLVE's numbered proposals ("reply approve
-   <n> to apply"). One report; the board holds the detail. After delivering it, run
-   `bash ops/polaris notify-gate done` — additive; the report itself is the close, hook or no hook.
+   <n> to apply"). One report; the board holds the detail.
+   Then, and only then, run `bash ops/polaris finish` — the one command that decides how this run
+   ends. It re-checks the board mechanically (nothing building, nothing waiting to land, `ready/`
+   drained per `drain:`, no unmerged `integrate/<date>`, no orphan locks, clean tree, `qa` green on
+   base) and fires `notify-gate done` itself, exactly once per finished state. **Never call
+   `notify-gate done` by hand any more, and never run `finish` mid-run.**
+   - **exit 0** → open your final reply with this line, verbatim, first, alone on its line:
+
+     `# 🎉 Complete!`
+
+     A markdown H1 renders huge and bold in the human's client — that is the signal, and it is why it
+     goes in the REPLY and not in a command's output (stdout does not render markdown). Then the
+     report. Every `caveat:` line `finish` printed — blocked tasks, tasks still queued under
+     `drain: plan` — must appear in it: the H1 means "the run is over", never "nothing was left
+     behind".
+   - **non-zero** → NO H1 and no `🎉`. Your next action is a tool call, not a sign-off (rule two):
+     fix the one thing `finish` named and run it again. The only exception is a budget cap, above.
    With the queue drained and the checks green there is nothing left to offer — the next run starts
-   with the human's next idea. (`drain: plan` with work still queued? Say so: `start` picks it up.)
+   with the human's next idea. (`drain: plan` with work still queued? `finish` says so as a caveat;
+   put it in the report — `start` picks it up.)
 
 ## Cost discipline
 A conductor run spends N builders' tokens in parallel — that's the point, but stay honest: lanes are

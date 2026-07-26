@@ -262,7 +262,7 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   # long path for the SINGLE-task case, in one pass: integrate branch → audit+land → ONE full
   # CONVENTIONS suite → seal → run-verify → done → branch cleanup. Express collapses SESSIONS,
   # never checks — every gate of the long path runs exactly as it does there. Four pinned
-  # refusals below die BEFORE step 1, mutating nothing; `qa` stays the mandatory finish line.
+  # refusals below die BEFORE step 1, mutating nothing; `finish` stays the mandatory finish line.
   local id="$1"
   local tf other f ex
   # refusal: express lands exactly one task — <ID> must be review/'s ONLY occupant
@@ -333,7 +333,7 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   cmd_done "$id"
   git branch -q -D "integrate/$date" 2>/dev/null || true
   say "express: $id landed · sealed · done — one pass, integrate/$date cleaned"
-  note "finish line: bash ops/polaris qa"
+  note "finish line: bash ops/polaris finish — it runs qa for you, proves the RUN is over, and signals done"
 }
 
 tag_push_recovery_note() { # tag_push_recovery_note <n> — convergent recovery when a moved-tag CAS
@@ -465,6 +465,10 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
   else
     say "sprint $n sealed — integrate/$date merged into $BASE (--no-ff), tagged sprint/$n"
   fi
+  # A wave is not a run: a sprint may seal several times (INTEGRATOR.md § 4). So this POINTS at the
+  # run-level verdict rather than calling it — an auto-called finish would print `⛔ pending:` inside
+  # two successful seals out of three, and would put the whole suite between the merge and the push.
+  note "wave sealed. run over? bash ops/polaris finish"
 }
 
 seal_sync() { # seal --sync <date> — pr mode only: finish the wave AFTER the human merges the PR

@@ -9,7 +9,7 @@ did not write it, and must not edit it.
 | file | `skills/i-have-adhd/SKILL.md` |
 | author | Ayoub Ghriss |
 | licence | MIT — full text in `LICENSE` beside this file |
-| vendored | 2026-07-26, for POLARIS 5.21.0 |
+| vendored | 2026-07-26, for POLARIS 5.22.0 |
 
 ## Why it ships with the kit
 

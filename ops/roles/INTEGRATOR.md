@@ -48,8 +48,10 @@ bash ops/polaris done <ID>           # review→done · applies map_delta to MAP
                                      # removes worktree + feat branch (local AND origin, so no stale
                                      # branch pile-up on the host) · refuses if not actually landed
 git branch -d integrate/<date>
-bash ops/polaris qa                  # the whole gate in one shot, on <base>: suite + build + board
-                                     # hygiene + env. Red here = the sprint is NOT done; report it red.
+bash ops/polaris finish              # the whole gate in one shot, on <base>: it RUNS qa (suite +
+                                     # build + board hygiene + env) and then asks the run-level
+                                     # question. Red or pending here = the sprint is NOT done;
+                                     # report it that way. See § 6 for what the exit code licenses.
 ```
 A rejected `<base>` push (protected branch) prints a by-hand note and suggests `publish: pr`; if
 origin keeps rejecting your base pushes, switch modes.
@@ -72,7 +74,7 @@ bash ops/polaris seal --sync [<date>]  # clean tree + git pull --ff-only origin 
                                       # mutates nothing); tags sprint/<n> per clean-history (create, or
                                       # move + compare-and-swap push); deletes integrate/<date> both sides.
 # then, per landed task, on <base>: run-verify <ID> · done <ID>  (done's [<ID>]-in-base gate now passes)
-bash ops/polaris qa
+bash ops/polaris finish
 ```
 `seal --sync` is pr-mode only — in direct mode it dies (`publish: direct seals locally — nothing to sync`).
 **Seal per wave.** A sprint may integrate in several waves — run land → suite → seal each time. The
@@ -94,6 +96,21 @@ Orphans: `sweep --fix` removes them. Stale: flag to the human with the release c
 
 ## 6. Close the loop
 Run `bash ops/polaris metrics` and put the cycle-p50 + kickback numbers in the burndown row — that's what EVOLVE and the Planner calibrate on. Update `SPRINT.md` burndown. Append ≤3 bullets to the **Learned** log (ownership violations, conflict causes, flaky tests, anything the Planner should carve differently). Commit that burndown + Learned update as `chore(board): integrate <date>` via the by-hand board-commit recipe in `ops/MANUAL.md` — it lands on the `polaris/board` ref, never on `<base>` (`SPRINT.md` is part of the board's moved set).
+
+Then the run-level verdict: `bash ops/polaris finish`. It is the mechanical answer to "is the whole
+**run** over?" — nothing in `active/` or `review/`, `ready/` drained per `drain:`, no unmerged
+`integrate/<date>`, no orphan locks, clean tree, `qa` green on `<base>` — and it fires the
+`notify-gate done` hook itself, exactly once per finished state, so you never call `notify-gate done`
+by hand. It replaces the closing `qa` in § 4: `finish` runs `qa` for you, and the suite is stamped
+per commit, so a green wave pays seconds. A wave that is not the last one will exit non-zero — that
+is not a failed seal, it is the truth about the run.
+- **Attended** (a human is in this chat) — **exit 0**: open your closing reply with `# 🎉 Complete!`
+  on its own line, then the report below, carrying every `caveat:` line `finish` printed (a markdown
+  H1 renders huge and bold in their client; a command's stdout cannot, which is why the signal lives
+  in the reply). **Non-zero**: no H1, no `🎉` — name the one pending thing and the next command.
+- **Conductor-entered** (you are a subagent) — **you NEVER write the H1.** Nobody reads your reply
+  but the conductor, and the run is not over until it says so. Put `finish`'s verdict line in your
+  report, unedited, and stop.
 
 ## Report (nothing else)
 Merged (IDs) · kicked back + why (IDs) · high-risk awaiting approval (IDs) · suite status on base · newly ready queue · Learned bullets added.

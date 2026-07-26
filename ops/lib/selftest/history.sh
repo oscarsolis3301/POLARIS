@@ -109,7 +109,7 @@ drill_express() {
     [ "$(git rev-parse refs/tags/sprint/2)" = "$(git rev-parse main)" ] || { echo "EXPRESS TAG FAIL (tag must equal the new base HEAD)"; exit 1; }
     git rev-parse -q --verify "refs/heads/integrate/$exd" >/dev/null && { echo "EXPRESS BRANCH FAIL (integrate/<today> must be deleted)"; exit 1; }
     [ -z "$(git status --porcelain)" ] || { echo "EXPRESS CLEAN FAIL (tree must end clean)"; exit 1; }
-    { grep -q 'finish line' "$T/ex8.out" && grep -q 'qa' "$T/ex8.out"; } || { echo "EXPRESS FINISH FAIL (final note must name qa)"; exit 1; }
+    grep -q 'polaris finish' "$T/ex8.out" || { echo "EXPRESS FINISH FAIL (final note must name polaris finish)"; exit 1; }
 }
 drill_pr-publish() {
     # T-033 self-provision: --only pr-publish skips the remote and notify drills, but it pushes to

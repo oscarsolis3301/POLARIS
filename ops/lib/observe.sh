@@ -1,5 +1,5 @@
 # POLARIS lib/observe.sh — read-only observers sourced by ops/polaris (the lib loader): notify-gate,
-# status/--brief, sweep, doctor, drift, rules, qa, metrics, why, dash, and fleet.
+# status/--brief, sweep, doctor, drift, rules, qa, finish, metrics, why, dash, and fleet.
 
 cmd_notify_gate() { # notify-gate <kind> [ID] — fire the notify: hook at a HUMAN GATE, and do
   # nothing else. Conductor calls it when the run starts waiting on a person; it is ADDITIVE to
@@ -1284,6 +1284,152 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
     printf '%s %s\n' "$head" "$(date +%s)" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
   fi
   say "qa: all green"
+}
+
+cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish.md). The mechanical
+  # half of CONDUCTOR.md's "the run is over ONLY when" list, in ONE call: nothing building, nothing
+  # waiting to land, ready/ drained per drain:, no unmerged integrate/<date>, no orphan lock, clean
+  # tree on <base>, qa green. It knows NOTHING about EVOLVE's proposals or the close report — those
+  # are the role's, and they come FIRST.
+  #   rc 0 → the run is COMPLETE. This is the ONLY thing that licenses the `# 🎉 Complete!` H1 in an
+  #          agent's reply (a command can never print it: terminals do not render markdown, which is
+  #          exactly why the signal lives in the REPLY and the verdict lives here). The notify: done
+  #          hook fires too, exactly ONCE per finished state — .polaris/finish-stamp, keyed on the
+  #          base tip sha, so it self-clears the moment the next run lands a commit.
+  #   rc 1 → something is pending, each named on its own `⛔ pending:` line. No H1, no confetti.
+  # `caveat:` lines are NEVER gates. They are things the closing message MUST mention — blocked
+  # tasks, work parked under drain: plan, cruft — because rc 0 means "the run is over", never
+  # "nothing was left behind".
+  # The verdict is recomputed on EVERY invocation; only the hook is memoised. That split is what
+  # lets an agent re-run finish freely while chasing pendings without muting the signal.
+  local force="" PEND=0 CAV=0 CAVS="" br dr n out w it stamp key fired bl rd ib lk f line
+  [ "${1:-}" = "--force" ] && force=1
+  fin_pending() { PEND=$((PEND+1)); printf '⛔ pending: %s\n' "$1"; }
+  fin_caveat()  { CAV=$((CAV+1));  CAVS="$CAVS$1
+"; }
+  fin_count() { ls "$BOARD/$1" 2>/dev/null | grep -c '\.md$' || true; }
+  fin_ids() { # ≤5 ids from a board column, comma-joined, "… +N more" beyond that (PROTOCOL.md § VOICE)
+    local d="$1" g i=0 o=""
+    for g in "$BOARD/$d/"*.md; do [ -e "$g" ] || break
+      i=$((i+1)); [ "$i" -le 5 ] && o="${o:+$o, }$(basename "$g" .md)"
+    done
+    [ "$i" -gt 5 ] && o="$o … +$((i-5)) more"
+    printf '%s' "$o"
+  }
+
+  # PHASE 0 — the mechanical half of "a Builder never celebrates". A conductor-spawned builder lives
+  # in .polaris/wt/<ID>, so it can never reach rc 0 no matter what its context talked it into.
+  in_primary || die "finish runs in the primary checkout — cd \"$PRIMARY\" first (a worktree can never end the run)"
+
+  # PHASE A — board + git. Free, and every finding is accumulated: one pass paints the whole picture,
+  # the same reason cmd_qa and cmd_drift never short-circuit on the first red.
+  br="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  [ "$br" = "$BASE" ] || fin_pending "on branch $br, not $BASE — a run ends on the base branch (git switch $BASE)"
+  # Same porcelain read cmd_qa's suite stamp uses, deliberately: if the two disagreed on "clean",
+  # finish could bless a tree for which qa silently re-ran the whole suite.
+  [ -z "$(git -C "$PRIMARY" status --porcelain 2>/dev/null | head -1)" ] \
+    || fin_pending "uncommitted changes in the working tree — commit or discard them before calling the work done"
+  n=$(fin_count active); [ "$n" -eq 0 ] || fin_pending "$n building — $(fin_ids active)"
+  n=$(fin_count review); [ "$n" -eq 0 ] || fin_pending "$n waiting to land — $(fin_ids review) (audit + land + seal them)"
+  # drain: (ops/contracts/hands-free-knobs.md) decides whether a queued task blocks the close. Under
+  # `plan` one "go" authorizes THE PLAN, not the board, so ready/ is legitimately non-empty at the
+  # end — gating on it there would make the default run un-finishable. Under queue/backlog it gates.
+  rd=$(fin_count ready); dr="$(cfg drain "")"; dr="${dr:-queue}"
+  if [ "$rd" -gt 0 ]; then
+    case "$dr" in
+      plan) fin_caveat "$rd queued in ready/ under drain: plan — say so; \`start\` picks them up";;
+      queue|backlog) fin_pending "$rd queued in ready/ and drain: $dr — drain them, or set drain: plan in ops/CONVENTIONS.md";;
+      *) note "⚠ unknown drain: '$dr' — treating it as queue (plan | queue | backlog)"
+         fin_pending "$rd queued in ready/ — drain them, or set drain: plan in ops/CONVENTIONS.md";;
+    esac
+  fi
+  # An unmerged integrate/<date> is a whole wave that never reached <base> — the single most
+  # expensive thing to mistake for done. Merged-but-undeleted is just cruft: a caveat.
+  while IFS= read -r ib; do
+    [ -n "$ib" ] || continue
+    if git -C "$PRIMARY" merge-base --is-ancestor "$ib" "$BASE" 2>/dev/null; then
+      fin_caveat "$ib is merged but the branch is still here — git branch -d $ib"
+    else
+      n=$(git -C "$PRIMARY" rev-list --count "$BASE..$ib" 2>/dev/null || echo 0)
+      fin_pending "$ib is not in $BASE — $n commit(s) unsealed (bash ops/polaris seal ${ib#integrate/})"
+    fi
+  done <<EOF
+$(git -C "$PRIMARY" for-each-ref --format='%(refname:short)' 'refs/heads/integrate/*' 2>/dev/null)
+EOF
+  for lk in "$LOCKS"/*/; do
+    [ -e "$lk" ] || break
+    n="$(basename "$lk")"; [ "$n" = ".board-mutex" ] && continue
+    if ! task_file "$n" active >/dev/null && ! task_file "$n" review >/dev/null; then
+      fin_pending "orphan lock $n (age $(( $(lock_age "$n") / 3600 ))h) — bash ops/polaris sweep --fix"
+    fi
+  done
+  [ -d "$MUTEX" ] && fin_pending "a board operation still holds the mutex — wait for it, or bash ops/polaris sweep --fix if it is stale"
+  # blocked/ is NEVER a gate. CONDUCTOR.md licenses blocked "with a reason the human has been told",
+  # and whether they were told is not mechanically knowable — gating here would either make runs
+  # un-finishable or force finish to write board state. So: a caveat the close MUST carry.
+  bl=$(fin_count blocked)
+  [ "$bl" -eq 0 ] || fin_caveat "$bl blocked — $(fin_ids blocked) (name what is parked, and why, in your close)"
+  for f in "$PRIMARY"/.polaris/wt/*/; do
+    [ -e "$f" ] || break
+    n="$(basename "$f")"
+    task_file "$n" active >/dev/null || task_file "$n" review >/dev/null \
+      || fin_caveat "worktree .polaris/wt/$n has no active task — bash ops/polaris sweep --fix"
+  done
+  # Local ref read only — NEVER a fetch. A missing or stale origin ref is silence, not a caveat
+  # about nothing.
+  if has_remote && git -C "$PRIMARY" show-ref -q --verify "refs/remotes/origin/$BASE" 2>/dev/null; then
+    n=$(git -C "$PRIMARY" rev-list --count "origin/$BASE..$BASE" 2>/dev/null || echo 0)
+    [ "$n" -eq 0 ] || fin_caveat "$n commit(s) on $BASE not pushed to origin — git push origin $BASE"
+  fi
+
+  # PHASE B — qa, and only once the board is quiet: a suite run while a lane is still building
+  # proves nothing about the finished state. finish RUNS it rather than requiring it, because
+  # "requiring" means trusting an agent's memory that it ran — the exact class of claim this command
+  # exists to replace. Nearly free when HEAD has not moved: cmd_qa's suite stamp skips the suite and
+  # drift/doctor are seconds. cmd_qa dies on red, so it goes in a subshell exactly as cmd_qa itself
+  # does for drift and doctor.
+  if [ "$PEND" -eq 0 ]; then
+    note "checking the suite on $BASE (quiet unless red; skipped when already green at this commit)"
+    out="$(mktemp)"
+    if ( cmd_qa ${force:+--force} ) >"$out" 2>&1; then
+      say "qa green on $BASE"
+    else
+      fin_pending "qa is red on $BASE"
+      tail -6 "$out" | sed 's/^/     /'
+    fi
+    rm -f "$out"
+  fi
+
+  if [ "$PEND" -gt 0 ]; then
+    [ "$PEND" -eq 1 ] && { w="thing"; it="it"; } || { w="things"; it="them"; }
+    die "finish: not done — $PEND $w pending; fix $it and run finish again"
+  fi
+
+  say "board clear — $(fin_count done) done · $bl blocked · $rd queued · nothing building · nothing waiting to land"
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    note "caveat: $line"
+  done <<EOF
+$CAVS
+EOF
+
+  # FIRE-ONCE, keyed on the base tip sha. notify-gate is observe-only by contract (it may not touch
+  # the board), so the board carries no record that the signal fired and cannot be made to — a stamp
+  # is the only permitted memory. Keying on HEAD makes it self-clearing: the next run lands a commit,
+  # the stamp goes stale, the signal fires again. No expiry, no --reset, no session id to plumb.
+  # Best-effort writes throughout, exactly as .polaris/suite-stamp — finish can never fail the close.
+  stamp="$PRIMARY/.polaris/finish-stamp"
+  key="$(git -C "$PRIMARY" rev-parse HEAD 2>/dev/null || echo none)"
+  fired=""
+  [ -f "$stamp" ] && fired="$(cut -d' ' -f1 < "$stamp" 2>/dev/null || true)"
+  if [ "$key" != none ] && [ "$fired" = "$key" ]; then
+    say "finish: run complete — done signal already fired"
+  else
+    cmd_notify_gate done
+    mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+    printf '%s %s\n' "$key" "$(date +%s)" > "$stamp" 2>/dev/null || true
+    say "finish: run complete — done signal fired"
+  fi
 }
 
 cmd_metrics() { # cycle time + throughput + kickbacks from EVENTS.ndjson — pure awk

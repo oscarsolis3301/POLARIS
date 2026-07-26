@@ -49,10 +49,26 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 6. **Land** — `bash ops/polaris land --express <ID>`. One pass: integrate branch, audit, the FULL
    suite ONCE, seal, run-verify, done, branch cleanup. A red suite unwinds the commit and kicks the
    task back to you — fix it here, in this session, and land again.
-7. **Finish** — `bash ops/polaris qa`. It skips the suite when HEAD has not moved since the green
-   run in step 6 and the tree is clean, so this is usually seconds; `drift` and `doctor` still run.
-8. **Report** one short paragraph in the repo's `voice:` — what changed, what proves it, what you
-   did not touch.
+7. **Finish** — `bash ops/polaris finish`. It runs `qa` for you (free when HEAD has not moved since
+   step 6's green suite — the stamp is per-commit) and then proves the **RUN** is over, not just the
+   task: nothing in `active/` or `review/`, `ready/` drained per `drain:`, no unmerged
+   `integrate/<date>`, no orphan locks, clean tree on `<base>`. It names exactly what is pending, if
+   anything, and it fires the `notify-gate done` hook itself, exactly once — you never call
+   `notify-gate done` by hand. Run it ONCE, at the very end.
+8. **Close** — one short paragraph in the repo's `voice:`: what changed, what proves it, what you did
+   not touch. Which close you write is decided by step 7's **exit code**, never by how the work feels:
+   - **exit 0** — open the reply with this line, verbatim, first, alone on its line:
+
+     `# 🎉 Complete!`
+
+     It is a markdown H1: it renders huge and bold in the human's client, and that is the entire
+     point. A command's stdout cannot do this — terminals do not render markdown — which is why the
+     signal lives in your REPLY and the verdict lives in the command. Then the paragraph. Every
+     `caveat:` line `finish` printed — blocked tasks, work still queued — goes in it: the H1 means
+     "I am finished", never "nothing was left behind".
+   - **non-zero** — NO H1, no `🎉`, no confetti. Two or three warm sentences in `voice:`: what
+     landed, the ONE thing `finish` named as pending, and the single next command. A pending run is
+     an ordinary state of affairs, not an apology.
 
 ## Hard limits — these end the session, not the gate
 - **Never spawn a subagent.** If the work turns out to need more than one, you were in the wrong
@@ -68,6 +84,6 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 
 ## What you must NOT skip
 Every gate the long path runs, you run: `verify` (ownership + RULES) · the task's `verify:` list ·
-the full suite once at `land --express` · `qa`. SOLO collapses SESSIONS, never CHECKS — the same
+the full suite once at `land --express` · `finish`. SOLO collapses SESSIONS, never CHECKS — the same
 principle `ops/contracts/express-lane.md` is built on. If you find yourself skipping a gate to make
 the change fit the lane, the lane is wrong.
