@@ -13,6 +13,81 @@ set -u
 
 IN="$(cat)"
 
+# --- SPEED: why this file no longer starts python on every write --------------
+# Traced 2026-07-26 with `PS4='+ $EPOCHREALTIME ' bash -x`, sorting the deltas. The hook cost
+# 4,045ms per Edit, of which only 537ms was the actual gate:
+#     python3 -c pass  probe   559ms      <- the Windows Store stub failing slowly
+#     python  -c pass  probe   920ms      <- a real interpreter booting just to prove it exists
+#     the parse run itself   ~1,400ms
+#     polaris _guard           537ms      <- the only line doing work
+# Two fixes, no gate weakened:
+#   1. CACHE the interpreter answer, exactly as ops/lib/search.sh::index_engine already does for
+#      the index (.polaris/index-engine). The probe cost is real and it is paid once, not per write.
+#   2. Do not start python AT ALL unless a CONTENT rule could actually match. path-kind rules and
+#      the ownership gate need only file_path + cwd, which bash parses safely below; the write
+#      PAYLOAD is needed solely to scan added lines against content-rule patterns. This repo's
+#      RULES.tsv is 14 path rules and zero content rules, so the common case now forks no python.
+# A hook that is slow is not merely annoying: at 2x this cost it exceeded its 10s timeout under
+# parallel builders, got killed, and FAILED OPEN — silently dropping the ownership gate entirely.
+
+# --- pure-bash JSON string read (same contract as ops/hooks/readonly-allow.sh) --
+# Returns 1 on ANY irregularity so the caller falls back to python rather than guessing. The
+# closing-quote-must-be-followed-by-,-or-} check is what makes a truncated read impossible.
+jstr() {
+  local key="$1" s="$2" rest ch out='' i=0 len after
+  rest="${s#*\"$key\"}"
+  [ "$rest" = "$s" ] && return 1
+  rest="${rest#"${rest%%[![:space:]]*}"}"
+  [ "${rest:0:1}" = ":" ] || return 1
+  rest="${rest:1}"
+  rest="${rest#"${rest%%[![:space:]]*}"}"
+  [ "${rest:0:1}" = '"' ] || return 1
+  rest="${rest:1}"; len=${#rest}
+  while [ "$i" -lt "$len" ]; do
+    ch="${rest:i:1}"
+    if [ "$ch" = '\' ]; then
+      i=$((i + 1)); ch="${rest:i:1}"
+      case "$ch" in
+        n) out="$out
+";;
+        t) out="$out	";;
+        r) ;;
+        '"'|'\'|/) out="$out$ch";;
+        *) return 1;;
+      esac
+      i=$((i + 1)); continue
+    fi
+    if [ "$ch" = '"' ]; then
+      after="${rest:i+1}"; after="${after#"${after%%[![:space:]]*}"}"
+      case "${after:0:1}" in ','|'}') REPLY="$out"; return 0;; *) return 1;; esac
+    fi
+    out="$out$ch"; i=$((i + 1))
+  done
+  return 1
+}
+
+# --- does any CONTENT rule exist? decides whether python is needed at all ------
+# Field 2 of RULES.tsv is the kind. No content rule anywhere → the payload cannot matter.
+# Unreadable RULES → assume yes and take the slow, safe path.
+GUARD_TOP0="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+NEED_BODY=1
+if [ -n "$GUARD_TOP0" ] && [ -f "$GUARD_TOP0/ops/RULES.tsv" ]; then
+  awk -F'\t' '!/^#/ && NF>=2 && $2=="content" {found=1; exit} END{exit !found}' \
+      "$GUARD_TOP0/ops/RULES.tsv" 2>/dev/null || NEED_BODY=0
+fi
+
+FILE=""; CWD=""; BODY=""
+if [ "$NEED_BODY" -eq 0 ]; then
+  # Fast path: bash only. If either read is irregular we fall through to python below.
+  if jstr file_path "$IN"; then FILE="$REPLY"
+  elif jstr notebook_path "$IN"; then FILE="$REPLY"; fi
+  jstr cwd "$IN" && CWD="$REPLY"
+  [ -n "$FILE" ] && PARSED_OK=1 || PARSED_OK=0
+else
+  PARSED_OK=0
+fi
+
+if [ "$PARSED_OK" -eq 0 ]; then
 # --- parse stdin JSON: path + cwd + write payload (schema-tolerant) ----------
 # Payload = every string value in tool_input EXCEPT path fields and old_string
 # (old_string is existing file text; scanning it would block edits that REMOVE
@@ -20,12 +95,38 @@ IN="$(cat)"
 # new_source and MultiEdit edits[].new_string today, and survives field renames.
 # `-c pass` proves a REAL interpreter — the Windows Store python3 alias stub
 # passes `command -v` but cannot run code, which would silently fail this guard open.
-PY=""; python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; }
+# The answer is CACHED: the two probes cost 1.5s together and never change between writes.
+PY=""
+PYCACHE=""
+[ -n "$GUARD_TOP0" ] && PYCACHE="$GUARD_TOP0/.polaris/guard-py"
+if [ -n "$PYCACHE" ] && [ -s "$PYCACHE" ] && [ "${POLARIS_GUARD_TEST_NOPY:-}" != "1" ]; then
+  PY="$(cat "$PYCACHE" 2>/dev/null)"
+  command -v "$PY" >/dev/null 2>&1 || PY=""      # uninstalled since — re-probe, never trust blindly
+fi
+if [ -z "$PY" ]; then
+  python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; }
+  [ -n "$PY" ] && [ -n "$PYCACHE" ] && {
+    mkdir -p "$(dirname "$PYCACHE")" 2>/dev/null
+    printf '%s' "$PY" > "$PYCACHE" 2>/dev/null || true; }
+fi
 [ "${POLARIS_GUARD_TEST_NOPY:-}" = "1" ] && PY=""
 if [ -z "$PY" ]; then
-  echo "polaris-guard: python not found — write-guard skipped (verify/handoff gate still enforces ownership + rules)" >&2
-  exit 0
-fi
+  # Degrade, do not disappear. Without python we cannot read the write PAYLOAD, so content rules
+  # cannot be scanned — but file_path/cwd may still have parsed in bash above, and the path and
+  # ownership gates are the ones that stop a Builder writing outside its lane. Run what we can.
+  # (Previously this exited 0 and dropped ALL THREE gates on any python-less machine.)
+  if [ -z "$FILE" ]; then
+    jstr file_path "$IN" && FILE="$REPLY"
+    [ -n "$FILE" ] || { jstr notebook_path "$IN" && FILE="$REPLY"; }
+    jstr cwd "$IN" && CWD="$REPLY"
+  fi
+  if [ -z "$FILE" ]; then
+    echo "polaris-guard: no python and the payload did not parse — write-guard skipped (verify/handoff still enforces ownership + rules)" >&2
+    exit 0
+  fi
+  echo "polaris-guard: no python — path + ownership gates ENFORCED, content rules not scanned (verify/handoff still scans them)" >&2
+  BODY=""
+else
 PARSED="$(printf '%s' "$IN" | "$PY" -c '
 import json,sys,tempfile
 try:
@@ -54,33 +155,60 @@ except Exception:
 FILE="$(printf '%s\n' "$PARSED" | sed -n 1p)"
 CWD="$(printf '%s\n' "$PARSED" | sed -n 2p)"
 BODY="$(printf '%s\n' "$PARSED" | sed -n 3p)"
+fi
+fi
 cleanup() { [ -n "$BODY" ] && rm -f "$BODY" 2>/dev/null; }
 trap cleanup EXIT
 [ -n "$FILE" ] || exit 0                       # nothing path-like to police
 [ -n "$CWD" ] || CWD="$(pwd)"
 
 # --- normalize (best effort for Windows-style paths) -------------------------
-norm() { printf '%s' "$1" | tr '\\' '/' | sed -e 's|^\([A-Za-z]\):/|/\L\1/|'; }
-lc()   { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
-FILE="$(norm "$FILE")"; CWD="$(norm "$CWD")"
+# REPLY-returning, not stdout-returning, and pure bash: `x="$(norm "$x")"` forks a subshell even
+# for a shell function, and a fork is ~80ms here. Six of them were 480ms of every write. Same
+# reason `lc` no longer pipes to tr. Bash 3.2 (macOS default) has no ${v,,}, hence the char loop —
+# it is O(path length) of in-process string ops, which is free next to one fork.
+lc() { # -> REPLY
+  local s="$1" out='' c i
+  local up='ABCDEFGHIJKLMNOPQRSTUVWXYZ' lo='abcdefghijklmnopqrstuvwxyz'
+  while [ -n "$s" ]; do
+    c="${s:0:1}"; s="${s:1}"
+    i="${up%%"$c"*}"
+    [ "$i" != "$up" ] && c="${lo:${#i}:1}"
+    out="$out$c"
+  done
+  REPLY="$out"
+}
+norm() { # -> REPLY
+  local s="${1//\\//}"
+  case "$s" in [A-Za-z]:/*) lc "${s:0:1}"; s="/$REPLY${s:2}";; esac
+  REPLY="$s"
+}
+norm "$FILE"; FILE="$REPLY"
+norm "$CWD";  CWD="$REPLY"
 
 # --- repo + repo-relative path ------------------------------------------------
 # Git on Windows prints toplevel/worktree as `C:/...` while FILE/CWD normalize
 # to `/c/...` — norm() BOTH sides or every in-repo path looks "outside the repo".
 TOP="$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)" || exit 0
-TOP="$(norm "$TOP")"
+norm "$TOP"; TOP="$REPLY"
 [ -x "$TOP/ops/polaris" ] || exit 0            # not a POLARIS repo — stand down
 BR="$(git -C "$CWD" rev-parse --abbrev-ref HEAD 2>/dev/null)" || exit 0
 case "$FILE" in /*) ABS="$FILE";; *) ABS="$CWD/$FILE";; esac
-PRIMARY="$(git -C "$CWD" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
-[ -n "$PRIMARY" ] && PRIMARY="$(norm "$PRIMARY")"
 # Prefix-match case-INSENSITIVELY (Windows + macOS default are case-insensitive filesystems, and
 # Claude Code may hand us a cwd/path whose segments differ in case from git's toplevel). Compare on
 # lowercased copies, but slice REL from the ORIGINAL-case ABS so files_owned matching stays exact.
-REL=""; ABS_LC="$(lc "$ABS")"; TOP_LC="$(lc "$TOP")"
+REL=""; lc "$ABS"; ABS_LC="$REPLY"; lc "$TOP"; TOP_LC="$REPLY"
 case "$ABS_LC" in
   "$TOP_LC"/*) REL="${ABS:$((${#TOP}+1))}";;
-  *) if [ -n "$PRIMARY" ]; then case "$ABS_LC" in "$(lc "$PRIMARY")"/*) REL="${ABS:$((${#PRIMARY}+1))}";; esac; fi;;
+  *)
+    # LAZY: `git worktree list` costs ~460ms and only matters when the write is NOT under this
+    # worktree's own toplevel — i.e. a Builder in .polaris/wt/<ID> touching the primary checkout.
+    # Resolving it eagerly taxed every ordinary write to answer a question they never ask.
+    PRIMARY="$(git -C "$CWD" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
+    if [ -n "$PRIMARY" ]; then
+      norm "$PRIMARY"; PRIMARY="$REPLY"; lc "$PRIMARY"
+      case "$ABS_LC" in "$REPLY"/*) REL="${ABS:$((${#PRIMARY}+1))}";; esac
+    fi;;
 esac
 if [ -z "$REL" ]; then
   case "$BR" in feat/*) ;; *) exit 0;; esac    # non-Builder sessions may write outside the repo

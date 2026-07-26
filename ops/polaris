@@ -26,6 +26,14 @@ usage() { cat <<'EOF'
 polaris — POLARIS board CLI (run from anywhere inside the repo)
   init-board                     create board dirs, gitignore .polaris/ + the board set, lock dir
                                  (board state commits to refs/heads/polaris/board — base stays clean)
+  pack [ID]                      YOUR WHOLE CONTEXT FOR ONE TASK, IN ONE CALL — run this FIRST,
+                                 before reading anything: the task's Why + acceptance, its contract
+                                 verbatim, the repo's DETECTED house style, files you own vs may
+                                 only read, the code-map for each owned directory, the public API
+                                 surface you must not break, the known traps recorded against those
+                                 exact paths, and the verify: commands that will be run. Read-only.
+                                 No ID inside a feat/<ID> worktree = that task. Replaces the 6-15
+                                 exploratory round trips a cold session otherwise spends
   claim [ID]                     lock + ready→active + worktree  (no ID = top wsjf; skips locked)
   resume [ID]                    re-enter an already-claimed active task (crash/kickback/new session)
   verify [ID]                    diff ⊆ files_owned + run verify: commands (in worktree)
@@ -88,6 +96,19 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  env var NAMES — all by reading tracked files, never by running the
                                  app. REVIEW the output: a golden records what the code DOES, not
                                  what it SHOULD do.
+  harness [--refresh]            GENERATE ONE runnable test suite for the HOST APP — the behaviour
+                                 tier above `check --scaffold --app` (which only locks shape by
+                                 reading files, and so cannot tell you the app still BOOTS).
+                                 Detects the stack, writes <tests>/test_polaris_harness.py or
+                                 polaris-harness.test.js, and captures a baseline inventory.
+                                 Three sweeps: every module IMPORTS · every GET route answers
+                                 non-5xx · every declared entry point runs --help without crashing;
+                                 plus "nothing disappeared" against the baseline. A sweep that
+                                 cannot find what it needs SKIPS and says why — it never passes by
+                                 asserting nothing, and it never invents an app factory's args.
+                                 Written once by an agent, then costs a subprocess and ZERO tokens
+                                 forever. Wire into `uat:` so qa picks it up. --refresh regenerates
+                                 the file and re-captures the baseline (how you accept a real change)
   find <symbol> | -f <glob> | -t <text> | --importers <path> | --imports <path> | --api <glob> [-n N]
                                  the 1-hop "where is X": ONE line per hit, path:line first, ranked
                                  (exact > prefix > substring, boosted by churn + fan-in, tests and
@@ -110,7 +131,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)
   triage                         which LANE this board's work belongs in — line 1 is one word:
-                                 solo (one context, zero subagents; 1 task ≤2pts, risk normal,
+                                 solo (one context, zero subagents; 1 task ≤3pts, risk normal,
                                  express on, publish direct) · express (one task, one builder,
                                  one integrator) · full (everything else). Reasons follow on
                                  stderr-style note lines. Decide with this, never by re-reading
@@ -129,6 +150,14 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  tmux windows or Windows Terminal panes (--dry-run previews the command)
   upgrade                        migrate an OLD BOARD (v3/v4→v5). Idempotent. Downloads NOTHING.
                                    want a newer KIT? that is `update` — one letter, unrelated job.
+  slim [--apply | --restore]     the per-context TOKEN TAX, measured: every skill/agent/command
+                                 definition under ~/.claude injects its name+description into the
+                                 system prompt of every session AND every subagent it spawns,
+                                 invoked or not. Reports bytes per family, marks the ones no
+                                 POLARIS role/CLAUDE.md/PROTOCOL.md ever names, and totals what a
+                                 6-8 context run pays for them. --apply MOVES those into
+                                 ~/.claude/.polaris-archived/ (never deletes); --restore puts them
+                                 all back. Report-only by default; the installer never applies it
   version                        installed version · commit · latest on the channel
   update [--repo-only]           fetch the latest KIT from the channel (manual; never automatic).
                                    also re-caches it into ~/.claude so the NEXT repo you install
@@ -201,6 +230,7 @@ BOARD_REF="refs/heads/polaris/board"
 case "${1:-}" in
   init-board) cmd_init_board;;
   claim)      shift; update_check_maybe || true; cmd_claim "$@";;
+  pack)       shift 2>/dev/null || true; cmd_pack "${1:-}";;
   resume)     shift; cmd_resume "$@";;
   verify)     shift; cmd_verify "$@";;
   handoff)    shift; cmd_handoff "$@";;
@@ -222,6 +252,7 @@ case "${1:-}" in
   # exit before the globals below them exist. They stay in `usage` above because that is what
   # documents them; ops/tests/cli-help-parity.cmd asserts they are still listed.
   check)      shift 2>/dev/null || true; cmd_check "$@";;
+  harness)    shift 2>/dev/null || true; cmd_harness "${1:-}";;
   board-fm)   shift 2>/dev/null || true; cmd_board_fm "$@";;
   sweep)      shift 2>/dev/null || true; cmd_sweep "${1:-}";;
   doctor)     shift 2>/dev/null || true; update_check_maybe || true; cmd_doctor "$@";;
@@ -236,6 +267,7 @@ case "${1:-}" in
   dash)       shift; update_check_maybe || true; cmd_dash "$@";;
   fleet)      shift; cmd_fleet "$@";;
   upgrade)    cmd_upgrade;;
+  slim)       shift 2>/dev/null || true; cmd_slim "${1:-}";;
   version)    update_check_maybe force || true; cmd_version;;
   update)     shift; cmd_update "${1:-}";;
   uninstall)  shift; cmd_uninstall "$@";;

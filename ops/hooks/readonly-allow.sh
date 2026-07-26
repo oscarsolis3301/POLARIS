@@ -88,10 +88,24 @@ jstr() {
 # Each returns 0 only when this specific invocation cannot write or execute.
 
 # find(1): every door out of "walk the tree and print" is an action predicate.
+# `-exec` is the ONE that is only conditionally a door: `find . -name '*.md' -exec wc -l {} +` is
+# among the most common ways an agent reads a repo, and refusing it outright cost a prompt on pure
+# reads (measured: it is what stopped a plan-mode session on 2026-07-26). So -exec RECURSES into
+# verb_ok, exactly as xargs_ok does below and for exactly the same reason — a launcher is precisely
+# as safe as the thing it launches. Deny-by-default survives untouched: an unrecognised verb after
+# -exec falls through verb_ok's final `*) return 1` and still prompts.
+#   -execdir/-ok/-okdir stay refused: -ok/-okdir prompt on a tty we do not have, and -execdir
+#   changes the working directory per match, so the command a human reads is not the one that runs.
+# The outer loop deliberately keeps scanning AFTER the recursion, so a tail like
+# `-exec wc -l {} + -o -delete` is still caught by the -delete arm.
 find_ok() {
   while [ $# -gt 0 ]; do
     case "$1" in
-      -exec|-execdir|-ok|-okdir|-delete|-fls|-fprint|-fprintf) return 1;;
+      -execdir|-ok|-okdir|-delete|-fls|-fprint|-fprintf) return 1;;
+      -exec)
+        shift
+        [ $# -gt 0 ] || return 1          # `-exec` with nothing after it is not something we parsed
+        verb_ok "$@" || return 1;;
     esac
     shift
   done
@@ -191,7 +205,10 @@ git_ok() {
 # `uninstall` and friends mutate the board, a branch or the installed kit — they keep their prompt.
 polaris_ok() {
   case "${1:-}" in
-    find|show|check|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|--help|-h|'') return 0;;
+    find|show|check|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|--help|-h|'') return 0;;
+    # `slim` bare is a report and writes nothing; `--apply`/`--restore` MOVE files under ~/.claude,
+    # so they keep their prompt. Same split as check vs check --update.
+    slim) case "${2:-}" in '') return 0;; *) return 1;; esac;;
     *) return 1;;
   esac
 }
@@ -292,7 +309,13 @@ scan() {
       '\')  i=$((i + 1)); tok="$tok${cmd:i:1}"; i=$((i + 1));;
       '`')  return 1;;
       '$')  [ "$n" = "(" ] && return 1; tok="$tok$c"; i=$((i + 1));;
-      '(' | ')' | '{' | '}') return 1;;                      # subshells and groups: not parsed
+      '{')
+        # `{}` is find(1)'s placeholder, and it is NOT a brace group: bash requires whitespace
+        # after `{` to open one, so an immediately-closed `{}` can never be command syntax. Accept
+        # exactly that two-character token and nothing else — `{ rm -rf x; }` still returns 1 below.
+        if [ "$n" = "}" ]; then tok="$tok{}"; i=$((i + 2)); continue; fi
+        return 1;;
+      '(' | ')' | '}') return 1;;                            # subshells and groups: not parsed
       '&')
         if [ "$n" = "&" ]; then                              # && — segment boundary
           [ -n "$tok" ] && toks="$toks$SEP$tok"; tok=''

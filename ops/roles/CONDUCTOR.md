@@ -72,13 +72,11 @@ never re-plan.
    > You are the PLANNER, conductor-entered. Read ops/roles/PLANNER.md and execute it. The interview
    > and brief gate are already done — do not re-ask; if truly blocked, return the question as your
    > result. Skip fan-out; return your report. CONFIRMED BRIEF: <brief>
-   > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
-   > To locate code run `bash ops/polaris find <symbol>` (one hop to path:line) or `show <path>#<symbol>`
-   > (one symbol's body, not the file) BEFORE any Grep.
-   > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
-   > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
-   > that file for the completion line. Polling is foreground work; a suite that times out returns
-   > NOTHING and gets re-run, which is strictly worse than waiting for it.
+   > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
+   > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
+   > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
+   > Foreground every command. A suite past your tool timeout goes to a log you POLL — never end a
+   > turn waiting on a notification; a timed-out suite returns NOTHING and gets re-run.
    It grooms the board, runs `drift`, returns the plan. If it returns a question instead: ask the
    human, spawn a fresh planner with the brief + the answer appended.
 2.5 **Express triage — a single small change skips the full pipeline.** After the planner's report,
@@ -116,13 +114,11 @@ never re-plan.
    > You are a BUILDER, conductor-entered. Read ops/roles/BUILDER.md and execute it. Claim <ID> and
    > complete it end to end. A spec ambiguity → return the question as your result instead of asking
    > the human. Stop at the review handoff; return: ID · branch · one-line summary · test results.
-   > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
-   > To locate code run `bash ops/polaris find <symbol>` (one hop to path:line) or `show <path>#<symbol>`
-   > (one symbol's body, not the file) BEFORE any Grep.
-   > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
-   > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
-   > that file for the completion line. Polling is foreground work; a suite that times out returns
-   > NOTHING and gets re-run, which is strictly worse than waiting for it.
+   > FIRST run `bash ops/polaris pack <ID>` — that output IS your context: the task, its contract,
+   > the house style to match, what you own, the API surface not to break, and your verify: list.
+   > Anything it does not answer: `bash ops/polaris find <symbol>`, one hop, before any Grep.
+   > Foreground every command. A suite past your tool timeout goes to a log you POLL — never end a
+   > turn waiting on a notification; a timed-out suite returns NOTHING and gets re-run.
    Say once where to watch (`bash ops/polaris dash` · 127.0.0.1:7373). As each lane reports, relay
    ONE line in `voice:` — "✅ 2 of 5 done — the nav restyle landed, tests green" — useful, plain,
    never a dump. Lane free + ready task left → spawn the next builder immediately.
@@ -155,13 +151,11 @@ never re-plan.
    > waits, everything else lands on arrival. Do NOT merge `risk: high` tasks — list them in your
    > result. The all-review `Integrate now` notice is your signal the wave is complete: run the suite
    > once, then seal.
-   > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
-   > To locate code run `bash ops/polaris find <symbol>` (one hop to path:line) or `show <path>#<symbol>`
-   > (one symbol's body, not the file) BEFORE any Grep.
-   > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
-   > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
-   > that file for the completion line. Polling is foreground work; a suite that times out returns
-   > NOTHING and gets re-run, which is strictly worse than waiting for it.
+   > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
+   > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
+   > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
+   > Foreground every command. A suite past your tool timeout goes to a log you POLL — never end a
+   > turn waiting on a notification; a timed-out suite returns NOTHING and gets re-run.
    > Return your report: merged · kicked back + why · suite status · newly promoted.
    - `risk: high` in its report → `bash ops/polaris notify-gate risk <ID>` (additive — approval
      happens HERE, in conversation, under every knob), ask the human "approve <ID>?" and relay ONLY
@@ -187,13 +181,11 @@ never re-plan.
    When it does run (`always`, or `auto` with both conditions met), spawn ONE bounded scout:
    > You are a QA scout, conductor-entered. Read-only — you fix NOTHING. Exercise the flows this
    > plan changed, the way a user would. Hunt for runtime errors, broken flows, console noise.
-   > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
-   > To locate code run `bash ops/polaris find <symbol>` (one hop to path:line) or `show <path>#<symbol>`
-   > (one symbol's body, not the file) BEFORE any Grep.
-   > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
-   > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
-   > that file for the completion line. Polling is foreground work; a suite that times out returns
-   > NOTHING and gets re-run, which is strictly worse than waiting for it.
+   > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
+   > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
+   > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
+   > Foreground every command. A suite past your tool timeout goes to a log you POLL — never end a
+   > turn waiting on a notification; a timed-out suite returns NOTHING and gets re-run.
    > Return findings as path:line one-liners, or "clean".
    Anything red — from `qa` or the scout — starts a **fix wave**: spawn a planner subagent to file
    the failures as bug task(s), then build → integrate → re-run `qa`. Cap: **`run_fix_waves`, default 2**;
@@ -221,13 +213,11 @@ never re-plan.
    > You are EVOLVE, conductor-entered. Read ops/roles/EVOLVE.md and execute its diagnosis.
    > APPLY NOTHING — return your ≤3 findings with evidence and the exact proposed diffs as your
    > result.
-   > Always read .polaris/brain/INDEX.md FIRST, repo second; fall back to ops/MAP.md when no brain exists.
-   > To locate code run `bash ops/polaris find <symbol>` (one hop to path:line) or `show <path>#<symbol>`
-   > (one symbol's body, not the file) BEFORE any Grep.
-   > Run commands in the FOREGROUND and never END A TURN waiting on a background notification —
-   > EXCEPT a suite/`qa` run that exceeds your harness's tool timeout: log it to a file and POLL
-   > that file for the completion line. Polling is foreground work; a suite that times out returns
-   > NOTHING and gets re-run, which is strictly worse than waiting for it.
+   > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
+   > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
+   > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
+   > Foreground every command. A suite past your tool timeout goes to a log you POLL — never end a
+   > turn waiting on a notification; a timed-out suite returns NOTHING and gets re-run.
    Its proposals go into the close report, numbered — the human applies one by replying
    "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Skip this
    step only when the run built ≤1 task — there is no signal in a sample of one.

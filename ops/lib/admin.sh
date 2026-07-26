@@ -394,6 +394,188 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
   fi
 }
 
+# ------------------------------------------------------------------ slim (5.21.0)
+# THE LARGEST SINGLE TOKEN LINE ITEM IN A POLARIS RUN, and it is not POLARIS.
+#
+# Every skill, agent and command definition installed under ~/.claude contributes its `name:` and
+# `description:` frontmatter to the SYSTEM PROMPT of every session — and of every subagent that
+# session spawns. It is paid whether or not anything ever invokes it. Measured on the author's
+# machine 2026-07-26: 251 definition files totalling 34,119 B (~8,500 tokens) per context, of which
+# ~28,568 B (~7,100 tokens) belonged to families POLARIS never names once — claude-flow's 98 agent
+# definitions, its 88 slash commands, and the agentdb/sparc/v3-*/github-*/flow-nexus skill sets.
+# A conductor run spawns 6-8 contexts, so that was 43k-57k tokens per run of pure passenger weight.
+#
+# Note what this command does NOT do: it never guesses at value. It reports bytes, names the
+# owner of every byte, and moves nothing unless asked. `--apply` MOVES into an archive tree and
+# `--restore` moves back — POLARIS does not delete a human's files (house rule: archive, never
+# delete), and the archive mirrors the original relative path so restore needs no manifest.
+#
+# It is also deliberately NOT run by the installer with --apply. Silently emptying someone's skill
+# directory because a tool decided the skills were unused is exactly the kind of confident,
+# irreversible helpfulness this kit exists to avoid. install.sh prints the REPORT; the human acts.
+
+claude_home() { printf '%s' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; }
+
+slim_scan() { # emit one TAB line per definition: bytes<TAB>keep|drop<TAB>name<TAB>relpath
+  # ONE awk pass over every definition file, and one `cat` for the corpus. The first shape of this
+  # function forked awk + wc + basename per file and grepped the role files per file — ~500 forks,
+  # MEASURED at 1m52s for a command whose entire job is to report a number. (It also crashed:
+  # `grep -qriF` over a directory ABORTS on Git Bash.) Same lesson as the 5.20.0 startup work —
+  # a fork inside a loop is invisible in a profile that only names functions. Now: 2 forks total.
+  #
+  # Corpus first (NR==FNR), then the definitions. Relative paths are emitted so --apply/--restore
+  # can mirror them and need no manifest file.
+  local ch tmp oldifs
+  ch="$(claude_home)"
+  tmp="$(mktemp)" || return 1
+  cat "$OPS"/roles/*.md "$PRIMARY/CLAUDE.md" "$OPS/PROTOCOL.md" "$CONV" 2>/dev/null \
+    | tr '[:upper:]' '[:lower:]' > "$tmp"
+  { find "$ch/skills"   -name 'SKILL.md' 2>/dev/null
+    find "$ch/agents"   -name '*.md'     2>/dev/null
+    find "$ch/commands" -name '*.md'     2>/dev/null
+  } > "$tmp.f"
+  # Newline-split, never word-split: a Claude home under "C:\Users\First Last" would otherwise
+  # shatter every path into fragments and awk would report every one of them as missing.
+  oldifs="$IFS"; IFS='
+'
+  # shellcheck disable=SC2046
+  set -- $(cat "$tmp.f")
+  IFS="$oldifs"
+  [ $# -gt 0 ] || { rm -f "$tmp" "$tmp.f" 2>/dev/null; return 0; }
+  awk -v ch="$ch/" '
+    NR==FNR { corpus = corpus $0 "\n"; next }          # file 1: everything POLARIS itself writes
+    FNR==1 { emit(); rel=FILENAME; sub("^" ch, "", rel)
+             # A skill is identified by its DIRECTORY (skills/foo/SKILL.md); an agent or command by
+             # its basename. Get this wrong and you archive "SKILL" 37 times, matching nothing.
+             if (rel ~ /^skills\//) { name=rel; sub(/^skills\//,"",name); sub(/\/.*$/,"",name) }
+             else { name=rel; sub(/^.*\//,"",name); sub(/\.md$/,"",name) }
+             skip = (rel ~ /^\.polaris-archived\//)    # already archived — not injected any more
+             b=0; fm=0; p=0; done_fm=0 }
+    # Only name: and description: reach a system prompt; the body loads on demand and costs nothing
+    # until invoked. Continuation lines of a folded description count — a 6-line YAML description
+    # is 6 lines of every prompt — which is why this tracks a `p` flag instead of matching 2 lines.
+    !done_fm {
+      if (FNR==1 && $0 ~ /^---/) { fm=1; next }
+      if (fm && $0 ~ /^---/)     { done_fm=1; next }
+      if (fm && $0 ~ /^(name|description):/) { p=1; b += length($0)+1; next }
+      if (fm && p && $0 ~ /^[A-Za-z_-]+:/)   { p=0 }
+      if (fm && p)                           { b += length($0)+1 }
+    }
+    END { emit() }
+    # THREE classes, not two, and the difference is the whole safety argument.
+    #
+    #   keep  — POLARIS names it, or it is on the hard-keep list. Never touched.
+    #   drop  — positively IDENTIFIED as claude-flow / RuFlo V3 machinery. Only these are archived.
+    #   other — POLARIS never names it, but nothing here recognises it either. REPORTED, NOT MOVED.
+    #
+    # `other` exists because "POLARIS does not mention it" is a terrible reason to hide a human'"'"'s
+    # tools. The first cut of this classifier had two classes and would have archived
+    # apple-design, frontend-design, emil-design-eng and make-interfaces-feel-better — craft skills
+    # the human installed on purpose and uses directly. Same deny-by-default contract as
+    # ops/hooks/readonly-allow.sh: act only on what you have positively identified, and let
+    # everything you merely fail to recognise pass through untouched.
+    function emit(   lname, keep, mach) {
+      if (rel=="" || skip) { rel=""; return }
+      lname = tolower(name)
+      keep = (lname=="polaris" || lname=="polaris-install" || lname=="i-have-adhd" \
+              || lname ~ /^superpowers/ || lname=="using-superpowers" \
+              || index(corpus, lname) > 0)
+      # The claude-flow / RuFlo V3 install, by family. ~/.claude/agents/ and ~/.claude/commands/ are
+      # that product wholesale — 98 agent definitions and 88 slash commands, none of which POLARIS
+      # has ever called. The skill families are named individually so a look-alike name a human
+      # chose for their own skill does not get swept up by a wildcard.
+      mach = (rel ~ /^agents\// || rel ~ /^commands\// \
+              || lname ~ /^(agentdb|reasoningbank|sparc|swarm|v3|flow-nexus|github)-/ \
+              || lname=="hooks-automation" || lname=="stream-chain" || lname=="verification-quality")
+      printf "%d\t%s\t%s\t%s\n", b, (keep ? "keep" : (mach ? "drop" : "other")), name, rel
+      rel=""
+    }
+  ' "$tmp" "$@"
+  rm -f "$tmp" "$tmp.f" 2>/dev/null || true
+}
+
+cmd_slim() { # slim [--apply | --restore] — the per-context token tax, measured and recoverable.
+  local mode="${1:-}" ch arc scan kept dropped nk nd f rel dst n=0
+  case "$mode" in ''|--apply|--restore) ;; *) die "usage: polaris slim [--apply | --restore]";; esac
+  ch="$(claude_home)"; arc="$ch/.polaris-archived"
+  [ -d "$ch" ] || die "no Claude config directory at $ch — nothing to measure"
+
+  if [ "$mode" = "--restore" ]; then
+    [ -d "$arc" ] || { say "nothing archived — $arc does not exist"; return 0; }
+    while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      rel="${f#"$arc"/}"; dst="$ch/$rel"
+      mkdir -p "$(dirname "$dst")" && mv "$f" "$dst" && n=$((n + 1))
+    done <<EOF
+$(find "$arc" -type f 2>/dev/null)
+EOF
+    find "$arc" -type d -empty -delete 2>/dev/null || true
+    say "restored $n definition(s) to $ch — re-run \`polaris slim\` to see the tax return"
+    return 0
+  fi
+
+  scan="$(slim_scan)"
+  [ -n "$scan" ] || { say "no skill/agent/command definitions found under $ch"; return 0; }
+  eval "$(printf '%s\n' "$scan" | awk -F'\t' '
+    { b[$2]+=$1; n[$2]++ }
+    END { printf "kept=%d nk=%d dropped=%d nd=%d other=%d no=%d\n",
+            b["keep"]+0, n["keep"]+0, b["drop"]+0, n["drop"]+0, b["other"]+0, n["other"]+0 }')"
+
+  printf 'CONTEXT TAX — bytes every session AND every subagent pays before any work\n'
+  printf '  source: %s\n\n' "$ch"
+  printf '  %-46s %8s %7s\n' 'claude-flow machinery, by family' 'bytes' '~tokens'
+  # Grouped by family, because the decision is never about one file — it is "do I need the whole
+  # agentdb set". Family = the leading path segment under skills/agents/commands.
+  printf '%s\n' "$scan" | awk -F'\t' '$2=="drop"{
+      split($4,p,"/"); fam=(p[1]=="skills"? "skills/" p[2] : p[1] "/" (p[3]!=""?p[2]:"*"))
+      b[fam]+=$1 } END{ for (k in b) printf "%d\t%s\n", b[k], k }' \
+    | sort -rn | head -12 \
+    | while IFS=$'\t' read -r b fam; do printf '  %-46s %8d %7d\n' "$fam" "$b" "$((b / 4))"; done
+
+  printf '\n  %-46s %8d %7d   (%d files)\n' 'MACHINERY — archived by --apply'   "$dropped" "$((dropped / 4))" "$nd"
+  printf '  %-46s %8d %7d   (%d files)\n'   'referenced by POLARIS — kept'      "$kept"    "$((kept / 4))"    "$nk"
+  printf '  %-46s %8d %7d   (%d files)\n'   'unrecognised — kept, never moved'  "$other"   "$((other / 4))"   "$no"
+  printf '  %-46s %8d %7d\n'                'total paid per context'            "$((kept + dropped + other))" "$(((kept + dropped + other) / 4))"
+  printf '\n  A conductor run spawns 6-8 contexts: %d-%d tokens recoverable per run.\n' \
+    "$((dropped / 4 * 6))" "$((dropped / 4 * 8))"
+
+  if [ "$mode" != "--apply" ]; then
+    printf '\n'
+    note "report only — nothing moved. To recover the machinery:  polaris slim --apply"
+    note "always reversible:                                      polaris slim --restore"
+    note "the 'unrecognised' rows are YOUR skills — slim never moves what it cannot identify"
+    return 0
+  fi
+
+  printf '\n'
+  while IFS=$'\t' read -r b keepdrop name rel; do
+    [ "$keepdrop" = "drop" ] || continue
+    f="$ch/$rel"; [ -f "$f" ] || continue
+    dst="$arc/$rel"
+    mkdir -p "$(dirname "$dst")" && mv "$f" "$dst" && n=$((n + 1))
+  done <<EOF
+$(printf '%s\n' "$scan")
+EOF
+  find "$ch/skills" "$ch/agents" "$ch/commands" -type d -empty -delete 2>/dev/null || true
+  mkdir -p "$arc"
+  cat > "$arc/RESTORE.md" <<EOF
+# POLARIS archive — $n definition(s) moved out of the system prompt
+
+These were skill/agent/command definitions under $ch that no POLARIS role, CLAUDE.md, PROTOCOL.md
+or CONVENTIONS.md ever names. Their frontmatter was being injected into every session and every
+subagent. Nothing was deleted; the tree below mirrors the original relative paths.
+
+Put every one of them back:
+
+    bash ops/polaris slim --restore
+
+Restoring one by hand works too — move it back to the same relative path under $ch.
+EOF
+  say "archived $n definition(s) → $arc  ·  ~$((dropped / 4)) tokens per context recovered"
+  note "reversible: polaris slim --restore   ·   details: $arc/RESTORE.md"
+  note "restart your agent session for the smaller system prompt to take effect"
+}
+
 cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and reversible only by git.
   # Re-exec from a copy FIRST: we are about to delete ops/polaris, and on Windows you cannot
   # unlink a file that is currently open — bash reads its script lazily, so removing ops/
@@ -422,6 +604,9 @@ cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and re
     note "ops/                         (board, tasks, contracts, RULES, CONVENTIONS, MAP, SPRINT, telemetry)"
     note "refs/heads/polaris/board     (the board-history branch — deleted locally and, with a remote, on origin)"
     note ".claude/skills/polaris/      (the project skill)"
+    note ".claude/skills/i-have-adhd/  (the vendored output-style skill POLARIS installed — MIT,"
+    note "                              github.com/ayghri/i-have-adhd; reinstall it standalone with"
+    note "                              claude plugin install if you want to keep using it)"
     note "the write-guard hook entry   (.claude/settings.json — your other hooks are kept)"
     note "the managed POLARIS block    (CLAUDE.md — your own content is kept)"
     note "POLARIS lines in .gitignore / .gitattributes · .polaris/ · the lock dir"
@@ -475,6 +660,7 @@ EOF
     fi
   fi
   rm -rf "$PRIMARY/.claude/skills/polaris"
+  rm -rf "$PRIMARY/.claude/skills/i-have-adhd"    # vendored by install.sh; see its SOURCE.md
   rmdir "$PRIMARY/.claude/skills" "$PRIMARY/.claude" 2>/dev/null || true   # only if now empty
 
   # --- the lines install.sh appended

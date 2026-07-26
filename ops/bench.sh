@@ -41,6 +41,31 @@ echo "POLARIS bench — $(sed -n 's/^version: *//p' ops/VERSION 2>/dev/null | he
 echo "repo: $(git ls-files 2>/dev/null | wc -l | tr -d ' ') tracked files"
 echo
 
+# --- the OTHER axis: bytes, not milliseconds -----------------------------------------------
+# Wall clock is only half the cost of running agents, and it was the half this file measured. The
+# other half is what every context PAYS TO EXIST: the router, the role file, and — much larger than
+# either — the name+description of every skill/agent/command definition installed under ~/.claude,
+# injected whether or not anything invokes them. A conductor run pays that 6-8 times.
+# `bench.sh --context` prints it so a claim about token savings can be reproduced, not asserted.
+if [ "${1:-}" = "--context" ]; then
+  echo "-- what every context pays before any work (bytes → ~tokens at 4 B/token) --"
+  ctx_b() { [ -f "$1" ] && wc -c < "$1" | tr -d ' ' || echo 0; }
+  R="$(ctx_b CLAUDE.md)"; K="$(ctx_b kit/CLAUDE.md)"
+  [ "$K" -gt 0 ] && R="$K"
+  printf '  %-34s %8s B  %7s tok\n' "CLAUDE.md (every subagent too)" "$R" "$((R / 4))"
+  for f in ops/roles/*.md; do
+    [ -f "$f" ] || continue
+    b="$(ctx_b "$f")"
+    printf '  %-34s %8s B  %7s tok\n' "  $(basename "$f")" "$b" "$((b / 4))"
+  done
+  echo
+  echo "-- installed definitions (the passenger) --"
+  bash ops/polaris slim 2>/dev/null | sed -n '/MACHINERY/,/total paid/p' | sed 's/^/  /'
+  echo
+  echo "  Recover the machinery rows:  bash ops/polaris slim --apply   (reversible: --restore)"
+  exit 0
+fi
+
 echo "-- the fixed tax (paid by every command) --"
 ms "help (no env, no modules)"  bash ops/polaris help
 ms "board-fm"                   bash ops/polaris board-fm

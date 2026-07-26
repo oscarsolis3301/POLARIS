@@ -238,6 +238,122 @@ EOF
   note "RULES.tsv still binds inside granted paths · prove it when done: polaris verify"
 }
 
+# ------------------------------------------------------------------ pack (5.21.0)
+# THE 1-HOP CONTEXT. `ops/contracts/context-pack.md`.
+#
+# Until now "read the brain first, run `find` before Grep, match the house style, check the
+# contract" was PROSE in five role files and every conductor kickoff. Prose is something a model
+# can skip, and skipping it is invisible until the diff comes back in the wrong style against an
+# interface nobody read. Worse, an agent that DOES follow it spends 6-15 round trips assembling
+# facts the CLI could have handed it in one — each round trip a tool call, a result, and a re-read
+# of everything above it in the transcript.
+#
+# `pack` is the same seven things as ONE call. It reads; it never writes, never touches git refs,
+# never mutates the board. Every section degrades to a one-line note rather than dying, because a
+# missing brain or an unindexed repo must still produce a usable pack.
+
+pack_section() { printf '\n=== %s ===\n' "$1"; }
+
+pack_brain_grep() { # pack_brain_grep <file> <pattern> — brain lines mentioning an owned path.
+  # The brain already distills gotchas and co-change; the only new thing here is RELEVANCE — a
+  # Builder needs the two lines about ITS files, not all 60.
+  local bf="$PRIMARY/.polaris/brain/$1" pat="$2"
+  [ -f "$bf" ] && [ -n "$pat" ] || return 0
+  grep -E "$pat" "$bf" 2>/dev/null | head -8 || true
+}
+
+cmd_pack() { # pack <ID> — the whole context for one task, in ONE call. Read-only.
+  local id="${1:-}" f owned ctx contract pts risk title dirs d p pat any
+  [ -n "$id" ] || id="$(current_task_id 2>/dev/null || true)"
+  [ -n "$id" ] || die "usage: polaris pack <ID>   (or run it inside a feat/<ID> worktree)"
+  f="$(task_file "$id" 2>/dev/null || true)"
+  [ -n "$f" ] && [ -f "$f" ] || die "no task $id on the board — check: ops/polaris board-fm"
+
+  title="$(fm_get title "$f")"; pts="$(fm_get points "$f")"; risk="$(fm_get risk "$f")"
+  owned="$(fm_list files_owned "$f" 2>/dev/null | grep . || true)"
+  ctx="$(fm_list context_files "$f" 2>/dev/null | grep . || true)"
+  contract="$(fm_get contract "$f" 2>/dev/null || true)"
+
+  printf 'PACK %s — %s\n' "$id" "$title"
+  printf 'points %s · risk %s · column %s\n' "${pts:-?}" "${risk:-normal}" "$(task_col "$id" 2>/dev/null || echo '?')"
+  printf 'This is your whole context. You should not need to go hunting for more.\n'
+
+  # 1. the task itself — Why becomes the commit body, acceptance boxes are the definition of done.
+  pack_section "THE TASK  ($f)"
+  awk '/^## Why/{on=1} on&&/^## /&&!/^## Why/&&!seen{seen=1} on{print}' "$f" 2>/dev/null \
+    | awk 'NR<=60' | grep . || printf '(no ## Why section — ask before coding)\n'
+
+  # 2. the contract, VERBATIM. Invariant 3: never invent an interface.
+  pack_section "THE CONTRACT"
+  if [ -n "$contract" ] && [ -f "$PRIMARY/$contract" ]; then
+    printf '# %s\n' "$contract"; awk 'NR<=120' "$PRIMARY/$contract"
+  elif [ -n "$contract" ]; then
+    printf '⛔ contract %s is NAMED but MISSING — Invariant 3: park this in blocked/, never guess\n' "$contract"
+  else
+    printf '(none — a change this size usually has no seam. Do not invent one.)\n'
+  fi
+
+  # 3. house style, DETECTED. The point: match what the repo already does without re-inferring it.
+  pack_section "HOUSE STYLE — match this, it is what the repo already does"
+  if [ -f "$PRIMARY/.polaris/brain/prefs.md" ]; then
+    grep -E '^\|' "$PRIMARY/.polaris/brain/prefs.md" 2>/dev/null | head -8 || true
+  else
+    printf '(no brain yet — run: ops/polaris brain)\n'
+  fi
+
+  # 4. what you may touch, and what you may only read. Invariant 1 is the whole job.
+  pack_section "FILES YOU OWN — edit ONLY these"
+  printf '%s\n' "${owned:-(none declared — that is a bug in the task, stop and ask)}"
+  if [ -n "$ctx" ]; then
+    printf '\nread-only context:\n%s\n' "$ctx"
+  fi
+
+  # 5. the neighbourhood + 6. the public surface you must not break. Both already exist as
+  # generated artifacts; pack's only contribution is asking for exactly the owned paths.
+  pack_section "WHERE THIS LIVES"
+  dirs="$(printf '%s\n' "$owned" | sed -n 's|/[^/]*$||p' | sort -u | grep . || true)"
+  any=""
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    if [ -f "$PRIMARY/.polaris/brain/code-map.md" ]; then
+      awk -v d="## $d/" '$0==d{on=1;print;next} on&&/^## /{exit} on{print}' \
+        "$PRIMARY/.polaris/brain/code-map.md" 2>/dev/null | grep . && any=1
+    fi
+  done <<EOF
+$dirs
+EOF
+  [ -n "$any" ] || printf '(no code-map entry — run: ops/polaris brain)\n'
+
+  pack_section "PUBLIC SURFACE — do not break these signatures"
+  any=""
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    # `find --api` is the same index `check --scaffold` locks goldens from, so what prints here is
+    # exactly what a shape regression would flag later.
+    "$SELF" find --api "$p" 2>/dev/null | head -25 | grep . && any=1
+  done <<EOF
+$owned
+EOF
+  [ -n "$any" ] || printf '(nothing indexed for these paths — new files, or run: ops/polaris brain)\n'
+
+  # 7. the lessons that already cost someone tokens, filtered to THIS task's files.
+  pat="$(printf '%s\n' "$owned" | sed -e 's/[].[^$*\\/]/\\&/g' | grep . | tr '\n' '|' | sed 's/|$//')"
+  if [ -n "$pat" ]; then
+    pack_section "KNOWN TRAPS IN THESE FILES"
+    { pack_brain_grep learned.md "$pat"; pack_brain_grep gotchas.md "$pat"; } | grep . \
+      || printf '(none recorded for these paths)\n'
+  fi
+
+  # 8. what will actually be run against you. Knowing this up front is what stops a Builder
+  # writing a verify: it cannot pass, or hand-checking something the list already proves.
+  pack_section "WHAT PROVES IT — polaris verify runs exactly this"
+  fm_list verify "$f" 2>/dev/null | grep . || printf '(no verify: list — add one, narrow, each under ~10s)\n'
+  printf '\nthen the fast tier: %s\n' "$(cfg test_fast "$(cfg test '(no test: configured)')")"
+
+  printf '\n--- end of pack. Anything beyond this needs a one-line reason in the task Notes. ---\n'
+  return 0
+}
+
 cmd_resume() { # resume [ID] — re-enter an already-claimed active task without re-claiming it: after a
   # Builder crash, a kickback, or simply a fresh session. sweep only FLAGS stale locks; this is the
   # action that takes one over — recreates the worktree if it vanished, refreshes the lock's age+owner.

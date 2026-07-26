@@ -7,10 +7,17 @@ bash ops/polaris claim          # takes the top-wsjf ready task, or: claim <ID>
 ```
 One command does it all atomically: lock → board move (ready→active, committed) → worktree at `.polaris/wt/<ID>` on branch `feat/<ID>`. "taken" → just run it again; it picks the next task. `cd` into the printed worktree path — ALL code work happens there, NEVER in the primary checkout.
 
-## 2. Read — exactly this, nothing more
-When `.polaris/brain/` exists, `read .polaris/brain/INDEX.md FIRST, repo second` — the generated brain digests the board and MAP into a cheaper cold-start; `ops/MAP.md` stays the tracked fallback when no brain exists. Then: the task file — it lives in the PRIMARY checkout, NOT your worktree (worktrees carry no `ops/board`); read it at the primary-anchored path `claim`/`resume` printed · its contract in `ops/contracts/` (repo-relative — contracts stay on base, so they ARE in your worktree) · its `context_files` · the relevant `ops/MAP.md` rows · `ops/CONVENTIONS.md`. That is your whole context. Anything else needs a one-line justification appended to the task's Notes.
+## 2. Read — ONE command, then stop
+```bash
+bash ops/polaris pack <ID>      # your whole context, in one call
+```
+That output **is** your context: the task's `## Why` and acceptance boxes, its contract verbatim, the house style this repo actually uses (detected, not guessed), the files you own versus the ones you may only read, the code-map for each owned directory, the public API surface you must not break, the traps already recorded against those exact paths, and the `verify:` commands that will be run against you.
 
-**Looking up code: `find` first, never grep first.** `bash ops/polaris find <symbol>` returns `path:line` + signature in one hop; `bash ops/polaris show <path>#<symbol>` prints that symbol's body without the file around it. Use them for every "where is X / what does X look like" — including reading your `context_files` for style, where `show` beats opening the whole file. Grep only when `find` and `find -t <text>` both miss.
+Do not go assembling those seven things by hand — that is 6-15 tool calls to arrive where `pack` already put you, and it is the single most expensive habit this role has. Anything `pack` does not answer needs a one-line justification appended to the task's Notes.
+
+**Then, for anything else: `find` first, never grep first.** `bash ops/polaris find <symbol>` returns `path:line` + signature in one hop; `bash ops/polaris show <path>#<symbol>` prints that symbol's body without the file around it. Grep only when `find` and `find -t <text>` both miss.
+
+(No `pack` — an older installed kit? Fall back to the manual sequence: `.polaris/brain/INDEX.md` first, repo second, `ops/MAP.md` when no brain exists; then the task file at the primary-anchored path `claim` printed, its contract in `ops/contracts/`, its `context_files`, and `ops/CONVENTIONS.md`.)
 
 ## 3. Build
 Implement strictly against the contract, strictly inside `files_owned`. `context_files` are read-only patterns to imitate — copy the local style, don't invent one. Commit on `feat/<ID>` as you go (`feat: <ID> <what>`). Every meaningful step: `✅ <what> — <file>`. Append discoveries to the task's Notes (one line each) instead of re-deriving them later — these lines become the squash commit's `Notes:` body verbatim at `land`, so keep each to one real discovery, no chatter; HTML comments and `⛔` lines are filtered out automatically.

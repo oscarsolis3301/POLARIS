@@ -8,7 +8,8 @@ when you actually need it. Read the section you need, not the file.
 |---|---|
 | the command table — what `polaris <x>` does | THE TOOL |
 | what lives where on disk | STATE = THE BOARD |
-| how to stay cheap: find-first, brain-first, read-less | TOKEN DISCIPLINE |
+| why a lane exists, and why one role never does two jobs | LANES |
+| how to stay cheap: pack-first, find-first, read-less | TOKEN DISCIPLINE |
 | which model tier a role deserves | MODEL ROUTING |
 | how to TALK to the human | VOICE |
 | how to behave as a model running this | MODEL NOTES |
@@ -18,6 +19,7 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 
 | Command | Does |
 |---|---|
+| `ops/polaris pack <ID>` | **the whole context for one task, in ONE call** — frontmatter + Why + acceptance, the contract verbatim, the repo's detected house style, the code-map for every owned directory, the public API surface each owned path must not break, the gotchas/co-change lines that mention an owned path, and the exact `verify:` commands. Run it FIRST, before reading anything. It replaces the 6-15 exploratory round trips a cold Builder otherwise spends rediscovering its own task |
 | `ops/polaris find <symbol>` · `show <path>#<symbol>` | the 1-hop "where is X": `path:line` + signature per hit, ranked, from a generated index; `show` prints ONE symbol's body instead of the file. `--api <glob>` = the sorted public surface of a path (the shape goldens lock). Run these BEFORE Grep |
 | `ops/polaris claim [ID]` | atomic lock + ready→active + worktree (no ID = top wsjf) |
 | `ops/polaris verify` | proves `diff ⊆ files_owned` + runs the task's `verify:` commands |
@@ -39,6 +41,7 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris drift / rules` | mechanical board-hygiene audit (`--strict` for CI) · policy file list + health |
 | `ops/polaris qa` | "is everything okay?" in ONE shot: CONVENTIONS suite (test/lint/typecheck/build/uat) + `drift --strict` + doctor. Runs every check even after a red; rc 1 on any red. The Conductor/Integrator finish line |
 | `ops/polaris fleet <N> [--launch]` | print N Builder kickoffs; `--launch` opens a session per ready task in tmux windows or side-by-side Windows Terminal panes (`--dry-run` previews). Planner runs this per `autolaunch:` |
+| `ops/polaris slim [--apply\|--restore]` | the per-context TOKEN TAX, measured. Every skill/agent/command definition under `~/.claude` injects its name+description into the system prompt of every session AND every subagent, invoked or not. Reports bytes per family and what a 6-8 context run pays for them; `--apply` MOVES the identified claude-flow machinery into `~/.claude/.polaris-archived/` (never deletes, always `--restore`-able) and leaves anything it cannot positively identify alone |
 | `ops/polaris version / update` | which POLARIS this repo runs · **fetch the latest kit** — also re-caches it into `~/.claude` so the next repo gets it too (manual; POLARIS never self-updates mid-sprint) |
 | `ops/polaris upgrade` | migrate an OLD BOARD v3/v4→v5. Downloads nothing. **Not** `update` — one letter apart, unrelated jobs; "upgrade POLARIS" almost always means `update`. |
 
@@ -72,7 +75,44 @@ ops/
 `.claude/` ships a project skill (auto-routes any Claude Code session to this protocol) and a PreToolUse hook wiring the write-guard.
 A task's state is the folder its file sits in; moving it (via the script) is the transition. Worktrees live in `.polaris/wt/<ID>` (gitignored). Locks live in `$(git rev-parse --git-common-dir)/polaris-locks/` — shared across all worktrees, never committed.
 
+## LANES — why the lane is a command, and why a role never does two jobs
+
+**The phases were never the expense. The CONTEXTS were.** Measured 2026-07-25/26: `qa`, `verify`,
+`check`, `triage` and `drift` are pure shell and cost zero LLM tokens — "cut the QA step to go
+faster" removes a gate and saves nothing. What costs is that a one-line change used to open four
+contexts (conductor, planner, builder, integrator), each re-injecting `CLAUDE.md` and its own role
+file, plus ~7,300 tokens of skill/agent definitions, before reading a word of the actual work.
+That is roughly 62 KB of boilerplate to move one line.
+
+So POLARIS collapses SESSIONS, never CHECKS:
+
+| lane | contexts | when `triage` picks it |
+|---|---|---|
+| `solo` | **1** | one task, ≤3 points, `risk: normal`, `express:` on, `publish: direct`, nothing RULES-guarded |
+| `express` | 2 | one task, one builder, one integrator |
+| `full` | 4+ | anything else — real parallelism, real merge risk |
+
+Every gate the long path runs, SOLO runs: `verify` (ownership + RULES), the task's `verify:` list,
+the full suite once at `land --express`, then `qa`. If you find yourself skipping a gate to make a
+change fit the lane, **the lane is wrong** — release it back and take the full loop.
+
+**`triage` is mechanical on purpose.** It reads points, risk, `express:`, `publish:` and the
+RULES-guarded paths straight off the board. A model weighing those six conditions from prose gets it
+wrong occasionally, and a wrong guess toward `full` costs a whole sprint of contexts while a wrong
+guess toward `solo` strands a half-built task. The command is free; the judgement is not.
+
+**One role per session** because a role's whole safety argument is its narrow context: a Builder that
+also plans starts inventing interfaces, and one that also integrates merges its own red work. The
+sole exception is the one-time INIT → PLANNER bootstrap — it runs once per repo, before any Builder
+exists, on the base branch, and writes zero feature code, so that installing POLARIS leaves you with
+a planned board instead of homework. The CONDUCTOR is **not** a second exception: it holds no role
+at all and delegates each one to a fresh subagent, so roles still never mix inside one context.
+
 ## TOKEN DISCIPLINE — this is how we stay cheap and fast
+- **`pack` first, everything else second.** Working a task? `ops/polaris pack <ID>` returns its
+  contract, house style, owned-directory map, public API surface and gotchas in ONE call. Reading
+  those seven things by hand costs 6-15 round trips and lands you in the same place. The brain and
+  `find` below are what `pack` is built out of — reach for them directly only when you have no task.
 - **Read the brain first.** When it exists, read `.polaris/brain/INDEX.md` FIRST, repo second — a generated, gitignored, ≤4-hop knowledge base that digests the tracked MAP and kills cold-start re-derivation. No brain yet → `ops/MAP.md` is the fallback (next bullet).
 - **Read the MAP, not the repo.** `ops/MAP.md` is the summary; `polaris status` is the board — never browse either raw.
 - **`find` first, grep second.** `polaris find <symbol>` answers "where is X" in ONE hop — `path:line` + signature per hit, ranked exact→prefix→substring, from a generated index. `polaris show <path>#<symbol>` prints just that symbol's body instead of the file. Use them BEFORE Grep: the same answer costs a hunt of 6-15 grep/read round trips otherwise. Grep is the fallback for text `find` can't match (and `find -t <text>` covers most of that). NEVER read a large file end-to-end without a written reason.
@@ -93,6 +133,23 @@ A task's state is the folder its file sits in; moving it (via the script) is the
 |---|---|
 | `standard` | Warm, friendly, plain English — like a teammate who knows the code, not a spec sheet. No POLARIS jargon (`wsjf`, `paranoid`, `local-lock`, `files_owned`) unless you explain it in the same breath. Lead with what happened and what it means for them; leave out detail they didn't ask for. |
 | `technical` | Dense, terse, expert-to-expert. Jargon is fine; assume they wrote this kit. |
+
+**OUTPUT DISCIPLINE — applies under BOTH voices, always.** Adapted from the `i-have-adhd` skill
+(github.com/ayghri/i-have-adhd, MIT), which ships with this kit at `.claude/skills/i-have-adhd/` and
+can also be invoked directly. These are not a style preference; a preamble you did not need is a
+paragraph the human reads and pays for, and every one of these rules is strictly less output:
+
+1. **Lead with the action**, not the context. Answer first, explain only if asked.
+2. **Number multi-step work.** Bounded, ordered steps — never a wall of prose.
+3. **End with ONE concrete next step**, doable in under two minutes. Not three options.
+4. **No preamble, no recap, no closing pleasantry.** Start at the answer, stop when it ends.
+5. **Cap lists at 5.** More than five and you are dumping, not reporting.
+6. **Make progress visible and specific** — "3 of 5 landed", not "good progress".
+7. **Suppress tangents.** Something else needs doing → one line in `ops/board/backlog/IDEAS.md`.
+
+Exceptions, and they are narrow: the human explicitly asks for the explanation · a STOP-AND-ASK
+confirmation (never compress a destructive-action check) · a genuine ambiguity that needs a
+question · a debugging spiral where the reasoning IS the answer.
 
 - **Applies ONLY to what you SAY** — your reports, the questions you ask, your `✅`/`⛔` lines.
 - **NEVER applies to what you WRITE to disk.** Task frontmatter, acceptance criteria, contracts, `ops/MAP.md`, `ops/SPRINT.md`, `ops/RULES.tsv`, commit messages and code stay exactly as terse and machine-precise as they are today — agents read those, and chattiness there costs the next agent tokens and accuracy.
