@@ -27,6 +27,7 @@ kit/ops/MANUAL.md	heading	Brain by hand — the generated knowledge base
 kit/ops/MANUAL.md	heading	Claim (Builder)
 kit/ops/MANUAL.md	heading	Express lane by hand (Integrator) — one small task, one pass
 kit/ops/MANUAL.md	heading	Finding code by hand — what `find` / `show` replace
+kit/ops/MANUAL.md	heading	Finish — "is the run over?" by hand
 kit/ops/MANUAL.md	heading	Grant (Builder) — amend `files_owned` mid-flight, the sanctioned way
 kit/ops/MANUAL.md	heading	Handoff (Builder)
 kit/ops/MANUAL.md	heading	Integrate (Integrator) — audit → land-per-task → suite → seal
@@ -261,6 +262,7 @@ kit/ops/lib/observe.sh	fn	cmd_check
 kit/ops/lib/observe.sh	fn	cmd_dash
 kit/ops/lib/observe.sh	fn	cmd_doctor
 kit/ops/lib/observe.sh	fn	cmd_drift
+kit/ops/lib/observe.sh	fn	cmd_finish
 kit/ops/lib/observe.sh	fn	cmd_fleet
 kit/ops/lib/observe.sh	fn	cmd_harness
 kit/ops/lib/observe.sh	fn	cmd_metrics
@@ -274,6 +276,10 @@ kit/ops/lib/observe.sh	fn	cmd_triage
 kit/ops/lib/observe.sh	fn	cmd_why
 kit/ops/lib/observe.sh	fn	dep_ids
 kit/ops/lib/observe.sh	fn	dep_reaches
+kit/ops/lib/observe.sh	fn	fin_caveat
+kit/ops/lib/observe.sh	fn	fin_count
+kit/ops/lib/observe.sh	fn	fin_ids
+kit/ops/lib/observe.sh	fn	fin_pending
 kit/ops/lib/observe.sh	fn	find_claude
 kit/ops/lib/observe.sh	fn	find_claude_windows
 kit/ops/lib/observe.sh	fn	finding
@@ -309,6 +315,7 @@ kit/ops/lib/selftest/history.sh	fn	drill_express
 kit/ops/lib/selftest/history.sh	fn	drill_pr-publish
 kit/ops/lib/selftest/history.sh	fn	drill_tcm
 kit/ops/lib/selftest/policy.sh	fn	drill_drift
+kit/ops/lib/selftest/policy.sh	fn	drill_finish
 kit/ops/lib/selftest/policy.sh	fn	drill_hardening
 kit/ops/lib/selftest/policy.sh	fn	drill_qa
 kit/ops/lib/selftest/policy.sh	fn	drill_rules

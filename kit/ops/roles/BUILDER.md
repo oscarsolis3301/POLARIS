@@ -41,6 +41,14 @@ bash ops/polaris handoff    # the gate: refuses dirty trees, re-proves ownership
 ```
 An ownership violation means you revert the stray change (or hand back if it was necessary) — never argue with the gate. After handoff, report: task ID, branch, one-line summary, test results. **Do not merge. Do not touch the lock** — the Integrator lands it and cleans up.
 
+**You never end the run.** Do not run `bash ops/polaris finish`, never fire `notify-gate done`, and
+never open a reply with `# 🎉 Complete!` or any `🎉`. Your task going green is a **handoff, not an
+ending** — the wave still has to be landed, sealed, checked and reported by somebody else, and a
+builder celebrating is how a human gets told the work is done while three lanes are still running.
+Your close is the four-part report above and nothing more. (`finish` would refuse you anyway: it runs
+only in the primary checkout, and your own task sitting in `review/` is itself a pending item — but
+the rule is yours to keep, not the command's to enforce.)
+
 ## Failure path (any abort)
 ```bash
 bash ops/polaris release <ID> --to ready -m "why"      # or --to blocked when something must change first

@@ -4,6 +4,58 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.22.0 — 2026-07-26
+
+**You could never tell "done" from "stopped talking".**
+
+A lane printed `✅ qa: all green` and went quiet. So did a Builder handing off mid-wave, a Conductor
+pausing at a budget cap, and a run that was genuinely, completely finished. Three different states,
+one indistinguishable ending — so the human went and re-read the board to find out which one it was.
+
+The definition of "finished" was not missing. It was written down, precisely, at `CONDUCTOR.md`
+§ "The second rule" — and locked inside that one role file, where SOLO, the INTEGRATOR and every lane
+that ends a run without a conductor could not reach it. This release makes it a command.
+
+| | before | after |
+|---|---|---|
+| "is the run over?" | re-read the board by hand | `bash ops/polaris finish` |
+| the run-over definition | prose, in 1 of 8 role files | executable, inherited by every lane |
+| lanes that fire the `done` hook | 1 of 4 (pr-mode seal only) | **all of them** |
+| a finished run, on screen | `✅ qa: all green` | **`# 🎉 Complete!`** |
+
+- **`polaris finish` — the run-over gate.** Eleven free board and git checks, then `qa`. Nothing
+  building, nothing waiting to land, `ready/` drained per `drain:`, no unmerged `integrate/<date>`,
+  no orphan lock, clean tree on base, suite green. rc 0 = the run is over. rc 1 names every pending
+  thing on its own line, so "not done" is always actionable rather than a mood. It runs `qa` for you
+  instead of trusting that you remember running it — and pays seconds when the suite stamp is
+  already green at this commit.
+- **The confetti, and why it lives in the reply.** On rc 0 the agent opens its closing message with a
+  markdown H1 — `# 🎉 Complete!` — which renders huge and bold in the client. A command cannot do
+  this: terminals do not render markdown. So the two halves are split deliberately, and the split is
+  the whole point. The command owns the *verdict*; the reply owns the *signal*; the exit code is the
+  only bridge. An agent can no longer decide it feels finished.
+- **A partial ending now reads as one.** Budget cap, blocked work, red suite: no H1, no confetti —
+  two or three warm sentences naming what landed, the one thing still pending, and the single next
+  command, per the ADHD output discipline already in `PROTOCOL.md` § VOICE. Seeing 🎉 means 100%
+  done, every time, or it means nothing.
+- **`blocked/` is a caveat, never a gate.** Whether the human was *told* about parked work is not
+  mechanically knowable, so gating on it would make runs un-finishable. Instead `finish` prints it as
+  a `caveat:` line and the role files make naming every caveat mandatory. rc 0 means "the run is
+  over", never "nothing was left behind".
+- **The `done` hook fires exactly once, and now actually fires.** Keyed on the base tip sha in
+  `.polaris/finish-stamp`, so it self-clears the moment the next run lands a commit — no expiry, no
+  `--reset`. Before this, `notify-gate done` fired only from a pr-mode seal; direct-mode seal,
+  `land --express` and SOLO never fired it at all. Every lane ends at `finish` now, so every lane
+  fires it.
+- **A Builder cannot celebrate, by construction rather than by good behaviour.** `finish` refuses
+  outside the primary checkout, and a worktree builder is never in it. That closes five of the six
+  subagent dispatch sites mechanically; two lines in `CLAUDE.md` — the only context every subagent
+  shares — close the sixth.
+- Fixed in passing: `CONDUCTOR.md` contradicted itself on the `drain:` default (one section said
+  `queue`, another said `plan`; the CLI's fallback is `queue`, and `plan` is what INIT seeds).
+- New contract `ops/contracts/run-finish.md`; new `drill_finish` (six assertions, hermetic);
+  `cli-help-parity` 8 → 9.
+
 ## 5.21.0 — 2026-07-26
 
 **The phases were never the expense. The contexts were.**

@@ -104,3 +104,71 @@ drill_qa() {
     "$SELF" qa >/dev/null 2>&1 && { echo "QA RED FAIL (red suite must rc 1)"; exit 1; }
     rm -f ops/CONVENTIONS.md
 }
+drill_finish() {
+    # --- v5.22: finish — the run-over gate (ops/contracts/run-finish.md). Proves: listed in help ·
+    # a pending item is NAMED, rc 1, and does NOT stamp or fire (a pending run must never claim it
+    # signalled) · drain: queue gates on ready/ while drain: plan demotes the SAME board to a caveat ·
+    # a worktree invocation refuses, which is the mechanical half of "a BUILDER never celebrates" ·
+    # a clean board is rc 0 with the frozen verdict token and a well-formed stamp · the done hook
+    # fires EXACTLY ONCE per finished state and a re-run stays rc 0 with the stamp unmoved.
+    # HERMETIC (ops/contracts/selftest-sharding.md): every artifact is removed before returning —
+    # CONVENTIONS.md absent and the tree clean, exactly as drill_qa leaves them, plus no finish-stamp
+    # and no notify.log (drill_notify greps the same file and would false-pass on our lines).
+    "$SELF" help | grep -q '^  finish' || { echo "USAGE FAIL: finish missing from help"; exit 1; }
+    # The fixture is COMMITTED: finish gates on a clean tree (same porcelain read cmd_qa's suite
+    # stamp uses), so an untracked CONVENTIONS.md would itself be the pending item. `test: true`
+    # gives qa a real green suite command; the notify: hook makes "fired once" OBSERVED, not assumed.
+    printf 'test: true\n' > ops/CONVENTIONS.md
+    printf 'notify: printf "%%s/%%s/%%s/%%s\\n" "$POLARIS_EV" "$POLARIS_SEVERITY" "$POLARIS_ID" "$POLARIS_NOTE" >> %s\n' "$T/notify.log" >> ops/CONVENTIONS.md
+    # A real contract file: the queued fixture below is the first ready/ task in the spine that
+    # coexists with a qa run, so it must satisfy the ready gate or drift reds for the wrong reason.
+    mkdir -p ops/contracts; printf '# drill contract\n' > ops/contracts/fin.md
+    git add -A; git commit -qm 'drill: finish fixture'
+    : > "$T/notify.log"; rm -f .polaris/finish-stamp
+    # 1) a task waiting to land → rc 1, named by ID, no stamp, no hook
+    printf -- '---\nid: T-FIN\npoints: 1\nwsjf: 1\nstatus: review\nfiles_owned:\n  - src/fin.txt\n---\n' > ops/board/review/T-FIN.md
+    "$SELF" finish > "$T/fin1.out" 2>&1 && { cat "$T/fin1.out"; echo "FINISH PENDING FAIL (a review/ task must rc 1)"; exit 1; }
+    grep -q 'pending: 1 waiting to land' "$T/fin1.out" || { cat "$T/fin1.out"; echo "FINISH PENDING MSG FAIL (must name WHAT is pending)"; exit 1; }
+    grep -q 'T-FIN' "$T/fin1.out" || { echo "FINISH PENDING ID FAIL (must name the task)"; exit 1; }
+    grep -q 'finish: not done' "$T/fin1.out" || { echo "FINISH PENDING VERDICT FAIL (frozen token missing)"; exit 1; }
+    [ -f .polaris/finish-stamp ] && { echo "FINISH PENDING STAMP FAIL (a pending run must not stamp)"; exit 1; }
+    grep -q 'run-done' "$T/notify.log" 2>/dev/null && { echo "FINISH PENDING HOOK FAIL (a pending run must not fire done)"; exit 1; }
+    rm -f ops/board/review/T-FIN.md
+    # 2) drain: — the default (queue) gates on a queued task; drain: plan demotes the SAME board to
+    #    a caveat, because one "go" there authorizes the plan and not the board.
+    printf -- '---\nid: T-FQ\npoints: 1\nwsjf: 1\nstatus: ready\ncontract: ops/contracts/fin.md\nfiles_owned:\n  - src/fq.txt\n---\n' > ops/board/ready/T-FQ.md
+    "$SELF" finish > "$T/fin2.out" 2>&1 && { cat "$T/fin2.out"; echo "FINISH DRAIN FAIL (a queued task under drain: queue must rc 1)"; exit 1; }
+    grep -q 'pending: 1 queued' "$T/fin2.out" || { cat "$T/fin2.out"; echo "FINISH DRAIN MSG FAIL"; exit 1; }
+    printf 'drain: plan\n' >> ops/CONVENTIONS.md; git add -A; git commit -qm 'drill: drain plan'
+    "$SELF" finish > "$T/fin3.out" 2>&1 || { cat "$T/fin3.out"; echo "FINISH DRAIN-PLAN FAIL (drain: plan must not gate on ready/)"; exit 1; }
+    grep -q 'caveat: 1 queued' "$T/fin3.out" || { cat "$T/fin3.out"; echo "FINISH DRAIN-PLAN CAVEAT FAIL (parked work must still be REPORTED)"; exit 1; }
+    rm -f ops/board/ready/T-FQ.md
+    grep -v '^drain:' ops/CONVENTIONS.md > "$T/conv.tmp" && mv "$T/conv.tmp" ops/CONVENTIONS.md
+    git add -A; git commit -qm 'drill: drain default'
+    # 3) a subagent can NEVER celebrate: finish refuses outside the primary checkout, whatever its
+    #    context talked it into. This is the one part of the H1 ban that is mechanically testable.
+    printf -- '---\nid: T-FW\npoints: 1\nwsjf: 1\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/fw.txt\nverify: []\n---\n' > ops/board/ready/T-FW.md
+    "$SELF" claim T-FW >/dev/null
+    ( cd .polaris/wt/T-FW && "$SELF" finish > "$T/fin4.out" 2>&1 ) && { cat "$T/fin4.out"; echo "FINISH WORKTREE FAIL (a worktree invocation must rc 1)"; exit 1; }
+    grep -q 'primary checkout' "$T/fin4.out" || { cat "$T/fin4.out"; echo "FINISH WORKTREE MSG FAIL (must name the refusal)"; exit 1; }
+    "$SELF" release T-FW --to ready -m drill >/dev/null
+    rm -f ops/board/ready/T-FW.md; git branch -D feat/T-FW >/dev/null 2>&1 || true
+    # 4) a clean board → rc 0, the frozen verdict token, a well-formed stamp, and the hook line
+    rm -f .polaris/finish-stamp; : > "$T/notify.log"
+    "$SELF" finish > "$T/fin5.out" 2>&1 || { cat "$T/fin5.out"; echo "FINISH GREEN FAIL (a clean board must rc 0)"; exit 1; }
+    grep -q 'finish: run complete' "$T/fin5.out" || { cat "$T/fin5.out"; echo "FINISH GREEN VERDICT FAIL (frozen token missing)"; exit 1; }
+    grep -q 'done signal fired' "$T/fin5.out" || { cat "$T/fin5.out"; echo "FINISH FIRE FAIL (the first finish must say it fired)"; exit 1; }
+    grep -qE '^[0-9a-f]{7,} [0-9]+$' .polaris/finish-stamp || { echo "FINISH STAMP FORMAT FAIL (want one '<sha> <epoch>' line)"; exit 1; }
+    ngwait '^run-done/done//run-done$' || { echo "FINISH HOOK FAIL (notify: must see run-done/done)"; exit 1; }
+    # 5) FIRE-ONCE: same finished state → still rc 0, no second hook line, stamp unmoved
+    fnpre="$(cat .polaris/finish-stamp)"
+    "$SELF" finish > "$T/fin6.out" 2>&1 || { cat "$T/fin6.out"; echo "FINISH REFIRE RC FAIL (a re-run must stay rc 0)"; exit 1; }
+    grep -q 'already fired' "$T/fin6.out" || { cat "$T/fin6.out"; echo "FINISH REFIRE MSG FAIL"; exit 1; }
+    sleep 0.5
+    [ "$(grep -c 'run-done/done' "$T/notify.log")" = "1" ] || { echo "FINISH REFIRE HOOK FAIL (done must fire EXACTLY once per finished state)"; exit 1; }
+    [ "$(cat .polaris/finish-stamp)" = "$fnpre" ] || { echo "FINISH REFIRE STAMP FAIL (the stamp must not move)"; exit 1; }
+    # hermetic: back to drill_qa's exit state — CONVENTIONS.md absent, tree clean, no stamp, no log
+    rm -f ops/CONVENTIONS.md ops/contracts/fin.md .polaris/finish-stamp "$T/notify.log"
+    rmdir ops/contracts 2>/dev/null || true
+    git add -A; git commit -qm 'drill: finish teardown'
+}
