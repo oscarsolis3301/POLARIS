@@ -2,14 +2,25 @@
 # (the lib loader): owned_match/check_ownership, the verify: runner, map_delta hint, the RULES scanners, and the guard entrypoints (_match/_rules).
 
 # ------------------------------------------------------------------ ownership
-owned_match() { # owned_match <changed-path> ; patterns on stdin. exact | dir/ prefix | glob
+match_one() { # match_one <changed-path> <pattern> — THE matcher: exact | dir/ prefix | glob.
+  # Extracted so a single-pattern caller does not have to build a pipe to reach it (a pipe is a
+  # subshell, and rule_scan_path built one PER RULE — ~14 forks per guarded write).
+  case "$2" in
+    */) case "$1" in "$2"*) return 0;; esac ;;
+    *)  case "$1" in $2) return 0;; esac ;;      # unquoted: glob; * crosses slashes
+  esac
+  return 1
+}
+owned_match() { # owned_match <changed-path> [pattern...] — patterns as args, or on stdin if none
   local f="$1" pat
+  shift
+  if [ $# -gt 0 ]; then
+    for pat in "$@"; do [ -z "$pat" ] && continue; match_one "$f" "$pat" && return 0; done
+    return 1
+  fi
   while IFS= read -r pat; do
     [ -z "$pat" ] && continue
-    case "$pat" in
-      */) case "$f" in "$pat"*) return 0;; esac ;;
-      *)  case "$f" in $pat) return 0;; esac ;;   # unquoted: glob; * crosses slashes
-    esac
+    match_one "$f" "$pat" && return 0
   done
   return 1
 }
@@ -40,10 +51,30 @@ EOF
   fi
   say "ownership clean: diff ⊆ files_owned"
 }
+_norm_cmd() { printf '%s' "$1" | tr -s ' \t' ' ' | sed -e 's/^ //' -e 's/ $//'; }
+
 run_verify_cmds() { # run_verify_cmds <taskfile> — execute verify: list in CWD
-  local tf="$1" c n=0
+  # REFUSES a bare full-suite command. `verify:` runs 2-3x per task (builder `verify`, `handoff`,
+  # integrator `run-verify`) ON TOP of the wave gate that already runs the suite once — so a suite
+  # command here is paid 2-3x per task for nothing. On this repo that is 805s x 3.
+  # PLANNER.md has said so in prose since 5.15.0, and the 2026-07-25 audit found 24 of 46 landed
+  # tasks doing it anyway: that is where most of the board's wall-clock went. A rule half the board
+  # violates is not a rule, so it is now mechanical. `test_fast:` is deliberately NOT refused —
+  # a fast tier in verify: is the whole point.
+  local tf="$1" c n=0 nc suite_t suite_b
+  suite_t="$(_norm_cmd "$(cfg test "")")"
+  suite_b="$(_norm_cmd "$(cfg build "")")"
   while IFS= read -r c; do
     [ -z "$c" ] && continue
+    nc="$(_norm_cmd "$c")"
+    if { [ -n "$suite_t" ] && [ "$nc" = "$suite_t" ]; } || { [ -n "$suite_b" ] && [ "$nc" = "$suite_b" ]; }; then
+      printf '⛔ verify: carries the full suite — "%s"\n' "$c" >&2
+      printf '   That command is the WAVE gate (`polaris qa`), which already runs it once. In verify: it is\n' >&2
+      printf '   paid again on verify, on handoff and on the integrator run-verify — 3x per task, for nothing.\n' >&2
+      printf '   Fix the task: replace it with the narrow check this task actually needs (or `test_fast:`),\n' >&2
+      printf '   then re-run. See ops/roles/PLANNER.md "NEVER put a bare full-suite command in verify:".\n' >&2
+      return 1
+    fi
     n=$((n+1)); note "verify[$n]: $c"
     bash -c "$c" || { printf '⛔ verify command failed: %s\n' "$c" >&2; return 1; }
   done <<EOF
@@ -81,9 +112,9 @@ EOF
 # stdout is debug-log-only, so an advisory the model can't see must not exist.
 rule_scan_path() { # rule_scan_path <repo-relative-path> — exit 1 + stderr msg on deny
   local rel="$1" scope kind pat msg
-  while IFS="$(printf '\t')" read -r scope kind pat msg; do
+  while IFS="$POLARIS_TAB" read -r scope kind pat msg; do
     [ "$kind" = "path" ] || continue
-    if printf '%s\n' "$scope" | owned_match "$rel"; then
+    if owned_match "$rel" "$scope"; then
       printf '⛔ RULES deny: %s — %s\n' "$rel" "${msg:-forbidden path}" >&2
       return 1
     fi
@@ -95,9 +126,9 @@ EOF
 rule_scan_content_file() { # rule_scan_content_file <rel> <file-with-payload>
   local rel="$1" body="$2" scope kind pat msg
   [ -s "$body" ] || return 0
-  while IFS="$(printf '\t')" read -r scope kind pat msg; do
+  while IFS="$POLARIS_TAB" read -r scope kind pat msg; do
     [ "$kind" = "content" ] && [ -n "$pat" ] && [ "$pat" != "-" ] || continue
-    printf '%s\n' "$scope" | owned_match "$rel" || continue
+    owned_match "$rel" "$scope" || continue
     if grep -E -q -e "$pat" "$body" 2>/dev/null; then
       printf '⛔ RULES deny in %s: /%s/ — %s\n' "$rel" "$pat" "${msg:-forbidden content}" >&2
       return 1

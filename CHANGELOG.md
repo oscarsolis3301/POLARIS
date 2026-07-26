@@ -4,6 +4,76 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.20.0 — 2026-07-25
+
+**Measure first, then fix what the measurement actually found.** Every performance claim in this
+kit was a comment written from memory, and when they were finally timed several were wrong by 5×.
+`find` was documented at 0.70s and ran at 1.1–2.0s. `hostname` was documented at 0.07s and cost
+0.52s. The fix for "searching is slow" turned out not to be a faster search at all.
+
+Measured on this repo (136 files, Windows/Git Bash), before → after:
+
+| | before | after |
+|---|---|---|
+| `polaris help` | 2820ms | **201ms** |
+| `_guard` (runs on every Edit/Write) | 2647ms | **572ms** |
+| `polaris find` | 1119–2038ms | **666ms** |
+| `polaris rules` | 1822ms | **1096ms** |
+| `polaris check` (goldens) | 19s | **12.7s** |
+
+- **Plan mode stops asking permission — in every repo, on every machine.** New
+  `ops/hooks/readonly-allow.sh`: a PreToolUse hook that parses a Bash command and auto-approves it
+  only when *every* segment is provably read-only. An allowlist structurally cannot do this —
+  `Bash(grep:*)` matches one command, not `find … | xargs wc -l | sort | head`, and a fresh repo or
+  machine starts empty regardless. Deny by default: an unknown verb, an unparsed construct or an
+  unrecognised redirection produces no output at all and the normal prompt runs. `python -c`,
+  `node -e`, `bash -c`, `tee`, `sed -i`, `sort -o` and `find -exec` are refused by name — they are
+  the write doors on otherwise-read verbs. 47 cases (23 allow, 24 refuse) are pinned by
+  `ops/tests/readonly-allow`.
+- **…and installation now actually delivers it.** Three silent no-ops fixed: `install.sh` merged
+  only `hooks.PreToolUse[0]` and bailed early on `grep -q ownership-guard.sh`, so a repo that
+  already had `.claude/settings.json` never received a second hook; `refresh_machine_kit` armed
+  three auto-mode keys and never re-applied the permission rules, so existing installs never got new
+  ones; and the shipped settings template had no `permissions` key at all. Merging is by hook script
+  NAME now, not array position, and is idempotent.
+- **~2.2s of preamble removed from every command.** It ran before any command did any work, and the
+  write-guard paid it on every edit: `cfg base` 683ms + `hostname` 524ms + a redundant
+  `rev-parse --git-dir` 171ms + `SELF` in three subshells 132ms. Now one git call, one `cfg_boot`
+  awk for all three keys, `SELF` from the already-resolved `OPS_DIR`, and `WHO` computed on demand.
+  Two more forks found by tracing: `IFS="$(printf '\t')"` sits in a *while condition*, so it
+  re-forked once per RULES line (42 rules ≈ 42 forks) on the guard's path, and `rule_scan_path`
+  built a pipe per rule to reach `owned_match`. `help` now answers above the module loader entirely.
+- **`ops/bench.sh`** reproduces the table above, and `ops/tests/startup-budget` asserts the
+  *structure* that produced it — timings flap, fork counts do not.
+- **The suite is paid once, not two or three times.** `polaris verify` now REFUSES a `verify:` entry
+  that is the full suite: it runs 2–3× per task on top of the wave gate that already covers it, and
+  the 2026-07-25 audit found 24 of 46 landed tasks doing exactly that. `PLANNER.md` had said so in
+  prose since 5.15.0; a rule half the board violates is not a rule. `qa` also skips the suite when
+  HEAD has not moved since the last green run and the tree is clean (`.polaris/suite-stamp`) — this
+  is what stops a conductor re-running a suite the integrator just passed. `qa --force` overrides.
+- **New SOLO lane: a one-line change costs one context, not four.** `ops/roles/SOLO.md` — one
+  session plans, builds and integrates a trivial change with zero subagents. Entry is mechanical:
+  `polaris triage` prints `solo` | `express` | `full` from points, risk, `express:`, `publish:` and
+  the RULES-guarded paths, so nothing re-derives the six conditions by reading the board. Every gate
+  still runs; SOLO collapses SESSIONS, never CHECKS.
+- **The brain maintains itself.** `doctor` now REFRESHES a stale brain instead of advising you to,
+  and it compares the code sha as well as the board timestamp — the old test looked only at
+  `board-changed`, so this repo's own brain sat four releases behind while every role file told
+  agents to read it first. `prefs.md` had two real bugs: the indent rules ended in `next`, so quote
+  and line-length counting never saw an indented line (i.e. never saw code inside a function), and
+  an empty sample printed zeros as though they were measurements.
+- **`find --importers` resolves variable-built and mirrored paths.** `. "$OPS_DIR/lib/core.sh"`
+  matches on its literal tail, and in a self-hosting repo the candidate in the importer's own tree
+  wins — an exact tie resolves to NULL rather than a coin flip, because an edge into the mirror
+  would point a Planner at a file that did not change. Both rules are pinned by `index.py
+  selfcheck` and were each verified to fail it when disabled.
+- **`check --scaffold --app`** generates goldens for the HOST application: declared dependencies
+  (Invariant 8 as a diff — an unauthorised package reds instantly), npm script names, the HTTP route
+  table, the migration set, and referenced env var NAMES. All by reading tracked files; it never
+  runs the app, opens a port or touches a database.
+- **`ops/contracts/code-index.md`** written — `search.sh` and `index.py` had both cited it for two
+  releases and it had never existed.
+
 ## 5.19.1 — 2026-07-25
 
 **What scaffolding this repo taught us.** Running `check --scaffold` on POLARIS itself produced

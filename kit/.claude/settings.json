@@ -4,6 +4,69 @@
     "commit": "",
     "pr": ""
   },
+  "permissions": {
+    "allow": [
+      "Bash(bash ops/polaris:*)",
+      "Bash(ops/polaris:*)",
+      "Bash(grep:*)",
+      "Bash(egrep:*)",
+      "Bash(fgrep:*)",
+      "Bash(rg:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Bash(cut:*)",
+      "Bash(tr:*)",
+      "Bash(uniq:*)",
+      "Bash(comm:*)",
+      "Bash(nl:*)",
+      "Bash(diff:*)",
+      "Bash(cmp:*)",
+      "Bash(file:*)",
+      "Bash(stat:*)",
+      "Bash(du:*)",
+      "Bash(basename:*)",
+      "Bash(dirname:*)",
+      "Bash(realpath:*)",
+      "Bash(readlink:*)",
+      "Bash(echo:*)",
+      "Bash(printf:*)",
+      "Bash(seq:*)",
+      "Bash(jq:*)",
+      "Bash(which:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(git status:*)",
+      "Bash(git blame:*)",
+      "Bash(git grep:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git cat-file:*)",
+      "Bash(git show-ref:*)",
+      "Bash(git for-each-ref:*)",
+      "Bash(git merge-base:*)",
+      "Bash(git worktree list:*)",
+      "PowerShell(Get-Content:*)",
+      "PowerShell(Get-ChildItem:*)",
+      "PowerShell(Get-Item:*)",
+      "PowerShell(Get-Location:*)",
+      "PowerShell(Get-Command:*)",
+      "PowerShell(Test-Path:*)",
+      "PowerShell(Select-String:*)",
+      "PowerShell(Select-Object:*)",
+      "PowerShell(Where-Object:*)",
+      "PowerShell(Measure-Object:*)",
+      "PowerShell(Sort-Object:*)",
+      "PowerShell(Resolve-Path:*)",
+      "PowerShell(Split-Path:*)",
+      "PowerShell(Join-Path:*)",
+      "PowerShell(ConvertFrom-Json:*)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -13,6 +76,16 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/ownership-guard.sh\"",
             "timeout": 20
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/readonly-allow.sh\"",
+            "timeout": 10
           }
         ]
       }

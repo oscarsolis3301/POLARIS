@@ -1,0 +1,6 @@
+per-iteration-IFS-forks 0
+hostname-in-entrypoint 0
+cfg-forks-in-globals 0
+help-fast-path 1
+rules-lines-memoized 3
+per-rule-match-pipes 0

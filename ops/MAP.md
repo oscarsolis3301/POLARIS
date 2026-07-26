@@ -12,12 +12,15 @@ installation running this repo's board. Never hand-edit `ops/` — see ops/CONVE
 ## Entry points
 | Path | What it is |
 |---|---|
-| kit/ops/polaris | THE CLI. ~1180 lines of bash. Every board mechanic incl. clean-history (task-commit-msg · land · seal · history · rollback — 5.12.0-unreleased). `cmd_*` per subcommand; dispatch at the bottom. |
+| kit/ops/polaris | THE CLI **entry point** — ~230 lines: fast paths (find/show/help), lib loader, resolved globals, dispatch. Every `cmd_*` body lives in kit/ops/lib/ since 5.16.0. |
 | kit/ops/install.sh | Installs the kit into any repo. Two paths: fresh vs live-board (test = target has ops/CONVENTIONS.md). |
 | kit/ops/bootstrap.py | The zipapp entry — packed to the archive ROOT as `__main__.py`, so `python polaris-v5.zip` just works. Also arms the machine (~/.claude skill + cached kit + permission rules). |
 | kit/ops/pack.py | Kit-repo tool, never shipped. Builds polaris-v5.zip from `git ls-files` run inside kit/. `--dogfood` installs the published release here. |
 | kit/ops/dashboard.py | `polaris dash` — read-only live board on 127.0.0.1:7373. stdlib http.server. |
 | kit/ops/hooks/ownership-guard.sh | Claude Code PreToolUse guard. Two gates: RULES (every session) + files_owned (feat/<ID> only). Fails OPEN by design. |
+| kit/ops/hooks/readonly-allow.sh | Claude Code PreToolUse auto-approver for Bash. Proves a command read-only, token by token, and skips the prompt. Deny by default: anything unparsed prompts as before. |
+| kit/ops/index.py | The code index behind `find`/`show`. SQLite + FTS5, rebuilt per query. Contract: ops/contracts/code-index.md. |
+| kit/ops/bench.sh | Startup + lookup benchmark. Run before/after any change to the startup path. |
 
 ## Modules
 | Path | Purpose | Notes |
@@ -90,3 +93,5 @@ not installed code — they are written normally, by the board scripts and by th
 - doctor --selftest gains --only <glob> — spine + matching labeled drills only; full run byte-identical (5.15.0-unreleased)  (T-033, 2026-07-20)
 
 - "kit/ops/lib/ added — runtime-sourced CLI modules (core·ownership·builder·integrate·knowledge·observe·admin + selftest/ groups); kit/ops/polaris = entry (globals + lib-loader + dispatch)"  (T-041, 2026-07-21)
+
+- "readonly-allow.sh hook + bench.sh added; polaris gains `triage`; SOLO role; ops/contracts/code-index.md written"  (5.20.0, 2026-07-25)

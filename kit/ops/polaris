@@ -19,52 +19,9 @@ case "${1:-}" in
     if [ -f "$OPS_DIR/lib/search.sh" ]; then . "$OPS_DIR/lib/search.sh"; index_fast "$@"; fi ;;
 esac
 
-# --- lib loader: every function body lives in lib/ — fixed order, core first ---
-# The write-guard calls _match/_rules on EVERY edit and needs only core+ownership (22KB of 249KB).
-# Sourcing all 14 there cost ~2s/call — twice per write against a 10s hook timeout, which under
-# parallel builders EXCEEDED it and made the guard fail OPEN. Load what the command needs.
-# (ops/contracts/module-layout.md v2 — both lists stay LITERAL, never a glob.)
-case "${1:-}" in
-  _match|_rules|_guard) _mods="core ownership" ;;
-  *)             _mods="core ownership builder integrate knowledge search observe admin
-                        selftest/spine selftest/board selftest/history selftest/report
-                        selftest/brain selftest/policy selftest/remote" ;;
-esac
-for _m in $_mods; do
-  if [ ! -f "$OPS_DIR/lib/$_m.sh" ]; then
-    printf '⛔ POLARIS: ops/lib/%s.sh is missing — this kit is incomplete. Re-run the installer (bash ops/install.sh) or fetch a fresh kit: ops/polaris update\n' "$_m" >&2
-    exit 1
-  fi
-  . "$OPS_DIR/lib/$_m.sh"
-done
-unset _m _mods
-
-git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repo"
-
-# ---------------------------------------------------------------- resolve env
-GCD="$(cd "$(git rev-parse --git-common-dir)" && pwd)"     # shared across all worktrees
-PRIMARY="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"
-[ -n "$PRIMARY" ] || die "cannot resolve primary checkout"
-OPS="$PRIMARY/ops"
-BOARD="$OPS/board"
-LOCKS="$GCD/polaris-locks"
-CONV="$OPS/CONVENTIONS.md"
-VER="$OPS/VERSION"
-SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-BASE="$(cfg base main)"
-CLAIM_MODE="$(cfg claim local-lock)"
-STALE_H="$(cfg stale_hours 4)"
-WHO="${USER:-${USERNAME:-unknown}}@$(hostname 2>/dev/null || echo host)"
-EVENTS="$BOARD/EVENTS.ndjson"
-
-RULES="$OPS/RULES.tsv"
-MUTEX="$LOCKS/.board-mutex"
-FAIL_LOCK_ID=""
-PUB="direct"
-PUBLISH_WARNED=""
-BOARD_REF="refs/heads/polaris/board"
-
-# ------------------------------------------------------------------- dispatch
+# `help` needs the text below and NOTHING else — no modules, no git, no CONVENTIONS. It used to
+# source all 15 lib modules and resolve the full environment to print a heredoc: 2820ms measured.
+# usage() lives up here so both the fast path and the dispatch table below can reach it.
 usage() { cat <<'EOF'
 polaris — POLARIS board CLI (run from anywhere inside the repo)
   init-board                     create board dirs, gitignore .polaris/ + the board set, lock dir
@@ -119,14 +76,18 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  <name>.rc = expected exit code). --update rewrites goldens — a
                                  human/Builder decision, never automatic. Wire it into qa by setting
                                  `uat: bash ops/polaris check` in ops/CONVENTIONS.md
-  check --scaffold [--cmd "<shell>"]
+  check --scaffold [--app] [--cmd "<shell>"]
                                  GENERATE the pairs from observed behavior — public API surface per
                                  source dir (from the index) + this CLI's parsed output shapes. Runs
                                  each candidate TWICE and discards any that flaps, is empty, or whose
                                  command is missing. Never overwrites an existing golden. --cmd adds
                                  ONE behavioural golden for your own command (auto-running an app's
-                                 executables would start servers, so it is opt-in). REVIEW the output:
-                                 a golden records what the code DOES, not what it SHOULD do.
+                                 executables would start servers, so it is opt-in). --app locks the
+                                 HOST app's shape instead: declared dependencies (Invariant 8 as a
+                                 diff), npm script names, HTTP routes, migration set, and referenced
+                                 env var NAMES — all by reading tracked files, never by running the
+                                 app. REVIEW the output: a golden records what the code DOES, not
+                                 what it SHOULD do.
   find <symbol> | -f <glob> | -t <text> | --importers <path> | --imports <path> | --api <glob> [-n N]
                                  the 1-hop "where is X": ONE line per hit, path:line first, ranked
                                  (exact > prefix > substring, boosted by churn + fan-in, tests and
@@ -148,11 +109,20 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)
+  triage                         which LANE this board's work belongs in — line 1 is one word:
+                                 solo (one context, zero subagents; 1 task ≤2pts, risk normal,
+                                 express on, publish direct) · express (one task, one builder,
+                                 one integrator) · full (everything else). Reasons follow on
+                                 stderr-style note lines. Decide with this, never by re-reading
+                                 the board and weighing the six conditions by hand.
   drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
-  qa                             is everything okay, in ONE shot: test/lint/typecheck/build/uat
+  qa [--force]                   is everything okay, in ONE shot: test/lint/typecheck/build/uat
                                  from CONVENTIONS + drift --strict + doctor env check. Runs every
                                  check even after a red; rc 1 if anything was red.
+                                 SKIPS the suite when HEAD is unchanged since the last green run
+                                 and the tree is clean (.polaris/suite-stamp) — drift and doctor
+                                 still run every time. --force always re-runs the suite.
   dash [--port N]                live read-only board at http://127.0.0.1:7373 (needs python3)
   fleet <N> [--loop] [--launch] [--dry-run]
                                  print N Builder kickoffs; --launch opens a session per task in
@@ -166,6 +136,66 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   uninstall --yes                remove POLARIS from this repo (keeps your CLAUDE.md + hooks)
 EOF
 }
+
+case "${1:-}" in
+  ''|help|-h|--help) usage; exit 0 ;;
+esac
+
+# --- lib loader: every function body lives in lib/ — fixed order, core first ---
+# The write-guard calls _match/_rules on EVERY edit and needs only core+ownership (22KB of 249KB).
+# Sourcing all 14 there cost ~2s/call — twice per write against a 10s hook timeout, which under
+# parallel builders EXCEEDED it and made the guard fail OPEN. Load what the command needs.
+# (ops/contracts/module-layout.md v2 — both lists stay LITERAL, never a glob.)
+case "${1:-}" in
+  _match|_rules|_guard) _mods="core ownership" ;;
+  *)             _mods="core ownership builder integrate knowledge search observe admin
+                        selftest/spine selftest/board selftest/history selftest/report
+                        selftest/brain selftest/policy selftest/remote" ;;
+esac
+for _m in $_mods; do
+  if [ ! -f "$OPS_DIR/lib/$_m.sh" ]; then
+    printf '⛔ POLARIS: ops/lib/%s.sh is missing — this kit is incomplete. Re-run the installer (bash ops/install.sh) or fetch a fresh kit: ops/polaris update\n' "$_m" >&2
+    exit 1
+  fi
+  . "$OPS_DIR/lib/$_m.sh"
+done
+unset _m _mods
+
+# ---------------------------------------------------------------- resolve env
+# Traced 2026-07-25 (Windows/Git Bash): this block cost ~2.2s on EVERY invocation — `cfg base` 683ms,
+# `hostname` 524ms, a redundant `rev-parse --git-dir` 171ms, and `SELF` 132ms in three subshells —
+# before any command did a single unit of work. Roles run ~20 CLI calls a session and the write-guard
+# runs one per edit, so it was the largest fixed tax in the kit. Four fixes, no behaviour change:
+#   1. ONE git call, not two. `--git-common-dir` already fails outside a repo, so the separate
+#      `rev-parse --git-dir` probe proved something the next line learns anyway.
+#   2. ONE awk for base/claim/stale_hours (cfg_boot) instead of three cfg calls.
+#   3. SELF from OPS_DIR, which line 8 already resolved — `cd`+`dirname`+`basename` was 3 forks.
+#   4. WHO is now lazy (core.sh::who) — only the mutation paths ever read it.
+# Deliberately NOT cached to disk: the two remaining git calls total ~220ms, and a stale PRIMARY
+# would write the board into the wrong checkout. Cheap and correct beats fast and occasionally wrong.
+_gcd="$(git rev-parse --git-common-dir 2>/dev/null)" || die "not inside a git repo"
+[ -n "$_gcd" ] || die "not inside a git repo"
+GCD="$(cd "$_gcd" && pwd)"; unset _gcd                     # shared across all worktrees
+PRIMARY="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"
+[ -n "$PRIMARY" ] || die "cannot resolve primary checkout"
+OPS="$PRIMARY/ops"
+BOARD="$OPS/board"
+LOCKS="$GCD/polaris-locks"
+CONV="$OPS/CONVENTIONS.md"
+VER="$OPS/VERSION"
+SELF="$OPS_DIR/${0##*/}"
+eval "$(cfg_boot)"                                         # BASE + CLAIM_MODE + STALE_H, one fork
+WHO=""                                                     # filled on demand by who(); see core.sh
+EVENTS="$BOARD/EVENTS.ndjson"
+
+RULES="$OPS/RULES.tsv"
+MUTEX="$LOCKS/.board-mutex"
+FAIL_LOCK_ID=""
+PUB="direct"
+PUBLISH_WARNED=""
+BOARD_REF="refs/heads/polaris/board"
+
+# ------------------------------------------------------------------- dispatch
 # update_check_maybe is wired ONLY into the human-facing commands below — deliberately not
 # into _match/_rules, which the write-guard fires on every single edit.
 case "${1:-}" in
@@ -197,9 +227,10 @@ case "${1:-}" in
   doctor)     shift 2>/dev/null || true; update_check_maybe || true; cmd_doctor "$@";;
   metrics)    cmd_metrics;;
   why)        shift; cmd_why "$@";;
+  triage)     cmd_triage;;
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
   rules)      cmd_rules;;
-  qa)         cmd_qa;;
+  qa)         shift 2>/dev/null || true; cmd_qa "${1:-}";;
   notify-gate) shift; cmd_notify_gate "$@";;   # no update_check_maybe: must stay silent + pure
   _rules)     shift; cmd_rules_check "$@";;
   dash)       shift; update_check_maybe || true; cmd_dash "$@";;

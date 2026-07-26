@@ -64,6 +64,7 @@ kit/ops/PROTOCOL.md	heading	STATE = THE BOARD (git-tracked, human-readable)
 kit/ops/PROTOCOL.md	heading	THE TOOL — `ops/polaris`
 kit/ops/PROTOCOL.md	heading	TOKEN DISCIPLINE — this is how we stay cheap and fast
 kit/ops/PROTOCOL.md	heading	VOICE — how you TALK to the human (`voice:` in `ops/CONVENTIONS.md`, default `standard`)
+kit/ops/bench.sh	fn	ms
 kit/ops/bootstrap.py	const	FLAGS
 kit/ops/bootstrap.py	const	PERMS
 kit/ops/bootstrap.py	const	PREFIX
@@ -102,6 +103,16 @@ kit/ops/dashboard.py	fn	signature
 kit/ops/hooks/ownership-guard.sh	fn	cleanup
 kit/ops/hooks/ownership-guard.sh	fn	lc
 kit/ops/hooks/ownership-guard.sh	fn	norm
+kit/ops/hooks/readonly-allow.sh	fn	awk_ok
+kit/ops/hooks/readonly-allow.sh	fn	check_segment
+kit/ops/hooks/readonly-allow.sh	fn	find_ok
+kit/ops/hooks/readonly-allow.sh	fn	git_ok
+kit/ops/hooks/readonly-allow.sh	fn	jstr
+kit/ops/hooks/readonly-allow.sh	fn	polaris_ok
+kit/ops/hooks/readonly-allow.sh	fn	scan
+kit/ops/hooks/readonly-allow.sh	fn	sed_ok
+kit/ops/hooks/readonly-allow.sh	fn	verb_ok
+kit/ops/hooks/readonly-allow.sh	fn	xargs_ok
 kit/ops/index.py	const	DDL
 kit/ops/index.py	const	EXT
 kit/ops/index.py	const	FIXTURES
@@ -163,6 +174,7 @@ kit/ops/lib/core.sh	fn	board_materialize
 kit/ops/lib/core.sh	fn	board_paths
 kit/ops/lib/core.sh	fn	board_ref_commit
 kit/ops/lib/core.sh	fn	cfg
+kit/ops/lib/core.sh	fn	cfg_boot
 kit/ops/lib/core.sh	fn	claim_branch_drop
 kit/ops/lib/core.sh	fn	claim_branch_take
 kit/ops/lib/core.sh	fn	current_task_id
@@ -189,6 +201,7 @@ kit/ops/lib/core.sh	fn	set_fm
 kit/ops/lib/core.sh	fn	sync_board
 kit/ops/lib/core.sh	fn	task_col
 kit/ops/lib/core.sh	fn	task_file
+kit/ops/lib/core.sh	fn	who
 kit/ops/lib/core.sh	fn	wt_path
 kit/ops/lib/integrate.sh	fn	cmd_audit
 kit/ops/lib/integrate.sh	fn	cmd_done
@@ -246,6 +259,7 @@ kit/ops/lib/observe.sh	fn	cmd_rules
 kit/ops/lib/observe.sh	fn	cmd_scaffold
 kit/ops/lib/observe.sh	fn	cmd_status
 kit/ops/lib/observe.sh	fn	cmd_sweep
+kit/ops/lib/observe.sh	fn	cmd_triage
 kit/ops/lib/observe.sh	fn	cmd_why
 kit/ops/lib/observe.sh	fn	dep_ids
 kit/ops/lib/observe.sh	fn	dep_reaches
@@ -263,6 +277,7 @@ kit/ops/lib/ownership.sh	fn	cmd_match
 kit/ops/lib/ownership.sh	fn	cmd_rules_check
 kit/ops/lib/ownership.sh	fn	gdiff
 kit/ops/lib/ownership.sh	fn	map_delta_hint
+kit/ops/lib/ownership.sh	fn	match_one
 kit/ops/lib/ownership.sh	fn	owned_match
 kit/ops/lib/ownership.sh	fn	rule_scan_content_file
 kit/ops/lib/ownership.sh	fn	rule_scan_path
@@ -382,6 +397,12 @@ kit/ops/roles/PLANNER.md	heading	Protocol
 kit/ops/roles/PLANNER.md	heading	ROLE: PLANNER — front-load all coordination
 kit/ops/roles/PLANNER.md	heading	Read first (and nothing else)
 kit/ops/roles/PLANNER.md	heading	Report (nothing else) — and mind the `voice:`
+kit/ops/roles/SOLO.md	heading	Context — brain first, repo second
+kit/ops/roles/SOLO.md	heading	Entry — mechanical, not a judgement call
+kit/ops/roles/SOLO.md	heading	Hard limits — these end the session, not the gate
+kit/ops/roles/SOLO.md	heading	SOLO — one small change, one context, zero subagents
+kit/ops/roles/SOLO.md	heading	The path
+kit/ops/roles/SOLO.md	heading	What you must NOT skip
 kit/ops/selftest-dashboard.sh	fn	cleanup
 kit/ops/selftest-dashboard.sh	fn	die
 kit/ops/selftest-dashboard.sh	fn	drill

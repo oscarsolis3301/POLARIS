@@ -27,6 +27,41 @@ cfg() { # cfg <key> <default>  — reads "key: value" from CONVENTIONS.md, strip
   [ -n "$v" ] && printf '%s' "$v" || printf '%s' "$2"
 }
 
+cfg_boot() { # the three keys the globals block needs, in ONE awk pass — emits shell assignments.
+  # Traced 2026-07-25 (Windows/Git Bash): `cfg base` 683ms + `cfg claim` 95ms + `cfg stale_hours`
+  # 67ms = 845ms paid by EVERY polaris invocation, including the write-guard on every edit. cfg is
+  # already one fork per call (see above); this is one fork for all three. Same first-match-wins and
+  # blank-key-with-comment semantics as cfg, so the values are byte-identical to three cfg calls.
+  # Values are single-quoted for eval and any embedded quote is stripped: CONVENTIONS.md is repo
+  # data, and repo data must never be able to inject shell into the startup path.
+  if [ ! -f "$CONV" ]; then
+    printf "BASE='main'; CLAIM_MODE='local-lock'; STALE_H='4'\n"; return
+  fi
+  awk '
+    function val(s) {
+      sub(/\r$/, "", s); sub(/^[ \t]*/, "", s)
+      if (s ~ /^#/) return ""
+      sub(/[ \t]#.*$/, "", s); sub(/[ \t]*$/, "", s)
+      gsub(/'\''/, "", s)
+      return s
+    }
+    index($0, "base:")        == 1 && b == "" { b = val(substr($0, 6))  }
+    index($0, "claim:")       == 1 && c == "" { c = val(substr($0, 7))  }
+    index($0, "stale_hours:") == 1 && s == "" { s = val(substr($0, 13)) }
+    END {
+      printf "BASE='\''%s'\''; CLAIM_MODE='\''%s'\''; STALE_H='\''%s'\''\n",
+             (b == "" ? "main" : b), (c == "" ? "local-lock" : c), (s == "" ? "4" : s)
+    }
+  ' "$CONV"
+}
+
+who() { # memoize the actor id — `hostname` costs ~524ms on Windows/Git Bash.
+  # It used to be computed eagerly in the globals block, so every `find`, every `check` and every
+  # write-guard invocation paid half a second for a string only the MUTATION paths ever read
+  # (evt, lock_take, claim_branch, set_fm owner, the release note). Call who() before using $WHO.
+  [ -n "${WHO:-}" ] || WHO="${USER:-${USERNAME:-unknown}}@$(hostname 2>/dev/null || echo host)"
+}
+
 # ------------------------------------------------------------------ telemetry
 jesc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\n\r'; }
 evt() { # evt <ev> <id> [note] [pts] — append one ndjson line. Call INSIDE the board
@@ -35,6 +70,7 @@ evt() { # evt <ev> <id> [note] [pts] — append one ndjson line. Call INSIDE the
   # machines never conflict on it. Never edit it by hand.
   # v5: claim/done lines carry "pts" so `metrics` can calibrate per point bucket.
   local pts="${4:-}"; case "$pts" in ''|*[!0-9.]*) pts="";; esac
+  who
   printf '{"ts":%s,"ev":"%s","id":"%s","who":"%s","note":"%s"%s}\n' \
     "$(date +%s)" "$(jesc "$1")" "$(jesc "$2")" "$(jesc "$WHO")" "$(jesc "${3:-}")" \
     "${pts:+,\"pts\":$pts}" >> "$EVENTS"
@@ -55,9 +91,24 @@ notify_fire() { # notify_fire <ev> <id> <note> <severity> — invoke the CONVENT
       bash -c "$ncmd" ) >/dev/null 2>&1 &
   return 0
 }
-rules_lines() { # normalized RULES.tsv: comments/blank/CR stripped
-  [ -f "$RULES" ] || return 0
-  tr -d '\r' < "$RULES" | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' || true
+# RULES.tsv is TAB-separated and every reader loops it with `while IFS="$TAB" read ...`. Written
+# inline as `IFS="$(printf '\t')"` that substitution sits in the WHILE CONDITION, so it re-forks
+# ONCE PER RULE LINE — 42 rules ≈ 42 forks ≈ 1s, on the write-guard's path, on every single edit.
+# Resolve it once per process instead.
+POLARIS_TAB="$(printf '\t')"
+
+_RULES_CACHE=""
+_RULES_CACHED=""
+rules_lines() { # normalized RULES.tsv: comments/blank/CR stripped. Memoized: check_rules alone
+  # called this 4x (each 3 forks), and RULES.tsv cannot change mid-process.
+  if [ -z "$_RULES_CACHED" ]; then
+    _RULES_CACHED=1
+    if [ -f "$RULES" ]; then
+      _RULES_CACHE="$(tr -d '\r' < "$RULES" | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' || true)"
+    fi
+  fi
+  [ -n "$_RULES_CACHE" ] && printf '%s\n' "$_RULES_CACHE"
+  return 0
 }
 
 # ------------------------------------------------------- frontmatter parsing
@@ -272,7 +323,7 @@ board_materialize() { # fresh clone: the moved set is ignored on base, so a clon
 lock_take() { # lock_take <ID> — atomic; returns 1 if already taken
   mkdir -p "$LOCKS"
   mkdir "$LOCKS/$1" 2>/dev/null || return 1
-  { date +%s; echo "$WHO"; echo "$1"; } > "$LOCKS/$1/meta"
+  who; { date +%s; echo "$WHO"; echo "$1"; } > "$LOCKS/$1/meta"
 }
 lock_drop() { rm -rf "${LOCKS:?}/$1" 2>/dev/null || true; }
 lock_age() { # seconds since lock creation; 0 if no meta
@@ -281,6 +332,7 @@ lock_age() { # seconds since lock creation; 0 if no meta
 }
 claim_branch_take() { # multi-machine claim: unique commit via plumbing + push guarded by empty lease
   local id="$1" sha
+  who
   sha="$(git -C "$PRIMARY" commit-tree "$BASE^{tree}" -p "$BASE" -m "polaris claim $id by $WHO")" \
     || die "commit-tree failed"
   git -C "$PRIMARY" push -q origin "$sha:refs/heads/claim/$id" \

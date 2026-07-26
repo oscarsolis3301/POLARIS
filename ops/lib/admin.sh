@@ -242,12 +242,18 @@ refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with wh
   # (no say/note — the quiet-line count above the ▶ NEXT epilogue is load-bearing). Fails OPEN under
   # `set -eu`: a settings hiccup must never fail an update that already succeeded, so it is guarded and
   # `|| true`. A present-but-malformed settings.json is left untouched; only an ABSENT one is created.
-  local SJ="$HOME/.claude/settings.json" PY=""
+  # It also unions the repo's read-only permission rules into the user's settings. Before 5.20.0
+  # this armed the three auto-mode keys and nothing else, so a machine installed BEFORE a rule was
+  # added never received it — new rules only ever reached brand-new installs. The rules are read
+  # from the repo's own .claude/settings.json (which the refresh above just updated) rather than
+  # duplicated here: one list, in the kit, is the only way the two paths cannot drift.
+  local SJ="$HOME/.claude/settings.json" RJ="$PRIMARY/.claude/settings.json" PY=""
   python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
   if [ -n "$PY" ]; then
-    "$PY" - "$SJ" <<'AUTOMODE' || true
+    "$PY" - "$SJ" "$RJ" <<'AUTOMODE' || true
 import json, os, sys
 p = sys.argv[1]
+repo = sys.argv[2] if len(sys.argv) > 2 else ""
 if os.path.exists(p):
     try:
         with open(p, encoding="utf-8") as fh:
@@ -264,10 +270,23 @@ if isinstance(perms, dict):
     if "defaultMode" not in perms:
         perms["defaultMode"] = "auto"; changed = True
 elif perms is None:
-    d["permissions"] = {"defaultMode": "auto"}; changed = True
+    perms = d["permissions"] = {"defaultMode": "auto"}; changed = True
 for k in ("skipAutoPermissionPrompt", "useAutoModeDuringPlan"):
     if k not in d:
         d[k] = True; changed = True
+if isinstance(perms, dict) and repo and os.path.exists(repo):
+    try:
+        with open(repo, encoding="utf-8") as fh:
+            rules = (json.load(fh).get("permissions") or {}).get("allow") or []
+    except (OSError, ValueError, AttributeError):
+        rules = []
+    allow = perms.get("allow")
+    if allow is None:
+        allow = perms["allow"] = []
+    if isinstance(allow, list):
+        for rule in rules:
+            if rule not in allow:
+                allow.append(rule); changed = True
 if changed:
     os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
     tmp = p + ".polaris-tmp"

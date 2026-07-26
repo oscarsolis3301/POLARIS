@@ -292,9 +292,44 @@ cmd_doctor() {
   fi
   # brain freshness (ops/contracts/brain.md): board-changed newer than the brain's stamp → the
   # digest lies. No brain dir → the feature was never opted into → stay silent.
-  if [ -d "$PRIMARY/.polaris/brain" ] \
-     && [ "$PRIMARY/.polaris/board-changed" -nt "$PRIMARY/.polaris/brain/.stamp" ]; then
-    note "⚠ brain is stale — refresh it: ops/polaris brain --refresh"
+  # Brain freshness (ops/contracts/brain.md). Two changes over the warn-only version:
+  #   1. It checks the CODE too. The old test compared only .polaris/board-changed against the
+  #      stamp, so a brain could be four releases behind with a clean board and doctor said nothing
+  #      — which is exactly the state this repo was found in on 2026-07-25 (stamp df0df1d, HEAD
+  #      9daab03), while every role file instructs agents to read that brain FIRST.
+  #   2. It REFRESHES instead of advising. A warning an agent has to act on is a warning an agent
+  #      pays tokens to act on, and a stale brain is worse than no brain: it answers confidently
+  #      and wrongly. `--refresh` skips code-map when the code is unchanged, so the warm cost is small.
+  if [ -d "$PRIMARY/.polaris/brain" ]; then
+    local bstale=0 bsha bhead
+    [ "$PRIMARY/.polaris/board-changed" -nt "$PRIMARY/.polaris/brain/.stamp" ] && bstale=1
+    bsha="$(cut -d' ' -f2 < "$PRIMARY/.polaris/brain/.stamp" 2>/dev/null | tr -d ' \r\n' || true)"
+    bhead="$(git -C "$PRIMARY" rev-parse --short "$BASE" 2>/dev/null || true)"
+    [ -n "$bsha" ] && [ -n "$bhead" ] && [ "$bsha" != "$bhead" ] && bstale=1
+    if [ "$bstale" = 1 ]; then
+      if ( cmd_brain --refresh ) >/dev/null 2>&1; then
+        say "brain was stale — refreshed (was ${bsha:-?}, now ${bhead:-?})"
+      else
+        note "⚠ brain is stale and could not be refreshed — run: ops/polaris brain --refresh"
+      fi
+    fi
+  fi
+  # Read-only auto-approver (ops/hooks/readonly-allow.sh). Without it every grep/sed/git-log an
+  # agent runs through Bash stops and asks a human — which is what made plan mode expensive. It is
+  # plumbing spread over three files, so it can be half-installed and look fine; check all three.
+  local rah="$OPS/hooks/readonly-allow.sh" psj="$PRIMARY/.claude/settings.json"
+  if [ ! -f "$rah" ]; then
+    note "⚠ ops/hooks/readonly-allow.sh is missing — reads through Bash will prompt. Re-run: bash ops/install.sh"
+  elif [ ! -f "$psj" ]; then
+    note "⚠ .claude/settings.json is missing — the read-only auto-approver is not wired. Re-run: bash ops/install.sh"
+  elif ! grep -q 'readonly-allow.sh' "$psj" 2>/dev/null; then
+    note "⚠ .claude/settings.json does not wire readonly-allow.sh — reads through Bash will prompt. Re-run: bash ops/install.sh"
+  fi
+  # Auto mode lives in the USER's settings, not the repo's, so a new machine starts prompting again
+  # even in a repo that is wired correctly. `ops/polaris update` arms it (admin.sh::refresh_machine_kit).
+  if [ -f "$HOME/.claude/settings.json" ] \
+     && ! grep -q '"useAutoModeDuringPlan"' "$HOME/.claude/settings.json" 2>/dev/null; then
+    note "⚠ ~/.claude/settings.json has no auto-mode keys — plan mode will prompt. Arm this machine: ops/polaris update"
   fi
   say "doctor: OK"
   # --selftest [--only <patterns>] [--parallel <N>] (ops/contracts/verification-tiering.md +
@@ -454,7 +489,7 @@ cmd_rules() { # list + health-check ops/RULES.tsv
   if ! rules_lines | grep -q .; then note "no rules yet — ops/RULES.tsv (INIT seeds danger zones; EVOLVE proposes more)"; return 0; fi
   local scope kind pat msg n=0 bad=0
   printf '%-28s %-8s %-24s %s\n' 'SCOPE' 'KIND' 'PATTERN' 'MESSAGE'
-  while IFS="$(printf '\t')" read -r scope kind pat msg; do
+  while IFS="$POLARIS_TAB" read -r scope kind pat msg; do
     n=$((n+1)); printf '%-28s %-8s %-24s %s\n' "$scope" "$kind" "${pat:--}" "$msg"
     case "$kind" in path|content) :;; *) bad=1; printf '   ⛔ bad kind (want path|content)\n';; esac
     [ -z "$scope" ] && { bad=1; printf '   ⛔ empty scope\n'; }
@@ -534,17 +569,62 @@ cmd_scaffold() { # check --scaffold [--cmd "<shell>"] — GENERATE goldens from 
   # CLI's own reporting commands. Scaffold does NOT go hunting for executables in bin/ to run with
   # --help: on a real app that is how you start a server or mutate a database during a test-writing
   # pass. Behavioural goldens for an app's own commands are opt-in, one at a time, via --cmd.
-  local extra=""
+  local extra="" app=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --cmd) extra="${2:?--cmd needs a shell command}"; shift 2;;
-      *) die "usage: polaris check --scaffold [--cmd \"<shell command>\"]";;
+      --app) app=1; shift;;
+      *) die "usage: polaris check --scaffold [--app] [--cmd \"<shell command>\"]";;
     esac
   done
   local dir="$OPS/tests" d slug
   mkdir -p "$dir"
   SC_MADE=0; SC_SKIP=0; SC_FLAP=0; SC_EMPTY=0; SC_DEAD=0; SC_HUGE=0; SC_DUP=0
-  if [ -n "$extra" ]; then
+  if [ "$app" -eq 1 ]; then
+    # --app: lock the HOST application's shape, not POLARIS's. The default scaffold locks the code
+    # index and this CLI; a user's repo also has a manifest, routes, migrations and a config
+    # surface, and those are where "someone changed something nobody meant to change" actually
+    # shows up. Each golden below is pure TEXT EXTRACTION over tracked files — nothing here runs
+    # the app, imports its modules, opens a port or touches a database, for the same reason the
+    # default scaffold refuses to go hunting for executables to run with --help.
+    #
+    # These answer the ask directly: instead of an agent re-reading routes and re-checking deps
+    # every wave, `polaris check` re-proves all of it for the price of a subprocess.
+    if [ -f "$PRIMARY/package.json" ]; then
+      # Parsed by node, not by a sed line-range: `/"scripts"/,/}/` runs past the closing brace on
+      # any compact package.json and swallows the next block whole (observed: the scripts golden
+      # captured `express` and `zod`). node only READS the manifest here — no install, no script
+      # run. A repo with a package.json and no node is rare, and when it happens scaffold_try
+      # simply records the candidate as dead and skips it, which is the honest outcome.
+      # Invariant 8 says no new dependencies without asking; app-deps-npm is that rule as a diff.
+      scaffold_try "app-deps-npm" \
+        "node -e \"p=require('./package.json');console.log(Object.keys(p.dependencies||{}).sort().join('\\n'))\"" || true
+      # Script NAMES only — never their bodies, and never running them.
+      scaffold_try "app-scripts-npm" \
+        "node -e \"p=require('./package.json');console.log(Object.keys(p.scripts||{}).sort().join('\\n'))\"" || true
+    fi
+    if [ -f "$PRIMARY/requirements.txt" ]; then
+      scaffold_try "app-deps-python" \
+        "grep -oE '^[A-Za-z0-9_.-]+' requirements.txt | sort -u" || true
+    fi
+    if [ -f "$PRIMARY/pyproject.toml" ]; then
+      scaffold_try "app-deps-pyproject" \
+        "sed -n '/^\\[project\\]/,/^\\[/p;/dependencies *= *\\[/,/\\]/p' pyproject.toml | grep -oE '\"[A-Za-z0-9_.-]+' | tr -d '\"' | sort -u" || true
+    fi
+    # HTTP surface. One line per registered route across the common frameworks — a deleted,
+    # renamed or newly exposed endpoint reds. Deliberately matches the DECLARATION text, so it
+    # needs no server and no framework knowledge at run time.
+    scaffold_try "app-routes" \
+      "git ls-files | grep -E '\\.(py|js|jsx|mjs|ts|tsx|go|rb|php|java|kt|cs)\$' | tr '\\n' '\\0' | xargs -0 grep -hoE '(@(app|router|bp|blueprint)\\.(route|get|post|put|patch|delete)|(app|router|r|mux)\\.(Get|Post|Put|Patch|Delete|get|post|put|patch|delete))\\([^,)]+' 2>/dev/null | sed 's/[[:space:]]*\$//' | sort -u" || true
+    # Schema surface: the migration set, by name. A migration appearing or vanishing is exactly the
+    # STOP-AND-ASK class of change, and this makes it mechanically visible.
+    scaffold_try "app-migrations" \
+      "git ls-files | grep -Ei '(^|/)(migrations?|alembic/versions|db/migrate)/' | sort" || true
+    # Config surface: env var NAMES referenced in source. NAMES ONLY — no values are read, printed
+    # or stored, so this can never put a secret in a golden (Invariant 10).
+    scaffold_try "app-env-names" \
+      "git ls-files | grep -E '\\.(py|js|jsx|mjs|ts|tsx|go|rb|php|java|kt|cs|sh)\$' | tr '\\n' '\\0' | xargs -0 grep -hoE '(process\\.env\\.[A-Z0-9_]+|os\\.environ\\[[^]]+\\]|os\\.getenv\\([^,)]+|ENV\\[[^]]+\\])' 2>/dev/null | grep -oE '[A-Z][A-Z0-9_]{2,}' | sort -u" || true
+  elif [ -n "$extra" ]; then
     scaffold_try "cmd-$(printf '%s' "$extra" | tr -cs 'a-zA-Z0-9' '-' | sed 's/^-*//;s/-*$//' | cut -c1-40)" "$extra"
   else
     # 1. public API surface — one golden per top-level source dir. The generic lock: a renamed,
@@ -598,7 +678,7 @@ cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output 
     case "$1" in
       --only) only="${2:?--only needs a glob}"; shift 2;;
       --update) upd=1; shift;;
-      *) die "usage: polaris check [--only <glob>] [--update] | check --scaffold [--cmd \"<shell>\"]";;
+      *) die "usage: polaris check [--only <glob>] [--update] | check --scaffold [--app] [--cmd \"<shell>\"]";;
     esac
   done
   local dir="$OPS/tests" f name exp rcf want got grc red=0 n=0
@@ -625,15 +705,86 @@ cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output 
   say "check: $n golden(s), all green"
 }
 
+cmd_triage() { # triage — print the LANE this board's work belongs in: solo | express | full.
+  # The six conditions below were prose in CONDUCTOR.md, which meant a model re-derived them from
+  # the board every run — reading task files, weighing points, re-reading CONVENTIONS — and paid
+  # tokens to reach an answer the CLI already had. It is data, so it is a command.
+  # Line 1 is the lane and nothing else, so a caller can branch on it without parsing.
+  #   solo    one context does plan+build+integrate. No subagents at all.
+  #   express conductor + ONE builder + ONE integrator, landing through `land --express`.
+  #   full    the ordinary loop: planner, N builders, integrator, wave gate.
+  local n=0 id="" f base pts risk owned p why="" lane=full
+  for f in "$BOARD"/ready/*.md "$BOARD"/active/*.md; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f")"; [ "$base" = "IDEAS.md" ] && continue
+    n=$((n + 1)); id="${base%.md}"
+  done
+
+  if [ "$n" -eq 0 ]; then
+    printf 'full\n'; note "nothing claimable — the board is empty, so a Planner runs first"; return 0
+  fi
+  if [ "$n" -gt 1 ]; then
+    printf 'full\n'; note "$n claimable tasks — parallel lanes are the point; solo/express land exactly one"; return 0
+  fi
+
+  f="$(task_file "$id")" || { printf 'full\n'; note "cannot read task $id"; return 0; }
+  pts="$(fm_get points "$f")"; pts="${pts:-99}"
+  risk="$(fm_get risk "$f")"; risk="${risk:-normal}"
+
+  [ "$risk" = "normal" ] || why="risk: $risk (only a human may approve a merge)"
+  case "$pts" in ''|*[!0-9]*) [ -z "$why" ] && why="points '$pts' is not a plain number";; esac
+  [ -z "$why" ] && [ "$(cfg express on)" = "off" ] && why="express: off in CONVENTIONS.md"
+  [ -z "$why" ] && [ "$(cfg publish direct)" != "direct" ] && why="publish: pr — the wave needs a human merge"
+  # STOP-AND-ASK, mechanically: a RULES path rule over anything the task owns means this task
+  # cannot be a quiet one-context run, whatever its size.
+  if [ -z "$why" ]; then
+    owned="$(fm_list files_owned "$f")"
+    while IFS= read -r p; do
+      [ -z "$p" ] && continue
+      if rule_scan_path "$p" 2>/dev/null; then :; else why="owns a RULES-guarded path ($p)"; break; fi
+    done <<EOF
+$owned
+EOF
+  fi
+
+  if [ -n "$why" ]; then
+    printf 'full\n'; note "$id: $why"; return 0
+  fi
+  if [ "$pts" -le 2 ]; then lane=solo; else lane=express; fi
+  printf '%s\n' "$lane"
+  note "$id: $pts point(s), risk normal, express on, publish direct"
+  [ "$lane" = express ] && note "over 2 points — worth a fresh builder context, but still ONE task and ONE suite run"
+  return 0
+}
+
 cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS suite (test/lint/
   # typecheck/build, uat if set), then drift --strict, then doctor's env check. Runs EVERY
   # check even after a red — one pass paints the whole picture — and exits 1 if anything was
   # red. The Conductor runs it after integration (a subagent's "green" is never taken on
   # faith), the Integrator runs it before reporting, CI and humans run it whenever.
-  local red=0 ran=0 k c out
-  local t0 t1
+  local red=0 ran=0 k c out skip=0 force=0
+  local t0 t1 head stamped dirty
+  [ "${1:-}" = "--force" ] && force=1
+
+  # SUITE STAMP. A green suite is a fact about a COMMIT, not about a moment: if HEAD has not moved
+  # and the tree is clean, re-running it cannot learn anything new. Measured here: test: 805s and
+  # the whole qa loop 1225s — and the old flow paid it TWICE per change, because the integrator
+  # ran the full suite inside `land --express` and then the conductor ran `qa` as its finish line
+  # over the identical tree. That duplicate was the single largest block of wall-clock in a run.
+  # Deliberately conservative: any uncommitted change, any HEAD move, or --force re-runs everything.
+  # drift and doctor below are seconds and always run, so the board is still audited every time.
+  head="$(git -C "$PRIMARY" rev-parse HEAD 2>/dev/null || echo none)"
+  dirty="$(git -C "$PRIMARY" status --porcelain 2>/dev/null | head -1)"
+  if [ "$force" -eq 0 ] && [ -z "$dirty" ] && [ -f "$PRIMARY/.polaris/suite-stamp" ]; then
+    stamped="$(cut -d' ' -f1 < "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true)"
+    [ -n "$stamped" ] && [ "$stamped" = "$head" ] && skip=1
+  fi
+
   t0="$(date +%s)"
   out="$(mktemp)"
+  if [ "$skip" -eq 1 ]; then
+    say "suite already green at $(printf '%.7s' "$head") — skipped (qa --force re-runs it)"
+  else
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
@@ -646,6 +797,7 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
       red=1
     fi
   done
+  fi
   # T-031 (ops/contracts/verification-tiering.md): stamp how long the suite took — one line,
   # "<seconds> <epoch>", written only when ≥1 suite command actually ran. `land` reads it for
   # the slow-suite hint; purely advisory, never a gate, best-effort write.
@@ -654,7 +806,7 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
     mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
     printf '%s %s\n' "$((t1 - t0))" "$t1" > "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true
   fi
-  [ "$ran" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
+  [ "$ran" -eq 0 ] && [ "$skip" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
   # drift --strict exits the script on findings, so both sub-checks run in subshells.
   if ( cmd_drift --strict ) >"$out" 2>&1; then
     say "drift — board clean"
@@ -672,6 +824,13 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
   fi
   rm -f "$out"
   [ "$red" -eq 0 ] || die "qa: red — fix the ⛔ lines above before calling the work done"
+  # Stamp only a suite we actually RAN and that was fully green. Never stamp a skipped run (it
+  # would just re-write the same sha) and never stamp a dirty tree — the stamp claims "this commit
+  # is proven", and an uncommitted edit means the thing proven is not the thing on disk.
+  if [ "$ran" -ge 1 ] && [ "$head" != "none" ] && [ -z "$dirty" ]; then
+    mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+    printf '%s %s\n' "$head" "$(date +%s)" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
+  fi
   say "qa: all green"
 }
 

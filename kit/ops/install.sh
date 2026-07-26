@@ -73,7 +73,7 @@ fi
 PY=""; python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
 
 # --- ops/ ---------------------------------------------------------------------
-KIT_CODE="polaris dashboard.py index.py PROTOCOL.md MANUAL.md PROMPTS.md install.sh VERSION"   # + roles/ templates/ hooks/ ci/
+KIT_CODE="polaris dashboard.py index.py bench.sh PROTOCOL.md MANUAL.md PROMPTS.md install.sh VERSION"   # + roles/ templates/ hooks/ ci/
                                                                    # (pack.py stays in the kit — never shipped)
 # ops/CONVENTIONS.md is written by INIT and by nothing else — it is THE "has INIT run?" test,
 # the same one `polaris doctor` uses. Never test ops/board/ for this (see header).
@@ -99,7 +99,7 @@ else
   done
   UPGRADE=0
 fi
-chmod +x "$TARGET/ops/polaris" "$TARGET/ops/hooks/ownership-guard.sh" "$TARGET/ops/hooks/commit-msg" "$TARGET/ops/install.sh" 2>/dev/null || true
+chmod +x "$TARGET/ops/polaris" "$TARGET/ops/hooks/ownership-guard.sh" "$TARGET/ops/hooks/readonly-allow.sh" "$TARGET/ops/hooks/commit-msg" "$TARGET/ops/install.sh" 2>/dev/null || true
 say "ops/ installed"
 
 # --- VERSION provenance ---------------------------------------------------------
@@ -176,22 +176,70 @@ mkdir -p "$TARGET/.claude/skills/polaris"
 cp "$KIT/.claude/skills/polaris/SKILL.md" "$TARGET/.claude/skills/polaris/SKILL.md"
 SJ="$TARGET/.claude/settings.json"
 if [ ! -f "$SJ" ]; then
-  cp "$KIT/.claude/settings.json" "$SJ"; say ".claude/ installed (skill + write-guard hook)"
-elif grep -q "ownership-guard.sh" "$SJ"; then
-  note ".claude/settings.json already wires the guard — left as is"
+  cp "$KIT/.claude/settings.json" "$SJ"; say ".claude/ installed (skill + hooks + read-only permissions)"
 elif [ -n "$PY" ]; then
+  # Merge EVERY kit hook entry and the read-only permissions, idempotently.
+  #
+  # This used to bail on `grep -q ownership-guard.sh` ("already wires the guard — left as is") and,
+  # failing that, merge only PreToolUse[0]. Both were silent no-ops for any repo that already had
+  # Claude settings: a second hook could never arrive, and no permission rule ever did. That is
+  # what made "install POLARIS and stop being prompted" false in exactly the repos that had been
+  # around longest. Match on the hook SCRIPT NAME, not on array position, so each entry is
+  # considered on its own and re-running changes nothing.
   "$PY" - "$SJ" "$KIT/.claude/settings.json" <<'EOF'
-import json, sys
+import json, re, sys
 tgt_p, kit_p = sys.argv[1], sys.argv[2]
-tgt, kit = json.load(open(tgt_p)), json.load(open(kit_p))
-entry = kit["hooks"]["PreToolUse"][0]
-tgt.setdefault("hooks", {}).setdefault("PreToolUse", []).append(entry)
-open(tgt_p, "w").write(json.dumps(tgt, indent=2) + "\n")
+try:
+    tgt = json.load(open(tgt_p, encoding="utf-8"))
+    kit = json.load(open(kit_p, encoding="utf-8"))
+except (OSError, ValueError) as exc:
+    sys.exit(f"unreadable settings: {exc}")     # never rewrite what we cannot parse
+if not isinstance(tgt, dict):
+    sys.exit("settings.json is not a JSON object")
+
+def scripts(entry):
+    """Every hook script basename an entry runs — the identity we de-duplicate on."""
+    return {re.sub(r".*/", "", h.get("command", "")).strip('"')
+            for h in entry.get("hooks", []) if isinstance(h, dict)}
+
+added_hooks, added_perms = [], []
+for event, entries in (kit.get("hooks") or {}).items():
+    have = tgt.setdefault("hooks", {}).setdefault(event, [])
+    if not isinstance(have, list):
+        continue
+    present = set()
+    for e in have:
+        if isinstance(e, dict):
+            present |= scripts(e)
+    for entry in entries:
+        names = scripts(entry)
+        if names and names & present:
+            continue                            # this script is already wired — leave it alone
+        have.append(entry)
+        added_hooks += sorted(names)
+
+perms = tgt.setdefault("permissions", {})
+if isinstance(perms, dict):
+    allow = perms.setdefault("allow", [])
+    if isinstance(allow, list):
+        for rule in (kit.get("permissions") or {}).get("allow", []):
+            if rule not in allow:
+                allow.append(rule)
+                added_perms.append(rule)
+
+open(tgt_p, "w", encoding="utf-8").write(json.dumps(tgt, indent=2) + "\n")
+# Deliberately silent: installer stdout is a contract (CI counts the quiet lines above the
+# ▶ NEXT epilogue), so a diagnostic here would be a tripwire failure, not a nicety.
 EOF
-  say ".claude/settings.json: guard hook merged into existing hooks"
+  MERGED="$?"
+  if [ "$MERGED" = 0 ]; then
+    say ".claude/settings.json: hooks + read-only permissions merged (idempotent)"
+  else
+    note "⚠ .claude/settings.json could not be merged — add by hand from $KIT/.claude/settings.json"
+  fi
 else
   note "⚠ .claude/settings.json exists and python is unavailable — merge by hand:"
-  note "  add the hooks.PreToolUse entry from $KIT/.claude/settings.json"
+  note "  the hooks.PreToolUse entries and permissions.allow from $KIT/.claude/settings.json"
 fi
 
 # --- attribution off: the product carries no AI fingerprints ---------------------

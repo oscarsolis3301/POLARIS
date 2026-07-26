@@ -231,10 +231,43 @@ def selfcheck():
         if not any(r == want for r, _ in imps):
             print("FAIL import %s: expected %r, got %r" % (name, want, imps))
             bad += 1
+    # resolve_import cases. The scanner above only proves we EXTRACT an import spec; these prove we
+    # turn it into the right file, which is what `find --importers` actually answers. Pure-function,
+    # so they cost nothing to run, and they pin the two rules that are easy to get subtly wrong:
+    # a variable-built path resolving through its literal tail, and a self-hosting repo's mirrored
+    # trees resolving to their OWN copy instead of each other's.
+    paths = {"src/lib/util.js": 1, "vendor/src/lib/util.js": 2, "src/lib/helper.sh": 3,
+             "ops/lib/core.sh": 4, "kit/ops/lib/core.sh": 5,
+             "app/a/conf.js": 6, "app/b/conf.js": 7}
+    bybase = {}
+    for _p, _i in paths.items():
+        bybase.setdefault(os.path.basename(_p), []).append((_p, _i))
+    res_cases = [
+        ('"$ROOT/src/lib/helper.sh"', "run.sh", 3),        # variable prefix, literal tail
+        ("./lib/util.js", "src/app.js", 1),                # relative, same tree
+        ("./lib/util.js", "vendor/src/app.js", 2),         # relative, mirrored tree stays its own
+        ('"$OPS_DIR/lib/core.sh"', "ops/polaris", 4),      # self-hosting: nearest tree wins
+        ('"$OPS_DIR/lib/core.sh"', "kit/ops/polaris", 5),  # ...and the mirror gets its own
+        ('"$R/a/conf.js"', "app/main.js", 6),              # tail disambiguates where basename cannot:
+                                                           # two conf.js are EQUALLY close to app/,
+                                                           # so tree distance ties and only the
+                                                           # literal tail "a/conf.js" is unique
+        ("core.sh", "ops/polaris", 4),                     # bare basename (`. core.sh`, `#include
+                                                           # "core.h"`): ambiguous in a self-hosting
+                                                           # repo, and only tree distance decides it
+        ('"$OPS_DIR/lib/$_m.sh"', "ops/polaris", None),    # no literal tail -> honestly unresolved
+        ("os", "a.py", None),                              # stdlib is external, and stays NULL
+    ]
+    for raw, src, want in res_cases:
+        got = resolve_import(raw, src, paths, bybase)
+        if got != want:
+            print("FAIL resolve %r from %s: expected %r, got %r" % (raw, src, want, got))
+            bad += 1
     if bad:
         print("selfcheck FAILED (%d)" % bad)
         return 1
-    print("selfcheck ok (%d language fixtures, %d import cases)" % (len(FIXTURES), len(imp_cases)))
+    print("selfcheck ok (%d language fixtures, %d import cases, %d resolve cases)"
+          % (len(FIXTURES), len(imp_cases), len(res_cases)))
     return 0
 
 
@@ -348,11 +381,64 @@ def resolve_import(raw, src, paths, bybase):
     for c in cands:
         if c in paths:
             return paths[c]
+
+    # Variable-built paths. Shell sources its modules as `. "$OPS_DIR/lib/search.sh"`, and CI and
+    # Makefiles do the same with $(VAR) — none of which is a literal path, so every edge in a repo
+    # written that way resolved to NULL. This repo indexed 38 edges and resolved 0 of them, which
+    # silently broke `find --importers`, the command PLANNER.md names as the way to prove
+    # files_owned disjointness. Drop the variable segments and match on the literal tail; a segment
+    # that is ITSELF a variable (`lib/$_m.sh`) leaves no usable tail and stays unresolved, which is
+    # the correct answer rather than a guess.
+    tail = ""
+    if "$" in raw:
+        segs = [s for s in raw.split("/") if s and "$" not in s]
+        tail = "/".join(segs)
+    if tail:
+        direct = os.path.normpath(os.path.join(d, tail)).replace("\\", "/")
+        if tail in paths:
+            return paths[tail]
+        if direct in paths:
+            return paths[direct]
+        best = _closest([p for p in paths if p.endswith("/" + tail)], src)
+        if best:
+            return paths[best]
+
     # last resort: unique basename match (catches `#include "core.h"`, `source core.sh`)
     hits = bybase.get(os.path.basename(raw), [])
     if len(hits) == 1:
         return hits[0][1]
+    if len(hits) > 1:
+        best = _closest([h[0] for h in hits], src)
+        if best:
+            return dict(hits).get(best) or paths.get(best)
     return None
+
+
+def _closest(candidates, src):
+    """The candidate sharing the longest directory prefix with src, or None if it is a tie.
+
+    A self-hosting repo has the same file twice — `ops/lib/search.sh` and its source
+    `kit/ops/lib/search.sh` — so a basename or tail match is routinely ambiguous. The right answer
+    is the one in the SAME tree as the importer, and when two are equally close there is no right
+    answer and we return None: an edge into the wrong tree would make --importers point a Planner
+    at the mirror of the file that actually changed.
+    """
+    if not candidates:
+        return None
+    sd = os.path.dirname(src).split("/")
+    scored = []
+    for c in candidates:
+        cd = os.path.dirname(c).split("/")
+        n = 0
+        for a, b in zip(sd, cd):
+            if a != b:
+                break
+            n += 1
+        scored.append((n, c))
+    scored.sort(key=lambda t: -t[0])
+    if len(scored) > 1 and scored[0][0] == scored[1][0]:
+        return None
+    return scored[0][1]
 
 
 def flags_for(path):

@@ -46,7 +46,7 @@ EOF
   local pts; pts="$(fm_get points "$BOARD/ready/$id.md")"
   mutex_on
   mv "$BOARD/ready/$id.md" "$BOARD/active/$id.md"   # plain mv: board paths are untracked on base
-  set_fm owner "$WHO" "$BOARD/active/$id.md"
+  who; set_fm owner "$WHO" "$BOARD/active/$id.md"
   set_fm branch "feat/$id" "$BOARD/active/$id.md"
   set_fm status active "$BOARD/active/$id.md"
   evt claim "$id" "" "$pts"
@@ -147,6 +147,7 @@ cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
   mutex_on
   mv "$BOARD/active/$id.md" "$BOARD/$to/$id.md"
   set_fm owner null "$BOARD/$to/$id.md"; set_fm status "$to" "$BOARD/$to/$id.md"
+  who
   [ -n "$msg" ] && printf -- '- ⛔ released by %s: %s\n' "$WHO" "$msg" >> "$BOARD/$to/$id.md"
   # v2: --to blocked is its own board event ("blocked", severity gate at the hook) — a recipe can
   # now tell "the run waits on you" from an FYI. --to ready keeps ev "release". Note text unchanged.
@@ -244,7 +245,7 @@ cmd_resume() { # resume [ID] — re-enter an already-claimed active task without
   [ -n "$id" ] || id="$(current_task_id)" || die "usage: polaris resume <ID> (or run inside a feat/<ID> worktree)"
   board_materialize || true   # fresh clone: rebuild ops/board/ from polaris/board BEFORE the lookup
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/ — only a claimed task can be resumed; for a fresh one: polaris claim"
-  mkdir -p "$LOCKS/$id"; { date +%s; echo "$WHO"; echo "$id"; } > "$LOCKS/$id/meta"   # adopt + refresh the lock
+  who; mkdir -p "$LOCKS/$id"; { date +%s; echo "$WHO"; echo "$id"; } > "$LOCKS/$id/meta"   # adopt + refresh the lock
   local wt; wt="$(wt_path "$id")"
   if [ ! -d "$wt" ]; then
     note "worktree was gone — recreating it from feat/$id"

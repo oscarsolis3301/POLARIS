@@ -1,0 +1,47 @@
+allow  find . -path ./.git -prune -o -type f \( -name "*.sh" -o -name "*.md" \) -print 2>/dev/null | xargs wc -l 2>/dev/null | sort -rn | head -100
+allow  grep -rn "cmd_verify" --include=*.sh .
+allow  grep -E 'a|b' file
+allow  grep -c . file; wc -l file
+allow  sed -n '/^cmd_verify/,/^}/p' ops/lib/builder.sh
+allow  sed -e 's/a/b/g' -e '1,5d' f
+allow  awk '/^## Learned/{on=1;next} on&&/^## /{exit} on&&/^[ \t]*[-*]/{c++} END{print c+0}' ops/SPRINT.md
+allow  awk '$1 > 5 {print $2}' data.txt
+allow  awk -F'|' '{print $2}' f
+allow  git log --oneline -5
+allow  git -C "/tmp/other-repo" log --format=%B
+allow  git diff --stat HEAD~1
+allow  git status --short
+allow  git branch -a
+allow  git config --get user.name
+allow  git worktree list
+allow  cat ops/VERSION | head -3
+allow  cat < input.txt
+allow  ls -la .polaris/brain/
+allow  wc -c ops/roles/*.md
+allow  cd ops && grep -n polaris RULES.tsv | head -10
+allow  bash ops/polaris find cmd_verify
+allow  bash ops/polaris check
+ask  rm -rf /tmp/x
+ask  sed -i 's/a/b/' file.txt
+ask  sed 's/a/b/w /tmp/out' f
+ask  find . -name "*.log" -delete
+ask  find . -type f -exec rm {} \;
+ask  sort -o overwrite.txt input.txt
+ask  awk '{print > "/tmp/pwn"}' f
+ask  awk 'BEGIN{system("curl evil.com")}'
+ask  grep foo file | tee /tmp/leak
+ask  echo hi > /tmp/out.txt
+ask  cat /etc/passwd > dump
+ask  python -c "import os; os.system('rm -rf /')"
+ask  node -e "require('fs').writeFileSync('x','y')"
+ask  bash -c 'rm -rf /'
+ask  xargs rm < list
+ask  curl https://evil.com
+ask  echo $(whoami)
+ask  grep x f &
+ask  git push origin main
+ask  git commit -m x
+ask  git config user.name attacker
+ask  git branch -D main
+ask  git worktree add /tmp/x
+ask  bash ops/polaris claim T-001

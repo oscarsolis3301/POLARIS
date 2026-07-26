@@ -71,6 +71,14 @@ def out(msg="", always=False):
 #
 # A rule in ~/.claude/settings.json IS the user naming the source. The curl URL is pinned in full
 # for exactly that reason — a wildcard would authorize fetching code from anywhere.
+#
+# The READ block below is the second half of the "never prompt me again in plan mode" guarantee.
+# It carries ONLY verbs that cannot write or execute in ANY invocation, because a prefix rule sees
+# no flags: `sed` is absent because of `-i`, `find` because of `-exec`, `sort` because of `-o`,
+# `awk` because of `print >`, and python/node/bash because they run arbitrary code. Those — and
+# every pipeline, which prefix rules cannot match at all — are handled by the far stricter parser
+# in ops/hooks/readonly-allow.sh. These rules exist so the commonest one-word reads never even
+# spawn that hook. Adding a verb here is a real decision: it authorizes every flag it will ever have.
 PERMS = [
     "Bash(python polaris-v5.zip)",
     "Bash(python polaris-v5.zip:*)",
@@ -78,6 +86,26 @@ PERMS = [
     "Bash(curl -fsSLO https://github.com/oscarsolis3301/POLARIS/releases/latest/download/polaris-v5.zip)",
     "Bash(bash ops/polaris:*)",
     "Bash(ops/polaris:*)",
+    # --- read-only verbs: safe under every flag they accept ---
+    "Bash(grep:*)", "Bash(egrep:*)", "Bash(fgrep:*)", "Bash(rg:*)",
+    "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(ls:*)",
+    "Bash(cut:*)", "Bash(tr:*)", "Bash(uniq:*)", "Bash(comm:*)", "Bash(nl:*)", "Bash(rev:*)",
+    "Bash(diff:*)", "Bash(cmp:*)", "Bash(file:*)", "Bash(stat:*)", "Bash(du:*)", "Bash(tree:*)",
+    "Bash(basename:*)", "Bash(dirname:*)", "Bash(realpath:*)", "Bash(readlink:*)", "Bash(pwd:*)",
+    "Bash(echo:*)", "Bash(printf:*)", "Bash(seq:*)", "Bash(date:*)", "Bash(jq:*)", "Bash(column:*)",
+    "Bash(which:*)", "Bash(whoami:*)", "Bash(hostname:*)", "Bash(uname:*)", "Bash(strings:*)",
+    # --- git: read subcommands only, never a bare `Bash(git:*)` ---
+    "Bash(git log:*)", "Bash(git diff:*)", "Bash(git show:*)", "Bash(git status:*)",
+    "Bash(git blame:*)", "Bash(git grep:*)", "Bash(git shortlog:*)", "Bash(git describe:*)",
+    "Bash(git rev-parse:*)", "Bash(git rev-list:*)", "Bash(git ls-files:*)", "Bash(git ls-tree:*)",
+    "Bash(git cat-file:*)", "Bash(git show-ref:*)", "Bash(git for-each-ref:*)",
+    "Bash(git merge-base:*)", "Bash(git worktree list:*)", "Bash(git branch --list:*)",
+    # --- PowerShell is the primary shell on Windows and had zero prefix rules ---
+    "PowerShell(Get-Content:*)", "PowerShell(Get-ChildItem:*)", "PowerShell(Get-Item:*)",
+    "PowerShell(Get-Location:*)", "PowerShell(Get-Command:*)", "PowerShell(Test-Path:*)",
+    "PowerShell(Select-String:*)", "PowerShell(Select-Object:*)", "PowerShell(Where-Object:*)",
+    "PowerShell(Measure-Object:*)", "PowerShell(Sort-Object:*)", "PowerShell(Resolve-Path:*)",
+    "PowerShell(Split-Path:*)", "PowerShell(Join-Path:*)", "PowerShell(ConvertFrom-Json:*)",
 ]
 
 

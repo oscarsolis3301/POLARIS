@@ -401,13 +401,28 @@ brain_prefs() { # prefs.md — house style DETECTED from the repo, never declare
     | grep -Ei '\.(py|js|jsx|mjs|cjs|ts|tsx|go|rs|java|kt|c|h|cc|cpp|cs|rb|php|sh|bash|css|scss)$' \
     | head -200 \
     | tr '\n' '\0' 2>/dev/null | xargs -0 awk '
+      # Length and quotes are counted on EVERY line, BEFORE the indent rules — those end in `next`,
+      # so anything indented used to skip both. Since virtually all code inside a function IS
+      # indented, the quote counter only ever saw top-level lines and reported "0 double vs 0
+      # single | mixed" for a repo full of double quotes. gsub runs after the length read because
+      # it mutates $0; it only strips quote characters, so leading whitespace survives for the
+      # indent rules below.
+      { if (length($0)>maxl) maxl=length($0) }
+      { dq+=gsub(/"/,""); sq+=gsub(/'"'"'/,"") }
       /^\t/            { tab++;  next }
       /^ +[^ ]/        { n=match($0,/[^ ]/)-1; if (n==2) sp2++; else if (n==4) sp4++; next }
-      { if (length($0)>maxl) maxl=length($0) }
-      { sq+=gsub(/'"'"'/,""); dq+=gsub(/"/,"") }
       END {
-        pick=(tab>sp2 && tab>sp4) ? "tabs" : ((sp2>=sp4) ? "2 spaces" : "4 spaces")
         tot=tab+sp2+sp4
+        # An EMPTY sample must say so, not report zeros as if they were measurements. In a repo
+        # whose only code is POLARIS itself (the kit repo, or a board installed before any app code
+        # exists) the filters above legitimately match nothing, and the old END block still printed
+        # "2 spaces | 0 of 1 indented lines" and "0 chars" — three confident rows backed by no data,
+        # in the one file whose entire promise is that every row prints its evidence.
+        if (tot==0 && maxl==0 && dq+sq==0) {
+          print "| indent | not detected | no application code sampled (ops/ is POLARIS itself) |"
+          exit
+        }
+        pick=(tab>sp2 && tab>sp4) ? "tabs" : ((sp2>=sp4) ? "2 spaces" : "4 spaces")
         printf "| indent | %s | %d of %d indented lines |\n", pick, (pick=="tabs"?tab:(pick=="2 spaces"?sp2:sp4)), (tot?tot:1)
         q=(dq>sq*1.2) ? "double" : ((sq>dq*1.2) ? "single" : "mixed")
         printf "| quotes | %s | %d double vs %d single |\n", q, dq, sq

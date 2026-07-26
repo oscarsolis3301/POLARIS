@@ -51,14 +51,18 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  <name>.rc = expected exit code). --update rewrites goldens — a
                                  human/Builder decision, never automatic. Wire it into qa by setting
                                  `uat: bash ops/polaris check` in ops/CONVENTIONS.md
-  check --scaffold [--cmd "<shell>"]
+  check --scaffold [--app] [--cmd "<shell>"]
                                  GENERATE the pairs from observed behavior — public API surface per
                                  source dir (from the index) + this CLI's parsed output shapes. Runs
                                  each candidate TWICE and discards any that flaps, is empty, or whose
                                  command is missing. Never overwrites an existing golden. --cmd adds
                                  ONE behavioural golden for your own command (auto-running an app's
-                                 executables would start servers, so it is opt-in). REVIEW the output:
-                                 a golden records what the code DOES, not what it SHOULD do.
+                                 executables would start servers, so it is opt-in). --app locks the
+                                 HOST app's shape instead: declared dependencies (Invariant 8 as a
+                                 diff), npm script names, HTTP routes, migration set, and referenced
+                                 env var NAMES — all by reading tracked files, never by running the
+                                 app. REVIEW the output: a golden records what the code DOES, not
+                                 what it SHOULD do.
   find <symbol> | -f <glob> | -t <text> | --importers <path> | --imports <path> | --api <glob> [-n N]
                                  the 1-hop "where is X": ONE line per hit, path:line first, ranked
                                  (exact > prefix > substring, boosted by churn + fan-in, tests and
@@ -80,11 +84,20 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)
+  triage                         which LANE this board's work belongs in — line 1 is one word:
+                                 solo (one context, zero subagents; 1 task ≤2pts, risk normal,
+                                 express on, publish direct) · express (one task, one builder,
+                                 one integrator) · full (everything else). Reasons follow on
+                                 stderr-style note lines. Decide with this, never by re-reading
+                                 the board and weighing the six conditions by hand.
   drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
-  qa                             is everything okay, in ONE shot: test/lint/typecheck/build/uat
+  qa [--force]                   is everything okay, in ONE shot: test/lint/typecheck/build/uat
                                  from CONVENTIONS + drift --strict + doctor env check. Runs every
                                  check even after a red; rc 1 if anything was red.
+                                 SKIPS the suite when HEAD is unchanged since the last green run
+                                 and the tree is clean (.polaris/suite-stamp) — drift and doctor
+                                 still run every time. --force always re-runs the suite.
   dash [--port N]                live read-only board at http://127.0.0.1:7373 (needs python3)
   fleet <N> [--loop] [--launch] [--dry-run]
                                  print N Builder kickoffs; --launch opens a session per task in
