@@ -3,8 +3,8 @@
 drill_brain() {
     # ==================== T-030 brain drills (ops/contracts/brain.md) ====================
     # generator: all 7 layout files, gitignored · INDEX routes to all 5 domain files · board
-    # digest names the landed task T-1 · staleness round-trip: board-changed newer → doctor
-    # warns → refresh clears. (Seal auto-refresh + the refresh-failure note ride the
+    # digest names the landed task T-1 · self-heal round-trip: board-changed newer → doctor
+    # REFRESHES it (v3, 5.20.0). (Seal auto-refresh + the refresh-failure note ride the
     # second-seal drill below.)
     "$SELF" help | grep -q 'brain' || { echo "USAGE FAIL: brain missing from help"; exit 1; }
     "$SELF" brain >/dev/null || { echo "BRAIN BUILD FAIL"; exit 1; }
@@ -33,8 +33,21 @@ drill_brain() {
       grep -q "^$bk:" .polaris/brain/commands.md || { echo "BRAIN COMMANDS KEYS FAIL ($bk: cut by the cap)"; exit 1; }
     done
     "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "BRAIN FRESH FAIL (a just-built brain must not warn)"; exit 1; }
+    # 5.20.0: doctor HEALS a stale brain instead of advising a refresh. This drill used to assert the
+    # ADVICE ("brain is stale") — but an advisory only works if something acts on it, and what acted
+    # on it was a model, spending tokens to run a command doctor could run itself. Meanwhile a stale
+    # brain is worse than none: every role file says read it FIRST, so it answers confidently and
+    # wrongly until someone notices. Found for real on 2026-07-25 — this repo's brain was four
+    # releases behind (stamp df0df1d, HEAD 9daab03) with a clean board, and the old check, which
+    # compared only board-changed, had never said a word. So: assert the REPAIR, not the warning.
     sleep 1; date +%s > .polaris/board-changed    # sleep: -nt needs strictly-newer mtime on 1s-resolution filesystems
-    "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' || { echo "BRAIN STALE FAIL (board-changed newer than .stamp must warn)"; exit 1; }
+    "$SELF" doctor 2>/dev/null | grep -q 'brain was stale — refreshed' \
+      || { echo "BRAIN HEAL FAIL (doctor must REFRESH a stale brain, not merely report it)"; exit 1; }
+    # The message is not the proof — the stamp is. Compare mtimes rather than stamp CONTENT: a
+    # refresh inside the same second at an unchanged sha writes a byte-identical stamp, which would
+    # make a content check flap. `-nt` is false on equal mtimes, so this is stable either way.
+    [ .polaris/board-changed -nt .polaris/brain/.stamp ] \
+      && { echo "BRAIN HEAL STAMP FAIL (stamp did not advance past board-changed)"; exit 1; }
+    "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "BRAIN REFRESH STALE FAIL (a healed brain must not report stale)"; exit 1; }
     "$SELF" brain --refresh >/dev/null || { echo "BRAIN REFRESH FAIL"; exit 1; }
-    "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "BRAIN REFRESH STALE FAIL (refresh must clear the warn)"; exit 1; }
 }

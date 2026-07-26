@@ -43,9 +43,17 @@ repos get "the same 6 `.md` files, near-empty".
   `board-changed` touch, `[ -d .polaris/brain ]` → run `brain --refresh`; failure prints a `⚠` note
   and never fails the done. No brain dir → do nothing. Net effect: the documented wave close
   (land → suite → seal → run-verify → done) ends FRESH — `doctor` prints no `brain is stale`.
-- `doctor`: `[ -d .polaris/brain ]` AND `.polaris/board-changed` newer (`-nt`) than
-  `.polaris/brain/.stamp` → one warn line containing `brain is stale` and naming
-  `ops/polaris brain --refresh`. No brain dir → silent (feature is opt-in by first run).
+- (v3, 5.20.0) `doctor` REPAIRS a stale brain instead of reporting it, and detects staleness two
+  ways: `.polaris/board-changed` newer (`-nt`) than `.polaris/brain/.stamp`, **OR** the sha recorded
+  in `.stamp` differing from `<BASE>`'s short sha. It then runs `brain --refresh` itself and prints
+  one line containing `brain was stale — refreshed`; only a refresh that FAILS falls back to a warn.
+  No brain dir → silent (the feature is opt-in by first run).
+  **Why it changed:** the v1.1 rule compared only `board-changed`, so a brain could be arbitrarily
+  far behind the CODE while the board sat clean and `doctor` said nothing — found on 2026-07-25 with
+  this repo's own brain four releases stale (stamp `df0df1d`, HEAD `9daab03`). And an advisory is
+  only as good as whatever acts on it; here that was a model, spending tokens to run a command
+  `doctor` could run itself. A stale brain is worse than no brain, because every role file says to
+  read it FIRST — it answers confidently and wrongly until someone notices.
 
 ## Consumers — pinned phrases (grep targets; write them VERBATIM)
 - Role files BUILDER/PLANNER/INTEGRATOR "read first" sections + CONDUCTOR subagent kickoff templates
@@ -59,8 +67,11 @@ Drills in `selftest()` of `kit/ops/polaris`, asserted in the throwaway repo:
 1. `brain` → all 7 files above exist; `git status --porcelain` shows NO brain path (untracked stays untracked).
 2. `INDEX.md` names all 5 domain files (routing resolves).
 3. `board.md` contains the selftest's landed task id `T-1`.
-4. Staleness: `board-changed` touched newer than `.stamp` → `doctor` output matches `brain is stale`;
-   after `brain --refresh` → warn gone.
+4. (v3) Self-heal: `board-changed` touched newer than `.stamp` → ONE `doctor` run outputs
+   `brain was stale — refreshed`, leaves `.stamp` no older than `board-changed`, and a second
+   `doctor` reports nothing stale. Fail tokens `BRAIN HEAL FAIL` / `BRAIN HEAL STAMP FAIL`.
+   Assert on the STAMP, not on stamp CONTENT: a refresh in the same second at an unchanged sha
+   writes a byte-identical stamp, so a content comparison would flap.
 5. Seal auto-refresh: with a brain present, a seal leaves `.stamp` newer than `board-changed`.
 6. (v1.1) Commands keys: after `brain`, `commands.md` contains ALL 8 CONVENTIONS keys (`base:` ·
    `claim:` · `integration:` · `publish:` · `express:` · `stale_hours:` · `test:` · `build:`) —
