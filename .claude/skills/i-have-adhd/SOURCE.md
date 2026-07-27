@@ -9,7 +9,7 @@ did not write it, and must not edit it.
 | file | `skills/i-have-adhd/SKILL.md` |
 | author | Ayoub Ghriss |
 | licence | MIT — full text in `LICENSE` beside this file |
-| vendored | 2026-07-26, for POLARIS 5.22.0 |
+| vendored | 2026-07-26, for POLARIS 5.23.0 |
 
 ## Why it ships with the kit
 
@@ -27,12 +27,19 @@ rather than as instructions to configure one.
 Its frontmatter carries `disable-model-invocation: true`, so the skill fires only when a human types
 `/i-have-adhd`. On its own it would sit unused in most sessions.
 
-That is why POLARIS also carries the same discipline in `ops/PROTOCOL.md` § VOICE → OUTPUT
-DISCIPLINE, which applies under BOTH `voice:` settings with no invocation at all. The two layers are
-deliberate and they are not redundant:
+That is why POLARIS also carries the same discipline elsewhere, with no invocation at all. Three
+layers, deliberate and not redundant — each reaches somewhere the others cannot:
 
 - **this skill** — the full ten rules, opt-in, session-persistent, for the human who wants them everywhere;
-- **PROTOCOL VOICE** — the seven rules that survive compression, always on, for every POLARIS role.
+- **the output style** (`.claude/output-styles/polaris.md`) — the seven rules plus the closing
+  contract, auto-selected by the installer, binding the MAIN conversation in every POLARIS repo.
+  Output styles never reach subagents, which is why the next layer still exists;
+- **PROTOCOL VOICE** — the seven rules that survive compression, always on, for every POLARIS role
+  and every subagent.
+
+Until 5.23.0 there were only the first and last, and the middle one is the reason this file used to
+overstate its case: the skill never fires by itself, and PROTOCOL is a section `CLAUDE.md` tells
+sessions they probably need not open. The always-on layer was, in practice, neither.
 
 If you update the vendored copy, re-fetch it from upstream verbatim and bump the vendored date
 above. Do not hand-edit `SKILL.md` — a locally-patched copy that still claims to be upstream is

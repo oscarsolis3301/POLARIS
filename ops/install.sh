@@ -123,7 +123,25 @@ fi
 # except the protocol document itself, so no CLAUDE.md change could ever reach an installed
 # repo. The markers are also what make `polaris uninstall` safe: you cannot remove a block
 # you cannot delimit.
-BEGIN_M='<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. -->'
+#
+# The BEGIN marker carries the kit version it was written from, so the block states its own
+# provenance. `polaris doctor` compares that stamp to ops/VERSION — without it, "the CLI says 5.23
+# but the protocol every session actually reads is 5.19" is invisible, and it happened: a repo on
+# 5.22.0 carrying a protocol three weeks old, reporting healthy the whole time. A version that lies
+# is worse than one that is old, because nobody looks. Rejected alternatives: a hash under .polaris/
+# (gitignored → absent in every fresh clone, so doctor would cry stale forever), mtimes (git does not
+# preserve them), and diffing against the source (a target holds no copy of kit/CLAUDE.md — which is
+# exactly why the block has to carry its version rather than have it derived).
+#
+# MIGRATION: everything now matches on BEGIN_TAG, a PREFIX, never on the whole BEGIN line. Blocks
+# written before the stamp existed still start with that prefix, so they are found, rebuilt, and come
+# out stamped — one install or update migrates every kit in the field, with no special case. END_M is
+# byte-identical to what it has always been; do not touch it, it is the detection key (`grep -qF`) in
+# three files. cmd_uninstall has always prefix-matched (lib/admin.sh), so an OLD client can still
+# delimit and remove a NEW block.
+KITV="$(sed -n 's/^version: *//p' "$KIT/ops/VERSION" 2>/dev/null | head -1 | tr -d ' \r')"
+BEGIN_TAG='<!-- POLARIS:BEGIN'
+BEGIN_M="$BEGIN_TAG"' — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker.'" [kit ${KITV:-unknown}] -->"
 END_M='<!-- POLARIS:END -->'
 MARK="POLARIS v5 — Parallel Sprint Protocol"
 CM="$TARGET/CLAUDE.md"
@@ -138,7 +156,7 @@ TMP="$TARGET/CLAUDE.md.polaris-tmp"
 # before re-wrapping also makes the whole operation idempotent, which is what it always claimed to be.
 protocol_text() {
   if grep -qF "$END_M" "$KIT/CLAUDE.md" 2>/dev/null; then
-    awk -v b="$BEGIN_M" -v e="$END_M" '
+    awk -v b="$BEGIN_TAG" -v e="$END_M" '
       index($0,e)==1 {inside=0; next}
       inside         {print}
       index($0,b)==1 {inside=1}
@@ -155,16 +173,50 @@ if [ ! -f "$CM" ]; then
 elif grep -qF "$END_M" "$CM"; then
   # Rebuild as: everything before BEGIN + a fresh block + everything after END.
   # Two plain awk passes — no sed -i (BSD needs a backup suffix), no bash 4 features.
-  { awk -v b="$BEGIN_M" 'index($0,b)==1 {exit} {print}' "$CM"
+  { awk -v b="$BEGIN_TAG" 'index($0,b)==1 {exit} {print}' "$CM"
     emit_block
     awk -v e="$END_M" 'after {print} index($0,e)==1 {after=1}' "$CM"
   } > "$TMP"
   mv "$TMP" "$CM"
   say "CLAUDE.md: managed POLARIS block refreshed (everything outside it untouched)"
 elif grep -qF "$MARK" "$CM"; then
-  note "CLAUDE.md carries POLARIS but has no markers (installed before they existed) —"
-  note "  left as is. To make it updatable, wrap the POLARIS section by hand in:"
-  note "  $BEGIN_M ... $END_M"
+  # SELF-HEAL. Pre-marker installs wrote the protocol with no delimiters, so `update` could never
+  # replace it: ops/ refreshed, ops/VERSION got stamped, and CLAUDE.md — the one file every session
+  # actually reads — stayed frozen at install day while `polaris version` reported the new kit.
+  #
+  # WHY THE BOUNDARY IS KNOWABLE rather than guessed. An unmarked block was written by exactly two
+  # code paths, both ours:
+  #     cp "$KIT/CLAUDE.md" "$TARGET/CLAUDE.md"                                → the file IS the protocol
+  #     { cat "$KIT/CLAUDE.md"; printf '\n---\n\n'; cat "$TARGET/CLAUDE.md"; } → protocol · sep · theirs
+  # So the protocol starts at line 1 and ends at that separator (blank / `---` / blank) or at EOF. No
+  # CLAUDE.md we have ever shipped contains a bare `---` line, which is what makes the separator a
+  # terminator and not a heuristic. Same shape cmd_uninstall already strips — keep the two in step.
+  #
+  # WHAT WE REFUSE TO GUESS: if the protocol is NOT at line 1, a human moved or merged it and we do
+  # not know where their text starts. A heal that rewrites what it cannot delimit is how rules get
+  # lost, so we say so and leave the file alone; doctor keeps saying so until it is wrapped by hand.
+  if [ "$(awk 'NF{print;exit}' "$CM")" = "# $MARK" ]; then
+    # Back up first, always. .polaris/ is gitignored further down, so this costs the repo nothing and
+    # gives an exact undo that does not depend on CLAUDE.md ever having been committed. Fails open —
+    # a backup we cannot write must never fail an install.
+    mkdir -p "$TARGET/.polaris" 2>/dev/null || true
+    cp "$CM" "$TARGET/.polaris/CLAUDE.md.pre-heal" 2>/dev/null || true
+    SEP="$(awk '$0=="---" && prev=="" {print NR; exit} {prev=$0}' "$CM")"
+    { emit_block
+      # From the blank line BEFORE the separator to EOF, byte for byte: their content and the
+      # separator itself come out exactly as they went in.
+      [ -n "$SEP" ] && awk -v s="$SEP" 'NR>=s-1' "$CM"
+    } > "$TMP"
+    mv "$TMP" "$CM"
+    say "CLAUDE.md: unmarked POLARIS text WRAPPED in markers and refreshed to ${KITV:-unknown} — it was"
+    note "  frozen at install time and could never be updated; now it can. Backup: .polaris/CLAUDE.md.pre-heal"
+    [ -n "$SEP" ] || note "  No separator was present, so the WHOLE file was POLARIS's — that is what the pre-marker installer wrote when the repo had no CLAUDE.md of its own. Had you added rules of your own at the bottom, take them from the backup and put them BELOW the END marker."
+  else
+    note "⚠ CLAUDE.md carries POLARIS but not at the top, and with no markers — NOT healed. The boundary"
+    note "  between our text and yours cannot be determined, and a heal that rewrites what it does not"
+    note "  understand is how rules get lost. Wrap the POLARIS section by hand between:"
+    note "  $BEGIN_TAG ... -->   and   $END_M   — then every update refreshes it for you."
+  fi
 else
   { emit_block; printf '\n---\n\n'; cat "$CM"; } > "$TMP"
   mv "$TMP" "$CM"
@@ -187,9 +239,22 @@ if [ -f "$KIT/.claude/skills/i-have-adhd/SKILL.md" ]; then
   done
   unset _f
 fi
+# Output style — the layer that binds the MAIN conversation's own voice, which is the one thing
+# CLAUDE.md cannot do: CLAUDE.md is context the model weighs, an output style is the session's
+# operating instructions. They are complementary, not duplicative — an output style never reaches
+# subagents and CLAUDE.md always does, so neither one alone covers a run.
+# `keep-coding-instructions: true` in its frontmatter is not decoration: without it a custom style
+# EXCLUDES Claude Code's built-in software-engineering instructions, and the harness keeps POLARIS's
+# voice while forgetting how to scope a change or verify its work. ops/tests/output-style-installed
+# locks that flag for the same reason the adhd golden locks the opt-in flag above.
+# Named explicitly, like every other .claude/ path here — no dir loop carries .claude/.
+if [ -f "$KIT/.claude/output-styles/polaris.md" ]; then
+  mkdir -p "$TARGET/.claude/output-styles"
+  cp "$KIT/.claude/output-styles/polaris.md" "$TARGET/.claude/output-styles/polaris.md"
+fi
 SJ="$TARGET/.claude/settings.json"
 if [ ! -f "$SJ" ]; then
-  cp "$KIT/.claude/settings.json" "$SJ"; say ".claude/ installed (skill + hooks + read-only permissions)"
+  cp "$KIT/.claude/settings.json" "$SJ"; say ".claude/ installed (skills + output style + hooks + read-only permissions)"
 elif [ -n "$PY" ]; then
   # Merge EVERY kit hook entry and the read-only permissions, idempotently.
   #
@@ -240,19 +305,33 @@ if isinstance(perms, dict):
                 allow.append(rule)
                 added_perms.append(rule)
 
+# outputStyle: SET-IF-ABSENT, never forced. Three reasons, and the third decides it:
+#   1. Same stance as includeCoAuthoredBy/attribution below — POLARIS seeds a default, it does not
+#      overrule a human who chose otherwise.
+#   2. This file is TRACKED. Forcing would rewrite a committed value on every update, so every
+#      `polaris update` would produce a diff to un-revert. An update has to stay reviewable.
+#   3. It would not even win. `/config` writes the human's choice to .claude/settings.local.json,
+#      which OUTRANKS settings.json — so someone who later picks another style keeps it whatever we
+#      write here, and we never fight for a key we would lose. `polaris doctor` reports the
+#      EFFECTIVE style instead, which turns an override from a mystery into a line of output.
+# Known, accepted wart: deleting the key is indistinguishable from a fresh install, so a deletion
+# comes back on the next update. The remedy is to set a different value, not to delete it.
+tgt.setdefault("outputStyle", "polaris")
+
 open(tgt_p, "w", encoding="utf-8").write(json.dumps(tgt, indent=2) + "\n")
 # Deliberately silent: installer stdout is a contract (CI counts the quiet lines above the
 # ▶ NEXT epilogue), so a diagnostic here would be a tripwire failure, not a nicety.
 EOF
   MERGED="$?"
   if [ "$MERGED" = 0 ]; then
-    say ".claude/settings.json: hooks + read-only permissions merged (idempotent)"
+    say ".claude/settings.json: hooks + permissions + output style merged (idempotent)"
   else
     note "⚠ .claude/settings.json could not be merged — add by hand from $KIT/.claude/settings.json"
   fi
 else
   note "⚠ .claude/settings.json exists and python is unavailable — merge by hand:"
-  note "  the hooks.PreToolUse entries and permissions.allow from $KIT/.claude/settings.json"
+  note "  the hooks.PreToolUse entries and permissions.allow from $KIT/.claude/settings.json,"
+  note '  and add:  "outputStyle": "polaris"'
 fi
 
 # --- attribution off: the product carries no AI fingerprints ---------------------

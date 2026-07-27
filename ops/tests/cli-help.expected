@@ -49,8 +49,8 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  unchanged): Last landed: / Next up: markers + a sprint-column clause
                                  doctor --selftest --only <patterns> = the always-on spine + only the
                                  labeled drills matching any comma-separated glob (fmlist tcm report
-                                 metrics brain rules drift hardening qa finish remote syncrace notify
-                                 grant upgrade pr-publish express hint brief); a nonsense element dies
+                                 metrics brain rules drift hardening qa finish claudemd remote syncrace
+                                 notify grant upgrade pr-publish express hint brief); a nonsense element dies
                                  before the spine (unknown drill label); --parallel <N> = run the
                                  selected drills as N parallel child shards (serial stays the default)
   check [--only <glob>] [--update]

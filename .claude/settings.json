@@ -90,5 +90,6 @@
       "PowerShell(Join-Path:*)",
       "PowerShell(ConvertFrom-Json:*)"
     ]
-  }
+  },
+  "outputStyle": "polaris"
 }

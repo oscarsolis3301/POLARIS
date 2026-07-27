@@ -105,9 +105,9 @@ by hand. It replaces the closing `qa` in § 4: `finish` runs `qa` for you, and t
 per commit, so a green wave pays seconds. A wave that is not the last one will exit non-zero — that
 is not a failed seal, it is the truth about the run.
 - **Attended** (a human is in this chat) — **exit 0**: open your closing reply with `# 🎉 Complete!`
-  on its own line, then the report below, carrying every `caveat:` line `finish` printed (a markdown
-  H1 renders huge and bold in their client; a command's stdout cannot, which is why the signal lives
-  in the reply). **Non-zero**: no H1, no `🎉` — name the one pending thing and the next command.
+  on its own line, then the report below, carrying every `caveat:` line `finish` printed.
+  **Non-zero**: no H1, no `🎉` — name the one pending thing and the next command.
+  (Full shape: `.claude/output-styles/polaris.md` § How a session ends.)
 - **Conductor-entered** (you are a subagent) — **you NEVER write the H1.** Nobody reads your reply
   but the conductor, and the run is not over until it says so. Put `finish`'s verdict line in your
   report, unedited, and stop.

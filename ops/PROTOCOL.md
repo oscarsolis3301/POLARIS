@@ -137,8 +137,11 @@ at all and delegates each one to a fresh subagent, so roles still never mix insi
 
 **OUTPUT DISCIPLINE — applies under BOTH voices, always.** Adapted from the `i-have-adhd` skill
 (github.com/ayghri/i-have-adhd, MIT), which ships with this kit at `.claude/skills/i-have-adhd/` and
-can also be invoked directly. These are not a style preference; a preamble you did not need is a
-paragraph the human reads and pays for, and every one of these rules is strictly less output:
+can also be invoked directly. The main conversation now gets these natively from
+`.claude/output-styles/polaris.md`, which the installer selects; **this copy is the one that reaches
+the role files and every subagent**, where an output style never applies. These are not a style
+preference; a preamble you did not need is a paragraph the human reads and pays for, and every one
+of these rules is strictly less output:
 
 1. **Lead with the action**, not the context. Answer first, explain only if asked.
 2. **Number multi-step work.** Bounded, ordered steps — never a wall of prose.
