@@ -56,19 +56,10 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    anything, and it fires the `notify-gate done` hook itself, exactly once — you never call
    `notify-gate done` by hand. Run it ONCE, at the very end.
 8. **Close** — one short paragraph in the repo's `voice:`: what changed, what proves it, what you did
-   not touch. Which close you write is decided by step 7's **exit code**, never by how the work feels:
-   - **exit 0** — open the reply with this line, verbatim, first, alone on its line:
-
-     `# 🎉 Complete!`
-
-     It is a markdown H1: it renders huge and bold in the human's client, and that is the entire
-     point. A command's stdout cannot do this — terminals do not render markdown — which is why the
-     signal lives in your REPLY and the verdict lives in the command. Then the paragraph. Every
-     `caveat:` line `finish` printed — blocked tasks, work still queued — goes in it: the H1 means
-     "I am finished", never "nothing was left behind".
-   - **non-zero** — NO H1, no `🎉`, no confetti. Two or three warm sentences in `voice:`: what
-     landed, the ONE thing `finish` named as pending, and the single next command. A pending run is
-     an ordinary state of affairs, not an apology.
+   not touch. Which close you write is decided by step 7's **exit code**, never by how the work
+   feels: **exit 0** → the `# 🎉 Complete!` H1 opens your reply, then the paragraph, carrying every
+   `caveat:` line `finish` printed. **Non-zero** → no H1: what landed, the one pending thing, the
+   next command. Full shape in `.claude/output-styles/polaris.md` § How a session ends.
 
 ## Hard limits — these end the session, not the gate
 - **Never spawn a subagent.** If the work turns out to need more than one, you were in the wrong

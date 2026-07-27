@@ -109,5 +109,6 @@ any `risk: high` task.
 ## PROGRESS FORMAT
 After each meaningful step, one line: `✅ <what> — <file>`. On any stop: `⛔ <why> — <what you need>`.
 Keep the shape; the words inside follow `voice:`.
-Run over? `bash ops/polaris finish` FIRST. Exit 0 → open your LAST reply with `# 🎉 Complete!`.
-Non-zero, or you are a subagent → no H1: name what `finish` says is pending + one next step.
+Changed the repo? `bash ops/polaris finish` is your LAST command; exit 0 licenses `# 🎉 Complete!`,
+nothing else does. Shape: `.claude/output-styles/polaris.md`.
+**A subagent never ends a run** — no `finish`, no `notify-gate done`, no H1. Your close is your report.

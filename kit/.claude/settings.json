@@ -4,6 +4,7 @@
     "commit": "",
     "pr": ""
   },
+  "outputStyle": "polaris",
   "permissions": {
     "allow": [
       "Bash(bash ops/polaris:*)",

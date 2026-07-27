@@ -331,6 +331,42 @@ cmd_doctor() {
      && ! grep -q '"useAutoModeDuringPlan"' "$HOME/.claude/settings.json" 2>/dev/null; then
     note "⚠ ~/.claude/settings.json has no auto-mode keys — plan mode will prompt. Arm this machine: ops/polaris update"
   fi
+  # The output style is what binds the MAIN conversation's voice and its closing 🎉 — the layer
+  # CLAUDE.md cannot supply. Three ways to be half-installed, and all three look identical from the
+  # inside: the session simply has no discipline and nobody can tell why.
+  local osf="$PRIMARY/.claude/output-styles/polaris.md" osl="$PRIMARY/.claude/settings.local.json"
+  if [ ! -f "$osf" ]; then
+    note "⚠ .claude/output-styles/polaris.md is missing — this session's output discipline is not installed. Re-run: bash ops/install.sh ."
+  elif ! grep -q 'keep-coding-instructions: *true' "$osf" 2>/dev/null; then
+    note "⚠ .claude/output-styles/polaris.md lost 'keep-coding-instructions: true' — a style without it EXCLUDES Claude Code's built-in coding instructions. Re-run: bash ops/install.sh ."
+  elif [ -f "$osl" ] && grep -q '"outputStyle"' "$osl" 2>/dev/null \
+       && ! grep -q '"outputStyle"[[:space:]]*:[[:space:]]*"polaris"' "$osl" 2>/dev/null; then
+    note "⚠ .claude/settings.local.json selects a different outputStyle — it OUTRANKS settings.json, so POLARIS's is not active here. That is yours to choose; remove the key to get it back."
+  elif [ -f "$psj" ] && ! grep -q '"outputStyle"' "$psj" 2>/dev/null; then
+    note "⚠ .claude/settings.json does not select the POLARIS output style — re-run: bash ops/install.sh ."
+  fi
+  # Does the protocol every session READS match the kit this repo claims to run? Nothing compared
+  # those two until 5.23.0, so a repo could sit on 5.22.0 while injecting a CLAUDE.md three weeks
+  # old — and every command, doctor included, called it healthy. install.sh stamps `[kit X.Y.Z]`
+  # into the BEGIN marker so the block states its own provenance; one grep closes the gap.
+  # Unstamped + a 5.23.0-or-later kit is conclusive, not a guess: 5.23.0+ always stamps.
+  local cmf="$PRIMARY/CLAUDE.md" cmv iv
+  iv="$(ver version 2>/dev/null || true)"
+  if [ ! -f "$cmf" ] || ! grep -qF '<!-- POLARIS:BEGIN' "$cmf" 2>/dev/null; then
+    if [ -f "$cmf" ] && grep -qF "POLARIS v5 — Parallel Sprint Protocol" "$cmf" 2>/dev/null; then
+      note "⚠ CLAUDE.md carries POLARIS with NO managed markers — frozen at install time while this kit reports ${iv:-unknown}."
+      note "  Every session here is reading that stale protocol. Heal it in place: ops/polaris update"
+    elif [ -f "$OPS/CONVENTIONS.md" ]; then
+      note "⚠ CLAUDE.md has no managed POLARIS block — sessions here get no protocol at all. Re-run: bash ops/install.sh ."
+    fi
+  else
+    cmv="$(sed -n 's/.*\[kit \([0-9][0-9.]*\)\].*/\1/p' "$cmf" | head -1)"
+    if [ -z "$cmv" ]; then
+      note "⚠ the managed CLAUDE.md block predates version stamping (pre-5.23.0) while this kit is ${iv:-unknown} — it may be several releases behind. Refresh it: ops/polaris update"
+    elif [ -n "$iv" ] && [ "$cmv" != "$iv" ]; then
+      note "⚠ ops/VERSION says $iv but the managed CLAUDE.md block is $cmv — the protocol injected into every session is NOT the kit you are running. Fix: ops/polaris update"
+    fi
+  fi
   say "doctor: OK"
   # --selftest [--only <patterns>] [--parallel <N>] (ops/contracts/verification-tiering.md +
   # ops/contracts/selftest-sharding.md): --only runs the always-on spine + just the labeled drills

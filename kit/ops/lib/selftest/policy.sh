@@ -172,3 +172,37 @@ drill_finish() {
     rmdir ops/contracts 2>/dev/null || true
     git add -A; git commit -qm 'drill: finish teardown'
 }
+drill_claudemd() {
+    # --- v5.23: does the protocol every session READS match the kit this repo claims to run?
+    # A repo was found on 5.22.0 injecting a CLAUDE.md three weeks old, and every command — doctor
+    # included — called it healthy, because nothing compared the two. install.sh now stamps
+    # `[kit X.Y.Z]` into the BEGIN marker; these four cases are the whole detection surface.
+    # The FOURTH is the one that keeps the check useful: a warning that also fires when everything
+    # is fine is a warning people learn to scroll past.
+    # HERMETIC: ops/VERSION and CLAUDE.md are saved and restored byte-exactly.
+    [ -f ops/VERSION ] && cp ops/VERSION "$T/cmv-VERSION.bak" || rm -f "$T/cmv-VERSION.bak"
+    [ -f CLAUDE.md ] && cp CLAUDE.md "$T/cmv-CLAUDE.bak" || rm -f "$T/cmv-CLAUDE.bak"
+    printf 'version: 9.9.9\n' > ops/VERSION
+    # 1) stamped, but NOT the version this kit runs → the mismatch must be named with both numbers
+    printf '<!-- POLARIS:BEGIN — managed block [kit 1.0.0] -->\nx\n<!-- POLARIS:END -->\n' > CLAUDE.md
+    "$SELF" doctor > "$T/cm1.out" 2>&1 || true
+    grep -q 'block is 1.0.0' "$T/cm1.out" || { cat "$T/cm1.out"; echo "CLAUDEMD MISMATCH FAIL (must name the block version)"; exit 1; }
+    grep -q '9.9.9' "$T/cm1.out" || { echo "CLAUDEMD MISMATCH FAIL (must name the kit version too)"; exit 1; }
+    # 2) markers but no stamp → a pre-5.23.0 block, possibly many releases behind
+    printf '<!-- POLARIS:BEGIN — managed block -->\nx\n<!-- POLARIS:END -->\n' > CLAUDE.md
+    "$SELF" doctor > "$T/cm2.out" 2>&1 || true
+    grep -q 'predates version stamping' "$T/cm2.out" || { cat "$T/cm2.out"; echo "CLAUDEMD UNSTAMPED FAIL"; exit 1; }
+    # 3) POLARIS text with NO markers at all — the frozen-at-install-time case, the actual bug
+    printf '# POLARIS v5 — Parallel Sprint Protocol\n\nold\n' > CLAUDE.md
+    "$SELF" doctor > "$T/cm3.out" 2>&1 || true
+    grep -q 'NO managed markers' "$T/cm3.out" || { cat "$T/cm3.out"; echo "CLAUDEMD UNMARKED FAIL"; exit 1; }
+    grep -q 'ops/polaris update' "$T/cm3.out" || { echo "CLAUDEMD UNMARKED FAIL (must name the fix)"; exit 1; }
+    # 4) stamp MATCHES → doctor must say nothing about CLAUDE.md at all
+    printf '<!-- POLARIS:BEGIN — managed block [kit 9.9.9] -->\nx\n<!-- POLARIS:END -->\n' > CLAUDE.md
+    "$SELF" doctor > "$T/cm4.out" 2>&1 || true
+    grep -q 'CLAUDE.md' "$T/cm4.out" && { cat "$T/cm4.out"; echo "CLAUDEMD FALSE ALARM (a current block must be silent)"; exit 1; }
+    # hermetic restore
+    [ -f "$T/cmv-VERSION.bak" ] && cp "$T/cmv-VERSION.bak" ops/VERSION || rm -f ops/VERSION
+    [ -f "$T/cmv-CLAUDE.bak" ] && cp "$T/cmv-CLAUDE.bak" CLAUDE.md || rm -f CLAUDE.md
+    rm -f "$T/cmv-VERSION.bak" "$T/cmv-CLAUDE.bak"
+}

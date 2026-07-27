@@ -1,3 +1,8 @@
+kit/.claude/output-styles/polaris.md	heading	How a session ends
+kit/.claude/output-styles/polaris.md	heading	Output discipline — under both voices, always
+kit/.claude/output-styles/polaris.md	heading	The endings that are not exit 0
+kit/.claude/output-styles/polaris.md	heading	Voice
+kit/.claude/output-styles/polaris.md	heading	What a close reads like
 kit/.claude/skills/polaris-install/SKILL.md	heading	After the install — DO NOT STOP HERE
 kit/.claude/skills/polaris-install/SKILL.md	heading	Do not
 kit/.claude/skills/polaris-install/SKILL.md	heading	First: what are they actually asking for?
@@ -314,6 +319,7 @@ kit/ops/lib/selftest/brain.sh	fn	drill_brain
 kit/ops/lib/selftest/history.sh	fn	drill_express
 kit/ops/lib/selftest/history.sh	fn	drill_pr-publish
 kit/ops/lib/selftest/history.sh	fn	drill_tcm
+kit/ops/lib/selftest/policy.sh	fn	drill_claudemd
 kit/ops/lib/selftest/policy.sh	fn	drill_drift
 kit/ops/lib/selftest/policy.sh	fn	drill_finish
 kit/ops/lib/selftest/policy.sh	fn	drill_hardening
@@ -435,11 +441,16 @@ kit/ops/selftest-dashboard.sh	fn	drill_repo_clean
 kit/ops/selftest-dashboard.sh	fn	say
 kit/ops/selftest-install.sh	fn	assert_no_leaks
 kit/ops/selftest-install.sh	fn	assert_one_marker_pair
+kit/ops/selftest-install.sh	fn	assert_quiet_budget
+kit/ops/selftest-install.sh	fn	assert_stamped
 kit/ops/selftest-install.sh	fn	board_snapshot
 kit/ops/selftest-install.sh	fn	cleanup
 kit/ops/selftest-install.sh	fn	die
 kit/ops/selftest-install.sh	fn	drill
 kit/ops/selftest-install.sh	fn	drill_fresh
+kit/ops/selftest-install.sh	fn	drill_heal_pure
+kit/ops/selftest-install.sh	fn	drill_heal_refuses
+kit/ops/selftest-install.sh	fn	drill_heal_unmarked
 kit/ops/selftest-install.sh	fn	drill_live_board
 kit/ops/selftest-install.sh	fn	drill_no_leaks
 kit/ops/selftest-install.sh	fn	drill_old_client
@@ -447,6 +458,7 @@ kit/ops/selftest-install.sh	fn	drill_pack
 kit/ops/selftest-install.sh	fn	drill_repo_clean
 kit/ops/selftest-install.sh	fn	drill_uninstall
 kit/ops/selftest-install.sh	fn	drill_zip_purity
+kit/ops/selftest-install.sh	fn	heal_target
 kit/ops/selftest-install.sh	fn	new_target
 kit/ops/selftest-install.sh	fn	say
 kit/ops/templates/CONTRACT.md	heading	CONTRACT: <seam name>            (v1 — <date>)

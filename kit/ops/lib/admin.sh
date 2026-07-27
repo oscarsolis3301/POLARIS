@@ -57,8 +57,12 @@ cmd_upgrade() { # idempotent v3→v4: creates what v4 adds, touches nothing that
   fi
   chmod +x "$OPS/polaris" 2>/dev/null || true
   [ -f "$OPS/hooks/ownership-guard.sh" ] && chmod +x "$OPS/hooks/ownership-guard.sh" 2>/dev/null || true
-  say "v5 ready. New since v4: RULES.tsv policy engine (danger zones + content guards, 3-deep) · drift (board hygiene audit) · per-point cycle calibration in metrics · uat:/notify: CONVENTIONS keys · dashboard points/drift/notify"
-  note "idempotent from v3 or v4 — board, tasks and locks untouched; no task frontmatter changes"
+  # This used to recite a hardcoded "New since v4: …" list — written once, never updated, and
+  # printed on every 5.x→5.x upgrade, where it was simply false. The changelog URL already lives in
+  # ops/VERSION and is always right; point at it instead of maintaining a second copy that rots.
+  say "v5 ready — board, tasks and locks untouched; no task frontmatter changes"
+  note "this kit: $(ver version 2>/dev/null || echo unknown)   ·   what's new: $(ver changelog 2>/dev/null | grep . || echo '—')"
+  note "idempotent from v3 or v4"
   note "commit ops/ + .claude/ + .gitattributes, then: ops/polaris doctor --selftest"
 
   # `upgrade` and `update` are one letter apart and do unrelated jobs — upgrade migrates a BOARD
@@ -377,6 +381,13 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
   rm -f "$PRIMARY/.polaris/update-cache"   # force a fresh check on the next command
   POLARIS_FROM_UPDATE=1 cmd_upgrade
   say "updated $cur → $(ver version)"
+  # An update that only says "5.21 → 5.22" tells nobody what they got, so nobody notices when a
+  # piece of it silently did not land — which is exactly how a repo ended up on 5.22.0 with a
+  # three-week-old CLAUDE.md. No changelog renderer and no network call: the URL is already a field
+  # in ops/VERSION, and the refreshed/untouched pair is a statement of what install.sh just did.
+  note "what changed:   $(ver changelog 2>/dev/null | grep . || echo 'see the project CHANGELOG')"
+  note "refreshed here: ops/ kit code · the managed CLAUDE.md block · .claude/ skills + output style"
+  note "untouched:      board · RULES.tsv · CONVENTIONS.md · MAP.md · SPRINT.md"
   note "review the diff, then commit ops/ — nothing was committed for you"
 
   # Updated but never configured? Then the job is NOT done. The inner install.sh printed the
@@ -607,6 +618,7 @@ cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and re
     note ".claude/skills/i-have-adhd/  (the vendored output-style skill POLARIS installed — MIT,"
     note "                              github.com/ayghri/i-have-adhd; reinstall it standalone with"
     note "                              claude plugin install if you want to keep using it)"
+    note ".claude/output-styles/       (polaris.md only — any other style you have is yours and stays)"
     note "the write-guard hook entry   (.claude/settings.json — your other hooks are kept)"
     note "the managed POLARIS block    (CLAUDE.md — your own content is kept)"
     note "POLARIS lines in .gitignore / .gitattributes · .polaris/ · the lock dir"
@@ -639,7 +651,9 @@ cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and re
   # --- .claude/: guard hook out of settings.json (mirror of install.sh's merge-in), skill dir
   local SJ="$PRIMARY/.claude/settings.json" PY=""
   python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
-  if [ -f "$SJ" ] && grep -q 'ownership-guard' "$SJ" 2>/dev/null; then
+  # Widened past `ownership-guard` in 5.23.0: a repo whose guard entry was already gone would
+  # otherwise keep a dangling "outputStyle" pointing at a style this command just deleted.
+  if [ -f "$SJ" ] && grep -qE 'ownership-guard|"outputStyle"' "$SJ" 2>/dev/null; then
     if [ -n "$PY" ]; then
       "$PY" - "$SJ" <<'EOF'
 import json, sys
@@ -651,16 +665,20 @@ pre = [e for e in h.get("PreToolUse", [])
 if pre: h["PreToolUse"] = pre
 else:   h.pop("PreToolUse", None)
 if not h: d.pop("hooks", None)
+if d.get("outputStyle") == "polaris":
+    d.pop("outputStyle", None)                            # only OUR value — a style they chose is theirs
 if d: open(p, "w").write(json.dumps(d, indent=2) + "\n")
 else: __import__("os").remove(p)                          # the file held nothing but our hook
 EOF
-      say ".claude/settings.json: guard hook removed (your other hooks kept)"
+      say ".claude/settings.json: guard hook + output style removed (your other hooks kept)"
     else
       note "⚠ python unavailable — remove the ownership-guard hook from .claude/settings.json by hand"
     fi
   fi
   rm -rf "$PRIMARY/.claude/skills/polaris"
   rm -rf "$PRIMARY/.claude/skills/i-have-adhd"    # vendored by install.sh; see its SOURCE.md
+  rm -f  "$PRIMARY/.claude/output-styles/polaris.md"   # ONLY ours — other styles are theirs to keep
+  rmdir "$PRIMARY/.claude/output-styles" 2>/dev/null || true
   rmdir "$PRIMARY/.claude/skills" "$PRIMARY/.claude" 2>/dev/null || true   # only if now empty
 
   # --- the lines install.sh appended

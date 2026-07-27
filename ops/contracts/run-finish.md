@@ -152,3 +152,37 @@ that machine, and a second request that lands nothing produced no new finished s
    run is still waiting on a human to merge the PR — by `hands-free-knobs.md` that state is
    `waiting`/`gate`. `finish` is now the authority and that call is redundant-but-harmless. Retiring
    it means editing `drill_pr-publish` and the spine summary; out of scope for v1.
+
+---
+
+## v2 — the trigger broadens beyond role lanes   (2026-07-27, POLARIS 5.23.0)
+
+v1 said nothing about *when* an agent runs `finish`; the role files did, and only for formal lane
+runs (SOLO step 7, CONDUCTOR step 8, INTEGRATOR § 6). Measured consequence: across six installed
+repos the H1 was never seen, because almost all real work is ordinary chat with no role at all.
+Nothing was broken — the gate simply was never reached.
+
+**v2 trigger.** Any session that **changed the repo** ends by running `bash ops/polaris finish`, as
+its last command, after its report is written. The verdict, the exit codes, the frozen tokens, the
+stamp and every invariant above are unchanged — only the population that reaches the gate grows.
+
+**"Changed the repo"** is defined by tool effect, never by intent, because intent is exactly what an
+agent misjudges: an Edit/Write/NotebookEdit on any path, an `ops/polaris` board mutation, or a
+commit/merge/branch/tag. Reading, grepping, `find`, `pack`, `status`, `qa`, `check`, `dash`, running
+tests, and anything written outside the repo are **not** changes. Changed nothing → no gate, no H1;
+a question deserves an answer, not a ceremony.
+
+**Four endings that are not rc 0**, each with a wrong answer that looks right:
+
+| Case | Ruling |
+|---|---|
+| Changed files, never committed | rc 1 on a dirty tree is **correct** (invariant A2). Commit the work, then re-run. Ask first only when committing needs a STOP-AND-ASK decision. |
+| Human interrupted mid-way | No H1, and **do not run `finish`** — an interrupt is not a verdict request, and running it produces a guaranteed rc 1 plus a narration of a gate nobody asked about. |
+| `unknown command: finish` (CLI older than 5.22.0) | **Still no H1.** The H1 is worth exactly what checked it, and here nothing did. Say so once, name `ops/polaris update`. Branch on the stdout message, not the exit code — an unknown command also exits 1. |
+| Stale queued tasks | Per A5, unchanged: `drain: plan` → caveat, rc can be 0, so celebrate **and** name what is queued. `drain: queue`/`backlog` → pending, no H1. **Never drain the queue just to turn the gate green.** |
+
+**Enforcement layers become four** (v1 § Closing-message shape listed three). New:
+`.claude/output-styles/polaris.md`, installed and selected by `install.sh`, carries the full shape
+for the MAIN conversation. It does **not** reach subagents — which is precisely why `kit/CLAUDE.md`
+keeps the trigger and the subagent ban, and why the output style is additive rather than a
+replacement. See `ops/contracts/output-style.md`.

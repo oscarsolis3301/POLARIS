@@ -88,8 +88,15 @@ Full detail is in `.polaris/install.log` (gitignored). Read it only if the insta
 
 The install is safe on a 10k-file repo and idempotent: an existing `CLAUDE.md` is **prepended to**,
 never overwritten; an existing `.claude/settings.json` gets the guard hook **merged into** its hooks
-block; a live board keeps its board, `RULES.tsv`, `CONVENTIONS.md`, `MAP.md` and `SPRINT.md`.
-Nothing is committed — INIT does that.
+block and `outputStyle` seeded only if unset; a live board keeps its board, `RULES.tsv`,
+`CONVENTIONS.md`, `MAP.md` and `SPRINT.md`. Nothing is committed — INIT does that.
+
+One exception to "prepended to", added in 5.23.0: a `CLAUDE.md` that carries POLARIS text with **no
+managed markers** (installed before markers existed) is wrapped in them and refreshed, with a
+byte-exact backup at `.polaris/CLAUDE.md.pre-heal`. Without that heal such a repo could never be
+updated — `ops/` refreshed and `ops/VERSION` got stamped while the protocol every session actually
+reads stayed frozen at install day. If the POLARIS text is not at the top of the file, the boundary
+is unknowable and the installer refuses instead, leaving it byte-identical.
 
 ## After the install — DO NOT STOP HERE
 
@@ -105,6 +112,10 @@ wrong:
 - `.claude/settings.json` — hooks and permissions — hot-reloads mid-session.
 - `CLAUDE.md` is not re-read mid-session, and does not need to be: it is only a routing table, and
   you already know your role. The protocol lives in `ops/roles/*.md`, which you can just read.
+- The one thing that genuinely waits: `.claude/output-styles/polaris.md` binds from the NEXT session
+  (output styles load at session start). That changes how replies are *worded*, nothing about what
+  INIT does — so it is not a reason to restart, and not a reason to mention it either. Their next
+  chat in this repo simply reads better. Do not narrate this.
 
 ### Say exactly this, and nothing else
 
@@ -166,9 +177,10 @@ Two traps worth knowing, because both have already caused a bad install:
 
 ## Uninstall
 
-`bash ops/polaris uninstall --yes` — removes `ops/`, the managed `CLAUDE.md` block, the guard hook
-and the POLARIS gitignore lines; keeps their own `CLAUDE.md` content and their other hooks. Refuses
-if any task is in `active/` or `review/`. Warn them it is destructive; `git checkout -- .` is the undo.
+`bash ops/polaris uninstall --yes` — removes `ops/`, the managed `CLAUDE.md` block, the guard hook,
+POLARIS's output style and its `outputStyle` key, and the POLARIS gitignore lines; keeps their own
+`CLAUDE.md` content, their other hooks, and any other output style they have. Refuses if any task is
+in `active/` or `review/`. Warn them it is destructive; `git checkout -- .` is the undo.
 
 ## Do not
 

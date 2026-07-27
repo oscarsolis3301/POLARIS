@@ -4,6 +4,58 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.23.0 — 2026-07-27
+
+**5.22.0 shipped the confetti. Across six installed projects, nobody ever saw it.**
+
+Three separate causes, and the first one is the kind of bug that hides behind a healthy-looking
+status line.
+
+| | before | after |
+|---|---|---|
+| a repo whose CLAUDE.md never updates | reports the new version, injects the old protocol | healed in place, and `doctor` can see it |
+| the output discipline | a skill only a human can invoke | auto-selected output style, every session |
+| the confetti trigger | formal board runs only | any session that changed the repo |
+| `update` says | `updated 5.21.0 → 5.22.0` | …and what was refreshed, and what was not |
+
+- **A version that lied.** A `CLAUDE.md` written before managed markers existed could never be
+  replaced, so `update` refreshed `ops/`, stamped `ops/VERSION` to the new release, and left the one
+  file every session actually reads frozen at install day. Found in the wild: a repo reporting 5.22.0
+  while injecting a protocol from three weeks earlier, with every command — `doctor` included —
+  calling it healthy. Now the installer wraps that text in markers and refreshes it, keeping anything
+  below the separator and saving a byte-exact backup at `.polaris/CLAUDE.md.pre-heal`. If the POLARIS
+  text is **not** at the top of the file, the boundary is unknowable and it refuses instead, leaving
+  the file byte-identical: a heal that rewrites what it cannot delimit is how rules get lost.
+- **The BEGIN marker now carries `[kit X.Y.Z]`,** so the block states its own provenance and `doctor`
+  compares it against `ops/VERSION`. Three distinct warnings — no markers, unstamped, stamp
+  mismatched — and silence when it is current. Blocks written before stamping still match the marker
+  prefix, so one install migrates every kit in the field with no special case.
+- **`.claude/output-styles/polaris.md` — the discipline finally arrives on its own.** The vendored
+  `i-have-adhd` skill sets `disable-model-invocation: true` in its *upstream* frontmatter, so it only
+  ever fires when a human types `/i-have-adhd`; its stated fallback lives in a `PROTOCOL.md` section
+  `CLAUDE.md` tells sessions they probably need not open. The "always-on" layer was, in practice,
+  neither. The installer now ships an output style and selects it — seven rules, the voice, and the
+  closing contract, in every session, with nothing to type.
+- **`keep-coding-instructions: true`, and why it gets three guards.** A custom output style
+  *excludes* Claude Code's built-in software-engineering instructions unless that key is set — the
+  harness would keep POLARIS's voice and forget how to scope a change or verify its work, a failure
+  invisible in review and expensive in use. A golden, a `doctor` check and a contract invariant all
+  hold that one line down.
+- **The confetti fires for ordinary work now,** not just formal board runs — any session that changed
+  the repo ends at `polaris finish`, and the exit code still decides. "Changed the repo" is defined
+  by tool effect, never intent. Four endings that are *not* exit 0 get explicit rules, including the
+  one that matters most: on a POLARIS too old to have `finish`, there is still no H1. The mark is
+  worth exactly what checked it.
+- `outputStyle` is seeded **set-if-absent, never forced** — `/config` writes your choice to
+  `settings.local.json`, which outranks the file we write, so POLARIS never fights for a key it would
+  lose. `doctor` reports the effective style instead. Uninstall removes our style and our key and
+  leaves any other style alone.
+- Deleted a line that had been false for four releases: `upgrade` recited a hardcoded "New since
+  v4: …" on every 5.x→5.x run. It now points at the changelog URL that was already in `ops/VERSION`.
+- New contract `ops/contracts/output-style.md`; `run-finish.md` gains a `## v2` for the broadened
+  trigger. Three new install drills (`heal-pure`, `heal-unmarked`, `heal-refuses`, each asserting the
+  quiet-line budget locally), a new `claudemd` selftest label, and a new golden pair.
+
 ## 5.22.0 — 2026-07-26
 
 **You could never tell "done" from "stopped talking".**

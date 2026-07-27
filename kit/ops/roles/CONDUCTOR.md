@@ -238,17 +238,12 @@ never re-plan.
    drained per `drain:`, no unmerged `integrate/<date>`, no orphan locks, clean tree, `qa` green on
    base) and fires `notify-gate done` itself, exactly once per finished state. **Never call
    `notify-gate done` by hand any more, and never run `finish` mid-run.**
-   - **exit 0** → open your final reply with this line, verbatim, first, alone on its line:
-
-     `# 🎉 Complete!`
-
-     A markdown H1 renders huge and bold in the human's client — that is the signal, and it is why it
-     goes in the REPLY and not in a command's output (stdout does not render markdown). Then the
-     report. Every `caveat:` line `finish` printed — blocked tasks, tasks still queued under
-     `drain: plan` — must appear in it: the H1 means "the run is over", never "nothing was left
-     behind".
+   - **exit 0** → the `# 🎉 Complete!` H1 opens your final reply, then the report, carrying every
+     `caveat:` line `finish` printed — blocked tasks, tasks still queued under `drain: plan`.
    - **non-zero** → NO H1 and no `🎉`. Your next action is a tool call, not a sign-off (rule two):
      fix the one thing `finish` named and run it again. The only exception is a budget cap, above.
+
+   Full shape in `.claude/output-styles/polaris.md` § How a session ends.
    With the queue drained and the checks green there is nothing left to offer — the next run starts
    with the human's next idea. (`drain: plan` with work still queued? `finish` says so as a caveat;
    put it in the report — `start` picks it up.)
