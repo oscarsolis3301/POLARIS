@@ -113,6 +113,16 @@ never re-plan.
    present → wait exactly as `confirm`. The proceed line must SAY it proceeded: "plan_gate: auto —
    proceeding; say stop to halt". After the go you run autonomously; only the STOP-AND-ASK list,
    `risk: high` approval, and builder questions interrupt.
+   - **An unapproved `ask` scope is a human gate here, like `risk: high`.** `ask` = the same denial
+     as `path`, lifted only by a human's recorded approval on the task — so a task the planner parked
+     for want of one is a decision only the human can make, and it is cheap HERE and expensive later.
+     Disclose it with the scope and why the task needs it, fire `bash ops/polaris notify-gate
+     question <ID>` (additive, exactly as in step 5 — the ask still happens in this conversation),
+     and on a literal yes record it yourself in the primary checkout: `bash ops/polaris approve <ID>
+     <scope> -m "why"`, after which the planner can promote it. **You never approve on the human's
+     behalf** — no yes, no `approve`, and the task stays parked; say so. An unapproved `ask` scope
+     anywhere in the plan or the disclosed drain depth makes `plan_gate: auto` wait exactly as
+     `confirm` does. Converting a rule between `path` and `ask` is a HUMAN decision, never an agent's.
    - `ops/CONVENTIONS.md` sets `builders: panes`? Run `bash ops/polaris fleet <N> --launch` instead
      of steps 4–6 and stop — the human chose to watch sessions in terminal panes (classic flow).
      Default (`subagents` or unset) → continue.

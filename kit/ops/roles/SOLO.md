@@ -71,7 +71,16 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 - **Scope = the task.** No drive-by refactors. Something else needs doing → one line in
   `ops/board/backlog/IDEAS.md` for the Planner.
 - **A RULES rejection or a guard block is an answer, not an obstacle.** Hand back or ask. Never
-  edit `ops/RULES.tsv` to get unstuck (Invariant 11).
+  edit `ops/RULES.tsv` to get unstuck (Invariant 11). Converting a rule between `path` and `ask` is
+  a HUMAN decision, never an agent's.
+- **An `ask` scope is decided at step 1, never at step 3.** `ask` = the same denial as `path`, lifted
+  only by a human's recorded approval on the task. You hold the conversation, so you may ask for that
+  yes while authoring the task — and on a literal yes, record it from the primary checkout before you
+  claim: `bash ops/polaris approve <ID> <scope> -m "why"`. Once you are in the worktree you are a
+  builder like any other: A Builder never approves. Hand back — the approval is granted at the plan
+  gate, not mid-build. (`approve` refuses inside `feat/*`, so this is mechanical, not willpower.)
+  Being one context doing the whole path is exactly why this is written down: the temptation to
+  approve your own way forward is strongest where nobody else is watching.
 
 ## What you must NOT skip
 Every gate the long path runs, you run: `verify` (ownership + RULES) · the task's `verify:` list ·
