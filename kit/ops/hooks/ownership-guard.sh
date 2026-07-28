@@ -228,6 +228,10 @@ MSG="$("$TOP/ops/polaris" _guard "$REL" "$ID" "$BODY" 2>&1 >/dev/null)"; RC=$?
 if [ "$RC" -eq 1 ]; then
   { printf '%s\n' "$MSG"
     echo "polaris-guard BLOCKED by ops/RULES.tsv. Rules bind even inside files_owned."
+    # Pinned verbatim by ops/contracts/ask-approval.md § Pinned phrasing — single-quoted so the
+    # backticks stay literal. An `ask` rule denies exactly like `path` until the approval is on the
+    # task, so the cheapest correct outcome is naming it before the heavier "the rule is wrong".
+    echo 'If a human has already approved this, it belongs on the task: `polaris approve <ID> <scope> -m "why"` — a Builder cannot run it.'
     echo "If the rule is wrong, that is a HUMAN decision: propose the change, do not work around it."
   } >&2
   exit 2
