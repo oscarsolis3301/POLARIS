@@ -15,6 +15,8 @@ W1 T-047 · T-051 · T-052 · T-053 · T-054 (5 disjoint lanes) → W2 T-048 ∥
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-07-28 | 8 (T-051, T-052, T-053, T-054, wave 1, sealed sprint/7 ba6d47d) | 20 (T-047 5pts HELD at the `risk: high` human gate · T-055 in review · T-048, T-049, T-050 behind T-047) · cycle p50 0.7h n=50 · kickbacks 0 · build avg 0.3h / integrate avg 1.5h · pipelined arrival-order landing, 4 lands, 0 squash conflicts · suite green on integrate (batch: full suite once, backgrounded ~13min + foreground log-poll) · uat 12/12 goldens green |
+| 2026-07-28 | 10 (+T-055, wave 2, re-sealed sprint/7 tag ba6d47d→72415a5) | 18 · T-047 (5pts) audit clean + its whole `verify:` list green incl. the `newcmds` drill, unmerged and awaiting the human's literal approval · T-048, T-049, T-050 (13pts) all `depends_on` T-047, so `ready/` is EMPTY and no lane can start · cycle p50 0.7h n=51 · kickbacks 0 · build avg 0.3h / integrate avg 1.5h · suite green on integrate + uat 12/12 |
 
 # SPRINT 6 — Many hands          capacity: 23   dates: 2026-07-21–
 
@@ -174,3 +176,18 @@ exercises but a Builder cannot.
   sharded (3 shards, ~7min vs ~12min serial) green, T-046's own run-verify --parallel 3 passed. The
   sprint-6-w3 "wave gates + qa stay SERIAL until a fix lands" caveat is RESOLVED; integrators may
   shard once T-046 is done (waves 4-5 correctly ran serial — the fix was landed but not yet done).
+- Contract-pinned phrases across parallel doc lanes held again (T-053/T-054/T-055 wrote the same
+  strings into 9 files from 3 lanes, 0 conflicts) — but they are only as good as their line breaks.
+  SOLO.md hard-wrapped the pinned one-liner mid-phrase ("lifted\nonly by a human"), so
+  `grep -q 'lifted only by a human'` fails on that one file while the other eight pass. Not a
+  kickback (T-054's `verify:` greps the Builder line, which is intact, and nothing greps SOLO for
+  the one-liner). Planner: the contract's Pinned phrasing section must say ON ONE LINE, NEVER
+  HARD-WRAPPED, and the grep belongs in `verify:` for EVERY file the task touches, not just one.
+- A `risk: high` task at the ROOT of the dependency tree stalls the whole board, not just itself.
+  T-047 is fully audited and verified but unmergeable without the human's word, and T-048/T-049/T-050
+  (13 of the sprint's 28 pts) all `depends_on` it — so `ready/` is empty and no lane can start. The
+  approval is cheap at the plan gate and expensive here; get it before the wave, exactly as the new
+  `ask` mechanism this sprint ships argues for its own scopes.
+- T-055 documents `ask`-guarded `solo` routing in PROTOCOL.md § LANES that T-049 has not shipped yet
+  (deliberate — the Planner's carve says so). If T-047's approval never arrives, that line and
+  MANUAL's by-hand `ask` recipe describe behavior the CLI does not have. Ship T-049 or revisit.
