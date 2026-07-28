@@ -19,8 +19,11 @@ cmd_init_board() {
 #   scope   files_owned semantics: exact path · dir/ prefix · glob
 #   kind    path    = scope is forbidden to write, even inside files_owned (danger zones)
 #           content = added lines under scope must not match the ERE pattern (use - for path kind)
+#           ask     = same denial as path, UNLESS the claimed task carries a human approval
+#                     covering the scope (polaris approve <ID> <scope> -m "why")
 # Enforced at write time (Claude Code guard), at verify/handoff (any model), and at audit.
 # EVOLVE proposes new lines from kickback/Learned evidence; a human approves; you append one line.
+# Converting a rule between path and ask is a HUMAN decision, never an agent's — Invariant 11.
 # Examples (delete the leading # to arm):
 #.env	path	-	secrets never enter the repo
 #migrations/	path	-	schema changes are a human decision (stop-and-ask)
