@@ -1,3 +1,21 @@
+# SPRINT 7 — The recorded yes          capacity: 28   dates: 2026-07-28–
+
+`ops/RULES.tsv` has two kinds and both mean NEVER, so a rule whose message says "human decision,
+stop-and-ask" is enforced as a wall. Field evidence (repo ARC): a human approved a schema change at
+the plan gate, the ready gate never consulted RULES, the task reached `ready/`, triage said `full`,
+and the Builder died on its first write with the decision already made. 5.24.0 adds a third kind
+`ask` — the same denial as `path`, lifted only by a human's recorded approval on the task — plus
+`polaris approve <ID> <scope> -m "why"`, an `approved:` task field, and the check that matters most:
+the ready gate now refuses to promote a task that needs a yes it has not got. `path` and `content`
+are untouched; converting a rule between `path` and `ask` is itself a human decision.
+Contract: ask-approval. plan: ask-rule-kind → T-047..T-055 (28 pts).
+W1 T-047 · T-051 · T-052 · T-053 · T-054 (5 disjoint lanes) → W2 T-048 ∥ T-049 (+T-055 drained)
+→ W3 T-050 (drills). Release 5.24.0 at the close.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 6 — Many hands          capacity: 23   dates: 2026-07-21–
 
 One file, eight modules: kit/ops/polaris (3,826 lines) becomes a <500-line entry (globals +
