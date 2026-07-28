@@ -22,6 +22,14 @@ When `.polaris/brain/` exists, `read .polaris/brain/INDEX.md FIRST, repo second`
    - Pattern semantics (enforced by `polaris verify`): exact path · `dir/` prefix owns everything under it · `*` glob (matches across `/` — keep globs narrow, e.g. `src/api/util_*.py`).
    - **Hotspot files** (MAP lists them: routers, DI registries, barrel indexes, route tables): NEVER give a hotspot to parallel tasks. Either (a) chain every task that touches it, or (b) design the seam so each feature registers via its own per-feature file and ONE final wiring task alone owns the hotspot.
    - Unknown coupling in a brownfield area → emit a spike first.
+   - **An `ask` scope is a plan-gate question, not a wall.** `ops/RULES.tsv` has a third kind:
+     `ask` = the same denial as `path`, lifted only by a human's recorded approval on the task.
+     A task whose `files_owned` intersects an `ask` scope may NOT enter `ready/` until you have the
+     human's yes and have RECORDED it: `bash ops/polaris approve <ID> <scope> -m "why"`. Get it here,
+     at the plan gate (0c), where it costs one message — a Builder never approves, so an unapproved
+     `ask` scope promoted to `ready/` dies mid-build with the decision already made. No yes yet? It
+     belongs in `blocked/`, not `ready/`; `drift` reports it as a `READY GATE:` finding (step 13b).
+     Converting a rule between `path` and `ask` is a HUMAN decision, never an agent's.
 6. **Assign `context_files`** (read-only, 2–5 paths): the nearest existing example of the pattern to copy. This is the single biggest token saver — a Builder in a 10k-file repo should never explore.
 7. **Make acceptance executable.** Every acceptance criterion that CAN be a command MUST be one, in the task's `verify:` list (run from repo root; keep each under ~10s — the full suite already runs at integration). **NEVER put a bare full-suite command in `verify:`.** `verify:` runs 2-3× per task (builder `verify`, `handoff`, integrator `run-verify`), so a suite command there is paid 2-3× per task on top of the wave gate that already covers it — on this repo that is 820s × 3. When a task needs suite coverage, scope it: `doctor --selftest --only <drill-label>`. Audit 2026-07-25: 24 of 46 landed tasks violated this, which is where most of the board's wall-clock went. `polaris verify` executes them at handoff and the Integrator re-runs them after merge. Criteria that can't be commands stay as checkboxes — but "done" should be provable by machine wherever possible.
 7b. **Interactive means wired.** Never plan an interactive control (button, toggle, input) as "display-only for now" — deferred wiring gets lost across sessions and ships things that look broken. If the write path is blocked by a missing dependency, plan a static placeholder instead, or chain the task behind the dependency.
