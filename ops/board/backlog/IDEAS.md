@@ -16,3 +16,4 @@
 - EVOLVE 2026-07-20: paranoid per-land `build:` was classifier-blocked in subagent shells all sprint 4 (6 waves ran selftest-only per land; build proven only at qa) — give the kit a classifier-safe entrypoint, e.g. a `polaris build` passthrough running CONVENTIONS `build:`, or arm the installer's permission rule for `python kit/ops/pack.py`.
 - EVOLVE 2026-07-20: update notice — raw.githubusercontent VERSION channel lags main by minutes post-release; version check answers stale "latest"; consider tag/release-asset as the channel of record (testbed, 5.15.0)
 - EVOLVE 2026-07-20: publish: pr — express refusal fires only at land time, after build work is spent; claim/handoff should hint "express needs publish: direct" early (testbed, 5.15.0)
+- Thread the task ID into `check_rules` at its `builder.sh` call sites (`cmd_verify`, `cmd_handoff`) — T-047 owned only ownership.sh + integrate.sh, so an approved `ask` scope still dies at a Builder's handoff.
