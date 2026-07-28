@@ -62,7 +62,8 @@ ops/
   MANUAL.md        # fallback recipes if you cannot execute commands
   PROMPTS.md       # copy-paste kickoffs for every role
   MAP.md           # ≤200-line codebase map. Read THIS, not the repo.
-  RULES.tsv        # repo policy as DATA: danger zones + content guards, one line each
+  RULES.tsv        # repo policy as DATA, one line each — three kinds: `path` · `content` · `ask`
+                   #   `ask` = the same denial as `path`, lifted only by a human's recorded approval on the task
   CONVENTIONS.md   # config header (base/claim/integration/test cmds) + rules
   SPRINT.md        # goal, capacity, burndown, Learned log
   contracts/       # interface contracts — the seams between tasks
@@ -89,7 +90,7 @@ So POLARIS collapses SESSIONS, never CHECKS:
 
 | lane | contexts | when `triage` picks it |
 |---|---|---|
-| `solo` | **1** | one task, ≤3 points, `risk: normal`, `express:` on, `publish: direct`, nothing RULES-guarded |
+| `solo` | **1** | one task, ≤3 points, `risk: normal`, `express:` on, `publish: direct`, nothing RULES-guarded, or `ask`-guarded with a recorded approval |
 | `express` | 2 | one task, one builder, one integrator |
 | `full` | 4+ | anything else — real parallelism, real merge risk |
 
