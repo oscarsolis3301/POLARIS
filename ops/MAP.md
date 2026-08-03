@@ -97,3 +97,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "readonly-allow.sh hook + bench.sh added; polaris gains `triage`; SOLO role; ops/contracts/code-index.md written"  (5.20.0, 2026-07-25)
 
 - "kit/ops/lib/workspace.sh — shared-checkout mechanics: id_ok · wt_add · stray_feat_repair · int_on/int_off (integration lease, rc 3 queued) · wave_on · park/unpark; CLI dispatches park/unpark (ops/contracts/shared-checkout.md)"  (T-057, 2026-08-03)
+
+- "kit/ops/PROTOCOL.md gains § N CHATS, ONE REPO — the second-chat decision table (ops/contracts/shared-checkout.md)"  (T-063, 2026-08-03)
