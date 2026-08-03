@@ -140,6 +140,14 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  one integrator) · full (everything else). Reasons follow on
                                  stderr-style note lines. Decide with this, never by re-reading
                                  the board and weighing the six conditions by hand.
+  route [<ID> | --role <R> | --points <N> [--risk <R>]]
+                                 which MODEL TIER runs a piece of work — line 1 is always one
+                                 word: strong | mid | cheap (a task's model: frontmatter
+                                 overrides; unknown role → mid, routing never blocks work). A
+                                 `   model: <name>` note follows ONLY when ops/CONVENTIONS.md
+                                 maps that tier (model_strong/mid/cheap). Read-only: the
+                                 CONDUCTOR asks it before every spawn; fleet rides the max
+                                 tier over ready/
   drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
   qa [--force]                   is everything okay, in ONE shot: test/lint/typecheck/build/uat
@@ -273,6 +281,7 @@ case "${1:-}" in
   metrics)    cmd_metrics;;
   why)        shift; cmd_why "$@";;
   triage)     cmd_triage;;
+  route)      shift; cmd_route "$@";;   # no update_check_maybe: read-only oracle, called before EVERY spawn — keep it quiet + pure
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
   rules)      cmd_rules;;
   qa)         shift 2>/dev/null || true; cmd_qa "${1:-}";;

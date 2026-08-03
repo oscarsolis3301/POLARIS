@@ -64,8 +64,9 @@ kit/ops/PROMPTS.md	heading	PROMPTS — copy, paste, go
 kit/ops/PROMPTS.md	heading	Replies the human gives mid-run
 kit/ops/PROMPTS.md	heading	Watching
 kit/ops/PROTOCOL.md	heading	LANES — why the lane is a command, and why a role never does two jobs
+kit/ops/PROTOCOL.md	heading	LONG COMMANDS — living under the 600s tool cap
 kit/ops/PROTOCOL.md	heading	MODEL NOTES (whichever model runs this)
-kit/ops/PROTOCOL.md	heading	MODEL ROUTING (cost — set per session by the human)
+kit/ops/PROTOCOL.md	heading	MODEL ROUTING (auto — polaris route decides)
 kit/ops/PROTOCOL.md	heading	N CHATS, ONE REPO — who waits, who parks, who queues
 kit/ops/PROTOCOL.md	heading	POLARIS v5 — PROTOCOL reference
 kit/ops/PROTOCOL.md	heading	STATE = THE BOARD (git-tracked, human-readable)
@@ -204,6 +205,7 @@ kit/ops/lib/core.sh	fn	jesc
 kit/ops/lib/core.sh	fn	lock_age
 kit/ops/lib/core.sh	fn	lock_drop
 kit/ops/lib/core.sh	fn	lock_take
+kit/ops/lib/core.sh	fn	model_for_tier
 kit/ops/lib/core.sh	fn	mutex_off
 kit/ops/lib/core.sh	fn	mutex_on
 kit/ops/lib/core.sh	fn	note
@@ -217,6 +219,7 @@ kit/ops/lib/core.sh	fn	set_fm
 kit/ops/lib/core.sh	fn	sync_board
 kit/ops/lib/core.sh	fn	task_col
 kit/ops/lib/core.sh	fn	task_file
+kit/ops/lib/core.sh	fn	tier_for
 kit/ops/lib/core.sh	fn	who
 kit/ops/lib/core.sh	fn	wt_path
 kit/ops/lib/integrate.sh	fn	cmd_audit
@@ -274,6 +277,7 @@ kit/ops/lib/observe.sh	fn	cmd_harness
 kit/ops/lib/observe.sh	fn	cmd_metrics
 kit/ops/lib/observe.sh	fn	cmd_notify_gate
 kit/ops/lib/observe.sh	fn	cmd_qa
+kit/ops/lib/observe.sh	fn	cmd_route
 kit/ops/lib/observe.sh	fn	cmd_rules
 kit/ops/lib/observe.sh	fn	cmd_scaffold
 kit/ops/lib/observe.sh	fn	cmd_status

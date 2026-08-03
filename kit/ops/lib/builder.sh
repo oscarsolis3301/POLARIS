@@ -348,9 +348,17 @@ cmd_pack() { # pack <ID> — the whole context for one task, in ONE call. Read-o
   owned="$(fm_list files_owned "$f" 2>/dev/null | grep . || true)"
   ctx="$(fm_list context_files "$f" 2>/dev/null | grep . || true)"
   contract="$(fm_get contract "$f" 2>/dev/null || true)"
+  # tier: route's line 1 for this task (ops/contracts/model-routing.md) — a model: frontmatter
+  # tier word wins; a literal model name keeps the derived tier (informational), exactly as route.
+  local pov ptier
+  pov="$(fm_get model "$f" 2>/dev/null || true)"
+  case "$pov" in
+    strong|mid|cheap) ptier="$pov";;
+    *) ptier="$(tier_for "$pts" "$risk")";;
+  esac
 
   printf 'PACK %s — %s\n' "$id" "$title"
-  printf 'points %s · risk %s · column %s\n' "${pts:-?}" "${risk:-normal}" "$(task_col "$id" 2>/dev/null || echo '?')"
+  printf 'points %s · risk %s · column %s · tier %s\n' "${pts:-?}" "${risk:-normal}" "$(task_col "$id" 2>/dev/null || echo '?')" "$ptier"
   printf 'This is your whole context. You should not need to go hunting for more.\n'
 
   # 1. the task itself — Why becomes the commit body, acceptance boxes are the definition of done.

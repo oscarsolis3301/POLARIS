@@ -62,6 +62,30 @@ who() { # memoize the actor id — `hostname` costs ~524ms on Windows/Git Bash.
   [ -n "${WHO:-}" ] || WHO="${USER:-${USERNAME:-unknown}}@$(hostname 2>/dev/null || echo host)"
 }
 
+# ------------------------------------------------------------- model routing
+tier_for() { # tier_for <points> <risk> — echo exactly ONE tier word (ops/contracts/model-routing.md):
+  # risk ≠ normal → strong (risk dominates points) · points ≥5 → strong · ≤1 → cheap · else mid.
+  # Empty or non-numeric points → mid, NEVER an error — callers pass frontmatter as-is. Pure bash,
+  # zero forks: core.sh rides the write-guard's hot path.
+  local p="${1:-}" r="${2:-normal}"
+  [ "$r" = "normal" ] || { printf 'strong'; return 0; }
+  case "$p" in ''|*[!0-9]*) printf 'mid'; return 0;; esac
+  if [ "$p" -ge 5 ]; then printf 'strong'
+  elif [ "$p" -le 1 ]; then printf 'cheap'
+  else printf 'mid'; fi
+  return 0
+}
+model_for_tier() { # model_for_tier <tier> — the matching CONVENTIONS knob's value (model_strong: /
+  # model_mid: / model_cheap:), or nothing when unset. cfg already strips the knobs' trailing `#`
+  # owner comments. Unknown tier → nothing: an unset mapping must change NOTHING downstream.
+  case "${1:-}" in
+    strong) cfg model_strong "";;
+    mid)    cfg model_mid "";;
+    cheap)  cfg model_cheap "";;
+  esac
+  return 0
+}
+
 # ------------------------------------------------------------------ telemetry
 jesc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\n\r'; }
 evt() { # evt <ev> <id> [note] [pts] — append one ndjson line. Call INSIDE the board
