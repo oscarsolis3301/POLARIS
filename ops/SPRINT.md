@@ -1,4 +1,4 @@
-# SPRINT 9 — Route and background          capacity: 21   dates: 2026-08-03–
+# SPRINT 9 — Route and background          capacity: 22   dates: 2026-08-03–
 
 Model choice is manual prose and long commands die at the harness's cap: PROTOCOL's routing rule is
 advisory (no code reads it, no `model:` field exists, conductor spawns and fleet panes pass
