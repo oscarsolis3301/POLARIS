@@ -101,3 +101,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "kit/ops/PROTOCOL.md gains § N CHATS, ONE REPO — the second-chat decision table (ops/contracts/shared-checkout.md)"  (T-063, 2026-08-03)
 
 - "polaris gains route [<ID>|--role R|--points N --risk R] — mechanical model tier (line 1 bare word, optional model: note from CONVENTIONS knobs); fleet injects --model (max tier over ready, tmux + wt.exe tokens); pack header gains · tier; finish pends on running bg jobs (5.24.0-unreleased)"  (T-065, 2026-08-03)
+
+- "kit/ops/PROTOCOL.md — § MODEL ROUTING is auto (polaris route decides; knobs, override, honest boundary) and gains § LONG COMMANDS (measured suite tiers vs the 600s cap, bg doctrine, subagent turn rule) (5.24.0-unreleased)"  (T-066, 2026-08-03)
