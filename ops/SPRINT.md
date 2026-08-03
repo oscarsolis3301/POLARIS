@@ -17,6 +17,7 @@ W1 T-047 · T-051 · T-052 · T-053 · T-054 (5 disjoint lanes) → W2 T-048 ∥
 |---|---|---|
 | 2026-07-28 | 8 (T-051, T-052, T-053, T-054, wave 1, sealed sprint/7 ba6d47d) | 20 (T-047 5pts HELD at the `risk: high` human gate · T-055 in review · T-048, T-049, T-050 behind T-047) · cycle p50 0.7h n=50 · kickbacks 0 · build avg 0.3h / integrate avg 1.5h · pipelined arrival-order landing, 4 lands, 0 squash conflicts · suite green on integrate (batch: full suite once, backgrounded ~13min + foreground log-poll) · uat 12/12 goldens green |
 | 2026-07-28 | 10 (+T-055, wave 2, re-sealed sprint/7 tag ba6d47d→72415a5) | 18 · T-047 (5pts) audit clean + its whole `verify:` list green incl. the `newcmds` drill, unmerged and awaiting the human's literal approval · T-048, T-049, T-050 (13pts) all `depends_on` T-047, so `ready/` is EMPTY and no lane can start · cycle p50 0.7h n=51 · kickbacks 0 · build avg 0.3h / integrate avg 1.5h · suite green on integrate + uat 12/12 |
+| 2026-08-03 | 16 (+T-047 5pts, +T-056 1pt, wave 3, re-sealed sprint/7 tag 72415a5→427c333) | 13 · T-048 + T-049 promoted to `ready/` (T-047 done unblocks both; ownership disjoint) · T-050 (3pts) still behind T-048+T-049 · scope grew +1pt mid-wave — T-056 filed to pin golden EOLs (28→29 pts) · cycle p50 0.7h n=53 · kickbacks 1 (2%), the sprint's first and mine: T-047 bounced so `ops/tests/api-kit.expected` got a sanctioned owner — procedural, not a defect · build avg 0.3h / integrate avg 1.5h→3.9h (T-047 sat 128.9h at the `risk: high` human gate; gate wait, not build effort, moved this) · suite green ×2 on integrate + build green + uat 12/12 after the EOL fix · Learned pruned 11→5 |
 
 # SPRINT 6 — Many hands          capacity: 23   dates: 2026-07-21–
 
@@ -141,53 +142,33 @@ exercises but a Builder cannot.
 | 2026-07-18 | 13 (T-003, T-007..T-010) | 7 (T-004..T-006) · cycle p50 0.5h · kickbacks 0 |
 
 ## Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
-- A `case` statement inside `$(...)` command substitution is a HARD PARSE error on bash 3.2 (macOS
-  `/bin/bash`): it reads the case pattern's `)` as the `$(`'s close. Keep `case` out of command
-  substitution; only the 3-OS CI's `/bin/bash 3.2` leg catches it. (Cost: 4 CI round-trips to pinpoint.)
-- Since T-006, doctor's stale-zip warning fires on every post-fold run in THIS repo (the zip embeds
-  its pack commit; any merge moves HEAD past it). Warning only — doctor/qa stay green; the rebuild
-  belongs to the release ritual, not integration. Don't read it as a red.
-- bash expands EVERY word of a `local` line BEFORE assigning, so `local n="$1" tag=".../$n"` reads
-  the CALLER's `n` (T-029: `report --all` sent sealed tasks to `(unsealed)`; two callers masked it by
-  holding the same `n`). Split `local` decls, and drills must cover the fallback path (Rule-1-blind),
-  not just the fixture's happy path — testbed verify of the PUBLISHED release is what caught it.
-- Pipelined arrival-order landing (sprint 5 w1–2, 6 tasks): 0 kickbacks, 0 squash conflicts,
-  integrate avg 2.3h→1.9h. The disjoint carve holds under batch mode with per-arrival lands;
-  spawn the integrator at first handoff, run the suite once per wave. Suite cost (sprint 6 w3):
-  serial full suite is now ~12 min — over the 600s harness cap; background to a log + poll works.
-  Sharded full runs are NOT yet a safe substitute: drills are fixture-coupled (`rules` leaves a
-  contract-less ready task that only the intervening `drift` drill masks — any `--only`/shard
-  subset with rules+qa minus drift goes red falsely; proven red on base pre-T-042, so a T-040-seam
-  defect, no kickback). Until a fix task makes drills hermetic, wave gates and qa stay SERIAL;
-  --only subsets beyond the proven-hermetic fmlist,grant need a base-check before trusting a red.
-- T-039 module split, two carries for T-042..T-045: (a) module-layout's core.sh header says 33 fns
-  but its NAMED list counts 34 — the list is authoritative (34/34 moved, census green at audit);
-  fix the header count on the contract's next version bump. (b) The pinned loader means ANY
-  mktemp re-exec copy of the entry script must carry lib/ beside it — update/uninstall guards now
-  `cp -R "${SELF%/*}/lib"` (drill uninstall caught the miss); movers of admin/integrate code:
-  audit any new copy-and-exec path for the same.
-- Sprint 6 module split COMPLETE (T-042→T-043→T-044→T-045 chain + T-046 fix): kit/ops/polaris
-  3,826→163-line entry (globals+loader+dispatch), 7 lib modules + selftest/ group, grand total 4017
-  in band [3750,4120], every module ≤1200 (max observe.sh 673). 0 kickbacks across the chain, audit
-  clean (diff⊆owned, 11 rules) on every land, serial+shard suite outputs byte-identical — verbatim
-  relocation held under the serial-chain-the-hotspot carve (chain on kit/ops/polaris; T-046 parallel
-  on the disjoint lib/selftest/).
-- T-046 (w5) killed the drill order-coupling: --parallel 3 is now a HERMETIC gate — waves 6-7 gated
-  sharded (3 shards, ~7min vs ~12min serial) green, T-046's own run-verify --parallel 3 passed. The
-  sprint-6-w3 "wave gates + qa stay SERIAL until a fix lands" caveat is RESOLVED; integrators may
-  shard once T-046 is done (waves 4-5 correctly ran serial — the fix was landed but not yet done).
+- GOLDENS NEED AN EOL PIN. `ops/tests/*.expected` and `*.cmd` fell through `.gitattributes`' `* text=auto`,
+  so with `core.autocrlf=true` git materializes them CRLF the moment it rewrites them — and `check`
+  byte-diffs LF stdout against the file, so all 480 lines "differ". A golden is therefore green only
+  until git next touches its working copy: `api-kit` was green at wave start and red right after the
+  land. Re-checking it out on bare `main` (`rm` + `git checkout --`) reproduced the red with ZERO task
+  code, which is what proved it was the repo's flake and not the task's. BASE-CHECK EVERY uat RED
+  before you believe it — role §3's flake clause paid for itself here; the golden's content was
+  byte-exact, ordering included. T-056 pins both globs `eol=lf`; the `.cmd` half matters most, since
+  `check` runs those through `bash -c`, so CRLF there breaks execution, not merely comparison.
+- A TASK THAT CHANGES THE PUBLIC API SURFACE MUST OWN THE GOLDEN THAT RECORDS IT. T-047 added three
+  contract-named fns to `ownership.sh` but did not own `ops/tests/api-kit.expected`, and its `verify:`
+  ran only `check --only startup-budget` — so its narrow gate passed while the wave-level `uat:` failed
+  on a file the Builder could not legally edit. Cost: a kickback, a `grant`, and a second land.
+  Planner: hand any surface-changing task the recording golden up front. T-048 (`polaris approve`,
+  owns `kit/ops/polaris` + `builder.sh`) adds fns too and will hit this again if carved as-is.
+- A `risk: high` task at the ROOT of the dependency tree stalls the whole board, not just itself.
+  T-047 was audited and verified for days while T-048/T-049/T-050 (13 of 28 pts) sat behind it and
+  `ready/` was empty — it waited 128.9h at the gate, which alone moved integrate avg 1.5h→3.9h. The
+  approval is cheap at the plan gate and expensive here, exactly as the `ask` mechanism this sprint
+  ships argues for its own scopes. Get the yes before the wave, not at the merge.
+- T-055 documents `ask`-guarded `solo` routing in PROTOCOL.md § LANES that T-049 has not shipped yet
+  (deliberate — the Planner's carve says so). Until T-049 lands, that line and MANUAL's by-hand `ask`
+  recipe describe behavior the CLI does not have. T-047 is merged now, so T-049 is unblocked and in
+  `ready/` — ship it before this gap outlives the sprint.
 - Contract-pinned phrases across parallel doc lanes held again (T-053/T-054/T-055 wrote the same
   strings into 9 files from 3 lanes, 0 conflicts) — but they are only as good as their line breaks.
   SOLO.md hard-wrapped the pinned one-liner mid-phrase ("lifted\nonly by a human"), so
-  `grep -q 'lifted only by a human'` fails on that one file while the other eight pass. Not a
-  kickback (T-054's `verify:` greps the Builder line, which is intact, and nothing greps SOLO for
-  the one-liner). Planner: the contract's Pinned phrasing section must say ON ONE LINE, NEVER
-  HARD-WRAPPED, and the grep belongs in `verify:` for EVERY file the task touches, not just one.
-- A `risk: high` task at the ROOT of the dependency tree stalls the whole board, not just itself.
-  T-047 is fully audited and verified but unmergeable without the human's word, and T-048/T-049/T-050
-  (13 of the sprint's 28 pts) all `depends_on` it — so `ready/` is empty and no lane can start. The
-  approval is cheap at the plan gate and expensive here; get it before the wave, exactly as the new
-  `ask` mechanism this sprint ships argues for its own scopes.
-- T-055 documents `ask`-guarded `solo` routing in PROTOCOL.md § LANES that T-049 has not shipped yet
-  (deliberate — the Planner's carve says so). If T-047's approval never arrives, that line and
-  MANUAL's by-hand `ask` recipe describe behavior the CLI does not have. Ship T-049 or revisit.
+  `grep -q 'lifted only by a human'` fails on that one file while the other eight pass. Planner: the
+  contract's Pinned phrasing section must say ON ONE LINE, NEVER HARD-WRAPPED, and the grep belongs
+  in `verify:` for EVERY file the task touches, not just one.
