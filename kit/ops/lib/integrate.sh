@@ -20,7 +20,7 @@ cmd_audit() { # Integrator: ownership check of a review branch, from anywhere
   local id="${1:?usage: polaris audit <ID>}"
   local tf; tf="$(task_file "$id")" || die "no task file for $id"
   check_ownership "$tf" "feat/$id"
-  check_rules "feat/$id"
+  check_rules "feat/$id" "$id"     # ID threaded: an `ask` rule cleared by <ID>'s approved: list
 }
 
 cmd_run_verify() { # Integrator: re-run a task's verify commands in CWD (e.g. on integrate branch)
@@ -227,7 +227,7 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   local tip; tip="$(git rev-parse -q --verify "refs/heads/feat/$id")" || die "no local branch feat/$id"
   # audit BEFORE any merge — ownership + rules on the feat branch, exactly as `polaris audit`
   check_ownership "$tf" "feat/$id"
-  check_rules "feat/$id"
+  check_rules "feat/$id" "$id"     # ID threaded: an `ask` rule cleared by <ID>'s approved: list
   # build the message BEFORE the merge, so no failure path can strand staged state
   local msgf; msgf="$(mktemp)"
   cmd_task_commit_msg "$tf" > "$msgf"

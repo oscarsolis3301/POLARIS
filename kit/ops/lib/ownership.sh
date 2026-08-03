@@ -103,21 +103,92 @@ EOF
 
 # --------------------------------------------------------------------- rules
 # ops/RULES.tsv — repo policy as data, one rule per line, TAB-separated:
-#   <scope pattern> <TAB> path|content <TAB> <ERE or -> <TAB> <message>
+#   <scope pattern> <TAB> path|content|ask <TAB> <ERE or -> <TAB> <message>
 # scope uses the SAME semantics as files_owned (exact · dir/ · glob).
 #   path    = the scope itself is forbidden to write — even inside files_owned.
 #   content = added lines under scope must not match the ERE.
+#   ask     = forbidden EXACTLY as path, unless the claimed task carries a human
+#             approval covering the scope (`polaris approve`, the task's
+#             `approved:` list). Pattern column is `-`, as for path.
+#             ops/contracts/ask-approval.md is the spec.
+# `ask` exists because a message like "human decision, stop-and-ask" was being
+# enforced as a wall: in the field a human approved a change at the plan gate and
+# the Builder still died on its first write, with the decision already made.
+# The approval is per-task and per-scope and expires with the task; it NEVER
+# weakens path or content, which are unchanged and consult no approval at all.
 # Enforced three-deep: write-time guard (Claude Code) → verify/handoff (any
 # model) → audit (Integrator). Deny-only by design: on PreToolUse, exit-0
 # stdout is debug-log-only, so an advisory the model can't see must not exist.
-rule_scan_path() { # rule_scan_path <repo-relative-path> — exit 1 + stderr msg on deny
+
+# --- ask: approval lookup -------------------------------------------------
+# _ASK_ID/_ASK_LIST memoize ONE task's approved: entries. The read happens at most once per process
+# AND only after an `ask` rule has actually matched, because this is the write-guard's hot path
+# (every Edit/Write, against a 10s hook timeout, ~3.8s of which is startup): a repo with no `ask`
+# rules — the normal case — must pay nothing at all for this feature.
+_ASK_ID=""
+_ASK_LIST=""
+POLARIS_ASK_APPROVAL=""    # the approved: entry that cleared the last covered path
+POLARIS_ASK_CLEARED=""     # accumulated "<path> …" lines, one per cleared rule, for check_rules
+ask_approvals_load() { # ask_approvals_load <ID|-> — cache <ID>'s approved: entries in _ASK_LIST
+  [ "$_ASK_ID" = "$1" ] && return 0
+  _ASK_ID="$1"; _ASK_LIST=""
+  case "$1" in ""|-) return 0;; esac
+  local tf
+  tf="$(task_file "$1" active)" || tf="$(task_file "$1")" || return 0
+  _ASK_LIST="$(fm_list approved "$tf" 2>/dev/null || true)"
+  return 0
+}
+ask_approval_covers() { # ask_approval_covers <repo-relative-path> <ID|-> — 0 when one of <ID>'s
+  # approved: entries covers <path>; sets POLARIS_ASK_APPROVAL to that entry.
+  # The scope is the entry's LEADING whitespace-delimited token; everything after it (conventionally
+  # " — <who>, <date>: <why>") is provenance for humans and is never parsed. Coverage runs through
+  # the ordinary files_owned matcher, so `src/db/` covers `src/db/models.py` — scope-for-scope
+  # equality is NOT required. No ID, no such task, no entries → 1. Fail closed: a session with
+  # nothing to carry an approval has no approval.
+  POLARIS_ASK_APPROVAL=""
+  local rel="$1" id="${2:--}" entry scope
+  case "$id" in ""|-) return 1;; esac
+  ask_approvals_load "$id"
+  [ -n "$_ASK_LIST" ] || return 1
+  while IFS= read -r entry; do
+    scope="${entry%%[[:space:]]*}"
+    [ -n "$scope" ] || continue
+    if owned_match "$rel" "$scope"; then POLARIS_ASK_APPROVAL="$entry"; return 0; fi
+  done <<EOF
+$_ASK_LIST
+EOF
+  return 1
+}
+ask_rule_matches() { # ask_rule_matches <scope-or-path> — 0 when it matches at least one `ask` rule.
+  # `polaris approve` calls this for its no-op precondition: approving something no `ask` rule gates
+  # must SAY so rather than silently write an approval line. Exported plainly instead of inlined at
+  # the call site so both readers of RULES agree on what "gated" means.
   local rel="$1" scope kind pat msg
   while IFS="$POLARIS_TAB" read -r scope kind pat msg; do
-    [ "$kind" = "path" ] || continue
-    if owned_match "$rel" "$scope"; then
-      printf '⛔ RULES deny: %s — %s\n' "$rel" "${msg:-forbidden path}" >&2
-      return 1
+    [ "$kind" = "ask" ] || continue
+    owned_match "$rel" "$scope" && return 0
+  done <<EOF
+$(rules_lines)
+EOF
+  return 1
+}
+
+rule_scan_path() { # rule_scan_path <repo-relative-path> [<ID>|-] — exit 1 + stderr msg on deny
+  # The optional ID is the claimed task, and it exists for `ask` alone — the only kind that can be
+  # cleared, and only by an approval recorded on that task. `path` never consults it: its behaviour
+  # here is byte-for-byte what it was. Omitted or `-` → every `ask` rule denies.
+  local rel="$1" id="${2:--}" scope kind pat msg
+  while IFS="$POLARIS_TAB" read -r scope kind pat msg; do
+    case "$kind" in path|ask) ;; *) continue;; esac
+    owned_match "$rel" "$scope" || continue
+    if [ "$kind" = "ask" ] && ask_approval_covers "$rel" "$id"; then
+      POLARIS_ASK_CLEARED="$POLARIS_ASK_CLEARED$rel — ask scope '$scope' cleared by approved: $POLARIS_ASK_APPROVAL
+"
+      continue
     fi
+    printf '⛔ RULES deny: %s — %s\n' "$rel" "${msg:-forbidden path}" >&2
+    [ "$kind" = "ask" ] && printf '   this is an `ask` rule: a human clears it with  polaris approve <ID> %s -m "why"  — never by editing the rule\n' "$scope" >&2
+    return 1
   done <<EOF
 $(rules_lines)
 EOF
@@ -138,16 +209,19 @@ $(rules_lines)
 EOF
   return 0
 }
-check_rules() { # check_rules <ref> — every changed path + its ADDED lines vs RULES
+check_rules() { # check_rules <ref> [<ID>] — every changed path + its ADDED lines vs RULES
   # HEAD resolves in the caller's worktree; named refs in the shared repo (as check_ownership).
+  # <ID> is the claimed task, forwarded to `ask` rules so an approval recorded on it can clear one.
+  # Omitted → `-` → no approvals apply and every `ask` rule denies.
   [ -f "$RULES" ] || return 0
   rules_lines | grep -q . || return 0
-  local ref="$1" f bad=0 tmp list; tmp="$(mktemp)"
+  local ref="$1" id="${2:--}" f bad=0 tmp list ln; tmp="$(mktemp)"
+  POLARIS_ASK_CLEARED=""
   gdiff() { if [ "$ref" = "HEAD" ]; then git "$@"; else git -C "$PRIMARY" "$@"; fi; }
   list="$(gdiff diff --name-only "$BASE...$ref" 2>/dev/null)"
   while IFS= read -r f; do
     [ -z "$f" ] && continue
-    rule_scan_path "$f" || bad=1
+    rule_scan_path "$f" "$id" || bad=1
     gdiff diff -U0 "$BASE...$ref" -- "$f" 2>/dev/null \
       | grep '^+' | grep -v '^+++' | cut -c2- > "$tmp" || : > "$tmp"
     rule_scan_content_file "$f" "$tmp" || bad=1
@@ -155,6 +229,14 @@ check_rules() { # check_rules <ref> — every changed path + its ADDED lines vs 
 $list
 EOF
   rm -f "$tmp"
+  # A check that passes BECAUSE of an approval must say which one. Silence would hide the exception
+  # at exactly the moment a human is meant to see it — this line rides the handoff report to the
+  # Integrator, who is the human gate for anything an `ask` rule was guarding.
+  while IFS= read -r ln; do
+    [ -n "$ln" ] && note "⚠ RULES exception used — $ln"
+  done <<EOF
+$POLARIS_ASK_CLEARED
+EOF
   [ "$bad" -eq 0 ] && { rules_lines | grep -q . && say "rules clean: $(rules_lines | grep -c .) rule(s) checked"; return 0; }
   printf '⛔ RULES violation — see lines above. These block even inside files_owned.\n' >&2
   return 1
@@ -179,7 +261,7 @@ cmd_guard() { # _guard <repo-relative-path> <ID|-> [payload-file] — internal: 
   # (non-Builder session). rc 0 clean · 1 rules deny · 3 ownership deny (distinct so the guard
   # prints the right remedy without re-running anything).
   local rel="${1:?}" id="${2:--}" body="${3:-}"
-  rule_scan_path "$rel" || exit 1
+  rule_scan_path "$rel" "$id" || exit 1     # the ID it already has is what an `ask` rule needs
   [ -n "$body" ] && [ -f "$body" ] && { rule_scan_content_file "$rel" "$body" || exit 1; }
   [ "$id" = "-" ] && exit 0
   local tf
@@ -193,8 +275,10 @@ cmd_guard() { # _guard <repo-relative-path> <ID|-> [payload-file] — internal: 
 cmd_rules_check() { # _rules <repo-relative-path> [payload-file] — internal: guard's policy gate.
   # Exit 0 = clean. Exit 1 = a rule denies (message on stderr). Payload file, when
   # given, holds the text about to be written (guard extracts it from tool_input).
+  # No ID reaches here and none can — `_rules` is the ID-less gate — so `ask` rules deny. That is
+  # the fail-closed default, and it is what keeps this entrypoint honest.
   local rel="${1:?}" body="${2:-}"
-  rule_scan_path "$rel" || exit 1
+  rule_scan_path "$rel" "-" || exit 1
   [ -n "$body" ] && [ -f "$body" ] && { rule_scan_content_file "$rel" "$body" || exit 1; }
   exit 0
 }
