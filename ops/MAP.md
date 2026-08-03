@@ -99,3 +99,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "kit/ops/lib/workspace.sh — shared-checkout mechanics: id_ok · wt_add · stray_feat_repair · int_on/int_off (integration lease, rc 3 queued) · wave_on · park/unpark; CLI dispatches park/unpark (ops/contracts/shared-checkout.md)"  (T-057, 2026-08-03)
 
 - "kit/ops/PROTOCOL.md gains § N CHATS, ONE REPO — the second-chat decision table (ops/contracts/shared-checkout.md)"  (T-063, 2026-08-03)
+
+- "polaris gains route [<ID>|--role R|--points N --risk R] — mechanical model tier (line 1 bare word, optional model: note from CONVENTIONS knobs); fleet injects --model (max tier over ready, tmux + wt.exe tokens); pack header gains · tier; finish pends on running bg jobs (5.24.0-unreleased)"  (T-065, 2026-08-03)
