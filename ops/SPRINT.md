@@ -23,8 +23,12 @@ at dogfood); the plan's R-8 release task is deliberately NOT on this board, same
 dropped I-8: `pack.py --dogfood` installs the PUBLISHED release only, and a landed VERSION bump
 without its tag reds the one-version-everywhere gate. Both waves still run installed 5.23.0 board
 mechanics (route/bg/park exist in kit only — prove new behavior via `bash kit/ops/polaris …`).
-Contracts: model-routing · bg-jobs (+ module-layout v4). plan: routing-and-bg → T-065..T-071 (21 pts).
-W1 T-065 ∥ T-066 ∥ T-067 ∥ T-068 ∥ T-069 (5 disjoint lanes) → W2 T-070 → W3 T-071.
+Contracts: model-routing · bg-jobs (+ module-layout v4). plan: routing-and-bg → T-065..T-072
+(22 pts; scope grew +1 mid-sprint: T-072 filed from T-067's gate-integrity finding — `check
+--update/--scaffold` were hook-auto-approved inside compounds, bg-jobs v1.1; T-071 groomed to also
+own kit/ops/PROTOCOL.md for the two § THE TOOL rows, explicit depends_on T-066 per the
+golden-coupling rule).
+W1 T-065 ∥ T-066 ∥ T-067 ∥ T-068 ∥ T-069 (5 disjoint lanes) → W2 T-070 → W3 T-071 ∥ T-072.
 
 ## Burndown
 | date | done pts | remaining |
