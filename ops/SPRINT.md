@@ -1,3 +1,29 @@
+# SPRINT 8 — N chats, one repo          capacity: 27   dates: 2026-08-03–
+
+Two chats on this repo today meet each other as errors: the second is told "another agent is
+working", a stray ref literally named `feat` turns worktree-add failures into git folklore, a dirty
+primary kills six commands without naming whose dirt it is, and one failed push strands a finished
+task in `active/` with its lock held. This sprint makes the shared checkout a self-explaining place.
+One new `workspace.sh` module (id_ok · wt_add · stray_feat_repair · park/unpark · int_on/int_off ·
+wave_on), integration as a SINGLE lane serialized by a lease — a busy lane means a bounded wait,
+then rc 3 with one `queued:` line, never a question — dirty trees parked into named stashes instead
+of dying, handoff pushes that degrade to a caveat instead of stranding the board, claim gaining an
+ID sanity check plus a disjointness gate against `active/`, re-lands that skip idempotently, and the
+sprint-report writer committing its own file. Docs teach the second-chat decision table; four new
+drills (park · claimguard · busyint · pushdegrade) prove all of it.
+Release: 5.24.0 lands ONCE at the end of the two-sprint program (isolation, then routing + bg jobs)
+per the approved plan — sprint 7's "release 5.24.0 at the close" is superseded, and the `ask`-rule
+remainder (T-048/T-049/T-050, re-parked to backlog) rides a later release. No mid-program dogfood:
+`pack.py --dogfood` installs the PUBLISHED release only, so both sprints run on installed 5.23.0
+board mechanics (the installed-CLI-lags-source rule already covers this) and the dogfood folds into
+the combined release step.
+Contract: shared-checkout. plan: n-chats-one-repo → T-057..T-063 (27 pts).
+W1 T-057 ∥ T-061 → W2 T-058 ∥ T-059 ∥ T-060 → W3 T-062 ∥ T-063.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 7 — The recorded yes          capacity: 28   dates: 2026-07-28–
 
 `ops/RULES.tsv` has two kinds and both mean NEVER, so a rule whose message says "human decision,
