@@ -4,6 +4,85 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 5.24.0 — 2026-08-03
+
+**Open a second chat on the same repo and it used to become your problem.**
+
+Two sessions collided in the working tree, and every collision surfaced as a question: the second
+integrator died on the first one's branch state, a dirty tree stopped `land` cold, one push hiccup
+stranded a finished task with its lock held — and none of it was ask-worthy. After plan approval the
+mechanics are POLARIS's job. Two sprints, one story: N chats on one repo stop colliding and stop
+asking, models route themselves, and the commands longer than the harness's patience stop blocking.
+
+| | before | after |
+|---|---|---|
+| second integrator, busy lane | dies on the other session's state | bounded wait, then rc 3 with one `queued:` line — never a question |
+| dirty tree at land/seal/update | `working tree not clean`, dead stop | parked as `polaris/park-<epoch>`, caveat, proceed; `unpark` restores byte-identical |
+| push fails at handoff | finished task stranded in active/, lock held | 3 tries + repair, then degrade: board moves, work safe locally, one ⚠ Note |
+| which model a spawn runs on | whatever the platform defaults to | `polaris route` answers; conductor and fleet pass it |
+| an 805s suite under a 600s tool cap | times out, returns NOTHING, gets re-run | `bg run test` → keep working → chunked `bg wait`; rc 0/1/2/3, never prose |
+
+- **The integration lease.** `land`, `seal`, `rollback` and express all take ONE shared lane,
+  serialized: a busy lane means a 2s-poll wait with progress notes, then rc 3 with a single
+  `queued:` line — the conductor polls at wave boundaries instead of asking you to referee. Stale
+  leases (crashed holders) are stolen past `integration_stale_minutes`, and a dying process
+  releases its own lease on the way out.
+- **Park, don't die.** The five dirty-tree die sites become `park` + caveat + proceed: tracked and
+  untracked into a named stash, reversible in one command. `update` parks too. `status` and
+  `finish` surface the lease and every parked stash, so a second chat's first read explains the
+  world.
+- **Waves adopt; re-lands are idempotent.** `land` on the base creates, fast-forward-reuses or
+  ADOPTS the open `integrate/<date>` instead of demanding you finish it by hand; an already-landed
+  ID prints `already landed — skipped` rc 0; a seal with only board noise says `nothing new to
+  seal`. Two integrators can no longer die on each other's completed work.
+- **Claims and pushes get honest.** IDs are validated BEFORE any lock exists; a stray ref
+  literally named `feat` is repaired to `stray/feat-<sha7>` (archived, never deleted); claim
+  re-checks ownership disjointness against every active task, catching a planner race at claim
+  time instead of as an integrator conflict two builds later. A handoff push gets three attempts
+  with a repair between; still failing → the board still moves, the work is safe locally, and the
+  task carries one ⚠ Note instead of a stranded lock.
+- **Locks learn whose they are.** The board mutex — the one lock in the kit without an ownership
+  check — now writes a pid and refuses to release for any other process, mirroring the lease. Any
+  process exit in one session could previously delete a mutex another session legitimately held,
+  un-serializing two board mutations mid-flight.
+- **The doctrine in one place.** `PROTOCOL.md` § N CHATS, ONE REPO is the second-chat decision
+  table: claim says taken → claim the next · lane busy → bounded wait · `queued:` → report it and
+  end the turn · dirty tree → park · another session's locks, leases and tasks → invisible, never
+  stolen unless flagged STALE. And CLAUDE.md's stop-ask list gains the carve-out: git/workspace
+  mechanics are never ask material after plan approval — the CLI prints the next step; follow it.
+  Real asks stay.
+- **Models route themselves.** `polaris route [<ID> | --role R | --points N --risk R]` answers
+  with a bare tier word — strong where mistakes multiply (5 points or risk ≠ normal), cheap where
+  they don't — overridable per task via `model:` frontmatter. Three CONVENTIONS knobs map tiers to
+  real names (this repo: fable / opus / sonnet, never haiku; unset knobs = tier words only,
+  behavior unchanged). The CONDUCTOR routes before every spawn, `fleet` injects the ready queue's
+  max tier into every pane it opens, `pack` headers carry `· tier`. § MODEL ROUTING goes auto,
+  with the honest boundary written down: a RUNNING session cannot switch its own model — routing
+  governs what gets spawned and launched.
+- **`bg` — the 600s cap stops eating suites.** Measured here so nobody re-measures: spine 144s,
+  the 4-drill subset 320s, the sharded suite 169-378s — all inside the cap; the full serial suite
+  at 805s and `qa` at 1225s are not, and a capped call returns NOTHING and gets re-run. `bg run
+  <key>` detaches it, `bg wait --max 300` collects in bounded chunks, `bg status` speaks rc
+  0/1/2/3 — every verdict is rc-file-first, then a live-pid check, because Windows reuses pids.
+  Completed jobs rotate to `.prev` (archive, never delete), `sweep --fix` rotates day-old strays,
+  a green `qa` warm-stamps so `finish` skips the re-run, and `finish` pends on any job still
+  running — but never on a `.prev` archive (one `--force` replace used to wall the run-over gate
+  forever). § LONG COMMANDS writes the three bands down, including the subagent rule: never end a
+  turn with your job still running.
+- **The auto-approver learns the new verbs — and unlearns one.** `route` and `bg
+  status/tail/wait` run without prompting inside compound reads; `bg run` keeps its prompt. And
+  `check --update` / `--scaffold` LOSE their silent pass: an agent quietly rewriting the goldens
+  that gate its own work is the `.github/` problem in miniature. The deliberate, visible path
+  stays sanctioned.
+- Fixed in passing: the triage-lane golden ran against the LIVE board, so any session filing a
+  task turned it red — re-founded hermetic, the pattern both new goldens follow; sprint reports
+  gain an LF pin (the goldens' own CRLF pin shipped in-repo at sprint 7) and the report writer now
+  commits its own file when it is the only dirt, so session B stops paying for session A's
+  forgotten hint.
+- New contracts `ops/contracts/shared-checkout.md`, `model-routing.md`, `bg-jobs.md`; six new
+  drills (`park`, `claimguard`, `busyint`, `pushdegrade`, `route`, `bg`) bring the suite to 27
+  labels; two hermetic goldens (`route-tier`, `bg-lifecycle`) bring the battery to 14 pairs.
+
 ## 5.23.0 — 2026-07-27
 
 **5.22.0 shipped the confetti. Across six installed projects, nobody ever saw it.**
