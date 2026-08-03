@@ -207,7 +207,7 @@ git_ok() {
 # writes nothing at all.
 polaris_ok() {
   case "${1:-}" in
-    find|show|check|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|route|--help|-h|'') return 0;;
+    find|show|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|route|--help|-h|'') return 0;;
     # `slim` bare is a report and writes nothing; `--apply`/`--restore` MOVE files under ~/.claude,
     # so they keep their prompt. Same split as check vs check --update.
     slim) case "${2:-}" in '') return 0;; *) return 1;; esac;;
@@ -217,6 +217,22 @@ polaris_ok() {
     # writes that registry, so it keeps its prompt — as does a bare `bg` and any word we do not
     # know, by the same deny-by-default that governs every other arm here.
     bg)   case "${2:-}" in status|tail|wait) return 0;; *) return 1;; esac;;
+    # `check` bare and `check --only <glob>` are reads; `--update` rewrites the goldens from
+    # actual output and `--scaffold` writes new pairs — observe.sh's own help calls these
+    # "ALWAYS a human/Builder decision, never automatic" (T-072). Both keep their prompt in
+    # every position and combination; anything outside that read shape fails closed, the same
+    # deny-by-default that governs every other arm here.
+    check)
+      shift
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --update|--scaffold) return 1;;
+          --only) shift; case "${1:-}" in ''|--*) return 1;; esac;;
+          *) return 1;;
+        esac
+        shift
+      done
+      return 0;;
     *) return 1;;
   esac
 }

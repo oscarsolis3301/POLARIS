@@ -33,6 +33,8 @@ wc -c ops/roles/*.md
 cd ops && grep -n polaris RULES.tsv | head -10
 bash ops/polaris find cmd_verify
 bash ops/polaris check
+bash ops/polaris check --only api-kit
+bash ops/polaris check --only api-kit && bash ops/polaris route --role BUILDER
 bash ops/polaris pack T-001
 bash ops/polaris slim
 # --- must ALLOW: find -exec recursed into a READ-ONLY verb (5.21.0) ------------
@@ -99,4 +101,12 @@ bash ops/polaris bg run qa --force
 bash ops/polaris bg
 bash ops/polaris bg sweep --fix
 bash ops/polaris bg status && bash ops/polaris bg run qa
+# `check --update`/`--scaffold` rewrite or add goldens — a human/Builder decision, never silent,
+# in every position and combination; the compound line proves one bad segment still asks.
+bash ops/polaris check --update
+bash ops/polaris check --scaffold
+bash ops/polaris check --scaffold --app
+bash ops/polaris check --update --only api-kit
+bash ops/polaris check --only api-kit --update
+bash ops/polaris check && bash ops/polaris check --update
 CASES
