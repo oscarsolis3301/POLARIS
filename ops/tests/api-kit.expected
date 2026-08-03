@@ -297,6 +297,9 @@ kit/ops/lib/observe.sh	fn	pat_overlap
 kit/ops/lib/observe.sh	fn	scaffold_dirs
 kit/ops/lib/observe.sh	fn	scaffold_try
 kit/ops/lib/observe.sh	fn	status_brief
+kit/ops/lib/ownership.sh	fn	ask_approval_covers
+kit/ops/lib/ownership.sh	fn	ask_approvals_load
+kit/ops/lib/ownership.sh	fn	ask_rule_matches
 kit/ops/lib/ownership.sh	fn	check_ownership
 kit/ops/lib/ownership.sh	fn	check_rules
 kit/ops/lib/ownership.sh	fn	cmd_guard

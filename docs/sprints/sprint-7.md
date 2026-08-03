@@ -1,5 +1,37 @@
 # Sprint 7 — The recorded yes (2026-07-28–)
 
+## T-047 — "`ask` rule kind + task-ID threaded through RULES enforcement"
+points 5 · risk high · landed 930721e (2026-08-03) · claimed 2026-07-28
+files touched: kit/ops/lib/integrate.sh, kit/ops/lib/ownership.sh, ops/tests/api-kit.expected
+
+### Why
+`ops/RULES.tsv` has two kinds, `path` and `content`, and both mean **never**. A rule whose message
+says "human decision, stop-and-ask" is enforced as a wall, so a directory under a `path` rule is
+unbuildable by POLARIS forever — even after a human has approved the exact change at the plan gate.
+That happened in the field (repo ARC): approval given, Builder still died on its first write, work
+lost. This task adds the missing third kind and threads the one piece of information enforcement is
+missing — WHICH TASK is writing — down to the matcher, so an approval recorded on that task can be
+consulted.
+
+You are the foundation of the sprint: T-048 (`polaris approve`) and T-049 (the plan gate) both build
+on the helpers you add here. Read `ops/contracts/ask-approval.md` § 1 and § 4 — they are exact.
+
+Two things this task must NOT do: weaken `path` or `content` in any way, and pass when no task ID is
+supplied. No-ID is a session with nothing to carry an approval, so it **denies** — fail closed.
+
+### Acceptance
+- [ ] `rule_scan_path <path> [<ID>|-]` takes an optional second argument; `path` and `content`
+- [ ] an `ask`-kind rule denies exactly like `path` when no covering approval exists
+- [ ] an `ask`-kind rule passes when the named task's `approved:` list covers the scope, matched with
+- [ ] the approval-coverage helper parses each `approved:` entry's leading whitespace-delimited token
+- [ ] `ask` + ID `-` or omitted → deny (fail closed)
+- [ ] a second helper answers "does this scope match at least one `ask` rule?" — T-048 calls it for
+- [ ] `check_rules <ref> [<ID>]` accepts and forwards the ID; `cmd_guard` forwards the ID it already
+- [ ] `cmd_audit` and `cmd_land` in `kit/ops/lib/integrate.sh` pass their ID to `check_rules`
+- [ ] when a check passes BECAUSE of an approval, `check_rules` prints a line naming the scope and
+- [ ] guard exit codes unchanged: 0 clean · 1 rules deny · 3 ownership deny
+- [ ] `bash ops/polaris check --only startup-budget` stays green — no `printf … | owned_match`
+
 ## T-051 — "`approved:` field on TASK.md + the guard's rc-1 message names the remedy"
 points 2 · risk normal · landed 37ebc94 (2026-07-28) · claimed 2026-07-28 → done 2026-07-28
 files touched: kit/ops/hooks/ownership-guard.sh, kit/ops/templates/TASK.md
@@ -95,7 +127,7 @@ Five short insertions, each quoting the contract's pinned phrasing. This is not 
 - [ ] no role file's ROLE header, its step numbering, or its report format changes
 
 ## T-055 — "MANUAL, PROTOCOL and the skill learn the third rule kind"
-points 2 · risk normal · landed 30c5bce (2026-07-28) · claimed 2026-07-28
+points 2 · risk normal · landed 30c5bce (2026-07-28) · claimed 2026-07-28 → done 2026-07-28
 files touched: kit/.claude/skills/polaris/SKILL.md, kit/ops/MANUAL.md, kit/ops/PROTOCOL.md
 
 ### Why
@@ -120,3 +152,27 @@ catch on the CLI side.
 - [ ] SKILL.md's invariant summary names `ask` and the approval route, and drops "never edit
 - [ ] all three quote the contract's pinned one-liner verbatim
 - [ ] no line count grows by more than ~4 lines per file — these are clauses, not sections
+
+## T-056 — pin ops/tests goldens to eol=lf
+points 1 · risk normal · landed 28cd326 (2026-08-03) · claimed 2026-08-03
+files touched: .gitattributes, ops/contracts/golden-eol.md
+
+### Why
+All 12 goldens under ops/tests/ are latently red on Windows. They are stored LF in git, but
+.gitattributes pins only *.sh, *.py, *.tsv and a few named paths to eol=lf; ops/tests/*.expected
+and ops/tests/*.cmd fall through to `* text=auto`, so with core.autocrlf=true any rewrite of the
+working copy materializes them CRLF. cmd_check (kit/ops/lib/observe.sh ~1170) byte-diffs LF stdout
+against the CRLF golden, so every line "differs" — and .cmd files execute via `bash -c "$(cat ...)"`,
+so CRLF there breaks execution, not just comparison. Proven red on bare main with no sprint code
+(rm + `git checkout -- ops/tests/...` reproduces it). This blocks uat:, qa, and finish repo-wide.
+
+The fix is two pin lines in .gitattributes — `ops/tests/*.expected text eol=lf` and
+`ops/tests/*.cmd text eol=lf` — matching the file's existing style/comment conventions. Touch
+nothing else in the file, especially nothing about .github/. The same class of gap also affects
+user repos the kit scaffolds goldens into on Windows — out of scope here, flagged in
+ops/board/backlog/IDEAS.md for next sprint's planning.
+
+### Acceptance
+- [ ] .gitattributes gains exactly the two pins `ops/tests/*.expected text eol=lf` and `ops/tests/*.cmd text eol=lf` (a house-style comment above them is fine); every pre-existing line stays byte-identical.
+- [ ] `git check-attr eol -- ops/tests/api-kit.expected ops/tests/api-kit.cmd` reports `eol: lf` for both, with the attr coming from the edited file (verify #1).
+- [ ] After re-materializing ops/tests/ inside the builder's worktree (verify #2), `git ls-files --eol -- ops/tests/` shows every ops/tests file with index eol lf and attr `eol=lf`, no crlf/mixed anywhere (verify #3), and a CR-byte scan of the sample pair finds zero CRs (verify #4).
