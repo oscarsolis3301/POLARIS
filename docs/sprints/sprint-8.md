@@ -150,7 +150,7 @@ hint printed.
 - [ ] no new top-level function in knowledge.sh — inline the porcelain check (the api-kit surface
 
 ## T-062 — "Four isolation drills — park, claimguard, busyint, pushdegrade — and the drill-surface golden"
-points 5 · risk normal · landed d3b61f8 (2026-08-03) · claimed 2026-08-03
+points 5 · risk normal · landed d3b61f8 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/ops/lib/selftest/board.sh, kit/ops/lib/selftest/history.sh, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/remote.sh, kit/ops/lib/selftest/spine.sh, ops/tests/api-kit.expected, ops/tests/triage-lane.cmd, ops/tests/triage-lane.expected
 
 ### Why
@@ -184,7 +184,7 @@ files a task. This task re-founds it on a hermetic fixture board.
 - [ ] the triage-lane golden is HERMETIC: `ops/tests/triage-lane.cmd` constructs its own fixture
 
 ## T-063 — "The second-chat doctrine — PROTOCOL § N CHATS ONE REPO, CLAUDE.md stop-ask carve-out, role deltas, SKILL pointer"
-points 2 · risk normal · landed 691939e (2026-08-03) · claimed 2026-08-03
+points 2 · risk normal · landed 691939e (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/.claude/skills/polaris/SKILL.md, kit/CLAUDE.md, kit/ops/PROTOCOL.md, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md
 
 ### Why
@@ -211,7 +211,7 @@ NEVER HARD-WRAPPED, and the grep for each file rides verify: (the T-055 lesson).
 - [ ] no behavioral claims beyond what T-058/T-059 shipped (docs describe the CLI that exists —
 
 ## T-064 — "The board mutex learns ownership — pid-guarded mutex_off, no more cross-session lock eating"
-points 2 · risk normal · landed 579c2f8 (2026-08-03) · claimed 2026-08-03
+points 2 · risk normal · landed 579c2f8 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/ops/lib/core.sh
 
 ### Why
