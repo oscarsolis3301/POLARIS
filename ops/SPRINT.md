@@ -1,4 +1,4 @@
-# SPRINT 8 — N chats, one repo          capacity: 27   dates: 2026-08-03–
+# SPRINT 8 — N chats, one repo          capacity: 29   dates: 2026-08-03–
 
 Two chats on this repo today meet each other as errors: the second is told "another agent is
 working", a stray ref literally named `feat` turns worktree-add failures into git folklore, a dirty
@@ -17,8 +17,11 @@ remainder (T-048/T-049/T-050, re-parked to backlog) rides a later release. No mi
 `pack.py --dogfood` installs the PUBLISHED release only, so both sprints run on installed 5.23.0
 board mechanics (the installed-CLI-lags-source rule already covers this) and the dogfood folds into
 the combined release step.
-Contract: shared-checkout. plan: n-chats-one-repo → T-057..T-063 (27 pts).
-W1 T-057 ∥ T-061 → W2 T-058 ∥ T-059 ∥ T-060 → W3 T-062 ∥ T-063.
+Contract: shared-checkout. plan: n-chats-one-repo → T-057..T-064 (29 pts).
+W1 T-057 ∥ T-061 → W2 T-058 ∥ T-059 ∥ T-060 → W3 T-062 ∥ T-063 ∥ T-064.
+Scope grew +2 pts mid-sprint (27→29): T-064 filed from the integrator's audit of T-058 — the board
+mutex was removable by ANY process exit (unguarded mutex_off + never-disarmed on_die trap, armed
+lease-long since T-057); pid-guard it like the lease (shared-checkout v1.1).
 
 ## Burndown
 | date | done pts | remaining |
