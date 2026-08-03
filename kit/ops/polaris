@@ -39,6 +39,10 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   verify [ID]                    diff ⊆ files_owned + run verify: commands (in worktree)
   handoff [ID]                   verify + push + active→review   (lock stays)
   release <ID> [--to ready|blocked] [-m note]   abort: give the task back cleanly
+  park [-m why]                  stash the primary's dirty tree (tracked + untracked) as
+                                 polaris/park-<epoch> — a dirty shared checkout is parked, never
+                                 asked about; reversible in ONE command
+  unpark                         restore the newest polaris/park-* stash (says what came back)
   grant <ID> <path> -m "why"     append one path to a CLAIMED task's files_owned (sanctioned
                                  amendment; REFUSES any overlap with another ready/active task's
                                  ownership — refusal mutates nothing; RULES.tsv still binds)
@@ -185,7 +189,7 @@ esac
 # (ops/contracts/module-layout.md v2 — both lists stay LITERAL, never a glob.)
 case "${1:-}" in
   _match|_rules|_guard) _mods="core ownership" ;;
-  *)             _mods="core ownership builder integrate knowledge search observe admin
+  *)             _mods="core ownership workspace builder integrate knowledge search observe admin
                         selftest/spine selftest/board selftest/history selftest/report
                         selftest/brain selftest/policy selftest/remote" ;;
 esac
@@ -243,6 +247,8 @@ case "${1:-}" in
   verify)     shift; cmd_verify "$@";;
   handoff)    shift; cmd_handoff "$@";;
   release)    shift; cmd_release "$@";;
+  park)       shift; cmd_park "$@";;
+  unpark)     shift; cmd_unpark "$@";;
   grant)      shift; cmd_grant "$@";;
   kickback)   shift; cmd_kickback "$@";;
   audit)      shift; cmd_audit "$@";;

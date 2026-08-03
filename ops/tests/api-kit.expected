@@ -340,6 +340,16 @@ kit/ops/lib/selftest/spine.sh	fn	drill_on
 kit/ops/lib/selftest/spine.sh	fn	ensure_origin
 kit/ops/lib/selftest/spine.sh	fn	ngwait
 kit/ops/lib/selftest/spine.sh	fn	selftest
+kit/ops/lib/workspace.sh	fn	cmd_park
+kit/ops/lib/workspace.sh	fn	cmd_unpark
+kit/ops/lib/workspace.sh	fn	id_ok
+kit/ops/lib/workspace.sh	fn	int_off
+kit/ops/lib/workspace.sh	fn	int_on
+kit/ops/lib/workspace.sh	fn	park
+kit/ops/lib/workspace.sh	fn	stray_feat_repair
+kit/ops/lib/workspace.sh	fn	unpark
+kit/ops/lib/workspace.sh	fn	wave_on
+kit/ops/lib/workspace.sh	fn	wt_add
 kit/ops/pack.py	const	DATA_MODE
 kit/ops/pack.py	const	EXEC_MODE
 kit/ops/pack.py	const	KIT

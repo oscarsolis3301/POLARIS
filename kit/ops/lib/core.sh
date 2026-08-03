@@ -167,6 +167,10 @@ task_col() { task_file "$1" >/dev/null || return 1; dirname "$(task_file "$1")" 
 mutex_off() { rm -rf "$MUTEX" 2>/dev/null || true; }
 on_die() {  # EXIT trap while a claim/board op is in flight
   mutex_off
+  # T-057: release the integration lease when this process holds it — a crashed holder must not
+  # cost integration_stale_minutes of staleness. ${INT_HELD:-}-guarded on purpose: the 2-module
+  # guard path (core+ownership — no workspace.sh, so no int_off) never sets it and never notices.
+  [ -n "${INT_HELD:-}" ] && int_off || true
   if [ -n "$FAIL_LOCK_ID" ]; then
     lock_drop "$FAIL_LOCK_ID"
     [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$FAIL_LOCK_ID" || true
