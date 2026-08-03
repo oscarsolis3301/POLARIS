@@ -180,6 +180,10 @@ never re-plan.
      a literal approval to a follow-up integrator; no approval → it stays parked, say so.
    - Kickbacks → treat as a RED snag (one fresh-builder retry via its Notes, then re-integrate the
      survivors).
+   - **A `queued:` line in its report (rc 3) means the lane was busy, not broken.**
+     integration lane busy → wait; rc 3 with a queued: line means report queued and retry at the next wave boundary
+     — re-spawn the integrator at the NEXT boundary (its kickoff re-runs `land`/`seal`, which retake the
+     lease themselves). Never park a second subagent on someone else's lease, and never ask the human.
 6.5 **Check — trust nothing, prove it.** Integration reported green? Run `bash ops/polaris qa`
    YOURSELF — one command re-runs the whole suite, the build, board hygiene and the env check on
    base. A subagent's "green" is never taken on faith — and note what that sentence licenses: YOU

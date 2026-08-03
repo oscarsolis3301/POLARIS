@@ -15,4 +15,6 @@ This repo runs POLARIS. Sessions are single-role; the board (`ops/board/`) is th
 4. Invariants live in `CLAUDE.md` — ownership (diff ⊆ files_owned), RULES (`ops/RULES.tsv` danger zones + content guards, binding even inside owned files; `ask` = the same denial as `path`, lifted only by a human's recorded approval on the task), contract-before-code, green-before-review, Integrator-only merges, `risk: high` needs human approval. A PreToolUse guard enforces ownership and RULES at write time; do not fight it — hand back instead. If a human has already approved this, it belongs on the task: `polaris approve <ID> <scope> -m "why"` — a Builder cannot run it. `RULES.tsv` is yours to maintain (Invariant 11), never to edit around a block. Converting a rule between `path` and `ask` is a HUMAN decision, never an agent's.
 5. Talk to the human in the repo's `voice:` (`ops/CONVENTIONS.md`, default `standard` = plain and friendly). It governs what you SAY, never what you write to the board and never a gate — see `ops/PROTOCOL.md` § VOICE.
 
+6. Another chat may already be in this repo. A taken lock, a held integration lane, a dirty tree — none of those is a question for the human; the CLI prints the next step. Decision table: `ops/PROTOCOL.md` § N CHATS, ONE REPO.
+
 Copy-paste kickoffs for the human: `ops/PROMPTS.md`.

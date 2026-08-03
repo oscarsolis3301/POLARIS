@@ -108,6 +108,8 @@ need one section or none.
 Deleting any file · adding a dependency · changing DB schema or migrations · editing outside
 `files_owned` · touching auth/payments/prod config not explicitly owned · any force-push · merging
 any `risk: high` task · converting a `RULES.tsv` rule between `path` and `ask`.
+**Not on it:** git/workspace mechanics are never ask material after plan approval — the CLI prints the next step; follow it.
+Taken lock · busy lane · dirty tree → `ops/PROTOCOL.md` § N CHATS, ONE REPO. Real asks stay: spec ambiguity, `risk: high`, `ask` scopes.
 
 ## PROGRESS FORMAT
 After each meaningful step, one line: `✅ <what> — <file>`. On any stop: `⛔ <why> — <what you need>`.

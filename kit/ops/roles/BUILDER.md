@@ -5,7 +5,10 @@ Run N in parallel. The Planner guaranteed every ready task is file-disjoint, so 
 ```bash
 bash ops/polaris claim          # takes the top-wsjf ready task, or: claim <ID>
 ```
-One command does it all atomically: lock → board move (ready→active, committed) → worktree at `.polaris/wt/<ID>` on branch `feat/<ID>`. "taken" → just run it again; it picks the next task. `cd` into the printed worktree path — ALL code work happens there, NEVER in the primary checkout.
+One command does it all atomically: lock → board move (ready→active, committed) → worktree at `.polaris/wt/<ID>` on branch `feat/<ID>`. `cd` into the printed worktree path — ALL code work happens there, NEVER in the primary checkout.
+
+**Another chat may already hold the one you wanted, and that is a non-event, not a question:**
+claim says taken → claim the next task; the lock already chose for you — re-run `bash ops/polaris claim` and build what it hands you.
 
 ## 2. Read — ONE command, then stop
 ```bash
