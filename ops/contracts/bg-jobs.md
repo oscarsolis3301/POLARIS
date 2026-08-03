@@ -103,5 +103,19 @@ A Builder on a 5-pt task, in its worktree: `bash ops/polaris bg run test_fast` �
 drains review/ meanwhile → `bg wait qa` twice → green stamps `.polaris/suite-stamp` → `finish`
 skips the re-run.
 
+## v1.1 — `check` write-flags lose the hook's auto-approve (2026-08-03, T-072)
+Pre-existing gate-integrity hole, found by T-067's builder: `check` sat in `polaris_ok`'s
+tail-ignoring read list, so `check --update` (rewrites goldens from actual output — observe.sh's
+own help: "ALWAYS a human/Builder decision, never automatic") and `check --scaffold` (writes new
+pairs) were auto-approved inside compound commands. An agent silently rewriting the goldens that
+gate its own work is the `.github/`-shaped problem. The fix (T-072): `check` moves to a
+flag-inspecting arm — bare `check` and `--only <glob>` tails allow; any tail containing `--update`
+or `--scaffold` refuses; flags outside the read set refuse (fail-closed). A refusal is
+deny-by-default's NORMAL PROMPT, not a block — and the standing settings.json rule still covers a
+bare `bash ops/polaris check --update`, which stays the sanctioned, visible Builder path (T-062
+precedent: the golden's owner runs it deliberately). The golden battery gains both directions.
+
 ## Changelog
+- v1.1 2026-08-03: `check` write flags (`--update`/`--scaffold`) refuse hook auto-approval;
+  T-072 files the arm + golden cases (read forms unchanged).
 - v1 2026-08-03: created for T-065, T-066, T-067, T-068, T-069, T-070, T-071 (plan: routing-and-bg)
