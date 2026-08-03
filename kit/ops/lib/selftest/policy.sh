@@ -297,3 +297,133 @@ drill_park() {
     rm -f ops/board/review/T-PK.md
     if [ -n "$pk_ac" ]; then git config core.autocrlf "$pk_ac"; else git config --unset core.autocrlf 2>/dev/null || true; fi
 }
+drill_route() {
+    # ---- T-071 route drill (ops/contracts/model-routing.md § Executable check) ----
+    # `triage` answers "which lane"; `route` answers "which MODEL", and the CONDUCTOR calls it
+    # before EVERY spawn while `fleet` injects its answer into every pane it opens. So line 1 is
+    # parsed BLIND — always exactly one of three words — and the note is the other half of the
+    # contract: it appears when, and ONLY when, a mapping knob or a task's literal `model:` names a
+    # model, because a repo that sets no knobs must behave byte-identically to one with no routing
+    # in it at all. That silence is the invariant a knob-shaped feature loses first, so it is
+    # asserted here in both directions rather than assumed.
+    # HERMETIC (T-046): CONVENTIONS.md is saved and restored byte-exactly, the fixture tasks and the
+    # stub PATH bin are removed, and nothing here claims, locks, commits or touches the board branch.
+    [ -f ops/CONVENTIONS.md ] && cp ops/CONVENTIONS.md "$T/rt-conv.bak" || rm -f "$T/rt-conv.bak"
+    rm -f ops/CONVENTIONS.md
+    # 1) the tier_for table, board-free AND knob-free: one bare word on line 1, and nothing else.
+    [ "$("$SELF" route --points 5 --risk normal | head -1)" = strong ] || { echo "ROUTE TIER FAIL (>=5 points is strong)"; exit 1; }
+    [ "$("$SELF" route --points 3 --risk normal | head -1)" = mid ]    || { echo "ROUTE TIER FAIL (3 points is mid)"; exit 1; }
+    [ "$("$SELF" route --points 1 --risk normal | head -1)" = cheap ]  || { echo "ROUTE TIER FAIL (<=1 point is cheap)"; exit 1; }
+    [ "$("$SELF" route --points 2 --risk high   | head -1)" = strong ] || { echo "ROUTE TIER FAIL (risk must dominate points)"; exit 1; }
+    [ "$("$SELF" route --points x --risk normal | head -1)" = mid ]    || { echo "ROUTE TIER FAIL (non-numeric points is the safe middle, NEVER an error)"; exit 1; }
+    [ "$("$SELF" route --points 5 --risk normal | wc -l | tr -d ' ')" = 1 ] || { echo "ROUTE QUIET FAIL (an unset knob must print NOTHING but the tier word)"; exit 1; }
+    # 2) the role table, and the only two things route is allowed to refuse. An unknown role is mid
+    #    at rc 0 on purpose — routing must never be the reason a piece of work cannot start.
+    [ "$("$SELF" route --role PLANNER | head -1)" = strong ] || { echo "ROUTE ROLE FAIL (PLANNER is strong)"; exit 1; }
+    [ "$("$SELF" route --role SOLO    | head -1)" = mid ]    || { echo "ROUTE ROLE FAIL (SOLO is mid)"; exit 1; }
+    "$SELF" route --role NO-SUCH-ROLE >/dev/null 2>&1 || { echo "ROUTE ROLE FAIL (an unknown role must still rc 0 — routing never blocks work)"; exit 1; }
+    [ "$("$SELF" route --role NO-SUCH-ROLE | head -1)" = mid ] || { echo "ROUTE ROLE FAIL (an unknown role falls back to mid)"; exit 1; }
+    "$SELF" route >/dev/null 2>&1 && { echo "ROUTE USAGE FAIL (no args must rc 1)"; exit 1; }
+    "$SELF" route T-NOPE >/dev/null 2>&1 && { echo "ROUTE ID FAIL (an unknown ID must rc 1)"; exit 1; }
+    # 3) the note, via a FIXTURE CONVENTIONS: three-space indent (triage's shape), the knob's value
+    #    with its owner comment stripped, and strictly per-tier — model_mid is left unset here, so
+    #    mid must stay a bare word while its neighbours note.
+    printf 'model_strong: drill-strong-9   # owner comment, stripped by cfg\nmodel_cheap: drill-cheap-2\n' > ops/CONVENTIONS.md
+    "$SELF" route --points 5 --risk normal | awk 'NR==2 && $0 == "   model: drill-strong-9" { ok=1 } END { exit !ok }' \
+      || { "$SELF" route --points 5 --risk normal; echo "ROUTE NOTE FAIL (want line 2 = three spaces + 'model: <knob value>')"; exit 1; }
+    [ "$("$SELF" route --points 1 --risk normal | wc -l | tr -d ' ')" = 2 ] || { echo "ROUTE NOTE FAIL (the cheap knob must note too)"; exit 1; }
+    [ "$("$SELF" route --points 3 --risk normal | wc -l | tr -d ' ')" = 1 ] || { echo "ROUTE NOTE FAIL (model_mid is unset — mid must stay a bare word)"; exit 1; }
+    # 4) the task override, both shapes. A tier WORD wins outright and the OVERRIDDEN tier's knob is
+    #    the one that speaks; any other value is a literal model name, and then line 1 stays the
+    #    DERIVED tier (informational) while the note carries the name verbatim, knob or no knob.
+    printf -- '---\nid: T-RTW\npoints: 5\nwsjf: 1\nrisk: normal\nmodel: cheap\nstatus: ready\nfiles_owned:\n  - src/rtw.txt\n---\n' > ops/board/ready/T-RTW.md
+    printf -- '---\nid: T-RTL\npoints: 5\nwsjf: 1\nrisk: normal\nmodel: drill-literal-7\nstatus: ready\nfiles_owned:\n  - src/rtl.txt\n---\n' > ops/board/ready/T-RTL.md
+    [ "$("$SELF" route T-RTW | head -1)" = cheap ] || { echo "ROUTE OVERRIDE FAIL (a tier-word model: must beat the derived tier)"; exit 1; }
+    "$SELF" route T-RTW | awk 'NR==2 && $0 == "   model: drill-cheap-2" { ok=1 } END { exit !ok }' \
+      || { "$SELF" route T-RTW; echo "ROUTE OVERRIDE FAIL (the overridden tier's knob is the one that notes)"; exit 1; }
+    [ "$("$SELF" route T-RTL | head -1)" = strong ] || { echo "ROUTE LITERAL FAIL (line 1 stays the DERIVED tier)"; exit 1; }
+    "$SELF" route T-RTL | awk 'NR==2 && $0 == "   model: drill-literal-7" { ok=1 } END { exit !ok }' \
+      || { "$SELF" route T-RTL; echo "ROUTE LITERAL FAIL (a literal model: name must reach the note verbatim)"; exit 1; }
+    # 5) fleet carries the ready queue's MAX tier: panes claim RACILY, so every pane must be able to
+    #    afford the hardest task on the board. T-RTL is 5 points, so strong is the max whatever else
+    #    is queued. The launcher needs a runnable tmux + claude or it falls through to "found no
+    #    terminal" and this would pass VACUOUSLY — so plant stubs (--dry-run never executes them)
+    #    and prepend them. The bin lives under $T, i.e. mktemp's /tmp path, ON PURPOSE: Git Bash
+    #    SPLITS a PATH entry at its colon, so a C:/… entry silently becomes two broken ones.
+    mkdir -p "$T/rtbin"
+    printf '#!/bin/sh\nexit 0\n' > "$T/rtbin/tmux";   chmod +x "$T/rtbin/tmux"
+    printf '#!/bin/sh\nexit 0\n' > "$T/rtbin/claude"; chmod +x "$T/rtbin/claude"
+    PATH="$T/rtbin:$PATH" "$SELF" fleet 2 --dry-run > "$T/rt-fleet.out" 2>&1 || { cat "$T/rt-fleet.out"; echo "ROUTE FLEET FAIL (fleet --dry-run must rc 0)"; exit 1; }
+    grep -q '\[dry-run\]' "$T/rt-fleet.out" || { cat "$T/rt-fleet.out"; echo "ROUTE FLEET FAIL (no launcher preview — the stub CLIs did not take)"; exit 1; }
+    grep -q -- '--model drill-strong-9' "$T/rt-fleet.out" || { cat "$T/rt-fleet.out"; echo "ROUTE FLEET FAIL (the pane command must carry the ready queue's max tier)"; exit 1; }
+    rm -f ops/CONVENTIONS.md
+    PATH="$T/rtbin:$PATH" "$SELF" fleet 2 --dry-run > "$T/rt-fleet2.out" 2>&1 || { cat "$T/rt-fleet2.out"; echo "ROUTE FLEET FAIL (unrouted fleet --dry-run must rc 0)"; exit 1; }
+    grep -q -- '--model' "$T/rt-fleet2.out" && { cat "$T/rt-fleet2.out"; echo "ROUTE FLEET FAIL (unset knobs must change NOTHING — no token at all)"; exit 1; }
+    # hermetic teardown: the fixture leaves exactly as it was found
+    rm -rf "$T/rtbin"; rm -f "$T/rt-fleet.out" "$T/rt-fleet2.out"
+    rm -f ops/board/ready/T-RTW.md ops/board/ready/T-RTL.md
+    [ -f "$T/rt-conv.bak" ] && cp "$T/rt-conv.bak" ops/CONVENTIONS.md || rm -f ops/CONVENTIONS.md
+    rm -f "$T/rt-conv.bak"
+}
+drill_bg() {
+    # ---- T-071 bg drill (ops/contracts/bg-jobs.md § Executable check) ----
+    # The harness caps a foreground tool call at 600s, so a suite-length command returns NOTHING and
+    # gets re-run; `bg` turns "run detached, collect in bounded chunks" into a command instead of a
+    # recipe every session re-invents. Its PUBLIC surface is the EXIT CODE — 0 green · 1 red ·
+    # 2 running · 3 unknown — because callers branch on it blind, inside compound commands, with
+    # nobody reading the prose. Underneath it sits rc-file-FIRST: a pid check alone may NEVER
+    # declare a verdict, since Windows reuses pids. All four codes are exercised below.
+    # Fast commands only (echo/false/sleep): a drill never waits on a real suite.
+    # HERMETIC (T-046): the whole .polaris/bg registry is removed before returning, so a later
+    # `finish` — drill_finish's clean rc 0 included — can never inherit a pending job from here.
+    rm -rf .polaris/bg
+    # 1) green: run → wait collects rc 0 → status agrees → tail carries the command's own stdout.
+    "$SELF" bg run bxok -- echo bx-hello >/dev/null || { echo "BG RUN FAIL (a green job must start rc 0)"; exit 1; }
+    "$SELF" bg wait bxok --max 60 > "$T/bx1.out" 2>&1 || { cat "$T/bx1.out"; echo "BG GREEN FAIL (wait must exit 0 on a green job)"; exit 1; }
+    "$SELF" bg status bxok >/dev/null 2>&1 || { echo "BG GREEN FAIL (status must exit 0 on a green job)"; exit 1; }
+    "$SELF" bg tail bxok | grep -q 'bx-hello' || { echo "BG TAIL FAIL (the job's own stdout must reach the log)"; exit 1; }
+    # 2) red is HONEST: the command's failure IS the job's verdict, never swallowed into a green.
+    "$SELF" bg run bxred -- false >/dev/null || { echo "BG RUN FAIL (starting a doomed job is still rc 0)"; exit 1; }
+    "$SELF" bg wait bxred --max 60 >/dev/null 2>&1 && { echo "BG RED FAIL (wait must exit 1 on a red job)"; exit 1; }
+    "$SELF" bg status bxred >/dev/null 2>&1 && { echo "BG RED FAIL (status must exit 1 on a red job)"; exit 1; }
+    # 3) running: rc 2, a same-name run REFUSES instead of racing, and --force replaces it.
+    "$SELF" bg run bxslow -- sleep 30 >/dev/null || { echo "BG RUN FAIL (the long job must start)"; exit 1; }
+    bx_rc=0; "$SELF" bg status bxslow >/dev/null 2>&1 || bx_rc=$?
+    [ "$bx_rc" = 2 ] || { echo "BG RUNNING FAIL (a live job must status rc 2, got $bx_rc)"; exit 1; }
+    "$SELF" bg run bxslow -- true > "$T/bx2.out" 2>&1 && { cat "$T/bx2.out"; echo "BG DUPLICATE FAIL (a RUNNING same-name job must refuse, not race)"; exit 1; }
+    grep -q 'already RUNNING' "$T/bx2.out" || { cat "$T/bx2.out"; echo "BG DUPLICATE MSG FAIL (the refusal must say why and name bg status)"; exit 1; }
+    "$SELF" bg run bxslow --force -- echo bx-forced >/dev/null || { echo "BG FORCE FAIL (--force must kill, rotate and start fresh)"; exit 1; }
+    "$SELF" bg wait bxslow --max 60 >/dev/null 2>&1 || { echo "BG FORCE FAIL (the forced replacement must run to green)"; exit 1; }
+    # 4) rotation ARCHIVES: one .prev slot per name, holding the run it replaced — never a delete.
+    "$SELF" bg run bxok -- echo bx-second >/dev/null || { echo "BG ROTATE FAIL (a finished name must be re-runnable)"; exit 1; }
+    [ -d .polaris/bg/bxok.prev ] || { echo "BG ROTATE FAIL (the finished run must archive to <name>.prev)"; exit 1; }
+    grep -q 'bx-hello' .polaris/bg/bxok.prev/cmd || { echo "BG ROTATE FAIL (.prev must hold the PREVIOUS run, not the new one)"; exit 1; }
+    "$SELF" bg wait bxok --max 60 >/dev/null 2>&1 || { echo "BG ROTATE FAIL (the replacement job must still collect green)"; exit 1; }
+    # 5) unknown: no rc file and a DEAD pid is rc 3 — the one case bash cannot solve, only order
+    #    around. A REAPED child's pid is dead by construction: no sleeping, no guessed pid number.
+    ( exit 0 ) & bx_ghost=$!
+    wait "$bx_ghost" 2>/dev/null || true
+    mkdir -p .polaris/bg/bxghost
+    printf '%s\n' "$bx_ghost" > .polaris/bg/bxghost/pid
+    printf 'true\n' > .polaris/bg/bxghost/cmd
+    date +%s > .polaris/bg/bxghost/start
+    : > .polaris/bg/bxghost/log
+    bx_rc=0; "$SELF" bg status bxghost >/dev/null 2>&1 || bx_rc=$?
+    [ "$bx_rc" = 3 ] || { echo "BG UNKNOWN FAIL (a dead pid with no rc must be rc 3, got $bx_rc)"; exit 1; }
+    # 6) finish's bg guard (bg-jobs.md § finish): a job with no rc is a suite still in flight — or a
+    #    crash nobody collected — and either way the run is NOT over. Invariant 4, mechanically.
+    "$SELF" finish > "$T/bx3.out" 2>&1 || true
+    grep -q 'background job bxghost' "$T/bx3.out" || { cat "$T/bx3.out"; echo "BG FINISH GUARD FAIL (an uncollected job must be a pending item)"; exit 1; }
+    grep -q 'bg status bxghost' "$T/bx3.out" || { cat "$T/bx3.out"; echo "BG FINISH GUARD FAIL (a dead-pid unknown must name bg status, not bg wait)"; exit 1; }
+    # 7) sweep: a job dir whose start is >24h old is leftover runtime state. BACKDATE it — a drill
+    #    that sleeps for a threshold is a drill nobody runs. --fix rotates it; it never deletes.
+    printf '%s\n' "$(( $(date +%s) - 90000 ))" > .polaris/bg/bxred/start
+    "$SELF" sweep > "$T/bx4.out" 2>&1 || true
+    grep -q 'STALE bg job: bxred' "$T/bx4.out" || { cat "$T/bx4.out"; echo "BG SWEEP FAIL (a >24h job must be reported)"; exit 1; }
+    "$SELF" sweep --fix > "$T/bx5.out" 2>&1 || true
+    [ -d .polaris/bg/bxred.prev ] || { cat "$T/bx5.out"; echo "BG SWEEP FIX FAIL (--fix must rotate the stale job — archive, never delete)"; exit 1; }
+    [ -d .polaris/bg/bxred ] && { echo "BG SWEEP FIX FAIL (the stale job must leave the LIVE registry)"; exit 1; }
+    # hermetic teardown: no job dirs, no scratch output — the fixture as it was found
+    rm -rf .polaris/bg
+    rm -f "$T/bx1.out" "$T/bx2.out" "$T/bx3.out" "$T/bx4.out" "$T/bx5.out"
+}

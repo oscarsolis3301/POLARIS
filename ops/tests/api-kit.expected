@@ -338,12 +338,14 @@ kit/ops/lib/selftest/history.sh	fn	drill_busyint
 kit/ops/lib/selftest/history.sh	fn	drill_express
 kit/ops/lib/selftest/history.sh	fn	drill_pr-publish
 kit/ops/lib/selftest/history.sh	fn	drill_tcm
+kit/ops/lib/selftest/policy.sh	fn	drill_bg
 kit/ops/lib/selftest/policy.sh	fn	drill_claudemd
 kit/ops/lib/selftest/policy.sh	fn	drill_drift
 kit/ops/lib/selftest/policy.sh	fn	drill_finish
 kit/ops/lib/selftest/policy.sh	fn	drill_hardening
 kit/ops/lib/selftest/policy.sh	fn	drill_park
 kit/ops/lib/selftest/policy.sh	fn	drill_qa
+kit/ops/lib/selftest/policy.sh	fn	drill_route
 kit/ops/lib/selftest/policy.sh	fn	drill_rules
 kit/ops/lib/selftest/remote.sh	fn	drill_notify
 kit/ops/lib/selftest/remote.sh	fn	drill_pushdegrade
