@@ -43,7 +43,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
   local SELFTEST_PAR="${2:-}"
   # Every label a drill_on gate below uses, in run order — the contract's minimum set. An --only
   # element matching NONE of these dies HERE, before the throwaway repo is even created.
-  local SELFTEST_LABELS='fmlist tcm report metrics brain rules drift hardening qa finish claudemd remote syncrace notify grant upgrade pr-publish express hint brief newcmds'
+  local SELFTEST_LABELS='fmlist tcm report metrics brain rules drift hardening qa finish claudemd remote syncrace notify grant upgrade pr-publish express hint brief newcmds park claimguard busyint pushdegrade'
   local st_total=0 st_hit=0 st_lbl
   local st_sel="" st_pat st_rest st_pat_hit
   for st_lbl in $SELFTEST_LABELS; do st_total=$((st_total+1)); done
@@ -390,6 +390,24 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     if drill_on brief; then
     drill_brief
     fi   # drill_on brief
+    # ==== T-062 shared-checkout isolation drills (ops/contracts/shared-checkout.md § Executable
+    # check). Deliberately LAST among the labeled drills: park/busyint land + seal real waves and
+    # claimguard/pushdegrade lean on the scratch origin, so they run where the board is drained and
+    # nothing downstream can inherit their state. Each is hermetic on its own (T-046) — any
+    # --only/--parallel partition meets the same spine.
+    if drill_on park; then
+    drill_park
+    fi   # drill_on park
+    if drill_on claimguard; then
+    drill_claimguard
+    fi   # drill_on claimguard
+    if drill_on busyint; then
+    drill_busyint
+    fi   # drill_on busyint
+    if drill_on pushdegrade; then
+    drill_pushdegrade
+    fi   # drill_on pushdegrade
+    # ==== end T-062 shared-checkout isolation drills ====
     # ========= T-033 --only self-drills (ops/contracts/verification-tiering.md) — full run ONLY:
     # a subset run must never re-spawn selftest (infinite recursion), so gate on empty SELFTEST_ONLY.
     # nonsense pattern dies pre-spine (rc 1); --only fmlist runs spine + the fmlist drill and prints
@@ -406,5 +424,5 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
     say "selftest passed (subset: $SELFTEST_ONLY — $st_hit of $st_total labeled drills; spine always runs)"
     return 0
   fi
-  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · finish (pending named + rc 1 + no stamp/hook · drain queue-gates vs plan-caveats · worktree refusal · green verdict + stamp format · done hook fires EXACTLY once, re-run stays rc 0) · CLAUDE.md block version truth (stamp mismatch names both · unstamped · unmarked · SILENT when current) · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin · pr-publish (feat stays local · seal pushes ONLY integrate + title/bullets/URL + notify done, no ref moved · --sync subject gate/tag/branch cleanup both sides · done via rule 1 · direct --sync dies · unknown publish warns) · sprint report (seal commits docs(sprint-N) riding the wave · cmd_report --sprint/current/--all renders + prints, board read-only + idempotent) · brain (9-file build gitignored · INDEX routes all 7 + find · prefs/learned content · board digest names the landed task · stale warn → refresh clears · seal auto-refresh · refresh failure = note, never a red seal) · express (help form · qa suite stamp gated+formatted · 4 refusals pre-mutation: solo-review/risk-high/off+unknown/publish-pr · red suite unwind+kickback tail · happy path: done+landed stamp · tag moved · integrate deleted · clean tree · finish-line note names polaris finish) · slow-suite hint (paranoid+180s fires naming integration: batch · batch silent) · status --brief (one paragraph · Last landed:/Next up: markers · header sprint clause · active ids · no table pipe · plain status unchanged) · metrics In-plain-English summary (first line above the table · silent on empty EVENTS)"
+  say "selftest passed: race(8→1) · ownership accept/reject · verify cmds · handoff+all-review notice · fm_list scalar/[]/flow/block+messy/depends_on · task-commit-msg format · land squash+trailer · seal merge+tag · history filter · done-on-squash+landed stamp · rollback task+sprint · second-seal tag-move+wave-spanning history+wave-2 done · quiet board (chores→polaris/board · zero base chores · orphan root · docs(map) once · tree=moved set · clean status) · EVENTS union sync race · legacy --no-ff done · done cleanup · events+metrics(+pts buckets) · _match · rules path/content/diff · drift overlap+strict · rename-reject · claim fan-out · glob-overlap · audit reject · why · dep-cycle · qa green/red · finish (pending named + rc 1 + no stamp/hook · drain queue-gates vs plan-caveats · worktree refusal · green verdict + stamp format · done hook fires EXACTLY once, re-run stays rc 0) · CLAUDE.md block version truth (stamp mismatch names both · unstamped · unmarked · SILENT when current) · attribution strip · remote branch cleanup+sweep · notify-gate silence/env/severity · blocked event+why · severity info/gate · doctor knob composition · grant append+refusals(column/-m/overlap both ways) · upgrade-migration (orphan seed · untrack+ignore · ONE base commit · no-op re-run · quiet after) · primary-anchored claim/resume paths · fresh-clone materialization (doctor+resume) · uninstall board-branch delete local+origin · pr-publish (feat stays local · seal pushes ONLY integrate + title/bullets/URL + notify done, no ref moved · --sync subject gate/tag/branch cleanup both sides · done via rule 1 · direct --sync dies · unknown publish warns) · sprint report (seal commits docs(sprint-N) riding the wave · cmd_report --sprint/current/--all renders + prints, board read-only + idempotent) · brain (9-file build gitignored · INDEX routes all 7 + find · prefs/learned content · board digest names the landed task · stale warn → refresh clears · seal auto-refresh · refresh failure = note, never a red seal) · express (help form · qa suite stamp gated+formatted · 4 refusals pre-mutation: solo-review/risk-high/off+unknown/publish-pr · red suite unwind+kickback tail · happy path: done+landed stamp · tag moved · integrate deleted · clean tree · finish-line note names polaris finish) · slow-suite hint (paranoid+180s fires naming integration: batch · batch silent) · status --brief (one paragraph · Last landed:/Next up: markers · header sprint clause · active ids · no table pipe · plain status unchanged) · metrics In-plain-English summary (first line above the table · silent on empty EVENTS) · park (tracked+untracked parked · byte-identical unpark · a dirty tree at land parks + proceeds + prints the stash) · claimguard (id_ok pre-lock · stray feat ref archived local+origin at claim · overlap auto-block + remedy note) · busyint (busy lease → wait note + queued rc 3 · stale lease stolen · already-landed skip rc 0 · non-ff wave adopted + sealed once) · pushdegrade (stray-feat repair mid-handoff · dead push degrades: board moves + ⚠ Note + push-fail event)"
 }

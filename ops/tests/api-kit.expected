@@ -66,6 +66,7 @@ kit/ops/PROMPTS.md	heading	Watching
 kit/ops/PROTOCOL.md	heading	LANES — why the lane is a command, and why a role never does two jobs
 kit/ops/PROTOCOL.md	heading	MODEL NOTES (whichever model runs this)
 kit/ops/PROTOCOL.md	heading	MODEL ROUTING (cost — set per session by the human)
+kit/ops/PROTOCOL.md	heading	N CHATS, ONE REPO — who waits, who parks, who queues
 kit/ops/PROTOCOL.md	heading	POLARIS v5 — PROTOCOL reference
 kit/ops/PROTOCOL.md	heading	STATE = THE BOARD (git-tracked, human-readable)
 kit/ops/PROTOCOL.md	heading	THE TOOL — `ops/polaris`
@@ -315,10 +316,12 @@ kit/ops/lib/ownership.sh	fn	run_verify_cmds
 kit/ops/lib/search.sh	fn	index_engine
 kit/ops/lib/search.sh	fn	index_fast
 kit/ops/lib/search.sh	fn	index_root
+kit/ops/lib/selftest/board.sh	fn	drill_claimguard
 kit/ops/lib/selftest/board.sh	fn	drill_fmlist
 kit/ops/lib/selftest/board.sh	fn	drill_grant
 kit/ops/lib/selftest/board.sh	fn	drill_newcmds
 kit/ops/lib/selftest/brain.sh	fn	drill_brain
+kit/ops/lib/selftest/history.sh	fn	drill_busyint
 kit/ops/lib/selftest/history.sh	fn	drill_express
 kit/ops/lib/selftest/history.sh	fn	drill_pr-publish
 kit/ops/lib/selftest/history.sh	fn	drill_tcm
@@ -326,9 +329,11 @@ kit/ops/lib/selftest/policy.sh	fn	drill_claudemd
 kit/ops/lib/selftest/policy.sh	fn	drill_drift
 kit/ops/lib/selftest/policy.sh	fn	drill_finish
 kit/ops/lib/selftest/policy.sh	fn	drill_hardening
+kit/ops/lib/selftest/policy.sh	fn	drill_park
 kit/ops/lib/selftest/policy.sh	fn	drill_qa
 kit/ops/lib/selftest/policy.sh	fn	drill_rules
 kit/ops/lib/selftest/remote.sh	fn	drill_notify
+kit/ops/lib/selftest/remote.sh	fn	drill_pushdegrade
 kit/ops/lib/selftest/remote.sh	fn	drill_remote
 kit/ops/lib/selftest/remote.sh	fn	drill_syncrace
 kit/ops/lib/selftest/remote.sh	fn	drill_upgrade
