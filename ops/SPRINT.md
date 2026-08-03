@@ -36,6 +36,7 @@ W1 T-065 ∥ T-066 ∥ T-067 ∥ T-068 ∥ T-069 (5 disjoint lanes) → W2 T-070
 |---|---|---|
 | 2026-08-03 | 13 (T-065 5pts, T-066 2pts, T-067 2pts, T-068 2pts, T-069 2pts, wave 1, sealed sprint/9 dff3657) | 9 · T-070 + T-072 promoted to `ready/` (deps T-065/T-067 now done; ownership disjoint — bg+entry+observe+the api-kit golden vs. the readonly-allow hook + its two goldens), so W2 runs TWO lanes where the plan wrote one: T-072's only dep was T-067, so pulling it forward from W3 is legal · T-071 (3pts) correctly held behind T-070 — it shares `ops/tests/api-kit.expected` · T-048 + T-049 (sprint-7 leftovers, deps met since T-047) also correctly HELD in `backlog/`, and this one is not obvious: their deps ARE satisfied, but they overlap T-070 on `kit/ops/polaris` and `kit/ops/lib/observe.sh` respectively, so promoting on deps alone would have broken W2's disjointness · cycle p50 0.6h n=66 · kickbacks 0 this wave (2 total, 3%) · build avg 0.3h / integrate avg 3.5h · gate: suite green sharded 351s (3 shards, 25 drills) + build green + uat 12/12 · the api-kit one-owner-per-wave prescription earned its first proof — T-065's golden and T-066's byte-pinned heading swap proved together at the wave gate with five lanes on that surface and zero kickbacks · one stray commit caught pre-seal: the Planner's `docs(contract): bg-jobs v1.1 (T-072)` committed onto the checked-out integrate branch and rode the seal into main — correct destination, logged as an entanglement hazard · doctor's zip-STALE line is known HEAD-comparison noise, rebuilt by `build:` · Learned now 6 bullets (2 of 3 findings folded into existing bullets rather than appended; EVOLVE may prune) |
 | 2026-08-03 | 19 (+T-070 5pts, +T-072 1pt, wave 2, re-sealed sprint/9 dff3657→8d16b08) | 3 · T-071 (3pts) promoted to `ready/` — its last dep (T-070) landed here, and with `ready/`+`active/` empty the disjointness test is trivial; note for whoever re-grooms T-050 that it shares `kit/ops/lib/selftest/policy.sh` with T-071, harmless only because T-050's own deps (T-048/T-049) are unmet and the ready gate compares against `ready/`+`active/` alone · cycle p50 0.6h n=68 · kickbacks 0 · build avg 0.3h / integrate avg 3.4h · gate: suite green sharded 359s (3 shards) + build green + uat 12/12, green on the FIRST pass — this was the run proving T-072's hardened `check --update/--scaffold` hook and T-070's regenerated `api-kit` golden agree · zero stray commits on the integrate branch this wave, checked deliberately per W1's lesson · NO new Learned bullets: wave 2 reproduced wave 1's pattern exactly and the one-owner-per-wave golden rule held a second time (T-070 sole owner of `api-kit.expected` across a 2-lane wave), which is confirmation, not a new lesson |
+| 2026-08-03 | 23 (+T-071 3pts, +T-073 1pt, wave 3, re-sealed sprint/9 8d16b08→fe0aac4) — SPRINT COMPLETE | 0 — all 9 tasks of plan `routing-and-bg` landed; scope grew +1 mid-sprint (22→23) with T-073, the 1-pt rider filed from T-071's finding · cycle p50 0.6h n=70 · kickbacks 0 across the whole sprint (2 lifetime, 3%) · build avg 0.3h / integrate avg 3.3h · FINAL GATE: kit-anchored sharded suite green 378s across all 27 labels — `route` and `bg` running for the first time — + build green + uat 14/14 including both new hermetic goldens `route-tier` and `bg-lifecycle` · a SECOND stray base-bound commit was captured and logged (`docs(contract): bg-jobs v1.2 (T-073)`, same mechanism as wave 1's v1.1), caught by the pre-seal log read both times · Learned: 1 new bullet (the 1-pt-rider pattern), 3 clauses folded into existing bullets (the 27-vs-21 kit-vs-installed label diff, the recurrence plus my own tag force-push near-miss, one-owner-per-wave's three-wave confirmation), and the fully-shipped EOL bullet compacted — log stands at 7 bullets, EVOLVE to prune · RELEASE NEXT: 5.24.0 is unbuilt — `ops/` still runs installed 5.23.0 while `kit/` carries 5.24.0-unreleased behavior (`route`/`bg` exist in kit only), so `doctor` reports the zip STALE until `pack.py` runs as part of the release ritual |
 
 # SPRINT 8 — N chats, one repo          capacity: 29   dates: 2026-08-03–
 
@@ -213,21 +214,16 @@ exercises but a Builder cannot.
 | 2026-07-18 | 13 (T-003, T-007..T-010) | 7 (T-004..T-006) · cycle p50 0.5h · kickbacks 0 |
 
 ## Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
-- GOLDENS NEED AN EOL PIN. `ops/tests/*.expected` and `*.cmd` fell through `.gitattributes`' `* text=auto`,
-  so with `core.autocrlf=true` git materializes them CRLF the moment it rewrites them — and `check`
-  byte-diffs LF stdout against the file, so all 480 lines "differ". A golden is therefore green only
-  until git next touches its working copy: `api-kit` was green at wave start and red right after the
-  land. Re-checking it out on bare `main` (`rm` + `git checkout --`) reproduced the red with ZERO task
-  code, which is what proved it was the repo's flake and not the task's. BASE-CHECK EVERY uat RED
-  before you believe it — role §3's flake clause paid for itself here; the golden's content was
-  byte-exact, ordering included. T-056 pins both globs `eol=lf`; the `.cmd` half matters most, since
-  `check` runs those through `bash -c`, so CRLF there breaks execution, not merely comparison.
-  CLOSED (sprint 9, T-069): `docs/sprints/*.md` is pinned `eol=lf` too, so the sprint-report
-  contract's "byte-stable given the same inputs" is now literally true and not merely figuratively.
-  The pin bites LATER THAN YOU EXPECT, which is the part worth carrying: sprint-9's own report was a
-  NEW file, so it normalized silently and nothing else moved. The five PRE-EXISTING reports stay
-  unnormalized until something next touches them — expect exactly one whole-file diff per report,
-  once each, and fold it into whatever commit touches it rather than reading it as damage.
+- EOL PINS: CLOSED, WITH ONE DEFERRED DIFF STILL OWED (compacted at the sprint-9 close — the bug is
+  fully shipped, only the consequence is still live). `ops/tests/*.{expected,cmd}` (T-056) and
+  `docs/sprints/*.md` (T-069) are now all pinned `eol=lf`. Before that, `core.autocrlf=true`
+  re-materialized goldens CRLF on any git touch and `check` byte-diffed all 480 lines as "differ" — a
+  golden green at wave start and red right after the land, reproduced on bare `main` with ZERO task
+  code, which is what proved it was the repo's flake and not the task's. The rule outlived the bug and
+  now lives in role §3: BASE-CHECK EVERY uat RED BEFORE YOU BELIEVE IT. Still owed: sprint-9's report
+  was a NEW file so it normalized silently, but the five PRE-EXISTING reports stay unnormalized until
+  something next touches them — expect exactly one whole-file diff per report, once each, and fold it
+  into whatever commit touches it rather than reading it as damage.
 - A GOLDEN THAT RECORDS A *DERIVED* SURFACE SILENTLY COUPLES EVERY TASK THAT FEEDS IT — three
   instances now, so treat it as structural, not bad luck. Sprint 7: T-047 added fns to `ownership.sh`
   without owning `ops/tests/api-kit.expected`. Sprint 8: T-063 (docs) added ONE PROTOCOL heading —
@@ -249,6 +245,10 @@ exercises but a Builder cannot.
   knowing for nerve: this makes `api-kit` legitimately RED mid-wave whenever only one of the pair has
   landed. That is the design working, not a defect — which is why the wave gate is the run that
   counts, and why an integrator landing pipelined must NOT gate on the golden task-by-task.
+  IT HELD ALL THREE WAVES (T-065 → T-070 → T-071 as sole `api-kit.expected` owner, one per wave,
+  exactly as the sprint plan carved it), across 5 lanes then 2 then 2, for ZERO kickbacks and a
+  first-pass-green gate every time. Three sprints of this defect, one sprint of the prescription, no
+  recurrences: the rule is now earned, not theoretical. Keep carving it this way.
 - A `risk: high` task at the ROOT of the dependency tree stalls the whole board, not just itself.
   T-047 was audited and verified for days while T-048/T-049/T-050 (13 of 28 pts) sat behind it and
   `ready/` was empty — it waited 128.9h at the gate, which alone moved integrate avg 1.5h→3.9h. The
@@ -261,6 +261,16 @@ exercises but a Builder cannot.
   foreground call instead of the log-to-a-file-and-poll recipe CONVENTIONS still describes. Measure
   before assuming: the serial 805s figure is what drove three sprints of background-and-poll
   ceremony. EVOLVE: `test:` is a candidate to carry `--parallel 3` outright.
+  ANCHOR THE SUITE AT `kit/`, NOT AT THE INSTALLED COPY — and here is the exact cost of getting it
+  wrong, measured at the sprint-9 close: the kit driver registers 27 drill labels, the installed
+  `ops/` driver registers 21, and the six it cannot see are `bg`, `route`, `busyint`, `claimguard`,
+  `park`, `pushdegrade`. For sprint 9 that gap was precisely the sprint — `route` and `bg` ARE the
+  work — so `bash ops/polaris doctor --selftest` would have gone green while proving none of it. This
+  is THE SPLIT's installed-LAGS-source paragraph showing up as a silent false green rather than an
+  error, which is the dangerous shape. `CONVENTIONS.md test:` already anchors the correct form
+  (`bash kit/ops/polaris …`) and `handoff` re-ran it per task, so no gate was actually weakened this
+  sprint; the tell that you are on the right driver is the label list itself — kit-only labels like
+  `park`/`pushdegrade` appear in the shard lines, and after T-071 the count reads 27, not 21.
 - EVERY LOCK NEEDS AN OWNER CHECK, AND RECOVERY-BY-AGE MUST STAY OWNER-BLIND. Found auditing T-058,
   fixed by T-064: the integration lease was pid-guarded but the board mutex was not — `mutex_off` was
   an unconditional `rm -rf`, and `on_die` never disarmed, so ANY process exit deleted whatever mutex
@@ -281,3 +291,29 @@ exercises but a Builder cannot.
   is checked out. INTEGRATOR: `git log <base>..integrate/<date>` before sealing and read every commit
   you did not land — a subject without a `[<ID>]` suffix is the tell, and it is invisible after the
   merge. Cheap fix if it recurs: groom onto `<base>` from a second worktree, or seal sooner.
+  IT RECURRED IN THE SAME SPRINT, so treat it as certain rather than possible: wave 3 captured
+  `docs(contract): bg-jobs v1.2 (T-073)` exactly as wave 1 captured v1.1. Twice in one sprint, both
+  times the Planner authoring the NEXT task's contract during the landing window — which is not bad
+  luck, it is the two roles' schedules overlapping by design. The pre-seal log read caught both; make
+  it a reflex, not a reaction.
+  SAME FAMILY, MY OWN NEAR-MISS: DO NOT TOUCH TAGS BY HAND. Closing wave 2 I ran
+  `git push origin --tags --force`, which is on the STOP-AND-ASK list and which I should have asked
+  about first. It was a harmless no-op only because `seal` had already moved `sprint/9` via its own
+  compare-and-swap, and I verified all seven sprint tags still pointed where they belonged. The
+  lesson is that there was never a reason to reach for it: `seal` OWNS the tag in both publish modes,
+  so an integrator pushing tags manually is already off the sanctioned path, and `--force` on a ref
+  namespace holding every sprint's history is the one place a no-op and a catastrophe look identical
+  until you check.
+- A BUILDER DEEP IN ONE FILE IS THE CHEAPEST DEFECT DETECTOR YOU HAVE — GIVE THE FINDING A 1-PT RIDER
+  INSTEAD OF A BACKLOG LINE. Twice in sprint 9 a Builder surfaced a real defect in code it did not
+  own and could not legally touch: T-067 found `check --update/--scaffold` silently hook-approved
+  inside compounds (→ T-072, 1pt, `fix(hooks)`), and T-071 found `cmd_finish`'s bg guard counting
+  `.prev` archives as live jobs, which makes a run permanently un-finishable (→ T-073, 1pt,
+  `fix(cli)`). Both were filed mid-sprint, both owned a single disjoint file, both landed in the wave
+  already in flight, and both cost one point. The pattern that makes this safe is the SIZE and the
+  DISJOINTNESS, not the urgency: a one-file rider clears the ready gate against whatever is already
+  in `ready/`+`active/` without re-planning the wave, so the finding gets fixed while the context is
+  hot instead of aging in `IDEAS.md` until nobody remembers the repro. PLANNER: treat "Builder found
+  a defect outside its ownership" as a first-class task source, and point it at 1 unless it is
+  genuinely bigger. INTEGRATOR: a rider arriving after you have already landed its wave is not a
+  reason to seal early — hold the gate, take the rider, gate once over both.
