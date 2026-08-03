@@ -44,6 +44,17 @@ find ops -maxdepth 2 -type f -exec wc -l {} + | sort -rn | head -50
 find . -name "*.md" -exec grep -l TODO {} \;
 find . -name "*.sh" -exec cat {} +
 find . -type f -exec head -5 {} \; | grep foo
+# --- must ALLOW: the routing oracle and the background-job READS ---------------
+# `route` derives a tier and writes nothing. `bg status|tail|wait` only read the job registry.
+# The last two are the whole reason this gate exists: an agent runs these inside a compound line,
+# and settings.json cannot match a pipe or an `&&`. `bg run` is refused at the bottom of the file.
+bash ops/polaris route --points 3 --risk normal
+bash ops/polaris route T-001 --role BUILDER
+bash ops/polaris bg status
+bash ops/polaris bg tail qa -n 40
+bash ops/polaris bg wait qa --max 120
+bash ops/polaris route --role CONDUCTOR | head -1
+bash ops/polaris bg status qa && bash ops/polaris bg tail qa -n 5
 # --- must ASK: every door out of "read" ---------------------------------------
 rm -rf /tmp/x
 sed -i 's/a/b/' file.txt
@@ -79,4 +90,13 @@ git worktree add /tmp/x
 bash ops/polaris claim T-001
 bash ops/polaris slim --apply
 bash ops/polaris slim --restore
+# `bg run` spawns a detached process and writes the job registry — every form of it asks, and so
+# does a bare `bg` and any word the gate has not proven, deny-by-default. The compound case is the
+# one that matters: one refused segment must refuse the whole line, however green its neighbour.
+bash ops/polaris bg run qa
+bash ops/polaris bg run test_fast -- npm test
+bash ops/polaris bg run qa --force
+bash ops/polaris bg
+bash ops/polaris bg sweep --fix
+bash ops/polaris bg status && bash ops/polaris bg run qa
 CASES

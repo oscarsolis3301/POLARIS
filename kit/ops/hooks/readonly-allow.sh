@@ -203,12 +203,20 @@ git_ok() {
 
 # ops/polaris: the read commands only. `claim`, `handoff`, `land`, `seal`, `done`, `update`,
 # `uninstall` and friends mutate the board, a branch or the installed kit — they keep their prompt.
+# `route` joins the plain readers: it derives a tier from task frontmatter and CONVENTIONS and
+# writes nothing at all.
 polaris_ok() {
   case "${1:-}" in
-    find|show|check|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|--help|-h|'') return 0;;
+    find|show|check|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|route|--help|-h|'') return 0;;
     # `slim` bare is a report and writes nothing; `--apply`/`--restore` MOVE files under ~/.claude,
     # so they keep their prompt. Same split as check vs check --update.
     slim) case "${2:-}" in '') return 0;; *) return 1;; esac;;
+    # `bg` splits the same way, and it is why this gate matters: agents run these reads INSIDE
+    # compound lines (`bg status x && …`), where a settings.json allow rule cannot match at all.
+    # `status`/`tail`/`wait` only read the job registry. `bg run` spawns a detached process and
+    # writes that registry, so it keeps its prompt — as does a bare `bg` and any word we do not
+    # know, by the same deny-by-default that governs every other arm here.
+    bg)   case "${2:-}" in status|tail|wait) return 0;; *) return 1;; esac;;
     *) return 1;;
   esac
 }
