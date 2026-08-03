@@ -343,6 +343,7 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
   command -v curl >/dev/null 2>&1 || die "update needs curl on PATH"
   command -v tar  >/dev/null 2>&1 || die "update needs tar on PATH"
   local tarball repo cur sha T K
+  local parked=0
   tarball="$(ver tarball || true)"; [ -n "$tarball" ] || die "no tarball: in ops/VERSION"
   repo="$(ver repo || true)"; cur="$(ver version)"
 
@@ -356,7 +357,17 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
       note "  python ~/.claude/skills/polaris-install/polaris-v5.zip"
       die "worktree is dirty — use the installer above (then run setup), or commit/stash and re-run update"
     fi
-    die "worktree is dirty — commit or stash first, so the update lands as a reviewable diff"
+    # Configured repo (ops/contracts/shared-checkout.md): N chats share this one checkout, so
+    # "commit or stash first" hands whoever happened to run update a decision about work that is
+    # very likely somebody else's — the exact git question this contract exists to stop asking.
+    # Park it: named, listed by status, reversible in one command, and the update still lands as
+    # the reviewable diff that die was protecting. Only a stash that genuinely REFUSES falls back
+    # to the old die, and park guarantees the tree is untouched when it does.
+    # The `why` rides the stash NAME, which `status` prints in full on one line — so it is kept
+    # short on purpose. The reasoning belongs in this comment, not in every future status read.
+    park "dirty tree at update" \
+      || die "worktree is dirty — commit or stash first, so the update lands as a reviewable diff"
+    parked=1
   fi
 
   T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
@@ -392,6 +403,12 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
   note "refreshed here: ops/ kit code · the managed CLAUDE.md block · .claude/ skills + output style"
   note "untouched:      board · RULES.tsv · CONVENTIONS.md · MAP.md · SPRINT.md"
   note "review the diff, then commit ops/ — nothing was committed for you"
+  # Reprinted LAST for the same reason the INIT epilogue below is: the park happened ~40 lines of
+  # install output ago, and an agent reads the END of the output as "what is left". Somebody's
+  # uncommitted work is in a stash, and nothing else here will say so again.
+  if [ "$parked" = 1 ]; then
+    note "your parked work:  bash ops/polaris unpark  — returns the dirt this update stashed (after you have reviewed the diff)"
+  fi
 
   # Updated but never configured? Then the job is NOT done. The inner install.sh printed the
   # run-INIT epilogue mid-stream, but these closing lines buried it — and an agent reads the END

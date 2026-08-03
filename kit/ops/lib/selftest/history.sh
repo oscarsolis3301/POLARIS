@@ -77,11 +77,13 @@ drill_express() {
     "$SELF" land --express T-EX > "$T/ex6.out" 2>&1 && { echo "EXPRESS PR FAIL (publish: pr must refuse)"; exit 1; }
     grep -q 'express needs publish: direct' "$T/ex6.out" || { echo "EXPRESS PR MSG FAIL"; exit 1; }
     git checkout -q -- ops/CONVENTIONS.md       # restore publish: direct (default) for everything below
-    # all four refusals died BEFORE any mutation
+    # all four refusals died BEFORE any mutation — and BEFORE step 0, so no lease is left behind
+    # (express-lane v2: refusals precede the integration lease; a doomed express never queues)
     [ "$(git rev-parse main)" = "$expre" ] || { echo "EXPRESS REFUSE MUTATE FAIL (base moved)"; exit 1; }
     git rev-parse -q --verify "refs/heads/integrate/$exd" >/dev/null && { echo "EXPRESS REFUSE MUTATE FAIL (integrate branch created)"; exit 1; }
     [ -f ops/board/review/T-EX.md ] || { echo "EXPRESS REFUSE MUTATE FAIL (task left review/)"; exit 1; }
     [ -z "$(git status --porcelain)" ] || { echo "EXPRESS REFUSE DIRTY FAIL (a refusal must leave zero uncommitted state)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/.int-lease" ] && { echo "EXPRESS REFUSE LEASE FAIL (a refusal must not leave the integration lease behind)"; exit 1; }
     # red suite mid-express: land unwinds (integrate back at base), kickback carries the failing tail
     sed -i.bak 's|^test: true$|test: bash -c "echo EXPRESS-BOOM; exit 1"|' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
     git add -A; git commit -qm 'express drill: suite red'
@@ -90,6 +92,10 @@ drill_express() {
     [ -f ops/board/active/T-EX.md ] || { echo "EXPRESS RED KICKBACK FAIL (task must bounce to active/)"; exit 1; }
     grep -q 'EXPRESS-BOOM' ops/board/active/T-EX.md || { echo "EXPRESS RED NOTE FAIL (kickback note must carry the tail)"; exit 1; }
     [ "$(git rev-parse "refs/heads/integrate/$exd")" = "$(git rev-parse main)" ] || { echo "EXPRESS RED UNWIND FAIL (the land must reset away)"; exit 1; }
+    # T-058 (express-lane v2): step 1 went through wave_on (first pass on a fresh day → create),
+    # and the red death released the step-0 integration lease on its way out
+    grep -q 'wave: created integrate/' "$T/ex7.out" || { echo "EXPRESS WAVE CREATE FAIL (step 1 must create the wave via wave_on)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/.int-lease" ] && { echo "EXPRESS RED LEASE FAIL (a red express must release the integration lease)"; exit 1; }
     git checkout -q main
     mv ops/board/active/T-EX.md ops/board/review/T-EX.md    # back to review + a green suite for the happy path
     set_fm status review ops/board/review/T-EX.md
@@ -110,6 +116,10 @@ drill_express() {
     git rev-parse -q --verify "refs/heads/integrate/$exd" >/dev/null && { echo "EXPRESS BRANCH FAIL (integrate/<today> must be deleted)"; exit 1; }
     [ -z "$(git status --porcelain)" ] || { echo "EXPRESS CLEAN FAIL (tree must end clean)"; exit 1; }
     grep -q 'polaris finish' "$T/ex8.out" || { echo "EXPRESS FINISH FAIL (final note must name polaris finish)"; exit 1; }
+    # T-058 (express-lane v2): the happy pass reused the red run's wave branch via wave_on
+    # (ff-reuse — it sat exactly at base), and freed the step-0 lease on the way out
+    grep -q 'wave: reusing integrate/' "$T/ex8.out" || { echo "EXPRESS WAVE REUSE FAIL (step 1 must ff-reuse the open wave via wave_on)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/.int-lease" ] && { echo "EXPRESS LEASE RELEASE FAIL (a green express must release the integration lease)"; exit 1; }
 }
 drill_pr-publish() {
     # T-033 self-provision: --only pr-publish skips the remote and notify drills, but it pushes to

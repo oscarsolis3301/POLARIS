@@ -148,7 +148,25 @@ A seals + `int_off` → B's `int_on` acquires, `wave_on` says `adopted integrate
 lane busy (held by oscar@host, 4m) — re-run when free; conductors poll at the next wave boundary`
 rc 3.
 
+## v1.1 — the board mutex learns ownership (2026-08-03, T-064)
+
+Found by the integrator's audit of T-058 (pre-existing in main, made hittable by this sprint):
+`mutex_off` is an unconditional `rm -rf "$MUTEX"` and `mutex_on` records no owner, while `on_die`'s
+EXIT trap is never disarmed — and v1 arms that trap for the WHOLE int_on lease lifetime, so any
+process exit could delete a board mutex another session legitimately holds. The lease already got
+this right (pid file, pid-guarded release); the board mutex now mirrors it:
+- `mutex_on` writes `$MUTEX/pid` (the acquiring process) beside `epoch`.
+- `mutex_off` is a NO-OP unless `$MUTEX/pid` exists and matches the calling process — a foreign,
+  missing or unreadable pid leaves the mutex in place. Removing one's OWN mutex stays exactly today.
+- The waiter-side staleness steal in `mutex_on` (epoch age > 120s → remove + retake) is UNCHANGED
+  and deliberately pid-blind: it is the crashed-holder recovery path.
+- `on_die` still calls `mutex_off` (and lease cleanup per v1) — both now ownership-guarded, so an
+  arbitrary exit can no longer eat another session's locks.
+- Inline the guard: NO new top-level function (the kit surface is frozen until T-062's golden delta).
+
 ## Changelog
+- v1.1 2026-08-03: board mutex pid-guarded — mutex_on writes $MUTEX/pid, mutex_off no-ops on a
+  foreign/missing pid; staleness steal + on_die wiring unchanged (T-064, integrator audit filing).
 - v1 2026-08-03: created for T-057 (module + CLI + on_die), T-058 (integration lane), T-059
   (claim/handoff/resume), T-060 (finish/status/doctor/update), T-062 (drills), T-063 (docs
   pinned phrases). plan: n-chats-one-repo.

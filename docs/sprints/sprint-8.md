@@ -1,7 +1,7 @@
 # Sprint 8 — N chats, one repo (2026-08-03–)
 
 ## T-057 — "workspace.sh — id_ok, wt_add, stray-feat repair, the integration lease, wave adoption, park/unpark"
-points 5 · risk normal · landed 90b6a46 (2026-08-03) · claimed 2026-08-03
+points 5 · risk normal · landed 90b6a46 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/ops/lib/core.sh, kit/ops/lib/workspace.sh, kit/ops/polaris, ops/tests/api-kit.expected
 
 ### Why
@@ -38,8 +38,94 @@ the kit surface: hand-author the `ops/tests/api-kit.expected` delta for workspac
 - [ ] `polaris park` / `polaris unpark` dispatch in `kit/ops/polaris`, documented in usage(), and
 - [ ] `ops/tests/api-kit.expected` gains exactly workspace.sh's fn lines (hand-authored, byte-exact
 
+## T-058 — "The integration lane — lease-serialized land/seal/rollback, parked dirt, wave adoption, idempotent re-lands"
+points 5 · risk normal · landed 6e5f9b6 (2026-08-03) · claimed 2026-08-03
+files touched: kit/ops/lib/integrate.sh, kit/ops/lib/selftest/history.sh
+
+### Why
+Integration is where two sessions actually collide: the primary checkout is the only place `land`
+and `seal` can run, so today the second integrator dies on the first one's branch state or dirt.
+The settled design (shared-checkout v1, pipelined-integration v2): ONE shared lane, serialized by
+the lease. This task makes `cmd_land`, `cmd_land_express`, `cmd_seal`, `seal_sync` and
+`cmd_rollback` take `int_on` first (rc 3 `queued: ` propagates; `int_off` on every exit), turns
+their five dirty-tree dies (integrate.sh:226/296/366/481/572) into `park` + caveat + proceed (park
+failure → today's die verbatim, tree untouched), replaces the hand-rolled branch logic with
+`wave_on` — `cmd_land` on $BASE creates/adopts instead of dying at :225, express's :298-305 block
+goes entirely, deleting the "finish that wave by hand first" die — and makes re-runs idempotent:
+an already-landed `land <ID>` prints `already landed — skipped` rc 0, a seal with only board noise
+prints `nothing new to seal` rc 0. Two integrators can never die on each other's completed work.
+The express drill (selftest/history.sh) updates its assertions to the new step-0 lease + wave_on
+lines per express-lane v2.
+
+### Acceptance
+- [ ] land / land --express / seal / seal --sync / rollback each acquire the lease before mutating
+- [ ] all five dirty-tree die sites park + caveat + proceed; park rc 1 → the old die verbatim,
+- [ ] `cmd_land` on $BASE calls wave_on (create / ff-reuse / adopt) instead of dying; express's
+- [ ] re-land of an already-landed ID (on the current wave branch or $BASE) → `already landed —
+- [ ] seal with only chore(board) subjects → `nothing new to seal`, rc 0 (the :371 die is gone)
+- [ ] express-lane v1's four refusals still die BEFORE anything mutates, pinned fragments intact
+- [ ] the express drill is green with assertions updated to the new output lines
+- [ ] no new top-level function in integrate.sh — inline the glue; call workspace.sh fns directly
+
+## T-059 — "Claim/handoff hardening — id_ok pre-lock, the claim-time disjointness gate, pushes that degrade instead of stranding"
+points 5 · risk normal · landed c5d1605 (2026-08-03) · claimed 2026-08-03
+files touched: kit/ops/lib/builder.sh, kit/ops/lib/selftest/board.sh, kit/ops/lib/selftest/remote.sh
+
+### Why
+A Builder's two worst multi-session failures are both in builder.sh. First, claim: IDs are never
+validated (a bad one becomes a bad ref name deep inside `worktree add`) and nothing re-checks
+ownership disjointness at claim time, so two planners racing can put overlapping tasks on the board
+and the overlap is only discovered as an integrator squash conflict two builds later. Second,
+handoff: the push (builder.sh:111) has zero retry and no fallback — one network hiccup strands a
+FINISHED task in active/ with its lock held. Per shared-checkout v1: `cmd_claim` runs `id_ok`
+BEFORE lock_take and, after locking a candidate, checks its `files_owned` against EVERY active/
+task via `pat_overlap` (both directions) — overlap on auto-pick → move the candidate to blocked/
+with a ⛔ note naming the active task, both patterns and the remedy, ONE board commit
+`chore(board): block <ID> (ownership overlap)`, release its lock, claim the next candidate;
+overlap on an explicit ID → die naming the same. `wt_add` replaces the inline retry loop (:62-71)
+and cmd_resume's recreate block (:369-371). `cmd_handoff`'s push gets 3 attempts with one
+`stray_feat_repair` between them; still failing → PROCEED with the board move (direct-mode landing
+merges the LOCAL branch — the work is safe), append the contract's ⚠ push-fail Note to the task,
+emit `evt push-fail`, and say so. A finished task is never stranded by the network again.
+Claim/handoff assertions live in selftest/board.sh and selftest/remote.sh — update any that the
+new claim/handoff output touches (existing drills only; new drills are T-062's).
+
+### Acceptance
+- [ ] an invalid ID dies via id_ok BEFORE any lock exists; every historical ID shape still claims
+- [ ] the disjointness gate: auto-pick moves the overlapping candidate to blocked/ (note + one
+- [ ] a claim with no overlap behaves byte-identically to today (gate is silent when clean)
+- [ ] wt_add serves both claim and resume; the old retry loops are gone; a non-index.lock failure
+- [ ] handoff push: 3 attempts, one stray-feat repair between, degrade → board move + task Note +
+- [ ] existing drills green with updated assertions (grant · remote · syncrace)
+- [ ] no new top-level function in builder.sh — inline the glue; call workspace.sh fns directly
+
+## T-060 — "finish/status/doctor/update learn the shared checkout — lease and parks surfaced, update parks instead of dying"
+points 3 · risk normal · landed 0cf5945 (2026-08-03) · claimed 2026-08-03
+files touched: kit/ops/lib/admin.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/policy.sh
+
+### Why
+A second chat's first question is "what is going on here?" — and today status/finish cannot answer
+it: they know nothing about the integration lease or parked stashes, `finish`'s dirty-tree pending
+line names no remedy, and `update` still dies on a dirty configured repo. Per shared-checkout v1:
+`cmd_status` gains one line for the lease when held (holder · age) and one per `polaris/park-*`
+stash, so the first read explains the world. `cmd_finish` gains a pending line when the lease is
+held by another live session, names `park` as the dirty-tree remedy, and lists parked stashes as
+caveats (never gates). `cmd_doctor` validates `integration_wait_minutes` /
+`integration_stale_minutes` when set (positive integers, one ⚠ line otherwise) and warns once when
+git < 2.13 (`stash push`). `cmd_update`'s configured-repo dirty die (admin.sh:359) becomes park +
+caveat + proceed (park failure → today's die; the never-configured branch :350-358 is untouched).
+finish/hardening drill assertions (selftest/policy.sh) update where output changed.
+
+### Acceptance
+- [ ] status shows lease holder + age when held, and each parked stash; silent when neither exists
+- [ ] finish: lease held by another session → ⛔ pending naming holder + age; dirty tree pending
+- [ ] doctor: bad knob values → one ⚠ line each; unset knobs → silent; git < 2.13 → one warn
+- [ ] update on a dirty CONFIGURED repo parks + proceeds + caveat; park failure → today's die;
+- [ ] finish + hardening drills green with updated assertions
+- [ ] no new top-level function in observe.sh/admin.sh — inline the glue (the api-kit surface
+
 ## T-061 — "The sprint-report writer commits its own file when it is the only dirt"
-points 2 · risk normal · landed 6dc7ca9 (2026-08-03) · claimed 2026-08-03
+points 2 · risk normal · landed 6dc7ca9 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/ops/lib/knowledge.sh, kit/ops/lib/selftest/report.sh
 
 ### Why

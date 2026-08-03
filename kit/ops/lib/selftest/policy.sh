@@ -93,6 +93,22 @@ drill_hardening() {
     printf 'version: 9.9.9\n' > ops/VERSION
     "$SELF" doctor 2>/dev/null | grep -q 'runs the POLARIS it ships' || { echo "SELFHOST SYNC FAIL"; exit 1; }
     rm -rf kit ops/VERSION
+    # --- shared checkout: doctor validates the two integration knobs (ops/contracts/shared-checkout.md).
+    # They are minutes on a path where a typo is SILENT — it changes how long a session waits for the
+    # lane, or how old a lease must be before it is stolen. Unset must stay quiet, on the same rule
+    # drill_claudemd's fourth case exists to hold: a warning that also fires when nothing is wrong is
+    # a warning people learn to scroll past. Each bad value gets exactly one ⚠ line, and 0 is bad —
+    # it means "never wait" and "steal any lease on sight", which nobody types on purpose.
+    "$SELF" doctor 2>/dev/null | grep -q 'integration_wait_minutes' && { echo "KNOB SILENCE FAIL (an unset knob must say nothing)"; exit 1; }
+    printf 'integration_wait_minutes: soon\nintegration_stale_minutes: 45\n' > ops/CONVENTIONS.md
+    "$SELF" doctor > "$T/knob1.out" 2>&1 || true
+    grep -q 'integration_wait_minutes' "$T/knob1.out" || { cat "$T/knob1.out"; echo "KNOB WAIT FAIL (a non-numeric wait must warn)"; exit 1; }
+    grep -q 'integration_stale_minutes' "$T/knob1.out" && { cat "$T/knob1.out"; echo "KNOB STALE MISFIRE FAIL (a valid value must stay silent)"; exit 1; }
+    printf 'integration_wait_minutes: 10\nintegration_stale_minutes: 0\n' > ops/CONVENTIONS.md
+    "$SELF" doctor > "$T/knob2.out" 2>&1 || true
+    grep -q 'integration_stale_minutes' "$T/knob2.out" || { cat "$T/knob2.out"; echo "KNOB STALE FAIL (0 is not a positive number of minutes)"; exit 1; }
+    grep -q 'integration_wait_minutes' "$T/knob2.out" && { cat "$T/knob2.out"; echo "KNOB WAIT MISFIRE FAIL (a valid value must stay silent)"; exit 1; }
+    rm -f ops/CONVENTIONS.md
 }
 drill_qa() {
     # --- v5.10: qa — one command, the whole picture. Green suite → rc 0 with per-check lines;
@@ -167,6 +183,35 @@ drill_finish() {
     sleep 0.5
     [ "$(grep -c 'run-done/done' "$T/notify.log")" = "1" ] || { echo "FINISH REFIRE HOOK FAIL (done must fire EXACTLY once per finished state)"; exit 1; }
     [ "$(cat .polaris/finish-stamp)" = "$fnpre" ] || { echo "FINISH REFIRE STAMP FAIL (the stamp must not move)"; exit 1; }
+    # 6) SHARED CHECKOUT (ops/contracts/shared-checkout.md) — what a SECOND chat must be able to see.
+    #    A dirty tree still gates, but the pending line now names park as the third option, because
+    #    on a shared checkout "commit or discard" asks one chat to rule on another's work. A lease
+    #    held elsewhere is a NEW gate: a land in flight leaves the board looking quiet, so without it
+    #    a run could be declared over mid-landing. Parked dirt is a CAVEAT and never a gate — rc 0
+    #    means "the run is over", never "nothing was left behind" — and a lease past the stale knob
+    #    is a caveat too, or one crashed integrator makes the run un-finishable for 45 minutes.
+    echo dirt > src/fin-dirt.txt
+    "$SELF" finish > "$T/fin7.out" 2>&1 && { cat "$T/fin7.out"; echo "FINISH DIRTY FAIL (a dirty tree must rc 1)"; exit 1; }
+    grep -q 'ops/polaris park' "$T/fin7.out" || { cat "$T/fin7.out"; echo "FINISH DIRTY REMEDY FAIL (the dirty-tree pending must name park)"; exit 1; }
+    "$SELF" park -m 'finish drill' >/dev/null || { echo "FINISH PARK FAIL (park must take a dirty tree)"; exit 1; }
+    "$SELF" finish > "$T/fin8.out" 2>&1 || { cat "$T/fin8.out"; echo "FINISH PARK GATE FAIL (a parked stash must never gate)"; exit 1; }
+    grep -q 'caveat: parked work is still stashed' "$T/fin8.out" || { cat "$T/fin8.out"; echo "FINISH PARK CAVEAT FAIL (a forgotten stash must still be REPORTED)"; exit 1; }
+    "$SELF" status | grep -q '^parked: ' || { echo "STATUS PARK FAIL (status must list the parked stash)"; exit 1; }
+    "$SELF" unpark >/dev/null || { echo "FINISH UNPARK FAIL (unpark must restore the stash)"; exit 1; }
+    rm -f src/fin-dirt.txt
+    # a lease held by ANOTHER session gates and names holder + age (pid 1 is never this process)
+    finlk="$(git rev-parse --git-common-dir)/polaris-locks/.int-lease"
+    mkdir -p "$finlk"; date +%s > "$finlk/epoch"; echo other@host > "$finlk/who"; echo 1 > "$finlk/pid"
+    "$SELF" finish > "$T/fin9.out" 2>&1 && { cat "$T/fin9.out"; echo "FINISH LEASE FAIL (a held integration lease must rc 1)"; exit 1; }
+    grep -q 'other@host holds the integration lease' "$T/fin9.out" || { cat "$T/fin9.out"; echo "FINISH LEASE MSG FAIL (must name the holder)"; exit 1; }
+    "$SELF" status | grep -q '^integration lane: held by other@host' || { echo "STATUS LEASE FAIL (status must name the holder)"; exit 1; }
+    echo $(( $(date +%s) - 3600 )) > "$finlk/epoch"     # older than the 45m default → abandoned
+    "$SELF" finish > "$T/finA.out" 2>&1 || { cat "$T/finA.out"; echo "FINISH STALE LEASE FAIL (a stale lease must not gate)"; exit 1; }
+    grep -q 'caveat: the integration lease is stale' "$T/finA.out" || { cat "$T/finA.out"; echo "FINISH STALE LEASE CAVEAT FAIL"; exit 1; }
+    rm -rf "$finlk"
+    # neither present → status says nothing about either: the quiet repo stays byte-identical
+    "$SELF" status > "$T/finB.out" 2>&1
+    grep -qE '^(integration lane|parked): ' "$T/finB.out" && { cat "$T/finB.out"; echo "STATUS QUIET FAIL (a quiet repo must stay silent about both)"; exit 1; }
     # hermetic: back to drill_qa's exit state — CONVENTIONS.md absent, tree clean, no stamp, no log
     rm -f ops/CONVENTIONS.md ops/contracts/fin.md .polaris/finish-stamp "$T/notify.log"
     rmdir ops/contracts 2>/dev/null || true
