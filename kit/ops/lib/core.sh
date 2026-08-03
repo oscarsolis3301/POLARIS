@@ -164,7 +164,18 @@ task_file() { # task_file <ID> [column] — path of the task file, searched or s
 task_col() { task_file "$1" >/dev/null || return 1; dirname "$(task_file "$1")" | xargs basename; }
 
 # --------------------------------------------------- board mutex + commit ops
-mutex_off() { rm -rf "$MUTEX" 2>/dev/null || true; }
+mutex_off() { # release the board mutex if OURS (the $MUTEX/pid mutex_on wrote matches this
+  # process); foreign, missing or unreadable pid → silent no-op, exactly as int_off treats a lease
+  # that is not ours. T-057 armed `trap on_die EXIT` for the whole int_on lease lifetime, so an
+  # unconditional `rm -rf "$MUTEX"` at exit could delete a mutex a DIFFERENT session legitimately
+  # holds and un-serialize two board mutations mid-flight. Removing our OWN mutex is byte-identical
+  # to before. Crashed/legacy (pid-less) mutexes are NOT this function's job: the staleness steal in
+  # mutex_on stays deliberately pid-blind and remains the one recovery path.
+  if [ -d "$MUTEX" ] && [ "$(cat "$MUTEX/pid" 2>/dev/null)" = "$$" ]; then
+    rm -rf "$MUTEX" 2>/dev/null || true
+  fi
+  return 0
+}
 on_die() {  # EXIT trap while a claim/board op is in flight
   mutex_off
   # T-057: release the integration lease when this process holds it — a crashed holder must not
@@ -190,6 +201,9 @@ mutex_on() {
     sleep 0.2
   done
   date +%s > "$MUTEX/epoch"
+  # Ownership, beside the epoch: mutex_off removes the mutex only when this pid wrote it. The steal
+  # branch above never reads it on purpose — a crashed holder must stay stealable by age alone.
+  printf '%s\n' "$$" > "$MUTEX/pid"
   trap on_die EXIT
 }
 has_remote() { git -C "$PRIMARY" remote get-url origin >/dev/null 2>&1; }

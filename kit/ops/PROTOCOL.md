@@ -9,6 +9,7 @@ when you actually need it. Read the section you need, not the file.
 | the command table — what `polaris <x>` does | THE TOOL |
 | what lives where on disk | STATE = THE BOARD |
 | why a lane exists, and why one role never does two jobs | LANES |
+| what a second chat does when the lock, the lane or the tree is busy | N CHATS, ONE REPO |
 | how to stay cheap: pack-first, find-first, read-less | TOKEN DISCIPLINE |
 | which model tier a role deserves | MODEL ROUTING |
 | how to TALK to the human | VOICE |
@@ -109,6 +110,40 @@ sole exception is the one-time INIT → PLANNER bootstrap — it runs once per r
 exists, on the base branch, and writes zero feature code, so that installing POLARIS leaves you with
 a planned board instead of homework. The CONDUCTOR is **not** a second exception: it holds no role
 at all and delegates each one to a fresh subagent, so roles still never mix inside one context.
+
+## N CHATS, ONE REPO — who waits, who parks, who queues
+Several chats, one checkout. The second session finds the task locked, the integration lane held, or
+somebody else's edits in the tree — and none of that is a question for the human:
+**git/workspace mechanics are never ask material after plan approval — the CLI prints the next step; follow it.**
+The behavior this replaces was emergent, never designed: nothing told a second chat what to DO, so it
+improvised a question and stalled on a human who had walked away. This table is the instruction.
+
+| you hit | the rule | the command |
+|---|---|---|
+| the task you wanted is locked | claim says taken → claim the next task; the lock already chose for you | `bash ops/polaris claim` again |
+| the integration lane is held | integration lane busy → wait; rc 3 with a queued: line means report queued and retry at the next wave boundary | `land` · `seal` take the lease for you |
+| the shared checkout is dirty | a dirty shared checkout is parked, never asked about: bash ops/polaris park | `bash ops/polaris unpark` puts it back |
+| a lock, lease or task that is not yours | another session's locks, leases and tasks are invisible — never steal unless sweep flags them STALE | `bash ops/polaris sweep` names stale locks |
+
+Exit codes carry the same answer, so a subagent or a script reads it without prose:
+
+| rc | means | the tell |
+|---|---|---|
+| 0 | success — including the idempotent skips a second chat causes | `already landed — skipped` · `nothing new to seal` |
+| 1 | refusal or error, worded honestly (real stderr, never swallowed) | fix what it names, or hand the task back |
+| 3 | queued — the lane stayed busy past the bounded wait | LAST line begins `queued: ` and names the holder |
+
+**rc 3 belongs to whoever can afford to wait.** A CONDUCTOR polls a queued lane at its next wave
+boundary, never mid-task. A subagent does the opposite: it repeats the `queued:` line verbatim in its
+report and ends its turn, because waiting on someone else's lease spends its own context and buys
+nothing. (Ending a turn with your OWN suite still running is the opposite mistake, and it loses the
+suite — foreground it, or poll its log.) Two optional `ops/CONVENTIONS.md` knobs tune the wait:
+`integration_wait_minutes` (10) before rc 3 · `integration_stale_minutes` (45), past which an
+abandoned lease is stolen with a note.
+
+**Plan and build as if you were alone.** Disjoint ownership is still the Planner's guarantee — but a
+second planner can file a task between your board read and your claim, and the claim-time
+disjointness gate is the backstop that blocks the loser rather than letting two chats edit one file.
 
 ## TOKEN DISCIPLINE — this is how we stay cheap and fast
 - **`pack` first, everything else second.** Working a task? `ops/polaris pack <ID>` returns its

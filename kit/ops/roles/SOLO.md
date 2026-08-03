@@ -21,6 +21,10 @@ is reading points, risk, `express:`, `publish:` and the RULES-guarded paths dire
 If `triage` says `full` because the board is empty and the human just asked for something small,
 you may author the single task yourself (step 1) and re-run `triage` to confirm `solo`.
 
+**You share this checkout with other chats, and their dirt is not your question:**
+a dirty shared checkout is parked, never asked about: bash ops/polaris park
+— `bash ops/polaris unpark` puts it back, and a taken lock or a busy lane read the same way (`ops/PROTOCOL.md` § N CHATS, ONE REPO).
+
 ## Context — ONE command
 Once the task exists, `bash ops/polaris pack <ID>` returns all of it in a single call: the task, its
 contract, the house style to match, what you own, the API surface not to break, the traps recorded

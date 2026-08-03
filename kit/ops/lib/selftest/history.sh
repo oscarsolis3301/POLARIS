@@ -192,3 +192,62 @@ drill_pr-publish() {
     sed -i.bak '/^publish:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
     git add -A; git commit -qm 'publish drill cleanup'
 }
+drill_busyint() {
+    # ---- T-062 busyint drill (ops/contracts/shared-checkout.md § Executable check) ----
+    # ONE shared integration lane, serialized by the lease. Proves: a held lease → the ~30s wait
+    # note, then rc 3 with the `queued: ` line · a STALE lease is stolen with a note and the land
+    # proceeds · a re-land of a landed ID skips rc 0 · an open non-ff integrate/<date> is ADOPTED
+    # and the wave seals ONCE. The lease is exercised through the CLI (`land`/`seal`) only — int_on
+    # is never captured in $( ): its EXIT trap self-releases inside a subshell (T-058 trap).
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/bi-conv.bak"; else rm -f "$T/bi-conv.bak"; fi
+    [ -f ops/SPRINT.md ] && cp ops/SPRINT.md "$T/bi-sprint.bak" || rm -f "$T/bi-sprint.bak"
+    printf 'integration_wait_minutes: 1\n' >> ops/CONVENTIONS.md   # bounded wait: 60s, not the 10m default
+    git add -A; git commit -qm 'busyint drill: wait knob'          # committed: land parks DIRTY trees
+    printf '# SPRINT 9 — busyint drill  capacity: 5\n' > ops/SPRINT.md   # moved set: disk-only, ignored on base
+    # review task + feat branch by hand (hint-drill shape): no claim, so no lock and no worktree —
+    # the lease is the object under test, not the builder lifecycle.
+    printf -- '---\nid: T-BI1\ntitle: busy one\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nowner: null\nbranch: feat/T-BI1\nstatus: review\nfiles_owned:\n  - src/bi1.txt\nverify: []\n---\n' > ops/board/review/T-BI1.md
+    git checkout -q -b feat/T-BI1 main
+    echo bi1 > src/bi1.txt; git add -A; git commit -qm ok
+    git checkout -q main
+    bi_lk="$(git rev-parse --git-common-dir)/polaris-locks/.int-lease"
+    bi_d="$(date +%F)"
+    # (a) held lease (fresh epoch, pid 1 — never this process): wait notes, then rc 3 + queued:
+    mkdir -p "$bi_lk"; date +%s > "$bi_lk/epoch"; echo other@host > "$bi_lk/who"; echo 1 > "$bi_lk/pid"
+    bi_rc=0
+    "$SELF" land T-BI1 > "$T/bi1.out" 2>&1 || bi_rc=$?
+    [ "$bi_rc" -eq 3 ] || { cat "$T/bi1.out"; echo "BUSYINT QUEUE RC FAIL (a busy lane past the bounded wait must rc 3)"; exit 1; }
+    grep -q '^   integration lane busy' "$T/bi1.out" || { cat "$T/bi1.out"; echo "BUSYINT WAIT NOTE FAIL (the ~30s progress note must fire while waiting)"; exit 1; }
+    grep -q '^queued: ' "$T/bi1.out" || { echo "BUSYINT QUEUED LINE FAIL (the final line must begin queued:)"; exit 1; }
+    git rev-parse -q --verify "refs/heads/integrate/$bi_d" >/dev/null && { echo "BUSYINT QUEUE MUTATE FAIL (a queued land must mutate nothing)"; exit 1; }
+    [ -f ops/board/review/T-BI1.md ] || { echo "BUSYINT QUEUE BOARD FAIL (a queued land must move nothing)"; exit 1; }
+    # (b) stale lease: epoch aged past integration_stale_minutes (default 45) → stolen with a note,
+    # the land proceeds, and the lane is FREED on the way out
+    echo $(( $(date +%s) - 3600 )) > "$bi_lk/epoch"
+    "$SELF" land T-BI1 > "$T/bi2.out" 2>&1 || { cat "$T/bi2.out"; echo "BUSYINT STEAL RC FAIL (a stale lease must be stolen, not queued)"; exit 1; }
+    grep -q 'stealing stale integration lease' "$T/bi2.out" || { echo "BUSYINT STEAL NOTE FAIL (the steal must be named)"; exit 1; }
+    git log -1 --format=%s | grep -q '\[T-BI1\]$' || { echo "BUSYINT STEAL LAND FAIL (the land must proceed after the steal)"; exit 1; }
+    [ -d "$bi_lk" ] && { echo "BUSYINT LEASE RELEASE FAIL (the lane must be freed after the land)"; exit 1; }
+    # (c) re-land of a landed ID: idempotent skip, rc 0, board untouched
+    "$SELF" land T-BI1 > "$T/bi3.out" 2>&1 || { cat "$T/bi3.out"; echo "BUSYINT RELAND RC FAIL (an already-landed ID must skip rc 0)"; exit 1; }
+    grep -q 'already landed — skipped' "$T/bi3.out" || { echo "BUSYINT RELAND MSG FAIL"; exit 1; }
+    [ -f ops/board/review/T-BI1.md ] || { echo "BUSYINT RELAND BOARD FAIL (the skip must move nothing)"; exit 1; }
+    # (d) adoption: a second land starts on $BASE, meets the open non-ff wave, ADOPTS it and lands
+    # on top; ONE seal then closes both lands (wave_on's third outcome — the by-hand die is dead).
+    printf -- '---\nid: T-BI2\ntitle: busy two\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nowner: null\nbranch: feat/T-BI2\nstatus: review\nfiles_owned:\n  - src/bi2.txt\nverify: []\n---\n' > ops/board/review/T-BI2.md
+    git checkout -q -b feat/T-BI2 main
+    echo bi2 > src/bi2.txt; git add -A; git commit -qm ok
+    git checkout -q main
+    "$SELF" land T-BI2 > "$T/bi4.out" 2>&1 || { cat "$T/bi4.out"; echo "BUSYINT ADOPT LAND FAIL"; exit 1; }
+    grep -q 'wave: adopting' "$T/bi4.out" || { echo "BUSYINT ADOPT FAIL (an open non-ff wave must be ADOPTED, never a die)"; exit 1; }
+    "$SELF" seal "$bi_d" > "$T/bi5.out" 2>&1 || { cat "$T/bi5.out"; echo "BUSYINT SEAL FAIL (the adopted wave must seal once)"; exit 1; }
+    git log -1 --format=%b main | grep -q '\[T-BI1\]$' || { echo "BUSYINT SEAL BULLET FAIL (the first land missing from the one seal)"; exit 1; }
+    git log -1 --format=%b main | grep -q '\[T-BI2\]$' || { echo "BUSYINT SEAL BULLET FAIL (the adopted-wave land missing from the one seal)"; exit 1; }
+    "$SELF" done T-BI1 >/dev/null || { echo "BUSYINT DONE FAIL (T-BI1)"; exit 1; }
+    "$SELF" done T-BI2 >/dev/null || { echo "BUSYINT DONE FAIL (T-BI2)"; exit 1; }
+    # hermetic: CONVENTIONS + SPRINT back byte-exactly; the sealed wave stays, like the spine's own
+    if [ -f "$T/bi-conv.bak" ]; then cp "$T/bi-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    [ -f "$T/bi-sprint.bak" ] && cp "$T/bi-sprint.bak" ops/SPRINT.md || rm -f ops/SPRINT.md
+    rm -f "$T/bi-conv.bak" "$T/bi-sprint.bak"
+    git add -A; git commit -qm 'busyint drill cleanup' >/dev/null 2>&1 || true
+}

@@ -251,3 +251,49 @@ drill_claudemd() {
     [ -f "$T/cmv-CLAUDE.bak" ] && cp "$T/cmv-CLAUDE.bak" CLAUDE.md || rm -f CLAUDE.md
     rm -f "$T/cmv-VERSION.bak" "$T/cmv-CLAUDE.bak"
 }
+drill_park() {
+    # ---- T-062 park drill (ops/contracts/shared-checkout.md § Executable check) ----
+    # A dirty shared checkout is parked, never asked about: park stashes tracked + untracked dirt
+    # as polaris/park-<epoch>, unpark reverses it BYTE-identically, and a dirty tree at `land`
+    # parks + proceeds + prints the stash name instead of dying. Byte-identity is proven with cmp,
+    # never grep/sed — Git Bash strips \r there (T-056), so the untracked fixture carries CR bytes
+    # on purpose. autocrlf is pinned OFF for the drill's duration (restored after): on Windows the
+    # throwaway repo inherits core.autocrlf=true and `stash pop` re-smudges LF→CRLF — git's own
+    # checkout policy, not a park distortion — which would red the cmp for the wrong reason.
+    pk_ac="$(git config --local --get core.autocrlf 2>/dev/null || true)"
+    git config core.autocrlf false
+    printf 'park tracked dirt\n' >> src/a.txt
+    printf 'untracked \r\nCR bytes kept\r\n' > src/park-un.bin
+    cp src/a.txt "$T/park-a.snap"; cp src/park-un.bin "$T/park-u.snap"
+    "$SELF" park -m 'park drill' > "$T/park1.out" 2>&1 || { cat "$T/park1.out"; echo "PARK RC FAIL (a dirty tree must park)"; exit 1; }
+    grep -q 'parked as polaris/park-' "$T/park1.out" || { echo "PARK SAY FAIL (park must name the stash)"; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "PARK CLEAN FAIL (tracked + untracked dirt must leave the tree)"; exit 1; }
+    [ -f src/park-un.bin ] && { echo "PARK UNTRACKED FAIL (the untracked file must be stashed away)"; exit 1; }
+    "$SELF" unpark > "$T/park2.out" 2>&1 || { cat "$T/park2.out"; echo "UNPARK RC FAIL"; exit 1; }
+    cmp -s src/a.txt "$T/park-a.snap" || { echo "UNPARK BYTES FAIL (tracked restore must be byte-identical)"; exit 1; }
+    cmp -s src/park-un.bin "$T/park-u.snap" || { echo "UNPARK BYTES FAIL (untracked restore must be byte-identical)"; exit 1; }
+    git checkout -q -- src/a.txt; rm -f src/park-un.bin "$T/park-a.snap" "$T/park-u.snap"
+    # dirty tree at land → park + caveat + PROCEED (integrate.sh dirty gate → park). Fixture is the
+    # hint-drill shape — a review task + its feat branch by hand: `land` makes NO board write and
+    # nothing here claims, so there is no lock and no worktree to clean up after.
+    printf -- '---\nid: T-PK\ntitle: park lane file\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nowner: null\nbranch: feat/T-PK\nstatus: review\nfiles_owned:\n  - src/pk.txt\nverify: []\n---\n' > ops/board/review/T-PK.md
+    git checkout -q -b feat/T-PK main
+    echo pk > src/pk.txt; git add -A; git commit -qm ok
+    git checkout -q main
+    printf 'park land dirt\n' >> src/a.txt          # TRACKED dirt: land's dirty gate is diff-based
+    cp src/a.txt "$T/pk-a.snap"
+    pk_d="$(date +%F)"
+    "$SELF" land T-PK > "$T/pk.out" 2>&1 || { cat "$T/pk.out"; echo "PARK LAND RC FAIL (a dirty tree must park + proceed, never die)"; exit 1; }
+    grep -q 'parked as polaris/park-' "$T/pk.out" || { echo "PARK LAND SAY FAIL (the land must print the stash name)"; exit 1; }
+    git log -1 --format=%s | grep -q '\[T-PK\]$' || { echo "PARK LAND PROCEED FAIL (the squash must land after the park)"; exit 1; }
+    git diff --quiet && git diff --cached --quiet || { echo "PARK LAND CLEAN FAIL (the dirt belongs in the stash, not the tree)"; exit 1; }
+    "$SELF" unpark >/dev/null 2>&1 || { echo "PARK LAND UNPARK FAIL"; exit 1; }
+    cmp -s src/a.txt "$T/pk-a.snap" || { echo "PARK LAND BYTES FAIL (the parked dirt must come back byte-identical)"; exit 1; }
+    git checkout -q -- src/a.txt; rm -f "$T/pk-a.snap"
+    # T-046 hermeticity: land wrote no board state — drop the wave, the branch and the fixture task
+    git checkout -q main
+    git branch -q -D "integrate/$pk_d" 2>/dev/null || true
+    git branch -q -D feat/T-PK 2>/dev/null || true
+    rm -f ops/board/review/T-PK.md
+    if [ -n "$pk_ac" ]; then git config core.autocrlf "$pk_ac"; else git config --unset core.autocrlf 2>/dev/null || true; fi
+}
