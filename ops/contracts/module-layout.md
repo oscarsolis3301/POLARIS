@@ -205,7 +205,21 @@ latency budget (v2's whole point) must not pay for it. Both lists stay LITERAL, 
   workspace.sh ≤ 350 · new fns land in the module this census names, never in the entry script.
   Re-legislating the other modules' sizes is future grooming, not this sprint's scope.
 
+## v4 — lib/bg.sh joins the census (2026-08-03, plan routing-and-bg)
+
+New module `kit/ops/lib/bg.sh` (T-070, ≤300 lines): the background job runner — `cmd_bg` dispatch
+plus `bg_`-prefixed workers (intended census in `ops/contracts/bg-jobs.md` § Module census; the
+landed api-kit delta is authoritative on final names). Registry `$PRIMARY/.polaris/bg/<name>/` is
+runtime state, never tracked. bg-jobs.md is the authority on behavior; THIS contract stays the
+authority on where code lives and the loader's shape.
+
+**The loader, v4:** the FULL-load `_mods` list gains `bg`, inserted immediately after `admin`.
+The `_match|_rules|_guard` guard path stays EXACTLY `core ownership` — the write-guard's latency
+budget (v2's whole point) never pays for job plumbing. Both lists stay LITERAL, never a glob.
+
 ## Changelog
+- v4 2026-08-03: bg.sh joins the census (≤300 lines, fn census in bg-jobs.md); loader full-load
+  list gains `bg` after `admin` (guard path unchanged).
 - v3 2026-08-03: workspace.sh joins the census; loader full-load list gains `workspace`
   (guard path unchanged); core.sh 33→34 header count corrected (named list authoritative);
   v1/v2 line bands marked historical — binding: entry <500, workspace ≤350.
