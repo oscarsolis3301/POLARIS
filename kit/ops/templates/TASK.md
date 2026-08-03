@@ -12,6 +12,8 @@ time_criticality:
 risk_opportunity:
 wsjf:                    # (value + time_criticality + risk_opportunity) / points
 risk: normal             # high = auth/payments/schema/prod-config → human approves before merge
+model:                   # optional; strong|mid|cheap tier word, or a literal model name — overrides
+                         # the tier `polaris route` derives for this task. ops/contracts/model-routing.md
 status: backlog          # mirrors the folder; folder is the source of truth
 owner: null              # set by `polaris claim`
 branch: null             # set by `polaris claim`: feat/<ID>

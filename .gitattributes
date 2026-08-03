@@ -18,5 +18,7 @@ ops/hooks/commit-msg text eol=lf
 # Golden fixtures: byte-diffed and bash-executed as LF (ops/contracts/golden-eol.md).
 ops/tests/*.expected text eol=lf
 ops/tests/*.cmd text eol=lf
+# Sprint reports: seal/report rewrite them byte-for-byte, so CRLF drift warns on every write.
+docs/sprints/*.md text eol=lf
 # Telemetry: append-only, union-merged, never eol-converted (init-board also arms this line).
 ops/board/EVENTS.ndjson merge=union -text
