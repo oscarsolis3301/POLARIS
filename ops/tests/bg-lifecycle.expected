@@ -1,0 +1,71 @@
+== an empty registry is silent, never an error ==
+bg status
+no background jobs
+rc 0
+== green: run · wait · status · tail ==
+bg run ok -- echo hello-bg
+✅ bg: 'ok' started (pid <pid>) — log: <reg>/ok/log · collect: bash ops/polaris bg wait ok
+rc 0
+bg wait ok --max 30
+hello-bg
+✅ 'ok' green — rc 0 in <dur>
+rc 0
+bg status ok
+✅ 'ok' green — rc 0 in <dur> · log: <reg>/ok/log
+rc 0
+bg tail ok
+hello-bg
+rc 0
+== red is HONEST: the job rc propagates to wait and status ==
+bg run nope -- false
+✅ bg: 'nope' started (pid <pid>) — log: <reg>/nope/log · collect: bash ops/polaris bg wait nope
+rc 0
+bg wait nope --max 30
+⛔ nope red — rc 1 in <dur> · full log: <reg>/nope/log
+rc 1
+bg status nope
+⛔ nope red — rc 1 in <dur> · tail: bash ops/polaris bg tail nope
+rc 1
+== running: rc 2, and a same-name run REFUSES instead of racing ==
+bg run slow -- sleep 8
+✅ bg: 'slow' started (pid <pid>) — log: <reg>/slow/log · collect: bash ops/polaris bg wait slow
+rc 0
+bg status slow
+slow running — pid <pid> · <age> · collect: bash ops/polaris bg wait slow
+rc 2
+bg run slow -- true
+⛔ job 'slow' is already RUNNING (pid <pid>) — bash ops/polaris bg status slow · rerun anyway: bg run slow --force
+rc 1
+bg wait slow --max 30
+✅ 'slow' green — rc 0 in <dur>
+rc 0
+== rotation ARCHIVES the finished run into its ONE .prev slot ==
+bg run ok -- echo second-run
+✅ bg: 'ok' started (pid <pid>) — log: <reg>/ok/log · collect: bash ops/polaris bg wait ok
+rc 0
+ok.prev exists: yes
+ok.prev/cmd: echo hello-bg
+ok/cmd:      echo second-run
+bg wait ok --max 30
+second-run
+✅ 'ok' green — rc 0 in <dur>
+rc 0
+== unknown: no rc file and a dead pid is rc 3, never a fabricated verdict ==
+bg status ghost
+ghost unknown — no rc and pid <pid> is dead: crashed, or a Windows pid was reused · log: <reg>/ghost/log
+rc 3
+== the bare listing: one line per live job, .prev archives skipped ==
+ghost	unknown	<age>
+nope	red	<age>
+ok	green	<age>
+slow	green	<age>
+== refusals: the name grammar, and a job that was never started ==
+bg run bad/name -- true
+⛔ bad job name 'bad/name' — allowed: A-Z a-z 0-9 . _ -
+rc 1
+bg status never-ran
+⛔ no background job 'never-ran' — bash ops/polaris bg status lists them
+rc 1
+bg tail ok -n 1
+second-run
+rc 0

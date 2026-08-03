@@ -115,7 +115,15 @@ deny-by-default's NORMAL PROMPT, not a block — and the standing settings.json 
 bare `bash ops/polaris check --update`, which stays the sanctioned, visible Builder path (T-062
 precedent: the golden's owner runs it deliberately). The golden battery gains both directions.
 
+## v1.2 — archives never pend: the finish guard skips `*.prev` (2026-08-03, T-073)
+v1's § finish says "any job dir with NO rc file" pends — read literally that includes `<name>.prev`
+archives, and `cmd_finish` implemented it literally: a `--force`-killed job rotates to an rc-less
+`.prev`, the guard pends it forever, and finish can never exit 0 again (found by T-071's builder;
+`bg_status` and `sweep` already skip archives). Clarified: the guard scans LIVE job dirs only —
+`*.prev` is history, never pending. Live rc-less dirs pend exactly as v1 states, both wordings.
+
 ## Changelog
+- v1.2 2026-08-03: finish guard scans live job dirs only — `*.prev` archives never pend (T-073).
 - v1.1 2026-08-03: `check` write flags (`--update`/`--scaffold`) refuse hook auto-approval;
   T-072 files the arm + golden cases (read forms unchanged).
 - v1 2026-08-03: created for T-065, T-066, T-067, T-068, T-069, T-070, T-071 (plan: routing-and-bg)

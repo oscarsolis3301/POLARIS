@@ -155,7 +155,7 @@ Five small truths land together because they are all one-line docs/config edits 
 - [ ] .gitattributes line sits with the other eol pins, commented like its neighbors
 
 ## T-070 — "bg.sh — the background job runner: run/status/tail/wait, rc-file-first, .prev rotation, sweep"
-points 5 · risk normal · landed a72d670 (2026-08-03) · claimed 2026-08-03
+points 5 · risk normal · landed a72d670 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/ops/lib/bg.sh, kit/ops/lib/observe.sh, kit/ops/polaris, ops/tests/api-kit.expected
 
 ### Why
@@ -187,8 +187,41 @@ census tight (`cmd_bg` + `bg_`-prefixed workers, ≤10 total).
 - [ ] api-kit.expected wave-2 delta: exactly one line per new top-level fn, byte-exact (recipe in
 - [ ] `bg` never writes the board, EVENTS.ndjson, or any lock
 
+## T-071 — "route + bg drills and the two hermetic goldens (route-tier, bg-lifecycle)"
+points 3 · risk normal · landed 0d93b08 (2026-08-03) · claimed 2026-08-03
+files touched: kit/ops/PROTOCOL.md, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/spine.sh, ops/tests/api-kit.expected, ops/tests/bg-lifecycle.cmd, ops/tests/bg-lifecycle.expected, ops/tests/route-tier.cmd, ops/tests/route-tier.expected
+
+### Why
+Routing and bg landed in waves 1-2; this task is the proof that keeps them true forever, in both
+test tiers. Two labeled DRILLS (deep, throwaway-repo): `route` asserts the tier_for table via flag
+forms, the `model:` note appearing exactly when a fixture CONVENTIONS sets a knob, the task-level
+`model:` override (tier word AND literal), and `fleet --dry-run` carrying `--model` for the ready
+queue's max tier; `bg` asserts the full lifecycle — green run, red run (honest rc 1),
+duplicate-RUNNING refusal, `--force` replace, tail, `.prev` rotation, `sweep --fix` rotating a
+>24h job (backdate `start`), the `finish` pending line on an rc-less job, and the status
+rc contract 0/1/2/3 including the dead-pid unknown. Labels register on spine.sh's one-line
+SELFTEST_LABELS literal (:46); both drill fns live in policy.sh (one fn per label, no stray
+`local` — dynamic scoping reaches spine state). Two GOLDENS (cheap, every `check`/`qa` run):
+`route-tier` and `bg-lifecycle`, HERMETIC BY CONSTRUCTION per the T-062 pattern — each .cmd builds
+its own throwaway fixture repo and runs `bash kit/ops/polaris` from INSIDE it (the CLI anchors to
+the worktree-list primary, which becomes the fixture), so live-board writes and this repo's future
+knob edits can never red them; bg-lifecycle uses fast commands only (`true`/`false`/`echo`, small
+`--max`), never a real suite. Running either .cmd twice from any board state is byte-identical.
+
+This task owns the wave-3 api-kit delta: exactly the `drill_route` + `drill_bg` fn lines,
+hand-authored byte-exact.
+
+### Acceptance
+- [ ] both labels in SELFTEST_LABELS (one line, literal); an unknown label still dies before the
+- [ ] drill_route + drill_bg in policy.sh assert every bullet above and leave the throwaway repo
+- [ ] route-tier.cmd: fixture repo with KNOWN knobs; asserts line-1 vocabulary, the three-space
+- [ ] bg-lifecycle.cmd: fixture repo; green/red/duplicate/tail/rotation asserted through the
+- [ ] api-kit.expected gains exactly the two drill fn lines, byte-exact, sorted position
+- [ ] PROTOCOL.md § THE TOOL gains EXACTLY two rows, matching the table's existing style and no
+- [ ] goldens are LF (auto-pinned by .gitattributes since T-056) and CR-safe: no CR-sensitive
+
 ## T-072 — "check's write flags lose the hook's silent pass — --update/--scaffold refuse auto-approval"
-points 1 · risk normal · landed 57e8a46 (2026-08-03) · claimed 2026-08-03
+points 1 · risk normal · landed 57e8a46 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/ops/hooks/readonly-allow.sh, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected
 
 ### Why
@@ -214,3 +247,25 @@ What this closes is the SILENT pass inside compound reads, where nobody chose it
 - [ ] golden battery gains BOTH directions (≥2 allow, ≥3 refuse incl. one compound line);
 - [ ] NO new top-level functions (extend `polaris_ok`'s arm in place — api-kit surface untouched)
 - [ ] hook stays fork-free pure bash
+
+## T-073 — "finish's bg guard pends forever on .prev archives — scan live job dirs only"
+points 1 · risk normal · landed 6cd5a1c (2026-08-03) · claimed 2026-08-03
+files touched: kit/ops/lib/observe.sh
+
+### Why
+Found by T-071's builder, outside its ownership, recorded in its Notes. `cmd_finish`'s bg guard
+(T-065) loops every `.polaris/bg/*/` dir and pends any one without an `rc` file. But rotation
+archives a job by MOVING its dir to `<name>.prev` — and a `--force`-killed job's archive has no
+`rc` by design. Result: one `--force` replace leaves a permanent rc-less `.prev`, the guard pends
+it forever, and `finish` can never exit 0 again — a false wall on the run-over gate. `bg_status`
+and `sweep` both already skip `*.prev`; the finish guard is the one scanner that does not. Fix:
+skip `*.prev` dirs in the guard's loop — archives are history, never pending. Live rc-less dirs
+keep pending exactly as before (alive pid → "still running" line; dead pid → the "crashed?"
+wording). Contract updated to match: `ops/contracts/bg-jobs.md` § v1.2 — v1's "any job dir with no
+rc" prose is what the current code faithfully implements, so the spec moves with the fix.
+
+### Acceptance
+- [ ] the guard's loop skips `*.prev` dirs: an rc-less archive NEVER produces a pending line
+- [ ] live rc-less dirs still pend, both wordings intact (alive → still-running + `bg wait`;
+- [ ] NO top-level function added or removed (the fix lives inside `cmd_finish` — api-kit's
+- [ ] worktree-local fixture demo pasted into Notes: `.polaris/bg/t073fx.prev/` (empty, no rc) →
