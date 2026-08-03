@@ -103,3 +103,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "polaris gains route [<ID>|--role R|--points N --risk R] — mechanical model tier (line 1 bare word, optional model: note from CONVENTIONS knobs); fleet injects --model (max tier over ready, tmux + wt.exe tokens); pack header gains · tier; finish pends on running bg jobs (5.24.0-unreleased)"  (T-065, 2026-08-03)
 
 - "kit/ops/PROTOCOL.md — § MODEL ROUTING is auto (polaris route decides; knobs, override, honest boundary) and gains § LONG COMMANDS (measured suite tiers vs the 600s cap, bg doctrine, subagent turn rule) (5.24.0-unreleased)"  (T-066, 2026-08-03)
+
+- "kit/ops/lib/bg.sh — background job runner: bg run/status/tail/wait, dir-per-job $PRIMARY/.polaris/bg/<name>/, rc-file-first verdicts, .prev rotation, sweep --fix rotates >24h (ops/contracts/bg-jobs.md) (5.24.0-unreleased)"  (T-070, 2026-08-03)
