@@ -6,14 +6,14 @@ drill_report() {
     # docs(sprint-N) commit (no [<ID>] suffix, off the first-parent chain), and the file carries the
     # task's ID/title/acceptance/landed sha. Then cmd_report re-renders it, board read-only.
     git log --format=%s sprint/1 | grep -qx 'docs(sprint-1): report' || { echo "SEAL REPORT COMMIT FAIL (docs(sprint-N) must ride the wave)"; exit 1; }
-    git log --first-parent --format=%s main | grep -q 'docs(sprint-1)' && { echo "SEAL REPORT FIRSTPARENT FAIL (report must not be a base first-parent commit)"; exit 1; }
+    git log --first-parent --format=%s main | grep -qx 'docs(sprint-1): report' && { echo "SEAL REPORT FIRSTPARENT FAIL (the seal's report must not be a base first-parent commit)"; exit 1; }   # exact subject: v2's `report refresh` IS a first-parent commit on base, by design
     [ -f docs/sprints/sprint-1.md ] || { echo "SEAL REPORT FILE FAIL (report must ride into base)"; exit 1; }
     grep -q '^## T-1 — land a file$' docs/sprints/sprint-1.md || { echo "REPORT SECTION FAIL (ID + title)"; exit 1; }
     grep -q 'the file lands' docs/sprints/sprint-1.md || { echo "REPORT ACCEPTANCE FAIL (acceptance line verbatim)"; exit 1; }
     grep -q 'the sprint report has a story' docs/sprints/sprint-1.md || { echo "REPORT WHY FAIL (Why body verbatim)"; exit 1; }
     t1short="$(git log --format='%h %s' main | awk '/\[T-1\]$/ {print $1; exit}')"   # the land commit (subject ENDS [T-1]), not the seal merge whose body cites it
     grep -q "landed $t1short" docs/sprints/sprint-1.md || { echo "REPORT SHA FAIL (landed short sha)"; exit 1; }
-    # cmd_report: explicit + board read-only. Rewrites the file WHOLE, prints the path, commits NOTHING.
+    # cmd_report: explicit + board read-only. Rewrites the file WHOLE, prints the path.
     mainpre_r="$(git rev-parse main)"; boardpre_r="$(git rev-parse refs/heads/polaris/board)"
     "$SELF" report --sprint 1 > "$T/rep.out" || { echo "REPORT RUN FAIL"; exit 1; }
     grep -q 'sprint-1.md' "$T/rep.out" || { echo "REPORT PATH FAIL (must print the path)"; exit 1; }
@@ -21,9 +21,53 @@ drill_report() {
     grep -q 'sprint-1.md' "$T/rep2.out" || { echo "REPORT CURRENT PATH FAIL"; exit 1; }
     "$SELF" report --all > "$T/rep3.out" || { echo "REPORT ALL FAIL"; exit 1; }
     grep -q 'sprint-1.md' "$T/rep3.out" || { echo "REPORT ALL PATH FAIL"; exit 1; }
-    [ "$(git rev-parse main)" = "$mainpre_r" ] || { echo "REPORT COMMIT FAIL (report must not commit on base)"; exit 1; }
+    [ "$(git rev-parse main)" = "$mainpre_r" ] || { echo "REPORT COMMIT FAIL (a re-render that matches HEAD must commit nothing)"; exit 1; }
     [ "$(git rev-parse refs/heads/polaris/board)" = "$boardpre_r" ] || { echo "REPORT BOARD FAIL (report must not touch the board)"; exit 1; }
     git diff --quiet -- docs/sprints/sprint-1.md || { echo "REPORT IDEMPOTENT FAIL (cmd_report must match the sealed render)"; exit 1; }
+    # ---------- v2 (T-061): the writer commits its own file when it is the ONLY dirt ----------
+    # Fixture: commit a deliberately STALE sprint-1.md so the next render legitimately differs from
+    # HEAD — the same shape as the post-`done` re-render that used to leave the tree dirty and kill
+    # the NEXT land/seal with "working tree not clean". Everything here is unwound at the end.
+    v2pre_r="$(git rev-parse main)"
+    printf 'stale\n' > docs/sprints/sprint-1.md
+    git commit -q -m 'report drill: stale report' -- docs/sprints/sprint-1.md
+    # (a) MIXED dirt → commit NOTHING, print v1.1's hint verbatim, leave the foreign path alone
+    echo foreign >> src/a.txt
+    mixedpre_r="$(git rev-parse main)"
+    "$SELF" report --sprint 1 > "$T/rep4.out" || { echo "REPORT MIXED RUN FAIL"; exit 1; }
+    [ "$(git rev-parse main)" = "$mixedpre_r" ] || { echo "REPORT MIXED COMMIT FAIL (a foreign dirty path vetoes the self-commit)"; exit 1; }
+    grep -q 'differs from HEAD' "$T/rep4.out" || { echo "REPORT MIXED HINT FAIL (v1.1 hint must still print)"; exit 1; }
+    grep -q 'report commits nothing' "$T/rep4.out" || { echo "REPORT MIXED HINT TEXT FAIL (v1.1 hint text is verbatim)"; exit 1; }
+    grep -q 'docs(sprint-1): report refresh' "$T/rep4.out" || { echo "REPORT MIXED HINT REMEDY FAIL (hint names the commit remedy)"; exit 1; }
+    grep -q 'git checkout -- docs/sprints/sprint-1.md' "$T/rep4.out" || { echo "REPORT MIXED HINT DISCARD FAIL (hint names the discard remedy)"; exit 1; }
+    tail -1 src/a.txt | grep -qx foreign || { echo "REPORT MIXED FOREIGN FAIL (the foreign dirty path must be untouched)"; exit 1; }
+    # (b) ONLY dirt → self-commit with the pinned subject, tree clean after, no contradictory hint
+    git checkout -- src/a.txt
+    "$SELF" report --sprint 1 > "$T/rep5.out" || { echo "REPORT ONLYDIRT RUN FAIL"; exit 1; }
+    git log -1 --format=%s | grep -qx 'docs(sprint-1): report refresh' || { echo "REPORT SELFCOMMIT FAIL (only-dirt must commit with the pinned subject)"; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "REPORT SELFCOMMIT CLEAN FAIL (the tree must come back clean)"; exit 1; }
+    grep -q 'committed' "$T/rep5.out" && grep -q 'docs(sprint-1): report refresh' "$T/rep5.out" || { echo "REPORT SELFCOMMIT SAY FAIL (it must say what it committed)"; exit 1; }
+    grep -q 'report commits nothing' "$T/rep5.out" && { echo "REPORT SELFCOMMIT HINT LEAK FAIL (a committed report must not also print the hint)"; exit 1; }
+    grep -q '^## T-1 — land a file$' docs/sprints/sprint-1.md || { echo "REPORT SELFCOMMIT CONTENT FAIL (the committed file is the real render)"; exit 1; }
+    # (c) --all → ONE commit, its own subject
+    printf 'stale\n' > docs/sprints/sprint-1.md
+    git commit -q -m 'report drill: stale report (all)' -- docs/sprints/sprint-1.md
+    allpre_r="$(git rev-parse main)"
+    "$SELF" report --all > "$T/rep6.out" || { echo "REPORT ALL SELFCOMMIT RUN FAIL"; exit 1; }
+    git log -1 --format=%s | grep -qx 'docs(sprint): report refresh --all' || { echo "REPORT ALL SUBJECT FAIL (--all has its own pinned subject)"; exit 1; }
+    [ "$(git rev-list --count "$allpre_r"..main)" = "1" ] || { echo "REPORT ALL ONE COMMIT FAIL (--all commits once)"; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "REPORT ALL CLEAN FAIL"; exit 1; }
+    # (d) off-$BASE → byte-identical to v1: writes, hints, never commits
+    git checkout -q -b integrate/report-drill
+    printf 'stale\n' > docs/sprints/sprint-1.md
+    git commit -q -m 'report drill: stale report (off-base)' -- docs/sprints/sprint-1.md
+    offpre_r="$(git rev-parse HEAD)"
+    "$SELF" report --sprint 1 > "$T/rep7.out" || { echo "REPORT OFFBASE RUN FAIL"; exit 1; }
+    [ "$(git rev-parse HEAD)" = "$offpre_r" ] || { echo "REPORT OFFBASE COMMIT FAIL (off-base must never commit)"; exit 1; }
+    grep -q 'report commits nothing' "$T/rep7.out" || { echo "REPORT OFFBASE HINT FAIL (off-base keeps the v1.1 hint)"; exit 1; }
+    git checkout -q -- docs/sprints/sprint-1.md
+    git checkout -q main; git branch -q -D integrate/report-drill
+    git reset -q --hard "$v2pre_r"     # unwind the whole v2 fixture: later drills inherit the sealed main
 }
 drill_metrics() {
     for ev in claim handoff all-review done; do
