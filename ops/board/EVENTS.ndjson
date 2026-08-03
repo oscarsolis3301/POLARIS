@@ -179,3 +179,4 @@
 {"ts":1785278724,"ev":"done","id":"T-051","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1785278748,"ev":"done","id":"T-054","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1785279937,"ev":"done","id":"T-055","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1785739111,"ev":"kickback","id":"T-047","who":"Owner@DESKTOP","note":"api-kit golden must record the three contract-ordered fns (ask_rule_matches, ask_approval_covers, ask_approvals_load) — Builder is the sanctioned --update decider; run check --only api-kit --update in the T-047 worktree, which has the code"}
