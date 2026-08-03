@@ -181,3 +181,5 @@
 {"ts":1785279937,"ev":"done","id":"T-055","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1785739111,"ev":"kickback","id":"T-047","who":"Owner@DESKTOP","note":"api-kit golden must record the three contract-ordered fns (ask_rule_matches, ask_approval_covers, ask_approvals_load) — Builder is the sanctioned --update decider; run check --only api-kit --update in the T-047 worktree, which has the code"}
 {"ts":1785739119,"ev":"grant","id":"T-047","who":"Owner@DESKTOP","note":"ops/tests/api-kit.expected"}
+{"ts":1785740574,"ev":"handoff","id":"T-047","who":"Owner@DESKTOP","note":""}
+{"ts":1785740574,"ev":"all-review","id":"T-047","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
