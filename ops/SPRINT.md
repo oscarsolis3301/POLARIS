@@ -33,6 +33,7 @@ W1 T-065 ∥ T-066 ∥ T-067 ∥ T-068 ∥ T-069 (5 disjoint lanes) → W2 T-070
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-08-03 | 13 (T-065 5pts, T-066 2pts, T-067 2pts, T-068 2pts, T-069 2pts, wave 1, sealed sprint/9 dff3657) | 9 · T-070 + T-072 promoted to `ready/` (deps T-065/T-067 now done; ownership disjoint — bg+entry+observe+the api-kit golden vs. the readonly-allow hook + its two goldens), so W2 runs TWO lanes where the plan wrote one: T-072's only dep was T-067, so pulling it forward from W3 is legal · T-071 (3pts) correctly held behind T-070 — it shares `ops/tests/api-kit.expected` · T-048 + T-049 (sprint-7 leftovers, deps met since T-047) also correctly HELD in `backlog/`, and this one is not obvious: their deps ARE satisfied, but they overlap T-070 on `kit/ops/polaris` and `kit/ops/lib/observe.sh` respectively, so promoting on deps alone would have broken W2's disjointness · cycle p50 0.6h n=66 · kickbacks 0 this wave (2 total, 3%) · build avg 0.3h / integrate avg 3.5h · gate: suite green sharded 351s (3 shards, 25 drills) + build green + uat 12/12 · the api-kit one-owner-per-wave prescription earned its first proof — T-065's golden and T-066's byte-pinned heading swap proved together at the wave gate with five lanes on that surface and zero kickbacks · one stray commit caught pre-seal: the Planner's `docs(contract): bg-jobs v1.1 (T-072)` committed onto the checked-out integrate branch and rode the seal into main — correct destination, logged as an entanglement hazard · doctor's zip-STALE line is known HEAD-comparison noise, rebuilt by `build:` · Learned now 6 bullets (2 of 3 findings folded into existing bullets rather than appended; EVOLVE may prune) |
 
 # SPRINT 8 — N chats, one repo          capacity: 29   dates: 2026-08-03–
 
@@ -219,11 +220,12 @@ exercises but a Builder cannot.
   before you believe it — role §3's flake clause paid for itself here; the golden's content was
   byte-exact, ordering included. T-056 pins both globs `eol=lf`; the `.cmd` half matters most, since
   `check` runs those through `bash -c`, so CRLF there breaks execution, not merely comparison.
-  STILL UNPINNED (sprint 8): `docs/sprints/*.md` falls through the same `* text=auto`, so every
-  `report` write warns "LF will be replaced by CRLF". Harmless today — git's filters normalize both
-  directions, so T-061's only-dirt self-commit check is sound and sees no false dirt — but the
-  sprint-report contract claims the file is "byte-stable given the same inputs", and that claim is
-  only literally true once the glob is pinned `eol=lf`. One line in `.gitattributes`.
+  CLOSED (sprint 9, T-069): `docs/sprints/*.md` is pinned `eol=lf` too, so the sprint-report
+  contract's "byte-stable given the same inputs" is now literally true and not merely figuratively.
+  The pin bites LATER THAN YOU EXPECT, which is the part worth carrying: sprint-9's own report was a
+  NEW file, so it normalized silently and nothing else moved. The five PRE-EXISTING reports stay
+  unnormalized until something next touches them — expect exactly one whole-file diff per report,
+  once each, and fold it into whatever commit touches it rather than reading it as damage.
 - A GOLDEN THAT RECORDS A *DERIVED* SURFACE SILENTLY COUPLES EVERY TASK THAT FEEDS IT — three
   instances now, so treat it as structural, not bad luck. Sprint 7: T-047 added fns to `ownership.sh`
   without owning `ops/tests/api-kit.expected`. Sprint 8: T-063 (docs) added ONE PROTOCOL heading —
@@ -237,6 +239,14 @@ exercises but a Builder cannot.
   owner owns every file feeding it, or surface-touching tasks get an explicit `depends_on` chain
   instead of parallel lanes — the ready gate compares paths and CANNOT see this. INTEGRATOR: never
   `check --update` yourself; its own help says "a human/Builder decision, never automatic".
+  THE PRESCRIPTION NOW HAS ITS FIRST POSITIVE RESULT (sprint 9 W1). Five parallel lanes touched the
+  `api-kit` surface and it cost zero kickbacks, because the plan did all three things at once: ONE
+  owner for the golden per wave (T-065), the cross-lane edit — T-066's PROTOCOL heading swap, the
+  exact shape that bounced T-063 — pinned BYTE-EXACT in the contract so the golden's owner could
+  write the matching line without seeing T-066's diff, and every other lane surface-frozen. Worth
+  knowing for nerve: this makes `api-kit` legitimately RED mid-wave whenever only one of the pair has
+  landed. That is the design working, not a defect — which is why the wave gate is the run that
+  counts, and why an integrator landing pipelined must NOT gate on the golden task-by-task.
 - A `risk: high` task at the ROOT of the dependency tree stalls the whole board, not just itself.
   T-047 was audited and verified for days while T-048/T-049/T-050 (13 of 28 pts) sat behind it and
   `ready/` was empty — it waited 128.9h at the gate, which alone moved integrate avg 1.5h→3.9h. The
@@ -257,3 +267,15 @@ exercises but a Builder cannot.
   two locks in the same codebase — worth grepping for whenever one lock learns something the others
   did not. The fix's second half matters as much: `mutex_on`'s staleness steal stays deliberately
   pid-blind, because pid-guarding recovery would make a crashed holder's lock immortal.
+- A BASE-BOUND COMMIT LANDS ON WHATEVER THE SHARED CHECKOUT HAS OUT — AND DURING A WAVE THAT IS THE
+  INTEGRATE BRANCH. Sprint 9 W1: while I held `integrate/2026-08-03`, the Planner authored
+  `docs(contract): bg-jobs v1.1 (T-072)` and it committed onto MY branch, then rode my `--no-ff` seal
+  into `main`. Content-wise a non-event — `ops/contracts/**` and `ops/MAP.md` are explicitly NOT in
+  the board's moved set (`ops/MANUAL.md`:57), so base is exactly where it belonged, and it touched no
+  file any task owned. The hazard is ENTANGLEMENT, not correctness: an unrelated contract is now
+  inside a sprint's seal merge, so `rollback sprint/<n>` would revert it too. Structural, not a
+  one-off — board writes are protected by living on their own ref, contracts and MAP have no such
+  protection, and the Planner grooms the next wave during precisely the window the integrate branch
+  is checked out. INTEGRATOR: `git log <base>..integrate/<date>` before sealing and read every commit
+  you did not land — a subject without a `[<ID>]` suffix is the tell, and it is invisible after the
+  merge. Cheap fix if it recurs: groom onto `<base>` from a second worktree, or seal sooner.
