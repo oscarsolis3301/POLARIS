@@ -90,6 +90,29 @@ cmd_status() {
     any=1; bid="$(basename "$bf" .md)"
     printf '  %s · %s\n' "$bid" "$(grep '⛔' "$bf" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*-*[[:space:]]*//' | grep . || echo 'no reason recorded — open the task')"
   done
+  # SHARED CHECKOUT (ops/contracts/shared-checkout.md). A second chat's FIRST read is `status`, and
+  # two things that change what it may do were invisible here: someone is mid-landing (the board
+  # looks quiet while a land is in flight), and someone's uncommitted work is stashed rather than
+  # gone. Both print ONLY when they exist — on a quiet repo this output is byte-identical to before,
+  # which is the whole reason they are appended rather than folded into the table above.
+  local lse lho lag
+  lse="$LOCKS/.int-lease"
+  if [ -d "$lse" ]; then
+    lag="$(cat "$lse/epoch" 2>/dev/null | tr -d ' \r\n' || true)"
+    case "$lag" in ''|*[!0-9]*) lag="$(date +%s)";; esac
+    lho="$(cat "$lse/who" 2>/dev/null | tr -d '\r\n' || true)"
+    printf 'integration lane: held by %s · %sm — a session is landing; wait for it, never steal\n' \
+      "${lho:-unknown}" "$(( ( $(date +%s) - lag ) / 60 ))"
+  fi
+  # One line per park, newest first. `git stash list` is the source of truth, not a guess: the human
+  # can act on the printed stash@{N} directly if unpark's newest-first order is not what they want.
+  local pk
+  while IFS= read -r pk; do
+    [ -n "$pk" ] || continue
+    printf 'parked: %s — bash ops/polaris unpark restores the newest\n' "$pk"
+  done <<EOF
+$(git -C "$PRIMARY" stash list --format='%gd %gs' 2>/dev/null | grep 'polaris/park-' || true)
+EOF
 }
 
 cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatter a Planner actually
@@ -190,6 +213,12 @@ cmd_doctor() {
   say "git $gv · primary: $PRIMARY · locks: $LOCKS"
   awk -v v="$gv" 'BEGIN{split(v,a,"."); exit !(a[1]>2 || (a[1]==2 && a[2]>=5))}' \
     || die "git >= 2.5 required for worktrees"
+  # `park` is `git stash push --include-untracked -m <name>`, and `stash push` landed in git 2.13
+  # (the old `stash save` cannot take untracked files AND a name). Below that the shared checkout's
+  # "a dirty tree is parked, never asked about" promise silently degrades to the old dirty-tree die.
+  # A warn, not a die: everything else in POLARIS still works on 2.5.
+  awk -v v="$gv" 'BEGIN{split(v,a,"."); exit !(a[1]>2 || (a[1]==2 && a[2]>=13))}' \
+    || note "⚠ git $gv predates 2.13 — 'git stash push' is missing, so park/unpark cannot run and a dirty shared checkout falls back to a die. Upgrade git."
   git -C "$PRIMARY" show-ref --verify -q "refs/heads/$BASE" || note "⚠ base branch '$BASE' not found — set base: in CONVENTIONS.md"
   board_materialize || true   # fresh clone: ops/board/ missing + polaris/board present → rebuild it
   # CONVENTIONS.md is written by INIT and by nothing else — its absence is THE test for
@@ -234,6 +263,27 @@ cmd_doctor() {
       case "$ds" in *[!0-9]*) note "⚠ drain_slices: '$ds' not a number — behaving as 2"; ds="";; esac
       note "drain: ${dr:-queue} · drain_slices: ${ds:-2} (autonomy never composes drain)"
     fi
+  fi
+  # The two shared-checkout knobs (ops/contracts/shared-checkout.md). They are NOT composed by
+  # autonomy: — they are minutes, and a typo in either changes how long a session waits for the
+  # integration lane or how old a lease must be before it is STOLEN, on a path where the wrong
+  # answer is silent. int_on fails closed to the default, so the ⚠ names what will actually happen
+  # rather than what was asked for. Unset = default = silence: a warning that fires when nothing is
+  # wrong is a warning people learn to scroll past.
+  local iwm ism
+  iwm="$(cfg integration_wait_minutes "")"
+  ism="$(cfg integration_stale_minutes "")"
+  if [ -n "$iwm" ]; then
+    case "$iwm" in
+      *[!0-9]*) note "⚠ integration_wait_minutes: '$iwm' is not a whole number of minutes — the integration lane will use the default (10)";;
+      0)        note "⚠ integration_wait_minutes: 0 — the lane will never wait; a busy lane returns 'queued:' on the first look";;
+    esac
+  fi
+  if [ -n "$ism" ]; then
+    case "$ism" in
+      *[!0-9]*) note "⚠ integration_stale_minutes: '$ism' is not a whole number of minutes — the integration lane will use the default (45)";;
+      0)        note "⚠ integration_stale_minutes: 0 — every held lease counts as abandoned and is stolen on sight; two sessions can then land at once";;
+    esac
   fi
   mkdir -p "$LOCKS" && [ -w "$LOCKS" ] || die "lock dir not writable: $LOCKS"
   case "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null)" in .*|../*) note "⚠ origin is a RELATIVE path — breaks in worktrees; use an absolute URL";; esac
@@ -1339,6 +1389,7 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   # The verdict is recomputed on EVERY invocation; only the hook is memoised. That split is what
   # lets an agent re-run finish freely while chasing pendings without muting the signal.
   local force="" PEND=0 CAV=0 CAVS="" br dr n out w it stamp key fired bl rd ib lk f line
+  local lho lag lsm
   [ "${1:-}" = "--force" ] && force=1
   fin_pending() { PEND=$((PEND+1)); printf '⛔ pending: %s\n' "$1"; }
   fin_caveat()  { CAV=$((CAV+1));  CAVS="$CAVS$1
@@ -1363,8 +1414,11 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   [ "$br" = "$BASE" ] || fin_pending "on branch $br, not $BASE — a run ends on the base branch (git switch $BASE)"
   # Same porcelain read cmd_qa's suite stamp uses, deliberately: if the two disagreed on "clean",
   # finish could bless a tree for which qa silently re-ran the whole suite.
+  # The remedy now names the third option. On a SHARED checkout the dirt is often not even this
+  # session's, so "commit or discard" asks one chat to make a call about another's work — exactly
+  # the git question ops/contracts/shared-checkout.md exists to stop asking. park is reversible.
   [ -z "$(git -C "$PRIMARY" status --porcelain 2>/dev/null | head -1)" ] \
-    || fin_pending "uncommitted changes in the working tree — commit or discard them before calling the work done"
+    || fin_pending "uncommitted changes in the working tree — commit or discard them before calling the work done, or park it: bash ops/polaris park"
   n=$(fin_count active); [ "$n" -eq 0 ] || fin_pending "$n building — $(fin_ids active)"
   n=$(fin_count review); [ "$n" -eq 0 ] || fin_pending "$n waiting to land — $(fin_ids review) (audit + land + seal them)"
   # drain: (ops/contracts/hands-free-knobs.md) decides whether a queued task blocks the close. Under
@@ -1392,6 +1446,25 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   done <<EOF
 $(git -C "$PRIMARY" for-each-ref --format='%(refname:short)' 'refs/heads/integrate/*' 2>/dev/null)
 EOF
+  # The integration lease (ops/contracts/shared-checkout.md). A land in flight leaves the board
+  # looking quiet — the task is out of review/ and not yet in done/ — so nothing else on this list
+  # can see it, and a run declared over here would be declared over mid-landing. OURS never gates:
+  # a finish nested inside our own landing pass is not a conflict. Past integration_stale_minutes
+  # the holder is abandoned by definition and the next `int_on` steals it automatically, so that is
+  # a caveat — gating on a crashed session would make the run un-finishable for 45 minutes.
+  if [ -d "$LOCKS/.int-lease" ] && [ "$(cat "$LOCKS/.int-lease/pid" 2>/dev/null | tr -d ' \r\n')" != "$$" ]; then
+    lho="$(cat "$LOCKS/.int-lease/who" 2>/dev/null | tr -d '\r\n')"; lho="${lho:-unknown}"
+    lag="$(cat "$LOCKS/.int-lease/epoch" 2>/dev/null | tr -d ' \r\n')"
+    case "$lag" in ''|*[!0-9]*) lag="$(date +%s)";; esac
+    lag=$(( ( $(date +%s) - lag ) / 60 ))
+    lsm="$(cfg integration_stale_minutes 45)"
+    case "$lsm" in ''|*[!0-9]*) lsm=45;; esac
+    if [ "$lag" -ge "$lsm" ]; then
+      fin_caveat "the integration lease is stale — $lho has held it ${lag}m (> ${lsm}m) — the next land steals it automatically"
+    else
+      fin_pending "$lho holds the integration lease (${lag}m) — a session is landing; wait for it, then run finish again"
+    fi
+  fi
   for lk in "$LOCKS"/*/; do
     [ -e "$lk" ] || break
     n="$(basename "$lk")"; [ "$n" = ".board-mutex" ] && continue
@@ -1411,6 +1484,16 @@ EOF
     task_file "$n" active >/dev/null || task_file "$n" review >/dev/null \
       || fin_caveat "worktree .polaris/wt/$n has no active task — bash ops/polaris sweep --fix"
   done
+  # Parked dirt is NEVER a gate. park exists precisely so a shared checkout never has to ask a git
+  # question, so gating on its own remedy would close the loop on itself — but a stash somebody
+  # forgot is exactly what rc 0 must still MENTION, on the same rule blocked/ follows: the run is
+  # over, and something was left behind. One caveat per park, newest first.
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    fin_caveat "parked work is still stashed: $line — bash ops/polaris unpark restores the newest"
+  done <<EOF
+$(git -C "$PRIMARY" stash list --format='%gd %gs' 2>/dev/null | grep 'polaris/park-' || true)
+EOF
   # Local ref read only — NEVER a fetch. A missing or stale origin ref is silence, not a caveat
   # about nothing.
   if has_remote && git -C "$PRIMARY" show-ref -q --verify "refs/remotes/origin/$BASE" 2>/dev/null; then
