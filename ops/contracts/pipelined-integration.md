@@ -46,5 +46,28 @@ Wave of 3 lanes: lane B hands off first → integrator spawns, audits+lands B; l
 lane C (depends_on A) arrives, lands after A; all-review notice fires with C → suite once → seal.
 Wall-clock: integration overlaps the slowest lane instead of following it.
 
+## v2 — one integration lane, many sessions (2026-08-03, plan n-chats-one-repo)
+
+Mechanics in `ops/contracts/shared-checkout.md` (the authority); this section pins what the
+ROLE DOCS say about them (T-063) and what the CLI guarantees underneath (T-058):
+- Integration is a SINGLE shared lane serialized by the lease. Because `files_owned` are
+  disjoint, ANY integrator may land ANY review task — the lane holder lands everything in
+  review/, in dependency order (v1's arrival-order recipe unchanged).
+- A second integrator is NOT an error: it waits (bounded, with progress notes), steals only a
+  STALE lease, and past the wait exits **rc 3** with one `queued: ` line. Pinned doc sentence
+  (ONE LINE, never hard-wrapped): `integration lane busy → wait; rc 3 with a queued: line means
+  report queued and retry at the next wave boundary` — CONDUCTOR.md polls at wave boundaries;
+  a subagent integrator reports queued and ends its turn instead of spinning.
+- Idempotent re-lands make overlap harmless: an already-landed task skips (`already landed —
+  skipped`, rc 0); a nothing-new seal is rc 0. Two integrators can never die on each other's
+  completed work.
+- An open integrate/<date> left by a crashed or paused session is ADOPTED by the next lane
+  holder (`wave_on`), never a reason to stop and ask.
+- Per-run integrate branches were CONSIDERED and REJECTED: $BASE is checked out in the primary
+  (git forbids a second checkout), so integrators cannot truly parallelize; a queue on one lane
+  is simpler than N branches racing to merge into one checkout.
+
 ## Changelog
+- v2 2026-08-03: single lane + lease semantics for docs (T-063) over the T-058 CLI; rc 3
+  queued line pinned; idempotent re-lands + wave adoption pinned.
 - v1 2026-07-20: created for T-034 (CONDUCTOR.md) · T-035 (INTEGRATOR.md and role files)

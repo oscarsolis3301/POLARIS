@@ -183,7 +183,32 @@ remain the real structural guards. **Design consequence, and the right one:** be
 is not counted, the band actively pushes indexing logic into python and keeps `search.sh` a thin
 shim — which is also what makes a native engine a drop-in later.
 
+## v3 — lib/workspace.sh joins the census (2026-08-03, plan n-chats-one-repo)
+
+New module `kit/ops/lib/workspace.sh` (T-057, ≤350 lines): `id_ok` · `wt_add` ·
+`stray_feat_repair` · `int_on` · `int_off` · `wave_on` · `park` · `unpark` · `cmd_park` ·
+`cmd_unpark` — semantics in `ops/contracts/shared-checkout.md`, which is the authority on their
+behavior; THIS contract stays the authority on where code lives and the loader's shape.
+
+**The loader, v3:** the FULL-load `_mods` list gains `workspace`, inserted between `ownership` and
+`builder` (builder/integrate call workspace fns at dispatch time). The `_match|_rules|_guard`
+guard path stays EXACTLY `core ownership` — the write-guard never touches workspace, and its
+latency budget (v2's whole point) must not pay for it. Both lists stay LITERAL, never a glob.
+
+**Census corrections + budget honesty:**
+- v1's core.sh header says "33 fns" but its NAMED list counts 34 — the NAMED list is and was
+  authoritative (census audited green at the sprint-6 close); header corrected here per the
+  Learned log's instruction to fix it on the next version bump.
+- The v1/v2 line-budget bands ([3750,4300]) and the per-module ≤1,200 cap described the SPRINT-6
+  RELOCATION and are HISTORICAL: five feature sprints later the tree measures ~6,080 and
+  observe.sh alone is 1,648. Binding going forward: entry `kit/ops/polaris` < 500 lines ·
+  workspace.sh ≤ 350 · new fns land in the module this census names, never in the entry script.
+  Re-legislating the other modules' sizes is future grooming, not this sprint's scope.
+
 ## Changelog
+- v3 2026-08-03: workspace.sh joins the census; loader full-load list gains `workspace`
+  (guard path unchanged); core.sh 33→34 header count corrected (named list authoritative);
+  v1/v2 line bands marked historical — binding: entry <500, workspace ≤350.
 - v2 2026-07-25: loader is need-scoped for `_match`/`_rules`/`_guard` (guard hot path) — correctness
   fix, the guard was exceeding its 10s hook timeout and failing open. Grand-total band
   [3750, 4120] → [3750, 4300], itemized above. Entry <500 and per-module ≤1,200 UNCHANGED.

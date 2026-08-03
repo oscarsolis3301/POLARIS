@@ -59,7 +59,23 @@ landed sha; the seal drill asserts the `docs(sprint-N):` commit rides the wave. 
 `polaris report --sprint 3` → `docs/sprints/sprint-3.md` with one `## T-013 — notify v2 …` section
 carrying points 3, landed f440bba, its Why paragraph and its checkbox list, verbatim.
 
+## v2 — the writer commits its own file when it is the only dirt (2026-08-03, T-061)
+
+v1.1 documented the failure (a silently dirty report file makes the NEXT land/seal die "working
+tree not clean" with no visible cause) and named remedies; v2 kills it at source. After writing,
+`cmd_report` SELF-COMMITS its file(s) when ALL hold:
+- running in the primary checkout, current branch == `$BASE`;
+- `git status --porcelain` shows NOTHING but the report file(s) this invocation just wrote.
+Commit subjects: `docs(sprint-<n>): report refresh` (single sprint) · `docs(sprint): report
+refresh --all` (--all). It says what it committed. ANY other dirty path present → commit NOTHING
+and print v1.1's two-remedy hint verbatim (unchanged). Never commits in a worktree, off-$BASE,
+or at seal time (seal's own `docs(sprint-N): report` commit on integrate/<date> is UNCHANGED).
+The `report` drill (selftest/report.sh, owned by T-061) gains both assertions: only-dirt →
+commit exists with the pinned subject + clean tree; mixed-dirt → no commit + hint printed.
+
 ## Changelog
+- v2 2026-08-03: report self-commits when its file(s) are the only dirty paths on $BASE in the
+  primary; mixed dirt keeps v1.1's hint; seal-time behavior untouched (T-061, plan n-chats-one-repo).
 - v1 2026-07-20: created for T-023 (seal hook), consumed by T-025, T-026
 - v1.1 2026-07-20 (QA fix wave, T-027): report stays board-read-only and never commits — UNCHANGED. Added: after writing a file, if it differs from HEAD (`git diff --quiet -- <file>`), report prints next steps naming both remedies verbatim — commit as `docs(sprint-<n>): report refresh`, or discard with `git checkout -- <file>`. Rationale: a post-`done` re-render adds done-dates the sealed render lacked; the silently dirty file makes the NEXT land/seal die "working tree not clean" with no visible cause.
 - v1.2 2026-07-20 (patch 5.14.1, T-029): ID-resolution semantics UNCHANGED; made binding: Rule 2 resolves `sprint/<n>` / `sprint/<n-1>` from the resolver's own `<n>` argument regardless of caller state (bash expands every word of a `local` line BEFORE assigning — split the declaration). Executable check extended: the drill proves Rule-2-ONLY attribution — `report --all` on a sealed sprint whose merge body carries no `[ID]` bullets still attributes the task under its sprint heading, never `(unsealed)`.

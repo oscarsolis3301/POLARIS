@@ -59,5 +59,24 @@ $ ops/polaris land --express T-042
 finish line: bash ops/polaris qa
 ```
 
+## v2 — express joins the single integration lane (2026-08-03, plan n-chats-one-repo)
+
+`land --express` participates in the shared-checkout model (`ops/contracts/shared-checkout.md`,
+the authority on lease/park/wave semantics). Deltas to v1's step list — T-058:
+- Step 0 (NEW): take the integration lease (`int_on`). Lane busy past the bounded wait → the
+  `queued: ` line + **rc 3**, nothing mutated. Lease released on every exit path.
+- Step 1 REPLACED by `wave_on`: create integrate/<today> from <base> · ff-reuse · or ADOPT an
+  open non-ff wave — the v1 die `finish that wave by hand first` is DELETED.
+- The clean-tree precondition becomes: dirty tree → `park` + caveat + proceed; park failure →
+  v1's die verbatim, tree untouched.
+- All four v1 REFUSALS are UNCHANGED, pinned fragments included. The suite/seal/verify/done
+  sequence and "express collapses SESSIONS, never checks" are UNCHANGED.
+- Idempotence rides cmd_land/cmd_seal (shared-checkout): re-express of a landed task prints
+  `already landed — skipped` and continues to the still-pending steps rather than dying.
+The express selftest drill (history.sh) updates its assertions to the new step-0/step-1 lines;
+label + assertion contract for the NEW drills lives in shared-checkout.
+
 ## Changelog
+- v2 2026-08-03: step 0 integration lease (rc 3 `queued: `), wave_on replaces the branch block
+  (adopt instead of die), dirty tree parks, refusals untouched (T-058).
 - v1 2026-07-20: created for T-031 (CLI) · T-034 (conductor triage) · T-037 (MANUAL recipe)
