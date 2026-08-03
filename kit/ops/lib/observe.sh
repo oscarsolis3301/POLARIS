@@ -141,7 +141,8 @@ cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatte
   done
 }
 
-cmd_sweep() { # report orphans + stale + remote strays; --fix removes true orphans and merged strays
+cmd_sweep() { # report orphans + stale locks + >24h bg jobs + remote strays; --fix removes true
+  # orphans, rotates finished/crashed stale jobs, and deletes merged strays
   local fix="${1:-}" d id found=0
   for d in "$LOCKS"/*/; do
     [ -e "$d" ] || break
@@ -152,6 +153,29 @@ cmd_sweep() { # report orphans + stale + remote strays; --fix removes true orpha
     elif task_file "$id" active >/dev/null && [ "$(lock_age "$id")" -gt $((STALE_H*3600)) ]; then
       found=1; printf '⚠ STALE lock: %s (%ss > %sh) — take it over: polaris resume %s · or hand back: polaris release %s --to ready\n' \
         "$id" "$(lock_age "$id")" "$STALE_H" "$id" "$id"
+    fi
+  done
+  # background jobs (ops/contracts/bg-jobs.md): a non-.prev job dir whose start is >24h old is
+  # leftover runtime state. Always reported; --fix rotates it to <name>.prev (archive, never
+  # delete) — but NEVER a still-running job: rotating a live job's dir out from under its runner
+  # is destruction, not hygiene. `.prev` archives are never swept (ONE slot per name, no chains).
+  local bgd bgn bgs bga bgp
+  for bgd in "$PRIMARY/.polaris/bg"/*/; do
+    [ -e "$bgd" ] || break
+    bgn="$(basename "$bgd")"
+    case "$bgn" in *.prev) continue;; esac
+    bgs="$(cat "$bgd/start" 2>/dev/null | tr -d ' \r\n')"
+    case "$bgs" in ''|*[!0-9]*) bgs=0;; esac
+    bga=$(( $(date +%s) - bgs ))
+    [ "$bga" -gt 86400 ] || continue
+    bgp="$(cat "$bgd/pid" 2>/dev/null | tr -d ' \r\n')"
+    if [ ! -f "$bgd/rc" ] && bg_alive "$bgp"; then
+      found=1; printf '⚠ STALE bg job: %s (%sh, pid %s still alive) — collect: bash ops/polaris bg wait %s (a live job is never auto-rotated)\n' \
+        "$bgn" "$(( bga / 3600 ))" "$bgp" "$bgn"
+    else
+      found=1; printf '⚠ STALE bg job: %s (%sh old, finished or crashed) — bash ops/polaris sweep --fix rotates it to %s.prev\n' \
+        "$bgn" "$(( bga / 3600 ))" "$bgn"
+      [ "$fix" = "--fix" ] && { bg_rotate "$bgn"; note "rotated to $bgn.prev"; }
     fi
   done
   # remote hygiene: a landed task should have taken its feat/<ID> branch with it (done does this

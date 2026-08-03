@@ -174,6 +174,15 @@ kit/ops/lib/admin.sh	fn	semver_gt
 kit/ops/lib/admin.sh	fn	slim_scan
 kit/ops/lib/admin.sh	fn	update_check_maybe
 kit/ops/lib/admin.sh	fn	ver
+kit/ops/lib/bg.sh	fn	bg_age
+kit/ops/lib/bg.sh	fn	bg_alive
+kit/ops/lib/bg.sh	fn	bg_resolve
+kit/ops/lib/bg.sh	fn	bg_rotate
+kit/ops/lib/bg.sh	fn	bg_run
+kit/ops/lib/bg.sh	fn	bg_status
+kit/ops/lib/bg.sh	fn	bg_tail
+kit/ops/lib/bg.sh	fn	bg_wait
+kit/ops/lib/bg.sh	fn	cmd_bg
 kit/ops/lib/builder.sh	fn	cmd_claim
 kit/ops/lib/builder.sh	fn	cmd_grant
 kit/ops/lib/builder.sh	fn	cmd_handoff

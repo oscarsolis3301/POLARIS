@@ -21,6 +21,8 @@ allow  wc -c ops/roles/*.md
 allow  cd ops && grep -n polaris RULES.tsv | head -10
 allow  bash ops/polaris find cmd_verify
 allow  bash ops/polaris check
+allow  bash ops/polaris check --only api-kit
+allow  bash ops/polaris check --only api-kit && bash ops/polaris route --role BUILDER
 allow  bash ops/polaris pack T-001
 allow  bash ops/polaris slim
 allow  find ops -maxdepth 2 -type f -exec wc -l {} + | sort -rn | head -50
@@ -74,3 +76,9 @@ ask  bash ops/polaris bg run qa --force
 ask  bash ops/polaris bg
 ask  bash ops/polaris bg sweep --fix
 ask  bash ops/polaris bg status && bash ops/polaris bg run qa
+ask  bash ops/polaris check --update
+ask  bash ops/polaris check --scaffold
+ask  bash ops/polaris check --scaffold --app
+ask  bash ops/polaris check --update --only api-kit
+ask  bash ops/polaris check --only api-kit --update
+ask  bash ops/polaris check && bash ops/polaris check --update

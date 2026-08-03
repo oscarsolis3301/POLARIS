@@ -1,7 +1,7 @@
 # Sprint 9 — Route and background (2026-08-03–)
 
 ## T-065 — "tier_for + `polaris route` + fleet --model + pack tier + finish bg-guard — routing becomes code"
-points 5 · risk normal · landed 220de96 (2026-08-03) · claimed 2026-08-03
+points 5 · risk normal · landed 220de96 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/core.sh, kit/ops/lib/observe.sh, kit/ops/polaris, ops/tests/api-kit.expected
 
 ### Why
@@ -36,7 +36,7 @@ the two lanes agree without touching each other's files.
 - [ ] `route` stays read-only: no lock, no board write, no hook fire
 
 ## T-066 — "PROTOCOL: § MODEL ROUTING goes auto, § LONG COMMANDS teaches the measured tiers"
-points 2 · risk normal · landed d1d6960 (2026-08-03) · claimed 2026-08-03
+points 2 · risk normal · landed d1d6960 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/ops/PROTOCOL.md
 
 ### Why
@@ -69,7 +69,7 @@ wave gate reds on a file you cannot legally fix.
 - [ ] tier-relative phrasing survives where models are not named: knob VALUES (fable/opus/sonnet)
 
 ## T-067 — "readonly-allow arms route + bg read forms — with both-direction golden cases"
-points 2 · risk normal · landed b728461 (2026-08-03) · claimed 2026-08-03
+points 2 · risk normal · landed b728461 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/ops/hooks/readonly-allow.sh, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected
 
 ### Why
@@ -93,7 +93,7 @@ the security half.
 - [ ] hook stays fork-free pure bash (its speed contract: ~100ms parse, no interpreter calls)
 
 ## T-068 — "CONDUCTOR: route before every spawn; five duplicated suite blockquotes become one pointer"
-points 2 · risk normal · landed 1f902ca (2026-08-03) · claimed 2026-08-03
+points 2 · risk normal · landed 1f902ca (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/ops/roles/CONDUCTOR.md
 
 ### Why
@@ -119,7 +119,7 @@ one file that must actually RUN `route` and pass the answer. Two edits, both pin
 - [ ] every other kickoff sentence is untouched — this task changes exactly the six things above
 
 ## T-069 — "Role pointers + INIT honesty + TASK.md model: + this repo's knobs (fable/opus/sonnet) + the report EOL pin"
-points 2 · risk normal · landed 58eb983 (2026-08-03) · claimed 2026-08-03
+points 2 · risk normal · landed 58eb983 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: .gitattributes, kit/ops/roles/BUILDER.md, kit/ops/roles/INIT.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md, kit/ops/templates/TASK.md, ops/CONVENTIONS.md
 
 ### Why
@@ -153,3 +153,64 @@ Five small truths land together because they are all one-line docs/config edits 
 - [ ] CONVENTIONS knob lines parse: `bash kit/ops/polaris route --points 5 --risk normal` on the
 - [ ] NO headings added/removed/reworded in any owned file; no other CONVENTIONS value touched
 - [ ] .gitattributes line sits with the other eol pins, commented like its neighbors
+
+## T-070 — "bg.sh — the background job runner: run/status/tail/wait, rc-file-first, .prev rotation, sweep"
+points 5 · risk normal · landed a72d670 (2026-08-03) · claimed 2026-08-03
+files touched: kit/ops/lib/bg.sh, kit/ops/lib/observe.sh, kit/ops/polaris, ops/tests/api-kit.expected
+
+### Why
+Suite-length commands (805s serial, `qa` 1225s) die at the harness's 600s foreground cap: they time
+out, return NOTHING, and get re-run — pure token and wall-clock waste, plus two subagents last
+sprint ending turns with a suite still running because the recipe lived in folklore. `bg` makes it
+a command. New module `kit/ops/lib/bg.sh` per `ops/contracts/bg-jobs.md` — that contract IS the
+spec (registry layout, rc semantics, rotation, cwd rules); code to it, invent nothing. The shape
+that matters most, from the T-064 lesson: jobs get pid semantics FROM BIRTH, and every verdict is
+rc-FILE-FIRST, then `kill -0` — a pid check alone never declares a verdict, because Windows reuses
+pids. Suite keys run in the CALLER's cwd (a builder proves its own worktree); `qa` always runs in
+the primary, so its green stamps `.polaris/suite-stamp` and a later `finish` skips the whole suite
+via the EXISTING fast path — the warm-stamp integration costs zero new code. Wiring: kit/ops/polaris
+gains the `bg` dispatch + usage entry and the loader's FULL-load list gains `bg` after `admin`
+(module-layout v4 — the `_match|_rules|_guard` short path stays EXACTLY `core ownership`);
+`cmd_sweep` (observe.sh:144) `--fix` learns to rotate job dirs whose `start` is >24h old.
+
+This task owns the wave-2 api-kit delta: one `fn` line per bg.sh top-level function, hand-authored
+byte-exact. You feed the surface AND own the golden, so there is no cross-lane pin — but keep the
+census tight (`cmd_bg` + `bg_`-prefixed workers, ≤10 total).
+
+### Acceptance
+- [ ] `bg run <name>` — suite keys per contract (caller cwd; `qa` → primary; empty key ⛔ rc 1),
+- [ ] `bg status [<name>]` rc contract EXACT: 0 green · 1 red · 2 running · 3 unknown (dead pid,
+- [ ] `bg tail <name> [-n N]` last N (default 20) log lines, read-only
+- [ ] `bg wait <name> [--max <s>]` — poll ~2s, `--max` default 300; finished → tail + verdict,
+- [ ] completed same-name rotates to `<name>.prev` (ONE slot, archive-not-delete) before re-run;
+- [ ] registry is `$PRIMARY/.polaris/bg/<name>/` with cmd·cwd·pid·log·rc·start·end, rc written
+- [ ] api-kit.expected wave-2 delta: exactly one line per new top-level fn, byte-exact (recipe in
+- [ ] `bg` never writes the board, EVENTS.ndjson, or any lock
+
+## T-072 — "check's write flags lose the hook's silent pass — --update/--scaffold refuse auto-approval"
+points 1 · risk normal · landed 57e8a46 (2026-08-03) · claimed 2026-08-03
+files touched: kit/ops/hooks/readonly-allow.sh, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected
+
+### Why
+Pre-existing gate-integrity hole, found by T-067's builder and deliberately left out of that lane
+because it changes a verdict outside its remit. `check` sits in `polaris_ok`'s tail-IGNORING plain-
+read list, so `check --update` and `check --scaffold` are auto-approved inside compound commands —
+yet `--update` rewrites the goldens from actual output, and observe.sh's own help calls that
+"ALWAYS a human/Builder decision, never automatic", while `--scaffold` writes new pairs. An agent
+that can silently rewrite the goldens gating its own work is the `.github/` Invariant-11 problem in
+miniature. The fix: `check` moves out of the plain list into a flag-inspecting arm, per
+`ops/contracts/bg-jobs.md` § v1.1.
+
+Scope decision, recorded: READ flags allow — bare `check` and `--only <glob>` tails; WRITE flags
+refuse — any tail containing `--update` or `--scaffold`; UNKNOWN flags refuse (fail-closed, the
+hook's deny-by-default contract). A refusal is the NORMAL PROMPT, not a block — and the standing
+settings.json rule still covers a bare `bash ops/polaris check --update`, which remains the
+sanctioned, visible Builder path (T-062 precedent: the golden's owner runs `--update` deliberately).
+What this closes is the SILENT pass inside compound reads, where nobody chose it.
+
+### Acceptance
+- [ ] `check` and `check --only <glob>` (any glob) still verdict `allow`
+- [ ] any tail containing `--update` or `--scaffold` verdicts `ask`, in every position and
+- [ ] golden battery gains BOTH directions (≥2 allow, ≥3 refuse incl. one compound line);
+- [ ] NO new top-level functions (extend `polaris_ok`'s arm in place — api-kit surface untouched)
+- [ ] hook stays fork-free pure bash
