@@ -213,18 +213,55 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   # `git reset --hard HEAD~1`, nothing uncommitted at stake. The landed record IS the commit
   # (subject suffix [<ID>] + Landed-from trailer); `done` stamps it onto the task later.
   # land --express <ID> routes to the one-pass lane (ops/contracts/express-lane.md).
+  # shared-checkout v1 (T-058): the body runs under the integration lease — ONE shared lane,
+  # int_on first (a busy lane past the bounded wait → its `queued: ` line + rc 3, nothing
+  # mutated), released on every exit. A dirty tree parks instead of dying; on $BASE wave_on
+  # creates/ff-reuses/adopts today's integrate/<date>; a re-land of an already-landed ID skips
+  # with rc 0 — two integrators never die on each other's completed work.
   if [ "${1:-}" = "--express" ]; then
     shift
-    cmd_land_express "${1:?usage: polaris land --express <ID>}"
+    cmd_land_express "${1:?usage: polaris land --express <ID>}" || return $?
     return 0
   fi
   local id="${1:?usage: polaris land <ID>}"
-  local tf; tf="$(task_file "$id" review)" || die "$id is not in review/ — only handed-off work lands"
   in_primary || die "land mutates the checked-out branch — run it in the primary checkout, never a worktree"
+  # lease is OUTERMOST (shared-checkout lock ordering). Nested calls (express) re-enter rc 0;
+  # only the frame that took it releases on success paths — a die releases regardless, because
+  # the process is over either way. STATEMENT-LEVEL call, never $( ): the EXIT trap it arms
+  # would self-release inside a subshell.
+  local land_had="${INT_HELD:-}"
+  int_on "land $id" || return $?
+  # idempotence gate 1: already in $BASE (a sealed earlier wave — the task may even be done/) →
+  # skip BEFORE the review/ gate can die on another integrator's completed work. Nothing mutated.
+  if landed_sha "$id" >/dev/null; then
+    [ -n "$land_had" ] || int_off
+    say "already landed — skipped ($id is in $BASE history)"
+    return 0
+  fi
+  local tf; tf="$(task_file "$id" review)" || { int_off; die "$id is not in review/ — only handed-off work lands"; }
+  local tip; tip="$(git rev-parse -q --verify "refs/heads/feat/$id")" || { int_off; die "no local branch feat/$id"; }
+  # dirty tree → park + caveat + proceed (BEFORE wave_on — the checkout needs the dirt gone);
+  # park refused → the old die verbatim, tree untouched.
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    if park "land $id"; then
+      note "⚠ parked your dirt — bash ops/polaris unpark returns it"
+    else
+      int_off
+      die "working tree not clean — a conflict must be able to reset --hard safely"
+    fi
+  fi
   local br; br="$(git rev-parse --abbrev-ref HEAD)"
-  [ "$br" != "$BASE" ] || die "you are on $BASE — create the integration branch first: git checkout -b integrate/$(date +%F)"
-  git diff --quiet && git diff --cached --quiet || die "working tree not clean — a conflict must be able to reset --hard safely"
-  local tip; tip="$(git rev-parse -q --verify "refs/heads/feat/$id")" || die "no local branch feat/$id"
+  if [ "$br" = "$BASE" ]; then
+    wave_on      # create · ff-reuse · adopt today's integrate/<date> — replaces the on-$BASE die
+    br="$(git rev-parse --abbrev-ref HEAD)"
+  fi
+  # idempotence gate 2: already on THIS wave branch (an adopted wave, or a re-run mid-wave) →
+  # skip; the earlier landing pass already did the work.
+  if landed_sha "$id" HEAD >/dev/null; then
+    [ -n "$land_had" ] || int_off
+    say "already landed — skipped ($id is on $br)"
+    return 0
+  fi
   # audit BEFORE any merge — ownership + rules on the feat branch, exactly as `polaris audit`
   check_ownership "$tf" "feat/$id"
   check_rules "feat/$id" "$id"     # ID threaded: an `ask` rule cleared by <ID>'s approved: list
@@ -244,15 +281,18 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
     git reset -q --hard                 # restore the integrate HEAD, tree clean
     rm -f "$msgf"
     cmd_kickback "$id" -m "squash conflict — planning bug"
+    int_off      # kickback's `trap - EXIT` disarmed the on_die net — release the lease by hand
     die "squash conflict — $br restored, $id kicked back to active/"
   fi
   rm -f "$mergeerr"
   if git diff --cached --quiet; then
     git reset -q --hard; rm -f "$msgf"
+    int_off
     die "feat/$id brings no changes over $br — nothing to land (your call: kickback it, or done it by hand)"
   fi
-  git commit -q -F "$msgf" || { rm -f "$msgf"; git reset -q --hard; die "commit failed — squash unwound, $br clean"; }
+  git commit -q -F "$msgf" || { rm -f "$msgf"; git reset -q --hard; int_off; die "commit failed — squash unwound, $br clean"; }
   rm -f "$msgf"
+  [ -n "$land_had" ] || int_off        # our lane work is done; a nested (express) hold stays held
   say "landed $id on $br — $(git log -1 --format=%s)"
   note "goes red on the suite? unwind: git reset --hard HEAD~1   ·   bounce: polaris kickback $id -m \"<why>\""
   land_slow_suite_hint
@@ -289,21 +329,30 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   # refusal: a pr-mode wave ends at a PR the human merges, never at a one-pass seal
   publish_resolve
   [ "$PUB" = "direct" ] || die "express needs publish: direct — publish: pr waves end at a PR, not a seal"
-  # context — the same preconditions land/seal enforce: primary checkout, ON <base>, clean tree
+  # context — the same preconditions land/seal enforce: primary checkout, ON <base>
   in_primary || die "express runs in the primary checkout — cd \"$PRIMARY\" first"
   local br; br="$(git rev-parse --abbrev-ref HEAD)"
   [ "$br" = "$BASE" ] || die "express starts ON $BASE — you are on $br"
-  git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
-  # step 1: create/reuse today's integration branch from $BASE
-  local date; date="$(date +%F)"
-  if git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null; then
-    git checkout -q "integrate/$date"
-    git merge -q --ff-only "$BASE" \
-      || { git checkout -q "$BASE"; die "integrate/$date exists and cannot fast-forward to $BASE — finish that wave by hand first"; }
-  else
-    git checkout -q -b "integrate/$date" "$BASE"
+  # step 0 (express-lane v2, shared-checkout): the integration lease. The four refusals above
+  # stay BEFORE it on purpose — a doomed express must refuse instantly, never queue on a busy
+  # lane. Busy past the bounded wait → int_on's `queued: ` line + rc 3, nothing mutated.
+  local ex_had="${INT_HELD:-}"
+  int_on "land --express $id" || return $?
+  # dirty tree → park + caveat + proceed; park refused → v1's die verbatim, tree untouched
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    if park "land --express $id"; then
+      note "⚠ parked your dirt — bash ops/polaris unpark returns it"
+    else
+      int_off
+      die "working tree not clean — commit or stash first"
+    fi
   fi
-  # step 2: audit + land — existing cmd_land semantics, unchanged
+  # step 1 (express-lane v2): today's wave via wave_on — create from $BASE · ff-reuse · ADOPT an
+  # open non-ff wave. The v1 "finish that wave by hand first" die is deleted.
+  local date; date="$(date +%F)"
+  wave_on
+  # step 2: audit + land — existing cmd_land semantics, unchanged (re-enters the lease, rc 0;
+  # an already-landed <ID> skips there and express continues to the still-pending steps)
   cmd_land "$id"
   # step 3: the FULL CONVENTIONS suite, ONCE (same set as qa). Red → unwind the land, kick the
   # task back carrying the failing tail, die — the board never keeps a green it didn't earn.
@@ -321,6 +370,7 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
       rm -f "$out"
       git reset -q --hard HEAD~1        # unwind the land — integrate/<date> back at $BASE state
       cmd_kickback "$id" -m "express suite red on $k: $tailtxt"
+      int_off    # kickback's `trap - EXIT` disarmed the on_die net — release the lease by hand
       die "express: $k red — land unwound on integrate/$date, $id kicked back with the failing tail"
     fi
   done
@@ -332,6 +382,7 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   cmd_run_verify "$id"
   cmd_done "$id"
   git branch -q -D "integrate/$date" 2>/dev/null || true
+  [ -n "$ex_had" ] || int_off          # the lane's work is over — free it before the closing notes
   say "express: $id landed · sealed · done — one pass, integrate/$date cleaned"
   note "finish line: bash ops/polaris finish — it runs qa for you, proves the RUN is over, and signals done"
 }
@@ -353,28 +404,47 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
   # auto-resolved. publish: pr (ops/contracts/publish-modes.md): NO local merge — the wave leaves
   # as ONE pushed integrate branch + a PR-create URL, and `seal --sync` finishes after the human
   # merges the PR (merge-commit strategy, never squash).
+  # shared-checkout v1 (T-058): the sealing pass runs under the integration lease (int_on first,
+  # statement-level; busy lane → `queued: ` + rc 3), a dirty tree parks instead of dying, and a
+  # wave with only board noise closes idempotently — `nothing new to seal`, rc 0.
   local sync=""
   if [ "${1:-}" = "--sync" ]; then sync=1; shift; fi
   local date="${1:-}"; [ -n "$date" ] || date="$(date +%F)"
   publish_resolve
   if [ -n "$sync" ]; then
     [ "$PUB" = "pr" ] || die "publish: direct seals locally — nothing to sync"
-    seal_sync "$date"
+    seal_sync "$date" || return $?
     return 0
   fi
   in_primary || die "seal runs in the primary checkout — cd \"$PRIMARY\" first"
-  git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
+  local seal_had="${INT_HELD:-}"
+  int_on "seal $date" || return $?
+  # dirty tree → park + caveat + proceed; park refused → the old die verbatim, tree untouched
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    if park "seal $date"; then
+      note "⚠ parked your dirt — bash ops/polaris unpark returns it"
+    else
+      int_off
+      die "working tree not clean — commit or stash first"
+    fi
+  fi
   git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null \
-    || die "no branch integrate/$date — land tasks on it first (a different day's branch? seal <date>)"
+    || { int_off; die "no branch integrate/$date — land tasks on it first (a different day's branch? seal <date>)"; }
   local subjects
   subjects="$(git log --reverse --format=%s "$BASE..integrate/$date" | grep -v '^chore(board):' || true)"
-  [ -n "$subjects" ] || die "nothing to seal — $BASE..integrate/$date has only board commits"
+  # idempotent close (shared-checkout): an already-sealed or board-noise-only wave costs nothing —
+  # a second integrator's seal after the first one finished is rc 0, board untouched.
+  if [ -z "$subjects" ]; then
+    [ -n "$seal_had" ] || int_off
+    say "nothing new to seal — $BASE..integrate/$date has only board commits"
+    return 0
+  fi
   # <n> + <goal> from the ops/SPRINT.md header: "# SPRINT <n> — <goal>" (goal ends at 2+ spaces
   # or capacity:; — or - both accepted)
   local hdr n goal
   hdr="$(sed -n 's/^# SPRINT //p' "$OPS/SPRINT.md" 2>/dev/null | head -1 | tr -d '\r')"
   n="${hdr%%[!0-9]*}"
-  [ -n "$n" ] || die "cannot read the sprint number — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header"
+  [ -n "$n" ] || { int_off; die "cannot read the sprint number — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header"; }
   goal="$(printf '%s' "${hdr#"$n"}" | sed -e 's/^[[:space:]]*//' -e 's/^—[[:space:]]*//' -e 's/^-[[:space:]]*//' \
       -e 's/[[:space:]][[:space:]].*$//' -e 's/[[:space:]]*capacity:.*$//' -e 's/[[:space:]]*$//')"
   # tag gate (contract v2): absent → first wave of sprint n. Present AND an ancestor of $BASE →
@@ -383,6 +453,7 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
   local oldtag
   oldtag="$(git rev-parse -q --verify "refs/tags/sprint/$n" || true)"
   if [ -n "$oldtag" ] && ! git merge-base --is-ancestor "$oldtag" "$BASE" 2>/dev/null; then
+    int_off
     die "sprint/$n exists and is not in $BASE history — reused sprint number; bump the ops/SPRINT.md header"
   fi
   # T-023: the sprint report rides the wave. Commit it on integrate/<date> BEFORE the merge (direct)
@@ -396,10 +467,12 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
     # NO $BASE ref change (local or remote) — everything mutating waits for `seal --sync` after
     # the human merges the PR. Tasks stay in review/, locks stay, integrate/<date> stays.
     # (T-023: the wave's sprint-report commit lands HERE, on integrate/$date, before the push.)
-    has_remote || die "publish: pr needs an origin remote — nowhere to push integrate/$date"
-    git push -q -u origin "integrate/$date" || die "push of integrate/$date failed — check origin access"
+    has_remote || { int_off; die "publish: pr needs an origin remote — nowhere to push integrate/$date"; }
+    git push -q -u origin "integrate/$date" || { int_off; die "push of integrate/$date failed — check origin access"; }
     board_changed_touch   # brain freshness (ops/contracts/brain.md): the wave left the machine.
                           # No auto-refresh here — the fold happens at `seal --sync`, not now.
+    [ -n "$seal_had" ] || int_off   # lane work done — release BEFORE the notify hook, which may
+                                    # block on a human gate; the lane must not wait with it
     local prurl
     prurl="$(pr_create_url "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null || true)" "$date" "$BASE")"
     say "wave pushed — ONLY integrate/$date left the machine ($BASE and tags untouched)"
@@ -423,6 +496,7 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
   git checkout -q "$BASE"
   if ! git merge --no-ff -q "integrate/$date" -m "$msg"; then
     git merge --abort 2>/dev/null || true
+    int_off
     die "merge conflict sealing integrate/$date into $BASE — resolve by hand; seal never auto-resolves"
   fi
   local old7="" new7=""
@@ -460,6 +534,7 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
   fi
   board_changed_touch   # fold succeeded (ops/contracts/brain.md): beacon first, then the brain
   brain_refresh_if_present  # follows the new base — a refresh failure notes ⚠, never fails the seal
+  [ -n "$seal_had" ] || int_off   # last mutation of the sealing pass is behind us — free the lane
   if [ -n "$oldtag" ]; then
     say "sprint $n re-sealed — integrate/$date merged into $BASE (--no-ff); sprint/$n: $old7 → $new7"
   else
@@ -476,22 +551,34 @@ seal_sync() { # seal --sync <date> — pr mode only: finish the wave AFTER the h
   # wave verified in $BASE (an unmerged OR squash-merged PR dies here, by name — the per-task
   # commits must survive) · sprint/<n> tag create-or-move per clean-history v2 (compare-and-swap
   # push; failure → by-hand note) · integrate/<date> deleted local+remote · per-task next step.
+  # shared-checkout v1 (T-058): the sync leg is lane work too — int_on first (statement-level;
+  # rc 3 `queued: ` propagates), dirty tree parks + proceeds, released on every exit.
   local date="$1"
   in_primary || die "seal --sync runs in the primary checkout — cd \"$PRIMARY\" first"
-  git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
-  has_remote || die "seal --sync needs an origin remote — the PR merge lives there"
+  local ss_had="${INT_HELD:-}"
+  int_on "seal --sync $date" || return $?
+  # dirty tree → park + caveat + proceed; park refused → the old die verbatim, tree untouched
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    if park "seal --sync $date"; then
+      note "⚠ parked your dirt — bash ops/polaris unpark returns it"
+    else
+      int_off
+      die "working tree not clean — commit or stash first"
+    fi
+  fi
+  has_remote || { int_off; die "seal --sync needs an origin remote — the PR merge lives there"; }
   git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null \
-    || die "no branch integrate/$date — nothing to sync (a different day's wave? seal --sync <date>)"
+    || { int_off; die "no branch integrate/$date — nothing to sync (a different day's wave? seal --sync <date>)"; }
   local hdr n goal
   hdr="$(sed -n 's/^# SPRINT //p' "$OPS/SPRINT.md" 2>/dev/null | head -1 | tr -d '\r')"
   n="${hdr%%[!0-9]*}"
-  [ -n "$n" ] || die "cannot read the sprint number — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header"
+  [ -n "$n" ] || { int_off; die "cannot read the sprint number — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header"; }
   # the wave's commits = integrate past its branch point — capture BEFORE the pull moves $BASE
   local mb; mb="$(git merge-base "$BASE" "integrate/$date")"
   # 1. base catches up to the merged PR — ff-only, never rebase, never merge
   git checkout -q "$BASE"
   git pull -q --ff-only origin "$BASE" \
-    || die "cannot fast-forward $BASE from origin — resolve by hand (--sync never rebases, never merges)"
+    || { int_off; die "cannot fast-forward $BASE from origin — resolve by hand (--sync never rebases, never merges)"; }
   # 2. every task subject of the wave must now be in $BASE history (rule 1: subject suffix [<ID>]).
   #    A squash-merged PR collapsed them into one foreign subject → die naming the missing.
   local subj sid ids="" missing=""
@@ -505,11 +592,12 @@ seal_sync() { # seal --sync <date> — pr mode only: finish the wave AFTER the h
   done <<EOF
 $(git log --no-merges --format=%s "$mb..integrate/$date" | grep -v '^chore(board):' || true)
 EOF
-  [ -z "$missing" ] || die "not in $BASE:$missing — the PR is unmerged, or was squash-merged (per-task commits must survive; merge with the MERGE COMMIT strategy). $BASE is already fast-forwarded to the PR merge; the sprint/$n tag, integrate/$date and the board are untouched"
+  [ -z "$missing" ] || { int_off; die "not in $BASE:$missing — the PR is unmerged, or was squash-merged (per-task commits must survive; merge with the MERGE COMMIT strategy). $BASE is already fast-forwarded to the PR merge; the sprint/$n tag, integrate/$date and the board are untouched"; }
   # 3. tag on the new $BASE HEAD — clean-history v2: create, or move an ancestor tag (CAS push)
   local oldtag old7 new7
   oldtag="$(git rev-parse -q --verify "refs/tags/sprint/$n" || true)"
   if [ -n "$oldtag" ] && ! git merge-base --is-ancestor "$oldtag" "$BASE" 2>/dev/null; then
+    int_off
     die "sprint/$n exists and is not in $BASE history — reused sprint number; bump the ops/SPRINT.md header"
   fi
   if [ -n "$oldtag" ]; then
@@ -531,6 +619,7 @@ EOF
     || note "⚠ could not delete origin integrate/$date — by hand: git push origin :refs/heads/integrate/$date"
   board_changed_touch   # the fold completed here in pr mode (ops/contracts/brain.md)
   brain_refresh_if_present  # existing brain follows the fast-forwarded base; failure = ⚠ note only
+  [ -n "$ss_had" ] || int_off   # fold complete — free the lane before the per-task next steps
   # 5. the [<ID>]-in-$BASE gate now passes — walk each task out
   if [ -n "$ids" ]; then
     note "next, per task:$ids — bash ops/polaris run-verify <ID> · bash ops/polaris done <ID>"
@@ -566,16 +655,29 @@ cmd_history() { # history [--tasks <n>] — read-only changelog view of $BASE: f
 
 cmd_rollback() { # rollback <ID | sprint/<n>> — one forward revert commit on $BASE. Never resets,
   # never force-pushes; a conflicted revert aborts with the tree restored.
+  # shared-checkout v1 (T-058): reverting $BASE is lane work — int_on first (statement-level;
+  # rc 3 `queued: ` propagates), dirty tree parks + proceeds, released on every exit.
   local target="${1:?usage: polaris rollback <ID | sprint/<n>>}"
   local br; br="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || die "cannot resolve the current branch"
   [ "$br" = "$BASE" ] || die "rollback reverts on $BASE — you are on $br"
-  git diff --quiet && git diff --cached --quiet || die "working tree not clean — commit or stash first"
+  local rb_had="${INT_HELD:-}"
+  int_on "rollback $target" || return $?
+  # dirty tree → park + caveat + proceed; park refused → the old die verbatim, tree untouched
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    if park "rollback $target"; then
+      note "⚠ parked your dirt — bash ops/polaris unpark returns it"
+    else
+      int_off
+      die "working tree not clean — commit or stash first"
+    fi
+  fi
   local sha
   case "$target" in
     sprint/*)
-      git rev-parse -q --verify "refs/tags/$target" >/dev/null || die "no tag $target — sealed sprints only"
+      git rev-parse -q --verify "refs/tags/$target" >/dev/null || { int_off; die "no tag $target — sealed sprints only"; }
       if ! git revert --no-edit -m 1 "$target" >/dev/null; then
         git revert --abort 2>/dev/null || true
+        int_off
         die "conflicted revert of $target — aborted, tree restored; resolve by hand"
       fi
       ;;
@@ -583,12 +685,14 @@ cmd_rollback() { # rollback <ID | sprint/<n>> — one forward revert commit on $
       sha=""
       [ -f "$BOARD/done/$target.md" ] && sha="$(fm_get landed "$BOARD/done/$target.md" 2>/dev/null || true)"
       [ -n "$sha" ] || sha="$(landed_sha "$target" || true)"
-      [ -n "$sha" ] || die "no landed commit for $target — no landed: stamp in done/ and nothing in $BASE with subject suffix [$target]"
+      [ -n "$sha" ] || { int_off; die "no landed commit for $target — no landed: stamp in done/ and nothing in $BASE with subject suffix [$target]"; }
       if ! git revert --no-edit "$sha" >/dev/null; then
         git revert --abort 2>/dev/null || true
+        int_off
         die "conflicted revert of $target ($sha) — aborted, tree restored; resolve by hand"
       fi
       ;;
   esac
+  [ -n "$rb_had" ] || int_off
   say "reverted $target — one forward commit on $BASE: $(git log -1 --format=%s)"
 }
