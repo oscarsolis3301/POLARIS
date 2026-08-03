@@ -1295,6 +1295,59 @@ EOF
   return 0
 }
 
+cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — which model TIER runs a
+  # piece of work (ops/contracts/model-routing.md). triage answers "which lane"; this answers
+  # "which model", with the same shape: line 1 is ALWAYS exactly one bare word — strong | mid |
+  # cheap — so callers branch on it blind, and a `   model: <name>` note follows ONLY when the
+  # winning tier's CONVENTIONS knob (model_strong/mid/cheap) is set, or the task pins a literal
+  # model: name in frontmatter. Precedence: explicit --points/--risk (pure, board-free) → --role →
+  # <ID>. Routing never blocks work — malformed points and unknown roles fall back to mid, rc 0;
+  # only no-args and an unknown ID are errors. Read-only by contract: touches no lock, writes no
+  # board file, fires no hook.
+  local id="" role="" pts="" rsk="" pts_set="" rsk_set=""
+  local tier="" mdl="" ov="" f="" rnote=""
+  local u="usage: polaris route <ID> | --role <ROLE> | --points <N> [--risk <R>]"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --role)   role="${2:-}"; if [ $# -ge 2 ]; then shift 2; else shift; fi;;
+      --points) pts_set=1; pts="${2:-}"; if [ $# -ge 2 ]; then shift 2; else shift; fi;;
+      --risk)   rsk_set=1; rsk="${2:-}"; if [ $# -ge 2 ]; then shift 2; else shift; fi;;
+      -*)       die "$u";;
+      *)        if [ -z "$id" ]; then id="$1"; else die "$u"; fi; shift;;
+    esac
+  done
+  if [ -n "$pts_set$rsk_set" ]; then
+    # pure mode: board-free. A missing half defaults (--risk normal; --points empty → mid inside
+    # tier_for), so a conductor can ask about work that has no task file yet.
+    tier="$(tier_for "$pts" "${rsk:-normal}")"
+  elif [ -n "$role" ] && [ "$role" != "BUILDER" ]; then
+    case "$role" in
+      INIT|PLANNER|INTEGRATOR|EVOLVE|CONDUCTOR) tier=strong;;
+      SOLO|scout) tier=mid;;
+      *) tier=mid; rnote="unknown role '$role' — mid (routing never blocks work)";;
+    esac
+  elif [ "$role" = "BUILDER" ] && [ -z "$id" ]; then
+    tier=mid; rnote="BUILDER routes per task — bash ops/polaris route <ID>"
+  elif [ -n "$id" ]; then
+    f="$(task_file "$id" 2>/dev/null || true)"
+    [ -n "$f" ] && [ -f "$f" ] || die "route: no task $id on the board — check: ops/polaris board-fm"
+    tier="$(tier_for "$(fm_get points "$f")" "$(fm_get risk "$f")")"
+    ov="$(fm_get model "$f" 2>/dev/null || true)"
+    case "$ov" in
+      strong|mid|cheap) tier="$ov";;                # tier-word override: that tier wins outright
+      "") :;;
+      *) mdl="$ov";;                                # literal model name — line 1 stays the derived
+    esac                                            # tier (informational); the note carries it
+  else
+    die "$u"
+  fi
+  printf '%s\n' "$tier"
+  [ -n "$mdl" ] || mdl="$(model_for_tier "$tier")"
+  [ -n "$mdl" ] && note "model: $mdl"
+  [ -n "$rnote" ] && note "$rnote"
+  return 0
+}
+
 cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS suite (test/lint/
   # typecheck/build, uat if set), then drift --strict, then doctor's env check. Runs EVERY
   # check even after a red — one pass paints the whole picture — and exits 1 if anything was
@@ -1473,6 +1526,22 @@ EOF
     fi
   done
   [ -d "$MUTEX" ] && fin_pending "a board operation still holds the mutex — wait for it, or bash ops/polaris sweep --fix if it is stale"
+  # Background jobs (ops/contracts/bg-jobs.md § finish): a job dir with NO rc file is a suite still
+  # in flight — or a crash nobody collected — and either way the run is not over. rc-file-FIRST,
+  # then the pid, never the reverse (Windows pid reuse). This reads the registry layout ONLY: the
+  # bg module may not even be installed yet, and no .polaris/bg/ dir means silence.
+  local bgd bgn bgp
+  for bgd in "$PRIMARY"/.polaris/bg/*/; do
+    [ -e "$bgd" ] || break
+    [ -f "$bgd/rc" ] && continue
+    bgn="$(basename "$bgd")"
+    bgp="$(cat "$bgd/pid" 2>/dev/null | tr -d ' \r\n')"
+    if [ -n "$bgp" ] && kill -0 "$bgp" 2>/dev/null; then
+      fin_pending "background job $bgn still running — collect it: bash ops/polaris bg wait $bgn"
+    else
+      fin_pending "background job $bgn crashed? no verdict recorded — check it: bash ops/polaris bg status $bgn"
+    fi
+  done
   # blocked/ is NEVER a gate. CONDUCTOR.md licenses blocked "with a reason the human has been told",
   # and whether they were told is not mechanically knowable — gating here would either make runs
   # un-finishable or force finish to write board state. So: a caveat the close MUST carry.
@@ -1641,15 +1710,19 @@ find_claude_windows() { # pane command wt.exe can actually launch. wt hands its 
   # session even started. So resolve a REAL claude.exe/.cmd and print its FULL Windows path (8.3
   # short form, so "C:\Program Files"-style spaces never break wt's arg re-joining); if only the
   # bash shim exists, wrap it in bash.exe -lc. Prints TAB-separated pane tokens, or nothing.
-  local c p b
+  # $1 (optional): a model name — rides along as `--model <name>` (ops/contracts/model-routing.md);
+  # empty → the token list is byte-identical to an unrouted launch.
+  local m="${1:-}" c p b
   for c in claude.exe claude.cmd; do
     p="$(command -v "$c" 2>/dev/null)" && [ -n "$p" ] || continue
     if command -v cygpath >/dev/null 2>&1; then p="$(cygpath -ws "$p" 2>/dev/null || cygpath -w "$p" 2>/dev/null || printf '%s' "$p")"; fi
-    printf '%s\tstart' "$p"; return 0
+    if [ -n "$m" ]; then printf '%s\t--model\t%s\tstart' "$p" "$m"; else printf '%s\tstart' "$p"; fi
+    return 0
   done
   if command -v claude >/dev/null 2>&1 && b="$(command -v bash 2>/dev/null)" && [ -n "$b" ]; then
     if command -v cygpath >/dev/null 2>&1; then b="$(cygpath -ws "$b" 2>/dev/null || cygpath -w "$b" 2>/dev/null || printf '%s' "$b")"; fi
-    printf '%s\t-lc\tclaude start' "$b"; return 0
+    if [ -n "$m" ]; then printf '%s\t-lc\tclaude --model %s start' "$b" "$m"; else printf '%s\t-lc\tclaude start' "$b"; fi
+    return 0
   fi
   return 1
 }
@@ -1686,15 +1759,37 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
   local cap launch_n; cap="$(cfg autolaunch_max 3)"; case "$cap" in ''|*[!0-9]*) cap=3;; esac
   launch_n="$n"; [ "$launch_n" -gt "$cap" ] && launch_n="$cap"
 
+  # Model routing (ops/contracts/model-routing.md § Consumers): panes claim RACILY — any pane may
+  # end up holding any ready task — so every launched session rides the MAX tier over ready/
+  # (strong > mid > cheap; a task's model: frontmatter counts when it names a tier). The max tier's
+  # knob unset → no token, and the launch command stays byte-identical to an unrouted fleet.
+  local ftier="" fmodel="" mtok="" tf tov tt
+  for tf in "$BOARD/ready/"*.md; do
+    [ -e "$tf" ] || break
+    [ "$(basename "$tf")" = "IDEAS.md" ] && continue
+    tov="$(fm_get model "$tf" 2>/dev/null || true)"
+    case "$tov" in
+      strong|mid|cheap) tt="$tov";;
+      *) tt="$(tier_for "$(fm_get points "$tf")" "$(fm_get risk "$tf")")";;
+    esac
+    case "$tt" in
+      strong) ftier="strong";;
+      mid)    [ "$ftier" = "strong" ] || ftier="mid";;
+      cheap)  [ -n "$ftier" ] || ftier="cheap";;
+    esac
+  done
+  [ -n "$ftier" ] && fmodel="$(model_for_tier "$ftier")"
+  [ -n "$fmodel" ] && mtok=" --model $fmodel"
+
   local claude_cmd; claude_cmd="$(find_claude || true)"
   local wt_pane=""
-  command -v wt.exe >/dev/null 2>&1 && wt_pane="$(find_claude_windows || true)"
+  command -v wt.exe >/dev/null 2>&1 && wt_pane="$(find_claude_windows "$fmodel" || true)"
   if command -v tmux >/dev/null 2>&1 && [ -n "$claude_cmd" ]; then
     if [ -n "$dry" ]; then
-      note "[dry-run] tmux: $launch_n windows, each running: $claude_cmd \"$msg\""
+      note "[dry-run] tmux: $launch_n windows, each running: $claude_cmd$mtok \"$msg\""
     else
       tmux has-session -t polaris 2>/dev/null || tmux new-session -d -s polaris -c "$PRIMARY"
-      for i in $(seq 1 "$launch_n"); do tmux new-window -t polaris -c "$PRIMARY" "$claude_cmd \"$msg\""; done
+      for i in $(seq 1 "$launch_n"); do tmux new-window -t polaris -c "$PRIMARY" "$claude_cmd$mtok \"$msg\""; done
       say "fleet of $launch_n launched in tmux — attach: tmux attach -t polaris · watch: ops/polaris dash"
     fi
   elif [ -n "$wt_pane" ]; then

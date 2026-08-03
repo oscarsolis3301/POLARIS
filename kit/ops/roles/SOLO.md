@@ -65,6 +65,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    `caveat:` line `finish` printed. **Non-zero** → no H1: what landed, the one pending thing, the
    next command. Full shape in `.claude/output-styles/polaris.md` § How a session ends.
 
+Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+
 ## Hard limits — these end the session, not the gate
 - **Never spawn a subagent.** If the work turns out to need more than one, you were in the wrong
   lane: `bash ops/polaris release <ID> --to ready -m "bigger than solo — needs the full loop"` and

@@ -23,6 +23,8 @@ bash ops/polaris land <ID>           # audits, then squash-merges feat/<ID> into
                                       # (message = task-commit-msg + Landed-from trailer)
 <full test suite + lint + typecheck from CONVENTIONS.md>    # run ONCE, after all lands
 ```
+Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+
 - **The integration lane is shared and lease-serialized — another session may be holding it.**
   integration lane busy → wait; rc 3 with a queued: line means report queued and retry at the next wave boundary
   — `land` and `seal` take the lease for you and print that line when the bounded wait runs out. Never spin on the lease and never ask the human about it; conductor-entered, the `queued:` line verbatim IS your report.

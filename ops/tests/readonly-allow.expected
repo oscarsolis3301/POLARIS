@@ -27,6 +27,13 @@ allow  find ops -maxdepth 2 -type f -exec wc -l {} + | sort -rn | head -50
 allow  find . -name "*.md" -exec grep -l TODO {} \;
 allow  find . -name "*.sh" -exec cat {} +
 allow  find . -type f -exec head -5 {} \; | grep foo
+allow  bash ops/polaris route --points 3 --risk normal
+allow  bash ops/polaris route T-001 --role BUILDER
+allow  bash ops/polaris bg status
+allow  bash ops/polaris bg tail qa -n 40
+allow  bash ops/polaris bg wait qa --max 120
+allow  bash ops/polaris route --role CONDUCTOR | head -1
+allow  bash ops/polaris bg status qa && bash ops/polaris bg tail qa -n 5
 ask  rm -rf /tmp/x
 ask  sed -i 's/a/b/' file.txt
 ask  sed 's/a/b/w /tmp/out' f
@@ -61,3 +68,9 @@ ask  git worktree add /tmp/x
 ask  bash ops/polaris claim T-001
 ask  bash ops/polaris slim --apply
 ask  bash ops/polaris slim --restore
+ask  bash ops/polaris bg run qa
+ask  bash ops/polaris bg run test_fast -- npm test
+ask  bash ops/polaris bg run qa --force
+ask  bash ops/polaris bg
+ask  bash ops/polaris bg sweep --fix
+ask  bash ops/polaris bg status && bash ops/polaris bg run qa

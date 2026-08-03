@@ -38,6 +38,8 @@ Hit a wall? Two kinds, two responses:
 ## 4. Test
 Write tests covering EVERY acceptance checkbox. Then run the commands from `ops/CONVENTIONS.md`: **`test_fast:` if it is set, otherwise `test:`** — plus `lint:` and `typecheck:`. All green or you stay in `active/`. (`test_fast:` is the per-task gate; the full `test:` still runs at the wave gate, in the Integrator's `qa`, and in CI — you are not skipping a gate, you are not re-paying the wave's gate on every handoff. A suite over the harness's tool timeout returns NOTHING and gets re-run, which is worse than useless.)
 
+Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+
 ## 5. Prove and hand off
 ```bash
 bash ops/polaris verify     # optional mid-flight check: diff ⊆ files_owned + verify: commands
