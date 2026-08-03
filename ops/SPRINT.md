@@ -1,4 +1,4 @@
-# SPRINT 9 — Route and background          capacity: 22   dates: 2026-08-03–
+# SPRINT 9 — Route and background          capacity: 23   dates: 2026-08-03–
 
 Model choice is manual prose and long commands die at the harness's cap: PROTOCOL's routing rule is
 advisory (no code reads it, no `model:` field exists, conductor spawns and fleet panes pass
@@ -27,8 +27,9 @@ Contracts: model-routing · bg-jobs (+ module-layout v4). plan: routing-and-bg �
 (22 pts; scope grew +1 mid-sprint: T-072 filed from T-067's gate-integrity finding — `check
 --update/--scaffold` were hook-auto-approved inside compounds, bg-jobs v1.1; T-071 groomed to also
 own kit/ops/PROTOCOL.md for the two § THE TOOL rows, explicit depends_on T-066 per the
-golden-coupling rule).
-W1 T-065 ∥ T-066 ∥ T-067 ∥ T-068 ∥ T-069 (5 disjoint lanes) → W2 T-070 → W3 T-071 ∥ T-072.
+golden-coupling rule; +T-073 filed from T-071's builder — finish's bg guard pended forever on
+rc-less `.prev` archives, bg-jobs v1.2).
+W1 T-065 ∥ T-066 ∥ T-067 ∥ T-068 ∥ T-069 (5 disjoint lanes) → W2 T-070 → W3 T-071 ∥ T-072 ∥ T-073.
 
 ## Burndown
 | date | done pts | remaining |
