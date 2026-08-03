@@ -229,3 +229,4 @@
 {"ts":1785787706,"ev":"handoff","id":"T-069","who":"Owner@DESKTOP","note":""}
 {"ts":1785788129,"ev":"handoff","id":"T-065","who":"Owner@DESKTOP","note":""}
 {"ts":1785788129,"ev":"all-review","id":"T-065","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
+{"ts":1785788693,"ev":"done","id":"T-065","who":"Owner@DESKTOP","note":"","pts":5}
