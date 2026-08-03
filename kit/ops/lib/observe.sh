@@ -1553,12 +1553,14 @@ EOF
   # Background jobs (ops/contracts/bg-jobs.md § finish): a job dir with NO rc file is a suite still
   # in flight — or a crash nobody collected — and either way the run is not over. rc-file-FIRST,
   # then the pid, never the reverse (Windows pid reuse). This reads the registry layout ONLY: the
-  # bg module may not even be installed yet, and no .polaris/bg/ dir means silence.
+  # bg module may not even be installed yet, and no .polaris/bg/ dir means silence. `.prev` dirs are
+  # rotation ARCHIVES (bg-jobs.md § v1.2), never live jobs — skipped here exactly like bg_status/sweep.
   local bgd bgn bgp
   for bgd in "$PRIMARY"/.polaris/bg/*/; do
     [ -e "$bgd" ] || break
-    [ -f "$bgd/rc" ] && continue
     bgn="$(basename "$bgd")"
+    case "$bgn" in *.prev) continue;; esac
+    [ -f "$bgd/rc" ] && continue
     bgp="$(cat "$bgd/pid" 2>/dev/null | tr -d ' \r\n')"
     if [ -n "$bgp" ] && kill -0 "$bgp" 2>/dev/null; then
       fin_pending "background job $bgn still running — collect it: bash ops/polaris bg wait $bgn"
