@@ -63,6 +63,11 @@ clear — then celebrate.)
 never re-plan.
 
 ## Protocol
+**Route every spawn.** Before you spawn ANY subagent, ask the oracle which model it gets: `bash
+ops/polaris route --role <ROLE>` for a role subagent, `bash ops/polaris route <ID>` for a builder
+(its own task's points and risk decide). Line 2 — `   model: <name>` — present → pass that name as
+the spawn's `model` param; absent → omit the param and let the platform default run. One read-only
+call per spawn; routing never blocks work.
 1. **Interview + brief.** Run PLANNER.md steps 0b and 0c yourself — subagents can't talk to the
    human, so the questions and the "what I understood" brief (WILL change · WON'T touch · DONE looks
    like · assumptions) happen here, in `voice:`. Scaled to vagueness: a concrete request gets zero
@@ -83,8 +88,7 @@ never re-plan.
    > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
    > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
    > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
-   > Foreground every command. A suite past your tool timeout goes to a log you POLL — never end a
-   > turn waiting on a notification; a timed-out suite returns NOTHING and gets re-run.
+   > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    It grooms the board, runs `drift`, returns the plan. If it returns a question instead: ask the
    human, spawn a fresh planner with the brief + the answer appended.
 2.5 **Express triage — a single small change skips the full pipeline.** After the planner's report,
@@ -97,7 +101,7 @@ never re-plan.
    whose kickoff names `land --express <ID>` in place of the batch land recipe → and YOU still run
    `bash ops/polaris finish` yourself as the finish line. Skip the QA scout AND EVOLVE — ≤1 task carries
    no signal (the EVOLVE skip rule already exists). Both subagents still carry the two standing kickoff
-   lines (brain-first + foreground).
+   lines (brain-first + long-commands).
 3. **Plan gate — the one human gate.** Present the plan in `voice:`: what gets built, in how many
    parallel lanes, what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
    `drain: queue` (the default) and other tasks already sitting in `ready/`, disclose that too —
@@ -128,15 +132,16 @@ never re-plan.
      Default (`subagents` or unset) → continue.
 4. **Build (parallel subagents).** Lanes = min(ready tasks, `autolaunch_max`, default 3). Spawn ALL
    lanes in ONE message, in the background, each pinned to a distinct task ID from the ready queue
-   (top-wsjf first — you know the queue; the lock still protects against races):
+   (top-wsjf first — you know the queue; the lock still protects against races). Route each lane
+   first — `bash ops/polaris route <ID>`, per the preamble rule — so every builder spawns at its
+   own task's tier:
    > You are a BUILDER, conductor-entered. Read ops/roles/BUILDER.md and execute it. Claim <ID> and
    > complete it end to end. A spec ambiguity → return the question as your result instead of asking
    > the human. Stop at the review handoff; return: ID · branch · one-line summary · test results.
    > FIRST run `bash ops/polaris pack <ID>` — that output IS your context: the task, its contract,
    > the house style to match, what you own, the API surface not to break, and your verify: list.
    > Anything it does not answer: `bash ops/polaris find <symbol>`, one hop, before any Grep.
-   > Foreground every command. A suite past your tool timeout goes to a log you POLL — never end a
-   > turn waiting on a notification; a timed-out suite returns NOTHING and gets re-run.
+   > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    Say once where to watch (`bash ops/polaris dash` · 127.0.0.1:7373). As each lane reports, relay
    ONE line in `voice:` — "✅ 2 of 5 done — the nav restyle landed, tests green" — useful, plain,
    never a dump. Lane free + ready task left → spawn the next builder immediately.
@@ -172,8 +177,7 @@ never re-plan.
    > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
    > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
    > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
-   > Foreground every command. A suite past your tool timeout goes to a log you POLL — never end a
-   > turn waiting on a notification; a timed-out suite returns NOTHING and gets re-run.
+   > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    > Return your report: merged · kicked back + why · suite status · newly promoted.
    - `risk: high` in its report → `bash ops/polaris notify-gate risk <ID>` (additive — approval
      happens HERE, in conversation, under every knob), ask the human "approve <ID>?" and relay ONLY
@@ -206,8 +210,7 @@ never re-plan.
    > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
    > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
    > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
-   > Foreground every command. A suite past your tool timeout goes to a log you POLL — never end a
-   > turn waiting on a notification; a timed-out suite returns NOTHING and gets re-run.
+   > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    > Return findings as path:line one-liners, or "clean".
    Anything red — from `qa` or the scout — starts a **fix wave**: spawn a planner subagent to file
    the failures as bug task(s), then build → integrate → re-run `qa`. Cap: **`run_fix_waves`, default 2**;
@@ -239,8 +242,7 @@ never re-plan.
    > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
    > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
    > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
-   > Foreground every command. A suite past your tool timeout goes to a log you POLL — never end a
-   > turn waiting on a notification; a timed-out suite returns NOTHING and gets re-run.
+   > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    Its proposals go into the close report, numbered — the human applies one by replying
    "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Skip this
    step only when the run built ≤1 task — there is no signal in a sample of one.
