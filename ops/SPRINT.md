@@ -26,6 +26,9 @@ lease-long since T-057); pid-guard it like the lease (shared-checkout v1.1).
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-08-03 | 7 (T-057 5pts, T-061 2pts, wave 1, sealed sprint/8 2f14623) | 22 · T-058 + T-059 + T-060 promoted to `ready/` (T-057 done unblocks all three; ownership disjoint: integrate+history · builder+board+remote · observe+admin+policy) · T-062 correctly held in `backlog/` — it overlaps all three on the selftest shards · cycle p50 0.7h n=55 · kickbacks 0 · suite green sharded + build green + uat 12/12 · MEASURED: `doctor --selftest --parallel 3` = 169s vs 805s serial for all 21 drills, which puts the whole wave gate under the harness's 600s tool cap for the first time |
+| 2026-08-03 | 20 (+T-058 5pts, +T-059 5pts, +T-060 3pts, wave 2, re-sealed sprint/8 2f14623→722ad1d) | 9 · T-062 + T-063 promoted to `ready/` beside the planner's T-064 · scope grew +2 pts mid-sprint (27→29): T-064 filed from my audit of T-058 — unguarded `mutex_off` + a never-disarmed `on_die` trap, armed lease-long since T-057 · cycle p50 0.7h n=58 · kickbacks 0 · suite green sharded 202s + build green · uat 11/12: `triage-lane` RED and NOT the sprint's — it asserts `polaris triage` against the LIVE board, and the planner filing T-064 mid-wave flipped line 1 `full`→`solo`; reproduced identically on bare `main` with zero sprint code, so role §3's flake clause applies — sealed, logged, not kicked back |
+| 2026-08-03 | 29 (+T-062 5pts, +T-063 2pts, +T-064 2pts, wave 3, re-sealed sprint/8 722ad1d→fe32671) | 0 — sprint complete, all 8 tasks of plan n-chats-one-repo landed · cycle p50 0.7h n=61 · kickbacks 1 (3%), mine and procedural: T-063 added a PROTOCOL heading that `api-kit.expected` records, but T-062 owns that golden, so the two parallel lanes were coupled through a file neither could reconcile alone — bisect (T-064 green → +T-063 red → +T-062 red, same single line) named T-063 the offender while only T-062 could legally fix it, so T-062 took the bounce · `check --update` is "a human/Builder decision, never automatic" per its own help, so the integrator routed it to the owning Builder instead of self-approving · build avg 0.3h / integrate avg 3.7h · final gate: suite green sharded 330s across 25 drills (4 new labels) + build green + uat 12/12 |
 
 # SPRINT 7 — The recorded yes          capacity: 28   dates: 2026-07-28–
 
@@ -180,24 +183,41 @@ exercises but a Builder cannot.
   before you believe it — role §3's flake clause paid for itself here; the golden's content was
   byte-exact, ordering included. T-056 pins both globs `eol=lf`; the `.cmd` half matters most, since
   `check` runs those through `bash -c`, so CRLF there breaks execution, not merely comparison.
-- A TASK THAT CHANGES THE PUBLIC API SURFACE MUST OWN THE GOLDEN THAT RECORDS IT. T-047 added three
-  contract-named fns to `ownership.sh` but did not own `ops/tests/api-kit.expected`, and its `verify:`
-  ran only `check --only startup-budget` — so its narrow gate passed while the wave-level `uat:` failed
-  on a file the Builder could not legally edit. Cost: a kickback, a `grant`, and a second land.
-  Planner: hand any surface-changing task the recording golden up front. T-048 (`polaris approve`,
-  owns `kit/ops/polaris` + `builder.sh`) adds fns too and will hit this again if carved as-is.
+  STILL UNPINNED (sprint 8): `docs/sprints/*.md` falls through the same `* text=auto`, so every
+  `report` write warns "LF will be replaced by CRLF". Harmless today — git's filters normalize both
+  directions, so T-061's only-dirt self-commit check is sound and sees no false dirt — but the
+  sprint-report contract claims the file is "byte-stable given the same inputs", and that claim is
+  only literally true once the glob is pinned `eol=lf`. One line in `.gitattributes`.
+- A GOLDEN THAT RECORDS A *DERIVED* SURFACE SILENTLY COUPLES EVERY TASK THAT FEEDS IT — three
+  instances now, so treat it as structural, not bad luck. Sprint 7: T-047 added fns to `ownership.sh`
+  without owning `ops/tests/api-kit.expected`. Sprint 8: T-063 (docs) added ONE PROTOCOL heading —
+  `api-kit` records headings too, not just fns — while T-062 (tests) owned the golden; `files_owned`
+  were disjoint, the ready gate was satisfied, and the two lanes were still coupled through a file
+  neither could reconcile alone. Bisect named T-063 the offender (T-064 green → +T-063 red → +T-062
+  red, same single line) while only T-062 could legally fix it, so the bounce went to T-062 — the
+  mechanical offender and the legal fixer are NOT always the same task. The live-board variant is the
+  same shape: `triage-lane` pins `triage`'s output against the real board, so the Planner filing T-064
+  mid-wave turned it red with zero code changed (T-062 made it hermetic). PLANNER: either the golden's
+  owner owns every file feeding it, or surface-touching tasks get an explicit `depends_on` chain
+  instead of parallel lanes — the ready gate compares paths and CANNOT see this. INTEGRATOR: never
+  `check --update` yourself; its own help says "a human/Builder decision, never automatic".
 - A `risk: high` task at the ROOT of the dependency tree stalls the whole board, not just itself.
   T-047 was audited and verified for days while T-048/T-049/T-050 (13 of 28 pts) sat behind it and
   `ready/` was empty — it waited 128.9h at the gate, which alone moved integrate avg 1.5h→3.9h. The
   approval is cheap at the plan gate and expensive here, exactly as the `ask` mechanism this sprint
   ships argues for its own scopes. Get the yes before the wave, not at the merge.
-- T-055 documents `ask`-guarded `solo` routing in PROTOCOL.md § LANES that T-049 has not shipped yet
-  (deliberate — the Planner's carve says so). Until T-049 lands, that line and MANUAL's by-hand `ask`
-  recipe describe behavior the CLI does not have. T-047 is merged now, so T-049 is unblocked and in
-  `ready/` — ship it before this gap outlives the sprint.
-- Contract-pinned phrases across parallel doc lanes held again (T-053/T-054/T-055 wrote the same
-  strings into 9 files from 3 lanes, 0 conflicts) — but they are only as good as their line breaks.
-  SOLO.md hard-wrapped the pinned one-liner mid-phrase ("lifted\nonly by a human"), so
-  `grep -q 'lifted only by a human'` fails on that one file while the other eight pass. Planner: the
-  contract's Pinned phrasing section must say ON ONE LINE, NEVER HARD-WRAPPED, and the grep belongs
-  in `verify:` for EVERY file the task touches, not just one.
+- THE SUITE SHARDS, AND THAT CHANGES THE INTEGRATOR'S RHYTHM. `doctor --selftest --parallel 3`
+  (hermetic since T-046) ran the FULL drill set in 169s / 202s / 330s across sprint 8's three wave
+  gates — versus 805s serial — with all 21→25 drills covered, not a subset. That is the first time
+  the whole wave gate fits under the harness's 600s tool cap, so a wave gate is now a plain
+  foreground call instead of the log-to-a-file-and-poll recipe CONVENTIONS still describes. Measure
+  before assuming: the serial 805s figure is what drove three sprints of background-and-poll
+  ceremony. EVOLVE: `test:` is a candidate to carry `--parallel 3` outright.
+- EVERY LOCK NEEDS AN OWNER CHECK, AND RECOVERY-BY-AGE MUST STAY OWNER-BLIND. Found auditing T-058,
+  fixed by T-064: the integration lease was pid-guarded but the board mutex was not — `mutex_off` was
+  an unconditional `rm -rf`, and `on_die` never disarmed, so ANY process exit deleted whatever mutex
+  existed, including one another session legitimately held. T-057 widened the window from one board
+  mutation to a whole landing pass by arming the trap lease-long. The tell was the ASYMMETRY between
+  two locks in the same codebase — worth grepping for whenever one lock learns something the others
+  did not. The fix's second half matters as much: `mutex_on`'s staleness steal stays deliberately
+  pid-blind, because pid-guarding recovery would make a crashed holder's lock immortal.
