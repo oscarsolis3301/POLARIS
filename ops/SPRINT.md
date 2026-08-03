@@ -1,3 +1,35 @@
+# SPRINT 9 — Route and background          capacity: 21   dates: 2026-08-03–
+
+Model choice is manual prose and long commands die at the harness's cap: PROTOCOL's routing rule is
+advisory (no code reads it, no `model:` field exists, conductor spawns and fleet panes pass
+nothing), and the suite — MEASURED 805s serial, 169-330s sharded, `qa` 1225s — times out against
+the 600s foreground ceiling, returns NOTHING, and gets re-run; two subagents did exactly that last
+sprint. This sprint makes both mechanical. F1: `tier_for(points,risk)` + `model_for_tier` in
+core.sh, `polaris route` (line 1 = bare tier word; `   model:` note only when a CONVENTIONS knob
+maps it), knobs model_strong/mid/cheap (THIS repo pins fable/opus/sonnet — owner decision
+2026-08-02, never haiku), CONDUCTOR route-per-spawn, fleet `--model` injection incl. the wt.exe
+pane tokens (max tier over ready — panes claim racily), pack `· tier`, TASK.md `model:` override.
+F2: `kit/ops/lib/bg.sh` — dir-per-job `$PRIMARY/.polaris/bg/<name>/`, rc-file-first verdicts then
+`kill -0` (pid semantics from birth — the T-064 lesson), run/status/tail/wait (`--max` 300 default:
+chunked under the cap), `.prev` rotation, `sweep --fix` >24h, `finish` pends on running jobs;
+readonly-allow arms `route` + `bg status/tail/wait`; PROTOCOL § LONG COMMANDS finally writes the
+recipe and the five duplicated CONDUCTOR blockquotes collapse to one canonical pointer. api-kit is
+the ONLY moving shared golden: ONE owner per wave (T-065 → T-070 → T-071), the wave-1 heading swap
+cross-pinned in the contract, every other wave-1 lane surface-frozen (Learned-log rule, 3 prior
+instances). New goldens route-tier + bg-lifecycle are hermetic by construction (fixture repos, flag
+forms — the T-062 pattern). Release: 5.24.0 lands ONCE at program end, AFTER this sprint —
+VERSION + CHANGELOG + tag + published release + dogfood as one ritual (cli-help goldens regenerate
+at dogfood); the plan's R-8 release task is deliberately NOT on this board, same reason sprint 8
+dropped I-8: `pack.py --dogfood` installs the PUBLISHED release only, and a landed VERSION bump
+without its tag reds the one-version-everywhere gate. Both waves still run installed 5.23.0 board
+mechanics (route/bg/park exist in kit only — prove new behavior via `bash kit/ops/polaris …`).
+Contracts: model-routing · bg-jobs (+ module-layout v4). plan: routing-and-bg → T-065..T-071 (21 pts).
+W1 T-065 ∥ T-066 ∥ T-067 ∥ T-068 ∥ T-069 (5 disjoint lanes) → W2 T-070 → W3 T-071.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 8 — N chats, one repo          capacity: 29   dates: 2026-08-03–
 
 Two chats on this repo today meet each other as errors: the second is told "another agent is
