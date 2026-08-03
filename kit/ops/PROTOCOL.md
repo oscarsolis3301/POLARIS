@@ -12,6 +12,7 @@ when you actually need it. Read the section you need, not the file.
 | what a second chat does when the lock, the lane or the tree is busy | N CHATS, ONE REPO |
 | how to stay cheap: pack-first, find-first, read-less | TOKEN DISCIPLINE |
 | which model tier a role deserves | MODEL ROUTING |
+| how to run a command that outlives the 600s tool cap | LONG COMMANDS |
 | how to TALK to the human | VOICE |
 | how to behave as a model running this | MODEL NOTES |
 
@@ -160,10 +161,71 @@ disjointness gate is the backstop that blocks the loser rather than letting two 
 - **Spikes exist so five tasks don't each re-explore.** Time-boxed read, written verdict, done.
 - **Prove it with a command, not a subagent.** Anything a shell command can check — a route responds, an export still exists, output still matches — belongs in the task's `verify:` list or in `ops/tests/` as a golden, written ONCE while the context is already in hand. `polaris check --scaffold` generates the mechanical half. A model re-checking by hand every wave is the single most expensive habit this protocol exists to kill.
 
-## MODEL ROUTING (cost — set per session by the human)
-- INIT / PLANNER / INTEGRATOR / EVOLVE: strongest tier available — their mistakes multiply.
-- BUILDER: mid tier for tasks ≤3 points; strongest tier for 5-point or `risk: high` tasks.
+## MODEL ROUTING (auto — polaris route decides)
+- **Ask, never guess.** `ops/polaris route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>]` is the
+  one oracle. Line 1 is always exactly one of `strong` · `mid` · `cheap` — bare, machine-parseable,
+  parse it blind. Line 2 is `   model: <name>`, and appears ONLY when that tier's mapping knob is
+  set. Read-only: no lock, no board write, no hook.
+- **The derivation**, which `route` runs whenever nothing overrides it: `risk:` ≠ `normal` → `strong`
+  (risk dominates points) · points ≥5 → `strong` · points ≤1 → `cheap` · everything else → `mid`.
+  Missing or non-numeric points → `mid`, the safe middle. Routing NEVER blocks work — an unknown role
+  falls back to `mid` with a note and rc 0; only no-args and an unknown ID are errors.
+- **Roles come from a table, tasks are derived.** INIT · PLANNER · INTEGRATOR · EVOLVE · CONDUCTOR →
+  `strong`, because their mistakes multiply · SOLO and the qa scout → `mid` · BUILDER → whatever its
+  task derives, so ask `route <ID>`, never `route --role BUILDER`.
+- **A task may override.** Optional `model:` frontmatter: `strong`/`mid`/`cheap` names that tier; any
+  other value is a LITERAL model name, echoed verbatim on line 2 with the derived tier still on
+  line 1 for information.
+- **Tier words become model names in exactly ONE place** — `model_strong:` / `model_mid:` /
+  `model_cheap:` in `ops/CONVENTIONS.md`. Unset knobs change NOTHING: the CLI speaks tier words only
+  and every command stays byte-identical to an unconfigured repo. Naming models is a per-repo
+  decision and never a kit default — THIS repo pins strong=fable · mid=opus · cheap=sonnet; yours
+  pins whatever it wants, or nothing.
+- **Consumers, so nobody re-derives it:** the CONDUCTOR runs `route` before EVERY spawn and passes
+  line 2's name as the Agent-tool `model` param (no line 2 → omit the param, let the platform default
+  run) · `fleet` injects `--model <name>` at the MAX tier over ready tasks, because panes claim
+  racily and any pane may end up holding any task · `pack` prints `· tier <t>` in its header line.
+- **The honest boundary.** A RUNNING session cannot switch its own model. Routing governs what gets
+  SPAWNED (subagents) and LAUNCHED (panes); for the session already reading this, `triage` and
+  `status` merely hint — acting on the hint means starting the next session at the right tier, not
+  re-rolling this one.
 - Phrase is tier-relative on purpose: models change, the routing rule doesn't.
+
+## LONG COMMANDS — living under the 600s tool cap
+A foreground tool call is capped at 600s (600000ms). Past that it returns NOTHING — you lose the run,
+learn nothing, and re-run it. MEASURED on this repo, so nobody re-measures:
+
+| command | measured | under the cap? |
+|---|---|---|
+| `doctor --selftest` spine only | 144s | yes |
+| `test_fast:` — the 4-drill subset | 320s | yes |
+| `doctor --selftest --parallel 3` — 25 drills, sharded | 169-330s | yes |
+| `test:` — the full selftest, serial | 805s | **no** |
+| `ops/polaris qa` — the whole loop | 1225s | **no** |
+
+Three bands, and the band is a property of the MEASURED time, not of how important the command feels:
+1. **Under ~60s** — plain foreground call. No ceremony.
+2. **60s to the cap** — foreground WITH an explicit tool timeout ≥ the measured time (600000ms for
+   anything near the top of the range). A defaulted timeout is how suites die at 120s.
+3. **Past the cap** — `ops/polaris bg run <key>` (a bare CONVENTIONS suite key: `test` · `test_fast` ·
+   `lint` · `typecheck` · `build` · `uat` · `qa`), keep working, then collect in bounded chunks with
+   `bg wait <key> --max 300`. Exit 2 means still running: call it again. `bg tail` reads the log
+   without waiting.
+
+- **SUBAGENT rule — never end a turn with a job still running.** Your existence ends with your turn,
+  and completion notifications re-invoke only the TOP-LEVEL session, so a job you leave behind has
+  nobody left to collect it and needs a conductor rescue (two of those last sprint). Poll INSIDE your
+  turn: chunked `bg wait` until it returns a verdict, then report.
+- **TOP-LEVEL rule** — the main session may instead use the harness's native `run_in_background`,
+  because it is the one context a completion notification can wake.
+- **Invariant 4 is absolute either way.** `bg wait` must return 0 for YOUR suites BEFORE
+  `handoff` · `land` · `seal` · `finish`. Backgrounding moves the suite off the critical path; it
+  never moves the gate. `finish` enforces this — any job with no verdict is a pending line.
+- **Stamp the wave with it.** `bg run qa` always executes in the primary checkout and stamps
+  `.polaris/suite-stamp` when green, so a green `qa` on a clean tree makes the later `finish` seconds
+  instead of 1225s. Start it at the top of the wave gate and drain `review/` while it runs.
+- Mechanics — registry layout, rc-file-first verdicts (a pid check alone NEVER declares one), one-slot
+  rotation, the `finish` guard — are specified in `ops/contracts/bg-jobs.md`.
 
 ## VOICE — how you TALK to the human (`voice:` in `ops/CONVENTIONS.md`, default `standard`)
 | `voice:` | How you speak |
