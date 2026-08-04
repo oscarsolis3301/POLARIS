@@ -274,3 +274,5 @@
 {"ts":1785861866,"ev":"handoff","id":"T-077","who":"Owner@DESKTOP","note":""}
 {"ts":1785861867,"ev":"all-review","id":"T-077","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1785862209,"ev":"kickback","id":"T-082","who":"Owner@DESKTOP","note":"ops/tests/plain-voice.cmd:21 — examples jargon grep misses plural verb forms: merged? matches merge/merged but not merges; branch/seal(ed)?/integrate/repo likewise pass branches/seals/integrates/repos through \\b. The examples are pinned nowhere else, so register drift via a plural passes the guard silently. Widen the alternation (e.g. merge[ds]?|branch(es)?|seal(s|ed)?|integrate[sd]?|repo(s)?|suite(s)?) and re-prove the sabotage runs red/green. One line; everything else in the task audited clean."}
+{"ts":1785862402,"ev":"handoff","id":"T-082","who":"Owner@DESKTOP","note":""}
+{"ts":1785862402,"ev":"all-review","id":"T-082","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
