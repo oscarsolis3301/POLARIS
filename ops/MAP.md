@@ -1,4 +1,4 @@
-# MAP — POLARIS            (updated: 2026-07-18, by EVOLVE)
+# MAP — POLARIS            (updated: 2026-08-03, by EVOLVE)
 
 ## Stack
 Bash (>= 3.2 — macOS default; no mapfile, no assoc arrays) + Python 3 stdlib only.
@@ -8,11 +8,16 @@ Windows/Git Bash; CI proves all three on every push.
 ## The one thing to understand
 The repo is BOTH the product and a user of it. `kit/` is what ships. `ops/` is a real POLARIS
 installation running this repo's board. Never hand-edit `ops/` — see ops/CONVENTIONS.md § THE SPLIT.
+The installed copy also LAGS the source mid-sprint, and the tell that a selftest ran on the right
+driver is the LABEL LIST: `bash kit/ops/polaris doctor --selftest` registers kit-only drill labels
+(27 at 6.0 vs the installed 21 — `bg`, `route`, `park`, `pushdegrade`…), so a green from
+`ops/polaris` can silently prove none of the sprint's new behavior.
 
 ## Entry points
 | Path | What it is |
 |---|---|
 | kit/ops/polaris | THE CLI **entry point** — ~230 lines: fast paths (find/show/help), lib loader, resolved globals, dispatch. Every `cmd_*` body lives in kit/ops/lib/ since 5.16.0. |
+| kit/ops/lib/ | The command bodies — runtime-sourced modules: core · ownership · builder · integrate · knowledge · observe · admin · workspace (shared-checkout mechanics: id_ok · wt_add · stray_feat_repair · int_on/int_off integration lease, rc 3 queued · park/unpark) · bg (background jobs: run/status/tail/wait, dir-per-job `.polaris/bg/<name>/`, rc-file-first verdicts, `.prev` rotation, sweep --fix rotates >24h) + selftest/ drill groups. Contracts: module-layout · shared-checkout · bg-jobs. |
 | kit/ops/install.sh | Installs the kit into any repo. Two paths: fresh vs live-board (test = target has ops/CONVENTIONS.md). |
 | kit/ops/bootstrap.py | The zipapp entry — packed to the archive ROOT as `__main__.py`, so `python polaris-v5.zip` just works. Also arms the machine (~/.claude skill + cached kit + permission rules). |
 | kit/ops/pack.py | Kit-repo tool, never shipped. Builds polaris-v5.zip from `git ls-files` run inside kit/. `--dogfood` installs the published release here. |
@@ -26,8 +31,10 @@ installation running this repo's board. Never hand-edit `ops/` — see ops/CONVE
 | Path | Purpose | Notes |
 |---|---|---|
 | kit/CLAUDE.md | The protocol. Installed as a MARKED, managed block in the target's CLAUDE.md. | Source of truth for the invariants. |
-| kit/ops/roles/ | INIT · PLANNER · BUILDER · INTEGRATOR · EVOLVE — one file each, read by the agent playing that role. | |
-| kit/ops/templates/ | TASK.md, CONTRACT.md — what the Planner instantiates. | |
+| kit/ops/roles/ | INIT · PLANNER · SOLO · BUILDER · INTEGRATOR · CONDUCTOR · EVOLVE — one file each, read by the agent playing that role. | |
+| kit/ops/templates/ | TASK.md, CONTRACT.md — what the Planner instantiates — plus ROADMAP.md, the human-authored standing-goal skeleton. | |
+| kit/ops/PROTOCOL.md | The extended protocol: full command table · LANES · TOKEN DISCIPLINE · § MODEL ROUTING (auto — `polaris route` decides; knobs, override, honest boundary) · § LONG COMMANDS (measured suite tiers vs the 600s tool cap, bg doctrine, subagent turn rule) · § N CHATS, ONE REPO (the second-chat decision table). | |
+| kit/ops/KEYS.tsv | The CONVENTIONS key registry (key · since · default · absent-cost), shipped via KIT_CODE; doctor's one-line drift report and `polaris adopt` consume it. | Contract: ops/contracts/key-registry.md. |
 | kit/ops/MANUAL.md | Fallback git recipes for environments that cannot execute the CLI. | Must mirror the CLI's behaviour. |
 | kit/ops/PROMPTS.md | Copy-paste kickoffs for every role. | |
 | kit/ops/VERSION | version + the four URLs (channel/tarball/repo/zip) that installed kits poll. | **Human-only.** A bump is a release act. |
@@ -44,6 +51,31 @@ installation running this repo's board. Never hand-edit `ops/` — see ops/CONVE
   compatibility surface for every kit installed before the `kit/` split. Refreshing it is `--dogfood`.
 - **the update notice** → `raw.githubusercontent.com/…/main/ops/VERSION` — again the instance.
 
+## Board mechanics (how state, seals and publishing actually move)
+- Board state lives on `refs/heads/polaris/board` — board mutations never touch `<base>`'s
+  first-parent; a done task's `map_delta` lands as a `docs(map)` base commit. `upgrade` migrates a
+  pre-5.14 board onto the ref, `doctor`/`resume` materialize it in a fresh clone, `uninstall`
+  deletes it.
+- `seal` is per integration wave: the `sprint/<n>` tag moves to each wave's merge, and
+  `history --tasks` spans waves. `polaris report` renders `docs/sprints/sprint-<n>.md`; seal
+  commits it on each wave.
+- `publish: direct|pr` — pr mode keeps feat branches local; seal pushes ONE integrate branch and
+  prints the host PR URL; `seal --sync` finishes after the human merges.
+- 6.0 autonomy defaults: unset knobs compose auto / default-safe / auto-reversible;
+  `autonomy: standard` is the one-line opt-out; doctor prints the effective composition
+  unconditionally (ops/contracts/hands-free-knobs.md v2).
+
+## CLI surface beyond the build loop (claim · build · verify · handoff · pack · find/show · check)
+`triage` (prints your lane) · `route [<ID>|--role R|--points N --risk R]` (mechanical model tier —
+line 1 bare word, `model:` note from CONVENTIONS knobs; fleet injects `--model` per pane, `pack`
+header carries `· tier`) · `brain [--refresh]` (generated `.polaris/brain/` knowledge base;
+seal auto-refreshes, doctor warns when stale) · `land --express <ID>` (audit+land+one full
+suite+seal+run-verify+done in one pass) · `status --brief` · `metrics` (opens with a plain-English
+summary) · `doctor --selftest --only <glob>` / `--parallel <N>` · `park`/`unpark` (dirty trees
+become named stashes) · `approve <ID> <scope> -m "why"` (records a human's yes to an `ask` rule) ·
+`notify-gate <kind> [ID]` + `POLARIS_SEVERITY` in the notify env contract · `finish` (pends on
+running bg jobs) · `bg run/status/tail/wait` (see the lib row above).
+
 ## Danger zones — agents NEVER edit these (machine-enforced, ops/RULES.tsv)
 | Path | Why |
 |---|---|
@@ -55,11 +87,17 @@ installation running this repo's board. Never hand-edit `ops/` — see ops/CONVE
 not installed code — they are written normally, by the board scripts and by the Planner/Integrator.
 
 ## Generated / vendored — never edit, never read
-`.polaris/` (worktrees + update cache, gitignored) · `polaris-v5.zip` (build output, gitignored) ·
+`.polaris/` (worktrees + update cache + generated brain/ + bg/ job dirs, gitignored) · `polaris-v5.zip` (build output, gitignored) ·
 `archive/` (retired files, kept for history — never ships) · `__pycache__/`
 
 ## Hotspot files (conflict magnets — Planner must chain these, never parallel-own)
-- `kit/ops/polaris` — one file, every command. Two tasks both editing it WILL collide. Chain them.
+- `kit/ops/polaris` + `kit/ops/lib/*.sh` — the entry is thin since the 5.16.0 split, but each lib
+  module is a conflict magnet in its own right; chain tasks touching the SAME module (sprint 10
+  chained observe.sh and install.sh serially, 0 kickbacks).
+- `ops/tests/api-kit.expected` — a DERIVED-surface golden: it records every top-level fn AND every
+  markdown heading under `kit/`, so it silently couples every task that adds either. ONE owner per
+  wave (ops/contracts/key-registry.md § 5), everyone else surface-frozen — three sprints of
+  defects, then four waves at 0 kickbacks, earned this rule.
 - `kit/CLAUDE.md` — the protocol. Same problem.
 - `kit/ops/install.sh` — fresh path and live-board path are ~40 lines apart.
 
@@ -68,46 +106,3 @@ not installed code — they are written normally, by the board scripts and by th
   tarball/raw-channel paths working regardless, so this is untested-in-the-wild, not unsafe.
 
 ## Deltas
-
-
-- templates/ gains ROADMAP.md — human-authored standing-goal skeleton (P3, 5.13.0-unreleased)  (T-016, 2026-07-18)
-
-- polaris gains notify-gate <kind> [ID] + POLARIS_SEVERITY in the notify env contract (5.13.0-unreleased)  (T-013, 2026-07-18)
-
-- seal is per integration wave — sprint/<n> tag moves to each wave's merge; history --tasks spans waves (5.13.0-unreleased)  (T-017, 2026-07-18)
-
-- board state lives on refs/heads/polaris/board — board_commit/sync_board use secondary-index plumbing; base first-parent stays chore(board)-free; done's map_delta is a docs(map) base commit (5.14.0-unreleased)  (T-020, 2026-07-20)
-
-- upgrade migrates a 5.13 board to polaris/board; doctor/resume materialize a fresh clone's board from the ref; uninstall deletes the branch (5.14.0-unreleased)  (T-021, 2026-07-20)
-
-- publish direct|pr — pr mode keeps feat branches local, seal pushes ONE integrate branch + prints the Bitbucket PR URL, seal --sync finishes after the human merges (5.14.0-unreleased)  (T-022, 2026-07-20)
-
-- polaris report [--sprint n | --all] renders docs/sprints/sprint-<n>.md from the board; seal commits it on each wave (5.14.0-unreleased)  (T-023, 2026-07-20)
-
-- polaris gains brain [--refresh] — generated .polaris/brain/ knowledge base (INDEX + 5 domain files, ≤4-hop); seal auto-refreshes it, done/seal touch board-changed, doctor warns when stale (5.15.0-unreleased)  (T-030, 2026-07-20)
-
-- land gains --express <ID> — audit+land+ONE full suite+seal+run-verify+done in one pass, refusals per express-lane contract; qa stamps suite duration, land hints when a paranoid suite ran >2min (5.15.0-unreleased)  (T-031, 2026-07-20)
-
-- status gains --brief (one plain-English paragraph) · metrics opens with an In-plain-English summary line (5.15.0-unreleased)  (T-032, 2026-07-20)
-
-- doctor --selftest gains --only <glob> — spine + matching labeled drills only; full run byte-identical (5.15.0-unreleased)  (T-033, 2026-07-20)
-
-- "kit/ops/lib/ added — runtime-sourced CLI modules (core·ownership·builder·integrate·knowledge·observe·admin + selftest/ groups); kit/ops/polaris = entry (globals + lib-loader + dispatch)"  (T-041, 2026-07-21)
-
-- "readonly-allow.sh hook + bench.sh added; polaris gains `triage`; SOLO role; ops/contracts/code-index.md written"  (5.20.0, 2026-07-25)
-
-- "kit/ops/lib/workspace.sh — shared-checkout mechanics: id_ok · wt_add · stray_feat_repair · int_on/int_off (integration lease, rc 3 queued) · wave_on · park/unpark; CLI dispatches park/unpark (ops/contracts/shared-checkout.md)"  (T-057, 2026-08-03)
-
-- "kit/ops/PROTOCOL.md gains § N CHATS, ONE REPO — the second-chat decision table (ops/contracts/shared-checkout.md)"  (T-063, 2026-08-03)
-
-- "polaris gains route [<ID>|--role R|--points N --risk R] — mechanical model tier (line 1 bare word, optional model: note from CONVENTIONS knobs); fleet injects --model (max tier over ready, tmux + wt.exe tokens); pack header gains · tier; finish pends on running bg jobs (5.24.0-unreleased)"  (T-065, 2026-08-03)
-
-- "kit/ops/PROTOCOL.md — § MODEL ROUTING is auto (polaris route decides; knobs, override, honest boundary) and gains § LONG COMMANDS (measured suite tiers vs the 600s cap, bg doctrine, subagent turn rule) (5.24.0-unreleased)"  (T-066, 2026-08-03)
-
-- "kit/ops/lib/bg.sh — background job runner: bg run/status/tail/wait, dir-per-job $PRIMARY/.polaris/bg/<name>/, rc-file-first verdicts, .prev rotation, sweep --fix rotates >24h (ops/contracts/bg-jobs.md) (5.24.0-unreleased)"  (T-070, 2026-08-03)
-
-- "BREAKING 6.0: autonomy knobs default to auto/default-safe/auto-reversible when unset; `autonomy: standard` is the one-line opt-out; doctor prints the effective composition unconditionally (hands-free-knobs.md v2)"  (T-075, 2026-08-03)
-
-- "kit/ops/KEYS.tsv added — the CONVENTIONS key registry (key · since · default · absent-cost), shipped via KIT_CODE, consumed by doctor drift + adopt (ops/contracts/key-registry.md)"  (T-074, 2026-08-03)
-
-- "polaris gains `approve <ID> <scope> -m \"why\"` — records a human's yes to an `ask` rule on one task (ops/contracts/ask-approval.md)"  (T-048, 2026-08-03)
