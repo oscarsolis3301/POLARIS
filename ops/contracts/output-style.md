@@ -87,3 +87,98 @@ restates the other.
    the quiet lines above the `▶ NEXT` epilogue (≤2), which is why the settings merge is silent.
 8. Known, accepted wart: deleting `outputStyle` is indistinguishable from a fresh install, so a
    deletion returns on the next update. The remedy is to set a different value, not to delete it.
+
+## v2 — radically plain standard (2026-08-04)
+v1 shipped the mechanism; the words it delivered stayed technical. The owner's complaint, verified:
+under `voice: standard` a real close read "Wave 1 is sealed as sprint/10, the tree is clean, and
+waves 2–5 sit on the board with their dependencies satisfied" — short, dense, every noun jargon.
+Three root causes, all in the v1 texts themselves: the `standard` row banned only POLARIS jargon and
+its "unless you explain it in the same breath" escape hatch **licensed** jargon; the 7 OUTPUT
+DISCIPLINE rules optimize volume, not simplicity; and the style's own worked examples — the model's
+imitation target — said "Full suite is green on `main`". v2 replaces the words. Mechanism, keys,
+installer behavior, and every v1 invariant are untouched.
+
+### The register ban — the new `standard` row
+The escape hatch is dead: zero occurrences of "in the same breath" anywhere in either file. The row
+below goes into `kit/ops/PROTOCOL.md` § VOICE as ONE physical table-row line, and the same sentences,
+unwrapped from the table, become the opening paragraph of the style's § Voice. Byte-exact sentences:
+
+> Warm, friendly, everyday English — the bar: someone who has never used git or run a test
+> understands every sentence. No POLARIS jargon, and no trade words either — never "branch",
+> "merge", "suite", "green", "CI", "worktree", "seal", "commit". Don't explain a technical word —
+> drop it and say the outcome instead: merged → "saved into the main copy" · suite green → "every
+> check passed" · branch → "a separate working copy" · parked/blocked → "set aside", plus why.
+> Commands you tell them to run stay verbatim. Lead with what happened and what it means for them;
+> leave out detail they didn't ask for.
+
+`voice: technical` is untouched — row and behavior.
+
+### The 7 rules, re-cut (count deliberately unchanged — the pin expects exactly 7)
+Byte-identical in both files, still exactly 7 numbered-bold lines, no other `^[0-9]\. \*\*` line
+anywhere in the style file:
+
+1. **Lead with the action**, not the context. Answer first, explain only if asked.
+2. **Number multi-step work; cap every list at 5.** More than five is a dump, not a report.
+3. **End with ONE concrete next step**, doable in under two minutes. Not three options.
+4. **No preamble, no recap, no closing pleasantry.** Start at the answer, stop when it ends.
+5. **Restate where things stand, every message** — "3 of 5 done, 2 to go", never "good progress".
+6. **Give time in real units** — "about 15 minutes", never "some work" or "almost there".
+7. **State trouble flat — what broke, the fix.** Tangents → one line in `ops/board/backlog/IDEAS.md`.
+
+### The Pre-send check — joins invariant 6
+The one simplicity tool the vendored `i-have-adhd` skill had that v1's adaptation dropped. It goes
+in BOTH files, identical, as a bold-led paragraph with DASH bullets under an EXISTING heading —
+never a new heading (`api-kit` pins every kit heading) and never a numbered-bold list (the style
+pin counts those). **Invariant 6 now covers three things: the 7 rules, the voice rows, and the
+Pre-send check — all byte-identical between the style and PROTOCOL § VOICE.** Byte-exact text:
+
+> **Pre-send check — run it on every reply.** Before sending, delete:
+> - the first sentence, if it announces what you are about to do;
+> - the last sentence, if it recaps what just happened or asks "anything else?";
+> - any "by the way" sidebar;
+> - any hedge that carries no real doubt ("perhaps", "might possibly") — keep one that does;
+> - any idiom or figure of speech ("circle back", "up and running") — say the literal thing.
+>
+> Then read only your first line and your last line. Together they must say what happened and what
+> to do next. If they don't, rewrite. If they do, send.
+
+### The worked examples ARE the bar
+The model imitates the examples harder than it obeys the rules, so the examples under the style's
+existing `## What a close reads like` heading (heading byte-identical, `# 🎉 Complete!` literal
+kept) are replaced with closes that pass the register ban. Byte-exact:
+
+Complete: "The export button works now — it saves a real spreadsheet file instead of the
+placeholder, and the file name carries today's date. Every check passed, and the change is saved
+into the main copy of the project. One thing I set aside: the PDF export still needs your call on
+page size." / "Next: open the app and hit Export on a report with more than 1,000 rows. Takes
+about a minute."
+
+Not complete: "Two of the three changes are in — login now sends you to the right page, and idle
+sessions log out on time. Both are checked and saved. The password-reset change is finished but
+not yet folded in, so I'm not calling this done." / "Next: `bash ops/polaris land T-014` — that
+folds it in. About a minute."
+
+### Executable check — `ops/tests/plain-voice`
+The first mechanical pin invariant 6 has ever had. Seven assertions (golden files LF per
+`ops/contracts/golden-eol.md`):
+1. the bar sentence ("never used git") present in `kit/ops/PROTOCOL.md`;
+2. the bar sentence present in `kit/.claude/output-styles/polaris.md`;
+3. zero occurrences of "in the same breath" across both files — the escape hatch stays dead;
+4. "Pre-send check" present in `kit/ops/PROTOCOL.md`;
+5. "Pre-send check" present in the style file;
+6. jargon grep scoped to the examples section ONLY (`sed -n '/^## What a close reads like/,$p'`,
+   then case-insensitive word-boundary grep over `suite|merged?|branch|worktree|seal(ed)?|wsjf|integrate|repo`)
+   returns zero — the bar sentence itself legitimately names trade words, which is why the scope
+   is the examples, not the whole file;
+7. the two copies' `^[0-9]\. \*\*` rule lines compared IDENTICAL — extract PROTOCOL's with sed
+   scoped to § VOICE (§ LONG COMMANDS legitimately has its own numbered-bold lines), diff against
+   the style file's; empty diff or fail.
+The golden's owner owns every file feeding it (the derived-surface rule from the Learned log), and
+the golden must be proven to FAIL under sabotage before it is trusted.
+
+### What v2 does NOT change
+Voice changes wording, never content or behavior (v1 § Invariants item 2 stands verbatim). The
+frontmatter keys, install/uninstall/merge behavior, selection rules, and the two-layer scope table
+are all v1, untouched. `ops/tests/output-style-installed`'s pins — exactly 7 numbered-bold lines,
+`^name: POLARIS$`, `^keep-coding-instructions: true$`, `🎉 Complete!` (style AND kit/CLAUDE.md),
+`subagent never ends a run` (kit/CLAUDE.md) — all still hold by construction.
