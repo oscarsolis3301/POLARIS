@@ -255,31 +255,38 @@ cmd_doctor() {
   else
     note "⚠ ops/CONVENTIONS.md missing — INIT has not run in this repo. Say: \"You are INIT.\" (no new session needed)"
   fi
-  # v5.13 autonomy knobs (ops/contracts/hands-free-knobs.md). Silence = every default = today's
-  # behavior, so print the EFFECTIVE composition only when a knob is set. Precedence per contract:
-  # explicit knob > autonomy: trusted > default. Unknown values warn and behave as the default
-  # (fail closed to today). `autonomy` composes only the three gate knobs — never drain.
-  local a pg bq ea dr ds trusted=0
-  a="$(cfg autonomy "")"; pg="$(cfg plan_gate "")"; bq="$(cfg builder_questions "")"
-  ea="$(cfg evolve_apply "")"; dr="$(cfg drain "")"; ds="$(cfg drain_slices "")"
-  if [ -n "$a$pg$bq$ea$dr$ds" ]; then
-    if [ "$a" = "trusted" ]; then trusted=1
-    elif [ -n "$a" ] && [ "$a" != "standard" ]; then
-      note "⚠ autonomy: '$a' unknown (standard | trusted) — behaving as standard"; a="standard"
+  # v6.0 autonomy knobs (ops/contracts/hands-free-knobs.md § v2). The 5.13 knobs shipped OFF and
+  # stayed off in exactly the repos that never learned they existed, so 6.0 INVERTS the fallbacks
+  # here, in kit code — the one mechanism `update` already refreshes in every installed repo — and
+  # writes into nobody's CONVENTIONS.md. Unset now composes the trusted values; `autonomy: standard`
+  # is the one-line opt-out restoring confirm/ask/confirm, and `autonomy: trusted` stays legal and
+  # equals the default. Precedence itself is unchanged: explicit knob > autonomy > default, in both
+  # directions. Unknown values fail SAFE — each behaves as that knob's STANDARD value, NOT as the
+  # now-autonomous default, because a typo must never grant autonomy. The composition prints
+  # whenever CONVENTIONS.md exists: printing it only when a knob was already set guaranteed that the
+  # repos most needing the message were the ones certain never to see it. `autonomy` composes only
+  # the three gate knobs — never drain, which keeps its own silence-when-unset.
+  if [ -f "$CONV" ]; then
+    local a pg bq ea dr ds std=0
+    a="$(cfg autonomy "")"; pg="$(cfg plan_gate "")"; bq="$(cfg builder_questions "")"
+    ea="$(cfg evolve_apply "")"; dr="$(cfg drain "")"; ds="$(cfg drain_slices "")"
+    if [ "$a" = "standard" ]; then std=1
+    elif [ -n "$a" ] && [ "$a" != "trusted" ]; then
+      note "⚠ autonomy: '$a' unknown (standard | trusted) — behaving as standard"; a="standard"; std=1
     fi
     if [ -n "$pg" ] && [ "$pg" != "confirm" ] && [ "$pg" != "auto" ]; then
-      note "⚠ plan_gate: '$pg' unknown (confirm | auto) — behaving as the default"; pg=""
+      note "⚠ plan_gate: '$pg' unknown (confirm | auto) — behaving as confirm"; pg="confirm"
     fi
-    if [ -z "$pg" ]; then if [ "$trusted" -eq 1 ]; then pg="auto"; else pg="confirm"; fi; fi
+    if [ -z "$pg" ]; then if [ "$std" -eq 1 ]; then pg="confirm"; else pg="auto"; fi; fi
     if [ -n "$bq" ] && [ "$bq" != "ask" ] && [ "$bq" != "default-safe" ]; then
-      note "⚠ builder_questions: '$bq' unknown (ask | default-safe) — behaving as the default"; bq=""
+      note "⚠ builder_questions: '$bq' unknown (ask | default-safe) — behaving as ask"; bq="ask"
     fi
-    if [ -z "$bq" ]; then if [ "$trusted" -eq 1 ]; then bq="default-safe"; else bq="ask"; fi; fi
+    if [ -z "$bq" ]; then if [ "$std" -eq 1 ]; then bq="ask"; else bq="default-safe"; fi; fi
     if [ -n "$ea" ] && [ "$ea" != "confirm" ] && [ "$ea" != "auto-reversible" ]; then
-      note "⚠ evolve_apply: '$ea' unknown (confirm | auto-reversible) — behaving as the default"; ea=""
+      note "⚠ evolve_apply: '$ea' unknown (confirm | auto-reversible) — behaving as confirm"; ea="confirm"
     fi
-    if [ -z "$ea" ]; then if [ "$trusted" -eq 1 ]; then ea="auto-reversible"; else ea="confirm"; fi; fi
-    note "autonomy: ${a:-standard} → plan_gate=$pg · builder_questions=$bq · evolve_apply=$ea (explicit > autonomy > default)"
+    if [ -z "$ea" ]; then if [ "$std" -eq 1 ]; then ea="confirm"; else ea="auto-reversible"; fi; fi
+    note "autonomy: ${a:-default} → plan_gate=$pg · builder_questions=$bq · evolve_apply=$ea (explicit > autonomy > default · opt out: autonomy: standard)"
     if [ -n "$dr$ds" ]; then
       if [ -n "$dr" ] && [ "$dr" != "queue" ] && [ "$dr" != "plan" ] && [ "$dr" != "backlog" ]; then
         note "⚠ drain: '$dr' unknown (queue | plan | backlog) — behaving as the default"; dr=""
