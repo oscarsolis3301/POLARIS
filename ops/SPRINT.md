@@ -22,6 +22,11 @@ kit/ops/polaris …` (27-label tell). plan: autonomy-by-default → T-074..T-081
 (36 pts). W1 ready: T-074 · T-075 · T-048 (risk: high — get the merge yes early, a high-risk
 root stalled 13 pts for 128.9h once) · T-079.
 
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+| 2026-08-03 | 12 (T-074 2pts, T-075 3pts, T-079 2pts, T-048 5pts, wave 1, sealed sprint/10 2145137) | 24 · T-076 + T-077 + T-078 promoted to `ready/` (deps T-074/T-075/T-048 all done; ownership mutually disjoint — observe.sh+keys-drift pair · admin+entry+adopt-stub pair+api-kit golden · install.sh+selftest-install.sh), so wave 2 runs THREE parallel lanes · T-049/T-050/T-080/T-081 correctly held in `backlog/` (deps unmet) · cycle p50 0.7h n=74 · kickbacks 0 this wave (2 lifetime, 3%) · build avg 0.3h / integrate avg 3.1h · gate: full SERIAL suite green on integrate (backgrounded, SELFTEST-PASS across all 27 labels incl. `doctor knob composition` · `grant append+refusals` · `rules` · `route`) · T-048 merged on the human's relayed in-conversation approval (risk: high, named alongside T-081; no other high task covered) · § 5 PINNED-PAIR DEADLOCK surfaced and resolved mid-wave: T-048, sole `api-kit.expected` owner, could not hand off while T-074/T-079's already-landed surface had redded the golden — integrator recorded the landed surface on integrate/2026-08-03 (derived from live output, cross-checked byte-identical against the owner's copy stripped of its two unlanded fns, diff reviewed line-by-line; commit 7afb5c2), post-T-048 the golden gained exactly `cmd_approve` + `fm_append_item` · `drill_live_board` byte-identical to pre-wave main at every land (the install-never-touches-board proof stands) · drift: MAP 21 delta lines to fold (EVOLVE target) · Learned: 2 new bullets + 1 clause folded into the derived-surface bullet |
+
 # SPRINT 9 — Route and background          capacity: 23   dates: 2026-08-03–
 
 Model choice is manual prose and long commands die at the harness's cap: PROTOCOL's routing rule is
@@ -273,6 +278,17 @@ exercises but a Builder cannot.
   exactly as the sprint plan carved it), across 5 lanes then 2 then 2, for ZERO kickbacks and a
   first-pass-green gate every time. Three sprints of this defect, one sprint of the prescription, no
   recurrences: the rule is now earned, not theoretical. Keep carving it this way.
+  SPRINT 10 W1 FOUND THE PRESCRIPTION'S OWN DEADLOCK: `handoff` re-runs `verify:`, the golden's sole
+  owner (T-048) pinned `check --only api-kit` in its verify list, and the golden was legitimately red
+  from OTHER lanes' landings (T-074's 37 key rows, T-079's INIT heading tail) — so the one lane
+  allowed to reconcile the golden was the one lane that could not hand off. Under one-owner-per-wave
+  the owner handing off LAST is the norm, so this is structural, not bad luck. The resolution that
+  keeps every gate: the INTEGRATOR records the landed surface mid-wave on the integrate branch —
+  derive from the live `.cmd` output, cross-check against the owner's copy stripped of its unlanded
+  lines (two independent derivations must agree), review the commit diff line-by-line, never
+  `check --update` on faith — and the owner's handoff retries green. After the owner lands, the
+  golden must gain exactly its own lines on top; anything else is a finding. EVOLVE: write this into
+  key-registry § 5 — the pinned-pair design assumed the owner could hand off red, and it cannot.
 - A `risk: high` task at the ROOT of the dependency tree stalls the whole board, not just itself.
   T-047 was audited and verified for days while T-048/T-049/T-050 (13 of 28 pts) sat behind it and
   `ready/` was empty — it waited 128.9h at the gate, which alone moved integrate avg 1.5h→3.9h. The
@@ -341,3 +357,17 @@ exercises but a Builder cannot.
   a defect outside its ownership" as a first-class task source, and point it at 1 unless it is
   genuinely bigger. INTEGRATOR: a rider arriving after you have already landed its wave is not a
   reason to seal early — hold the gate, take the rider, gate once over both.
+- A RAW SHELL BACKGROUND JOB IS OWNED BY NOBODY THE MOMENT A SUBAGENT'S TURN ENDS. Sprint 10 W1: the
+  integrator (conductor-entered, so a subagent) launched the 805s suite through the harness's
+  background shell and ended its turn expecting a completion notification — but a subagent between
+  turns receives none, so the job ran orphaned with nothing watching it, and a crash would have been
+  indistinguishable from still-running. It survived because the conductor independently armed a watch
+  on process exit covering both outcomes. `bg run` + chunked `bg wait` exists for exactly this — the
+  verdict lives in an rc file ANY session can collect later — so a long command in a subagent goes
+  through the bg machinery or stays foreground with an explicit timeout; a bare background shell is
+  only safe in a session that will still be alive to reap it.
+- PLANNER: NEVER YAML-QUOTE A `verify:` LINE. frontmatter-lists v1 keeps quotes BY DESIGN, so a
+  double-quoted entry reaches bash as ONE quoted word and can never run — T-074 shipped with two
+  unrunnable assertions (the awk TSV checks) and the Builder had to fix its own task file mid-flight,
+  the only sanctioned self-edit there is. `fm_list` strips only a trailing ` #comment`; plain
+  unquoted lines are always right, and no quoting is ever needed.
