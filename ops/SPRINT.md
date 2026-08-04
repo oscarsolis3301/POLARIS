@@ -247,13 +247,6 @@ exercises but a Builder cannot.
 | 2026-07-18 | 13 (T-003, T-007..T-010) | 7 (T-004..T-006) · cycle p50 0.5h · kickbacks 0 |
 
 ## Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
-- EOL PINS: CLOSED, ONE DEFERRED DIFF STILL OWED. Goldens (`ops/tests/*.{expected,cmd}`, T-056) and
-  sprint reports (`docs/sprints/*.md`, T-069) are pinned `eol=lf`; the bug (`core.autocrlf=true`
-  re-materializing files CRLF on any git touch, redding a golden that was green at wave start) is
-  fully shipped, and the rule it earned lives in role §3: BASE-CHECK EVERY uat RED BEFORE YOU
-  BELIEVE IT. Still owed: the five PRE-EXISTING reports stay unnormalized until something next
-  touches them — expect exactly one whole-file diff per report, once each, and fold it into
-  whatever commit touches it rather than reading it as damage.
 - A GOLDEN THAT RECORDS A *DERIVED* SURFACE SILENTLY COUPLES EVERY TASK THAT FEEDS IT — three
   instances now, so treat it as structural, not bad luck. Sprint 7: T-047 added fns to `ownership.sh`
   without owning `ops/tests/api-kit.expected`. Sprint 8: T-063 (docs) added ONE PROTOCOL heading —
@@ -344,16 +337,6 @@ exercises but a Builder cannot.
   register or invariant — sabotage it yourself (red) and restore (green); a golden nobody has seen
   fail is not evidence. EVOLVE: either `check` learns to see the worktree's own new pairs, or
   BUILDER.md names the gap so builders prove pairs by hand as T-076's did.
-- A GREEN GUARD WITH A KNOWN HOLE EARNS A KICKBACK EVEN THOUGH NOTHING IS RED. plain-voice's
-  examples grep (`merged?|branch|…`) let every plural verb form through the `\b` — and the worked
-  examples are byte-pinned nowhere else, so the register's ONLY guard had a bypass on day one.
-  Kicked back rather than follow-up'd because the golden IS the deliverable; one-line widen,
-  re-landed same session, sabotage re-proven first-hand ("merges" red · PROTOCOL-side rule drift
-  red · restore green · "report/reports" no false positive against `repos?`). LEFTOVER in the
-  dangerous direction: ops/contracts/output-style.md § v2 still specifies the OLD narrow
-  alternation, so a builder reading the contract verbatim would faithfully reopen the hole —
-  EVOLVE owes the v3 line; the .cmd header's "NEVER narrow this alternation back" note is the
-  interim guard.
 - PARALLEL BUILDERS SHARE ONE SCRATCHPAD AND CAN DESTROY EACH OTHER'S FIXTURE TREES — a silent
   cross-lane corruption channel, seen once for real (sprint 10 W4): T-080's setup `rm -rf
   scratchpad/sab` deleted T-050's in-use sabotage tree mid-selftest, fabricating a spine failure
