@@ -25,6 +25,43 @@ kit/README.md	heading	Install (into any git repo)
 kit/README.md	heading	POLARIS v5 — parallel-sprint protocol
 kit/README.md	heading	The one idea
 kit/README.md	heading	The pieces
+kit/ops/KEYS.tsv	key	autolaunch
+kit/ops/KEYS.tsv	key	autolaunch_max
+kit/ops/KEYS.tsv	key	autonomy
+kit/ops/KEYS.tsv	key	base
+kit/ops/KEYS.tsv	key	bootstrap
+kit/ops/KEYS.tsv	key	build
+kit/ops/KEYS.tsv	key	builder_questions
+kit/ops/KEYS.tsv	key	builders
+kit/ops/KEYS.tsv	key	claim
+kit/ops/KEYS.tsv	key	drain
+kit/ops/KEYS.tsv	key	drain_slices
+kit/ops/KEYS.tsv	key	evolve_apply
+kit/ops/KEYS.tsv	key	express
+kit/ops/KEYS.tsv	key	generated
+kit/ops/KEYS.tsv	key	integration
+kit/ops/KEYS.tsv	key	integration_stale_minutes
+kit/ops/KEYS.tsv	key	integration_wait_minutes
+kit/ops/KEYS.tsv	key	lint
+kit/ops/KEYS.tsv	key	model_cheap
+kit/ops/KEYS.tsv	key	model_mid
+kit/ops/KEYS.tsv	key	model_strong
+kit/ops/KEYS.tsv	key	notify
+kit/ops/KEYS.tsv	key	plan_gate
+kit/ops/KEYS.tsv	key	publish
+kit/ops/KEYS.tsv	key	qa_scout
+kit/ops/KEYS.tsv	key	reports
+kit/ops/KEYS.tsv	key	run_fix_waves
+kit/ops/KEYS.tsv	key	run_max_agents
+kit/ops/KEYS.tsv	key	run_max_minutes
+kit/ops/KEYS.tsv	key	run_max_tasks
+kit/ops/KEYS.tsv	key	runnable
+kit/ops/KEYS.tsv	key	stale_hours
+kit/ops/KEYS.tsv	key	test
+kit/ops/KEYS.tsv	key	test_fast
+kit/ops/KEYS.tsv	key	typecheck
+kit/ops/KEYS.tsv	key	uat
+kit/ops/KEYS.tsv	key	voice
 kit/ops/MANUAL.md	heading	<ID> — <title>
 kit/ops/MANUAL.md	heading	Board commit by hand — the `polaris/board` ref (EVERY mutation below uses this)
 kit/ops/MANUAL.md	heading	Board ref lifecycle by hand — fresh install · fresh clone · migrate 5.13→5.14
@@ -431,7 +468,7 @@ kit/ops/roles/INIT.md	heading	SPRINT.md skeleton
 kit/ops/roles/INIT.md	heading	Stack
 kit/ops/roles/INIT.md	heading	Unverified
 kit/ops/roles/INIT.md	heading	Write routing — one fact, one home (a fact in two files means one is drifting)
-kit/ops/roles/INIT.md	heading	autonomy: standard         # standard | trusted — composition macro; nothing reads it directly. trusted =
+kit/ops/roles/INIT.md	heading	autonomy: standard         # standard | trusted — composition macro; nothing reads it directly. Since 6.0
 kit/ops/roles/INIT.md	heading	builder_questions: ask     # ask | default-safe — default-safe applies ONLY to spec-detail ambiguity that is
 kit/ops/roles/INIT.md	heading	evolve_apply: confirm      # confirm | auto-reversible — auto-reversible lets EVOLVE apply ONLY its fixed
 kit/ops/roles/INIT.md	heading	ops/polaris brain (re)generates the untracked .polaris/brain/ knowledge base every role reads first — git-ignored, MAP.md the tracked fallback.
