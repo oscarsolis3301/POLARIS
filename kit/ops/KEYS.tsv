@@ -1,0 +1,52 @@
+# POLARIS key registry — every ops/CONVENTIONS.md key the kit reads, as DATA.
+# TAB-separated: key<TAB>since<TAB>default<TAB>absent-cost      ('#' lines and blank lines ignored)
+#   key          the CONVENTIONS.md header key, spelled exactly as `cfg` reads it
+#   since        the kit version that introduced it
+#   default      the EFFECTIVE value when the key is ABSENT — what the repo already behaves as, not
+#                what INIT happens to write. For the three autonomy knobs these are the 6.0 values
+#                (ops/contracts/hands-free-knobs.md v2), NOT the pre-6.0 ones. A `<placeholder>`
+#                means there is no effective value: the key is optional, unset does nothing, and the
+#                placeholder is what a human types in its place.
+#   absent-cost  one plain-English line — what the repo loses, or behaves as, while the key is unset
+#
+# Rows DOCUMENT; they never execute. Adding a row is data, not behavior. `polaris doctor` reports
+# which of these an installed CONVENTIONS.md lacks, and `polaris adopt` appends one commented stub
+# per absent key. Contract: ops/contracts/key-registry.md. ORDER IS MEANINGFUL — doctor names the
+# first six absent keys in the order they appear below.
+base	5.0.0	main	branches cut from and merge into main; a repo whose trunk is named anything else breaks
+claim	5.0.0	local-lock	locks stay on this machine; several machines sharing one repo need claim-branch
+integration	5.0.0	batch	merges land as one batch and halve on red; paranoid tests after every single merge
+voice	5.2.0	standard	agents talk to you in plain friendly English; technical makes them dense and terse
+autolaunch	5.7.0	ask	the Planner offers Builder panes once; wt opens them for you, off only prints kickoffs
+builders	5.9.0	subagents	a work request runs the whole loop in one chat; panes stops the conductor after planning
+model_strong	5.24.0	<name>	polaris route answers in bare tier words — no real model name reaches a spawn or a pane
+model_mid	5.24.0	<name>	same for the mid tier — ordinary tasks run on whatever the platform defaults to
+model_cheap	5.24.0	<name>	same for the cheap tier — small tasks are never routed to a cheaper model
+autonomy	5.13.0	trusted	unset composes the hands-free trio since 6.0; autonomy: standard is the one-line opt-out
+plan_gate	5.13.0	auto	unset proceeds past a clean plan since 6.0; confirm waits for your go every time
+builder_questions	5.13.0	default-safe	unset lets Builders default reversible spec details since 6.0; ask returns every question
+evolve_apply	5.13.0	auto-reversible	unset lets EVOLVE apply its inert allowlist since 6.0; confirm queues every item for approval
+drain	5.10.0	plan	a run stops after the approved plan's own tasks; queue and backlog reach further
+drain_slices	5.13.0	2	caps planner-promotion rounds under drain: backlog — ignored under any other drain mode
+run_max_tasks	5.18.0	12	a run builds at most 12 tasks, then integrates what landed and reports
+run_max_minutes	5.18.0	90	a run takes no new work 90 minutes after kickoff — checked at wave boundaries only
+run_max_agents	5.18.0	20	a run spawns at most 20 subagents in total
+run_fix_waves	5.18.0	2	the Check phase retries a red suite at most twice before handing you the failures
+qa_scout	5.18.0	auto	the runtime QA scout spawns only when uat: is empty AND the run touched a runnable: path
+runnable	5.18.0	<globs or omit>	this repo declares no runnable surface, so qa_scout: auto resolves to off
+test_fast	5.18.0	<cmd or omit>	Builders pay the whole test: suite per handoff — set this before it nears the tool timeout
+stale_hours	5.0.0	4	sweep warns on active locks older than 4 hours
+uat	5.0.0	<cmd or omit>	no end-to-end command runs on the integrate branch; only test/lint/typecheck/build gate it
+notify	5.0.0	<cmd or omit>	board events and gates reach nothing outside the terminal you happen to be watching
+bootstrap	5.8.0	<cmd or omit>	a fresh worktree installs no dependencies, so the first verify: on a real repo fails
+generated	5.8.0	<globs or omit>	a Builder that runs build: is rejected for dirtying tracked build output it does not own
+publish	5.14.0	direct	seal merges and pushes the base locally; pr pushes only integrate/<date> and prints a PR URL
+express	5.15.0	auto	a lone small task takes the express lane; off spends the full pipeline on everything
+reports	5.14.0	docs/sprints/	where seal writes the per-sprint report and polaris report regenerates it
+test	5.0.0	<cmd>	nothing proves a task green — the wave gate, qa and CI all have no suite to run
+lint	5.0.0	<cmd>	no lint gate runs before a task reaches review
+typecheck	5.0.0	<cmd>	no type gate runs before a task reaches review
+build	5.0.0	<cmd>	no build gate runs before a task reaches review
+autolaunch_max	5.7.0	3	at most 3 Builder panes open themselves; the printed kickoffs stay uncapped
+integration_wait_minutes	5.24.0	10	a second session waits 10 minutes for the integration lane before it gives up
+integration_stale_minutes	5.24.0	45	an integration lease held this long counts as crashed and may be stolen

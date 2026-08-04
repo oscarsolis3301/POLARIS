@@ -135,7 +135,7 @@ cmd_verify() {
   local id="${1:-}"; [ -n "$id" ] || id="$(current_task_id)" || die "not on a feat/<ID> branch — pass the ID"
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
   check_ownership "$tf" HEAD
-  check_rules HEAD
+  check_rules HEAD "$id"           # ID threaded: an `ask` rule cleared by <ID>'s approved: list
   run_verify_cmds "$tf"
 }
 
@@ -144,7 +144,7 @@ cmd_handoff() {
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
   git diff --quiet && git diff --cached --quiet || die "uncommitted changes — commit on feat/$id first"
   check_ownership "$tf" "feat/$id"
-  check_rules "feat/$id"
+  check_rules "feat/$id" "$id"     # ID threaded: an `ask` rule cleared by <ID>'s approved: list
   run_verify_cmds "$tf"
   map_delta_hint "$tf" "feat/$id"
   # publish: pr — feat branches never leave the machine; seal pushes ONE integrate branch instead
@@ -237,18 +237,20 @@ cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
   say "$id → $to/ · lock released · worktree removed (branch feat/$id kept)"
 }
 
-grant_append_owned() { # grant_append_owned <path> <taskfile> — append ONE files_owned entry, keeping
-  # the list's shape: block list gets a new "  - <path>" item · "[a, b]" flow list gets ", <path>"
-  # before the ] · "[]" is filled · an inline scalar becomes a two-item flow list (the entry itself
-  # passes through verbatim). Append-only by construction: existing entries are never removed or
-  # rewritten. rc 1 + file untouched when files_owned is missing or malformed. POSIX awk, bash 3.2.
-  local p="$1" tf="$2" tmp="$2.tmp.$$"
-  awk -v p="$p" '
+fm_append_item() { # fm_append_item <field> <item> <taskfile> — THE append-only front-matter list
+  # writer, shared by grant (files_owned) and approve (approved) so the 25 lines of awk exist ONCE
+  # (ops/contracts/ask-approval.md § 3). Keeps the list's shape: block list gets a new "  - <item>" ·
+  # "[a, b]" flow list gets ", <item>" before the ] · "[]" is filled · an inline scalar becomes a
+  # two-item flow list (the item itself passes through verbatim). Append-only by construction:
+  # existing entries are never removed or rewritten. rc 1 + file untouched when the named field is
+  # missing or malformed — it NEVER invents a field. POSIX awk, bash 3.2.
+  local fld="$1" p="$2" tf="$3" tmp="$3.tmp.$$"
+  awk -v k="$fld" -v p="$p" '
     inblock && /^[ \t]*-[ \t]/ { print; ind=$0; sub(/-.*$/,"",ind); next }
     inblock { if (ind=="") ind="  "; print ind "- " p; inblock=0; done=1 }
     /^---[\r]?$/ { fs++; print; next }
-    fs==1 && !done && !inblock && index($0, "files_owned:")==1 {
-      t=substr($0, 13)
+    fs==1 && !done && !inblock && index($0, k":")==1 {
+      t=substr($0, length(k)+2)
       sub(/^[ \t]*/,"",t); sub(/[ \t]#.*$/,"",t); sub(/[ \t\r]*$/,"",t)
       if (t == "") { print; inblock=1; next }             # block list opens on the next lines
       if (t ~ /^\[/) {                                    # inline flow list, incl. []
@@ -256,7 +258,7 @@ grant_append_owned() { # grant_append_owned <path> <taskfile> — append ONE fil
         if (t ~ /^\[[ \t]*\]$/) ins=p; else ins=", " p
         print substr($0, 1, i-1) ins substr($0, i)
       } else {
-        print "files_owned: [" t ", " p "]"               # inline scalar → flow list, entry kept
+        print k": [" t ", " p "]"                         # inline scalar → flow list, entry kept
       }
       done=1; next
     }
@@ -266,6 +268,12 @@ grant_append_owned() { # grant_append_owned <path> <taskfile> — append ONE fil
       if (!done) exit 3
     }' "$tf" > "$tmp" || { rm -f "$tmp"; return 1; }
   mv "$tmp" "$tf"
+}
+
+grant_append_owned() { # grant_append_owned <path> <taskfile> — the files_owned specialization of
+  # fm_append_item, kept under its public name (and signature) so cmd_grant and the grant drill are
+  # byte-for-byte what they were before the writer was generalized for T-048.
+  fm_append_item files_owned "$1" "$2"
 }
 
 cmd_grant() { # grant <ID> <path> -m "why" — the SANCTIONED files_owned amendment (ops/contracts/grant.md).
@@ -311,6 +319,47 @@ EOF
   mutex_off; trap - EXIT
   say "granted: $path → $id files_owned (append-only; why recorded on the task)"
   note "RULES.tsv still binds inside granted paths · prove it when done: polaris verify"
+}
+
+cmd_approve() { # approve <ID> <scope> -m "why" — the sibling of grant (ops/contracts/ask-approval.md).
+  # Records a HUMAN's yes to an `ask` rule on ONE task's approved: list. It records a decision, it
+  # never infers one: no ask rule gating <scope> → refuse and SAY so (approving something ungated is
+  # a no-op, never a silent write) · any feat/* branch → refuse (a Builder approving itself must be
+  # mechanically impossible, not merely discouraged) · every refusal mutates NOTHING. The approval is
+  # per-task and per-scope and expires with the task; `path` and `content` rules consult it never.
+  local id="${1:-}" scope="${2:-}" msg=""
+  local u='usage: polaris approve <ID> <scope> -m "why"'
+  [ -n "$id" ] && [ -n "$scope" ] || die "$u"
+  shift 2
+  while [ $# -gt 0 ]; do case "$1" in
+    -m) msg="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
+    *)  die "unknown flag $1 — $u";;
+  esac; done
+  [ -n "$msg" ] || die "approve needs -m \"why\" — the human's reason goes on the task's record ($u)"
+  # the load-bearing containment: an approval mechanism is exactly what a stuck agent rationalizes
+  # its way into, so the refusal is mechanical — feat/* is where Builders live, and no session on a
+  # feat branch can record an approval, its own or anyone else's.
+  local br; br="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  case "$br" in feat/*)
+    die "approve refused on $br — a Builder never approves its own gate. Hand back instead: the human records their yes from the primary checkout (ops/contracts/ask-approval.md § 3)";;
+  esac
+  # any board column, deliberately wider than grant's active/-only: the ask belongs at the PLAN
+  # gate, so the approval usually lands while the task still sits in backlog/ or ready/.
+  local tf; tf="$(task_file "$id")" || die "$id is not on the board — check: ops/polaris board-fm"
+  ask_rule_matches "$scope" \
+    || die "approve refused: no ask-kind rule in ops/RULES.tsv gates '$scope' — approving something ungated is a no-op, nothing written"
+  who
+  local entry; entry="$scope — $WHO, $(date +%F): $msg"
+  mutex_on
+  fm_append_item approved "$entry" "$tf" \
+    || die "approve refused: $tf has no approved: front-matter field — add the empty field from ops/templates/TASK.md first; nothing written"
+  printf -- '- approve: %s — %s\n' "$scope" "$msg" >> "$tf"
+  evt approve "$id" "$scope"
+  board_commit "chore(board): approve $id $scope"
+  sync_board
+  mutex_off; trap - EXIT
+  say "approved: $scope → $id approved: (a recorded human decision — per-task, per-scope, expires with the task)"
+  note "verify/handoff will name this approval when it clears the rule, so the Integrator sees the exception"
 }
 
 # ------------------------------------------------------------------ pack (5.21.0)
