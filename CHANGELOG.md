@@ -4,6 +4,109 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.0.0 — 2026-08-04
+
+**Eleven releases of autonomy machinery, and nobody was running any of it.**
+
+The hands-free knobs shipped in 5.13.0 defaulting to the asking behavior, and in practice were
+never switched on anywhere — this repo ran two sprints with them off; polaris-testbed still has
+them off. The system was structurally unable to say so: `doctor` printed the autonomy composition
+only when a knob was already set, so exactly the repos that had never found the knobs were
+guaranteed never to hear about them — and `update`, correctly, never writes into a repo's
+CONVENTIONS.md, so no update could deliver the values. 6.0.0 flips the defaults in kit code,
+which is precisely what `update` already replaces: every installed repo becomes autonomous on its
+next update without anyone editing a file, and without `update` touching that repo's
+CONVENTIONS.md, RULES.tsv, MAP.md, SPRINT.md or board.
+
+**BREAKING — the new default posture, stated plainly:**
+
+- **Unset autonomy knobs now compose the trusted values:** `plan_gate=auto` ·
+  `builder_questions=default-safe` · `evolve_apply=auto-reversible`. Before 6.0, unset meant
+  `confirm` / `ask` / `confirm`.
+- **The one-line revert: add `autonomy: standard` to `ops/CONVENTIONS.md`.** It restores
+  `confirm` / `ask` / `confirm` exactly. An explicitly set individual knob still beats
+  `autonomy:`, in both directions — precedence itself (explicit > `autonomy:` > default) is
+  unchanged, and `autonomy: trusted` stays legal, now equal to the default.
+- **A typo can NEVER grant autonomy.** An unknown value on an individual knob falls back to that
+  knob's STANDARD value (`confirm` / `ask` / `confirm`) — even under `autonomy: trusted`. An
+  unknown `autonomy:` value behaves as `standard`. Both warn once. This deliberately inverts the
+  old fail-to-default rule: unknown input now fails to the safe side, not to the default.
+- **The hard gates never move, under any setting:** `risk: high` approval, the STOP-AND-ASK
+  list, RULES.tsv, the ready gate, contract-before-code, green-before-review. EVOLVE still may
+  never set or change the autonomy dial or its components, in either direction.
+- **You are told at update time.** Incoming kit >= 6.0.0 and none of the four knobs explicitly
+  set → `update` prints a two-line BREAKING banner naming the new composition and the one-line
+  revert. Any of the four set, either direction → silent.
+- **`doctor` now prints the effective composition unconditionally** whenever CONVENTIONS.md
+  exists — the guard that printed it only when a knob was already set is deleted; the silence
+  WAS the bug.
+
+| | before | after |
+|---|---|---|
+| unset autonomy knobs | confirm / ask / confirm — dormant since 5.13.0 | auto / default-safe / auto-reversible |
+| doctor on the composition | printed only when a knob was already set | printed always |
+| a CONVENTIONS key a repo never learned about | capability ships dormant, invisibly | doctor names it; `polaris adopt` explains it |
+| a shipped hook field change | never arrived (merge keyed on basename) | arrives (merge keyed on script path) |
+| an `ask`-ruled scope, human's yes already given | Builder dies on its first write | settled at the plan gate, carried on the task |
+
+- **`kit/ops/KEYS.tsv` — every CONVENTIONS key, on the record.** 37 rows: key, the version that
+  introduced it, the effective value when absent, and one plain line naming what the repo loses
+  while it is unset. `doctor` compares the registry against CONVENTIONS.md and reports drift in
+  ONE line (this repo read "lacks 14 of 37 known keys"); a pre-6.0 install with no registry gets
+  silence, not a warning storm. Rows document; they never execute.
+- **`polaris adopt` — discovery, not enablement.** For every absent key it appends a COMMENTED
+  stub to the end of CONVENTIONS.md — default, absent-cost, since — under a one-time marker
+  line. It never edits an existing line, never uncomments, never writes a live value, and a
+  second run is a byte-identical no-op that says so. Uncommenting a stub is and stays a human
+  act; autonomy itself arrives via the kit-code defaults above, never through this command.
+- **The settings.json hook merge learns path identity — and can finally repair what it ships.**
+  The old merge keyed on script BASENAME and skipped any existing match, so an entry once
+  written was never re-examined: a shipped field change (the ownership guard's timeout,
+  10 → 20) could never arrive — and, sharper, a user hook that merely SHARED our basename made
+  the POLARIS guard look already-wired, so in such a repo the guard was never installed at all.
+  Now a POLARIS-owned entry is one whose command runs a script under `ops/hooks/`; kit entries
+  REPLACE their existing counterpart wholesale (matcher, timeout, command) preserving list
+  position, user-added hooks are byte-untouched whatever script they run, non-hook keys keep
+  their exact merge semantics, and a second run changes nothing.
+- **`polaris approve` finishes the `ask` rule kind — which this changelog never announced.**
+  Backfill, owed since 2026-07-28: the third RULES kind landed then (contract 64c3742, then the
+  RULES.tsv header, the `approved:` task field, the guard's remedy line, and the role/protocol
+  surfaces) with no changelog entry. The kind: `ask` = the same denial as `path`, lifted only by
+  a human's recorded approval on the task. 6.0.0 completes it: `approve <ID> <scope> -m "why"`
+  records the approval (append-only, one board commit, modeled on `grant` via one generalized
+  front-matter writer — `grant` widens ownership, `approve` clears a policy gate, and only
+  `approve` needs a human). It refuses inside a `feat/*` worktree — a Builder cannot approve its
+  own way out, mechanically. Enforcement threads the task ID through the rule scan, so verify,
+  handoff, audit, land and the write guard all honor a covering approval — and print WHICH
+  approval cleared the scope, so the exception is visible exactly where the Integrator looks.
+  No ID → deny, fail-closed. `path` and `content` rules are untouched; an approval never clears
+  a `path` rule.
+- **`ask` reaches the plan gate, where the question is cheap.** The field failure this kind was
+  built for (repo ARC: a human approved a schema change at the plan gate, the ready gate never
+  consulted RULES, a Builder claimed the task and died on its first write — the work died with
+  the decision already made) is now caught at step 1: `drift` flags a ready task owning an
+  unapproved `ask` scope as a `READY GATE:` finding, and `triage` answers three ways — a `path`
+  scope → `full`, cannot be built as specified · an unapproved `ask` scope → `full`, get the
+  human's yes before starting · a covered `ask` scope → the question is settled, fall through to
+  ordinary points-based routing.
+- **`voice: standard` is rewritten radically plain.** Under the old row a real close read "Wave
+  1 is sealed as sprint/10, the tree is clean…" — short, dense, every noun jargon — because the
+  row's "unless you explain it in the same breath" escape hatch LICENSED jargon, the seven
+  output rules optimized volume rather than simplicity, and the style's own worked examples (the
+  model's actual imitation target) said "Full suite is green". The rewrite kills the escape
+  hatch, bans trade words outright — drop the word and say the outcome: merged → "saved into the
+  main copy", suite green → "every check passed" — restores the Pre-send check the vendored
+  skill always had, and replaces the worked examples with closes that pass the ban. Commands to
+  run stay verbatim; `voice: technical` is untouched. A new `plain-voice` golden pins the bar
+  sentence, the dead escape hatch and the examples' register — the first mechanical guard the
+  style/PROTOCOL byte-parity invariant has had.
+- New contract `ops/contracts/key-registry.md`; `hands-free-knobs.md` and `output-style.md` gain
+  `## v2` sections. New drills: `adopt` (stubs against the real registry, idempotent, live
+  values survive byte-identical) brings the labeled suite to 28; `drill_hookmerge` joins the
+  install suite with `drill_live_board` green UNCHANGED — the preserve guarantee is the thing
+  being protected. Three new goldens (`keys-drift`, `adopt-stub`, `plain-voice`) bring the
+  battery to 17 pairs, all hermetic, none pinning a line that embeds a version number.
+
 ## 5.24.0 — 2026-08-03
 
 **Open a second chat on the same repo and it used to become your problem.**
