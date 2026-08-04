@@ -34,7 +34,7 @@ merely discouraged. Read `ops/contracts/ask-approval.md` § 3.
 - [ ] W1 api-kit owner (key-registry.md § 5): ops/tests/api-kit.expected gains `cmd_approve` and
 
 ## T-049 — "Move the ask to the plan gate — ready gate, triage three-way, rules health"
-points 5 · risk normal · landed 92ab95f (2026-08-04) · claimed 2026-08-04
+points 5 · risk normal · landed 92ab95f (2026-08-04) · claimed 2026-08-04 → done 2026-08-04
 files touched: kit/ops/lib/observe.sh, ops/tests/api-kit.expected, ops/tests/triage-lane.cmd, ops/tests/triage-lane.expected
 
 ### Why
@@ -56,6 +56,31 @@ Read `ops/contracts/ask-approval.md` § 5 — the three triage cases and the fin
 - [ ] `cmd_triage` distinguishes three cases instead of one: `path` scope → `full` +
 - [ ] `triage` line 1 is still exactly one bare word (`solo`/`express`/`full`); every reason stays on
 - [ ] `bash ops/polaris check --only triage-lane` green — the golden asserts line-1 shape, the
+
+## T-050 — "Six drill assertions for `ask` + approve in drill_rules"
+points 3 · risk normal · landed d7848de (2026-08-04) · claimed 2026-08-04
+files touched: kit/ops/lib/selftest/policy.sh
+
+### Why
+`ask` is a mechanism for lifting a denial. Every one of its containments is a claim that only a
+machine can keep honest — especially "a `path` rule is NOT cleared by an approval" and "a Builder
+cannot approve itself", which are the two that stop `ask` from becoming a legal way to dissolve any
+rule that blocks you. Prose cannot hold those. These six assertions can.
+
+`drill_rules` already has exactly the right shape: it appends a temp rule, exercises it, and cleans
+up so the fixture is left byte-identical (T-046 hermeticity). Follow that shape exactly — a drill
+that leaks a rule or a ready task makes a *different* drill go red one shard over, which is a whole
+wasted fix wave.
+
+### Acceptance
+- [ ] 1. an `ask` rule + no approval → `_guard <path> <ID>` denies (rc 1)
+- [ ] 2. after `polaris approve <ID> <scope> -m "drill"` → the same `_guard` call passes (rc 0)
+- [ ] 3. `_rules <path>` with no ID still denies, even with the approval on the task
+- [ ] 4. `approve` from a `feat/<ID>` branch refuses AND the board ref is unmoved (compare
+- [ ] 5. a `path` rule is NOT cleared by an approval covering the same scope
+- [ ] 6. a `ready/` task owning an unapproved `ask` scope → `drift --strict` exits 1 with the finding
+- [ ] HERMETIC: on return, `ops/RULES.tsv` is pristine, no drill task file survives in any column,
+- [ ] `doctor --selftest --only rules,drift` green — and green again on a second run (proves the
 
 ## T-074 — "KEYS.tsv — the key registry ships with the kit"
 points 2 · risk normal · landed 011c489 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
@@ -179,6 +204,26 @@ observe.sh state the same default and can never drift apart in this release.
 - [ ] EVOLVE.md:16 — the parenthetical replaced with the v2 pinned parenthetical
 - [ ] INIT.md:120-134 — the four commented autonomy-stanza lines state the 6.0 facts: unset =
 - [ ] no markdown heading added, removed, or renamed in any of the four files (api-kit records
+
+## T-080 — "Drills for the flip and the stub-writer — defaults, standard, adopt idempotence"
+points 3 · risk normal · landed b44f484 (2026-08-04) · claimed 2026-08-04
+files touched: kit/ops/lib/selftest/remote.sh, kit/ops/lib/selftest/spine.sh, ops/tests/api-kit.expected
+
+### Why
+The flip's whole claim is behavioral — "unset now means auto" — and prose cannot hold that. Two
+machine checks can: extend drill_notify's existing knob-awareness block (remote.sh:135-142, which
+already proves precedence and trusted-fill) with the two new compositions, and add `drill_adopt`
+proving the stub-writer against the REAL registry — adopt twice, second run a byte-identical
+no-op, an existing live value untouched.
+
+### Acceptance
+- [ ] drill_notify knob block gains: EMPTY CONVENTIONS → doctor prints `plan_gate=auto`,
+- [ ] and: `autonomy: standard` alone → `plan_gate=confirm`, `builder_questions=ask`,
+- [ ] the three EXISTING assertions (explicit beats trusted · trusted fills unset · unknown
+- [ ] `drill_adopt` in remote.sh (beside drill_upgrade; fn name pinned in key-registry.md § 5):
+- [ ] label `adopt` added to SELFTEST_LABELS (spine.sh:46); `--only adopt` selects it;
+- [ ] hermetic: both drills restore every fixture file they touch (`git status --porcelain`
+- [ ] W4 api-kit owner: ops/tests/api-kit.expected gains exactly `drill_adopt`; T-050 (same
 
 ## T-082 — "Radically plain `standard` voice — new row, re-cut rules, Pre-send check, plain examples, plain-voice golden"
 points 3 · risk normal · landed 3f33f42 (2026-08-04) · claimed 2026-08-04 → done 2026-08-04

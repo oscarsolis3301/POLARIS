@@ -139,6 +139,40 @@ drill_notify() {
     grep -q 'plan_gate=confirm' "$T/doc.out" || { echo "KNOB PRECEDENCE FAIL (explicit knob must beat autonomy: trusted)"; exit 1; }
     grep -q 'builder_questions=default-safe' "$T/doc.out" || { echo "KNOB TRUSTED FAIL (autonomy: trusted must fill unset knobs)"; exit 1; }
     grep -q "drain: 'bogus' unknown" "$T/doc.out" || { echo "KNOB WARN FAIL (unknown value must warn + behave as default)"; exit 1; }
+    # v6.0 THE FLIP (hands-free-knobs.md § v2), the release's whole claim and the one thing prose
+    # cannot hold: an UNSET knob now composes the autonomous defaults, and `autonomy: standard` is
+    # the one-line opt-out that restores 5.13's confirm/ask/confirm exactly.
+    : > ops/CONVENTIONS.md
+    "$SELF" doctor > "$T/doc-def.out" 2>&1 || { echo "DOCTOR DEFAULT RC FAIL"; exit 1; }
+    grep -q 'plan_gate=auto · builder_questions=default-safe · evolve_apply=auto-reversible' "$T/doc-def.out" \
+      || { echo "KNOB DEFAULT FAIL (an empty CONVENTIONS must compose the 6.0 autonomous defaults)"; exit 1; }
+    printf 'autonomy: standard\n' > ops/CONVENTIONS.md
+    "$SELF" doctor > "$T/doc-std.out" 2>&1 || { echo "DOCTOR STANDARD RC FAIL"; exit 1; }
+    grep -q 'plan_gate=confirm · builder_questions=ask · evolve_apply=confirm' "$T/doc-std.out" \
+      || { echo "KNOB STANDARD FAIL (autonomy: standard must restore confirm/ask/confirm)"; exit 1; }
+    # precedence's OTHER direction: an explicit knob beats `autonomy: standard` too, and standard
+    # still fills the rest (the first assertion above proves explicit beating `trusted`)
+    printf 'autonomy: standard\nplan_gate: auto\n' > ops/CONVENTIONS.md
+    "$SELF" doctor > "$T/doc-mix.out" 2>&1 || { echo "DOCTOR MIX RC FAIL"; exit 1; }
+    grep -q 'plan_gate=auto · builder_questions=ask · evolve_apply=confirm' "$T/doc-mix.out" \
+      || { echo "KNOB PRECEDENCE FAIL (an explicit knob must beat autonomy: standard, both directions)"; exit 1; }
+    # A TYPO MUST NEVER GRANT AUTONOMY. An unknown value on an individual knob falls back to that
+    # knob's STANDARD value — even under `autonomy: trusted`, where both the dial AND the 6.0
+    # default would otherwise say auto. Mistakes degrade toward asking the human, never toward
+    # acting without them (v2 fails SAFE, deliberately diverging from v1's fail-to-default).
+    printf 'autonomy: trusted\nplan_gate: bogus\nbuilder_questions: bogus\nevolve_apply: bogus\n' > ops/CONVENTIONS.md
+    "$SELF" doctor > "$T/doc-typo.out" 2>&1 || { echo "DOCTOR TYPO RC FAIL"; exit 1; }
+    grep -q 'plan_gate=confirm · builder_questions=ask · evolve_apply=confirm' "$T/doc-typo.out" \
+      || { echo "KNOB TYPO FAIL (an unknown knob value must fail SAFE to standard, never grant autonomy)"; exit 1; }
+    grep -q "plan_gate: 'bogus' unknown" "$T/doc-typo.out" || { echo "KNOB TYPO WARN FAIL (the safe fallback must say so)"; exit 1; }
+    grep -q "builder_questions: 'bogus' unknown" "$T/doc-typo.out" || { echo "KNOB TYPO WARN FAIL (builder_questions)"; exit 1; }
+    grep -q "evolve_apply: 'bogus' unknown" "$T/doc-typo.out" || { echo "KNOB TYPO WARN FAIL (evolve_apply)"; exit 1; }
+    # ...and a typo in the DIAL itself degrades the same way: standard, never the autonomous default
+    printf 'autonomy: trustd\n' > ops/CONVENTIONS.md
+    "$SELF" doctor > "$T/doc-dial.out" 2>&1 || { echo "DOCTOR DIAL RC FAIL"; exit 1; }
+    grep -q 'plan_gate=confirm · builder_questions=ask · evolve_apply=confirm' "$T/doc-dial.out" \
+      || { echo "KNOB DIAL TYPO FAIL (an unknown autonomy: value must behave as standard)"; exit 1; }
+    grep -q "autonomy: 'trustd' unknown" "$T/doc-dial.out" || { echo "KNOB DIAL WARN FAIL"; exit 1; }
     git checkout -q -- ops/CONVENTIONS.md
 }
 drill_upgrade() {
@@ -208,6 +242,68 @@ drill_upgrade() {
       git rev-parse -q --verify refs/heads/polaris/board >/dev/null && { echo "UNINSTALL LOCAL REF FAIL (the branch must be deleted)"; exit 1; }
       git ls-remote "$T/mig-origin.git" refs/heads/polaris/board | grep -q . && { echo "UNINSTALL REMOTE REF FAIL (the deletion must push)"; exit 1; }
       : ) || exit 1
+}
+drill_adopt() {
+    # ============ T-080 adopt stub-writer drill (ops/contracts/key-registry.md § 3) ============
+    # `update` refreshes kit code and NEVER rewrites CONVENTIONS.md — that is what makes updating
+    # safe — so every key-gated capability ships dormant and adopt is the discovery half. Its whole
+    # promise is that discovery can never become activation: it appends COMMENTED stubs and nothing
+    # else. Drilled against the REAL shipped registry (kit/ops/KEYS.tsv), never a fixture — a
+    # stub-writer proven only on invented keys says nothing about the file that actually ships.
+    adst="$(git status --porcelain)"
+    [ -f ops/CONVENTIONS.md ] && cp ops/CONVENTIONS.md "$T/ad-conv.bak" || rm -f "$T/ad-conv.bak"
+    [ -f "$OPS_DIR/KEYS.tsv" ] || { echo "ADOPT REGISTRY MISSING (kit/ops/KEYS.tsv must ship)"; exit 1; }
+    # the two refusals, first: no registry → die naming the remedy · no CONVENTIONS.md (INIT never
+    # ran) → die, and NEVER create the file it was asked to extend
+    rm -f ops/KEYS.tsv
+    printf 'voice: plain\n' > ops/CONVENTIONS.md
+    "$SELF" adopt > "$T/ad-nokeys.out" 2>&1 && { echo "ADOPT REGISTRY RC FAIL (no KEYS.tsv must die)"; exit 1; }
+    grep -q 'polaris update' "$T/ad-nokeys.out" || { echo "ADOPT REGISTRY REMEDY FAIL (the refusal must name the remedy)"; exit 1; }
+    cp "$OPS_DIR/KEYS.tsv" ops/KEYS.tsv
+    rm -f ops/CONVENTIONS.md
+    "$SELF" adopt > "$T/ad-noconv.out" 2>&1 && { echo "ADOPT CONV RC FAIL (no CONVENTIONS.md must die)"; exit 1; }
+    [ -f ops/CONVENTIONS.md ] && { echo "ADOPT CREATE FAIL (adopt must never create CONVENTIONS.md)"; exit 1; }
+    grep -q 'INIT' "$T/ad-noconv.out" || { echo "ADOPT CONV REMEDY FAIL (the refusal must point at INIT)"; exit 1; }
+    # a live value AND an existing stub, both pre-set: both must survive exactly as found — the stub
+    # is what says "known and deliberately unset", so re-stubbing it would itself be an edit
+    printf 'voice: plain\ndrain: plan\n# builder_questions: ask   # deliberately unset\n' > ops/CONVENTIONS.md
+    cp ops/CONVENTIONS.md "$T/ad-pre.md"
+    adbytes="$(wc -c < "$T/ad-pre.md" | tr -d ' ')"
+    "$SELF" adopt > "$T/ad1.out" 2>&1 || { cat "$T/ad1.out"; echo "ADOPT RUN RC FAIL"; exit 1; }
+    # APPEND-ONLY, proven in bytes: everything that was there is still there, unchanged and in order
+    head -c "$adbytes" ops/CONVENTIONS.md > "$T/ad-head"
+    cmp -s "$T/ad-pre.md" "$T/ad-head" || { echo "ADOPT APPEND-ONLY FAIL (adopt must never edit, reorder or uncomment an existing line)"; exit 1; }
+    # ...and nothing appended is LIVE: every added line is a comment (the blank separator aside)
+    tail -c "+$((adbytes+1))" ops/CONVENTIONS.md | grep -v '^#' | grep -q . \
+      && { echo "ADOPT LIVE VALUE FAIL (every appended line must be a comment — adopt never activates a key)"; exit 1; }
+    grep -qxF '# --- known keys not set here (polaris adopt; uncomment a line to enable it) ---' ops/CONVENTIONS.md \
+      || { echo "ADOPT MARKER FAIL (the first append writes the marker)"; exit 1; }
+    # the stub carries the key's default and absent-cost out of the REGISTRY — read back from
+    # KEYS.tsv so this asserts the shipped data itself, not a hand-copy of it that can drift
+    adline="$(awk -F'\t' '$1=="plan_gate"{printf "# %s: %s   # %s (since %s)\n",$1,$3,$4,$2}' ops/KEYS.tsv)"
+    [ -n "$adline" ] || { echo "ADOPT REGISTRY ROW FAIL (plan_gate must have a KEYS.tsv row)"; exit 1; }
+    grep -qxF "$adline" ops/CONVENTIONS.md || { echo "ADOPT STUB SHAPE FAIL (the stub must carry the registry's default + absent-cost)"; exit 1; }
+    grep -q '^plan_gate:' ops/CONVENTIONS.md && { echo "ADOPT UNCOMMENT FAIL (a stubbed key must never become a live value)"; exit 1; }
+    grep -qx 'drain: plan' ops/CONVENTIONS.md || { echo "ADOPT LIVE SURVIVE FAIL (a pre-set live value must survive untouched)"; exit 1; }
+    [ "$(grep -c '^# builder_questions:' ops/CONVENTIONS.md)" = "1" ] || { echo "ADOPT RESTUB FAIL (an existing stub counts as present)"; exit 1; }
+    grep -q 'nothing changed behavior' "$T/ad1.out" || { echo "ADOPT SAY FAIL (the run must say it changed no behavior)"; exit 1; }
+    # second run: rc 0, byte-identical file, and the no-op line names the whole registry
+    cp ops/CONVENTIONS.md "$T/ad-1.md"
+    "$SELF" adopt > "$T/ad2.out" 2>&1 || { cat "$T/ad2.out"; echo "ADOPT RERUN RC FAIL"; exit 1; }
+    cmp -s "$T/ad-1.md" ops/CONVENTIONS.md || { echo "ADOPT IDEMPOTENT FAIL (a second run must leave CONVENTIONS.md byte-identical)"; exit 1; }
+    grep -q "nothing to adopt — all $(grep -c '^[a-z]' ops/KEYS.tsv) known keys present or stubbed" "$T/ad2.out" \
+      || { echo "ADOPT NOOP LINE FAIL (the no-op must count every registry row)"; exit 1; }
+    # a GROWN registry appends under the marker that is already there — never a second marker
+    printf 'zz_drill_key\t9.9.9\tnope\tnothing at all\n' >> ops/KEYS.tsv
+    "$SELF" adopt > "$T/ad3.out" 2>&1 || { cat "$T/ad3.out"; echo "ADOPT GROWN RC FAIL"; exit 1; }
+    grep -qxF '# zz_drill_key: nope   # nothing at all (since 9.9.9)' ops/CONVENTIONS.md \
+      || { echo "ADOPT GROWN STUB FAIL (a new registry row must stub on the next run)"; exit 1; }
+    [ "$(grep -cF '# --- known keys not set here' ops/CONVENTIONS.md)" = "1" ] \
+      || { echo "ADOPT MARKER ONCE FAIL (a grown registry must append under the existing marker)"; exit 1; }
+    # hermetic (T-046): every fixture file leaves with the drill
+    rm -f ops/KEYS.tsv
+    if [ -f "$T/ad-conv.bak" ]; then cp "$T/ad-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    [ "$(git status --porcelain)" = "$adst" ] || { echo "ADOPT HERMETIC FAIL (the drill must leave the tree exactly as it found it)"; exit 1; }
 }
 drill_pushdegrade() {
     # ---- T-062 pushdegrade drill (ops/contracts/shared-checkout.md § Executable check) ----

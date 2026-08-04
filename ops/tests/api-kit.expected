@@ -388,6 +388,7 @@ kit/ops/lib/selftest/policy.sh	fn	drill_park
 kit/ops/lib/selftest/policy.sh	fn	drill_qa
 kit/ops/lib/selftest/policy.sh	fn	drill_route
 kit/ops/lib/selftest/policy.sh	fn	drill_rules
+kit/ops/lib/selftest/remote.sh	fn	drill_adopt
 kit/ops/lib/selftest/remote.sh	fn	drill_notify
 kit/ops/lib/selftest/remote.sh	fn	drill_pushdegrade
 kit/ops/lib/selftest/remote.sh	fn	drill_remote
