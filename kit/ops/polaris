@@ -46,6 +46,11 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   grant <ID> <path> -m "why"     append one path to a CLAIMED task's files_owned (sanctioned
                                  amendment; REFUSES any overlap with another ready/active task's
                                  ownership — refusal mutates nothing; RULES.tsv still binds)
+  approve <ID> <scope> -m "why"  record a HUMAN's yes to an `ask` rule on one task's approved:
+                                 list (the sibling of grant: grant widens ownership, approve
+                                 clears a policy gate — and only approve needs a human. REFUSES
+                                 when no ask rule gates <scope> and on any feat/* branch, so a
+                                 Builder can never approve itself; refusal mutates nothing)
   kickback <ID> [-m note]        Integrator: red merge → review→active
   audit <ID>                     Integrator: ownership check of feat/<ID>
   run-verify <ID>                Integrator: re-run task verify: commands in CWD
@@ -274,6 +279,7 @@ case "${1:-}" in
   park)       shift; cmd_park "$@";;
   unpark)     shift; cmd_unpark "$@";;
   grant)      shift; cmd_grant "$@";;
+  approve)    shift; cmd_approve "$@";;
   kickback)   shift; cmd_kickback "$@";;
   audit)      shift; cmd_audit "$@";;
   run-verify) shift; cmd_run_verify "$@";;

@@ -220,6 +220,7 @@ kit/ops/lib/bg.sh	fn	bg_status
 kit/ops/lib/bg.sh	fn	bg_tail
 kit/ops/lib/bg.sh	fn	bg_wait
 kit/ops/lib/bg.sh	fn	cmd_bg
+kit/ops/lib/builder.sh	fn	cmd_approve
 kit/ops/lib/builder.sh	fn	cmd_claim
 kit/ops/lib/builder.sh	fn	cmd_grant
 kit/ops/lib/builder.sh	fn	cmd_handoff
@@ -227,6 +228,7 @@ kit/ops/lib/builder.sh	fn	cmd_pack
 kit/ops/lib/builder.sh	fn	cmd_release
 kit/ops/lib/builder.sh	fn	cmd_resume
 kit/ops/lib/builder.sh	fn	cmd_verify
+kit/ops/lib/builder.sh	fn	fm_append_item
 kit/ops/lib/builder.sh	fn	grant_append_owned
 kit/ops/lib/builder.sh	fn	pack_brain_grep
 kit/ops/lib/builder.sh	fn	pack_section
