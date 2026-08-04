@@ -106,3 +106,5 @@ not installed code — they are written normally, by the board scripts and by th
   tarball/raw-channel paths working regardless, so this is untested-in-the-wild, not unsafe.
 
 ## Deltas
+
+- "install.sh settings merge: POLARIS-owned hook entries (identified by ops/hooks/ script path) are REPLACED with the kit's current fields on re-install; user-added hooks and all other keys keep skip-if-present (key-registry.md § 6)"  (T-078, 2026-08-04)
