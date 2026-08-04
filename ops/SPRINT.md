@@ -243,16 +243,13 @@ exercises but a Builder cannot.
 | 2026-07-18 | 13 (T-003, T-007..T-010) | 7 (T-004..T-006) · cycle p50 0.5h · kickbacks 0 |
 
 ## Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
-- EOL PINS: CLOSED, WITH ONE DEFERRED DIFF STILL OWED (compacted at the sprint-9 close — the bug is
-  fully shipped, only the consequence is still live). `ops/tests/*.{expected,cmd}` (T-056) and
-  `docs/sprints/*.md` (T-069) are now all pinned `eol=lf`. Before that, `core.autocrlf=true`
-  re-materialized goldens CRLF on any git touch and `check` byte-diffed all 480 lines as "differ" — a
-  golden green at wave start and red right after the land, reproduced on bare `main` with ZERO task
-  code, which is what proved it was the repo's flake and not the task's. The rule outlived the bug and
-  now lives in role §3: BASE-CHECK EVERY uat RED BEFORE YOU BELIEVE IT. Still owed: sprint-9's report
-  was a NEW file so it normalized silently, but the five PRE-EXISTING reports stay unnormalized until
-  something next touches them — expect exactly one whole-file diff per report, once each, and fold it
-  into whatever commit touches it rather than reading it as damage.
+- EOL PINS: CLOSED, ONE DEFERRED DIFF STILL OWED. Goldens (`ops/tests/*.{expected,cmd}`, T-056) and
+  sprint reports (`docs/sprints/*.md`, T-069) are pinned `eol=lf`; the bug (`core.autocrlf=true`
+  re-materializing files CRLF on any git touch, redding a golden that was green at wave start) is
+  fully shipped, and the rule it earned lives in role §3: BASE-CHECK EVERY uat RED BEFORE YOU
+  BELIEVE IT. Still owed: the five PRE-EXISTING reports stay unnormalized until something next
+  touches them — expect exactly one whole-file diff per report, once each, and fold it into
+  whatever commit touches it rather than reading it as damage.
 - A GOLDEN THAT RECORDS A *DERIVED* SURFACE SILENTLY COUPLES EVERY TASK THAT FEEDS IT — three
   instances now, so treat it as structural, not bad luck. Sprint 7: T-047 added fns to `ownership.sh`
   without owning `ops/tests/api-kit.expected`. Sprint 8: T-063 (docs) added ONE PROTOCOL heading —
@@ -289,36 +286,6 @@ exercises but a Builder cannot.
   `check --update` on faith — and the owner's handoff retries green. After the owner lands, the
   golden must gain exactly its own lines on top; anything else is a finding. EVOLVE: write this into
   key-registry § 5 — the pinned-pair design assumed the owner could hand off red, and it cannot.
-- A `risk: high` task at the ROOT of the dependency tree stalls the whole board, not just itself.
-  T-047 was audited and verified for days while T-048/T-049/T-050 (13 of 28 pts) sat behind it and
-  `ready/` was empty — it waited 128.9h at the gate, which alone moved integrate avg 1.5h→3.9h. The
-  approval is cheap at the plan gate and expensive here, exactly as the `ask` mechanism this sprint
-  ships argues for its own scopes. Get the yes before the wave, not at the merge.
-- THE SUITE SHARDS, AND THAT CHANGES THE INTEGRATOR'S RHYTHM. `doctor --selftest --parallel 3`
-  (hermetic since T-046) ran the FULL drill set in 169s / 202s / 330s across sprint 8's three wave
-  gates — versus 805s serial — with all 21→25 drills covered, not a subset. That is the first time
-  the whole wave gate fits under the harness's 600s tool cap, so a wave gate is now a plain
-  foreground call instead of the log-to-a-file-and-poll recipe CONVENTIONS still describes. Measure
-  before assuming: the serial 805s figure is what drove three sprints of background-and-poll
-  ceremony. EVOLVE: `test:` is a candidate to carry `--parallel 3` outright.
-  ANCHOR THE SUITE AT `kit/`, NOT AT THE INSTALLED COPY — and here is the exact cost of getting it
-  wrong, measured at the sprint-9 close: the kit driver registers 27 drill labels, the installed
-  `ops/` driver registers 21, and the six it cannot see are `bg`, `route`, `busyint`, `claimguard`,
-  `park`, `pushdegrade`. For sprint 9 that gap was precisely the sprint — `route` and `bg` ARE the
-  work — so `bash ops/polaris doctor --selftest` would have gone green while proving none of it. This
-  is THE SPLIT's installed-LAGS-source paragraph showing up as a silent false green rather than an
-  error, which is the dangerous shape. `CONVENTIONS.md test:` already anchors the correct form
-  (`bash kit/ops/polaris …`) and `handoff` re-ran it per task, so no gate was actually weakened this
-  sprint; the tell that you are on the right driver is the label list itself — kit-only labels like
-  `park`/`pushdegrade` appear in the shard lines, and after T-071 the count reads 27, not 21.
-- EVERY LOCK NEEDS AN OWNER CHECK, AND RECOVERY-BY-AGE MUST STAY OWNER-BLIND. Found auditing T-058,
-  fixed by T-064: the integration lease was pid-guarded but the board mutex was not — `mutex_off` was
-  an unconditional `rm -rf`, and `on_die` never disarmed, so ANY process exit deleted whatever mutex
-  existed, including one another session legitimately held. T-057 widened the window from one board
-  mutation to a whole landing pass by arming the trap lease-long. The tell was the ASYMMETRY between
-  two locks in the same codebase — worth grepping for whenever one lock learns something the others
-  did not. The fix's second half matters as much: `mutex_on`'s staleness steal stays deliberately
-  pid-blind, because pid-guarding recovery would make a crashed holder's lock immortal.
 - A BASE-BOUND COMMIT LANDS ON WHATEVER THE SHARED CHECKOUT HAS OUT — AND DURING A WAVE THAT IS THE
   INTEGRATE BRANCH. Sprint 9 W1: while I held `integrate/2026-08-03`, the Planner authored
   `docs(contract): bg-jobs v1.1 (T-072)` and it committed onto MY branch, then rode my `--no-ff` seal
@@ -344,30 +311,17 @@ exercises but a Builder cannot.
   so an integrator pushing tags manually is already off the sanctioned path, and `--force` on a ref
   namespace holding every sprint's history is the one place a no-op and a catastrophe look identical
   until you check.
-- A BUILDER DEEP IN ONE FILE IS THE CHEAPEST DEFECT DETECTOR YOU HAVE — GIVE THE FINDING A 1-PT RIDER
-  INSTEAD OF A BACKLOG LINE. Twice in sprint 9 a Builder surfaced a real defect in code it did not
-  own and could not legally touch: T-067 found `check --update/--scaffold` silently hook-approved
-  inside compounds (→ T-072, 1pt, `fix(hooks)`), and T-071 found `cmd_finish`'s bg guard counting
-  `.prev` archives as live jobs, which makes a run permanently un-finishable (→ T-073, 1pt,
-  `fix(cli)`). Both were filed mid-sprint, both owned a single disjoint file, both landed in the wave
-  already in flight, and both cost one point. The pattern that makes this safe is the SIZE and the
-  DISJOINTNESS, not the urgency: a one-file rider clears the ready gate against whatever is already
-  in `ready/`+`active/` without re-planning the wave, so the finding gets fixed while the context is
-  hot instead of aging in `IDEAS.md` until nobody remembers the repro. PLANNER: treat "Builder found
-  a defect outside its ownership" as a first-class task source, and point it at 1 unless it is
-  genuinely bigger. INTEGRATOR: a rider arriving after you have already landed its wave is not a
-  reason to seal early — hold the gate, take the rider, gate once over both.
-- A RAW SHELL BACKGROUND JOB IS OWNED BY NOBODY THE MOMENT A SUBAGENT'S TURN ENDS. Sprint 10 W1: the
-  integrator (conductor-entered, so a subagent) launched the 805s suite through the harness's
-  background shell and ended its turn expecting a completion notification — but a subagent between
-  turns receives none, so the job ran orphaned with nothing watching it, and a crash would have been
-  indistinguishable from still-running. It survived because the conductor independently armed a watch
-  on process exit covering both outcomes. `bg run` + chunked `bg wait` exists for exactly this — the
-  verdict lives in an rc file ANY session can collect later — so a long command in a subagent goes
-  through the bg machinery or stays foreground with an explicit timeout; a bare background shell is
-  only safe in a session that will still be alive to reap it.
-- PLANNER: NEVER YAML-QUOTE A `verify:` LINE. frontmatter-lists v1 keeps quotes BY DESIGN, so a
-  double-quoted entry reaches bash as ONE quoted word and can never run — T-074 shipped with two
-  unrunnable assertions (the awk TSV checks) and the Builder had to fix its own task file mid-flight,
-  the only sanctioned self-edit there is. `fm_list` strips only a trailing ` #comment`; plain
-  unquoted lines are always right, and no quoting is ever needed.
+- A RAW SHELL BACKGROUND JOB IS OWNED BY NOBODY THE MOMENT A SUBAGENT'S TURN ENDS. TWICE in sprint
+  10 an agent (the W1 integrator first — conductor-entered, so a subagent) launched a long suite
+  through the harness's background shell and ended its turn expecting a completion notification —
+  but a completed subagent receives none, so the job ran orphaned with nothing watching it, and a
+  crash would have been indistinguishable from still-running. It survived only because the
+  conductor independently armed a watch on process exit covering both outcomes. `bg run` + chunked
+  `bg wait` exists for exactly this — the verdict lives in an rc file ANY session can collect
+  later — so a long command in a subagent goes through the bg machinery or stays foreground with an
+  explicit timeout; a bare background shell is only safe in a session that will still be alive to
+  reap it. AND THE LIST OF LONG COMMANDS HAS A GAP THAT CAUGHT THE CONDUCTOR THIS RUN:
+  `polaris finish` re-runs the suite internally, so it exceeds the 600s tool ceiling exactly as
+  `test:` (805s) and `qa` (1225s) do — but the CONVENTIONS measured-times comment names the suites
+  and not `finish`. Until that comment is amended (EVOLVE proposal queued), treat `finish` as a
+  `qa`-class command: background it and poll.
