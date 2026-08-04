@@ -182,3 +182,28 @@ frontmatter keys, install/uninstall/merge behavior, selection rules, and the two
 are all v1, untouched. `ops/tests/output-style-installed`'s pins — exactly 7 numbered-bold lines,
 `^name: POLARIS$`, `^keep-coding-instructions: true$`, `🎉 Complete!` (style AND kit/CLAUDE.md),
 `subagent never ends a run` (kit/CLAUDE.md) — all still hold by construction.
+
+## v3 — the widened jargon alternation is authoritative (2026-08-04)
+§ v2's assertion 6 spelled the examples grep as `suite|merged?|branch|worktree|seal(ed)?|wsjf|integrate|repo`.
+That alternation had a hole on day one: the `\b` word boundaries let every plural and third-person
+form — "merges", "branches", "seals", "integrates", "repos" — walk straight through, and the worked
+examples are byte-pinned nowhere else, so the register's ONLY guard had a bypass. It earned the
+6.0.0 program's one kickback (sprint 10 wave 2, T-082 — integrator-initiated on a GREEN check),
+was widened one line and re-landed the same session, and every added form was injected into an
+example and watched to red before it was trusted.
+
+The shipped, authoritative alternation — what `ops/tests/plain-voice.cmd` carries today and what
+any rewrite of that file MUST reproduce:
+
+```
+\b(suites?|merge[ds]?|branch(es)?|worktrees?|seal(ed|s)?|wsjf|integrates?|repos?)\b
+```
+
+**Never narrow this alternation back — not to match § v2's spelling, not for tidiness.** § v2's
+assertion-6 text describes the check's intent (a case-insensitive jargon grep scoped to the
+examples section); THIS section fixes its pattern. Where the two disagree, v3 wins. A regex that
+reads correct is not a regex that works: every optional group above exists because its absence let
+a real form through. Extend the alternation when a new jargon form appears in an example; treat any
+diff that removes a group as reopening the hole, not as cleanup. Everything else in v2 — the scope
+(`sed -n '/^## What a close reads like/,$p'`), the case-insensitivity, the other six assertions —
+is unchanged.

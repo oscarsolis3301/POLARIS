@@ -1,4 +1,4 @@
-# MAP — POLARIS            (updated: 2026-08-03, by EVOLVE)
+# MAP — POLARIS            (updated: 2026-08-04, by EVOLVE)
 
 ## Stack
 Bash (>= 3.2 — macOS default; no mapfile, no assoc arrays) + Python 3 stdlib only.
@@ -10,15 +10,16 @@ The repo is BOTH the product and a user of it. `kit/` is what ships. `ops/` is a
 installation running this repo's board. Never hand-edit `ops/` — see ops/CONVENTIONS.md § THE SPLIT.
 The installed copy also LAGS the source mid-sprint, and the tell that a selftest ran on the right
 driver is the LABEL LIST: `bash kit/ops/polaris doctor --selftest` registers kit-only drill labels
-(27 at 6.0 vs the installed 21 — `bg`, `route`, `park`, `pushdegrade`…), so a green from
-`ops/polaris` can silently prove none of the sprint's new behavior.
+(kit 28 vs the installed 27 at 5.24.0 — `adopt` is kit-only until the 6.0.0 dogfood), so a green
+from `ops/polaris` can silently prove none of the sprint's new behavior. The counts move every
+sprint: recount `SELFTEST_LABELS` in both `lib/selftest/spine.sh` copies rather than trusting this line.
 
 ## Entry points
 | Path | What it is |
 |---|---|
 | kit/ops/polaris | THE CLI **entry point** — ~230 lines: fast paths (find/show/help), lib loader, resolved globals, dispatch. Every `cmd_*` body lives in kit/ops/lib/ since 5.16.0. |
 | kit/ops/lib/ | The command bodies — runtime-sourced modules: core · ownership · builder · integrate · knowledge · observe · admin · workspace (shared-checkout mechanics: id_ok · wt_add · stray_feat_repair · int_on/int_off integration lease, rc 3 queued · park/unpark) · bg (background jobs: run/status/tail/wait, dir-per-job `.polaris/bg/<name>/`, rc-file-first verdicts, `.prev` rotation, sweep --fix rotates >24h) + selftest/ drill groups. Contracts: module-layout · shared-checkout · bg-jobs. |
-| kit/ops/install.sh | Installs the kit into any repo. Two paths: fresh vs live-board (test = target has ops/CONVENTIONS.md). |
+| kit/ops/install.sh | Installs the kit into any repo. Two paths: fresh vs live-board (test = target has ops/CONVENTIONS.md). Settings merge: POLARIS-owned hook entries (identified by the `ops/hooks/` script PATH, never basename) are REPLACED with the kit's current fields on re-install; user-added hooks and all other keys keep skip-if-present (key-registry.md § 6). |
 | kit/ops/bootstrap.py | The zipapp entry — packed to the archive ROOT as `__main__.py`, so `python polaris-v5.zip` just works. Also arms the machine (~/.claude skill + cached kit + permission rules). |
 | kit/ops/pack.py | Kit-repo tool, never shipped. Builds polaris-v5.zip from `git ls-files` run inside kit/. `--dogfood` installs the published release here. |
 | kit/ops/dashboard.py | `polaris dash` — read-only live board on 127.0.0.1:7373. stdlib http.server. |
@@ -64,6 +65,10 @@ driver is the LABEL LIST: `bash kit/ops/polaris doctor --selftest` registers kit
 - 6.0 autonomy defaults: unset knobs compose auto / default-safe / auto-reversible;
   `autonomy: standard` is the one-line opt-out; doctor prints the effective composition
   unconditionally (ops/contracts/hands-free-knobs.md v2).
+- 6.0 discovery loop (key-registry.md § 2-4): doctor reads `ops/KEYS.tsv` and reports CONVENTIONS
+  keys absent from the live file as ONE summary line naming the remedy (`ops/polaris adopt`) —
+  the drift class the CLAUDE.md stamp check covers for exactly one file; `update` prints the
+  BREAKING banner when the incoming kit is >=6.0.0 and no autonomy knob is set.
 
 ## CLI surface beyond the build loop (claim · build · verify · handoff · pack · find/show · check)
 `triage` (prints your lane) · `route [<ID>|--role R|--points N --risk R]` (mechanical model tier —
@@ -74,7 +79,9 @@ suite+seal+run-verify+done in one pass) · `status --brief` · `metrics` (opens 
 summary) · `doctor --selftest --only <glob>` / `--parallel <N>` · `park`/`unpark` (dirty trees
 become named stashes) · `approve <ID> <scope> -m "why"` (records a human's yes to an `ask` rule) ·
 `notify-gate <kind> [ID]` + `POLARIS_SEVERITY` in the notify env contract · `finish` (pends on
-running bg jobs) · `bg run/status/tail/wait` (see the lib row above).
+running bg jobs) · `bg run/status/tail/wait` (see the lib row above) · `adopt` (appends a
+commented stub — default + rationale — for every KEYS.tsv key missing from CONVENTIONS.md;
+never edits a value, idempotent; drill label `adopt` in remote.sh proves it).
 
 ## Danger zones — agents NEVER edit these (machine-enforced, ops/RULES.tsv)
 | Path | Why |
@@ -106,11 +113,3 @@ not installed code — they are written normally, by the board scripts and by th
   tarball/raw-channel paths working regardless, so this is untested-in-the-wild, not unsafe.
 
 ## Deltas
-
-- "install.sh settings merge: POLARIS-owned hook entries (identified by ops/hooks/ script path) are REPLACED with the kit's current fields on re-install; user-added hooks and all other keys keep skip-if-present (key-registry.md § 6)"  (T-078, 2026-08-04)
-
-- "doctor reads ops/KEYS.tsv and reports CONVENTIONS keys absent from the live file as ONE summary line naming the remedy (ops/polaris adopt) — the class of drift the CLAUDE.md stamp check covers for exactly one file (key-registry.md § 2)"  (T-076, 2026-08-04)
-
-- "polaris gains `adopt` — appends every KEYS.tsv key missing from CONVENTIONS.md as a commented stub (default + rationale), never edits a value, idempotent; `update` prints the BREAKING banner when the incoming kit is >=6.0.0 and no autonomy knob is set (key-registry.md § 3-4)"  (T-077, 2026-08-04)
-
-- "doctor --selftest gains label `adopt` (drill_adopt in remote.sh); drill_notify's knob block asserts the 6.0 defaults and the `autonomy: standard` opt-out"  (T-080, 2026-08-04)
