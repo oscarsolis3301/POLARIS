@@ -109,3 +109,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "BREAKING 6.0: autonomy knobs default to auto/default-safe/auto-reversible when unset; `autonomy: standard` is the one-line opt-out; doctor prints the effective composition unconditionally (hands-free-knobs.md v2)"  (T-075, 2026-08-03)
 
 - "kit/ops/KEYS.tsv added — the CONVENTIONS key registry (key · since · default · absent-cost), shipped via KIT_CODE, consumed by doctor drift + adopt (ops/contracts/key-registry.md)"  (T-074, 2026-08-03)
+
+- "polaris gains `approve <ID> <scope> -m \"why\"` — records a human's yes to an `ask` rule on one task (ops/contracts/ask-approval.md)"  (T-048, 2026-08-03)
