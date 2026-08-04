@@ -21,6 +21,10 @@
 #               (the branch tarball's root ops/ IS our installation) — same no-leak + marker checks
 #   live-board  install twice over one target: second run says `live-board`, refreshes kit code,
 #               leaves board/CONVENTIONS/MAP/SPRINT/RULES byte-identical
+#   hookmerge   settings.json holding a STALE POLARIS hook entry (ownership-guard at timeout 10)
+#               plus two hooks the human added — one of them sharing our basename — is merged:
+#               our entry is replaced with the kit's shipped fields, theirs come out untouched,
+#               and a second install changes not one byte
 #   uninstall   `polaris uninstall --yes` removes ops/, the managed block and the guard hook,
 #               keeps the user's own CLAUDE.md content and hooks
 #   repo-clean  this repo is left byte-identical (everything ran in mktemp dirs)
@@ -291,6 +295,83 @@ drill_live_board() {
   cmp "$WORK/board-before" "$WORK/board-after"
 }
 
+drill_hookmerge() {
+  # The half of the settings.json merge that was silently broken for three releases: it keyed on
+  # hook script BASENAME and skipped every entry it already saw, so a POLARIS entry, once written,
+  # could never be CORRECTED. Measured in polaris-testbed — pinned at ownership-guard.sh
+  # `timeout: 10` against a guard ops/lib/core.sh clocks at ~8s per write, i.e. parked on the
+  # fail-open margin where the ownership gate quietly stops applying, with no update able to
+  # rescue it. Identity is the script PATH under ops/hooks/ now, so this drill has to prove BOTH
+  # halves in one run: OUR entry is refreshed to the shipped fields, THEIRS is never touched.
+  new_target "$WORK/hookmerge"
+  # A stale POLARIS entry (wrong matcher AND wrong timeout) between two hooks the human added.
+  # The last one runs `tools/ownership-guard.sh` — our basename, their script: under the old
+  # matcher its mere presence suppressed our own entry, which is why basename identity had to go.
+  cat > "$WORK/hookmerge/.claude/settings.json" <<'JSONEOF'
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "echo THEIR_HOOK" }]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/ownership-guard.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [{ "type": "command", "command": "bash tools/ownership-guard.sh", "timeout": 1 }]
+      }
+    ]
+  }
+}
+JSONEOF
+  cp "$WORK/hookmerge/.claude/settings.json" "$WORK/hookmerge.pre"
+  ( cd "$WORK/hookmerge" && "$PY" "$ZIP" --no-machine-setup ) > "$WORK/hookmerge1.out"
+  cat "$WORK/hookmerge1.out"
+  grep -q 'installed · fresh' "$WORK/hookmerge1.out"
+  # Path as argv, never inline — Git Bash converts argv paths for native python (see zip-purity).
+  "$PY" - "$WORK/hookmerge/.claude/settings.json" "$KIT/.claude/settings.json" "$WORK/hookmerge.pre" <<'PYEOF'
+import json, sys
+merged = json.load(open(sys.argv[1], encoding="utf-8"))
+kit    = json.load(open(sys.argv[2], encoding="utf-8"))
+pre    = json.load(open(sys.argv[3], encoding="utf-8"))
+got, want = merged["hooks"]["PreToolUse"], kit["hooks"]["PreToolUse"]
+canon = lambda e: json.dumps(e, sort_keys=True)
+ours  = lambda es: [e for e in es if "ops/hooks/" in json.dumps(e)]
+mine  = lambda es: [e for e in es if "ops/hooks/" not in json.dumps(e)]
+
+# 1. every kit entry is present EXACTLY as shipped — matcher, timeout and command together
+for w in want:
+    if canon(w) not in [canon(e) for e in got]:
+        sys.exit("kit entry did not land verbatim: " + canon(w))
+# 2. replaced IN PLACE, never duplicated: one POLARIS entry per kit entry, and the stale one
+#    kept its slot (index 1) rather than being appended behind the user's hooks
+if len(ours(got)) != len(want):
+    sys.exit("expected %d POLARIS entries, found %d: %s" % (len(want), len(ours(got)), got))
+if "ops/hooks/ownership-guard.sh" not in json.dumps(got[1]):
+    sys.exit("the refreshed entry lost its list position: " + canon(got[1]))
+# 3. the user's hooks are untouched, in order — including the one sharing our basename
+if [canon(e) for e in mine(pre["hooks"]["PreToolUse"])] != [canon(e) for e in mine(got)]:
+    sys.exit("user hooks were modified: %s" % json.dumps(mine(got)))
+PYEOF
+  # The repair is REPORTED, not silent — a fix no one can see is how the old bug survived.
+  grep -q 'updated ops/hooks/ownership-guard.sh' "$WORK/hookmerge/.polaris/install.log"
+  grep -q 'added ops/hooks/readonly-allow.sh' "$WORK/hookmerge/.polaris/install.log"
+  cp "$WORK/hookmerge/.claude/settings.json" "$WORK/hookmerge.after1"
+  # 4. idempotent: a second install changes not one byte, and claims no update it did not make.
+  ( cd "$WORK/hookmerge" && "$PY" "$ZIP" --no-machine-setup ) > "$WORK/hookmerge2.out"
+  cmp "$WORK/hookmerge.after1" "$WORK/hookmerge/.claude/settings.json"
+  ! grep -q 'updated ops/hooks/' "$WORK/hookmerge/.polaris/install.log"
+}
+
 drill_uninstall() {
   [ -f "$T_FRESH/ops/polaris" ]      # depends on drill fresh
   ( cd "$T_FRESH" && bash ops/polaris uninstall --yes ) > "$WORK/uninstall.out"
@@ -323,6 +404,8 @@ drill heal-refuses  drill_heal_refuses
 drill no-leaks    drill_no_leaks
 drill old-client  drill_old_client
 drill live-board  drill_live_board
+# Builds its own target, like the heal drills — independent of every other drill.
+drill hookmerge   drill_hookmerge
 drill uninstall   drill_uninstall
 drill repo-clean  drill_repo_clean
 
