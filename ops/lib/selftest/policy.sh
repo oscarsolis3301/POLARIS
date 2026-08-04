@@ -25,6 +25,57 @@ drill_rules() {
     # drift --strict) meets a clean board + pristine RULES.tsv regardless of partition.
     rm -f ops/board/ready/T-2.md
     sed -i.bak '/DO_NOT_SHIP/d' ops/RULES.tsv && rm -f ops/RULES.tsv.bak
+    # ---- T-050: the `ask` rule kind + `polaris approve`, end to end (ops/contracts/ask-approval.md).
+    # `ask` is the ONE kind that can be lifted, so every containment on it is load-bearing: unheld,
+    # `ask` decays into a legal way to dissolve any rule that blocks you — the single motive
+    # invariant 11 exists to resist. Two assertions carry that weight alone. (5) a `path` rule is
+    # never cleared by an approval, or `ask` becomes a lever on every wall in the repo. (4) a Builder
+    # can never approve, its own gate or anyone's — mechanically, by branch, not by exhortation,
+    # because an approval mechanism is exactly what a stuck agent rationalizes its way into.
+    # Hermetic like the rest of this drill: three rules, two task files and one feat branch, all gone
+    # before it returns. `src/wall/` deliberately carries BOTH kinds on the IDENTICAL scope — that
+    # collision is the only shape in which (5) means anything.
+    printf 'src/ask/\task\t-\taskdrill gated scope\n' >> ops/RULES.tsv
+    printf 'src/wall/\task\t-\taskdrill gated wall\n' >> ops/RULES.tsv
+    printf 'src/wall/\tpath\t-\taskdrill walled\n' >> ops/RULES.tsv
+    printf -- '---\nid: T-ASK\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/ask/a.txt\n  - src/wall/w.txt\napproved:\nverify: []\n---\n## Notes\n' > ops/board/ready/T-ASK.md
+    # (1) an ask rule with no approval denies EXACTLY as path — rc 1 (rules), not 3 (ownership):
+    # T-ASK owns the path, so the rule is the only thing that can be refusing it.
+    "$SELF" _guard src/ask/a.txt T-ASK >/dev/null 2>&1; [ $? -eq 1 ] || { echo "ASK DENY FAIL (an ask rule with no approval must deny, rc 1)"; exit 1; }
+    # (2) the recorded approval clears that same call.
+    "$SELF" approve T-ASK src/ask/ -m drill >/dev/null || { echo "ASK APPROVE FAIL (approve from the primary checkout must succeed)"; exit 1; }
+    fm_list approved ops/board/ready/T-ASK.md | grep -q '^src/ask/ —' || { echo "ASK APPROVE APPEND FAIL (entry missing from approved:)"; exit 1; }
+    "$SELF" _guard src/ask/a.txt T-ASK >/dev/null 2>&1 || { echo "ASK CLEAR FAIL (want rc 0 once the approval is on the task)"; exit 1; }
+    # (3) the ID-less entrypoint stays fail-closed: `_rules` carries no task, so it carries no
+    # approval — even with the approval that just cleared (2) sitting on the board.
+    "$SELF" _rules src/ask/a.txt >/dev/null 2>&1 && { echo "ASK IDLESS FAIL (_rules has no ID and must still deny)"; exit 1; }
+    # (5) an approval NEVER clears a `path` rule, even one covering the identical scope.
+    "$SELF" approve T-ASK src/wall/ -m drill >/dev/null || { echo "ASK APPROVE WALL FAIL (an ask rule gates this scope, so approve must record it)"; exit 1; }
+    "$SELF" _guard src/wall/w.txt T-ASK >/dev/null 2>&1; [ $? -eq 1 ] || { echo "PATH UNCLEARED FAIL (an approval must NOT clear a path rule on the same scope)"; exit 1; }
+    # (4) approve refuses on feat/*, names the containment, and moves nothing. The scope is the
+    # already-approved src/ask/, so the branch is the ONLY thing standing between this call and a
+    # successful self-approval — remove the guard and both halves below go red.
+    "$SELF" claim T-ASK >/dev/null
+    apre="$(git rev-parse refs/heads/polaris/board)"
+    ( cd .polaris/wt/T-ASK && "$SELF" approve T-ASK src/ask/ -m "self-approval" ) >/dev/null 2>"$T/askfeat.err" \
+      && { echo "SELF-APPROVE FAIL (approve on feat/* must refuse — a Builder never clears its own gate)"; exit 1; }
+    grep -q 'a Builder never approves its own gate' "$T/askfeat.err" || { cat "$T/askfeat.err"; echo "SELF-APPROVE MSG FAIL (the refusal must name the containment)"; exit 1; }
+    [ "$(git rev-parse refs/heads/polaris/board)" = "$apre" ] || { echo "SELF-APPROVE MUTATE FAIL (a refusal must not move the board ref)"; exit 1; }
+    # (6) the plan gate — the ARC sequence stopped at step 1. T-ASK is active by now, so ready/ holds
+    # only the unapproved T-ASK2. The finding disappearing once its approval lands is the half that
+    # proves the gate reads the approval, not merely the rule.
+    printf -- '---\nid: T-ASK2\npoints: 1\nwsjf: 2\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/ask/b.txt\napproved:\nverify: []\n---\n## Notes\n' > ops/board/ready/T-ASK2.md
+    "$SELF" drift > "$T/askdrift.out" 2>&1 || true
+    grep -q "READY GATE: T-ASK2 owns 'src/ask/b.txt' under ask scope 'src/ask/'" "$T/askdrift.out" \
+      || { cat "$T/askdrift.out"; echo "READY GATE FAIL (an unapproved ask scope in ready/ must be a finding)"; exit 1; }
+    ( "$SELF" drift --strict >/dev/null 2>&1 ) && { echo "READY GATE STRICT FAIL (an ask-gated ready task must make --strict rc 1)"; exit 1; }
+    "$SELF" approve T-ASK2 src/ask/ -m drill >/dev/null || { echo "READY GATE APPROVE FAIL"; exit 1; }
+    "$SELF" drift 2>&1 | grep -q 'READY GATE: T-ASK2 owns' && { echo "READY GATE SETTLED FAIL (a covered scope is a settled question, not a finding)"; exit 1; }
+    "$SELF" release T-ASK --to ready -m drill >/dev/null
+    rm -f ops/board/ready/T-ASK.md ops/board/ready/T-ASK2.md
+    git branch -q -D feat/T-ASK 2>/dev/null || true
+    sed -i.bak '/askdrill/d' ops/RULES.tsv && rm -f ops/RULES.tsv.bak
+    # ---- end T-050 ask/approve drills ----
     git add -A; git commit -qm 'rules drill cleanup' >/dev/null 2>&1 || true
 }
 drill_drift() {

@@ -232,7 +232,7 @@ Three bands, and the band is a property of the MEASURED time, not of how importa
 ## VOICE — how you TALK to the human (`voice:` in `ops/CONVENTIONS.md`, default `standard`)
 | `voice:` | How you speak |
 |---|---|
-| `standard` | Warm, friendly, plain English — like a teammate who knows the code, not a spec sheet. No POLARIS jargon (`wsjf`, `paranoid`, `local-lock`, `files_owned`) unless you explain it in the same breath. Lead with what happened and what it means for them; leave out detail they didn't ask for. |
+| `standard` | Warm, friendly, everyday English — the bar: someone who has never used git or run a test understands every sentence. No POLARIS jargon, and no trade words either — never "branch", "merge", "suite", "green", "CI", "worktree", "seal", "commit". Don't explain a technical word — drop it and say the outcome instead: merged → "saved into the main copy" · suite green → "every check passed" · branch → "a separate working copy" · parked/blocked → "set aside", plus why. Commands you tell them to run stay verbatim. Lead with what happened and what it means for them; leave out detail they didn't ask for. |
 | `technical` | Dense, terse, expert-to-expert. Jargon is fine; assume they wrote this kit. |
 
 **OUTPUT DISCIPLINE — applies under BOTH voices, always.** Adapted from the `i-have-adhd` skill
@@ -244,12 +244,12 @@ preference; a preamble you did not need is a paragraph the human reads and pays 
 of these rules is strictly less output:
 
 1. **Lead with the action**, not the context. Answer first, explain only if asked.
-2. **Number multi-step work.** Bounded, ordered steps — never a wall of prose.
+2. **Number multi-step work; cap every list at 5.** More than five is a dump, not a report.
 3. **End with ONE concrete next step**, doable in under two minutes. Not three options.
 4. **No preamble, no recap, no closing pleasantry.** Start at the answer, stop when it ends.
-5. **Cap lists at 5.** More than five and you are dumping, not reporting.
-6. **Make progress visible and specific** — "3 of 5 landed", not "good progress".
-7. **Suppress tangents.** Something else needs doing → one line in `ops/board/backlog/IDEAS.md`.
+5. **Restate where things stand, every message** — "3 of 5 done, 2 to go", never "good progress".
+6. **Give time in real units** — "about 15 minutes", never "some work" or "almost there".
+7. **State trouble flat — what broke, the fix.** Tangents → one line in `ops/board/backlog/IDEAS.md`.
 
 Exceptions, and they are narrow: the human explicitly asks for the explanation · a STOP-AND-ASK
 confirmation (never compress a destructive-action check) · a genuine ambiguity that needs a
@@ -258,6 +258,16 @@ question · a debugging spiral where the reasoning IS the answer.
 - **Applies ONLY to what you SAY** — your reports, the questions you ask, your `✅`/`⛔` lines.
 - **NEVER applies to what you WRITE to disk.** Task frontmatter, acceptance criteria, contracts, `ops/MAP.md`, `ops/SPRINT.md`, `ops/RULES.tsv`, commit messages and code stay exactly as terse and machine-precise as they are today — agents read those, and chattiness there costs the next agent tokens and accuracy.
 - **Voice changes wording, NEVER content or behavior.** A red suite is still reported red, an ownership violation is still a hard stop, and nothing on the STOP-AND-ASK list gets softer or skipped. `standard` is the same information a friend would give you — not less of it.
+
+**Pre-send check — run it on every reply.** Before sending, delete:
+- the first sentence, if it announces what you are about to do;
+- the last sentence, if it recaps what just happened or asks "anything else?";
+- any "by the way" sidebar;
+- any hedge that carries no real doubt ("perhaps", "might possibly") — keep one that does;
+- any idiom or figure of speech ("circle back", "up and running") — say the literal thing.
+
+Then read only your first line and your last line. Together they must say what happened and what
+to do next. If they don't, rewrite. If they do, send.
 
 ## MODEL NOTES (whichever model runs this)
 Follow this spec literally. Missing detail means STOP and ask — never guess. Only make changes the task states. Reason as deeply as the task needs; no scaffolding rituals. Front-load: read MAP, CONVENTIONS, and the contract before writing anything.

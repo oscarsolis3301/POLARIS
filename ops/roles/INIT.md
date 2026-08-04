@@ -42,7 +42,7 @@ numbered list. Never more than 4 questions in one call.
 
 ### 2a. Interaction 1 — voice. Alone, first, before anything else.
 > Before we start — how would you like me to talk to you?
-> **Plain English** — friendly, no jargon. I explain as we go. *(default)*
+> **Plain English** — friendly, everyday words, nothing technical. *(default)*
 > **Technical** — dense and terse. You know this stuff; don't pad it.
 
 That answer is `voice:` (`standard` | `technical`) and it binds **from this moment on**, including
@@ -117,21 +117,26 @@ builders: subagents         # subagents (a work request runs the whole loop in o
 model_strong: <name>        # optional; literal model name per tier — `polaris route` picks the tier
 model_mid: <name>           # from points+risk, CONDUCTOR spawns and `fleet` panes carry the name.
 model_cheap: <name>         # Omit all three unless the human names models (model-routing.md).
-# autonomy: standard         # standard | trusted — composition macro; nothing reads it directly. trusted =
-                            # plan_gate: auto + builder_questions: default-safe + evolve_apply: auto-reversible,
-                            # applied only where each of those is unset below — an explicit knob always wins
-                            # over autonomy, in both directions. Uncomment and set trusted to switch hands-free
-                            # mode on. Default: standard (today's behavior; commented out on a fresh install).
+# autonomy: standard         # standard | trusted — composition macro; nothing reads it directly. Since 6.0
+                            # the DEFAULT (nothing set) is the trusted composition: plan_gate: auto +
+                            # builder_questions: default-safe + evolve_apply: auto-reversible, applied only
+                            # where each of those is unset below — an explicit knob always wins over autonomy,
+                            # in both directions. Uncomment this line to opt out: autonomy: standard confirms
+                            # everything again (confirm / ask / confirm). trusted stays legal, and now equals
+                            # the default. Hard gates (risk: high, STOP-AND-ASK, RULES.tsv) never change.
 # plan_gate: confirm         # confirm | auto — auto proceeds without waiting only when no risk:high task and
                             # nothing on the STOP-AND-ASK list is touched, by the plan or its full drain depth;
-                            # otherwise it waits exactly like confirm. Default: confirm.
+                            # otherwise it waits exactly like confirm. Unset since 6.0 = auto; uncomment this
+                            # line (or set autonomy: standard) to go back to confirming every plan.
 # builder_questions: ask     # ask | default-safe — default-safe applies ONLY to spec-detail ambiguity that is
                             # both reversible and low-stakes, and logs the assumption; structural blocks and
-                            # risk:high tasks always ask regardless. Default: ask.
+                            # risk:high tasks always ask regardless. Unset since 6.0 = default-safe; uncomment
+                            # this line (or set autonomy: standard) to have Builders ask every time.
 # evolve_apply: confirm      # confirm | auto-reversible — auto-reversible lets EVOLVE apply ONLY its fixed
                             # inert allowlist (calibration notes, MAP.md deltas, SPRINT Learned pruning,
-                            # stale_hours/voice) without "approve <n>"; everything else still waits.
-                            # EVOLVE may never set autonomy or its components either way. Default: confirm.
+                            # stale_hours/voice) without "approve <n>"; everything else still waits. EVOLVE may
+                            # never set autonomy or its components either way. Unset since 6.0 = auto-reversible
+                            # — uncomment this line (or set autonomy: standard) to restore the approve queue.
 drain: plan                 # plan (stop after the approved plan's own tasks — one "go" authorizes the
                             # plan the human just approved, not the whole board; dependency chains
                             # INSIDE the plan still loop automatically) | queue (also finish tasks

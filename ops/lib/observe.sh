@@ -255,31 +255,70 @@ cmd_doctor() {
   else
     note "⚠ ops/CONVENTIONS.md missing — INIT has not run in this repo. Say: \"You are INIT.\" (no new session needed)"
   fi
-  # v5.13 autonomy knobs (ops/contracts/hands-free-knobs.md). Silence = every default = today's
-  # behavior, so print the EFFECTIVE composition only when a knob is set. Precedence per contract:
-  # explicit knob > autonomy: trusted > default. Unknown values warn and behave as the default
-  # (fail closed to today). `autonomy` composes only the three gate knobs — never drain.
-  local a pg bq ea dr ds trusted=0
-  a="$(cfg autonomy "")"; pg="$(cfg plan_gate "")"; bq="$(cfg builder_questions "")"
-  ea="$(cfg evolve_apply "")"; dr="$(cfg drain "")"; ds="$(cfg drain_slices "")"
-  if [ -n "$a$pg$bq$ea$dr$ds" ]; then
-    if [ "$a" = "trusted" ]; then trusted=1
-    elif [ -n "$a" ] && [ "$a" != "standard" ]; then
-      note "⚠ autonomy: '$a' unknown (standard | trusted) — behaving as standard"; a="standard"
+  # CONFIG DRIFT (ops/contracts/key-registry.md § 2). `update` refreshes kit code and deliberately
+  # never rewrites CONVENTIONS.md — that is what makes updating safe — but nothing compared an
+  # installed config against the kit's feature set, so every capability gated on a NEW key shipped
+  # DORMANT and no line ever said so. Measured: a repo running byte-identical 5.24.0 code against a
+  # CONVENTIONS.md missing 19 keys, called healthy by every command. This is the CLAUDE.md `[kit
+  # X.Y.Z]` stamp lesson (:429 below) applied to the config surface, and it keeps that check's tone:
+  # ONE line naming the count and the remedy, never a warning storm.
+  # A commented `# key:` stub counts as PRESENT — "known here and deliberately unset" — which is how
+  # `polaris adopt` silences this line without changing one behavior. Silent when `ops/KEYS.tsv` is
+  # absent (a pre-6.0 installed copy; the next update ships it) and when CONVENTIONS.md is absent
+  # (INIT never ran — the line above already says the one useful thing, and "lacks 37 of 37" on top
+  # of it is the storm this check exists to avoid).
+  # NEVER name a kit version in the line: it is goldened, and a version number reds it every release.
+  if [ -f "$OPS/KEYS.tsv" ] && [ -f "$CONV" ]; then
+    local drift
+    drift="$(awk '
+      FNR==NR {                                  # pass 1: CONVENTIONS.md → every key known HERE
+        s=$0; sub(/\r$/,"",s)
+        if (substr(s,1,1)=="#") sub(/^#[ \t]*/,"",s)  # a `# key:` stub reads exactly like a live key
+        i=index(s,":"); if (i>1) present[substr(s,1,i-1)]=1
+        next
+      }
+      { s=$0; sub(/\r$/,"",s)                    # pass 2: the registry, IN ORDER — the line names
+        if (s ~ /^#/ || s ~ /^[ \t]*$/) next     # the first six absent keys as KEYS.tsv lists them
+        k=s; sub(/\t.*$/,"",k); if (k=="") next
+        m++
+        if (!(k in present)) { n++; if (n<=6) list = (n==1 ? k : list " · " k) }
+      }
+      END { if (n>0) printf "⚠ CONVENTIONS.md lacks %d of %d known keys (%s%s) — see what each unlocks: ops/polaris adopt\n", n, m, list, (n>6 ? " +" (n-6) " more" : "") }
+    ' "$CONV" "$OPS/KEYS.tsv")"
+    [ -n "$drift" ] && note "$drift"
+  fi
+  # v6.0 autonomy knobs (ops/contracts/hands-free-knobs.md § v2). The 5.13 knobs shipped OFF and
+  # stayed off in exactly the repos that never learned they existed, so 6.0 INVERTS the fallbacks
+  # here, in kit code — the one mechanism `update` already refreshes in every installed repo — and
+  # writes into nobody's CONVENTIONS.md. Unset now composes the trusted values; `autonomy: standard`
+  # is the one-line opt-out restoring confirm/ask/confirm, and `autonomy: trusted` stays legal and
+  # equals the default. Precedence itself is unchanged: explicit knob > autonomy > default, in both
+  # directions. Unknown values fail SAFE — each behaves as that knob's STANDARD value, NOT as the
+  # now-autonomous default, because a typo must never grant autonomy. The composition prints
+  # whenever CONVENTIONS.md exists: printing it only when a knob was already set guaranteed that the
+  # repos most needing the message were the ones certain never to see it. `autonomy` composes only
+  # the three gate knobs — never drain, which keeps its own silence-when-unset.
+  if [ -f "$CONV" ]; then
+    local a pg bq ea dr ds std=0
+    a="$(cfg autonomy "")"; pg="$(cfg plan_gate "")"; bq="$(cfg builder_questions "")"
+    ea="$(cfg evolve_apply "")"; dr="$(cfg drain "")"; ds="$(cfg drain_slices "")"
+    if [ "$a" = "standard" ]; then std=1
+    elif [ -n "$a" ] && [ "$a" != "trusted" ]; then
+      note "⚠ autonomy: '$a' unknown (standard | trusted) — behaving as standard"; a="standard"; std=1
     fi
     if [ -n "$pg" ] && [ "$pg" != "confirm" ] && [ "$pg" != "auto" ]; then
-      note "⚠ plan_gate: '$pg' unknown (confirm | auto) — behaving as the default"; pg=""
+      note "⚠ plan_gate: '$pg' unknown (confirm | auto) — behaving as confirm"; pg="confirm"
     fi
-    if [ -z "$pg" ]; then if [ "$trusted" -eq 1 ]; then pg="auto"; else pg="confirm"; fi; fi
+    if [ -z "$pg" ]; then if [ "$std" -eq 1 ]; then pg="confirm"; else pg="auto"; fi; fi
     if [ -n "$bq" ] && [ "$bq" != "ask" ] && [ "$bq" != "default-safe" ]; then
-      note "⚠ builder_questions: '$bq' unknown (ask | default-safe) — behaving as the default"; bq=""
+      note "⚠ builder_questions: '$bq' unknown (ask | default-safe) — behaving as ask"; bq="ask"
     fi
-    if [ -z "$bq" ]; then if [ "$trusted" -eq 1 ]; then bq="default-safe"; else bq="ask"; fi; fi
+    if [ -z "$bq" ]; then if [ "$std" -eq 1 ]; then bq="ask"; else bq="default-safe"; fi; fi
     if [ -n "$ea" ] && [ "$ea" != "confirm" ] && [ "$ea" != "auto-reversible" ]; then
-      note "⚠ evolve_apply: '$ea' unknown (confirm | auto-reversible) — behaving as the default"; ea=""
+      note "⚠ evolve_apply: '$ea' unknown (confirm | auto-reversible) — behaving as confirm"; ea="confirm"
     fi
-    if [ -z "$ea" ]; then if [ "$trusted" -eq 1 ]; then ea="auto-reversible"; else ea="confirm"; fi; fi
-    note "autonomy: ${a:-standard} → plan_gate=$pg · builder_questions=$bq · evolve_apply=$ea (explicit > autonomy > default)"
+    if [ -z "$ea" ]; then if [ "$std" -eq 1 ]; then ea="confirm"; else ea="auto-reversible"; fi; fi
+    note "autonomy: ${a:-default} → plan_gate=$pg · builder_questions=$bq · evolve_apply=$ea (explicit > autonomy > default · opt out: autonomy: standard)"
     if [ -n "$dr$ds" ]; then
       if [ -n "$dr" ] && [ "$dr" != "queue" ] && [ "$dr" != "plan" ] && [ "$dr" != "backlog" ]; then
         note "⚠ drain: '$dr' unknown (queue | plan | backlog) — behaving as the default"; dr=""
@@ -491,6 +530,31 @@ pat_overlap() { # heuristic: can patterns A and B claim a common path?
   return 1
 }
 
+rules_gate() { # rules_gate <owned-pattern> <ID|-> — does RULES gate this owned pattern, and WHY?
+  # rc 0 = gated, with RULES_GATE (path|ask) and RULES_GATE_SCOPE naming the rule; rc 1 = clear.
+  # cmd_triage and cmd_drift need the KIND behind a deny — rule_scan_path's rc deliberately carries
+  # only yes/no and its contract is unchanged (ask-approval.md § 4) — so the classification lives
+  # here, beside its two plan-gate callers. Matching is pat_overlap, BOTH directions: files_owned
+  # entries and rule scopes are both patterns, so a task owning src/db/ intersects a scope
+  # src/db/schema.py even though scope-matches-path alone would miss it. `path` dominates `ask`:
+  # a pattern under both gets the wall's answer, because no approval can lift a `path` rule.
+  # An `ask` scope covered by <ID>'s approved: list does not gate — the question is settled
+  # (ask-approval.md § 5). `content` rules never gate planning: they judge diffs, not ownership.
+  local p="$1" id="${2:--}" scope kind pat msg ask_scope=""
+  RULES_GATE=""; RULES_GATE_SCOPE=""
+  while IFS="$POLARIS_TAB" read -r scope kind pat msg; do
+    case "$kind" in path|ask) ;; *) continue;; esac
+    pat_overlap "$p" "$scope" || continue
+    if [ "$kind" = "path" ]; then RULES_GATE=path; RULES_GATE_SCOPE="$scope"; return 0; fi
+    [ -n "$ask_scope" ] && continue
+    ask_approval_covers "$p" "$id" || ask_scope="$scope"
+  done <<EOF
+$(rules_lines)
+EOF
+  [ -n "$ask_scope" ] && { RULES_GATE=ask; RULES_GATE_SCOPE="$ask_scope"; return 0; }
+  return 1
+}
+
 dep_ids() { # dep_ids <taskfile> — depends_on entries as clean ids, handling BOTH block lists
   # ("- T-002") and the inline form ("[T-002, T-003]"). The sed bracket-expression strips [ ] and ,
   # portably — BSD tr (macOS) mishandles a bare '[]' set, so `tr -d '[]'` is NOT portable here.
@@ -512,7 +576,7 @@ EOF
 }
 
 cmd_drift() { # mechanical hygiene audit — the invariants, machine-checked. --strict: rc 1 on findings
-  local strict="${1:-}" n=0 f g id id2 v d
+  local strict="${1:-}" n=0 f g id id2 v d p
   finding() { n=$((n+1)); printf '⚠ [%d] %s\n' "$n" "$1"; }
   # 1) THE invariant: files_owned disjoint across ready ∪ active (heuristic, see pat_overlap)
   local claimable=""; for d in ready active; do
@@ -553,6 +617,17 @@ EOF
 $(dep_ids "$f")
 EOF
     v="$(fm_get points "$f")"; case "$v" in 8|13) finding "READY GATE: $id is ${v}pts — must be split before ready/";; esac
+    # ask gate (ask-approval.md § 5): a ready task owning anything under an `ask` scope with no
+    # covering approved: entry would spawn a Builder only to die on its first write — the ARC
+    # sequence, stopped here at step 1. The asking belongs at the plan gate, where a human is
+    # present and it is cheap. A covered scope is a settled question and no finding at all.
+    while IFS= read -r p; do [ -z "$p" ] && continue
+      if rules_gate "$p" "$id" && [ "$RULES_GATE" = "ask" ]; then
+        finding "READY GATE: $id owns '$p' under ask scope '$RULES_GATE_SCOPE' with no covering approved: entry — get the human's yes (polaris approve $id $RULES_GATE_SCOPE -m \"why\") or blocked/, not ready/"
+      fi
+    done <<EOF
+$(fm_list files_owned "$f")
+EOF
   done
   # 3) cruft: done tasks whose feat branch survived
   for f in "$BOARD/done/"*.md; do [ -e "$f" ] || break
@@ -601,7 +676,9 @@ cmd_rules() { # list + health-check ops/RULES.tsv
   printf '%-28s %-8s %-24s %s\n' 'SCOPE' 'KIND' 'PATTERN' 'MESSAGE'
   while IFS="$POLARIS_TAB" read -r scope kind pat msg; do
     n=$((n+1)); printf '%-28s %-8s %-24s %s\n' "$scope" "$kind" "${pat:--}" "$msg"
-    case "$kind" in path|content) :;; *) bad=1; printf '   ⛔ bad kind (want path|content)\n';; esac
+    # `ask` is a first-class kind (ask-approval.md § 1): pattern column `-`, exactly as for path —
+    # no ERE is demanded for either. Only `content` carries a pattern that must compile.
+    case "$kind" in path|content|ask) :;; *) bad=1; printf '   ⛔ bad kind (want path|content|ask)\n';; esac
     [ -z "$scope" ] && { bad=1; printf '   ⛔ empty scope\n'; }
     if [ "$kind" = "content" ]; then
       { [ -z "$pat" ] || [ "$pat" = "-" ]; } && { bad=1; printf '   ⛔ content rule needs an ERE pattern\n'; }
@@ -1288,13 +1365,20 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
   case "$pts" in ''|*[!0-9]*) [ -z "$why" ] && why="points '$pts' is not a plain number";; esac
   [ -z "$why" ] && [ "$(cfg express on)" = "off" ] && why="express: off in CONVENTIONS.md"
   [ -z "$why" ] && [ "$(cfg publish direct)" != "direct" ] && why="publish: pr — the wave needs a human merge"
-  # STOP-AND-ASK, mechanically: a RULES path rule over anything the task owns means this task
-  # cannot be a quiet one-context run, whatever its size.
+  # STOP-AND-ASK, mechanically — three cases, not one (ask-approval.md § 5):
+  #   `path` scope       → full: the rule is a wall, no approval can lift it
+  #   `ask`, no approval → full: get the human's yes at the plan gate, where asking is cheap
+  #   `ask`, approved    → the question is settled — fall through to ordinary points routing
   if [ -z "$why" ]; then
     owned="$(fm_list files_owned "$f")"
     while IFS= read -r p; do
       [ -z "$p" ] && continue
-      if rule_scan_path "$p" 2>/dev/null; then :; else why="owns a RULES-guarded path ($p)"; break; fi
+      if rules_gate "$p" "$id"; then
+        if [ "$RULES_GATE" = "path" ]; then why="owns '$p' under RULES path scope '$RULES_GATE_SCOPE' — cannot be built as specified"
+        else why="owns '$p' under ask scope '$RULES_GATE_SCOPE' — get the human's yes before starting (polaris approve $id $RULES_GATE_SCOPE -m \"why\")"
+        fi
+        break
+      fi
     done <<EOF
 $owned
 EOF

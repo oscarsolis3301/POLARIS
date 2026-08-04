@@ -1,4 +1,4 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 5.24.0] -->
+<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.0.0] -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 Model-agnostic operating system for running N coding agents in parallel on this repo with zero merge
@@ -114,7 +114,7 @@ Taken lock · busy lane · dirty tree → `ops/PROTOCOL.md` § N CHATS, ONE REPO
 
 ## PROGRESS FORMAT
 After each meaningful step, one line: `✅ <what> — <file>`. On any stop: `⛔ <why> — <what you need>`.
-Keep the shape; the words inside follow `voice:`.
+Keep the shape; the words inside follow `voice:` — `standard` = everyday words, no git/test vocabulary.
 Changed the repo? `bash ops/polaris finish` is your LAST command; exit 0 licenses `# 🎉 Complete!`,
 nothing else does. Shape: `.claude/output-styles/polaris.md`.
 **A subagent never ends a run** — no `finish`, no `notify-gate done`, no H1. Your close is your report.

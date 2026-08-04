@@ -59,8 +59,9 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    `integrate/<date>`, no orphan locks, clean tree on `<base>`. It names exactly what is pending, if
    anything, and it fires the `notify-gate done` hook itself, exactly once — you never call
    `notify-gate done` by hand. Run it ONCE, at the very end.
-8. **Close** — one short paragraph in the repo's `voice:`: what changed, what proves it, what you did
-   not touch. Which close you write is decided by step 7's **exit code**, never by how the work
+8. **Close** — one short paragraph in the repo's `voice:`: what changed, how you know it works, what
+   you left alone. Under `standard` that is everyday words — outcomes, not git. Which close you
+   write is decided by step 7's **exit code**, never by how the work
    feels: **exit 0** → the `# 🎉 Complete!` H1 opens your reply, then the paragraph, carrying every
    `caveat:` line `finish` printed. **Non-zero** → no H1: what landed, the one pending thing, the
    next command. Full shape in `.claude/output-styles/polaris.md` § How a session ends.
