@@ -40,6 +40,13 @@ ops/lib/	path	-	installed copy — edit kit/ops/lib/
 # ops/index.py added 2026-07-25 (assistant, owner-authorized). Same reasoning as its siblings above:
 # it is the installed twin of kit/ops/index.py and ships via install.sh's KIT_CODE manifest.
 ops/index.py	path	-	installed copy — edit kit/ops/index.py
+# ops/KEYS.tsv added 2026-08-03 (assistant, under invariant 11 — task T-074, contract
+# ops/contracts/key-registry.md). It is the installed twin of kit/ops/KEYS.tsv and ships via
+# install.sh's KIT_CODE manifest, so a hand-edit here is silently lost at the next update. It also
+# fails a way its siblings cannot: doctor's drift report and `polaris adopt` ANSWER from this file,
+# so an edited installed copy would quietly tell a repo it is missing keys the kit never had — or
+# hide ones it does. New keys belong in kit/ops/KEYS.tsv, where every repo can be shipped them.
+ops/KEYS.tsv	path	-	installed copy — edit kit/ops/KEYS.tsv
 # kit/ops/VERSION rule LIFTED 2026-07-15 — repo owner authorized assistant-driven releases. Still a release act: bump ONLY as a full release (VERSION + CHANGELOG + tag + dogfood together). Re-enable: restore this as a `path` rule.
 # .github/ rule lifted ONCE 2026-07-16 (owner-approved, single commit) so the quiet-line drill could learn to count above the 5.9.1 install epilogue; restored immediately below.
 .github/	path	-	the CI drills are the last gate between a bad kit and every user — an agent must not edit its own tests
