@@ -26,6 +26,7 @@ root stalled 13 pts for 128.9h once) · T-079.
 | date | done pts | remaining |
 |---|---|---|
 | 2026-08-03 | 12 (T-074 2pts, T-075 3pts, T-079 2pts, T-048 5pts, wave 1, sealed sprint/10 2145137) | 24 · T-076 + T-077 + T-078 promoted to `ready/` (deps T-074/T-075/T-048 all done; ownership mutually disjoint — observe.sh+keys-drift pair · admin+entry+adopt-stub pair+api-kit golden · install.sh+selftest-install.sh), so wave 2 runs THREE parallel lanes · T-049/T-050/T-080/T-081 correctly held in `backlog/` (deps unmet) · cycle p50 0.7h n=74 · kickbacks 0 this wave (2 lifetime, 3%) · build avg 0.3h / integrate avg 3.1h · gate: full SERIAL suite green on integrate (backgrounded, SELFTEST-PASS across all 27 labels incl. `doctor knob composition` · `grant append+refusals` · `rules` · `route`) · T-048 merged on the human's relayed in-conversation approval (risk: high, named alongside T-081; no other high task covered) · § 5 PINNED-PAIR DEADLOCK surfaced and resolved mid-wave: T-048, sole `api-kit.expected` owner, could not hand off while T-074/T-079's already-landed surface had redded the golden — integrator recorded the landed surface on integrate/2026-08-03 (derived from live output, cross-checked byte-identical against the owner's copy stripped of its two unlanded fns, diff reviewed line-by-line; commit 7afb5c2), post-T-048 the golden gained exactly `cmd_approve` + `fm_append_item` · `drill_live_board` byte-identical to pre-wave main at every land (the install-never-touches-board proof stands) · drift: MAP 21 delta lines to fold (EVOLVE target) · Learned: 2 new bullets + 1 clause folded into the derived-surface bullet |
+| 2026-08-04 | 28 (+T-076 3pts, +T-077 5pts, +T-078 3pts, wave 2 of plan autonomy-by-default; +T-082 3pts, +T-083 2pts riding as plan plain-voice; re-sealed sprint/10 2145137→afd46cd) | 13 · T-049 (5pts) promoted to `ready/` (deps T-047/T-048/T-076 all done; `ready/`+`active/` empty so disjointness trivial) · T-050/T-080/T-081 correctly held in `backlog/` (all depend on T-049; T-081 additionally `risk: high` — human approval for it stands relayed but deps unmet) · cycle p50 0.7h n=79 · kickbacks 1 this wave (3 lifetime, 4%): T-082, integrator-initiated on a GREEN check — the plain-voice examples grep missed every plural jargon form and that grep is the examples' only guard; one-line widen, re-landed same session, sabotage re-proven first-hand · build avg 0.3h / integrate avg 3.0h · gate: `qa` all green on integrate via bg run (test 805s full serial suite + build + uat + drift + doctor, 15m) · § 5 OWNER-HANDOFF DEADLOCK fired AGAIN, second variant: T-077 (sole api-kit owner) blocked because landing T-078 created the very fn T-077 was contractually recording for it — integrator recorded the landed surface mid-wave (commit 2642cd9; two independent derivations agreed line-for-line), T-077's land then moved the golden by exactly `+cmd_adopt` · `drill_live_board` byte-unchanged through every land (zero deletions in selftest-install.sh across the branch) — the install-never-touches-board proof stands · THREE new golden pairs (keys-drift · adopt-stub · plain-voice) all shipped VACUOUSLY green from their builders' verify (cmd_check is primary-anchored; worktree goldens print `no goldens matched`) — each exercised for real post-land, all green · run-verify ×5 green on main · doctor drift line live against the real registry: `lacks 14 of 37 known keys` — the dormant-feature silence 6.0 exists to end · parked at seal, NOT integrator's pen: uncommitted CONVENTIONS `run_max_minutes: 90→180` edit (self-described owner decision 2026-08-04) in stash polaris/park-1785863440, awaiting the human/EVOLVE |
 
 # SPRINT 9 — Route and background          capacity: 23   dates: 2026-08-03–
 
@@ -286,6 +287,12 @@ exercises but a Builder cannot.
   `check --update` on faith — and the owner's handoff retries green. After the owner lands, the
   golden must gain exactly its own lines on top; anything else is a finding. EVOLVE: write this into
   key-registry § 5 — the pinned-pair design assumed the owner could hand off red, and it cannot.
+  SECOND OCCURRENCE, SECOND VARIANT (sprint 10 W2): T-077 was blocked not by other lanes' surface
+  drift but by the exact fn it was contractually recording FOR T-078 — the moment T-078 landed, the
+  golden it could not touch went red. Same recipe, same result (recording commit 2642cd9, two
+  derivations agreed, owner's land added exactly `+cmd_adopt`). Two waves, two variants, zero
+  luck involved: when one task owns a golden that another task's landing moves, either the OWNER
+  lands first or the integrator records mid-wave — every time. EVOLVE proposal 4 is earned.
 - A BASE-BOUND COMMIT LANDS ON WHATEVER THE SHARED CHECKOUT HAS OUT — AND DURING A WAVE THAT IS THE
   INTEGRATE BRANCH. Sprint 9 W1: while I held `integrate/2026-08-03`, the Planner authored
   `docs(contract): bg-jobs v1.1 (T-072)` and it committed onto MY branch, then rode my `--no-ff` seal
@@ -325,3 +332,22 @@ exercises but a Builder cannot.
   `test:` (805s) and `qa` (1225s) do — but the CONVENTIONS measured-times comment names the suites
   and not `finish`. Until that comment is amended (EVOLVE proposal queued), treat `finish` as a
   `qa`-class command: background it and poll.
+- A NEW GOLDEN IS INVISIBLE TO ITS OWN AUTHOR'S VERIFY. `cmd_check` reads `$OPS/tests` and runs
+  from `$PRIMARY` (observe.sh:1244,1251), so a pair created inside a Builder worktree prints
+  `no goldens matched` and the builder's `check --only <name>` passes VACUOUSLY — all three new
+  pairs this wave (keys-drift · adopt-stub · plain-voice) shipped never having executed. The
+  integrate branch is the first place they run for real. INTEGRATOR: after landing any task that
+  ADDS a golden, run `check --only <name>` explicitly and — when the golden exists to guard a
+  register or invariant — sabotage it yourself (red) and restore (green); a golden nobody has seen
+  fail is not evidence. EVOLVE: either `check` learns to see the worktree's own new pairs, or
+  BUILDER.md names the gap so builders prove pairs by hand as T-076's did.
+- A GREEN GUARD WITH A KNOWN HOLE EARNS A KICKBACK EVEN THOUGH NOTHING IS RED. plain-voice's
+  examples grep (`merged?|branch|…`) let every plural verb form through the `\b` — and the worked
+  examples are byte-pinned nowhere else, so the register's ONLY guard had a bypass on day one.
+  Kicked back rather than follow-up'd because the golden IS the deliverable; one-line widen,
+  re-landed same session, sabotage re-proven first-hand ("merges" red · PROTOCOL-side rule drift
+  red · restore green · "report/reports" no false positive against `repos?`). LEFTOVER in the
+  dangerous direction: ops/contracts/output-style.md § v2 still specifies the OLD narrow
+  alternation, so a builder reading the contract verbatim would faithfully reopen the hole —
+  EVOLVE owes the v3 line; the .cmd header's "NEVER narrow this alternation back" note is the
+  interim guard.
