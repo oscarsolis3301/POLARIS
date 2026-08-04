@@ -107,3 +107,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "kit/ops/lib/bg.sh — background job runner: bg run/status/tail/wait, dir-per-job $PRIMARY/.polaris/bg/<name>/, rc-file-first verdicts, .prev rotation, sweep --fix rotates >24h (ops/contracts/bg-jobs.md) (5.24.0-unreleased)"  (T-070, 2026-08-03)
 
 - "BREAKING 6.0: autonomy knobs default to auto/default-safe/auto-reversible when unset; `autonomy: standard` is the one-line opt-out; doctor prints the effective composition unconditionally (hands-free-knobs.md v2)"  (T-075, 2026-08-03)
+
+- "kit/ops/KEYS.tsv added — the CONVENTIONS key registry (key · since · default · absent-cost), shipped via KIT_CODE, consumed by doctor drift + adopt (ops/contracts/key-registry.md)"  (T-074, 2026-08-03)
