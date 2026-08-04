@@ -255,6 +255,38 @@ cmd_doctor() {
   else
     note "⚠ ops/CONVENTIONS.md missing — INIT has not run in this repo. Say: \"You are INIT.\" (no new session needed)"
   fi
+  # CONFIG DRIFT (ops/contracts/key-registry.md § 2). `update` refreshes kit code and deliberately
+  # never rewrites CONVENTIONS.md — that is what makes updating safe — but nothing compared an
+  # installed config against the kit's feature set, so every capability gated on a NEW key shipped
+  # DORMANT and no line ever said so. Measured: a repo running byte-identical 5.24.0 code against a
+  # CONVENTIONS.md missing 19 keys, called healthy by every command. This is the CLAUDE.md `[kit
+  # X.Y.Z]` stamp lesson (:429 below) applied to the config surface, and it keeps that check's tone:
+  # ONE line naming the count and the remedy, never a warning storm.
+  # A commented `# key:` stub counts as PRESENT — "known here and deliberately unset" — which is how
+  # `polaris adopt` silences this line without changing one behavior. Silent when `ops/KEYS.tsv` is
+  # absent (a pre-6.0 installed copy; the next update ships it) and when CONVENTIONS.md is absent
+  # (INIT never ran — the line above already says the one useful thing, and "lacks 37 of 37" on top
+  # of it is the storm this check exists to avoid).
+  # NEVER name a kit version in the line: it is goldened, and a version number reds it every release.
+  if [ -f "$OPS/KEYS.tsv" ] && [ -f "$CONV" ]; then
+    local drift
+    drift="$(awk '
+      FNR==NR {                                  # pass 1: CONVENTIONS.md → every key known HERE
+        s=$0; sub(/\r$/,"",s)
+        if (substr(s,1,1)=="#") sub(/^#[ \t]*/,"",s)  # a `# key:` stub reads exactly like a live key
+        i=index(s,":"); if (i>1) present[substr(s,1,i-1)]=1
+        next
+      }
+      { s=$0; sub(/\r$/,"",s)                    # pass 2: the registry, IN ORDER — the line names
+        if (s ~ /^#/ || s ~ /^[ \t]*$/) next     # the first six absent keys as KEYS.tsv lists them
+        k=s; sub(/\t.*$/,"",k); if (k=="") next
+        m++
+        if (!(k in present)) { n++; if (n<=6) list = (n==1 ? k : list " · " k) }
+      }
+      END { if (n>0) printf "⚠ CONVENTIONS.md lacks %d of %d known keys (%s%s) — see what each unlocks: ops/polaris adopt\n", n, m, list, (n>6 ? " +" (n-6) " more" : "") }
+    ' "$CONV" "$OPS/KEYS.tsv")"
+    [ -n "$drift" ] && note "$drift"
+  fi
   # v6.0 autonomy knobs (ops/contracts/hands-free-knobs.md § v2). The 5.13 knobs shipped OFF and
   # stayed off in exactly the repos that never learned they existed, so 6.0 INVERTS the fallbacks
   # here, in kit code — the one mechanism `update` already refreshes in every installed repo — and
