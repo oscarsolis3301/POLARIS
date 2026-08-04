@@ -37,6 +37,7 @@ uat: bash kit/ops/polaris check
 # escapes — that is how the suite grows without anyone budgeting time to "write tests".
 
 # --- run bounds (2026-07-25 token/wall-clock audit) — a loop with no ceiling is not autonomy ---
+autonomy: trusted           # owner decision 2026-08-03: composes plan_gate=auto · builder_questions=default-safe · evolve_apply=auto-reversible. These four knobs shipped in 5.13.0 and were never set here, so every run since has been paying the pre-5.13 gates — confirm at every plan, every spec ambiguity returned, every EVOLVE amendment queued. The hard gates are untouched and no knob softens them: risk: high approval, the STOP-AND-ASK list, RULES.tsv, the ready gate, contract-before-code, green-before-review. Explicit per-knob values still beat this line in both directions
 drain: plan                 # plan | queue | backlog. CHANGED DEFAULT: one "go" authorizes the plan the human just approved, not the whole ready queue. Dependency chains inside the plan still loop automatically
 run_max_tasks: 12           # tasks a single run will BUILD (0 = unbounded)
 run_max_minutes: 90         # wall clock since kickoff; checked at wave boundaries only, never mid-task
