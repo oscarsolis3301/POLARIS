@@ -105,3 +105,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "kit/ops/PROTOCOL.md — § MODEL ROUTING is auto (polaris route decides; knobs, override, honest boundary) and gains § LONG COMMANDS (measured suite tiers vs the 600s cap, bg doctrine, subagent turn rule) (5.24.0-unreleased)"  (T-066, 2026-08-03)
 
 - "kit/ops/lib/bg.sh — background job runner: bg run/status/tail/wait, dir-per-job $PRIMARY/.polaris/bg/<name>/, rc-file-first verdicts, .prev rotation, sweep --fix rotates >24h (ops/contracts/bg-jobs.md) (5.24.0-unreleased)"  (T-070, 2026-08-03)
+
+- "BREAKING 6.0: autonomy knobs default to auto/default-safe/auto-reversible when unset; `autonomy: standard` is the one-line opt-out; doctor prints the effective composition unconditionally (hands-free-knobs.md v2)"  (T-075, 2026-08-03)
