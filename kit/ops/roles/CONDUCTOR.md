@@ -108,9 +108,9 @@ call per spawn; routing never blocks work.
    "…and once your plan lands I'll finish the N tasks already queued." `drain: backlog` →
    enumerate the FULL drain depth (every this-plan backlog task the `drain_slices` cap could
    reach), naming beyond-cap tasks as staying parked, so one "go" covers the whole run. Effective
-   `plan_gate` = the explicit `ops/CONVENTIONS.md` value if set (it beats `autonomy`, both
-   directions) · else `auto` under `autonomy: trusted` · else `confirm`; unknown value →
-   `confirm`, said once. `confirm` → enter the wait: `bash ops/polaris notify-gate plan` (additive
+   plan_gate = the explicit ops/CONVENTIONS.md value if set (it beats autonomy, both directions) ·
+   else confirm under autonomy: standard · else auto — the default since 6.0; unknown value →
+   confirm, said once. `confirm` → enter the wait: `bash ops/polaris notify-gate plan` (additive
    to this in-conversation gate, never a substitute) and wait for the go. `auto` → after the SAME
    full disclosure, proceed WITHOUT waiting ONLY when BOTH hold: no `risk: high` task in the plan
    or in the disclosed drain depth · nothing on the STOP-AND-ASK list touched by any of it; either

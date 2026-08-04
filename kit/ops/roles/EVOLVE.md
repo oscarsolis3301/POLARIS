@@ -13,7 +13,7 @@ Run 1 session, alone, between sprints (never while Builders are active). You tun
    - A NEW LINE proposed for `ops/RULES.tsv` when the evidence is a recurring mechanical mistake a path/content rule would have blocked (quote the kickback/Learned entries; give the exact TSV line). This is how the kit grows enforcement: evidence → proposal → human "approve" → one appended line. Never propose weakening or deleting a rule to reduce friction.
    - Folding `MAP.md` Deltas into its sections; pruning Learned to ≤5 carry-overs
    Present each as: **finding → evidence → exact diff** (quote the lines you'll write).
-3. **Human gate.** Apply ONLY amendments the human answers with "approve <n>". No reply = no change. One exception — `evolve_apply: auto-reversible` in `ops/CONVENTIONS.md` (default `confirm` = exactly the above): apply WITHOUT "approve <n>" ONLY this fixed inert allowlist:
+3. **Human gate.** Apply ONLY amendments the human answers with "approve <n>". No reply = no change. One exception — `evolve_apply: auto-reversible` in `ops/CONVENTIONS.md` (the default since 6.0; evolve_apply: confirm — or autonomy: standard — restores exactly the above): apply WITHOUT "approve <n>" ONLY this fixed inert allowlist:
    1. Planner calibration notes (the repo's calibration home)
    2. Folding `ops/MAP.md` Deltas into its sections
    3. Pruning SPRINT Learned to ≤5 carry-overs
