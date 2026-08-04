@@ -523,6 +523,7 @@ kit/ops/selftest-install.sh	fn	drill_fresh
 kit/ops/selftest-install.sh	fn	drill_heal_pure
 kit/ops/selftest-install.sh	fn	drill_heal_refuses
 kit/ops/selftest-install.sh	fn	drill_heal_unmarked
+kit/ops/selftest-install.sh	fn	drill_hookmerge
 kit/ops/selftest-install.sh	fn	drill_live_board
 kit/ops/selftest-install.sh	fn	drill_no_leaks
 kit/ops/selftest-install.sh	fn	drill_old_client
