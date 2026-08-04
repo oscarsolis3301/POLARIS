@@ -24,7 +24,10 @@ trap 'rm -rf "$FIX"' EXIT
   git add -A; git commit -qm board
   # ONE claimable 1-point normal-risk task, no knobs set, nothing RULES-guarded → the SOLO lane,
   # with exactly one three-space note line under it. Every branch of the answer is fixture-pinned.
-  printf -- '---\nid: T-1\ntitle: fixture task\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/a.txt\nverify: []\n---\n' > ops/board/ready/T-1.md
+  # The contract file exists so the T-049 drift assertions below can pin `--strict` rc 0 on the
+  # approved state — without it every state reds on "contract missing" and the rc proves nothing.
+  printf '# fixture contract\n' > ops/contracts/fix.md
+  printf -- '---\nid: T-1\ntitle: fixture task\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/a.txt\nverify: []\n---\n' > ops/board/ready/T-1.md
 ) >/dev/null 2>&1
 OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
 # Line 1 must be EXACTLY one bare word, always — reasons go on `   ` note lines below it, so a
@@ -39,3 +42,31 @@ grep -c 'pts" -le 3 \]' kit/ops/lib/observe.sh
 # ...and the help text must agree with it. cli-docs-parity: one fact, one home — a threshold that
 # disagrees with its own documentation is how an agent talks itself back into the wrong lane.
 bash kit/ops/polaris help | grep -c '1 task ≤3pts'
+# --- T-049: the ask three-way (ask-approval.md § 5) — same fixture, three RULES states. ---------
+# The `ask` kind is the ONE denial a human can lift; before T-049 the plan gate never consulted it,
+# so an approved decision still burned a Builder's whole context discovering it could not write.
+TAB="$(printf '\t')"
+# 1) a `path` scope over anything the task owns is a wall: full, and the note says exactly why.
+printf '%s\n' "src/a.txt${TAB}path${TAB}-${TAB}frozen for the drill" > "$FIX/repo/ops/RULES.tsv"
+OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
+printf '%s\n' "$OUT" | sed -n 1p
+printf '%s\n' "$OUT" | grep -c "^   .*cannot be built as specified"
+# 2) an `ask` scope with NO covering approval is the same wall, but the note names the lift. The
+# dir/ scope vs the exact owned path also pins the both-directions pattern intersection.
+printf '%s\n' "src/${TAB}ask${TAB}-${TAB}human decision, stop-and-ask" > "$FIX/repo/ops/RULES.tsv"
+OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
+printf '%s\n' "$OUT" | sed -n 1p
+printf '%s\n' "$OUT" | grep -c "^   .*get the human's yes before starting"
+# ...and the ready gate agrees BEFORE any builder exists: drift names task + owned pattern + scope,
+# and --strict reds on it. This is the ARC sequence stopped at step 1.
+DR="$(cd "$FIX/repo" && bash "$KIT" drift 2>&1)"
+printf '%s\n' "$DR" | grep -c "READY GATE: T-1 owns 'src/a.txt' under ask scope 'src/'"
+( cd "$FIX/repo" && bash "$KIT" drift --strict >/dev/null 2>&1 ); echo "strict-rc=$?"
+# 3) an approval recorded on the task settles the question: no finding, --strict back to rc 0, and
+# triage falls through to ordinary points routing — 1 point, so solo again.
+printf -- '---\nid: T-1\ntitle: fixture task\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/a.txt\napproved:\n  - src/ — human, 2026-08-04: fixture approval\nverify: []\n---\n' > "$FIX/repo/ops/board/ready/T-1.md"
+OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
+printf '%s\n' "$OUT" | sed -n 1p
+DR="$(cd "$FIX/repo" && bash "$KIT" drift 2>&1)"
+printf '%s\n' "$DR" | grep -c 'READY GATE: T-1'
+( cd "$FIX/repo" && bash "$KIT" drift --strict >/dev/null 2>&1 ); echo "strict-rc=$?"
