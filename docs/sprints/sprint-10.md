@@ -58,7 +58,7 @@ Read `ops/contracts/ask-approval.md` § 5 — the three triage cases and the fin
 - [ ] `bash ops/polaris check --only triage-lane` green — the golden asserts line-1 shape, the
 
 ## T-050 — "Six drill assertions for `ask` + approve in drill_rules"
-points 3 · risk normal · landed d7848de (2026-08-04) · claimed 2026-08-04
+points 3 · risk normal · landed d7848de (2026-08-04) · claimed 2026-08-04 → done 2026-08-04
 files touched: kit/ops/lib/selftest/policy.sh
 
 ### Why
@@ -206,7 +206,7 @@ observe.sh state the same default and can never drift apart in this release.
 - [ ] no markdown heading added, removed, or renamed in any of the four files (api-kit records
 
 ## T-080 — "Drills for the flip and the stub-writer — defaults, standard, adopt idempotence"
-points 3 · risk normal · landed b44f484 (2026-08-04) · claimed 2026-08-04
+points 3 · risk normal · landed b44f484 (2026-08-04) · claimed 2026-08-04 → done 2026-08-04
 files touched: kit/ops/lib/selftest/remote.sh, kit/ops/lib/selftest/spine.sh, ops/tests/api-kit.expected
 
 ### Why
@@ -224,6 +224,27 @@ no-op, an existing live value untouched.
 - [ ] label `adopt` added to SELFTEST_LABELS (spine.sh:46); `--only adopt` selects it;
 - [ ] hermetic: both drills restore every fixture file they touch (`git status --porcelain`
 - [ ] W4 api-kit owner: ops/tests/api-kit.expected gains exactly `drill_adopt`; T-050 (same
+
+## T-081 — "6.0.0 — BREAKING changelog, the ask entry it never got, and the release ritual"
+points 2 · risk high · landed 94bd1e0 (2026-08-04) · claimed 2026-08-04
+files touched: CHANGELOG.md
+
+### Why
+6.0.0 changes the safety posture of every installed repo, and a breaking change nobody can read
+about is a trap, not a release. The builder's half is CHANGELOG.md: a BREAKING section for the
+autonomy flip naming the one-line revert (`autonomy: standard`), entries for the key registry /
+doctor drift / adopt / hook-merge repair, AND the entry the `ask` rule kind never got — it landed
+2026-07-28 (commit 64c3742) undocumented. The ritual's other half is HUMAN by the write-routing
+table and stays that way.
+
+### Acceptance
+- [ ] CHANGELOG.md gains a 6.0.0 section with an explicit BREAKING block: unset autonomy knobs
+- [ ] entries for: KEYS.tsv registry + doctor drift line + `polaris adopt` · settings.json
+- [ ] HUMAN steps, per ops/CONVENTIONS.md:75-85 — the builder does NOT do these; the run's close
+      - [ ] bump kit/ops/VERSION to 6.0.0 (HUMAN-ONLY per the write-routing table)
+      - [ ] commit · `git tag v6.0.0 && git push --tags` (CI publishes the zip)
+      - [ ] `python kit/ops/pack.py --dogfood` · commit the refreshed ops/ (cli-help goldens
+- [ ] END-TO-END acceptance (the question the human actually asked), at the close, after
 
 ## T-082 — "Radically plain `standard` voice — new row, re-cut rules, Pre-send check, plain examples, plain-voice golden"
 points 3 · risk normal · landed 3f33f42 (2026-08-04) · claimed 2026-08-04 → done 2026-08-04
