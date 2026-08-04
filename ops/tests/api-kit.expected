@@ -199,6 +199,7 @@ kit/ops/install.sh	fn	note
 kit/ops/install.sh	fn	protocol_text
 kit/ops/install.sh	fn	say
 kit/ops/lib/admin.sh	fn	claude_home
+kit/ops/lib/admin.sh	fn	cmd_adopt
 kit/ops/lib/admin.sh	fn	cmd_init_board
 kit/ops/lib/admin.sh	fn	cmd_slim
 kit/ops/lib/admin.sh	fn	cmd_uninstall

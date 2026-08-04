@@ -1,0 +1,23 @@
+== no ops/KEYS.tsv: die names the remedy ==
+⛔ no ops/KEYS.tsv here — this install predates the key registry; it ships with:  ops/polaris update
+rc 1
+== no ops/CONVENTIONS.md: die points at INIT, never creates the file ==
+⛔ no ops/CONVENTIONS.md — INIT has never run here, and adopt never creates it; read ops/roles/INIT.md first
+rc 1
+== first run: one stub per absent key, KEYS.tsv order ==
+   + # fake_alpha: on
+   + # fake_beta: 7
+✅ adopted 2 stub(s) — uncomment in ops/CONVENTIONS.md to enable; nothing changed behavior
+rc 0
+== the file after: marker once at the end, live value + stub byte-untouched ==
+fake_live: main   # the human set this
+# fake_stub: off   # known and deliberately unset
+prose the human wrote below the keys stays put
+
+# --- known keys not set here (polaris adopt; uncomment a line to enable it) ---
+# fake_alpha: on   # first absent fake key (since 0.3)
+# fake_beta: 7   # second absent fake key (since 0.4)
+== second run: nothing to adopt ==
+✅ nothing to adopt — all 4 known keys present or stubbed
+rc 0
+file byte-identical after second run
