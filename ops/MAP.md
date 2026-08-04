@@ -108,3 +108,5 @@ not installed code — they are written normally, by the board scripts and by th
 ## Deltas
 
 - "install.sh settings merge: POLARIS-owned hook entries (identified by ops/hooks/ script path) are REPLACED with the kit's current fields on re-install; user-added hooks and all other keys keep skip-if-present (key-registry.md § 6)"  (T-078, 2026-08-04)
+
+- "doctor reads ops/KEYS.tsv and reports CONVENTIONS keys absent from the live file as ONE summary line naming the remedy (ops/polaris adopt) — the class of drift the CLAUDE.md stamp check covers for exactly one file (key-registry.md § 2)"  (T-076, 2026-08-04)
