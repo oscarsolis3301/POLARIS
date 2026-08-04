@@ -112,3 +112,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "doctor reads ops/KEYS.tsv and reports CONVENTIONS keys absent from the live file as ONE summary line naming the remedy (ops/polaris adopt) — the class of drift the CLAUDE.md stamp check covers for exactly one file (key-registry.md § 2)"  (T-076, 2026-08-04)
 
 - "polaris gains `adopt` — appends every KEYS.tsv key missing from CONVENTIONS.md as a commented stub (default + rationale), never edits a value, idempotent; `update` prints the BREAKING banner when the incoming kit is >=6.0.0 and no autonomy knob is set (key-registry.md § 3-4)"  (T-077, 2026-08-04)
+
+- "doctor --selftest gains label `adopt` (drill_adopt in remote.sh); drill_notify's knob block asserts the 6.0 defaults and the `autonomy: standard` opt-out"  (T-080, 2026-08-04)
