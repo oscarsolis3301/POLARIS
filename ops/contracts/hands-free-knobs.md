@@ -5,7 +5,9 @@ Append-only once any dependent task is claimed: breaking changes = new `## v2` s
 ## Purpose
 One seam for Phase 2 "Hands-Free Core" (5.13.0): the autonomy knobs, the backlog drain, the
 ROADMAP read protocol, and the notify v2 env contract. Tasks T-012..T-016 all code against THIS
-file. Governing invariant: **every knob unset = byte-identical to today's behavior.**
+file. Governing invariant: **every knob unset = byte-identical to today's behavior** — TRUE for
+kits < 6.0 only. **Superseded by `## v2` below for kits >= 6.0**: unset now composes the trusted
+values, and `autonomy: standard` is the explicit opt-out restoring this section's gates.
 
 ## Knobs (CONVENTIONS.md header, read via `cfg`; all optional)
 ```
@@ -116,8 +118,75 @@ ev "blocked" and the hook sees SEVERITY=gate · an ordinary board event sees SEV
 Role/docs tasks (T-012, T-014..T-016): the greps in their own `verify:` lists are their checks.
 
 ## Invariants
-- Every knob unset → byte-identical current behavior; every default above = today.
+- Every knob unset → byte-identical current behavior; every default above = today. (v1 — holds for
+  kits < 6.0; superseded by `## v2` below.)
 - Hard gates never soften under any knob: risk:high approval, STOP-AND-ASK, RULES human-only,
   ready gate, contract-before-code, green-before-review.
 - The notify path can never stall or fail a run; the board never learns whether the hook ran.
 - No agent, under any knob, may set or change the autonomy dial or its components.
+
+## v2 — autonomy by default            (2026-08-03, POLARIS 6.0.0 · human-approved plan)
+The 5.13 knobs shipped OFF and stayed off in exactly the repos that never learned they existed
+(this repo included, for two sprints; polaris-testbed still). 6.0.0 flips the DEFAULTS IN KIT
+CODE — reaching every installed repo through the one mechanism `update` already refreshes — and
+never writes into anyone's CONVENTIONS.md. This is a deliberate BREAKING change to the safety
+posture of every installed repo: major bump, BREAKING changelog section, loud update banner.
+
+### Composition + precedence (normative — replaces v1's table for kits >= 6.0)
+- effective(knob) = explicit CONVENTIONS value if set · else the standard-values when
+  `autonomy: standard` · else the DEFAULT, which is now the trusted composition:
+  `plan_gate: auto` + `builder_questions: default-safe` + `evolve_apply: auto-reversible`.
+- `autonomy: standard` is the explicit one-line opt-out restoring `confirm` / `ask` / `confirm`.
+  `autonomy: trusted` stays legal and now equals the default. An explicitly set individual knob
+  ALWAYS beats `autonomy`, in both directions — precedence itself is unchanged:
+  explicit knob > `autonomy:` > default.
+- Unknown `autonomy:` value → warn once, behave as `standard`. Unknown individual-knob value →
+  warn once, behave as that knob's STANDARD value (`confirm` / `ask` / `confirm`). v2 fails to the
+  SAFE side, deliberately diverging from v1's fail-to-default: a typo must never grant autonomy.
+- `autonomy` still composes ONLY the three gate knobs. It never touches `drain` (or anything
+  else); `drain`/`drain_slices` and the integration knobs keep their v1 silence-when-unset.
+- The three knob SEMANTICS (what `auto`, `default-safe`, `auto-reversible` permit and refuse) are
+  v1's, unchanged — only which value applies when nothing is set changes.
+- Hard gates are untouched and remain non-composable: `risk: high` approval, the STOP-AND-ASK
+  list, RULES.tsv, the ready gate, contract-before-code, green-before-review. EVOLVE still may
+  never set or change the autonomy dial or its components, in either direction.
+
+### Doctor always prints the composition (the silence WAS the bug)
+`cmd_doctor` prints the effective line UNCONDITIONALLY when CONVENTIONS.md exists — the guard that
+printed it only when a knob was already set is deleted. Pinned shape (`<a>` = the literal
+`autonomy:` value, or `default` when unset):
+`autonomy: <a> → plan_gate=<pg> · builder_questions=<bq> · evolve_apply=<ea> (explicit > autonomy > default · opt out: autonomy: standard)`
+Unknown-value warnings keep their v1 one-line shapes. The `drain:` note stays conditional.
+
+### Pinned strings — quote verbatim; paraphrases are how doc surfaces drift
+- Update banner (cmd_update, after `untouched:`; conditions in key-registry.md § 4), two lines:
+  `BREAKING (6.0): agents in this repo now run hands-free BY DEFAULT — plan_gate=auto · builder_questions=default-safe · evolve_apply=auto-reversible.`
+  `One line reverts it: add 'autonomy: standard' to ops/CONVENTIONS.md. Hard gates (risk: high approval, STOP-AND-ASK, RULES.tsv) are unchanged.`
+- CONDUCTOR.md (replaces the effective-plan_gate sentence at :111-113):
+  `Effective plan_gate = the explicit ops/CONVENTIONS.md value if set (it beats autonomy, both directions) · else confirm under autonomy: standard · else auto — the default since 6.0; unknown value → confirm, said once.`
+- BUILDER.md (replaces the opening clause of :36; the rest of the paragraph is unchanged):
+  `builder_questions in ops/CONVENTIONS.md defaults to default-safe since 6.0 (builder_questions: ask — or autonomy: standard — restores exactly the above), and default-safe narrows ONLY the spec-ambiguity path:`
+- EVOLVE.md (replaces the parenthetical in step 3, :16):
+  `(the default since 6.0; evolve_apply: confirm — or autonomy: standard — restores exactly the above)`
+- INIT.md skeleton: the four autonomy stanza comments (:120-134) must state the 6.0 defaults —
+  unset = auto / default-safe / auto-reversible, `autonomy: standard` = the confirm-everything
+  opt-out; wording is the doc task's, the facts are these.
+
+### Executable check (v2)
+`drill_notify`'s knob-awareness block (`kit/ops/lib/selftest/remote.sh:135-142`) gains, owned by
+T-080: EMPTY CONVENTIONS → doctor prints `plan_gate=auto`, `builder_questions=default-safe`,
+`evolve_apply=auto-reversible` · `autonomy: standard` → `plan_gate=confirm`, `builder_questions=ask`,
+`evolve_apply=confirm` · the three existing assertions (explicit beats trusted · trusted fills ·
+unknown warns) stay green unchanged. Goldens NEVER pin a line embedding a version number.
+
+### Invariants (v2)
+- The flip lives in kit CODE (observe.sh resolution + role-file prose). Nothing writes a value
+  into any repo's CONVENTIONS.md — the preserve guarantee (`drill_live_board`) stays green
+  byte-identical.
+- `autonomy: standard` restores v1's gates exactly: confirm / ask / confirm.
+- Everything v1 lists as never-auto-applied stays never-auto-applied.
+
+## Changelog
+- v1 2026-07-18: created for T-012..T-016 (5.13.0 Hands-Free Core).
+- v2 2026-08-03: autonomy by default for POLARIS 6.0.0 — defaults invert, `autonomy: standard` is
+  the opt-out, doctor always prints, fail-safe unknown handling. For T-075/T-076/T-077/T-079/T-080.
