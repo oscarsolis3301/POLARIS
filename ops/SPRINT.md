@@ -1,3 +1,27 @@
+# SPRINT 10 — Autonomy by default (6.0.0)          capacity: 36   dates: 2026-08-03–
+
+`update` refreshes kit code and never rewrites CONVENTIONS.md — correct, and exactly why every
+capability gated on a NEW key ships dormant: the 5.13 autonomy knobs sat OFF here for two sprints
+and are still off in polaris-testbed (19 keys missing on byte-identical kit code), doctor printed
+the composition ONLY when a knob was already set, and cfg() cannot tell missing from empty. 6.0.0
+flips the DEFAULTS IN KIT CODE (hands-free-knobs v2): unset composes auto / default-safe /
+auto-reversible, `autonomy: standard` is the one-line revert, doctor always prints the effective
+plan — plus the discovery loop (KEYS.tsv registry → doctor's one-line drift report → `polaris
+adopt` commented stubs), the settings.json hook-merge repair (path identity, field updates —
+testbed is parked at guard timeout 10 vs the kit's 20, on the fail-open margin), and the parked
+`ask`-rule remainder (T-048/T-049/T-050) rides along at last. Hard gates move NOWHERE: risk:high
+approval, STOP-AND-ASK, RULES.tsv, ready gate, contract-before-code, green-before-review; drain
+is never composed. BREAKING major: T-081 carries the changelog + the human-only ritual (VERSION ·
+tag · dogfood · testbed E2E). Serial chains, not parallel splits, on every hotspot:
+observe.sh T-075→T-076→T-049 · kit/ops/polaris T-048→T-077 · install.sh T-074→T-078. api-kit is
+the ONLY moving shared golden — ONE owner per wave (T-048 → T-077 → T-049 → T-080), cross-lane fn
+names pinned in key-registry.md § 5, everything else surface-frozen (the sprint-9 prescription,
+0 kickbacks across 3 waves). New goldens keys-drift + adopt-stub are hermetic fixtures, no
+version numbers. Board mechanics run installed 5.24.0; prove new behavior via `bash
+kit/ops/polaris …` (27-label tell). plan: autonomy-by-default → T-074..T-081 + T-048/T-049/T-050
+(36 pts). W1 ready: T-074 · T-075 · T-048 (risk: high — get the merge yes early, a high-risk
+root stalled 13 pts for 128.9h once) · T-079.
+
 # SPRINT 9 — Route and background          capacity: 23   dates: 2026-08-03–
 
 Model choice is manual prose and long commands die at the harness's cap: PROTOCOL's routing rule is
