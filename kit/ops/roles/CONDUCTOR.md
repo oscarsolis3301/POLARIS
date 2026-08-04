@@ -143,7 +143,7 @@ call per spawn; routing never blocks work.
    > Anything it does not answer: `bash ops/polaris find <symbol>`, one hop, before any Grep.
    > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    Say once where to watch (`bash ops/polaris dash` · 127.0.0.1:7373). As each lane reports, relay
-   ONE line in `voice:` — "✅ 2 of 5 done — the nav restyle landed, tests green" — useful, plain,
+   ONE line in `voice:` — "✅ 2 of 5 done — the new navigation is in, every check passed" — useful, plain,
    never a dump. Lane free + ready task left → spawn the next builder immediately.
 5. **Snags — never silently swallow one.**
    - Builder returns a QUESTION → ask the human right away (choice UI, `voice:`; other lanes keep
@@ -246,9 +246,10 @@ call per spawn; routing never blocks work.
    Its proposals go into the close report, numbered — the human applies one by replying
    "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Skip this
    step only when the run built ≤1 task — there is no signal in a sample of one.
-8. **Report, then close.** In `voice:`: what landed and what it means for them, what's parked and why,
-   `qa` status on base, what to try right now — then EVOLVE's numbered proposals ("reply approve
-   <n> to apply"). One report; the board holds the detail.
+8. **Report, then close.** In `voice:`, **≤8 lines** (INIT.md's cap, same reason): what got built and
+   what it means for them, what was set aside and why, whether every check passed, one thing to try
+   right now — then EVOLVE's numbered proposals ("reply approve <n> to apply"). One report; the
+   board holds the detail.
    Then, and only then, run `bash ops/polaris finish` — the one command that decides how this run
    ends. It re-checks the board mechanically (nothing building, nothing waiting to land, `ready/`
    drained per `drain:`, no unmerged `integrate/<date>`, no orphan locks, clean tree, `qa` green on

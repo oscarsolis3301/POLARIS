@@ -266,11 +266,22 @@ elif [ -n "$PY" ]; then
   # failing that, merge only PreToolUse[0]. Both were silent no-ops for any repo that already had
   # Claude settings: a second hook could never arrive, and no permission rule ever did. That is
   # what made "install POLARIS and stop being prompted" false in exactly the repos that had been
-  # around longest. Match on the hook SCRIPT NAME, not on array position, so each entry is
-  # considered on its own and re-running changes nothing.
-  "$PY" - "$SJ" "$KIT/.claude/settings.json" <<'EOF'
+  # around longest.
+  #
+  # The second half of the same bug, and the one this block now closes: keying on the script
+  # BASENAME and skipping any entry already present meant a POLARIS entry, once written, could
+  # never be CORRECTED. Measured in polaris-testbed — pinned at ownership-guard.sh `timeout: 10`
+  # against a guard ops/lib/core.sh measures at ~8s per write, so the ownership gate silently
+  # fails open exactly when the machine is slow, and no future update could rescue it.
+  # Identity is now the script PATH under `ops/hooks/`, which is what makes the repair safe to
+  # scope: an entry running one of OUR scripts is ours, so it is replaced wholesale (matcher,
+  # timeout, command) in place; an entry running anything else is the human's, so it is left
+  # exactly as found — even when it happens to share a basename with one of ours.
+  MERGE_REPORT="$(mktemp)" || MERGE_REPORT=""
+  "$PY" - "$SJ" "$KIT/.claude/settings.json" "$MERGE_REPORT" <<'EOF'
 import json, re, sys
 tgt_p, kit_p = sys.argv[1], sys.argv[2]
+report_p = sys.argv[3] if len(sys.argv) > 3 else ""
 try:
     tgt = json.load(open(tgt_p, encoding="utf-8"))
     kit = json.load(open(kit_p, encoding="utf-8"))
@@ -279,26 +290,41 @@ except (OSError, ValueError) as exc:
 if not isinstance(tgt, dict):
     sys.exit("settings.json is not a JSON object")
 
-def scripts(entry):
-    """Every hook script basename an entry runs — the identity we de-duplicate on."""
-    return {re.sub(r".*/", "", h.get("command", "")).strip('"')
-            for h in entry.get("hooks", []) if isinstance(h, dict)}
+def owned(entry):
+    """Every `ops/hooks/<script>` this entry runs — POLARIS's identity for a hook entry.
 
-added_hooks, added_perms = [], []
+    PATH, never basename. An empty set means the entry is NOT ours: a hook the human added,
+    which we neither replace nor count as satisfying one of ours, whatever script it runs.
+    Backslashes are folded first so a Windows-style command still matches the segment.
+    """
+    out = set()
+    for h in entry.get("hooks", []) if isinstance(entry, dict) else []:
+        cmd = h.get("command", "") if isinstance(h, dict) else ""
+        if isinstance(cmd, str):
+            out |= {"ops/hooks/" + m for m in
+                    re.findall(r"ops/hooks/([A-Za-z0-9._+-]+)", cmd.replace("\\", "/"))}
+    return out
+
+added_hooks, updated_hooks, added_perms = [], [], []
 for event, entries in (kit.get("hooks") or {}).items():
     have = tgt.setdefault("hooks", {}).setdefault(event, [])
     if not isinstance(have, list):
         continue
-    present = set()
-    for e in have:
-        if isinstance(e, dict):
-            present |= scripts(e)
     for entry in entries:
-        names = scripts(entry)
-        if names and names & present:
-            continue                            # this script is already wired — leave it alone
-        have.append(entry)
-        added_hooks += sorted(names)
+        mine = owned(entry)
+        if not mine:
+            continue                            # not a POLARIS script — nothing to own or refresh
+        at = -1
+        for i, e in enumerate(have):
+            if isinstance(e, dict) and owned(e) & mine:
+                at = i                          # same ops/hooks script → this entry is ours
+                break
+        if at < 0:
+            have.append(entry)                  # no entry runs it yet → append (today's behavior)
+            added_hooks += sorted(mine)
+        elif have[at] != entry:
+            have[at] = entry                    # REPLACE wholesale, in place: shipped fields win
+            updated_hooks += sorted(mine)
 
 perms = tgt.setdefault("permissions", {})
 if isinstance(perms, dict):
@@ -323,15 +349,34 @@ if isinstance(perms, dict):
 tgt.setdefault("outputStyle", "polaris")
 
 open(tgt_p, "w", encoding="utf-8").write(json.dumps(tgt, indent=2) + "\n")
-# Deliberately silent: installer stdout is a contract (CI counts the quiet lines above the
-# ▶ NEXT epilogue), so a diagnostic here would be a tripwire failure, not a nicety.
+# Deliberately silent on STDOUT: installer stdout is a contract (CI counts the quiet lines above
+# the ▶ NEXT epilogue), so a diagnostic here would be a tripwire failure, not a nicety. What
+# changed goes to a file the caller folds into its one ✅ line (and therefore into install.log),
+# because "updated ops/hooks/ownership-guard.sh" is the whole point of this block — a repair no
+# one can see is how the old bug survived three releases.
+bits = []
+if added_hooks:
+    bits.append("added " + ", ".join(sorted(set(added_hooks))))
+if updated_hooks:
+    bits.append("updated " + ", ".join(sorted(set(updated_hooks))))
+if added_perms:
+    bits.append("%d permission rule(s)" % len(added_perms))
+if report_p and bits:
+    open(report_p, "w", encoding="utf-8").write("; ".join(bits) + "\n")
 EOF
   MERGED="$?"
   if [ "$MERGED" = 0 ]; then
-    say ".claude/settings.json: hooks + permissions + output style merged (idempotent)"
+    _merge_note=""
+    if [ -n "$MERGE_REPORT" ] && [ -s "$MERGE_REPORT" ]; then
+      _merge_note=" — $(cat "$MERGE_REPORT")"
+    fi
+    say ".claude/settings.json: hooks + permissions + output style merged (idempotent)$_merge_note"
+    unset _merge_note
   else
     note "⚠ .claude/settings.json could not be merged — add by hand from $KIT/.claude/settings.json"
   fi
+  if [ -n "$MERGE_REPORT" ]; then rm -f "$MERGE_REPORT"; fi   # `[ … ] && rm` would trip set -e
+  unset MERGE_REPORT
 else
   note "⚠ .claude/settings.json exists and python is unavailable — merge by hand:"
   note "  the hooks.PreToolUse entries and permissions.allow from $KIT/.claude/settings.json,"

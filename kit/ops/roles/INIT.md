@@ -42,7 +42,7 @@ numbered list. Never more than 4 questions in one call.
 
 ### 2a. Interaction 1 — voice. Alone, first, before anything else.
 > Before we start — how would you like me to talk to you?
-> **Plain English** — friendly, no jargon. I explain as we go. *(default)*
+> **Plain English** — friendly, everyday words, nothing technical. *(default)*
 > **Technical** — dense and terse. You know this stuff; don't pad it.
 
 That answer is `voice:` (`standard` | `technical`) and it binds **from this moment on**, including

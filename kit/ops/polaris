@@ -191,6 +191,11 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  tmux windows or Windows Terminal panes (--dry-run previews the command)
   upgrade                        migrate an OLD BOARD (v3/v4→v5). Idempotent. Downloads NOTHING.
                                    want a newer KIT? that is `update` — one letter, unrelated job.
+  adopt                          append a COMMENTED stub to ops/CONVENTIONS.md for every key this
+                                 repo has never set — each carries the key's default and what it
+                                 unlocks (from ops/KEYS.tsv). Uncomment a line to enable that
+                                 feature; adopt itself never edits a value, never uncomments, and
+                                 never changes behavior. Idempotent — a second run appends nothing
   slim [--apply | --restore]     the per-context TOKEN TAX, measured: every skill/agent/command
                                  definition under ~/.claude injects its name+description into the
                                  system prompt of every session AND every subagent it spawns,
@@ -315,6 +320,7 @@ case "${1:-}" in
   dash)       shift; update_check_maybe || true; cmd_dash "$@";;
   fleet)      shift; cmd_fleet "$@";;
   upgrade)    cmd_upgrade;;
+  adopt)      cmd_adopt;;
   slim)       shift 2>/dev/null || true; cmd_slim "${1:-}";;
   version)    update_check_maybe force || true; cmd_version;;
   update)     shift; cmd_update "${1:-}";;

@@ -402,6 +402,17 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
   note "what changed:   $(ver changelog 2>/dev/null | grep . || echo 'see the project CHANGELOG')"
   note "refreshed here: ops/ kit code · the managed CLAUDE.md block · .claude/ skills + output style"
   note "untouched:      board · RULES.tsv · CONVENTIONS.md · MAP.md · SPRINT.md"
+  # The 6.0 default flip is a BREAKING change to the safety posture of every installed repo, and it
+  # arrives through this very command — reaching owners who never read the changelog. The banner is
+  # what makes that honest instead of silent (ops/contracts/key-registry.md § 4; the two lines are
+  # pinned VERBATIM in hands-free-knobs.md v2 § Pinned strings — never golden them, they name a
+  # version boundary). Any of the four knobs explicitly set, in either direction, means the human
+  # already chose a posture → stay silent.
+  if ! semver_gt "6.0.0" "$(ver version)" \
+     && ! grep -Eq '^(autonomy|plan_gate|builder_questions|evolve_apply):' "$CONV" 2>/dev/null; then
+    note "BREAKING (6.0): agents in this repo now run hands-free BY DEFAULT — plan_gate=auto · builder_questions=default-safe · evolve_apply=auto-reversible."
+    note "One line reverts it: add 'autonomy: standard' to ops/CONVENTIONS.md. Hard gates (risk: high approval, STOP-AND-ASK, RULES.tsv) are unchanged."
+  fi
   note "review the diff, then commit ops/ — nothing was committed for you"
   # Reprinted LAST for the same reason the INIT epilogue below is: the park happened ~40 lines of
   # install output ago, and an agent reads the END of the output as "what is left". Somebody's
@@ -422,6 +433,46 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
     printf '  tell the human to open a new chat or hand them a kickoff phrase to type — INIT is your\n'
     printf '  job, now. This holds whatever the human asked for: an unconfigured POLARIS is not\n'
     printf '  delivered. (No AI reading this? Ask your AI chat in this repo to set up POLARIS.)\n'
+  fi
+}
+
+# ------------------------------------------------------------------ adopt (6.0)
+# The DISCOVERY half of the key registry (ops/contracts/key-registry.md § 3). `update` refreshes
+# kit code and never rewrites CONVENTIONS.md — correct, that is what makes updating safe — so every
+# capability gated on a NEW key ships dormant, and nothing used to say so. adopt closes the gap
+# without touching behavior: one COMMENTED stub per absent key, carrying the key's default and what
+# it unlocks, appended to the END of ops/CONVENTIONS.md. Uncommenting a line is the whole gesture
+# of enabling a feature. It NEVER edits an existing line, never uncomments, never writes a live
+# value — autonomy itself arrives via kit-code defaults (hands-free-knobs.md v2), never through
+# anything this function writes. A key counts as present on a live `key:` line OR a `# key:` stub
+# (same test doctor's drift line uses): a stub means "known and deliberately unset", which is how
+# one adopt run silences both commands forever without changing any behavior.
+
+cmd_adopt() {
+  local keys="$OPS/KEYS.tsv" marker cr added=0 total=0 key since def cost
+  [ -f "$keys" ] || die "no ops/KEYS.tsv here — this install predates the key registry; it ships with:  ops/polaris update"
+  [ -f "$CONV" ] || die "no ops/CONVENTIONS.md — INIT has never run here, and adopt never creates it; read ops/roles/INIT.md first"
+  marker='# --- known keys not set here (polaris adopt; uncomment a line to enable it) ---'
+  cr="$(printf '\r')"
+  while IFS="$POLARIS_TAB" read -r key since def cost; do
+    case "$key" in ''|'#'*) continue;; esac
+    total=$((total + 1))
+    cost="${cost%$cr}"
+    grep -Eq "^${key}:|^#[[:space:]]*${key}:" "$CONV" && continue
+    # First append ever writes the marker once; a later run against a GROWN registry appends new
+    # stubs under the marker that is already there. The leading blank line also terminates an
+    # unterminated last line, so we never glue a stub onto somebody's prose.
+    if [ "$added" = 0 ] && ! grep -qF "$marker" "$CONV"; then
+      printf '\n%s\n' "$marker" >> "$CONV"
+    fi
+    printf '# %s: %s   # %s (since %s)\n' "$key" "$def" "$cost" "$since" >> "$CONV"
+    note "+ # $key: $def"
+    added=$((added + 1))
+  done < "$keys"
+  if [ "$added" = 0 ]; then
+    say "nothing to adopt — all $total known keys present or stubbed"
+  else
+    say "adopted $added stub(s) — uncomment in ops/CONVENTIONS.md to enable; nothing changed behavior"
   fi
 }
 

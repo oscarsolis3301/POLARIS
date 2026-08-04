@@ -199,6 +199,7 @@ kit/ops/install.sh	fn	note
 kit/ops/install.sh	fn	protocol_text
 kit/ops/install.sh	fn	say
 kit/ops/lib/admin.sh	fn	claude_home
+kit/ops/lib/admin.sh	fn	cmd_adopt
 kit/ops/lib/admin.sh	fn	cmd_init_board
 kit/ops/lib/admin.sh	fn	cmd_slim
 kit/ops/lib/admin.sh	fn	cmd_uninstall
@@ -523,6 +524,7 @@ kit/ops/selftest-install.sh	fn	drill_fresh
 kit/ops/selftest-install.sh	fn	drill_heal_pure
 kit/ops/selftest-install.sh	fn	drill_heal_refuses
 kit/ops/selftest-install.sh	fn	drill_heal_unmarked
+kit/ops/selftest-install.sh	fn	drill_hookmerge
 kit/ops/selftest-install.sh	fn	drill_live_board
 kit/ops/selftest-install.sh	fn	drill_no_leaks
 kit/ops/selftest-install.sh	fn	drill_old_client
