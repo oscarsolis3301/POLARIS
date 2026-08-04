@@ -33,6 +33,30 @@ merely discouraged. Read `ops/contracts/ask-approval.md` § 3.
 - [ ] `check_rules` threaded with the task ID at its builder.sh call sites (`cmd_verify`,
 - [ ] W1 api-kit owner (key-registry.md § 5): ops/tests/api-kit.expected gains `cmd_approve` and
 
+## T-049 — "Move the ask to the plan gate — ready gate, triage three-way, rules health"
+points 5 · risk normal · landed 92ab95f (2026-08-04) · claimed 2026-08-04
+files touched: kit/ops/lib/observe.sh, ops/tests/api-kit.expected, ops/tests/triage-lane.cmd, ops/tests/triage-lane.expected
+
+### Why
+This is the half that actually fixes the ARC failure. T-047 makes an approval *possible*; this makes
+the board *ask for it before a Builder is ever spawned*.
+
+The ARC sequence was: ready gate never consults RULES → task promoted to `ready/` with nothing
+objecting → `triage` prints `full` → Builder claims it → dies on its first write. Break it at step 1
+and the rest never happens. A task that needs a human's yes belongs in `blocked/` with a note, not in
+`ready/` waiting to burn a Builder's whole context discovering it cannot write.
+
+Read `ops/contracts/ask-approval.md` § 5 — the three triage cases and the finding text are exact.
+
+### Acceptance
+- [ ] `cmd_rules` accepts `ask` as a valid kind in its health check (alongside `path|content`), and
+- [ ] `cmd_drift` step 2 gains a check: a `ready/` task whose `files_owned` intersects an `ask` scope
+- [ ] that finding makes `drift --strict` exit 1
+- [ ] a `ready/` task WITH a covering approval produces no finding
+- [ ] `cmd_triage` distinguishes three cases instead of one: `path` scope → `full` +
+- [ ] `triage` line 1 is still exactly one bare word (`solo`/`express`/`full`); every reason stays on
+- [ ] `bash ops/polaris check --only triage-lane` green — the golden asserts line-1 shape, the
+
 ## T-074 — "KEYS.tsv — the key registry ships with the kit"
 points 2 · risk normal · landed 011c489 (2026-08-03) · claimed 2026-08-03 → done 2026-08-03
 files touched: kit/ops/KEYS.tsv, kit/ops/install.sh, ops/RULES.tsv, ops/tests/rules-health.expected
@@ -75,7 +99,7 @@ writes into anyone's CONVENTIONS.md, and no hard gate softens.
 - [ ] surface-frozen (key-registry.md § 5): no new top-level fn — the flip lives inside
 
 ## T-076 — "Doctor reports config drift — one line naming the keys an install is missing"
-points 3 · risk normal · landed b923cf2 (2026-08-04) · claimed 2026-08-04
+points 3 · risk normal · landed b923cf2 (2026-08-04) · claimed 2026-08-04 → done 2026-08-04
 files touched: kit/ops/lib/observe.sh, ops/tests/keys-drift.cmd, ops/tests/keys-drift.expected
 
 ### Why
@@ -96,7 +120,7 @@ silences the line without changing behavior.
 - [ ] surface-frozen (key-registry.md § 5): implemented inline in cmd_doctor, no new top-level fn
 
 ## T-077 — "`polaris adopt` — commented stubs for every missing key, plus the 6.0 update banner"
-points 5 · risk normal · landed bd647d3 (2026-08-04) · claimed 2026-08-04
+points 5 · risk normal · landed bd647d3 (2026-08-04) · claimed 2026-08-04 → done 2026-08-04
 files touched: kit/ops/lib/admin.sh, kit/ops/polaris, ops/tests/adopt-stub.cmd, ops/tests/adopt-stub.expected, ops/tests/api-kit.expected
 
 ### Why
@@ -118,7 +142,7 @@ lines naming the one-line revert, exactly when a repo crosses to 6.0 with no kno
 - [ ] W2 api-kit owner (key-registry.md § 5): ops/tests/api-kit.expected gains `cmd_adopt` AND
 
 ## T-078 — "settings.json hook merge keys on script PATH and updates POLARIS-owned fields"
-points 3 · risk normal · landed 473b5e7 (2026-08-04) · claimed 2026-08-04
+points 3 · risk normal · landed 473b5e7 (2026-08-04) · claimed 2026-08-04 → done 2026-08-04
 files touched: kit/ops/install.sh, kit/ops/selftest-install.sh
 
 ### Why
@@ -157,7 +181,7 @@ observe.sh state the same default and can never drift apart in this release.
 - [ ] no markdown heading added, removed, or renamed in any of the four files (api-kit records
 
 ## T-082 — "Radically plain `standard` voice — new row, re-cut rules, Pre-send check, plain examples, plain-voice golden"
-points 3 · risk normal · landed 3f33f42 (2026-08-04) · claimed 2026-08-04
+points 3 · risk normal · landed 3f33f42 (2026-08-04) · claimed 2026-08-04 → done 2026-08-04
 files touched: kit/.claude/output-styles/polaris.md, kit/ops/PROTOCOL.md, ops/tests/plain-voice.cmd, ops/tests/plain-voice.expected
 
 ### Why
@@ -183,7 +207,7 @@ invariant 6 its first mechanical pin. Every replacement text is byte-exact in
 - [ ] `output-style-installed` and `adhd-skill-installed` goldens still green (pinned literals
 
 ## T-083 — "Role prose speaks the plain voice — conductor close, solo report, builder progress line, INIT picker, CLAUDE.md clause"
-points 2 · risk normal · landed 952d80b (2026-08-04) · claimed 2026-08-04
+points 2 · risk normal · landed 952d80b (2026-08-04) · claimed 2026-08-04 → done 2026-08-04
 files touched: kit/CLAUDE.md, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INIT.md, kit/ops/roles/SOLO.md
 
 ### Why
