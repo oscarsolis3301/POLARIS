@@ -74,7 +74,18 @@ behavior the installed CLI does not have yet. When they disagree, the installed 
 The board (`ops/board/`, `ops/contracts/`, and this file) IS state, and is written normally.
 
 ## Release ritual — a release is not done until we run it ourselves
-1. bump `kit/ops/VERSION` (human only — it is what tells every installed kit a new POLARIS exists)
+**Whose job: the assistant's, end to end.** Owner decision 2026-08-04, extending the 2026-07-15
+lift of the `kit/ops/VERSION` rule (`ops/RULES.tsv`). An approved plan that reaches its end carries
+the release with it — all five steps below, without a second ask. Reaching the end means the board
+is drained and `bash ops/polaris finish` exited 0; a run that stopped short of that has not earned a
+release. `risk: high` approval, the STOP-AND-ASK list and every RULES line still bind as always.
+**SCOPE — read this before generalizing it.** This paragraph is about THIS repo publishing ITSELF.
+It lives in `ops/CONVENTIONS.md` and `ops/RULES.tsv`, the two files `install.sh` refreshes never
+(`install.sh`: "board, RULES, CONVENTIONS, MAP, SPRINT untouched"), so it cannot and must not reach
+a repo that merely *has* POLARIS installed. POLARIS in someone's project never bumps their version,
+never tags them, never publishes them, and never touches their config — it does the board work its
+role files describe and nothing more. Do not port this to the kit; there is nothing here to ship.
+1. bump `kit/ops/VERSION` — it is what tells every installed kit a new POLARIS exists
 2. CHANGELOG entry, same version
 3. commit · `git tag vX.Y.Z && git push --tags` — CI builds and publishes the zip
 4. **`python kit/ops/pack.py --dogfood`** — downloads the PUBLISHED zip, installs it here, runs the
