@@ -150,18 +150,19 @@ report_dirty_hint() { # report_dirty_hint <n> — report commits NOTHING and nev
 }
 
 report_one() { # report_one <n> — resolve IDs, render, write <reports>/sprint-<n>.md whole, print path
+  # Writes only. What happens to a file that ends up differing from HEAD — self-commit or hint —
+  # is ONE decision over ALL the files an invocation wrote, so cmd_report's tail owns it (v2).
   local n="$1" ids out
   ids="$(resolve_sprint_ids "$n")"
   out="$(report_file "$n")"; mkdir -p "$(dirname "$out")"
   render_sprint "$n" "$BASE" $ids > "$out"
   say "wrote $(report_rel "$n")"
-  report_dirty_hint "$n"
 }
 
 cmd_report() { # report [--sprint <n> | --all] — render per-sprint management reports (docs/sprints/
   # by default) from the board + git history. Writes the file(s) WHOLE (idempotent), prints the
-  # path(s); commits nothing, the board is read-only to it. Contract: ops/contracts/sprint-report.md.
-  local n=""
+  # path(s); the board stays read-only to it. Contract: ops/contracts/sprint-report.md.
+  local n="" wrote="" sub=""
   case "${1:-}" in
     --all)
       local nums newest allids="" m ids out f tid orphans=""
@@ -187,14 +188,39 @@ $ids"
         out="$(report_file "$newest")"
         { printf '\n## (unsealed)\n'; for tid in $orphans; do render_task_section "$tid" "$BASE"; done; } >> "$out"
       fi
-      for m in $nums; do report_dirty_hint "$m"; done   # final on-disk state per file (post-orphan append)
-      return 0
+      wrote="$nums"; sub="docs(sprint): report refresh --all"
       ;;
     --sprint) n="${2:-}"; [ -n "$n" ] || die "usage: polaris report --sprint <n>";;
     "")       n="$(sprint_hdr_num)"; [ -n "$n" ] || die "cannot read the current sprint — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header";;
     *)        die "usage: polaris report [--sprint <n> | --all]";;
   esac
-  report_one "$n"
+  [ -n "$sub" ] || { report_one "$n"; wrote="$n"; sub="docs(sprint-$n): report refresh"; }
+  # --- the writer commits its own file when it is the only dirt (contract sprint-report v2, T-061)
+  # v1.1 only WARNED about this, and a warning is read by exactly one session: a re-render after
+  # `done` adds done-dates the sealed render lacked, and the file left dirty makes the NEXT land or
+  # seal die "working tree not clean" with no visible cause — session B paying for session A's
+  # forgotten hint. So when this runs in the primary checkout, on $BASE, and `status --porcelain`
+  # holds NOTHING but the file(s) this invocation just wrote, commit them here and the trap never
+  # springs. ANY other dirty path → commit NOTHING and print v1.1's hint verbatim; a human's work in
+  # progress is never swept into a docs commit. Seal reaches its report through seal_report_commit
+  # (on integrate/<date>, subject `docs(sprint-N): report`) and never through this tail.
+  # `-uall`: without it a not-yet-tracked reports/ dir collapses to one `?? docs/sprints/` line that
+  # can never equal a file path, and a first render would read as somebody else's dirt.
+  local m rels dirty others=""
+  rels="$(for m in $wrote; do report_rel "$m"; done)"
+  dirty=""
+  in_primary && [ "$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)" = "$BASE" ] \
+    && dirty="$(git -C "$PRIMARY" status --porcelain -uall 2>/dev/null || true)"
+  [ -n "$dirty" ] && others="$(printf '%s\n' "$dirty" | cut -c4- | grep -vxF "$rels" || true)"
+  if [ -n "$dirty" ] && [ -z "$others" ]; then
+    git -C "$PRIMARY" add -- $rels
+    git -C "$PRIMARY" diff --cached --quiet -- $rels || {
+      git -C "$PRIMARY" commit -q -m "$sub" -- $rels
+      say "committed \`$sub\` — the report was the only dirt on $BASE"
+    }
+  else
+    for m in $wrote; do report_dirty_hint "$m"; done   # final on-disk state per file (post-orphan append)
+  fi
 }
 
 seal_report_commit() { # seal_report_commit <n> <date> — render the sprint report from THIS wave's

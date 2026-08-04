@@ -5,7 +5,10 @@ Run N in parallel. The Planner guaranteed every ready task is file-disjoint, so 
 ```bash
 bash ops/polaris claim          # takes the top-wsjf ready task, or: claim <ID>
 ```
-One command does it all atomically: lock → board move (ready→active, committed) → worktree at `.polaris/wt/<ID>` on branch `feat/<ID>`. "taken" → just run it again; it picks the next task. `cd` into the printed worktree path — ALL code work happens there, NEVER in the primary checkout.
+One command does it all atomically: lock → board move (ready→active, committed) → worktree at `.polaris/wt/<ID>` on branch `feat/<ID>`. `cd` into the printed worktree path — ALL code work happens there, NEVER in the primary checkout.
+
+**Another chat may already hold the one you wanted, and that is a non-event, not a question:**
+claim says taken → claim the next task; the lock already chose for you — re-run `bash ops/polaris claim` and build what it hands you.
 
 ## 2. Read — ONE command, then stop
 ```bash
@@ -22,7 +25,9 @@ Do not go assembling those seven things by hand — that is 6-15 tool calls to a
 ## 3. Build
 Implement strictly against the contract, strictly inside `files_owned`. `context_files` are read-only patterns to imitate — copy the local style, don't invent one. Commit on `feat/<ID>` as you go (`feat: <ID> <what>`). Every meaningful step: `✅ <what> — <file>`. Append discoveries to the task's Notes (one line each) instead of re-deriving them later — these lines become the squash commit's `Notes:` body verbatim at `land`, so keep each to one real discovery, no chatter; HTML comments and `⛔` lines are filtered out automatically.
 
-Under Claude Code, a PreToolUse guard blocks two things the moment you attempt them: writes outside `files_owned`, and anything `ops/RULES.tsv` forbids — danger-zone paths and forbidden content patterns, which apply EVEN INSIDE your owned files. Same matcher and rules as `polaris verify`, so what the guard blocks, handoff would have rejected anyway. A rejection is information, not an obstacle. Never work around it via bash redirection, and never touch RULES.tsv — hand back or flag the human instead.
+Under Claude Code, a PreToolUse guard blocks two things the moment you attempt them: writes outside `files_owned`, and anything `ops/RULES.tsv` forbids — danger-zone paths and forbidden content patterns, which apply EVEN INSIDE your owned files. Same matcher and rules as `polaris verify`, so what the guard blocks, handoff would have rejected anyway. A rejection is information, not an obstacle. Never work around it via bash redirection, and never edit `ops/RULES.tsv` to get unstuck — Invariant 11 makes the rules agent-maintained, but "it blocked me" is the one motive that file exists to resist. Hand back or flag the human instead.
+
+One rule kind reads differently: `ask` = the same denial as `path`, lifted only by a human's recorded approval on the task. A Builder never approves. Hand back — the approval is granted at the plan gate, not mid-build. If a human has already approved this, it belongs on the task: `polaris approve <ID> <scope> -m "why"` — a Builder cannot run it. (The command refuses inside a `feat/*` worktree, which is where you are.) Converting a rule between `path` and `ask` is a HUMAN decision, never an agent's.
 
 Hit a wall? Two kinds, two responses:
 - **Structural block** — a needed file isn't in `files_owned`, a hidden dependency, a missing or self-contradictory contract. Output `⛔ <why>` and go to the Failure path. Do NOT improvise around it.
@@ -32,6 +37,8 @@ Hit a wall? Two kinds, two responses:
 
 ## 4. Test
 Write tests covering EVERY acceptance checkbox. Then run the commands from `ops/CONVENTIONS.md`: **`test_fast:` if it is set, otherwise `test:`** — plus `lint:` and `typecheck:`. All green or you stay in `active/`. (`test_fast:` is the per-task gate; the full `test:` still runs at the wave gate, in the Integrator's `qa`, and in CI — you are not skipping a gate, you are not re-paying the wave's gate on every handoff. A suite over the harness's tool timeout returns NOTHING and gets re-run, which is worse than useless.)
+
+Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
 
 ## 5. Prove and hand off
 ```bash

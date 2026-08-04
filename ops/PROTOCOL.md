@@ -9,8 +9,10 @@ when you actually need it. Read the section you need, not the file.
 | the command table — what `polaris <x>` does | THE TOOL |
 | what lives where on disk | STATE = THE BOARD |
 | why a lane exists, and why one role never does two jobs | LANES |
+| what a second chat does when the lock, the lane or the tree is busy | N CHATS, ONE REPO |
 | how to stay cheap: pack-first, find-first, read-less | TOKEN DISCIPLINE |
 | which model tier a role deserves | MODEL ROUTING |
+| how to run a command that outlives the 600s tool cap | LONG COMMANDS |
 | how to TALK to the human | VOICE |
 | how to behave as a model running this | MODEL NOTES |
 
@@ -40,7 +42,9 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris notify-gate <kind> [ID]` | fire the notify: hook at a human gate — kinds `plan` · `risk <ID>` · `question <ID>` · `done [ID]`; observe-only, never writes the board |
 | `ops/polaris drift / rules` | mechanical board-hygiene audit (`--strict` for CI) · policy file list + health |
 | `ops/polaris qa` | "is everything okay?" in ONE shot: CONVENTIONS suite (test/lint/typecheck/build/uat) + `drift --strict` + doctor. Runs every check even after a red; rc 1 on any red. `finish` runs this for you at the close |
+| `ops/polaris bg run/status/tail/wait` | run and collect suite-length commands without blocking: `run <suite-key\|name -- cmd…>` detaches it, `wait` collects in bounded chunks (`--max` defaults to 300s, deliberately half the 600s tool cap). rc 0 green · 1 red · 2 running · 3 unknown — parse the code, never the prose. Past the cap this is the only way a result comes back at all, because a timed-out call returns NOTHING and gets re-run; see § LONG COMMANDS |
 | `ops/polaris finish` | "is the RUN over?" — the mechanical half of CONDUCTOR.md's run-over definition in ONE call: nothing building, nothing waiting to land, `ready/` drained per `drain:`, no unmerged `integrate/<date>`, no orphan lock, clean tree, `qa` green on `<base>`. rc 0 = complete, and the `notify-gate done` hook fires exactly once per finished state; rc 1 names every pending thing. `caveat:` lines are not gates — the close must mention them. **The last command of every lane**, and the only thing that licenses the `# 🎉 Complete!` H1 (ops/contracts/run-finish.md) |
+| `ops/polaris route [<ID> \| --role R \| --points N --risk R]` | which model tier a task or role deserves, in one hop: line 1 is a bare `strong` \| `mid` \| `cheap`, so a caller branches on it blind, and a three-space `model:` note follows ONLY when a `model_*` knob (or the task's own `model:` frontmatter) maps that tier to a real name. Unset knobs = tier words only, behaviour unchanged. The CONDUCTOR runs it before every spawn; `fleet` injects its answer into every pane |
 | `ops/polaris fleet <N> [--launch]` | print N Builder kickoffs; `--launch` opens a session per ready task in tmux windows or side-by-side Windows Terminal panes (`--dry-run` previews). Planner runs this per `autolaunch:` |
 | `ops/polaris slim [--apply\|--restore]` | the per-context TOKEN TAX, measured. Every skill/agent/command definition under `~/.claude` injects its name+description into the system prompt of every session AND every subagent, invoked or not. Reports bytes per family and what a 6-8 context run pays for them; `--apply` MOVES the identified claude-flow machinery into `~/.claude/.polaris-archived/` (never deletes, always `--restore`-able) and leaves anything it cannot positively identify alone |
 | `ops/polaris version / update` | which POLARIS this repo runs · **fetch the latest kit** — also re-caches it into `~/.claude` so the next repo gets it too (manual; POLARIS never self-updates mid-sprint) |
@@ -62,7 +66,8 @@ ops/
   MANUAL.md        # fallback recipes if you cannot execute commands
   PROMPTS.md       # copy-paste kickoffs for every role
   MAP.md           # ≤200-line codebase map. Read THIS, not the repo.
-  RULES.tsv        # repo policy as DATA: danger zones + content guards, one line each
+  RULES.tsv        # repo policy as DATA, one line each — three kinds: `path` · `content` · `ask`
+                   #   `ask` = the same denial as `path`, lifted only by a human's recorded approval on the task
   CONVENTIONS.md   # config header (base/claim/integration/test cmds) + rules
   SPRINT.md        # goal, capacity, burndown, Learned log
   contracts/       # interface contracts — the seams between tasks
@@ -89,7 +94,7 @@ So POLARIS collapses SESSIONS, never CHECKS:
 
 | lane | contexts | when `triage` picks it |
 |---|---|---|
-| `solo` | **1** | one task, ≤3 points, `risk: normal`, `express:` on, `publish: direct`, nothing RULES-guarded |
+| `solo` | **1** | one task, ≤3 points, `risk: normal`, `express:` on, `publish: direct`, nothing RULES-guarded, or `ask`-guarded with a recorded approval |
 | `express` | 2 | one task, one builder, one integrator |
 | `full` | 4+ | anything else — real parallelism, real merge risk |
 
@@ -109,6 +114,40 @@ exists, on the base branch, and writes zero feature code, so that installing POL
 a planned board instead of homework. The CONDUCTOR is **not** a second exception: it holds no role
 at all and delegates each one to a fresh subagent, so roles still never mix inside one context.
 
+## N CHATS, ONE REPO — who waits, who parks, who queues
+Several chats, one checkout. The second session finds the task locked, the integration lane held, or
+somebody else's edits in the tree — and none of that is a question for the human:
+**git/workspace mechanics are never ask material after plan approval — the CLI prints the next step; follow it.**
+The behavior this replaces was emergent, never designed: nothing told a second chat what to DO, so it
+improvised a question and stalled on a human who had walked away. This table is the instruction.
+
+| you hit | the rule | the command |
+|---|---|---|
+| the task you wanted is locked | claim says taken → claim the next task; the lock already chose for you | `bash ops/polaris claim` again |
+| the integration lane is held | integration lane busy → wait; rc 3 with a queued: line means report queued and retry at the next wave boundary | `land` · `seal` take the lease for you |
+| the shared checkout is dirty | a dirty shared checkout is parked, never asked about: bash ops/polaris park | `bash ops/polaris unpark` puts it back |
+| a lock, lease or task that is not yours | another session's locks, leases and tasks are invisible — never steal unless sweep flags them STALE | `bash ops/polaris sweep` names stale locks |
+
+Exit codes carry the same answer, so a subagent or a script reads it without prose:
+
+| rc | means | the tell |
+|---|---|---|
+| 0 | success — including the idempotent skips a second chat causes | `already landed — skipped` · `nothing new to seal` |
+| 1 | refusal or error, worded honestly (real stderr, never swallowed) | fix what it names, or hand the task back |
+| 3 | queued — the lane stayed busy past the bounded wait | LAST line begins `queued: ` and names the holder |
+
+**rc 3 belongs to whoever can afford to wait.** A CONDUCTOR polls a queued lane at its next wave
+boundary, never mid-task. A subagent does the opposite: it repeats the `queued:` line verbatim in its
+report and ends its turn, because waiting on someone else's lease spends its own context and buys
+nothing. (Ending a turn with your OWN suite still running is the opposite mistake, and it loses the
+suite — foreground it, or poll its log.) Two optional `ops/CONVENTIONS.md` knobs tune the wait:
+`integration_wait_minutes` (10) before rc 3 · `integration_stale_minutes` (45), past which an
+abandoned lease is stolen with a note.
+
+**Plan and build as if you were alone.** Disjoint ownership is still the Planner's guarantee — but a
+second planner can file a task between your board read and your claim, and the claim-time
+disjointness gate is the backstop that blocks the loser rather than letting two chats edit one file.
+
 ## TOKEN DISCIPLINE — this is how we stay cheap and fast
 - **`pack` first, everything else second.** Working a task? `ops/polaris pack <ID>` returns its
   contract, house style, owned-directory map, public API surface and gotchas in ONE call. Reading
@@ -124,10 +163,71 @@ at all and delegates each one to a fresh subagent, so roles still never mix insi
 - **Spikes exist so five tasks don't each re-explore.** Time-boxed read, written verdict, done.
 - **Prove it with a command, not a subagent.** Anything a shell command can check — a route responds, an export still exists, output still matches — belongs in the task's `verify:` list or in `ops/tests/` as a golden, written ONCE while the context is already in hand. `polaris check --scaffold` generates the mechanical half. A model re-checking by hand every wave is the single most expensive habit this protocol exists to kill.
 
-## MODEL ROUTING (cost — set per session by the human)
-- INIT / PLANNER / INTEGRATOR / EVOLVE: strongest tier available — their mistakes multiply.
-- BUILDER: mid tier for tasks ≤3 points; strongest tier for 5-point or `risk: high` tasks.
+## MODEL ROUTING (auto — polaris route decides)
+- **Ask, never guess.** `ops/polaris route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>]` is the
+  one oracle. Line 1 is always exactly one of `strong` · `mid` · `cheap` — bare, machine-parseable,
+  parse it blind. Line 2 is `   model: <name>`, and appears ONLY when that tier's mapping knob is
+  set. Read-only: no lock, no board write, no hook.
+- **The derivation**, which `route` runs whenever nothing overrides it: `risk:` ≠ `normal` → `strong`
+  (risk dominates points) · points ≥5 → `strong` · points ≤1 → `cheap` · everything else → `mid`.
+  Missing or non-numeric points → `mid`, the safe middle. Routing NEVER blocks work — an unknown role
+  falls back to `mid` with a note and rc 0; only no-args and an unknown ID are errors.
+- **Roles come from a table, tasks are derived.** INIT · PLANNER · INTEGRATOR · EVOLVE · CONDUCTOR →
+  `strong`, because their mistakes multiply · SOLO and the qa scout → `mid` · BUILDER → whatever its
+  task derives, so ask `route <ID>`, never `route --role BUILDER`.
+- **A task may override.** Optional `model:` frontmatter: `strong`/`mid`/`cheap` names that tier; any
+  other value is a LITERAL model name, echoed verbatim on line 2 with the derived tier still on
+  line 1 for information.
+- **Tier words become model names in exactly ONE place** — `model_strong:` / `model_mid:` /
+  `model_cheap:` in `ops/CONVENTIONS.md`. Unset knobs change NOTHING: the CLI speaks tier words only
+  and every command stays byte-identical to an unconfigured repo. Naming models is a per-repo
+  decision and never a kit default — THIS repo pins strong=fable · mid=opus · cheap=sonnet; yours
+  pins whatever it wants, or nothing.
+- **Consumers, so nobody re-derives it:** the CONDUCTOR runs `route` before EVERY spawn and passes
+  line 2's name as the Agent-tool `model` param (no line 2 → omit the param, let the platform default
+  run) · `fleet` injects `--model <name>` at the MAX tier over ready tasks, because panes claim
+  racily and any pane may end up holding any task · `pack` prints `· tier <t>` in its header line.
+- **The honest boundary.** A RUNNING session cannot switch its own model. Routing governs what gets
+  SPAWNED (subagents) and LAUNCHED (panes); for the session already reading this, `triage` and
+  `status` merely hint — acting on the hint means starting the next session at the right tier, not
+  re-rolling this one.
 - Phrase is tier-relative on purpose: models change, the routing rule doesn't.
+
+## LONG COMMANDS — living under the 600s tool cap
+A foreground tool call is capped at 600s (600000ms). Past that it returns NOTHING — you lose the run,
+learn nothing, and re-run it. MEASURED on this repo, so nobody re-measures:
+
+| command | measured | under the cap? |
+|---|---|---|
+| `doctor --selftest` spine only | 144s | yes |
+| `test_fast:` — the 4-drill subset | 320s | yes |
+| `doctor --selftest --parallel 3` — 25 drills, sharded | 169-330s | yes |
+| `test:` — the full selftest, serial | 805s | **no** |
+| `ops/polaris qa` — the whole loop | 1225s | **no** |
+
+Three bands, and the band is a property of the MEASURED time, not of how important the command feels:
+1. **Under ~60s** — plain foreground call. No ceremony.
+2. **60s to the cap** — foreground WITH an explicit tool timeout ≥ the measured time (600000ms for
+   anything near the top of the range). A defaulted timeout is how suites die at 120s.
+3. **Past the cap** — `ops/polaris bg run <key>` (a bare CONVENTIONS suite key: `test` · `test_fast` ·
+   `lint` · `typecheck` · `build` · `uat` · `qa`), keep working, then collect in bounded chunks with
+   `bg wait <key> --max 300`. Exit 2 means still running: call it again. `bg tail` reads the log
+   without waiting.
+
+- **SUBAGENT rule — never end a turn with a job still running.** Your existence ends with your turn,
+  and completion notifications re-invoke only the TOP-LEVEL session, so a job you leave behind has
+  nobody left to collect it and needs a conductor rescue (two of those last sprint). Poll INSIDE your
+  turn: chunked `bg wait` until it returns a verdict, then report.
+- **TOP-LEVEL rule** — the main session may instead use the harness's native `run_in_background`,
+  because it is the one context a completion notification can wake.
+- **Invariant 4 is absolute either way.** `bg wait` must return 0 for YOUR suites BEFORE
+  `handoff` · `land` · `seal` · `finish`. Backgrounding moves the suite off the critical path; it
+  never moves the gate. `finish` enforces this — any job with no verdict is a pending line.
+- **Stamp the wave with it.** `bg run qa` always executes in the primary checkout and stamps
+  `.polaris/suite-stamp` when green, so a green `qa` on a clean tree makes the later `finish` seconds
+  instead of 1225s. Start it at the top of the wave gate and drain `review/` while it runs.
+- Mechanics — registry layout, rc-file-first verdicts (a pid check alone NEVER declares one), one-slot
+  rotation, the `finish` guard — are specified in `ops/contracts/bg-jobs.md`.
 
 ## VOICE — how you TALK to the human (`voice:` in `ops/CONVENTIONS.md`, default `standard`)
 | `voice:` | How you speak |

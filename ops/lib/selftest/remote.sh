@@ -28,6 +28,41 @@ drill_remote() {
     git ls-remote --exit-code origin refs/heads/integrate/2030-01-01 >/dev/null 2>&1 && { echo "SWEEP INTEGRATE FIX FAIL (merged wave must be deleted)"; exit 1; }
     git ls-remote --exit-code origin refs/heads/integrate/2030-02-02 >/dev/null || { echo "SWEEP INTEGRATE KEEP FAIL (diverged wave must be kept)"; exit 1; }
     git push -q origin :refs/heads/integrate/2030-02-02    # clean up so later drills see a bare origin
+    # ---- T-059 handoff push resilience (ops/contracts/shared-checkout.md) ----
+    # (1) a stray ref literally named `feat` on origin D/F-blocks EVERY feat/<ID> push: handoff must
+    # repair it BETWEEN attempts (archive as stray/feat-<sha7>, never delete) and land the push.
+    printf -- '---\nid: T-PU\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/pu.txt\nverify: []\n---\n' > ops/board/ready/T-PU.md
+    git push -q origin main:refs/heads/feat
+    straysha="$(git rev-parse main)"
+    "$SELF" claim T-PU >/dev/null
+    ( cd .polaris/wt/T-PU && echo pu > src/pu.txt && git add -A && git commit -qm ok && "$SELF" handoff T-PU > "$T/pu.out" 2>&1 ) \
+      || { echo "HANDOFF REPAIR RC FAIL (a stray feat ref must not sink the handoff)"; exit 1; }
+    git ls-remote --exit-code origin refs/heads/feat/T-PU >/dev/null || { echo "HANDOFF REPAIR PUSH FAIL (the repaired push must land)"; exit 1; }
+    git ls-remote origin refs/heads/feat | grep -q . && { echo "HANDOFF REPAIR STRAY FAIL (origin's stray feat must be archived away)"; exit 1; }
+    git ls-remote --exit-code origin "refs/heads/stray/feat-$(printf '%.7s' "$straysha")" >/dev/null \
+      || { echo "HANDOFF REPAIR ARCHIVE FAIL (the stray must be RENAMED to stray/feat-<sha7>, never deleted)"; exit 1; }
+    grep -q 'push failed' "$T/pu.out" && { echo "HANDOFF REPAIR DEGRADE FAIL (a repaired push must not report failure)"; exit 1; }
+    git merge -q --no-ff feat/T-PU -m merge
+    "$SELF" done T-PU >/dev/null
+    git push -q origin ":refs/heads/stray/feat-$(printf '%.7s' "$straysha")"   # bare origin for later drills
+    # (2) a push that keeps failing DEGRADES: 3 attempts, then the board move PROCEEDS with the
+    # contract's ⚠ Note + a push-fail event — a finished task is never stranded in active/ again.
+    # (refs/heads/feat/T-PF/x on origin D/F-blocks pushing feat/T-PF while polaris/board still syncs.)
+    printf -- '---\nid: T-PF\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/pf.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-PF.md
+    git push -q origin main:refs/heads/feat/T-PF/x
+    "$SELF" claim T-PF >/dev/null
+    ( cd .polaris/wt/T-PF && echo pf > src/pf.txt && git add -A && git commit -qm ok && "$SELF" handoff T-PF > "$T/pf.out" 2>&1 ) \
+      || { echo "HANDOFF DEGRADE RC FAIL (a failing push must not strand the task in active/)"; exit 1; }
+    [ -f ops/board/review/T-PF.md ] || { echo "HANDOFF DEGRADE MOVE FAIL (the board move must proceed)"; exit 1; }
+    grep -qxF -- '- ⚠ push failed at handoff — feat/T-PF is local-only; land merges the local branch' ops/board/review/T-PF.md \
+      || { echo "HANDOFF DEGRADE NOTE FAIL (the contract Note must append to the task)"; exit 1; }
+    grep -q '"ev":"push-fail","id":"T-PF"' ops/board/EVENTS.ndjson || { echo "HANDOFF DEGRADE EVENT FAIL (evt push-fail must emit)"; exit 1; }
+    grep -q 'local-only' "$T/pf.out" || { echo "HANDOFF DEGRADE SAY FAIL (the degrade must say so)"; exit 1; }
+    git ls-remote origin refs/heads/feat/T-PF | grep -q . && { echo "HANDOFF DEGRADE PUSH FAIL (feat/T-PF must stay local-only)"; exit 1; }
+    git push -q origin ":refs/heads/feat/T-PF/x"
+    git merge -q --no-ff feat/T-PF -m merge
+    "$SELF" done T-PF >/dev/null
+    # ---- end T-059 handoff push resilience ----
 }
 drill_syncrace() {
     ensure_origin   # T-033: --only syncrace skips the remote drill above — self-provision origin (+ polaris/board)
@@ -173,4 +208,44 @@ drill_upgrade() {
       git rev-parse -q --verify refs/heads/polaris/board >/dev/null && { echo "UNINSTALL LOCAL REF FAIL (the branch must be deleted)"; exit 1; }
       git ls-remote "$T/mig-origin.git" refs/heads/polaris/board | grep -q . && { echo "UNINSTALL REMOTE REF FAIL (the deletion must push)"; exit 1; }
       : ) || exit 1
+}
+drill_pushdegrade() {
+    # ---- T-062 pushdegrade drill (ops/contracts/shared-checkout.md § Executable check) ----
+    # handoff push resilience, end to end: (1) a planted ref literally named `feat` on the scratch
+    # origin D/F-blocks every feat/<ID> push → handoff retries, repairs BETWEEN attempts (archive
+    # as stray/feat-<sha7>, NEVER delete) and the push lands clean. (2) push forced dead — an
+    # unrepairable D/F blocker with no stray `feat` to fix — → the board move STILL happens, with
+    # the contract's ⚠ Note on the task + the push-fail event: a finished task is never stranded
+    # in active/ by the network.
+    ensure_origin
+    printf -- '---\nid: T-PD\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/pd.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-PD.md
+    git push -q origin main:refs/heads/feat
+    pd_sha="$(git rev-parse main)"
+    "$SELF" claim T-PD >/dev/null
+    ( cd .polaris/wt/T-PD && echo pd > src/pd.txt && git add -A && git commit -qm ok && "$SELF" handoff T-PD > "$T/pd1.out" 2>&1 ) \
+      || { echo "PUSHDEGRADE REPAIR RC FAIL (a stray feat ref must not sink the handoff)"; exit 1; }
+    git ls-remote --exit-code origin refs/heads/feat/T-PD >/dev/null || { echo "PUSHDEGRADE REPAIR PUSH FAIL (the repaired push must land)"; exit 1; }
+    git ls-remote origin refs/heads/feat | grep -q . && { echo "PUSHDEGRADE REPAIR STRAY FAIL (origin's stray feat must be archived away)"; exit 1; }
+    git ls-remote --exit-code origin "refs/heads/stray/feat-$(printf '%.7s' "$pd_sha")" >/dev/null \
+      || { echo "PUSHDEGRADE REPAIR ARCHIVE FAIL (the stray must be RENAMED stray/feat-<sha7>, never deleted)"; exit 1; }
+    grep -q 'push failed' "$T/pd1.out" && { echo "PUSHDEGRADE REPAIR DEGRADE FAIL (a repaired push must not report failure)"; exit 1; }
+    git merge -q --no-ff feat/T-PD -m merge
+    "$SELF" done T-PD >/dev/null
+    git push -q origin ":refs/heads/stray/feat-$(printf '%.7s' "$pd_sha")"   # bare origin for later drills
+    # (2) push forced dead: refs/heads/feat/T-PD2/x D/F-blocks feat/T-PD2 and no stray `feat`
+    # exists to repair — 3 attempts, then the DEGRADE: board moves, Note + event land, branch local
+    printf -- '---\nid: T-PD2\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/pd2.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-PD2.md
+    git push -q origin main:refs/heads/feat/T-PD2/x
+    "$SELF" claim T-PD2 >/dev/null
+    ( cd .polaris/wt/T-PD2 && echo pd2 > src/pd2.txt && git add -A && git commit -qm ok && "$SELF" handoff T-PD2 > "$T/pd2.out" 2>&1 ) \
+      || { echo "PUSHDEGRADE DEAD RC FAIL (a dead push must degrade, never strand the task in active/)"; exit 1; }
+    [ -f ops/board/review/T-PD2.md ] || { echo "PUSHDEGRADE DEAD MOVE FAIL (the board move must proceed)"; exit 1; }
+    grep -qxF -- '- ⚠ push failed at handoff — feat/T-PD2 is local-only; land merges the local branch' ops/board/review/T-PD2.md \
+      || { echo "PUSHDEGRADE DEAD NOTE FAIL (the contract Note must append to the task)"; exit 1; }
+    grep -q '"ev":"push-fail","id":"T-PD2"' ops/board/EVENTS.ndjson || { echo "PUSHDEGRADE DEAD EVENT FAIL (evt push-fail must emit)"; exit 1; }
+    grep -q 'local-only' "$T/pd2.out" || { echo "PUSHDEGRADE DEAD SAY FAIL (the degrade must say so)"; exit 1; }
+    git ls-remote origin refs/heads/feat/T-PD2 | grep -q . && { echo "PUSHDEGRADE DEAD PUSH FAIL (feat/T-PD2 must stay local-only)"; exit 1; }
+    git push -q origin ":refs/heads/feat/T-PD2/x"
+    git merge -q --no-ff feat/T-PD2 -m merge
+    "$SELF" done T-PD2 >/dev/null
 }

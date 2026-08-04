@@ -23,19 +23,72 @@ cmd_claim() {
   fi
 
   local got="" cand
+  local ov_id="" ov_cpat="" ov_apat=""
+  local af aid apat cpat
   while IFS= read -r cand; do
     [ -z "$cand" ] && continue
+    # T-059 (ops/contracts/shared-checkout.md): branch-ID hygiene BEFORE any lock — a bad ID used
+    # to become a bad ref name deep inside worktree add. Explicit → die; auto-pick → id_ok already
+    # printed its one ⛔ line, move on to the next candidate.
+    id_ok "$cand" || { [ "$explicit" = 1 ] && die "claim refused — invalid task ID (fix the ID and re-run)"; continue; }
     f="$(task_file "$cand" ready)" || { [ "$explicit" = 1 ] && die "$cand is not in ready/ (state: $(task_col "$cand" || echo unknown))"; continue; }
     if [ "$CLAIM_MODE" = "claim-branch" ]; then
       has_remote || die "claim: claim-branch requires an origin remote"
-      if claim_branch_take "$cand"; then lock_take "$cand" || true; got="$cand"; break
+      if claim_branch_take "$cand"; then lock_take "$cand" || true
       elif [ "$explicit" = 1 ]; then die "taken — $cand claimed on another machine; try: polaris claim"
+      else continue
       fi
     else
-      if lock_take "$cand"; then got="$cand"; break
+      if lock_take "$cand"; then :
       elif [ "$explicit" = 1 ]; then die "taken — $cand is locked by another session; try: polaris claim"
+      else continue
       fi
     fi
+    FAIL_LOCK_ID="$cand"; trap on_die EXIT   # we hold the lock from here — any die below must release it
+    # T-059 claim-time disjointness gate: the locked candidate's files_owned vs EVERY active/ task,
+    # both directions via pat_overlap (observe.sh). Two planners racing can put overlapping tasks in
+    # ready/, and the ready-gate never re-checks against already-claimed work — without this the
+    # overlap surfaces two builds later as an integrator squash conflict. Clean board → zero output,
+    # zero extra git work: the scan is frontmatter reads only.
+    ov_id=""; ov_cpat=""; ov_apat=""
+    for af in "$BOARD/active/"*.md; do
+      [ -e "$af" ] || break
+      aid="$(basename "$af" .md)"
+      while IFS= read -r cpat; do
+        [ -z "$cpat" ] && continue
+        while IFS= read -r apat; do
+          [ -z "$apat" ] && continue
+          if [ -z "$ov_id" ] && pat_overlap "$cpat" "$apat"; then
+            ov_id="$aid"; ov_cpat="$cpat"; ov_apat="$apat"
+          fi
+        done <<EOF_APAT
+$(fm_list files_owned "$af")
+EOF_APAT
+      done <<EOF_CPAT
+$(fm_list files_owned "$f")
+EOF_CPAT
+      [ -n "$ov_id" ] && break
+    done
+    if [ -n "$ov_id" ]; then
+      # explicit ID → refuse, naming the active task and both patterns (on_die releases our lock).
+      [ "$explicit" = 1 ] && die "claim refused: $cand files_owned '$ov_cpat' overlaps active $ov_id '$ov_apat' — re-groom or wait for $ov_id"
+      # auto-pick → park the bad pairing in blocked/ with the remedy ON THE RECORD (ONE board
+      # commit), release its lock, and keep claiming — the next candidate gets its own gate pass.
+      note "⛔ $cand files_owned '$ov_cpat' overlaps active $ov_id '$ov_apat' → blocked/ — claiming the next candidate"
+      mutex_on
+      mv "$BOARD/ready/$cand.md" "$BOARD/blocked/$cand.md"
+      set_fm status blocked "$BOARD/blocked/$cand.md"
+      printf -- "- ⛔ ownership overlap: files_owned '%s' overlaps active %s '%s' — re-groom or wait for %s\n" \
+        "$ov_cpat" "$ov_id" "$ov_apat" "$ov_id" >> "$BOARD/blocked/$cand.md"
+      evt blocked "$cand" "ownership overlap with $ov_id"
+      board_commit "chore(board): block $cand (ownership overlap)"
+      sync_board
+      mutex_off
+      lock_drop "$cand"; [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$cand"
+      FAIL_LOCK_ID=""; trap - EXIT
+      continue
+    fi
+    got="$cand"; break
   done <<EOF
 $candidates
 EOF
@@ -55,20 +108,10 @@ EOF
   mutex_off; FAIL_LOCK_ID=""; trap - EXIT
 
   local wt; wt="$(wt_path "$id")"
-  mkdir -p "$PRIMARY/.polaris/wt"
-  # worktree add runs OUTSIDE the board mutex (it is slow, and each task's tree is distinct), so two
-  # near-simultaneous claims — exactly what a fleet's panes are — can collide on git's index.lock.
-  # Each adds a different worktree, so a brief retry is safe and keeps the fan-out promise real.
-  local wi
-  for wi in 1 2 3 4 5 6 7; do
-    if git -C "$PRIMARY" show-ref --verify -q "refs/heads/feat/$id"; then
-      git -C "$PRIMARY" worktree add -q "$wt" "feat/$id" 2>/dev/null && break
-    else
-      git -C "$PRIMARY" worktree add -q "$wt" -b "feat/$id" "$BASE" 2>/dev/null && break
-    fi
-    [ "$wi" -ge 7 ] && die "worktree add failed for $id (git index busy after retries) — retry: polaris claim $id"
-    sleep 0.3
-  done
+  # T-059: wt_add (lib/workspace.sh) replaces the inline retry loop — one shared primitive with
+  # cmd_resume. index.lock-only retries, ONE stray-feat repair, and any other failure re-emits
+  # git's REAL stderr instead of the old blanket "git index busy" guess.
+  wt_add "$id"
   say "claimed $id → cd \"$wt\""
   # bootstrap: a fresh worktree is a bare checkout — node_modules/.venv/target are gitignored and
   # absent, so a real repo's `verify:`/full suite fails until deps are installed, in a dir the Builder
@@ -107,12 +150,43 @@ cmd_handoff() {
   # publish: pr — feat branches never leave the machine; seal pushes ONE integrate branch instead
   # (ops/contracts/publish-modes.md). Everything else stays byte-identical to direct mode.
   publish_resolve
+  # T-059 (ops/contracts/shared-checkout.md): the push was ONE unguarded attempt, so one network
+  # hiccup stranded a FINISHED task in active/ with its lock held. Now 3 attempts 0.5s apart, ONE
+  # stray_feat_repair between attempts when a ref literally named `feat` shadows the push, and a
+  # persistent failure DEGRADES below instead of dying — direct-mode landing merges the LOCAL
+  # branch, so the work is safe either way.
+  local pushed=1
+  local perr ptry repaired
   if [ "$PUB" != "pr" ] && has_remote; then
-    git push -q -u origin "feat/$id"
+    pushed=0
+    perr="$(mktemp)"
+    ptry=1
+    repaired=0
+    while :; do
+      if git push -q -u origin "feat/$id" 2>"$perr"; then pushed=1; break; fi
+      [ "$ptry" -ge 3 ] && break
+      if [ "$repaired" -eq 0 ]; then
+        if grep -q "refs/heads/feat'" "$perr" 2>/dev/null \
+           || [ -n "$(git -C "$PRIMARY" ls-remote --heads origin feat 2>/dev/null | head -1)" ]; then
+          repaired=1
+          stray_feat_repair
+        fi
+      fi
+      ptry=$((ptry+1))
+      sleep 0.5
+    done
+    if [ "$pushed" -eq 0 ]; then cat "$perr" >&2; fi
+    rm -f "$perr"
   fi
   mutex_on
   mv "$BOARD/active/$id.md" "$BOARD/review/$id.md"
   set_fm status review "$BOARD/review/$id.md"
+  if [ "$pushed" -eq 0 ]; then
+    # a finished task is NEVER stranded by the network: the contract's ⚠ Note + push-fail event
+    # ride the same board commit, and land merges the local branch.
+    printf -- '- ⚠ push failed at handoff — feat/%s is local-only; land merges the local branch\n' "$id" >> "$BOARD/review/$id.md"
+    evt push-fail "$id" "feat/$id local-only after 3 push attempts"
+  fi
   evt handoff "$id"
   # Last lane landed? Count inside the mutex (post-mv, pre-commit) so the all-review event
   # rides this same board commit. Without this notice, a fleet of one-task pane sessions
@@ -130,6 +204,7 @@ cmd_handoff() {
   sync_board
   mutex_off; trap - EXIT
   say "$id → review/. Lock stays until the Integrator lands it. Session may close."
+  [ "$pushed" -eq 0 ] && note "⚠ push failed ×3 — feat/$id is local-only; the board moved anyway and land merges the local branch"
   case "$notice" in
     integrate) say "all lanes done — nothing left building. Integrate now: \"You are the INTEGRATOR. Land everything in ops/board/review/.\"";;
     queue)     note "$nrdy ready task(s) still queued — say start (or: bash ops/polaris fleet $nrdy --launch) to build them";;
@@ -273,9 +348,17 @@ cmd_pack() { # pack <ID> — the whole context for one task, in ONE call. Read-o
   owned="$(fm_list files_owned "$f" 2>/dev/null | grep . || true)"
   ctx="$(fm_list context_files "$f" 2>/dev/null | grep . || true)"
   contract="$(fm_get contract "$f" 2>/dev/null || true)"
+  # tier: route's line 1 for this task (ops/contracts/model-routing.md) — a model: frontmatter
+  # tier word wins; a literal model name keeps the derived tier (informational), exactly as route.
+  local pov ptier
+  pov="$(fm_get model "$f" 2>/dev/null || true)"
+  case "$pov" in
+    strong|mid|cheap) ptier="$pov";;
+    *) ptier="$(tier_for "$pts" "$risk")";;
+  esac
 
   printf 'PACK %s — %s\n' "$id" "$title"
-  printf 'points %s · risk %s · column %s\n' "${pts:-?}" "${risk:-normal}" "$(task_col "$id" 2>/dev/null || echo '?')"
+  printf 'points %s · risk %s · column %s · tier %s\n' "${pts:-?}" "${risk:-normal}" "$(task_col "$id" 2>/dev/null || echo '?')" "$ptier"
   printf 'This is your whole context. You should not need to go hunting for more.\n'
 
   # 1. the task itself — Why becomes the commit body, acceptance boxes are the definition of done.
@@ -365,10 +448,7 @@ cmd_resume() { # resume [ID] — re-enter an already-claimed active task without
   local wt; wt="$(wt_path "$id")"
   if [ ! -d "$wt" ]; then
     note "worktree was gone — recreating it from feat/$id"
-    mkdir -p "$PRIMARY/.polaris/wt"
-    git -C "$PRIMARY" worktree add -q "$wt" "feat/$id" 2>/dev/null \
-      || git -C "$PRIMARY" worktree add -q "$wt" -b "feat/$id" "$BASE" 2>/dev/null \
-      || die "could not recreate the worktree for $id"
+    wt_add "$id"   # T-059: same primitive as claim — honest stderr, index.lock-only retries
   fi
   say "resumed $id → cd \"$wt\""
   note "task file: \"$BOARD/active/$id.md\" (primary-anchored — worktrees do not contain ops/board)"

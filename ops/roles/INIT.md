@@ -6,7 +6,7 @@ The point is that a human says "install polaris" once and ends up ready to build
 ## 0. Preconditions
 - **Has INIT already run?** The test is `ops/CONVENTIONS.md` — INIT writes it and nothing else does. It exists → say so and offer only (a) refresh MAP.md, (b) re-run the interview, (c) abort; NEVER re-initialize over a live board. It does NOT exist → this repo has never been initialized; proceed, and do not ask. An `ops/board/` with no `ops/CONVENTIONS.md` is a bare install from an older kit, not a live board — ignore it, `init-board` in step 3 is idempotent.
 - `chmod +x ops/polaris ops/hooks/ownership-guard.sh` (once). If the kit's `.claude/` folder is present, tell the human: Claude Code will ask to trust the project hook on first use — that hook is the write-time ownership guard, approving it is expected.
-- Run `bash ops/polaris doctor`. On a machine's first POLARIS use, also run `bash ops/polaris doctor --selftest` (≈15s, throwaway repo). Windows: run everything in **Git Bash** (ships with Git for Windows) — PowerShell is not supported.
+- Run `bash ops/polaris doctor`. On a machine's first POLARIS use, also run `bash ops/polaris doctor --selftest` (throwaway repo; it runs for MINUTES, not seconds — give it an explicit timeout well above the measured time, and past your harness's cap follow `ops/PROTOCOL.md` § LONG COMMANDS). Windows: run everything in **Git Bash** (ships with Git for Windows) — PowerShell is not supported.
 
 ## 1. Survey — hard token budget, no exceptions
 Greenfield (near-empty repo): skip to step 2; MAP.md is written from the interview instead.
@@ -114,6 +114,9 @@ builders: subagents         # subagents (a work request runs the whole loop in o
                             # build, integrate — each role a fresh subagent; needs a harness with a subagent
                             # tool, e.g. Claude Code) | panes (conductor stops after planning; Builders run
                             # in terminal sessions per autolaunch:). No subagent tool → behaves as panes.
+model_strong: <name>        # optional; literal model name per tier — `polaris route` picks the tier
+model_mid: <name>           # from points+risk, CONDUCTOR spawns and `fleet` panes carry the name.
+model_cheap: <name>         # Omit all three unless the human names models (model-routing.md).
 # autonomy: standard         # standard | trusted — composition macro; nothing reads it directly. trusted =
                             # plan_gate: auto + builder_questions: default-safe + evolve_apply: auto-reversible,
                             # applied only where each of those is unset below — an explicit knob always wins

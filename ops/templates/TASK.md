@@ -12,11 +12,16 @@ time_criticality:
 risk_opportunity:
 wsjf:                    # (value + time_criticality + risk_opportunity) / points
 risk: normal             # high = auth/payments/schema/prod-config → human approves before merge
+model:                   # optional; strong|mid|cheap tier word, or a literal model name — overrides
+                         # the tier `polaris route` derives for this task. ops/contracts/model-routing.md
 status: backlog          # mirrors the folder; folder is the source of truth
 owner: null              # set by `polaris claim`
 branch: null             # set by `polaris claim`: feat/<ID>
 files_owned:             # ONLY paths this task may create/edit — disjoint vs all ready+active.
   -                      # exact path · `dir/` prefix · glob like src/api/util_*.py (* crosses /)
+approved:                # optional; human-granted exceptions to `ask` rules. `polaris approve`
+                         # writes these — a Planner never hand-edits them. Empty = no approvals.
+  -                      # <scope> — <who>, <date>: <why>
 context_files:           # read-only patterns to imitate (2–5 paths). Builders read nothing else.
   -
 depends_on: []           # task is not ready until all of these are in done/

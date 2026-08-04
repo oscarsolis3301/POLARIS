@@ -90,6 +90,29 @@ cmd_status() {
     any=1; bid="$(basename "$bf" .md)"
     printf '  %s · %s\n' "$bid" "$(grep '⛔' "$bf" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*-*[[:space:]]*//' | grep . || echo 'no reason recorded — open the task')"
   done
+  # SHARED CHECKOUT (ops/contracts/shared-checkout.md). A second chat's FIRST read is `status`, and
+  # two things that change what it may do were invisible here: someone is mid-landing (the board
+  # looks quiet while a land is in flight), and someone's uncommitted work is stashed rather than
+  # gone. Both print ONLY when they exist — on a quiet repo this output is byte-identical to before,
+  # which is the whole reason they are appended rather than folded into the table above.
+  local lse lho lag
+  lse="$LOCKS/.int-lease"
+  if [ -d "$lse" ]; then
+    lag="$(cat "$lse/epoch" 2>/dev/null | tr -d ' \r\n' || true)"
+    case "$lag" in ''|*[!0-9]*) lag="$(date +%s)";; esac
+    lho="$(cat "$lse/who" 2>/dev/null | tr -d '\r\n' || true)"
+    printf 'integration lane: held by %s · %sm — a session is landing; wait for it, never steal\n' \
+      "${lho:-unknown}" "$(( ( $(date +%s) - lag ) / 60 ))"
+  fi
+  # One line per park, newest first. `git stash list` is the source of truth, not a guess: the human
+  # can act on the printed stash@{N} directly if unpark's newest-first order is not what they want.
+  local pk
+  while IFS= read -r pk; do
+    [ -n "$pk" ] || continue
+    printf 'parked: %s — bash ops/polaris unpark restores the newest\n' "$pk"
+  done <<EOF
+$(git -C "$PRIMARY" stash list --format='%gd %gs' 2>/dev/null | grep 'polaris/park-' || true)
+EOF
 }
 
 cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatter a Planner actually
@@ -118,7 +141,8 @@ cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatte
   done
 }
 
-cmd_sweep() { # report orphans + stale + remote strays; --fix removes true orphans and merged strays
+cmd_sweep() { # report orphans + stale locks + >24h bg jobs + remote strays; --fix removes true
+  # orphans, rotates finished/crashed stale jobs, and deletes merged strays
   local fix="${1:-}" d id found=0
   for d in "$LOCKS"/*/; do
     [ -e "$d" ] || break
@@ -129,6 +153,29 @@ cmd_sweep() { # report orphans + stale + remote strays; --fix removes true orpha
     elif task_file "$id" active >/dev/null && [ "$(lock_age "$id")" -gt $((STALE_H*3600)) ]; then
       found=1; printf '⚠ STALE lock: %s (%ss > %sh) — take it over: polaris resume %s · or hand back: polaris release %s --to ready\n' \
         "$id" "$(lock_age "$id")" "$STALE_H" "$id" "$id"
+    fi
+  done
+  # background jobs (ops/contracts/bg-jobs.md): a non-.prev job dir whose start is >24h old is
+  # leftover runtime state. Always reported; --fix rotates it to <name>.prev (archive, never
+  # delete) — but NEVER a still-running job: rotating a live job's dir out from under its runner
+  # is destruction, not hygiene. `.prev` archives are never swept (ONE slot per name, no chains).
+  local bgd bgn bgs bga bgp
+  for bgd in "$PRIMARY/.polaris/bg"/*/; do
+    [ -e "$bgd" ] || break
+    bgn="$(basename "$bgd")"
+    case "$bgn" in *.prev) continue;; esac
+    bgs="$(cat "$bgd/start" 2>/dev/null | tr -d ' \r\n')"
+    case "$bgs" in ''|*[!0-9]*) bgs=0;; esac
+    bga=$(( $(date +%s) - bgs ))
+    [ "$bga" -gt 86400 ] || continue
+    bgp="$(cat "$bgd/pid" 2>/dev/null | tr -d ' \r\n')"
+    if [ ! -f "$bgd/rc" ] && bg_alive "$bgp"; then
+      found=1; printf '⚠ STALE bg job: %s (%sh, pid %s still alive) — collect: bash ops/polaris bg wait %s (a live job is never auto-rotated)\n' \
+        "$bgn" "$(( bga / 3600 ))" "$bgp" "$bgn"
+    else
+      found=1; printf '⚠ STALE bg job: %s (%sh old, finished or crashed) — bash ops/polaris sweep --fix rotates it to %s.prev\n' \
+        "$bgn" "$(( bga / 3600 ))" "$bgn"
+      [ "$fix" = "--fix" ] && { bg_rotate "$bgn"; note "rotated to $bgn.prev"; }
     fi
   done
   # remote hygiene: a landed task should have taken its feat/<ID> branch with it (done does this
@@ -190,6 +237,12 @@ cmd_doctor() {
   say "git $gv · primary: $PRIMARY · locks: $LOCKS"
   awk -v v="$gv" 'BEGIN{split(v,a,"."); exit !(a[1]>2 || (a[1]==2 && a[2]>=5))}' \
     || die "git >= 2.5 required for worktrees"
+  # `park` is `git stash push --include-untracked -m <name>`, and `stash push` landed in git 2.13
+  # (the old `stash save` cannot take untracked files AND a name). Below that the shared checkout's
+  # "a dirty tree is parked, never asked about" promise silently degrades to the old dirty-tree die.
+  # A warn, not a die: everything else in POLARIS still works on 2.5.
+  awk -v v="$gv" 'BEGIN{split(v,a,"."); exit !(a[1]>2 || (a[1]==2 && a[2]>=13))}' \
+    || note "⚠ git $gv predates 2.13 — 'git stash push' is missing, so park/unpark cannot run and a dirty shared checkout falls back to a die. Upgrade git."
   git -C "$PRIMARY" show-ref --verify -q "refs/heads/$BASE" || note "⚠ base branch '$BASE' not found — set base: in CONVENTIONS.md"
   board_materialize || true   # fresh clone: ops/board/ missing + polaris/board present → rebuild it
   # CONVENTIONS.md is written by INIT and by nothing else — its absence is THE test for
@@ -234,6 +287,27 @@ cmd_doctor() {
       case "$ds" in *[!0-9]*) note "⚠ drain_slices: '$ds' not a number — behaving as 2"; ds="";; esac
       note "drain: ${dr:-queue} · drain_slices: ${ds:-2} (autonomy never composes drain)"
     fi
+  fi
+  # The two shared-checkout knobs (ops/contracts/shared-checkout.md). They are NOT composed by
+  # autonomy: — they are minutes, and a typo in either changes how long a session waits for the
+  # integration lane or how old a lease must be before it is STOLEN, on a path where the wrong
+  # answer is silent. int_on fails closed to the default, so the ⚠ names what will actually happen
+  # rather than what was asked for. Unset = default = silence: a warning that fires when nothing is
+  # wrong is a warning people learn to scroll past.
+  local iwm ism
+  iwm="$(cfg integration_wait_minutes "")"
+  ism="$(cfg integration_stale_minutes "")"
+  if [ -n "$iwm" ]; then
+    case "$iwm" in
+      *[!0-9]*) note "⚠ integration_wait_minutes: '$iwm' is not a whole number of minutes — the integration lane will use the default (10)";;
+      0)        note "⚠ integration_wait_minutes: 0 — the lane will never wait; a busy lane returns 'queued:' on the first look";;
+    esac
+  fi
+  if [ -n "$ism" ]; then
+    case "$ism" in
+      *[!0-9]*) note "⚠ integration_stale_minutes: '$ism' is not a whole number of minutes — the integration lane will use the default (45)";;
+      0)        note "⚠ integration_stale_minutes: 0 — every held lease counts as abandoned and is stolen on sight; two sessions can then land at once";;
+    esac
   fi
   mkdir -p "$LOCKS" && [ -w "$LOCKS" ] || die "lock dir not writable: $LOCKS"
   case "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null)" in .*|../*) note "⚠ origin is a RELATIVE path — breaks in worktrees; use an absolute URL";; esac
@@ -1245,6 +1319,59 @@ EOF
   return 0
 }
 
+cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — which model TIER runs a
+  # piece of work (ops/contracts/model-routing.md). triage answers "which lane"; this answers
+  # "which model", with the same shape: line 1 is ALWAYS exactly one bare word — strong | mid |
+  # cheap — so callers branch on it blind, and a `   model: <name>` note follows ONLY when the
+  # winning tier's CONVENTIONS knob (model_strong/mid/cheap) is set, or the task pins a literal
+  # model: name in frontmatter. Precedence: explicit --points/--risk (pure, board-free) → --role →
+  # <ID>. Routing never blocks work — malformed points and unknown roles fall back to mid, rc 0;
+  # only no-args and an unknown ID are errors. Read-only by contract: touches no lock, writes no
+  # board file, fires no hook.
+  local id="" role="" pts="" rsk="" pts_set="" rsk_set=""
+  local tier="" mdl="" ov="" f="" rnote=""
+  local u="usage: polaris route <ID> | --role <ROLE> | --points <N> [--risk <R>]"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --role)   role="${2:-}"; if [ $# -ge 2 ]; then shift 2; else shift; fi;;
+      --points) pts_set=1; pts="${2:-}"; if [ $# -ge 2 ]; then shift 2; else shift; fi;;
+      --risk)   rsk_set=1; rsk="${2:-}"; if [ $# -ge 2 ]; then shift 2; else shift; fi;;
+      -*)       die "$u";;
+      *)        if [ -z "$id" ]; then id="$1"; else die "$u"; fi; shift;;
+    esac
+  done
+  if [ -n "$pts_set$rsk_set" ]; then
+    # pure mode: board-free. A missing half defaults (--risk normal; --points empty → mid inside
+    # tier_for), so a conductor can ask about work that has no task file yet.
+    tier="$(tier_for "$pts" "${rsk:-normal}")"
+  elif [ -n "$role" ] && [ "$role" != "BUILDER" ]; then
+    case "$role" in
+      INIT|PLANNER|INTEGRATOR|EVOLVE|CONDUCTOR) tier=strong;;
+      SOLO|scout) tier=mid;;
+      *) tier=mid; rnote="unknown role '$role' — mid (routing never blocks work)";;
+    esac
+  elif [ "$role" = "BUILDER" ] && [ -z "$id" ]; then
+    tier=mid; rnote="BUILDER routes per task — bash ops/polaris route <ID>"
+  elif [ -n "$id" ]; then
+    f="$(task_file "$id" 2>/dev/null || true)"
+    [ -n "$f" ] && [ -f "$f" ] || die "route: no task $id on the board — check: ops/polaris board-fm"
+    tier="$(tier_for "$(fm_get points "$f")" "$(fm_get risk "$f")")"
+    ov="$(fm_get model "$f" 2>/dev/null || true)"
+    case "$ov" in
+      strong|mid|cheap) tier="$ov";;                # tier-word override: that tier wins outright
+      "") :;;
+      *) mdl="$ov";;                                # literal model name — line 1 stays the derived
+    esac                                            # tier (informational); the note carries it
+  else
+    die "$u"
+  fi
+  printf '%s\n' "$tier"
+  [ -n "$mdl" ] || mdl="$(model_for_tier "$tier")"
+  [ -n "$mdl" ] && note "model: $mdl"
+  [ -n "$rnote" ] && note "$rnote"
+  return 0
+}
+
 cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS suite (test/lint/
   # typecheck/build, uat if set), then drift --strict, then doctor's env check. Runs EVERY
   # check even after a red — one pass paints the whole picture — and exits 1 if anything was
@@ -1339,6 +1466,7 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   # The verdict is recomputed on EVERY invocation; only the hook is memoised. That split is what
   # lets an agent re-run finish freely while chasing pendings without muting the signal.
   local force="" PEND=0 CAV=0 CAVS="" br dr n out w it stamp key fired bl rd ib lk f line
+  local lho lag lsm
   [ "${1:-}" = "--force" ] && force=1
   fin_pending() { PEND=$((PEND+1)); printf '⛔ pending: %s\n' "$1"; }
   fin_caveat()  { CAV=$((CAV+1));  CAVS="$CAVS$1
@@ -1363,8 +1491,11 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   [ "$br" = "$BASE" ] || fin_pending "on branch $br, not $BASE — a run ends on the base branch (git switch $BASE)"
   # Same porcelain read cmd_qa's suite stamp uses, deliberately: if the two disagreed on "clean",
   # finish could bless a tree for which qa silently re-ran the whole suite.
+  # The remedy now names the third option. On a SHARED checkout the dirt is often not even this
+  # session's, so "commit or discard" asks one chat to make a call about another's work — exactly
+  # the git question ops/contracts/shared-checkout.md exists to stop asking. park is reversible.
   [ -z "$(git -C "$PRIMARY" status --porcelain 2>/dev/null | head -1)" ] \
-    || fin_pending "uncommitted changes in the working tree — commit or discard them before calling the work done"
+    || fin_pending "uncommitted changes in the working tree — commit or discard them before calling the work done, or park it: bash ops/polaris park"
   n=$(fin_count active); [ "$n" -eq 0 ] || fin_pending "$n building — $(fin_ids active)"
   n=$(fin_count review); [ "$n" -eq 0 ] || fin_pending "$n waiting to land — $(fin_ids review) (audit + land + seal them)"
   # drain: (ops/contracts/hands-free-knobs.md) decides whether a queued task blocks the close. Under
@@ -1392,6 +1523,25 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   done <<EOF
 $(git -C "$PRIMARY" for-each-ref --format='%(refname:short)' 'refs/heads/integrate/*' 2>/dev/null)
 EOF
+  # The integration lease (ops/contracts/shared-checkout.md). A land in flight leaves the board
+  # looking quiet — the task is out of review/ and not yet in done/ — so nothing else on this list
+  # can see it, and a run declared over here would be declared over mid-landing. OURS never gates:
+  # a finish nested inside our own landing pass is not a conflict. Past integration_stale_minutes
+  # the holder is abandoned by definition and the next `int_on` steals it automatically, so that is
+  # a caveat — gating on a crashed session would make the run un-finishable for 45 minutes.
+  if [ -d "$LOCKS/.int-lease" ] && [ "$(cat "$LOCKS/.int-lease/pid" 2>/dev/null | tr -d ' \r\n')" != "$$" ]; then
+    lho="$(cat "$LOCKS/.int-lease/who" 2>/dev/null | tr -d '\r\n')"; lho="${lho:-unknown}"
+    lag="$(cat "$LOCKS/.int-lease/epoch" 2>/dev/null | tr -d ' \r\n')"
+    case "$lag" in ''|*[!0-9]*) lag="$(date +%s)";; esac
+    lag=$(( ( $(date +%s) - lag ) / 60 ))
+    lsm="$(cfg integration_stale_minutes 45)"
+    case "$lsm" in ''|*[!0-9]*) lsm=45;; esac
+    if [ "$lag" -ge "$lsm" ]; then
+      fin_caveat "the integration lease is stale — $lho has held it ${lag}m (> ${lsm}m) — the next land steals it automatically"
+    else
+      fin_pending "$lho holds the integration lease (${lag}m) — a session is landing; wait for it, then run finish again"
+    fi
+  fi
   for lk in "$LOCKS"/*/; do
     [ -e "$lk" ] || break
     n="$(basename "$lk")"; [ "$n" = ".board-mutex" ] && continue
@@ -1400,6 +1550,24 @@ EOF
     fi
   done
   [ -d "$MUTEX" ] && fin_pending "a board operation still holds the mutex — wait for it, or bash ops/polaris sweep --fix if it is stale"
+  # Background jobs (ops/contracts/bg-jobs.md § finish): a job dir with NO rc file is a suite still
+  # in flight — or a crash nobody collected — and either way the run is not over. rc-file-FIRST,
+  # then the pid, never the reverse (Windows pid reuse). This reads the registry layout ONLY: the
+  # bg module may not even be installed yet, and no .polaris/bg/ dir means silence. `.prev` dirs are
+  # rotation ARCHIVES (bg-jobs.md § v1.2), never live jobs — skipped here exactly like bg_status/sweep.
+  local bgd bgn bgp
+  for bgd in "$PRIMARY"/.polaris/bg/*/; do
+    [ -e "$bgd" ] || break
+    bgn="$(basename "$bgd")"
+    case "$bgn" in *.prev) continue;; esac
+    [ -f "$bgd/rc" ] && continue
+    bgp="$(cat "$bgd/pid" 2>/dev/null | tr -d ' \r\n')"
+    if [ -n "$bgp" ] && kill -0 "$bgp" 2>/dev/null; then
+      fin_pending "background job $bgn still running — collect it: bash ops/polaris bg wait $bgn"
+    else
+      fin_pending "background job $bgn crashed? no verdict recorded — check it: bash ops/polaris bg status $bgn"
+    fi
+  done
   # blocked/ is NEVER a gate. CONDUCTOR.md licenses blocked "with a reason the human has been told",
   # and whether they were told is not mechanically knowable — gating here would either make runs
   # un-finishable or force finish to write board state. So: a caveat the close MUST carry.
@@ -1411,6 +1579,16 @@ EOF
     task_file "$n" active >/dev/null || task_file "$n" review >/dev/null \
       || fin_caveat "worktree .polaris/wt/$n has no active task — bash ops/polaris sweep --fix"
   done
+  # Parked dirt is NEVER a gate. park exists precisely so a shared checkout never has to ask a git
+  # question, so gating on its own remedy would close the loop on itself — but a stash somebody
+  # forgot is exactly what rc 0 must still MENTION, on the same rule blocked/ follows: the run is
+  # over, and something was left behind. One caveat per park, newest first.
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    fin_caveat "parked work is still stashed: $line — bash ops/polaris unpark restores the newest"
+  done <<EOF
+$(git -C "$PRIMARY" stash list --format='%gd %gs' 2>/dev/null | grep 'polaris/park-' || true)
+EOF
   # Local ref read only — NEVER a fetch. A missing or stale origin ref is silence, not a caveat
   # about nothing.
   if has_remote && git -C "$PRIMARY" show-ref -q --verify "refs/remotes/origin/$BASE" 2>/dev/null; then
@@ -1558,15 +1736,19 @@ find_claude_windows() { # pane command wt.exe can actually launch. wt hands its 
   # session even started. So resolve a REAL claude.exe/.cmd and print its FULL Windows path (8.3
   # short form, so "C:\Program Files"-style spaces never break wt's arg re-joining); if only the
   # bash shim exists, wrap it in bash.exe -lc. Prints TAB-separated pane tokens, or nothing.
-  local c p b
+  # $1 (optional): a model name — rides along as `--model <name>` (ops/contracts/model-routing.md);
+  # empty → the token list is byte-identical to an unrouted launch.
+  local m="${1:-}" c p b
   for c in claude.exe claude.cmd; do
     p="$(command -v "$c" 2>/dev/null)" && [ -n "$p" ] || continue
     if command -v cygpath >/dev/null 2>&1; then p="$(cygpath -ws "$p" 2>/dev/null || cygpath -w "$p" 2>/dev/null || printf '%s' "$p")"; fi
-    printf '%s\tstart' "$p"; return 0
+    if [ -n "$m" ]; then printf '%s\t--model\t%s\tstart' "$p" "$m"; else printf '%s\tstart' "$p"; fi
+    return 0
   done
   if command -v claude >/dev/null 2>&1 && b="$(command -v bash 2>/dev/null)" && [ -n "$b" ]; then
     if command -v cygpath >/dev/null 2>&1; then b="$(cygpath -ws "$b" 2>/dev/null || cygpath -w "$b" 2>/dev/null || printf '%s' "$b")"; fi
-    printf '%s\t-lc\tclaude start' "$b"; return 0
+    if [ -n "$m" ]; then printf '%s\t-lc\tclaude --model %s start' "$b" "$m"; else printf '%s\t-lc\tclaude start' "$b"; fi
+    return 0
   fi
   return 1
 }
@@ -1603,15 +1785,37 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
   local cap launch_n; cap="$(cfg autolaunch_max 3)"; case "$cap" in ''|*[!0-9]*) cap=3;; esac
   launch_n="$n"; [ "$launch_n" -gt "$cap" ] && launch_n="$cap"
 
+  # Model routing (ops/contracts/model-routing.md § Consumers): panes claim RACILY — any pane may
+  # end up holding any ready task — so every launched session rides the MAX tier over ready/
+  # (strong > mid > cheap; a task's model: frontmatter counts when it names a tier). The max tier's
+  # knob unset → no token, and the launch command stays byte-identical to an unrouted fleet.
+  local ftier="" fmodel="" mtok="" tf tov tt
+  for tf in "$BOARD/ready/"*.md; do
+    [ -e "$tf" ] || break
+    [ "$(basename "$tf")" = "IDEAS.md" ] && continue
+    tov="$(fm_get model "$tf" 2>/dev/null || true)"
+    case "$tov" in
+      strong|mid|cheap) tt="$tov";;
+      *) tt="$(tier_for "$(fm_get points "$tf")" "$(fm_get risk "$tf")")";;
+    esac
+    case "$tt" in
+      strong) ftier="strong";;
+      mid)    [ "$ftier" = "strong" ] || ftier="mid";;
+      cheap)  [ -n "$ftier" ] || ftier="cheap";;
+    esac
+  done
+  [ -n "$ftier" ] && fmodel="$(model_for_tier "$ftier")"
+  [ -n "$fmodel" ] && mtok=" --model $fmodel"
+
   local claude_cmd; claude_cmd="$(find_claude || true)"
   local wt_pane=""
-  command -v wt.exe >/dev/null 2>&1 && wt_pane="$(find_claude_windows || true)"
+  command -v wt.exe >/dev/null 2>&1 && wt_pane="$(find_claude_windows "$fmodel" || true)"
   if command -v tmux >/dev/null 2>&1 && [ -n "$claude_cmd" ]; then
     if [ -n "$dry" ]; then
-      note "[dry-run] tmux: $launch_n windows, each running: $claude_cmd \"$msg\""
+      note "[dry-run] tmux: $launch_n windows, each running: $claude_cmd$mtok \"$msg\""
     else
       tmux has-session -t polaris 2>/dev/null || tmux new-session -d -s polaris -c "$PRIMARY"
-      for i in $(seq 1 "$launch_n"); do tmux new-window -t polaris -c "$PRIMARY" "$claude_cmd \"$msg\""; done
+      for i in $(seq 1 "$launch_n"); do tmux new-window -t polaris -c "$PRIMARY" "$claude_cmd$mtok \"$msg\""; done
       say "fleet of $launch_n launched in tmux — attach: tmux attach -t polaris · watch: ops/polaris dash"
     fi
   elif [ -n "$wt_pane" ]; then

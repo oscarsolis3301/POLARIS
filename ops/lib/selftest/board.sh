@@ -61,7 +61,8 @@ drill_grant() {
     "$SELF" help | grep -q 'grant' || { echo "USAGE FAIL: grant missing from help"; exit 1; }
     printf -- '---\nid: T-G\npoints: 1\nwsjf: 6\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/g.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-G.md
     printf -- '---\nid: T-H\npoints: 1\nwsjf: 1\nstatus: ready\nfiles_owned:\n  - src/h/\n---\n' > ops/board/ready/T-H.md
-    "$SELF" claim T-G >/dev/null
+    "$SELF" claim T-G > "$T/tg.out" 2>&1
+    grep -q 'overlap' "$T/tg.out" && { echo "CLAIM CLEAN NOISE FAIL (the disjointness gate must be silent on a clean claim)"; exit 1; }
     "$SELF" grant T-H src/free.txt -m why >/dev/null 2>&1 && { echo "GRANT COLUMN FAIL (ready task must refuse — grant is for active/ only)"; exit 1; }
     "$SELF" grant T-G src/free.txt >/dev/null 2>&1 && { echo "GRANT -M FAIL (missing -m must refuse)"; exit 1; }
     gpre="$(git rev-parse refs/heads/polaris/board)"
@@ -77,7 +78,93 @@ drill_grant() {
     git log -1 --format=%s refs/heads/polaris/board | grep -q '^chore(board): grant T-G src/free.txt$' || { echo "GRANT COMMIT FAIL (one board commit on polaris/board, contract subject)"; exit 1; }
     ( cd .polaris/wt/T-G && echo f > src/free.txt && git add -A && git commit -qm ok \
       && "$SELF" verify T-G >/dev/null ) || { echo "GRANT VERIFY FAIL (granted path must pass ownership)"; exit 1; }
+    # ---- T-059 claim hardening (ops/contracts/shared-checkout.md): id_ok pre-lock + the claim-time
+    # disjointness gate, drilled here where a claimed task (T-G, active) already owns src/g.txt.
+    "$SELF" claim 'bad..id' >/dev/null 2>"$T/badid.err" && { echo "CLAIM BADID FAIL (invalid ID must die)"; exit 1; }
+    grep -q 'invalid task ID' "$T/badid.err" || { echo "CLAIM BADID MSG FAIL (id_ok must name the bad ID)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/bad..id" ] && { echo "CLAIM BADID LOCK FAIL (id_ok must run BEFORE lock_take)"; exit 1; }
+    gvpre="$(git rev-parse refs/heads/polaris/board)"
+    printf -- '---\nid: T-OV\npoints: 1\nwsjf: 9\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/\nverify: []\n---\n## Notes\n' > ops/board/ready/T-OV.md
+    "$SELF" claim T-OV >/dev/null 2>"$T/ov.err" && { echo "CLAIM GATE EXPLICIT FAIL (overlap with active T-G must refuse)"; exit 1; }
+    grep -q "T-OV files_owned 'src/' overlaps active T-G 'src/g.txt'" "$T/ov.err" || { echo "CLAIM GATE NAME FAIL (die must name the task and both patterns)"; exit 1; }
+    [ -f ops/board/ready/T-OV.md ] || { echo "CLAIM GATE EXPLICIT MUTATE FAIL (an explicit refusal must move nothing)"; exit 1; }
+    [ "$(git rev-parse refs/heads/polaris/board)" = "$gvpre" ] || { echo "CLAIM GATE EXPLICIT COMMIT FAIL (an explicit refusal must not commit)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-OV" ] && { echo "CLAIM GATE EXPLICIT LOCK FAIL (the refused claim must release its lock)"; exit 1; }
+    "$SELF" claim > "$T/ovauto.out" 2>&1 || { echo "CLAIM GATE AUTO RC FAIL (auto-pick must block the overlap and claim the next candidate)"; exit 1; }
+    [ -f ops/board/blocked/T-OV.md ] || { echo "CLAIM GATE BLOCK FAIL (the overlapping candidate must auto-block)"; exit 1; }
+    grep -q 're-groom or wait for T-G' ops/board/blocked/T-OV.md || { echo "CLAIM GATE NOTE FAIL (the ⛔ note must name the remedy)"; exit 1; }
+    git log --format=%s refs/heads/polaris/board | grep -qx 'chore(board): block T-OV (ownership overlap)' || { echo "CLAIM GATE COMMIT FAIL (ONE board commit, contract subject)"; exit 1; }
+    grep -q '"ev":"blocked","id":"T-OV"' ops/board/EVENTS.ndjson || { echo "CLAIM GATE EVENT FAIL (the auto-block must emit ev blocked)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-OV" ] && { echo "CLAIM GATE AUTOLOCK FAIL (the blocked candidate's lock must release)"; exit 1; }
+    [ -f ops/board/active/T-H.md ] || { echo "CLAIM GATE NEXT FAIL (claim must take the next candidate)"; exit 1; }
+    "$SELF" release T-H --to ready -m drill >/dev/null
+    rm -f ops/board/blocked/T-OV.md
+    # wt_add honesty: a junk dir at the worktree path is NOT an index.lock race — claim must die
+    # re-emitting git's real stderr (never the old blanket "git index busy"), and resume must
+    # recreate the worktree through the same wt_add primitive once the junk is gone.
+    mkdir -p .polaris/wt/T-H && : > .polaris/wt/T-H/junk
+    "$SELF" claim T-H >/dev/null 2>"$T/wterr.err" && { echo "WT HONEST RC FAIL (worktree add into a junk dir must die)"; exit 1; }
+    grep -q 'git index busy' "$T/wterr.err" && { echo "WT HONEST MSG FAIL (the blanket index-busy guess must be gone)"; exit 1; }
+    grep -q 'already exists' "$T/wterr.err" || { echo "WT HONEST STDERR FAIL (git's real error must re-emit verbatim)"; exit 1; }
+    rm -rf .polaris/wt/T-H
+    "$SELF" resume T-H >/dev/null 2>&1 || { echo "WT RESUME FAIL (resume must recreate the worktree via wt_add)"; exit 1; }
+    [ -d .polaris/wt/T-H ] || { echo "WT RESUME DIR FAIL (recreated worktree missing)"; exit 1; }
+    "$SELF" release T-H --to ready -m drill >/dev/null
+    # ---- end T-059 claim hardening ----
     "$SELF" release T-G --to ready -m drill >/dev/null
     rm -f ops/board/ready/T-G.md ops/board/ready/T-H.md
     # ================== end T-005 grant drills ==================
+}
+drill_claimguard() {
+    # ---- T-062 claimguard drill (ops/contracts/shared-checkout.md § Executable check) ----
+    # claim's three isolation gates, end to end: (1) an invalid ID dies via id_ok BEFORE lock_take,
+    # (2) a planted ref literally named `feat` — local AND scratch origin — is ARCHIVED as
+    # stray/feat-<sha7> and the claim then succeeds, (3) two overlapping ready tasks → auto-pick
+    # blocks the second in blocked/ with the remedy note and claims the next candidate.
+    "$SELF" claim 'cg..bad' >/dev/null 2>"$T/cg1.err" && { echo "CLAIMGUARD BADID FAIL (invalid ID must die)"; exit 1; }
+    grep -q 'invalid task ID' "$T/cg1.err" || { echo "CLAIMGUARD BADID MSG FAIL (id_ok must name the refusal)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/cg..bad" ] && { echo "CLAIMGUARD BADID LOCK FAIL (id_ok must run BEFORE lock_take)"; exit 1; }
+    # (2) in a NESTED throwaway repo: the main fixture's lingering feat/<ID> branches make a ref
+    # literally named `feat` un-plantable there (git's ref D/F rule) — and the nested repo dies
+    # whole at the end, locks, worktrees and refs with it (T-046 hermeticity by construction).
+    git init -q -b main "$T/cgrepo" 2>/dev/null || { git init -q "$T/cgrepo"; git -C "$T/cgrepo" symbolic-ref HEAD refs/heads/main; }
+    ( set -e; cd "$T/cgrepo"; git config user.email t@t; git config user.name t
+      mkdir -p src; echo x > src/cg.txt
+      git add -A; git commit -qm init
+      "$SELF" init-board >/dev/null
+      git add -A; git commit -qm board
+      git init -q --bare "$T/cg-origin.git"
+      git remote add origin "$T/cg-origin.git"
+      git push -qu origin main >/dev/null 2>&1
+      git branch feat main
+      git push -q origin main:refs/heads/feat
+      cg_sha="$(git rev-parse refs/heads/feat)"
+      cg_7="$(git rev-parse --short=7 refs/heads/feat)"
+      printf -- '---\nid: T-CG\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/cg.txt\nverify: []\n---\n' > ops/board/ready/T-CG.md
+      "$SELF" claim T-CG > "$T/cg2.out" 2>&1 || { cat "$T/cg2.out"; echo "CLAIMGUARD STRAY CLAIM FAIL (a stray feat ref must be repaired, never fatal)"; exit 1; }
+      [ -f ops/board/active/T-CG.md ] || { echo "CLAIMGUARD STRAY MOVE FAIL (the claim must complete)"; exit 1; }
+      [ -d .polaris/wt/T-CG ] || { echo "CLAIMGUARD STRAY WT FAIL (the worktree must exist)"; exit 1; }
+      git show-ref --verify -q refs/heads/feat && { echo "CLAIMGUARD STRAY LOCAL FAIL (local feat must be renamed away)"; exit 1; }
+      [ "$(git rev-parse "refs/heads/stray/feat-$cg_7")" = "$cg_sha" ] || { echo "CLAIMGUARD STRAY ARCHIVE FAIL (local feat must be ARCHIVED as stray/feat-<sha7>)"; exit 1; }
+      git ls-remote origin refs/heads/feat | grep -q . && { echo "CLAIMGUARD STRAY ORIGIN FAIL (origin's feat must be archived away)"; exit 1; }
+      [ "$(git ls-remote origin "refs/heads/stray/feat-$(printf '%.7s' "$cg_sha")" | cut -f1)" = "$cg_sha" ] || { echo "CLAIMGUARD STRAY ORIGIN ARCHIVE FAIL (origin's feat must be RENAMED, never deleted)"; exit 1; }
+    ) || exit 1
+    rm -rf "$T/cgrepo" "$T/cg-origin.git"
+    # (3) overlap auto-block, in the main fixture: A active, B overlaps A (top wsjf), C is free —
+    # auto-pick must block B with the remedy ON THE RECORD and claim C in the same pass.
+    printf -- '---\nid: T-CGA\npoints: 1\nwsjf: 9\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/cga.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-CGA.md
+    "$SELF" claim T-CGA >/dev/null
+    printf -- '---\nid: T-CGB\npoints: 1\nwsjf: 8\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/cga.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-CGB.md
+    printf -- '---\nid: T-CGC\npoints: 1\nwsjf: 1\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/cgc.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-CGC.md
+    "$SELF" claim > "$T/cg3.out" 2>&1 || { cat "$T/cg3.out"; echo "CLAIMGUARD OVERLAP RC FAIL (auto-pick must block the overlap and claim the next)"; exit 1; }
+    [ -f ops/board/blocked/T-CGB.md ] || { echo "CLAIMGUARD OVERLAP BLOCK FAIL (the overlapping candidate must auto-move to blocked/)"; exit 1; }
+    grep -q 're-groom or wait for T-CGA' ops/board/blocked/T-CGB.md || { echo "CLAIMGUARD OVERLAP NOTE FAIL (the ⛔ note must carry the remedy)"; exit 1; }
+    git log --format=%s refs/heads/polaris/board | grep -qx 'chore(board): block T-CGB (ownership overlap)' || { echo "CLAIMGUARD OVERLAP COMMIT FAIL (ONE board commit, contract subject)"; exit 1; }
+    grep -q '"ev":"blocked","id":"T-CGB"' ops/board/EVENTS.ndjson || { echo "CLAIMGUARD OVERLAP EVENT FAIL (the auto-block must emit ev blocked)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-CGB" ] && { echo "CLAIMGUARD OVERLAP LOCK FAIL (the blocked candidate's lock must release)"; exit 1; }
+    [ -f ops/board/active/T-CGC.md ] || { echo "CLAIMGUARD OVERLAP NEXT FAIL (claim must take the next candidate)"; exit 1; }
+    "$SELF" release T-CGC --to ready -m drill >/dev/null
+    "$SELF" release T-CGA --to ready -m drill >/dev/null
+    rm -f ops/board/ready/T-CGA.md ops/board/ready/T-CGC.md ops/board/blocked/T-CGB.md
+    git branch -q -D feat/T-CGA feat/T-CGC 2>/dev/null || true
 }

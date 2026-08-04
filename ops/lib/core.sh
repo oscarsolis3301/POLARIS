@@ -62,6 +62,30 @@ who() { # memoize the actor id — `hostname` costs ~524ms on Windows/Git Bash.
   [ -n "${WHO:-}" ] || WHO="${USER:-${USERNAME:-unknown}}@$(hostname 2>/dev/null || echo host)"
 }
 
+# ------------------------------------------------------------- model routing
+tier_for() { # tier_for <points> <risk> — echo exactly ONE tier word (ops/contracts/model-routing.md):
+  # risk ≠ normal → strong (risk dominates points) · points ≥5 → strong · ≤1 → cheap · else mid.
+  # Empty or non-numeric points → mid, NEVER an error — callers pass frontmatter as-is. Pure bash,
+  # zero forks: core.sh rides the write-guard's hot path.
+  local p="${1:-}" r="${2:-normal}"
+  [ "$r" = "normal" ] || { printf 'strong'; return 0; }
+  case "$p" in ''|*[!0-9]*) printf 'mid'; return 0;; esac
+  if [ "$p" -ge 5 ]; then printf 'strong'
+  elif [ "$p" -le 1 ]; then printf 'cheap'
+  else printf 'mid'; fi
+  return 0
+}
+model_for_tier() { # model_for_tier <tier> — the matching CONVENTIONS knob's value (model_strong: /
+  # model_mid: / model_cheap:), or nothing when unset. cfg already strips the knobs' trailing `#`
+  # owner comments. Unknown tier → nothing: an unset mapping must change NOTHING downstream.
+  case "${1:-}" in
+    strong) cfg model_strong "";;
+    mid)    cfg model_mid "";;
+    cheap)  cfg model_cheap "";;
+  esac
+  return 0
+}
+
 # ------------------------------------------------------------------ telemetry
 jesc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\n\r'; }
 evt() { # evt <ev> <id> [note] [pts] — append one ndjson line. Call INSIDE the board
@@ -164,9 +188,24 @@ task_file() { # task_file <ID> [column] — path of the task file, searched or s
 task_col() { task_file "$1" >/dev/null || return 1; dirname "$(task_file "$1")" | xargs basename; }
 
 # --------------------------------------------------- board mutex + commit ops
-mutex_off() { rm -rf "$MUTEX" 2>/dev/null || true; }
+mutex_off() { # release the board mutex if OURS (the $MUTEX/pid mutex_on wrote matches this
+  # process); foreign, missing or unreadable pid → silent no-op, exactly as int_off treats a lease
+  # that is not ours. T-057 armed `trap on_die EXIT` for the whole int_on lease lifetime, so an
+  # unconditional `rm -rf "$MUTEX"` at exit could delete a mutex a DIFFERENT session legitimately
+  # holds and un-serialize two board mutations mid-flight. Removing our OWN mutex is byte-identical
+  # to before. Crashed/legacy (pid-less) mutexes are NOT this function's job: the staleness steal in
+  # mutex_on stays deliberately pid-blind and remains the one recovery path.
+  if [ -d "$MUTEX" ] && [ "$(cat "$MUTEX/pid" 2>/dev/null)" = "$$" ]; then
+    rm -rf "$MUTEX" 2>/dev/null || true
+  fi
+  return 0
+}
 on_die() {  # EXIT trap while a claim/board op is in flight
   mutex_off
+  # T-057: release the integration lease when this process holds it — a crashed holder must not
+  # cost integration_stale_minutes of staleness. ${INT_HELD:-}-guarded on purpose: the 2-module
+  # guard path (core+ownership — no workspace.sh, so no int_off) never sets it and never notices.
+  [ -n "${INT_HELD:-}" ] && int_off || true
   if [ -n "$FAIL_LOCK_ID" ]; then
     lock_drop "$FAIL_LOCK_ID"
     [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$FAIL_LOCK_ID" || true
@@ -186,6 +225,9 @@ mutex_on() {
     sleep 0.2
   done
   date +%s > "$MUTEX/epoch"
+  # Ownership, beside the epoch: mutex_off removes the mutex only when this pid wrote it. The steal
+  # branch above never reads it on purpose — a crashed holder must stay stealable by age alone.
+  printf '%s\n' "$$" > "$MUTEX/pid"
   trap on_die EXIT
 }
 has_remote() { git -C "$PRIMARY" remote get-url origin >/dev/null 2>&1; }

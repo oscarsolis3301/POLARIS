@@ -21,6 +21,10 @@ is reading points, risk, `express:`, `publish:` and the RULES-guarded paths dire
 If `triage` says `full` because the board is empty and the human just asked for something small,
 you may author the single task yourself (step 1) and re-run `triage` to confirm `solo`.
 
+**You share this checkout with other chats, and their dirt is not your question:**
+a dirty shared checkout is parked, never asked about: bash ops/polaris park
+— `bash ops/polaris unpark` puts it back, and a taken lock or a busy lane read the same way (`ops/PROTOCOL.md` § N CHATS, ONE REPO).
+
 ## Context — ONE command
 Once the task exists, `bash ops/polaris pack <ID>` returns all of it in a single call: the task, its
 contract, the house style to match, what you own, the API surface not to break, the traps recorded
@@ -61,6 +65,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    `caveat:` line `finish` printed. **Non-zero** → no H1: what landed, the one pending thing, the
    next command. Full shape in `.claude/output-styles/polaris.md` § How a session ends.
 
+Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+
 ## Hard limits — these end the session, not the gate
 - **Never spawn a subagent.** If the work turns out to need more than one, you were in the wrong
   lane: `bash ops/polaris release <ID> --to ready -m "bigger than solo — needs the full loop"` and
@@ -71,7 +77,16 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 - **Scope = the task.** No drive-by refactors. Something else needs doing → one line in
   `ops/board/backlog/IDEAS.md` for the Planner.
 - **A RULES rejection or a guard block is an answer, not an obstacle.** Hand back or ask. Never
-  edit `ops/RULES.tsv` to get unstuck (Invariant 11).
+  edit `ops/RULES.tsv` to get unstuck (Invariant 11). Converting a rule between `path` and `ask` is
+  a HUMAN decision, never an agent's.
+- **An `ask` scope is decided at step 1, never at step 3.** `ask` = the same denial as `path`, lifted
+  only by a human's recorded approval on the task. You hold the conversation, so you may ask for that
+  yes while authoring the task — and on a literal yes, record it from the primary checkout before you
+  claim: `bash ops/polaris approve <ID> <scope> -m "why"`. Once you are in the worktree you are a
+  builder like any other: A Builder never approves. Hand back — the approval is granted at the plan
+  gate, not mid-build. (`approve` refuses inside `feat/*`, so this is mechanical, not willpower.)
+  Being one context doing the whole path is exactly why this is written down: the temptation to
+  approve your own way forward is strongest where nobody else is watching.
 
 ## What you must NOT skip
 Every gate the long path runs, you run: `verify` (ownership + RULES) · the task's `verify:` list ·

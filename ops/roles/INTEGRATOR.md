@@ -8,6 +8,8 @@ bash ops/polaris audit <ID>        # diff BASE...feat/<ID> ⊆ files_owned — b
 ```
 A violation → `bash ops/polaris kickback <ID> -m "<paths>"` and record it in the Learned log. Do not merge it.
 
+**An approval named in a handoff report is part of what you are landing.** `ask` = the same denial as `path`, lifted only by a human's recorded approval on the task, and when a check passes BECAUSE of one, it says so — a line naming the scope and the approval entry, which reaches you through the builder's handoff report and `audit`'s own output. Read it. That is a human's recorded decision travelling with the diff, and it is deliberately visible at exactly the moment you are merging it; carry it into your report. Nothing mechanical changes: `audit` still passes or fails on its own, and a `path`-rule violation is exactly what it always was — an approval never clears `path` — so kick it back as above.
+
 **Pipelined start (conductor-driven).** You need not wait for the last lane: when the conductor spawns you at the FIRST handoff, audit and land tasks `as they arrive in review/, in dependency order` — a task whose `depends_on` has not yet reached `review/` waits; everything else lands on arrival. `handoff`'s all-review `Integrate now` notice stays the LAST-LANE signal that seal may run — pipelining changes only when landing STARTS, never the suite/seal discipline below or any gate above.
 
 ## 2. HUMAN GATE — `risk: high`
@@ -21,6 +23,11 @@ bash ops/polaris land <ID>           # audits, then squash-merges feat/<ID> into
                                       # (message = task-commit-msg + Landed-from trailer)
 <full test suite + lint + typecheck from CONVENTIONS.md>    # run ONCE, after all lands
 ```
+Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+
+- **The integration lane is shared and lease-serialized — another session may be holding it.**
+  integration lane busy → wait; rc 3 with a queued: line means report queued and retry at the next wave boundary
+  — `land` and `seal` take the lease for you and print that line when the bounded wait runs out. Never spin on the lease and never ask the human about it; conductor-entered, the `queued:` line verbatim IS your report.
 - `land` makes no board write and no evt — a red task on integrate unwinds cleanly with a single `git reset --hard HEAD~1`, nothing uncommitted to lose.
 - **Squash conflict is a planning bug** — disjointness failed. `land` already resets integrate's HEAD and kicks the task back itself (`"squash conflict — planning bug"`); write the matching Learned entry so the Planner tightens ownership, then keep landing the rest.
 - **Empty diff** → `land` resets and dies; you decide (skip + kickback, or investigate) — never an automatic kickback.

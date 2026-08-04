@@ -14,6 +14,10 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   verify [ID]                    diff ⊆ files_owned + run verify: commands (in worktree)
   handoff [ID]                   verify + push + active→review   (lock stays)
   release <ID> [--to ready|blocked] [-m note]   abort: give the task back cleanly
+  park [-m why]                  stash the primary's dirty tree (tracked + untracked) as
+                                 polaris/park-<epoch> — a dirty shared checkout is parked, never
+                                 asked about; reversible in ONE command
+  unpark                         restore the newest polaris/park-* stash (says what came back)
   grant <ID> <path> -m "why"     append one path to a CLAIMED task's files_owned (sanctioned
                                  amendment; REFUSES any overlap with another ready/active task's
                                  ownership — refusal mutates nothing; RULES.tsv still binds)
@@ -111,6 +115,14 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  one integrator) · full (everything else). Reasons follow on
                                  stderr-style note lines. Decide with this, never by re-reading
                                  the board and weighing the six conditions by hand.
+  route [<ID> | --role <R> | --points <N> [--risk <R>]]
+                                 which MODEL TIER runs a piece of work — line 1 is always one
+                                 word: strong | mid | cheap (a task's model: frontmatter
+                                 overrides; unknown role → mid, routing never blocks work). A
+                                 `   model: <name>` note follows ONLY when ops/CONVENTIONS.md
+                                 maps that tier (model_strong/mid/cheap). Read-only: the
+                                 CONDUCTOR asks it before every spawn; fleet rides the max
+                                 tier over ready/
   drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
   qa [--force]                   is everything okay, in ONE shot: test/lint/typecheck/build/uat
@@ -120,6 +132,22 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  and the tree is clean (.polaris/suite-stamp) — drift and doctor
                                  still run every time. --force always re-runs the suite.
                                  `finish` runs this for you at the close.
+  bg run <name> [--force] [-- <cmd…>]
+                                 detach a suite past the harness's 600s tool cap and keep working:
+                                 a bare CONVENTIONS suite key (test test_fast lint typecheck build
+                                 uat — runs in the CALLER's cwd; qa — always the PRIMARY, so its
+                                 green stamps .polaris/suite-stamp and `finish` rides the existing
+                                 fast path) or an arbitrary command after --. Registry (runtime
+                                 state, never tracked): .polaris/bg/<name>/ under the primary; a
+                                 finished same-name job rotates to <name>.prev — archived, never
+                                 deleted. Never writes the board, EVENTS.ndjson, or any lock
+  bg status [<name>] | bg tail <name> [-n N] | bg wait <name> [--max <s>]
+                                 collect it in bounded chunks: status is rc-file-FIRST (0 green ·
+                                 1 red · 2 running · 3 unknown: dead pid + no rc — crashed, or
+                                 Windows reused the pid); tail = last N (default 20) log lines;
+                                 wait polls ~2s up to --max (default 300 — half the cap), prints
+                                 the tail + verdict and exits 0/1, or ONE resumable `still
+                                 running` line + rc 2 — chunk-resumable, NEVER a question
   finish [--force]               is the RUN over? The LAST command of every lane. Nothing building,
                                  nothing waiting to land, ready/ drained per drain:, no unmerged
                                  integrate/<date>, no orphan lock, clean tree on base, qa green.

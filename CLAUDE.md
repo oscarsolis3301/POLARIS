@@ -1,4 +1,4 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 5.23.0] -->
+<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 5.24.0] -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 Model-agnostic operating system for running N coding agents in parallel on this repo with zero merge
@@ -96,16 +96,21 @@ need one section or none.
 10. **No secrets** in the repo, board, contracts, or notes. Reference env-var names only.
 11. **RULES are yours to maintain** (owner decision, 2026-07-25). `ops/RULES.tsv` is policy as DATA:
     add, edit and remove lines as the work requires, each change carrying a `#` comment naming WHO
-    decided and WHY. **One thing this does NOT license: deleting a rule because it blocked you** —
+    decided and WHY. Three kinds: `path` and `content` deny outright;
+    `ask` = the same denial as `path`, lifted only by a human's recorded approval on the task
+    — you never run `approve` yourself, so an `ask` denial means hand back for the human's yes.
+    **One thing this does NOT license: deleting a rule because it blocked you** —
     that is the one motive the file exists to resist. Blocked and the rule looks wrong → say so and
     ask; blocked and it looks right → hand the task back. `.github/` needs a human's word before you
     touch it: an agent editing the tests that gate its own work is the sharpest version of the same
-    problem.
+    problem. **Converting a rule between `path` and `ask` is a HUMAN decision** for that same reason.
 
 ## STOP AND ASK THE HUMAN before
 Deleting any file · adding a dependency · changing DB schema or migrations · editing outside
 `files_owned` · touching auth/payments/prod config not explicitly owned · any force-push · merging
-any `risk: high` task.
+any `risk: high` task · converting a `RULES.tsv` rule between `path` and `ask`.
+**Not on it:** git/workspace mechanics are never ask material after plan approval — the CLI prints the next step; follow it.
+Taken lock · busy lane · dirty tree → `ops/PROTOCOL.md` § N CHATS, ONE REPO. Real asks stay: spec ambiguity, `risk: high`, `ask` scopes.
 
 ## PROGRESS FORMAT
 After each meaningful step, one line: `✅ <what> — <file>`. On any stop: `⛔ <why> — <what you need>`.
