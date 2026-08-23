@@ -121,3 +121,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "claim disjointness gate sweeps ready/ as well as active/; drift --strict exits nonzero on OWNERSHIP OVERLAP"  (T-086, 2026-08-23)
 
 - "CONVENTIONS key landing (self|integrator, default self in code) — handoff continues into land through the shared lease; autolaunch_max default 5; Invariant 9 reworded in kit/CLAUDE.md (the lease holder IS the Integrator)"  (T-088, 2026-08-23)
+
+- "doctor --selftest gains checkoutguard, readyoverlap and selfland drills (labels 28 to 31); golden pairs checkout-guard-denies + ownership-primary pin the refusal wording"  (T-089, 2026-08-23)
