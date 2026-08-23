@@ -28,6 +28,7 @@ human input) — plus installing POLARIS in the colliding app repo once the huma
 | date | done pts | remaining |
 |---|---|---|
 | 2026-08-23 | 9 (T-084 3pts, T-085 3pts, T-086 3pts, wave 1, sealed sprint/11 c24892a) | 14 · T-087 (2pts) promoted to `ready/` (sole dep T-086 done; `ready/`+`active/` were empty so disjointness is trivial) · T-088/T-089/T-090 correctly held in `backlog/` (serial dep chain T-087→T-088→T-089→T-090) · cycle p50 0.7h n=86 · kickbacks 0 this wave (3 lifetime, 3%) · build avg 0.6h / integrate avg 2.8h · gate: full suite green backgrounded 9m (SELFTEST-PASS, all labels) on integrate; uat `check` 16/17 — the ONE red (`cli-help`) proven PRE-EXISTING on base, not the wave's: `approve` help text ships on main in `kit/ops/polaris` but `ops/tests/cli-help.expected` never learned it, and the wave touched neither file (byte-identical to base) — no kickback, golden refresh needs a human/Builder `check --update` decision · api-kit golden landed correct as pinned (T-086 sole owner, verify 4/5 green on base) · pre-existing warns reported not fixed: CONVENTIONS lacks 14/37 keys · polaris-v5.zip STALE (built 4e9fa63; T-090 release's business) · sweep --fix rotated 6 stale bg jobs (452-475h old) · drift clean |
+| 2026-08-23 | 12 (+T-087 2pts, +T-091 1pt, wave 2, re-sealed sprint/11 c24892a→32b3ef3) | 12 · T-088 (5pts) promoted to `ready/` (sole dep T-087 done; `ready/`+`active/` empty so disjointness trivial) · T-089/T-090 correctly held in `backlog/` (serial chain T-088→T-089→T-090) · scope grew +1 mid-sprint (23→24) with T-091, the 1-pt golden-refresh rider filed from W1's finding · cycle p50 0.7h n=88 · kickbacks 0 this wave (3 lifetime, 3%) · build avg 0.6h / integrate avg 2.7h · gate: full suite green backgrounded 9m (SELFTEST-PASS, all labels) on integrate · uat `check` 17/17 rc 0 — W1's sole red (`cli-help`) closed by T-091 exactly as the Learned bullet prescribed (golden diff vs base: additions only, approve 5 lines + adopt 5 lines) · T-087's outstanding contract item (top-level EnterWorktree entry, untestable from a pinned-cwd subagent) settled by the conductor's LIVE top-level verification pre-land, recorded in the task's Notes: contingency does NOT fire, EnterWorktree stays pinned · run-verify 11/11 (T-087) + 3/3 (T-091) on base · pre-seal `base..integrate` log read: zero stray commits · pre-existing warns reported not fixed: CONVENTIONS lacks 14/37 keys (benign by design since 6.0.0 defaults-in-code; human's call) · polaris-v5.zip STALE (built 4e9fa63; T-090's explicit acceptance item) · sweep + drift clean |
 
 # SPRINT 10 — Autonomy by default (6.0.0)          capacity: 36   dates: 2026-08-03–
 
@@ -393,3 +394,20 @@ exercises but a Builder cannot.
   failure points reproduced identically). Related reflex, same wave: VERIFY THE SABOTAGE TOOK
   by reading its diff before running — an off-by-one sed is a no-op whose green is vacuous, the
   same trap as the primary-anchored golden, one layer down.
+- A GOLDEN REFRESH SCOPED BY COMMIT RANGE MISSES GAPS OLDER THAN THE RANGE — sprint 11's
+  cli-help rider (T-091) bounced on its first claim because the task scoped the expected diff off
+  `4e9fa63..HEAD` (the `approve` block) while a SECOND uncaptured block (`adopt`) predated that
+  range; the builder's STOP-on-unexpected-hunk gate worked exactly as written and the hand-back
+  was correct, not friction. PLANNER: scope a golden refresh by diffing the golden's CONTENT
+  against live output (`cmd | diff - golden`), never by a commit range — the Planner's re-scope
+  did exactly this and the re-run landed clean, additions-only, 17/17. The read-the-diff-before-
+  committing clause is what turned a silent mis-capture into a clean bounce; keep writing it into
+  every golden task.
+- A VERIFICATION REQUIREMENT MUST NAME A CALLER WHO CAN ACTUALLY RUN IT — T-087's contract
+  demanded the top-level `EnterWorktree` entry be re-verified LIVE, but the builder was a
+  pinned-cwd subagent, the one caller structurally unable to test it (the tool refuses there by
+  design). The builder rightly refused to claim it worked and left the item open in Notes; it was
+  settled only when a TOP-LEVEL session (the conductor) ran the entry first-hand pre-land.
+  PLANNER/CONDUCTOR: when an acceptance item can only be proven from a specific execution context,
+  route that proof to a session that HAS the context and record who ran it — an open item that no
+  assigned lane can close otherwise rides silently into review/.
