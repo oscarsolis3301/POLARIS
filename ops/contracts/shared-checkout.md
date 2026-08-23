@@ -242,10 +242,25 @@ ungated — accepted trade, recorded here. Refusal pinned ON ONE LINE:
   - `risk: high never self-lands — a human must approve the merge; task stays in review/`
 - Under `integrator` (and on any self-land refusal) behavior is byte-for-byte today's.
 - Defaults re-sized for 5 lanes: `autolaunch_max` 3 → 5 (KEYS.tsv row + the `cfg autolaunch_max 3`
-  fallback at observe.sh:1869 + CONDUCTOR.md "default 3"), `integration_wait_minutes` 10 → 20
-  (KEYS.tsv row + `cfg integration_wait_minutes 10` at workspace.sh:96 + the two observe.sh
-  doctor warnings naming "(10)"). Suite economics unchanged: `land` is squash+audit (fast); the
-  full suite stays per-wave (`integration: batch`).
+  fallback at observe.sh:1869 + CONDUCTOR.md "default 3"). **`integration_wait_minutes` STAYS 10**
+  — human decision 2026-08-23, measured and load-bearing: `int_on` polls in the FOREGROUND
+  (workspace.sh:105-125 sleep-2 loop), so a 10-minute bound is already EXACTLY the harness's 600s
+  tool cap. At 20 a session that genuinely waits blows the cap — its tool call returns NOTHING and
+  is re-run, so it loses the whole wait and learns nothing. A bigger number buys strictly less
+  than the smaller one: NEVER raise this knob past 10, and KEYS.tsv's prose for the key carries
+  this same 600s-cap warning (T-088). The long-wait fix is DETACHING, not a bigger bound: a
+  self-landing session runs its landing tail under `bg run ship-<ID> -- …` and collects it with
+  chunked `bg wait --max 300` (half the cap — why that default exists); the roles T-088 edits
+  carry this recipe. Polling is not notification, so pipelined-integration.md's pinned foreground
+  rule stays literally true. Suite economics unchanged: `land` is squash+audit (fast); the full
+  suite stays per-wave (`integration: batch`).
+- **Invariant 9 REWORDED** (human-approved VERBATIM, 2026-08-23; lives in `kit/CLAUDE.md`, which
+  T-088 now owns — replace the existing invariant-9 line with exactly this, no new headings):
+  > 9. **Only the integration-lease holder merges.** The lease *is* the Integrator — there is exactly one at any instant, and taking it is what makes a session one. `risk: high` NEVER merges without explicit human approval in the conversation.
+  Rationale, recorded: this is what the code has always actually done — `wave_on`
+  (workspace.sh:146-167) says outright that any integrator lands any task because `files_owned`
+  are disjoint, so the lands compose; the words were narrower than the machinery. Self-landing
+  needs no exception once the invariant names the lease.
 - `kit/ops/PROTOCOL.md` § LANES documents self-landing as the SOLO / `land --express` precedent
   generalized — one session carrying one task to merged. Edit INSIDE the section; no new heading.
 
@@ -274,7 +289,8 @@ ungated — accepted trade, recorded here. Refusal pinned ON ONE LINE:
 - bash >= 3.2 everywhere; hooks stay fork-free pure bash.
 
 ## Changelog
-- v2 2026-08-23: enforced isolation - checkout-guard hook, ownership-guard primary_gate, ready-union-active claim sweep, drift --strict fails overlap, landing: self knob + defaults 5/20, drills checkoutguard/readyoverlap/selfland (T-084..T-090, plan enforced-isolation).
+- v2 2026-08-23: enforced isolation - checkout-guard hook, ownership-guard primary_gate, ready-union-active claim sweep, drift --strict fails overlap, landing: self knob + autolaunch_max 5, drills checkoutguard/readyoverlap/selfland (T-084..T-090, plan enforced-isolation).
+- v2 amended pre-claim 2026-08-23 (T-088 unclaimed, so edited in place per the append-only rule): integration_wait_minutes REVERTED to 10 - the foreground int_on poll makes 10min exactly the harness 600s tool cap, so 20 loses the whole wait (detach with bg run ship-<ID> + chunked bg wait --max 300 instead); Invariant 9 reworded (human-approved verbatim: the lease holder IS the Integrator) - kit/CLAUDE.md joins T-088's files_owned. Wave-1 sections 1-4 and 6 byte-identical.
 - v1.1 2026-08-03: board mutex pid-guarded — mutex_on writes $MUTEX/pid, mutex_off no-ops on a
   foreign/missing pid; staleness steal + on_die wiring unchanged (T-064, integrator audit filing).
 - v1 2026-08-03: created for T-057 (module + CLI + on_die), T-058 (integration lane), T-059
