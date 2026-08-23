@@ -313,3 +313,4 @@
 {"ts":1787502424,"ev":"claim","id":"T-091","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1787502570,"ev":"handoff","id":"T-091","who":"Owner@DESKTOP","note":""}
 {"ts":1787502571,"ev":"all-review","id":"T-091","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
+{"ts":1787503413,"ev":"done","id":"T-087","who":"Owner@DESKTOP","note":"","pts":2}
