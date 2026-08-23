@@ -27,6 +27,7 @@ human input) — plus installing POLARIS in the colliding app repo once the huma
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-08-23 | 9 (T-084 3pts, T-085 3pts, T-086 3pts, wave 1, sealed sprint/11 c24892a) | 14 · T-087 (2pts) promoted to `ready/` (sole dep T-086 done; `ready/`+`active/` were empty so disjointness is trivial) · T-088/T-089/T-090 correctly held in `backlog/` (serial dep chain T-087→T-088→T-089→T-090) · cycle p50 0.7h n=86 · kickbacks 0 this wave (3 lifetime, 3%) · build avg 0.6h / integrate avg 2.8h · gate: full suite green backgrounded 9m (SELFTEST-PASS, all labels) on integrate; uat `check` 16/17 — the ONE red (`cli-help`) proven PRE-EXISTING on base, not the wave's: `approve` help text ships on main in `kit/ops/polaris` but `ops/tests/cli-help.expected` never learned it, and the wave touched neither file (byte-identical to base) — no kickback, golden refresh needs a human/Builder `check --update` decision · api-kit golden landed correct as pinned (T-086 sole owner, verify 4/5 green on base) · pre-existing warns reported not fixed: CONVENTIONS lacks 14/37 keys · polaris-v5.zip STALE (built 4e9fa63; T-090 release's business) · sweep --fix rotated 6 stale bg jobs (452-475h old) · drift clean |
 
 # SPRINT 10 — Autonomy by default (6.0.0)          capacity: 36   dates: 2026-08-03–
 
@@ -277,7 +278,18 @@ exercises but a Builder cannot.
 | 2026-07-18 | 13 (T-003, T-007..T-010) | 7 (T-004..T-006) · cycle p50 0.5h · kickbacks 0 |
 
 ## Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
-- A GOLDEN THAT RECORDS A *DERIVED* SURFACE SILENTLY COUPLES EVERY TASK THAT FEEDS IT — three
+- A GOLDEN CAN GO STALE ON BASE WITH NOBODY NOTICING, AND THE WAVE GATE IS WHERE IT SURFACES —
+  sprint 11 W1's uat came back red on `cli-help` and the diff LOOKED like this wave's doing (the
+  `approve` block, kin to the wave's ask/approve subject matter), but base-comparison proved
+  otherwise: `kit/ops/polaris` carries the `approve` help text on main (landed sprint 10 with
+  T-048) while `ops/tests/cli-help.expected` was never refreshed, and the wave touched neither
+  file — byte-identical to base, so red-on-base, not the tasks'. The rot vector: `test:` (selftest)
+  never runs `check`, `qa`'s suite stamp can skip it, and sprint 10's gates evidently never ran
+  this golden after `approve` landed. Rule confirmed cheap: before ANY red-suite kickback, diff
+  the failing gate's inputs against base FIRST — here it replaced a 3-way bisect with one
+  `git diff --stat`. Repair is deliberately NOT the integrator's: `check --update` is a
+  human/Builder decision — Planner, queue the `cli-help` golden refresh (1-pt rider, or fold into
+  T-089 which already owns golden files this sprint). — three
   instances now, so treat it as structural, not bad luck. Sprint 7: T-047 added fns to `ownership.sh`
   without owning `ops/tests/api-kit.expected`. Sprint 8: T-063 (docs) added ONE PROTOCOL heading —
   `api-kit` records headings too, not just fns — while T-062 (tests) owned the golden; `files_owned`
