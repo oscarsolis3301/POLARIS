@@ -238,6 +238,73 @@ cmd_handoff() {
     integrate) say "all lanes done — nothing left building. Integrate now: \"You are the INTEGRATOR. Land everything in ops/board/review/.\"";;
     queue)     note "$nrdy ready task(s) still queued — say start (or: bash ops/polaris fleet $nrdy --launch) to build them";;
   esac
+  # T-088 (shared-checkout v2 §5): under landing: self the handoff CONTINUES into the landing —
+  # the last statement on purpose, so its rc (0, or 3 for a queued lane) is the handoff's rc.
+  self_land "$id" "$notice"
+}
+
+self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout.md v2 §5): under
+  # `landing: self` — the DEFAULT IN CODE, because `update` never rewrites an installed
+  # CONVENTIONS.md (the 6.0.0 lesson), so unset must compose to the new behavior — a handoff
+  # continues into `land <ID>` in this same session. The integration lease already provides
+  # wait-your-turn (int_on: atomic lease, 2s poll, stale steal, `queued: ` + rc 3 past the
+  # bounded wait) and land/seal/done run as child invocations from the PRIMARY (`land` refuses
+  # worktrees), so every one of their gates, parks and rc semantics applies UNCHANGED. Runs
+  # AFTER handoff's mutex_off: the lease is OUTERMOST (contract § Lock ordering) and is never
+  # taken while the board mutex is held. Self-landing runs NO full suite — `land` is
+  # squash + audit; the suite stays per-wave (integration: batch economics unchanged).
+  #
+  # HARD STOPS no knob softens, gated on the task's OWN frontmatter (no new classifiers):
+  # risk: high, and any recorded ask-rule approval on the task (approved: entries mark
+  # STOP-AND-ASK surfaces a human had to clear — their merge stays a human-lane decision).
+  # FAIL-CLOSED on a task with NO risk: frontmatter at all: an unclassified task cannot prove
+  # it is not stop-and-ask material, so it keeps today's integrator path silently — which also
+  # keeps every pre-6.1 fixture (none carry risk:) byte-identical. On EVERY refusal or skip,
+  # behavior before this call is byte-for-byte today's handoff.
+  local id="$1" notice="${2:-}"
+  local lk; lk="$(cfg landing self)"
+  [ "$lk" = "self" ] || return 0     # landing: integrator (or any other value) → classic handoff
+  local tf="$BOARD/review/$id.md"
+  [ -f "$tf" ] || return 0
+  local rk; rk="$(fm_get risk "$tf" 2>/dev/null || true)"
+  local ap; ap="$(fm_list approved "$tf" 2>/dev/null || true)"
+  if [ "$rk" = "high" ] || [ -n "$ap" ]; then
+    say "risk: high never self-lands — a human must approve the merge; task stays in review/"
+    return 0
+  fi
+  [ -n "$rk" ] || return 0           # no risk: frontmatter → unclassified → integrator path
+  note "landing: self — continuing into land $id (the lease is the integration lane: this waits its turn)"
+  local lrc=0
+  ( cd "$PRIMARY" && "$SELF" land "$id" ) || lrc=$?
+  if [ "$lrc" -eq 3 ]; then
+    return 3                         # int_on printed the final `queued: ` line — nothing after it
+  fi
+  if [ "$lrc" -ne 0 ]; then
+    note "⚠ self-land failed (rc $lrc) — the work is safe on feat/$id and $id stays in review/ for the integration lane"
+    return 0
+  fi
+  if [ "$notice" != "integrate" ]; then
+    note "$id landed on the wave — mid-wave lands never seal; the last lane out seals"
+    return 0
+  fi
+  # last lane out seals the wave, then finishes every LANDED review task (a refused risk: high
+  # task has no landed commit and stays in review/ for the human lane).
+  local src=0
+  ( cd "$PRIMARY" && "$SELF" seal ) || src=$?
+  if [ "$src" -ne 0 ]; then
+    note "⚠ wave not sealed (rc $src) — $id is landed and safe; close the wave with: bash ops/polaris seal"
+    return 0
+  fi
+  local f tid
+  for f in "$BOARD/review/"*.md; do
+    [ -f "$f" ] || continue
+    tid="$(fm_get id "$f" 2>/dev/null || true)"
+    [ -n "$tid" ] || continue
+    landed_sha "$tid" >/dev/null 2>&1 || continue
+    ( cd "$PRIMARY" && "$SELF" done "$tid" ) \
+      || note "⚠ done $tid failed — finish it by hand: bash ops/polaris done $tid"
+  done
+  return 0
 }
 
 cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]

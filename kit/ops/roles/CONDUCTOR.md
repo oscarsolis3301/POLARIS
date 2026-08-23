@@ -130,7 +130,7 @@ call per spawn; routing never blocks work.
    - `ops/CONVENTIONS.md` sets `builders: panes`? Run `bash ops/polaris fleet <N> --launch` instead
      of steps 4–6 and stop — the human chose to watch sessions in terminal panes (classic flow).
      Default (`subagents` or unset) → continue.
-4. **Build (parallel subagents).** Lanes = min(ready tasks, `autolaunch_max`, default 3). Spawn ALL
+4. **Build (parallel subagents).** Lanes = min(ready tasks, `autolaunch_max`, default 5). Spawn ALL
    lanes in ONE message, in the background, each pinned to a distinct task ID from the ready queue
    (top-wsjf first — you know the queue; the lock still protects against races). Route each lane
    first — `bash ops/polaris route <ID>`, per the preamble rule — so every builder spawns at its
@@ -140,7 +140,11 @@ call per spawn; routing never blocks work.
    add it back here; top-level sessions get it from `claim` and from `BUILDER.md` step 1b.
    > You are a BUILDER, conductor-entered. Read ops/roles/BUILDER.md and execute it. Claim <ID> and
    > complete it end to end. A spec ambiguity → return the question as your result instead of asking
-   > the human. Stop at the review handoff; return: ID · branch · one-line summary · test results.
+   > the human. Ship per BUILDER.md step 5: `bash ops/polaris bg run ship-<ID> -- bash ops/polaris
+   > handoff`, then `bash ops/polaris bg wait ship-<ID> --max 300` repeated until the rc is not 2 —
+   > under `landing: self` (the default) that handoff lands your task through the integration lease
+   > and, last lane out, seals the wave. Stop after the collect; return: ID · branch · one-line
+   > summary · test results · landed / queued / in review.
    > FIRST run `bash ops/polaris pack <ID>` — that output IS your context: the task, its contract,
    > the house style to match, what you own, the API surface not to break, and your verify: list.
    > Anything it does not answer: `bash ops/polaris find <symbol>`, one hop, before any Grep.
@@ -165,7 +169,12 @@ call per spawn; routing never blocks work.
      it right where it left off. No response → re-anchor from `bash ops/polaris status` +
      `git status` in its worktree to see how far it got, then release the task back to `ready/` and
      respawn one fresh builder per the retry path above.
-6. **Integrate (subagent) — pipelined, from the FIRST handoff.** Spawn the integrator the moment the
+6. **Integrate (subagent) — pipelined, from the FIRST handoff.** Under `landing: self` (the default
+   since 6.1.0) lanes land their own tasks through the lease and the last lane out seals, so this
+   subagent's job narrows to the leftovers: `risk: high` and other refused tasks, `queued:` tails,
+   and any wave the lanes could not seal — spawn it only when `review/` is non-empty after the lanes
+   close. Under `landing: integrator` the classic choreography below applies unchanged: spawn the
+   integrator the moment the
    FIRST lane reports its handoff, not after the last one. It audits and lands tasks
    `as they arrive in review/, in dependency order`: a task whose `depends_on` has not yet arrived
    waits, everything else lands on arrival — so integration overlaps the still-running lanes instead

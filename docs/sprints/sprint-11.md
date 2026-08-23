@@ -75,7 +75,7 @@ the contract, never from the other lanes' diffs.
 - [ ] `bash kit/ops/polaris doctor --selftest` drills claimguard and drift stay green
 
 ## T-087 — "Worktree entry is mechanical — claim instructs, fleet and roles carry the step"
-points 2 · risk normal · landed 3d6b235 (2026-08-23) · claimed 2026-08-23
+points 2 · risk normal · landed 3d6b235 (2026-08-23) · claimed 2026-08-23 → done 2026-08-23
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/observe.sh, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/SOLO.md
 
 ### Why
@@ -102,8 +102,47 @@ the exact failure mode this sprint removes.
 - [ ] no new top-level fns; no new H2 headings in any role file (api-kit records headings)
 - [ ] claim/fleet drills stay green (claimguard, fmlist)
 
+## T-088 — "landing: self — a builder queues behind the lease and lands its own task"
+points 5 · risk normal · landed 487037e (2026-08-23) · claimed 2026-08-23
+files touched: kit/CLAUDE.md, kit/ops/KEYS.tsv, kit/ops/PROTOCOL.md, kit/ops/lib/builder.sh, kit/ops/lib/observe.sh, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/SOLO.md, ops/tests/api-kit.expected
+
+### Why
+Root cause #8 of the collisions: nothing wakes an integrator — handoff prints prose and the
+board sits in `review/` forever when no CONDUCTOR runs. The lease already provides "wait your
+turn behind the other agents" (int_on: atomic lease, 2s poll, stale steal, queued:/rc 3), so
+close the loop: new knob `landing` (KEYS.tsv, since 6.1.0, default `self` IN CODE — the 6.0.0
+lesson: update never rewrites CONVENTIONS, so unset must compose to the new behavior). Under
+self, cmd_handoff continues into `land <ID>` via ONE new top-level fn `self_land`; the
+all-review condition handoff already computes also triggers `seal` (last lane out seals the
+wave). HARD STOPS no knob softens: `risk: high` and STOP-AND-ASK tasks never self-land — pinned
+refusal, classic integrate notice, today's behavior byte-for-byte (same under
+`landing: integrator`). Re-size autolaunch_max 3 to 5 (KEYS row + the code
+fallback + CONDUCTOR.md "default 3"); integration_wait_minutes STAYS 10 — human decision
+2026-08-23: int_on polls in the FOREGROUND, so a 10-minute bound is already exactly the
+harness's 600s tool cap, and a bigger one makes the tool call return nothing and lose the whole
+wait. Instead, KEYS.tsv's prose for that key gains the 600s-cap warning (never raise past 10),
+and the self-land tail DETACHES: bg run ship-<ID>, collected with chunked bg wait --max 300
+(contract v2.5) — the recipe the role files carry. Also reword Invariant 9 in kit/CLAUDE.md with
+the human-approved VERBATIM text pinned in contract v2.5 (the lease holder IS the Integrator —
+what wave_on always did); replace the existing line 9, touch nothing else in that file. Document self-landing in kit/ops/PROTOCOL.md
+section LANES as the SOLO / land --express precedent generalized — edit INSIDE the section, no
+new heading. Update BUILDER/SOLO/CONDUCTOR so the builder's life reads claim, build, verify,
+handoff, then (self) land.
+
+### Acceptance
+- [ ] landing unset or self: handoff of a normal task continues into land; task reaches done/;
+- [ ] last lane out (all-review) also seals the wave; mid-wave lands do not seal
+- [ ] risk: high NEVER self-lands: pinned ONE-LINE refusal from contract v2.5 + classic
+- [ ] self-land runs NO full suite (integration: batch economics unchanged — land is
+- [ ] KEYS.tsv gains the landing row; autolaunch_max default 5 everywhere the old default
+- [ ] kit/CLAUDE.md invariant 9 replaced with the contract v2.5 verbatim text, byte-exact; no
+- [ ] the role files' self-land tail uses bg run ship-<ID> + chunked bg wait --max 300 — never a
+- [ ] exactly ONE new top-level fn (self_land, builder.sh); api-kit.expected delta is exactly
+- [ ] PROTOCOL section LANES documents self-landing; no new H2 headings anywhere
+- [ ] busyint + express + claimguard drills stay green
+
 ## T-091 — "Refresh the cli-help golden — approve + adopt blocks ship on main, the expected file never caught up"
-points 1 · risk normal · landed 180bda0 (2026-08-23) · claimed 2026-08-23
+points 1 · risk normal · landed 180bda0 (2026-08-23) · claimed 2026-08-23 → done 2026-08-23
 files touched: ops/tests/cli-help.expected
 
 ### Why

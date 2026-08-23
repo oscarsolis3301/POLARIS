@@ -56,12 +56,27 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    conventions, so you do not have to infer them.
 4. **Verify** — `bash ops/polaris verify`. Proves diff ⊆ `files_owned` and runs your `verify:` list.
    Then the repo's fast tier: `test_fast:` from `ops/CONVENTIONS.md` if it is set, else `test:`.
-5. **Handoff** — `bash ops/polaris handoff`.
-6. **Land** — `bash ops/polaris land --express <ID>`. One pass: integrate branch, audit, the FULL
+5. **Handoff — and, by default, the landing.** Under `landing: self` (since 6.1.0 unset composes to
+   `self`) `bash ops/polaris handoff` continues into the land in this same session: it takes the
+   integration lease (wait-your-turn behind every other session), squashes `feat/<ID>` onto the
+   wave, and — you being the only lane — seals the wave and finishes the task. That tail can wait
+   on a busy lease, so detach it and collect the rc in chunks:
+   `bash ops/polaris bg run ship-<ID> -- bash ops/polaris handoff`, then
+   `bash ops/polaris bg wait ship-<ID> --max 300` repeated until the rc is not 2 (0 green · 1 red ·
+   2 still running · 3 unknown) — never a foreground wait that can cross the 600s cap, never a
+   background notification. A `queued:` line (rc 3) means the lane stayed busy: report queued and
+   retry at the next wave boundary. `risk: high` and STOP-AND-ASK work never reaches SOLO, so the
+   self-land refusals should never fire here; `landing: integrator` restores the classic two-step
+   below.
+6. **Land** — only under `landing: integrator`, or when step 5's tail queued or refused:
+   `bash ops/polaris land --express <ID>`. One pass: integrate branch, audit, the FULL
    suite ONCE, seal, run-verify, done, branch cleanup. A red suite unwinds the commit and kicks the
-   task back to you — fix it here, in this session, and land again.
+   task back to you — fix it here, in this session, and land again. (After a step-5 self-land there
+   is nothing left to do here — the task is already done and sealed.)
 7. **Finish** — `bash ops/polaris finish`. It runs `qa` for you (free when HEAD has not moved since
-   step 6's green suite — the stamp is per-commit) and then proves the **RUN** is over, not just the
+   an express land's green suite — the stamp is per-commit; after a step-5 self-land there is no
+   stamp yet, so `finish` pays the suite here: that is the wave's ONE full run, arriving at the
+   finish line instead of the express lane) and then proves the **RUN** is over, not just the
    task: nothing in `active/` or `review/`, `ready/` drained per `drain:`, no unmerged
    `integrate/<date>`, no orphan locks, clean tree on `<base>`. It names exactly what is pending, if
    anything, and it fires the `notify-gate done` hook itself, exactly once — you never call
@@ -98,6 +113,7 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
 
 ## What you must NOT skip
 Every gate the long path runs, you run: `verify` (ownership + RULES) · the task's `verify:` list ·
-the full suite once at `land --express` · `finish`. SOLO collapses SESSIONS, never CHECKS — the same
+the full suite once — at `land --express`, or at `finish` after a step-5 self-land · `finish`.
+SOLO collapses SESSIONS, never CHECKS — the same
 principle `ops/contracts/express-lane.md` is built on. If you find yourself skipping a gate to make
 the change fit the lane, the lane is wrong.
