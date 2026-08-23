@@ -183,11 +183,18 @@ contract is "only ever ALLOWS"; deny lives in its own file.
 - **Deny** when CWD is the PRIMARY worktree (resolve: `git rev-parse --git-common-dir` vs
   `--git-dir` equal means primary; a `.polaris/wt/` path segment means worktree) AND the Bash
   command contains a checkout-mutating git invocation: `git switch` · `git checkout` (all forms) ·
-  `git reset` · `git stash` (incl. pop/apply) · `git merge` · `git rebase` · `git cherry-pick` ·
+  `git reset` · `git stash` (incl. pop/apply — but `git stash list` and `git stash show`, the
+  only read-only stash forms, stay ALLOWED: readonly-allow's `git_ok` already allows both, and
+  denying them would break the allow/deny disjointness the two-hook design rests on; T-084
+  default-safe assumption, ratified) · `git merge` · `git rebase` · `git cherry-pick` ·
   `git worktree add` · `git branch -D|-d|-m|-M`. Read-only git and everything non-git pass through
   untouched (exit 0, no output). Inside `.polaris/wt/<ID>` ALL of these stay allowed.
-- Deny mechanism: PreToolUse JSON `permissionDecision: deny` on stdout, same shape
-  ownership-guard emits. Refusal text pinned ON ONE LINE, greppable:
+- Deny mechanism: readonly-allow-style `hookSpecificOutput` JSON with
+  `permissionDecision: deny` on STDOUT — this section's own pinned verify greps STDOUT for the
+  refusal, so an exit-2+stderr deny could never satisfy it. NOTE (T-084 finding): the two hooks
+  legitimately deny by DIFFERENT mechanisms — ownership-guard denies via exit 2 + stderr,
+  checkout-guard via JSON-on-stdout. Both are correct as shipped; do not "fix" either to match
+  the other. Refusal text pinned ON ONE LINE, greppable:
 - `the primary checkout is shared by every session — never switch it: work in your task's worktree (bash ops/polaris claim, then cd .polaris/wt/<ID>); a dirty tree is parked (bash ops/polaris park), never switched around`
 - Top-level fns EXACTLY (api-kit pins, sorted): `deny` · `jstr` · `mutating_git`. No others.
 
@@ -223,6 +230,11 @@ TWO callers, two entries — pin BOTH, never one recipe (wave-1 field finding, T
 a conductor-spawned subagent has its cwd PINNED at launch and EnterWorktree REFUSES there —
 "the current working directory … is the repository root, not an isolated worktree" — while a
 top-level session, the human's actual ~5-chat workflow, enters normally and needs no prompt).
+Sharpened cause (T-084 wave): EnterWorktree only accepts paths under `.claude/worktrees/`, so
+`.polaris/wt/<ID>` may be structurally outside what it accepts for ANY caller — T-087 MUST
+re-verify the top-level entry LIVE before pinning it; if it refuses there too, the
+absolute-paths/cd form becomes the sole pinned instruction for all callers, the EnterWorktree
+mention is dropped from every kickoff, and the finding goes in the handoff report.
 - `cmd_claim` closes with an INSTRUCTION, not an observation. Pinned (one line each):
   - `now enter the worktree — every command until handoff runs there`
   - `top-level session: EnterWorktree({path: ".polaris/wt/<ID>"}) · pinned-cwd subagent or any other CLI: run everything via absolute paths under .polaris/wt/<ID> (or cd there — the shell's cwd persists between calls)`
@@ -274,8 +286,11 @@ top-level session, the human's actual ~5-chat workflow, enters normally and need
 
 ### 6. Executable check (T-089 — three drills + goldens; labels in spine.sh SELFTEST_LABELS)
 - `checkoutguard` (drill_checkoutguard, policy.sh): pipe a PreToolUse payload with cwd=primary +
-  `git switch x` → deny JSON carrying `the primary checkout is shared`; same command with
-  cwd=.polaris/wt/T-000 → exit 0, no deny; `git status` in primary → exit 0. Also primary_gate:
+  `git switch x` → deny as `hookSpecificOutput` JSON on STDOUT carrying `the primary checkout
+  is shared` (assert the shape, not just the string); same command with cwd=.polaris/wt/T-000 →
+  exit 0, no deny; `git status` in primary → exit 0; `git stash list` and `git stash show` in
+  the primary → exit 0, NO deny (the §1 carve-out — a golden asserting all stash forms deny
+  would fail against correct behavior). Also primary_gate:
   primary + planted lock + non-feat HEAD + tracked source path → deny; an ops/board/ path →
   allow; no locks → allow. And the FALLBACK entry — the path every conductor lane actually
   takes: with cwd pinned at the primary, a write via an ABSOLUTE path under `.polaris/wt/<ID>`
@@ -297,6 +312,14 @@ top-level session, the human's actual ~5-chat workflow, enters normally and need
 - **Entry is enforced by the GUARD, not by the entry tool.** EnterWorktree vs `cd` vs absolute
   paths is a convenience question; §2's `primary_gate` is what makes staying in the primary
   actually fail. If the harness's worktree tooling changes again, the layer still holds.
+- Field note (T-084, deliberate and recorded): checkout-guard's `--git-common-dir` probe runs
+  only when a deny is otherwise imminent and FAILS CLOSED — an unreadable or absent repo at cwd
+  counts as primary (the `/tmp/fakerepo` verify case requires exactly this). A deliberate
+  fail-closed choice in a file whose other paths all fail open; do not "normalize" it.
+- Field note (T-084): `find --api` anchors to the PRIMARY's index by design (search.sh:13), so a
+  worktree-run api-kit check reads green and CANNOT see a file added in that worktree. Golden
+  deltas are proven via the index db / POLARIS_ROOT recipe, never by running api-kit from the
+  worktree.
 - Field note (wave 1, applies to §1 AND §2, additive — both hooks were claimed when learned):
   `git rev-parse --git-common-dir` prints a RELATIVE path from the primary and an absolute one
   only from a linked worktree, so `$LOCKS` and every path derived from it must be anchored to
@@ -311,6 +334,7 @@ top-level session, the human's actual ~5-chat workflow, enters normally and need
 - v2 2026-08-23: enforced isolation - checkout-guard hook, ownership-guard primary_gate, ready-union-active claim sweep, drift --strict fails overlap, landing: self knob + autolaunch_max 5, drills checkoutguard/readyoverlap/selfland (T-084..T-090, plan enforced-isolation).
 - v2 amended pre-claim 2026-08-23 (T-088 unclaimed, so edited in place per the append-only rule): integration_wait_minutes REVERTED to 10 - the foreground int_on poll makes 10min exactly the harness 600s tool cap, so 20 loses the whole wait (detach with bg run ship-<ID> + chunked bg wait --max 300 instead); Invariant 9 reworded (human-approved verbatim: the lease holder IS the Integrator) - kit/CLAUDE.md joins T-088's files_owned. Wave-1 sections 1-4 and 6 byte-identical.
 - v2 amended 2026-08-23 (T-087/T-089 unclaimed; claimed sections untouched, field notes additive): section 4 now pins TWO caller entries - EnterWorktree refuses in a pinned-cwd subagent (wave-1 finding, T-085's builder), so top-level sessions keep EnterWorktree while subagents get absolute-paths-as-primary and the CONDUCTOR kickoff never instructs EnterWorktree; checkoutguard drill gains the fallback-entry assertion; invariants gain entry-enforced-by-the-guard + the relative --git-common-dir anchoring note.
+- v2 corrected 2026-08-23 post-T-084-handoff, pre-T-089 (recording shipped behavior before goldens bake in a wrong assumption): section 1's deny mechanism is hookSpecificOutput JSON on STDOUT (the ownership-guard comparison was self-contradictory - that hook denies via exit 2 + stderr; the two mechanisms legitimately differ); git stash list/show carved out of the deny list (read-only forms, allowed by git_ok - denying them breaks the two-hook disjointness); drill spec pins both + the fail-closed probe and primary-anchored find --api field notes; section 4 records the sharpened EnterWorktree cause (.claude/worktrees/ only) and requires live re-verification of the top-level entry.
 - v1.1 2026-08-03: board mutex pid-guarded — mutex_on writes $MUTEX/pid, mutex_off no-ops on a
   foreign/missing pid; staleness steal + on_die wiring unchanged (T-064, integrator audit filing).
 - v1 2026-08-03: created for T-057 (module + CLI + on_die), T-058 (integration lane), T-059
