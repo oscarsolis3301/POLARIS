@@ -164,7 +164,117 @@ this right (pid file, pid-guarded release); the board mutex now mirrors it:
   arbitrary exit can no longer eat another session's locks.
 - Inline the guard: NO new top-level function (the kit surface is frozen until T-062's golden delta).
 
+## v2 — enforced isolation (2026-08-23, plan enforced-isolation, T-084..T-090)
+
+v1 built the machinery (worktree per task, disjoint files_owned, claim lock, single lease); v2
+makes it ENFORCED. Verified holes: nothing puts a session into its worktree (claim only prints a
+cd), the ownership hook keys off the current dir's branch so the primary on `main` has no gate at
+all, nothing refuses checkout-mutating git in the primary, the claim gate sweeps only `active/`,
+and the board sits in `review/` forever when no integrator exists. Five live sessions collided on
+exactly these. Additive: every v1 interface above is unchanged.
+
+### 1. `kit/ops/hooks/checkout-guard.sh` — NEW PreToolUse hook (T-084)
+Pure bash, NO fork to `ops/polaris`, no interpreter — the readonly-allow timeout lesson (a slow
+hook is killed and FAILS OPEN) sizes the budget. Copies v1's `jstr` payload reader. Registered in
+`kit/.claude/settings.json` alongside ownership-guard (matcher `Bash`); `kit/ops/install.sh`
+settings merge picks it up by path identity (no merge-code change) but the chmod line at
+install.sh:106 gains the new path. NOT an extension of readonly-allow.sh — that hook's safety
+contract is "only ever ALLOWS"; deny lives in its own file.
+- **Deny** when CWD is the PRIMARY worktree (resolve: `git rev-parse --git-common-dir` vs
+  `--git-dir` equal means primary; a `.polaris/wt/` path segment means worktree) AND the Bash
+  command contains a checkout-mutating git invocation: `git switch` · `git checkout` (all forms) ·
+  `git reset` · `git stash` (incl. pop/apply) · `git merge` · `git rebase` · `git cherry-pick` ·
+  `git worktree add` · `git branch -D|-d|-m|-M`. Read-only git and everything non-git pass through
+  untouched (exit 0, no output). Inside `.polaris/wt/<ID>` ALL of these stay allowed.
+- Deny mechanism: PreToolUse JSON `permissionDecision: deny` on stdout, same shape
+  ownership-guard emits. Refusal text pinned ON ONE LINE, greppable:
+- `the primary checkout is shared by every session — never switch it: work in your task's worktree (bash ops/polaris claim, then cd .polaris/wt/<ID>); a dirty tree is parked (bash ops/polaris park), never switched around`
+- Top-level fns EXACTLY (api-kit pins, sorted): `deny` · `jstr` · `mutating_git`. No others.
+
+### 2. ownership-guard learns the primary (T-085)
+New top-level fn `primary_gate`, called before the existing branch-keyed path. When (a) CWD is the
+primary worktree, (b) HEAD is not `feat/*`, and (c) at least one task lock dir exists under
+`$LOCKS` (`<git-common-dir>/polaris-locks/*/`, ignoring `.int-lease` and the board mutex), DENY
+writes to tracked source paths. Allowlist (primary-role surfaces, checked first): `ops/board/` ·
+`ops/contracts/` · `ops/*.md` (top-level ops docs: SPRINT/MAP/CONVENTIONS…) · `.polaris/` ·
+untracked scratch. The lock-existence test keeps INIT and a lone PLANNER on an empty board
+ungated — accepted trade, recorded here. Refusal pinned ON ONE LINE:
+- `builders never edit the shared primary — claim a task and work in its worktree: bash ops/polaris claim, then cd .polaris/wt/<ID>`
+- New top-level fns EXACTLY: `primary_gate`. (`cleanup`/`jstr`/`lc`/`norm` stay.)
+
+### 3. Claim gate sweeps ready ∪ active; drift --strict fails on overlap (T-086)
+- `cmd_claim` (builder.sh): the T-059 disjointness loop iterates `"$BOARD/active/"*.md` — it now
+  ALSO iterates `"$BOARD/ready/"*.md` (skipping the candidate itself). Same `pat_overlap` both
+  directions, same explicit-vs-auto behavior; the auto-pick blocked/ note and the explicit-die
+  message gain the ready variant. Pinned fragment (explicit case): `overlaps ready` (mirror of the
+  existing `overlaps active`).
+- `cmd_drift` (observe.sh): `OWNERSHIP OVERLAP` findings become FAILING (nonzero exit) under
+  `--strict`, like the ready-gate findings. Plain `drift` output unchanged.
+- NO new top-level fns in either file. T-086 owns `ops/tests/api-kit.expected` for wave 1 and
+  writes EXACTLY these additions (sorted into place), pinned here so it never needs the other
+  lanes' diffs — the key-registry § 5 recipe, third use:
+  - `kit/ops/hooks/checkout-guard.sh	fn	deny`
+  - `kit/ops/hooks/checkout-guard.sh	fn	jstr`
+  - `kit/ops/hooks/checkout-guard.sh	fn	mutating_git`
+  - `kit/ops/hooks/ownership-guard.sh	fn	primary_gate`
+
+### 4. Worktree entry is a numbered step (T-087)
+- `cmd_claim` closes with an INSTRUCTION, not an observation. Pinned (one line each):
+  - `now enter the worktree — every command until handoff runs there`
+  - `Claude Code: EnterWorktree({path: ".polaris/wt/<ID>"}) · any other CLI: cd .polaris/wt/<ID>`
+- `cmd_fleet` pane kickoffs and the CONDUCTOR builder-kickoff template carry the same
+  EnterWorktree line. `kit/ops/roles/BUILDER.md` step 1b / `SOLO.md` / `CONDUCTOR.md`: entering
+  the worktree is a numbered step. No new fns; no new H2 headings anywhere (api-kit records
+  headings).
+
+### 5. `landing:` knob — a builder lands its own task (T-088)
+- KEYS.tsv row: `landing` · since 6.1.0 · default `self` · values `self | integrator`.
+  `update` never rewrites CONVENTIONS.md, so existing repos get the behavior by DEFAULT-IN-CODE
+  (the 6.0.0 lesson): unset composes to `self`.
+- Under `self`, `cmd_handoff` continues into `land <ID>` in the same session (new top-level fn
+  `self_land` in builder.sh — the ONLY new fn this task adds; api-kit line
+  `kit/ops/lib/builder.sh	fn	self_land`, and T-088 owns the golden for its wave). `int_on`
+  already provides wait-your-turn: atomic lease, 2s poll, stale steal, `queued: ` + rc 3 past the
+  wait — self_land inherits ALL of it unchanged. The all-review condition already computed at
+  handoff also triggers `seal` (last lane out seals the wave).
+- **Hard stops no knob softens** (refusal pinned ON ONE LINE): `risk: high` tasks and anything on
+  the STOP-AND-ASK list NEVER self-land — handoff prints the classic integrate notice instead:
+  - `risk: high never self-lands — a human must approve the merge; task stays in review/`
+- Under `integrator` (and on any self-land refusal) behavior is byte-for-byte today's.
+- Defaults re-sized for 5 lanes: `autolaunch_max` 3 → 5 (KEYS.tsv row + the `cfg autolaunch_max 3`
+  fallback at observe.sh:1869 + CONDUCTOR.md "default 3"), `integration_wait_minutes` 10 → 20
+  (KEYS.tsv row + `cfg integration_wait_minutes 10` at workspace.sh:96 + the two observe.sh
+  doctor warnings naming "(10)"). Suite economics unchanged: `land` is squash+audit (fast); the
+  full suite stays per-wave (`integration: batch`).
+- `kit/ops/PROTOCOL.md` § LANES documents self-landing as the SOLO / `land --express` precedent
+  generalized — one session carrying one task to merged. Edit INSIDE the section; no new heading.
+
+### 6. Executable check (T-089 — three drills + goldens; labels in spine.sh SELFTEST_LABELS)
+- `checkoutguard` (drill_checkoutguard, policy.sh): pipe a PreToolUse payload with cwd=primary +
+  `git switch x` → deny JSON carrying `the primary checkout is shared`; same command with
+  cwd=.polaris/wt/T-000 → exit 0, no deny; `git status` in primary → exit 0. Also primary_gate:
+  primary + planted lock + non-feat HEAD + tracked source path → deny; an ops/board/ path →
+  allow; no locks → allow.
+- `readyoverlap` (drill_readyoverlap, board.sh): two ready tasks sharing a file → explicit
+  `claim` of the second dies `overlaps ready`; auto-pick moves it to blocked/ with the remedy
+  note; `drift --strict` exits nonzero naming OWNERSHIP OVERLAP; plain `drift` exits 0.
+- `selfland` (drill_selfland, history.sh): landing unset (composes self) → handoff of a normal
+  task lands it (task reaches done/, lease released); a `risk: high` task stays in review/ with
+  the pinned refusal; `landing: integrator` → classic notice, no land.
+- Golden pairs (polaris check --scaffold): `checkout-guard-denies` · `ownership-primary` grepping
+  the pinned refusal lines out of the hook scripts themselves (hermetic — no live board).
+- Budget: ~44s/drill + 144s spine; drills namespace ALL scratch under `scratchpad/<ID>/`.
+- New fns are the three `drill_*` bodies; T-089 owns api-kit.expected for the final wave.
+
+### v2 invariants
+- Layer 1+2 are HOOKS: they gate the agent's Bash/Edit tools, never git run inside `ops/polaris`
+  itself (`wave_on`, `park` keep working in the primary).
+- Every v1 gate, pin and rc stays. `queued: `/rc 3, lease stealing, park semantics: unchanged.
+- Only the deny messages above are new agent-facing strings; each lives ON ONE LINE.
+- bash >= 3.2 everywhere; hooks stay fork-free pure bash.
+
 ## Changelog
+- v2 2026-08-23: enforced isolation - checkout-guard hook, ownership-guard primary_gate, ready-union-active claim sweep, drift --strict fails overlap, landing: self knob + defaults 5/20, drills checkoutguard/readyoverlap/selfland (T-084..T-090, plan enforced-isolation).
 - v1.1 2026-08-03: board mutex pid-guarded — mutex_on writes $MUTEX/pid, mutex_off no-ops on a
   foreign/missing pid; staleness steal + on_die wiring unchanged (T-064, integrator audit filing).
 - v1 2026-08-03: created for T-057 (module + CLI + on_die), T-058 (integration lane), T-059
