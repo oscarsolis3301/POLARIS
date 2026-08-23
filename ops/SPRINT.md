@@ -5,7 +5,10 @@ nothing puts a session into its worktree, the write-guard disengages in the prim
 nothing refuses `git switch` in the shared checkout, the claim gate sweeps only `active/`, and the
 board sits in review/ with no integrator. Four layers close it (shared-checkout.md v2, the spec):
 checkout-guard hook (T-084) · ownership-guard primary_gate (T-085) · ready∪active disjointness +
-failing strict drift (T-086) · `landing: self` through the existing lease, defaults 5/20 (T-088);
+failing strict drift (T-086) · `landing: self` through the existing lease, autolaunch_max 5 — integration_wait_minutes STAYS
+10 by human ruling (foreground int_on poll = the 600s tool cap; detach with bg run ship-<ID> +
+chunked bg wait --max 300), and T-088 also carries the human-approved Invariant 9 rewording
+into kit/CLAUDE.md (the lease holder IS the Integrator — what wave_on always did);
 mechanical worktree entry (T-087), three drills + goldens (T-089), release 6.1.0 (T-090).
 Pre-mortem applied: api-kit is the ONLY moving shared golden — ONE owner per wave
 (T-086 → T-088 → T-089), every cross-lane fn name pinned BYTE-EXACT in shared-checkout v2 §3/§5/§6
