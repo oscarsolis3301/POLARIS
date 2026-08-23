@@ -89,6 +89,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/checkout-guard.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }

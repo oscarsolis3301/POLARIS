@@ -147,10 +147,14 @@ kit/ops/dashboard.py	fn	read_text
 kit/ops/dashboard.py	fn	repo_root
 kit/ops/dashboard.py	fn	sh
 kit/ops/dashboard.py	fn	signature
+kit/ops/hooks/checkout-guard.sh	fn	deny
+kit/ops/hooks/checkout-guard.sh	fn	jstr
+kit/ops/hooks/checkout-guard.sh	fn	mutating_git
 kit/ops/hooks/ownership-guard.sh	fn	cleanup
 kit/ops/hooks/ownership-guard.sh	fn	jstr
 kit/ops/hooks/ownership-guard.sh	fn	lc
 kit/ops/hooks/ownership-guard.sh	fn	norm
+kit/ops/hooks/ownership-guard.sh	fn	primary_gate
 kit/ops/hooks/readonly-allow.sh	fn	awk_ok
 kit/ops/hooks/readonly-allow.sh	fn	check_segment
 kit/ops/hooks/readonly-allow.sh	fn	find_ok
