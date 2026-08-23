@@ -117,3 +117,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "kit/ops/hooks/checkout-guard.sh — new PreToolUse deny hook: checkout-mutating git is refused in the shared primary, allowed inside .polaris/wt/<ID>"  (T-084, 2026-08-23)
 
 - "ownership-guard gains primary_gate — writes to tracked source in the shared primary are denied while any task lock exists and HEAD is not feat/*"  (T-085, 2026-08-23)
+
+- "claim disjointness gate sweeps ready/ as well as active/; drift --strict exits nonzero on OWNERSHIP OVERLAP"  (T-086, 2026-08-23)
