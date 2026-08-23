@@ -189,9 +189,27 @@ norm "$CWD";  CWD="$REPLY"
 # --- repo + repo-relative path ------------------------------------------------
 # Git on Windows prints toplevel/worktree as `C:/...` while FILE/CWD normalize
 # to `/c/...` — norm() BOTH sides or every in-repo path looks "outside the repo".
-TOP="$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)" || exit 0
+# ONE rev-parse fetches BOTH values it needs; splitting the two lines in bash is free, whereas a
+# second `git rev-parse` would be another fork on every single write. See the SPEED note above:
+# at 2x the budget this hook was killed at its timeout and FAILED OPEN, dropping the gate silently.
+GITINFO="$(git -C "$CWD" rev-parse --show-toplevel --git-common-dir 2>/dev/null)" || exit 0
+TOP="${GITINFO%%$'\n'*}"
+GCD="${GITINFO#*$'\n'}"
+[ "$GCD" = "$TOP" ] && GCD=""                  # one-line output (git too old for --git-common-dir)
 norm "$TOP"; TOP="$REPLY"
+norm "$GCD"; GCD="$REPLY"
+# --git-common-dir prints RELATIVE to $CWD inside the primary (".git", "../.git") and absolute from
+# a linked worktree. Anchor the relative form; leftover `..` segments are fine for the -d tests.
+case "$GCD" in ''|/*) ;; *) GCD="$CWD/$GCD";; esac
 [ -x "$TOP/ops/polaris" ] || exit 0            # not a POLARIS repo — stand down
+# WHERE ARE WE? Pure string ops. The worktree layout .polaris/wt/<ID> spells out BOTH the task ID
+# and the primary checkout, so neither answer needs `git worktree list` (~460ms).
+WT_ID=""; PRIMARY=""
+case "$TOP" in
+  */.polaris/wt/*) WT_ID="${TOP##*/}"; PRIMARY="${TOP%/.polaris/wt/*}";;
+  *) PRIMARY="$TOP";;
+esac
+[ -n "$PRIMARY" ] && [ -x "$PRIMARY/ops/polaris" ] || PRIMARY=""   # odd layout → resolve it lazily
 BR="$(git -C "$CWD" rev-parse --abbrev-ref HEAD 2>/dev/null)" || exit 0
 case "$FILE" in /*) ABS="$FILE";; *) ABS="$CWD/$FILE";; esac
 # Prefix-match case-INSENSITIVELY (Windows + macOS default are case-insensitive filesystems, and
@@ -204,9 +222,13 @@ case "$ABS_LC" in
     # LAZY: `git worktree list` costs ~460ms and only matters when the write is NOT under this
     # worktree's own toplevel — i.e. a Builder in .polaris/wt/<ID> touching the primary checkout.
     # Resolving it eagerly taxed every ordinary write to answer a question they never ask.
-    PRIMARY="$(git -C "$CWD" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
+    # Usually free now: the .polaris/wt/<ID> toplevel already named the primary above.
+    if [ -z "$PRIMARY" ]; then
+      PRIMARY="$(git -C "$CWD" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
+      [ -n "$PRIMARY" ] && { norm "$PRIMARY"; PRIMARY="$REPLY"; }
+    fi
     if [ -n "$PRIMARY" ]; then
-      norm "$PRIMARY"; PRIMARY="$REPLY"; lc "$PRIMARY"
+      lc "$PRIMARY"
       case "$ABS_LC" in "$REPLY"/*) REL="${ABS:$((${#PRIMARY}+1))}";; esac
     fi;;
 esac
@@ -215,6 +237,43 @@ if [ -z "$REL" ]; then
   echo "polaris-guard BLOCKED: $ABS is outside this repo. Task ${BR#feat/} may only write its files_owned." >&2
   exit 2
 fi
+
+# --- the primary checkout is not a lane ---------------------------------------
+# The ownership gate below keys off the CURRENT DIRECTORY's branch, so a session that never
+# entered its worktree sits in the primary on `main` with the ownership system fully disengaged —
+# the exact state five colliding sessions were in. Contract: ops/contracts/shared-checkout.md § v2.2.
+# Three conditions, cheapest first: (a) cwd is the primary worktree, (b) HEAD is not feat/*,
+# (c) at least one task lock dir exists under <git-common-dir>/polaris-locks (a builder is live).
+# The allowlist is checked FIRST and the answer to every unknown is ALLOW: PLANNER, INTEGRATOR,
+# CONDUCTOR and EVOLVE legitimately write in the primary, and a gate that blocks them is worse than
+# the bug it fixes. This NEVER returns the ownership rc — anything it does not deny falls through
+# to today's exact behavior. No locks (INIT, a lone PLANNER, an empty board) = no gate: an accepted
+# trade, recorded in the contract. Costs zero forks unless a write is already a deny candidate.
+# rc 0 = allow / not our business · rc 2 = deny.
+primary_gate() {
+  [ -n "$WT_ID" ] && return 0                  # inside .polaris/wt/<ID> — the branch gate owns this
+  case "$BR" in feat/*) return 0;; esac        # a feat/* HEAD is the branch gate's business
+  case "$REL" in                               # primary-role surfaces, checked FIRST
+    ops/board/*|ops/contracts/*|.polaris/*) return 0;;
+    ops/*.md) case "${REL#ops/}" in */*) ;; *) return 0;; esac;;   # top-level ops docs only
+  esac
+  [ -n "$GCD" ] || return 0
+  local d hit=""
+  for d in "$GCD"/polaris-locks/*/; do
+    [ -d "$d" ] || continue                    # no match — bash leaves the pattern verbatim
+    case "${d%/}" in */.int-lease|*/.board-mutex) continue;; esac
+    hit=1; break
+  done
+  [ -n "$hit" ] || return 0                    # nobody is building — nothing to collide with
+  git -C "$TOP" ls-files --error-unmatch -- "$REL" >/dev/null 2>&1 || return 0   # untracked scratch
+  { echo "polaris-guard BLOCKED: '$REL' is tracked source in the SHARED primary checkout, and a task lock is live."
+    echo 'builders never edit the shared primary — claim a task and work in its worktree: bash ops/polaris claim, then cd .polaris/wt/<ID>'
+    echo "Already claimed one? Then you are simply in the wrong directory: cd .polaris/wt/<ID> and re-run there."
+    echo "Primary-role surfaces stay open: ops/board/ · ops/contracts/ · ops/*.md · .polaris/ · anything untracked."
+  } >&2
+  return 2
+}
+primary_gate || exit 2
 
 # --- both gates in ONE polaris startup ----------------------------------------
 # RULES (every session, every branch) then OWNERSHIP (only inside a Builder worktree, feat/<ID>).
