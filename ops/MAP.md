@@ -113,3 +113,5 @@ not installed code — they are written normally, by the board scripts and by th
   tarball/raw-channel paths working regardless, so this is untested-in-the-wild, not unsafe.
 
 ## Deltas
+
+- "kit/ops/hooks/checkout-guard.sh — new PreToolUse deny hook: checkout-mutating git is refused in the shared primary, allowed inside .polaris/wt/<ID>"  (T-084, 2026-08-23)
