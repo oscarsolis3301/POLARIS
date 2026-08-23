@@ -219,13 +219,21 @@ ungated — accepted trade, recorded here. Refusal pinned ON ONE LINE:
   - `kit/ops/hooks/ownership-guard.sh	fn	primary_gate`
 
 ### 4. Worktree entry is a numbered step (T-087)
+TWO callers, two entries — pin BOTH, never one recipe (wave-1 field finding, T-085's builder:
+a conductor-spawned subagent has its cwd PINNED at launch and EnterWorktree REFUSES there —
+"the current working directory … is the repository root, not an isolated worktree" — while a
+top-level session, the human's actual ~5-chat workflow, enters normally and needs no prompt).
 - `cmd_claim` closes with an INSTRUCTION, not an observation. Pinned (one line each):
   - `now enter the worktree — every command until handoff runs there`
-  - `Claude Code: EnterWorktree({path: ".polaris/wt/<ID>"}) · any other CLI: cd .polaris/wt/<ID>`
-- `cmd_fleet` pane kickoffs and the CONDUCTOR builder-kickoff template carry the same
-  EnterWorktree line. `kit/ops/roles/BUILDER.md` step 1b / `SOLO.md` / `CONDUCTOR.md`: entering
-  the worktree is a numbered step. No new fns; no new H2 headings anywhere (api-kit records
-  headings).
+  - `top-level session: EnterWorktree({path: ".polaris/wt/<ID>"}) · pinned-cwd subagent or any other CLI: run everything via absolute paths under .polaris/wt/<ID> (or cd there — the shell's cwd persists between calls)`
+- `cmd_fleet` pane kickoffs are top-level panes: they carry the EnterWorktree line. The
+  CONDUCTOR builder-kickoff template must NOT instruct EnterWorktree — it refuses every time for
+  a subagent, and an instruction that always fails teaches builders to ignore the step, the exact
+  failure mode this sprint removes. Its pinned line instead:
+  - `you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout`
+- `kit/ops/roles/BUILDER.md` step 1b / `SOLO.md`: entering the worktree is a numbered step
+  carrying BOTH caller lines (a builder session may be either). No new fns; no new H2 headings
+  anywhere (api-kit records headings).
 
 ### 5. `landing:` knob — a builder lands its own task (T-088)
 - KEYS.tsv row: `landing` · since 6.1.0 · default `self` · values `self | integrator`.
@@ -269,7 +277,9 @@ ungated — accepted trade, recorded here. Refusal pinned ON ONE LINE:
   `git switch x` → deny JSON carrying `the primary checkout is shared`; same command with
   cwd=.polaris/wt/T-000 → exit 0, no deny; `git status` in primary → exit 0. Also primary_gate:
   primary + planted lock + non-feat HEAD + tracked source path → deny; an ops/board/ path →
-  allow; no locks → allow.
+  allow; no locks → allow. And the FALLBACK entry — the path every conductor lane actually
+  takes: with cwd pinned at the primary, a write via an ABSOLUTE path under `.polaris/wt/<ID>`
+  is allowed (the `.polaris/` allowlist) and the resulting commit lands on `feat/<ID>`.
 - `readyoverlap` (drill_readyoverlap, board.sh): two ready tasks sharing a file → explicit
   `claim` of the second dies `overlaps ready`; auto-pick moves it to blocked/ with the remedy
   note; `drift --strict` exits nonzero naming OWNERSHIP OVERLAP; plain `drift` exits 0.
@@ -284,6 +294,15 @@ ungated — accepted trade, recorded here. Refusal pinned ON ONE LINE:
 ### v2 invariants
 - Layer 1+2 are HOOKS: they gate the agent's Bash/Edit tools, never git run inside `ops/polaris`
   itself (`wave_on`, `park` keep working in the primary).
+- **Entry is enforced by the GUARD, not by the entry tool.** EnterWorktree vs `cd` vs absolute
+  paths is a convenience question; §2's `primary_gate` is what makes staying in the primary
+  actually fail. If the harness's worktree tooling changes again, the layer still holds.
+- Field note (wave 1, applies to §1 AND §2, additive — both hooks were claimed when learned):
+  `git rev-parse --git-common-dir` prints a RELATIVE path from the primary and an absolute one
+  only from a linked worktree, so `$LOCKS` and every path derived from it must be anchored to
+  the payload cwd before any comparison — never to the hook process's own cwd. (T-085 landed
+  this way, folding the second rev-parse into the first and dropping a ~460ms `git worktree
+  list` — zero added forks is the budget to match.)
 - Every v1 gate, pin and rc stays. `queued: `/rc 3, lease stealing, park semantics: unchanged.
 - Only the deny messages above are new agent-facing strings; each lives ON ONE LINE.
 - bash >= 3.2 everywhere; hooks stay fork-free pure bash.
@@ -291,6 +310,7 @@ ungated — accepted trade, recorded here. Refusal pinned ON ONE LINE:
 ## Changelog
 - v2 2026-08-23: enforced isolation - checkout-guard hook, ownership-guard primary_gate, ready-union-active claim sweep, drift --strict fails overlap, landing: self knob + autolaunch_max 5, drills checkoutguard/readyoverlap/selfland (T-084..T-090, plan enforced-isolation).
 - v2 amended pre-claim 2026-08-23 (T-088 unclaimed, so edited in place per the append-only rule): integration_wait_minutes REVERTED to 10 - the foreground int_on poll makes 10min exactly the harness 600s tool cap, so 20 loses the whole wait (detach with bg run ship-<ID> + chunked bg wait --max 300 instead); Invariant 9 reworded (human-approved verbatim: the lease holder IS the Integrator) - kit/CLAUDE.md joins T-088's files_owned. Wave-1 sections 1-4 and 6 byte-identical.
+- v2 amended 2026-08-23 (T-087/T-089 unclaimed; claimed sections untouched, field notes additive): section 4 now pins TWO caller entries - EnterWorktree refuses in a pinned-cwd subagent (wave-1 finding, T-085's builder), so top-level sessions keep EnterWorktree while subagents get absolute-paths-as-primary and the CONDUCTOR kickoff never instructs EnterWorktree; checkoutguard drill gains the fallback-entry assertion; invariants gain entry-enforced-by-the-guard + the relative --git-common-dir anchoring note.
 - v1.1 2026-08-03: board mutex pid-guarded — mutex_on writes $MUTEX/pid, mutex_off no-ops on a
   foreign/missing pid; staleness steal + on_die wiring unchanged (T-064, integrator audit filing).
 - v1 2026-08-03: created for T-057 (module + CLI + on_die), T-058 (integration lane), T-059
