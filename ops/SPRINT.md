@@ -1,3 +1,30 @@
+# SPRINT 11 — Enforced isolation (6.1.0)          capacity: 23   dates: 2026-08-23–
+
+Five parallel sessions on one repo collide because POLARIS's isolation machinery is not ENFORCED:
+nothing puts a session into its worktree, the write-guard disengages in the primary on `main`,
+nothing refuses `git switch` in the shared checkout, the claim gate sweeps only `active/`, and the
+board sits in review/ with no integrator. Four layers close it (shared-checkout.md v2, the spec):
+checkout-guard hook (T-084) · ownership-guard primary_gate (T-085) · ready∪active disjointness +
+failing strict drift (T-086) · `landing: self` through the existing lease, defaults 5/20 (T-088);
+mechanical worktree entry (T-087), three drills + goldens (T-089), release 6.1.0 (T-090).
+Pre-mortem applied: api-kit is the ONLY moving shared golden — ONE owner per wave
+(T-086 → T-088 → T-089), every cross-lane fn name pinned BYTE-EXACT in shared-checkout v2 §3/§5/§6
+so the owner never needs a sibling's diff (the §5 recording recipe stands if an owner deadlocks);
+kit/ops/lib/*.sh is a serial chain T-086→T-087→T-088→T-089 (selftest mid-edit trap + hotspot
+rule), so W1 is the only parallel wave: T-084 · T-085 · T-086, fully disjoint. Scratch is
+lane-namespaced (scratchpad/<ID>/), sabotage greens count only after reading the sabotage diff,
+verify: lines unquoted, drill runs foreground ≥600000ms on the KIT driver (label-count tell:
+28 → 31). Board mechanics run installed 6.0.0. Hard gates move NOWHERE: risk:high approval,
+STOP-AND-ASK, RULES.tsv, ready gate, contract-before-code, green-before-review — `landing: self`
+explicitly refuses both, drilled. plan: enforced-isolation → T-084..T-090 (23 pts). W1 ready:
+T-084 · T-085 · T-086. Acceptance beyond the suite: the live 5-session drill (fleet 5 --launch;
+primary branch never moves; every head on exactly one branch; five lands through the lease, zero
+human input) — plus installing POLARIS in the colliding app repo once the human names its path.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 10 — Autonomy by default (6.0.0)          capacity: 36   dates: 2026-08-03–
 
 `update` refreshes kit code and never rewrites CONVENTIONS.md — correct, and exactly why every
