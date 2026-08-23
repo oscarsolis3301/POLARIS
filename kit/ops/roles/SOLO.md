@@ -43,8 +43,15 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
      gate already runs the suite once.
    - Write `## Why` in plain language: it becomes the commit body verbatim.
    - Commit it to the board ref (`ops/MANUAL.md` § board-commit recipe), never to `<base>`.
-2. **Claim** — `bash ops/polaris claim <ID>`. This locks it and puts you in a worktree on
-   `feat/<ID>`. Work there, only inside `files_owned`.
+2. **Claim** — `bash ops/polaris claim <ID>`. This locks it and builds a worktree on `feat/<ID>`.
+2b. **Enter that worktree** — a step, not a suggestion, and the one step every collision so far
+   skipped. You share this checkout; work only inside `files_owned`, and only in there. Two callers,
+   one of which is you:
+   - **Top-level session** (a chat or a fleet pane): `EnterWorktree({path: ".polaris/wt/<ID>"})` — no prompt, this file is your instruction to run it.
+   - **Pinned-cwd subagent or any other CLI:** run everything via absolute paths under .polaris/wt/<ID> (or `cd` there — a shell's cwd persists between calls). `EnterWorktree` refuses here: your cwd was fixed at launch, and the tool only accepts paths under `.claude/worktrees/`.
+
+   Which one you used is convenience; staying in the primary is what actually fails — the ownership
+   guard denies writes to shared source while any task lock is live.
 3. **Build.** Match the surrounding code: `.polaris/brain/prefs.md` records the repo's real
    conventions, so you do not have to infer them.
 4. **Verify** — `bash ops/polaris verify`. Proves diff ⊆ `files_owned` and runs your `verify:` list.
