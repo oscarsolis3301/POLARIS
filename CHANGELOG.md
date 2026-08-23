@@ -4,6 +4,76 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.1.0 — 2026-08-23
+
+**Every piece of parallel isolation was already here except the part that enforces it.**
+
+A worktree per task, disjoint `files_owned`, an atomic claim lock, one integration lease — the
+machinery has shipped for releases. None of it was binding. Five concurrent sessions still shared
+ONE primary checkout, and any of them could `git switch` or `git reset` it out from under the other
+four; the claim gate promised Invariant 2 but only ever swept `active/`; a session sitting in the
+primary on a non-`feat/*` branch passed no ownership check whatsoever. Not hypothetical: on
+2026-08-23 one PR silently carried another session's commits. 6.1.0 closes the three seams where
+isolation was a convention nobody could see, and lets a finishing builder land its own work instead
+of waiting for somebody to come collect it. Additive throughout — every 6.0 interface is unchanged,
+and the one behavior flip composes from an unset key with a one-line opt-out.
+
+| | before | after |
+|---|---|---|
+| `git switch` / `reset` / `stash` in the shared primary | allowed — moves the ground under four other sessions | denied by `checkout-guard.sh`, which names the worktree command to run instead; silent inside `.polaris/wt/<ID>` |
+| a session in the primary on a non-`feat/*` branch | no ownership gate at all | `primary_gate` refuses tracked-source writes while any task lock is live |
+| Invariant 2 disjointness at claim | swept `active/` only, outside the mutex | sweeps `ready/` ∪ `active/` INSIDE the board mutex; `drift --strict` fails on overlap |
+| a builder whose task just went green | hands to `review/` and waits for an integrator to appear | `landing: self` continues into a lease-gated `land`: queue behind the other lanes, then merge itself |
+| "cd into your worktree" in the role files | one form, which half the callers structurally cannot use | two caller forms named: `EnterWorktree` for top-level sessions, absolute paths for pinned-cwd subagents |
+
+- **`ops/hooks/checkout-guard.sh` — the primary checkout is not yours to switch.** A new PreToolUse
+  guard denies exactly one thing: a checkout-mutating git invocation issued from the shared primary
+  — `switch`, `checkout`, `reset`, `merge`, `rebase`, `cherry-pick`, `worktree add`, `branch`
+  `-d/-D/-m/-M`, and `stash` except the read-only `list`/`show`. The same commands inside
+  `.polaris/wt/<ID>`, all read-only git, and every non-git command produce NO output at all. Deny is
+  narrow and silence is the default: any token it cannot read confidently as a command-position
+  `git` is left alone on purpose, and the common path forks nothing — no interpreter, no
+  `ops/polaris`, no git — because the lesson of the ownership guard is that a hook killed at its
+  timeout FAILS OPEN and drops its gate silently. It refuses through `hookSpecificOutput` JSON on
+  stdout, and it is deliberately NOT wired into `readonly-allow.sh`, whose whole safety contract is
+  that it only ever ALLOWS. Deny lives in its own file.
+- **`primary_gate` closes the hole underneath the other guard.** `ownership-guard.sh` gated a
+  `feat/*` HEAD and nothing else, so the single most dangerous place to be — the shared primary, on
+  the base branch, while four builders hold locks — was the one place with no gate. Now a write to
+  tracked source from the primary is refused (exit 2 + stderr, the shape that call site reads)
+  whenever a task lock is live, naming the worktree to run in instead. Primary-role surfaces stay
+  open by design: `ops/board/`, `ops/contracts/`, top-level `ops/*.md`, `.polaris/`, and anything
+  untracked. Nobody building → nothing to collide with → no gate.
+- **Invariant 2 stops being a promise and becomes a gate.** The claim-time disjointness sweep now
+  covers `ready/` ∪ `active/` rather than `active/` alone, and runs INSIDE the board mutex, closing
+  the TOCTOU window where two sessions could each check a clean board and then both claim into it.
+  `pat_overlap` is fork-free (it was a subshell per pattern pair, on the hot path of every claim),
+  and `drift --strict` now fails on an overlap instead of merely mentioning it — so the planner
+  hears about it one gate earlier, where re-grooming is cheap.
+- **`landing: self` — the session that finishes the work lands the work.** New CONVENTIONS knob,
+  `self` | `integrator`, defaulting to `self` in kit code by the 6.0.0 pattern (`update` must never
+  rewrite a repo's own config, so a default that matters ships in code). A handoff continues
+  straight into `land`, which takes the integration lease first: a finishing builder queues behind
+  whoever holds the lane and merges itself when its turn comes, instead of leaving a green task in
+  `review/` waiting for an integrator to be spawned. The opt-out is one line —
+  `landing: integrator` restores the classic handoff exactly. `risk: high` tasks and anything on the
+  STOP-AND-ASK list NEVER self-land, under any setting. `autolaunch_max` goes 3 → 5, re-sized for
+  five lanes; `integration_wait_minutes` deliberately STAYS 10 — raising it past the harness's 600s
+  tool cap does not buy a longer wait, it loses the wait entirely.
+- **Worktree entry stops being folklore.** `claim`, `fleet` and the BUILDER, SOLO and CONDUCTOR role
+  files now spell out both caller forms, because one instruction could never fit both: a top-level
+  session uses `EnterWorktree` (verified working), and a pinned-cwd subagent uses an absolute `cd`
+  or absolute paths, since `EnterWorktree` structurally refuses there. Half the callers were being
+  told to run a command that cannot work for them.
+- **Invariant 9, reworded with the human's word on it:** *"Only the integration-lease holder merges.
+  The lease IS the Integrator."* The lease has been the real authority since 5.24.0; the invariant
+  still named a role, which is exactly the ambiguity a self-landing builder walks into.
+- `ops/contracts/shared-checkout.md` gains a `## v2` section (enforced isolation) covering all of
+  the above. Three new drills — `checkoutguard`, `readyoverlap`, `selfland` — bring the labeled
+  suite to 31, and two new golden pairs (`checkout-guard-denies`, `ownership-primary`) plus a
+  refreshed `cli-help` (the `approve` and `adopt` help blocks had never been captured) bring `check`
+  to 19/19.
+
 ## 6.0.0 — 2026-08-04
 
 **Eleven releases of autonomy machinery, and nobody was running any of it.**
