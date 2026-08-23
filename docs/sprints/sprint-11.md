@@ -142,7 +142,7 @@ handoff, then (self) land.
 - [ ] busyint + express + claimguard drills stay green
 
 ## T-089 — "Prove it — checkoutguard, readyoverlap, selfland drills + refusal goldens"
-points 5 · risk normal · landed 260dfeb (2026-08-23) · claimed 2026-08-23
+points 5 · risk normal · landed 260dfeb (2026-08-23) · claimed 2026-08-23 → done 2026-08-23
 files touched: kit/ops/lib/selftest/board.sh, kit/ops/lib/selftest/history.sh, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/spine.sh, ops/tests/api-kit.expected, ops/tests/checkout-guard-denies.cmd, ops/tests/checkout-guard-denies.expected, ops/tests/ownership-primary.cmd, ops/tests/ownership-primary.expected
 
 ### Why
@@ -171,6 +171,28 @@ drill fns.
 - [ ] golden pairs checkout-guard-denies + ownership-primary green via bash ops/polaris check,
 - [ ] api-kit.expected delta is exactly drill_checkoutguard + drill_readyoverlap +
 - [ ] drill budget respected: about 44s each — reuse the throwaway-repo spine, no new sleeps
+
+## T-090 — "Release 6.1.0 — enforced isolation ships to every POLARIS repo"
+points 2 · risk normal · landed 5a196d9 (2026-08-23) · claimed 2026-08-23
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+A release lands in all four places at once — kit/ops/VERSION, CHANGELOG, git tag, published
+release — and the daily CI job fails if ops/VERSION lags what is published. This task carries
+the first two: bump kit/ops/VERSION to 6.1.0 and write the CHANGELOG entry (the four layers: the
+checkout-guard hook, the ownership-guard primary gate, ready-union-active disjointness + strict
+drift, landing: self with the 5/20 defaults, plus the three drills). Minor, not major: every
+change is additive and the one behavior flip (self-landing) composes from an unset key by the
+6.0.0 default-in-code pattern with a one-line opt-out (landing: integrator). Tag, publish,
+dogfood (pack.py --dogfood refreshes ops/ including ops/VERSION) and the rollout `bash
+ops/polaris update` in each POLARIS repo happen at sprint finish per the release ritual in
+ops/CONVENTIONS.md — never bump without tagging.
+
+### Acceptance
+- [ ] kit/ops/VERSION reads exactly 6.1.0
+- [ ] CHANGELOG.md gains a 6.1.0 entry covering all four layers + drills, matching the file's
+- [ ] no other file touched — tag/publish/dogfood happen at finish per the release ritual, not
+- [ ] the published zip is refreshed by this release: polaris-v5.zip is currently STALE (built at
 
 ## T-091 — "Refresh the cli-help golden — approve + adopt blocks ship on main, the expected file never caught up"
 points 1 · risk normal · landed 180bda0 (2026-08-23) · claimed 2026-08-23 → done 2026-08-23
