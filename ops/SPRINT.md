@@ -29,6 +29,7 @@ human input) — plus installing POLARIS in the colliding app repo once the huma
 |---|---|---|
 | 2026-08-23 | 9 (T-084 3pts, T-085 3pts, T-086 3pts, wave 1, sealed sprint/11 c24892a) | 14 · T-087 (2pts) promoted to `ready/` (sole dep T-086 done; `ready/`+`active/` were empty so disjointness is trivial) · T-088/T-089/T-090 correctly held in `backlog/` (serial dep chain T-087→T-088→T-089→T-090) · cycle p50 0.7h n=86 · kickbacks 0 this wave (3 lifetime, 3%) · build avg 0.6h / integrate avg 2.8h · gate: full suite green backgrounded 9m (SELFTEST-PASS, all labels) on integrate; uat `check` 16/17 — the ONE red (`cli-help`) proven PRE-EXISTING on base, not the wave's: `approve` help text ships on main in `kit/ops/polaris` but `ops/tests/cli-help.expected` never learned it, and the wave touched neither file (byte-identical to base) — no kickback, golden refresh needs a human/Builder `check --update` decision · api-kit golden landed correct as pinned (T-086 sole owner, verify 4/5 green on base) · pre-existing warns reported not fixed: CONVENTIONS lacks 14/37 keys · polaris-v5.zip STALE (built 4e9fa63; T-090 release's business) · sweep --fix rotated 6 stale bg jobs (452-475h old) · drift clean |
 | 2026-08-23 | 12 (+T-087 2pts, +T-091 1pt, wave 2, re-sealed sprint/11 c24892a→32b3ef3) | 12 · T-088 (5pts) promoted to `ready/` (sole dep T-087 done; `ready/`+`active/` empty so disjointness trivial) · T-089/T-090 correctly held in `backlog/` (serial chain T-088→T-089→T-090) · scope grew +1 mid-sprint (23→24) with T-091, the 1-pt golden-refresh rider filed from W1's finding · cycle p50 0.7h n=88 · kickbacks 0 this wave (3 lifetime, 3%) · build avg 0.6h / integrate avg 2.7h · gate: full suite green backgrounded 9m (SELFTEST-PASS, all labels) on integrate · uat `check` 17/17 rc 0 — W1's sole red (`cli-help`) closed by T-091 exactly as the Learned bullet prescribed (golden diff vs base: additions only, approve 5 lines + adopt 5 lines) · T-087's outstanding contract item (top-level EnterWorktree entry, untestable from a pinned-cwd subagent) settled by the conductor's LIVE top-level verification pre-land, recorded in the task's Notes: contingency does NOT fire, EnterWorktree stays pinned · run-verify 11/11 (T-087) + 3/3 (T-091) on base · pre-seal `base..integrate` log read: zero stray commits · pre-existing warns reported not fixed: CONVENTIONS lacks 14/37 keys (benign by design since 6.0.0 defaults-in-code; human's call) · polaris-v5.zip STALE (built 4e9fa63; T-090's explicit acceptance item) · sweep + drift clean |
+| 2026-08-23 | 17 (+T-088 5pts, wave 3, re-sealed sprint/11 32b3ef3→0780d99) | 7 · T-089 (5pts) promoted to `ready/` (deps T-084/T-085/T-088 all done; `ready/`+`active/` empty so disjointness trivial) · T-090 correctly held in `backlog/` (sole dep T-089 unmet) · cycle p50 0.7h n=89 · kickbacks 0 this wave (3 lifetime, 3%) · build avg 0.6h / integrate avg 2.7h · gate: full suite green backgrounded ~10m rc 0 (SELFTEST-PASS, all labels) on integrate — which is also the byte-identical proof that T-088's recorded fail-closed decision held (`self_land` refuses silently when a task has NO `risk:` frontmatter; every pre-6.1 fixture lacks one, so zero drill churn) · uat `check` 17/17 rc 0 — the builder's corrected TWO-line api-kit golden delta (pinned `self_land` fn + `kit/ops/KEYS.tsv key landing` row; the contract had pinned only the fn) proven right at the primary-anchored gate · run-verify 14/14 on base · T-089 fixture requirement pasted into its Notes: selfland drill fixtures MUST declare `risk:` explicitly or `self_land` silently refuses and the drill tests nothing · installed ops/ copy unchanged this wave (self-landing ships in kit/ only until dogfood), so land/seal ran exactly as waves 1-2 · pre-existing warns reported not fixed: CONVENTIONS lacks 14/37 keys · polaris-v5.zip STALE (built 4e9fa63; T-090's explicit acceptance item) · sweep + drift clean |
 
 # SPRINT 10 — Autonomy by default (6.0.0)          capacity: 36   dates: 2026-08-03–
 
@@ -411,3 +412,22 @@ exercises but a Builder cannot.
   PLANNER/CONDUCTOR: when an acceptance item can only be proven from a specific execution context,
   route that proof to a session that HAS the context and record who ran it — an open item that no
   assigned lane can close otherwise rides silently into review/.
+- FAIL-CLOSED BEATS FIXTURE CHURN (sprint 11 W3): T-088 ships `landing:` default `self` IN CODE
+  (the 6.0.0 lesson — `update` never rewrites CONVENTIONS), which would have fired inside every
+  existing drill's `handoff` (scratch fixture repos have no CONVENTIONS.md) and wrecked the
+  spine's inline choreography. The builder's recorded `- assumed:` resolution — `self_land`
+  refuses SILENTLY when a task carries NO `risk:` frontmatter at all (unclassified = cannot be
+  proven not-stop-and-ask) — held at the wave gate exactly as claimed: full suite byte-identical,
+  SELFTEST-PASS, zero drill churn. The corollary cuts the other way and is now pasted into
+  T-089's Notes: its selfland drill fixtures MUST declare `risk:` explicitly, or `self_land`
+  silently refuses and the drill tests NOTHING — a silently-vacuous drill is worse than a missing
+  one. PLANNER: when a default-in-code feature meets legacy fixtures, refusing on the
+  unclassifiable is the carve that keeps the suite stable AND every new test honest.
+- PIN GOLDEN DELTAS BY SURFACE KIND, NOT JUST FN NAMES (sprint 11 W3): the api-kit index records
+  KEYS.tsv KEY rows as well as fns and headings (headings were sprint 8's lesson), so
+  shared-checkout §5's pinned ONE-line delta was incomplete — the true delta for T-088 is TWO
+  lines, the pinned `self_land` fn plus `kit/ops/KEYS.tsv	key	landing`. The builder caught and
+  corrected it inside its own ownership (it owns the golden this wave), and `check` 17/17 at the
+  primary-anchored gate confirmed; shipping only the pinned line would have gone red AFTER
+  landing. PLANNER: a contract that pins an api-kit delta for a task adding a KEYS.tsv row must
+  pin the key row alongside the fns.
