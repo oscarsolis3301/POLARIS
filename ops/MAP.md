@@ -119,3 +119,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "ownership-guard gains primary_gate — writes to tracked source in the shared primary are denied while any task lock exists and HEAD is not feat/*"  (T-085, 2026-08-23)
 
 - "claim disjointness gate sweeps ready/ as well as active/; drift --strict exits nonzero on OWNERSHIP OVERLAP"  (T-086, 2026-08-23)
+
+- "CONVENTIONS key landing (self|integrator, default self in code) — handoff continues into land through the shared lease; autolaunch_max default 5; Invariant 9 reworded in kit/CLAUDE.md (the lease holder IS the Integrator)"  (T-088, 2026-08-23)
