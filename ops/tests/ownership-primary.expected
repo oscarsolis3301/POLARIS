@@ -1,0 +1,4 @@
+pinned-refusal-lines: 1
+primary-gate-fn: 1
+primary-gate-exit2: 1
+json-deny-in-this-hook: 0
