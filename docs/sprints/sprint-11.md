@@ -103,7 +103,7 @@ the exact failure mode this sprint removes.
 - [ ] claim/fleet drills stay green (claimguard, fmlist)
 
 ## T-088 — "landing: self — a builder queues behind the lease and lands its own task"
-points 5 · risk normal · landed 487037e (2026-08-23) · claimed 2026-08-23
+points 5 · risk normal · landed 487037e (2026-08-23) · claimed 2026-08-23 → done 2026-08-23
 files touched: kit/CLAUDE.md, kit/ops/KEYS.tsv, kit/ops/PROTOCOL.md, kit/ops/lib/builder.sh, kit/ops/lib/observe.sh, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/SOLO.md, ops/tests/api-kit.expected
 
 ### Why
@@ -140,6 +140,37 @@ handoff, then (self) land.
 - [ ] exactly ONE new top-level fn (self_land, builder.sh); api-kit.expected delta is exactly
 - [ ] PROTOCOL section LANES documents self-landing; no new H2 headings anywhere
 - [ ] busyint + express + claimguard drills stay green
+
+## T-089 — "Prove it — checkoutguard, readyoverlap, selfland drills + refusal goldens"
+points 5 · risk normal · landed 260dfeb (2026-08-23) · claimed 2026-08-23
+files touched: kit/ops/lib/selftest/board.sh, kit/ops/lib/selftest/history.sh, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/spine.sh, ops/tests/api-kit.expected, ops/tests/checkout-guard-denies.cmd, ops/tests/checkout-guard-denies.expected, ops/tests/ownership-primary.cmd, ops/tests/ownership-primary.expected
+
+### Why
+The three enforcement layers are exactly the kind of behavior prose cannot hold — they must be
+drilled or they will silently regress. Add three labeled drills per contract v2.6:
+drill_checkoutguard (policy.sh — primary deny + worktree allow + read-only allow, plus
+primary_gate: planted lock/no-lock, allowlist, fail-open — AND the fallback entry every
+conductor lane actually takes: cwd pinned at the primary, a write via an ABSOLUTE path under
+.polaris/wt/<ID> is allowed and the commit lands on feat/<ID>), drill_readyoverlap (board.sh — two
+overlapping ready tasks: explicit claim dies with `overlaps ready`, auto-pick parks to blocked/,
+drift --strict exits nonzero, plain drift exits zero), drill_selfland (history.sh — unset knob
+lands a normal task to done/ through the lease; risk: high stays in review/ with the pinned
+refusal; landing: integrator gives the classic notice). Register all three labels at the END of
+SELFTEST_LABELS in spine.sh (order: ... route bg checkoutguard readyoverlap selfland). Scaffold
+golden pairs (polaris check --scaffold) grepping the two pinned refusal lines out of the hook
+scripts themselves — hermetic, no live board. Own the final api-kit.expected delta: the three
+drill fns.
+
+### Acceptance
+- [ ] all three drills green via --only, each assertion watched RED under a semantic sabotage in
+- [ ] checkoutguard asserts the FALLBACK path (contract v2.6): pinned-cwd session, absolute
+- [ ] checkoutguard asserts the deny SHAPE: hookSpecificOutput JSON on STDOUT (contract v2.1 —
+- [ ] checkoutguard and the goldens assert git stash list / git stash show in the primary are
+- [ ] hermetic: git status --porcelain unchanged across each drill; green on a second
+- [ ] labels registered; full-run drill count goes 28 to 31; --only selects each individually
+- [ ] golden pairs checkout-guard-denies + ownership-primary green via bash ops/polaris check,
+- [ ] api-kit.expected delta is exactly drill_checkoutguard + drill_readyoverlap +
+- [ ] drill budget respected: about 44s each — reuse the throwaway-repo spine, no new sleeps
 
 ## T-091 — "Refresh the cli-help golden — approve + adopt blocks ship on main, the expected file never caught up"
 points 1 · risk normal · landed 180bda0 (2026-08-23) · claimed 2026-08-23 → done 2026-08-23
