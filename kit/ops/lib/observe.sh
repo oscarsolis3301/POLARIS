@@ -1878,7 +1878,7 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
   fi
 
   # Cap auto-launched sessions — screen + cost discipline. The printed kickoff above stays uncapped.
-  local cap launch_n; cap="$(cfg autolaunch_max 3)"; case "$cap" in ''|*[!0-9]*) cap=3;; esac
+  local cap launch_n; cap="$(cfg autolaunch_max 5)"; case "$cap" in ''|*[!0-9]*) cap=5;; esac   # T-088: 3 → 5, re-sized for 5 lanes
   launch_n="$n"; [ "$launch_n" -gt "$cap" ] && launch_n="$cap"
 
   # Model routing (ops/contracts/model-routing.md § Consumers): panes claim RACILY — any pane may

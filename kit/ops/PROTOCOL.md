@@ -114,6 +114,19 @@ exists, on the base branch, and writes zero feature code, so that installing POL
 a planned board instead of homework. The CONDUCTOR is **not** a second exception: it holds no role
 at all and delegates each one to a fresh subagent, so roles still never mix inside one context.
 
+**Self-landing is that same collapse applied to every lane** (`landing:` in `ops/CONVENTIONS.md`,
+since 6.1.0; unset composes to `self` in code, because `update` never rewrites an installed
+CONVENTIONS). SOLO and `land --express` proved one session can carry one task from claim to merged;
+`landing: self` generalizes the precedent: a Builder's `handoff` continues into a lease-gated
+`land`, and the last lane out seals the wave. This is not a second role in the session — the
+integration lease IS the Integrator (Invariant 9): there is exactly one holder at any instant, and
+taking it is what makes a session one. No check moves: verify/ownership/RULES still gate the
+handoff, `land` is still squash + audit, the full suite still runs once per wave, and the hard
+stops keep the classic path — risk: high never self-lands — a human must approve the merge; task stays in review/.
+The landing tail can wait on a busy lease, so a session detaches it (`bg run ship-<ID>` + chunked
+`bg wait --max 300` — § LONG COMMANDS) and polls the rc; `landing: integrator` restores the classic
+handoff byte-for-byte.
+
 ## N CHATS, ONE REPO — who waits, who parks, who queues
 Several chats, one checkout. The second session finds the task locked, the integration lane held, or
 somebody else's edits in the tree — and none of that is a question for the human:

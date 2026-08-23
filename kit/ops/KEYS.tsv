@@ -47,6 +47,7 @@ test	5.0.0	<cmd>	nothing proves a task green — the wave gate, qa and CI all ha
 lint	5.0.0	<cmd>	no lint gate runs before a task reaches review
 typecheck	5.0.0	<cmd>	no type gate runs before a task reaches review
 build	5.0.0	<cmd>	no build gate runs before a task reaches review
-autolaunch_max	5.7.0	3	at most 3 Builder panes open themselves; the printed kickoffs stay uncapped
-integration_wait_minutes	5.24.0	10	a second session waits 10 minutes for the integration lane before it gives up
+autolaunch_max	5.7.0	5	at most 5 Builder panes open themselves; the printed kickoffs stay uncapped
+integration_wait_minutes	5.24.0	10	a second session waits 10 minutes for the integration lane before it gives up — NEVER raise past 10: the wait polls in the foreground, so 10 minutes is already the harness's 600s tool cap and a bigger bound makes the tool call return nothing and lose the whole wait; the long-wait fix is detaching (bg run + chunked bg wait --max 300), never a bigger number
 integration_stale_minutes	5.24.0	45	an integration lease held this long counts as crashed and may be stolen
+landing	6.1.0	self	a handoff lands its own task through the integration lease and the last lane out seals the wave; integrator restores the classic wait-for-an-integrator handoff

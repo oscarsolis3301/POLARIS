@@ -90,8 +90,7 @@ need one section or none.
    you did not claim.
 8. **Scope = the task.** No drive-by refactors, no extra features, no new dependencies. Want more?
    One line in `ops/board/backlog/IDEAS.md` for the Planner.
-9. **Only the Integrator merges**, and `risk: high` NEVER merges without explicit human approval in
-   the conversation.
+9. **Only the integration-lease holder merges.** The lease *is* the Integrator — there is exactly one at any instant, and taking it is what makes a session one. `risk: high` NEVER merges without explicit human approval in the conversation.
 10. **No secrets** in the repo, board, contracts, or notes. Reference env-var names only.
 11. **RULES are yours to maintain** (owner decision, 2026-07-25). `ops/RULES.tsv` is policy as DATA:
     add, edit and remove lines as the work requires, each change carrying a `#` comment naming WHO
