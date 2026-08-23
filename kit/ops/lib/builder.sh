@@ -23,7 +23,7 @@ cmd_claim() {
   fi
 
   local got="" cand
-  local ov_id="" ov_cpat="" ov_apat=""
+  local ov_id="" ov_cpat="" ov_apat="" ov_col="" ov_msg=""
   local af aid apat cpat
   while IFS= read -r cand; do
     [ -z "$cand" ] && continue
@@ -45,15 +45,30 @@ cmd_claim() {
       fi
     fi
     FAIL_LOCK_ID="$cand"; trap on_die EXIT   # we hold the lock from here — any die below must release it
-    # T-059 claim-time disjointness gate: the locked candidate's files_owned vs EVERY active/ task,
-    # both directions via pat_overlap (observe.sh). Two planners racing can put overlapping tasks in
-    # ready/, and the ready-gate never re-checks against already-claimed work — without this the
-    # overlap surfaces two builds later as an integrator squash conflict. Clean board → zero output,
-    # zero extra git work: the scan is frontmatter reads only.
-    ov_id=""; ov_cpat=""; ov_apat=""
-    for af in "$BOARD/active/"*.md; do
-      [ -e "$af" ] || break
+    # T-059 claim-time disjointness gate, widened to ready ∪ active by T-086 (shared-checkout § v2.3):
+    # the locked candidate's files_owned vs EVERY task in ready/ AND active/, both directions via
+    # pat_overlap (observe.sh). Two planners racing can put overlapping tasks in ready/, and the
+    # ready-gate never re-checks against already-claimed work — without this the overlap surfaces
+    # two builds later as an integrator squash conflict. Clean board → zero output, zero extra git
+    # work: the scan is frontmatter reads and (since T-086) fork-free pattern matching.
+    #
+    # The scan runs INSIDE the board mutex, and the placement IS the gate. Where it used to sit —
+    # after lock_take, before the mutex — two sessions claiming two overlapping tasks could each
+    # scan a board that showed neither of them in active/ yet, both pass, and both mv: the mutex was
+    # taken after the decision it exists to protect. Held from here through the ready→active mv
+    # below, decision and move are one atomic step. mutex_on is NOT re-entrant, so there is exactly
+    # ONE acquisition per candidate and every exit from this iteration releases it — blocked/ below,
+    # die (on_die runs mutex_off), or the claim after the loop.
+    mutex_on
+    ov_id=""; ov_cpat=""; ov_apat=""; ov_col=""
+    # active/ FIRST, deliberately: when a candidate collides with both columns the active one is the
+    # live conflict — someone is building it right now — and reporting it keeps T-059's message for
+    # every board that already had one. ready/ is the addition, not the new precedence.
+    for af in "$BOARD/active/"*.md "$BOARD/ready/"*.md; do
+      [ -e "$af" ] || continue          # `continue`, not `break`: an empty column must not stop the other
       aid="$(basename "$af" .md)"
+      [ "$aid" = "$cand" ] && continue  # the candidate is still in ready/ — it never overlaps itself
+      case "$af" in "$BOARD/ready/"*) ov_col=ready;; *) ov_col=active;; esac
       while IFS= read -r cpat; do
         [ -z "$cpat" ] && continue
         while IFS= read -r apat; do
@@ -70,16 +85,20 @@ EOF_CPAT
       [ -n "$ov_id" ] && break
     done
     if [ -n "$ov_id" ]; then
-      # explicit ID → refuse, naming the active task and both patterns (on_die releases our lock).
-      [ "$explicit" = 1 ] && die "claim refused: $cand files_owned '$ov_cpat' overlaps active $ov_id '$ov_apat' — re-groom or wait for $ov_id"
+      # Both phrasings are spelled out here as literals, not composed from $ov_col, so they stay
+      # greppable in the source: `overlaps active` (T-059) and `overlaps ready` (T-086) are pinned
+      # in the contract and grepped by verify: and the readyoverlap drill. Output is byte-identical
+      # to T-059's for the active case.
+      if [ "$ov_col" = ready ]; then ov_msg="overlaps ready $ov_id"; else ov_msg="overlaps active $ov_id"; fi
+      # explicit ID → refuse, naming the task and both patterns (on_die releases lock AND mutex).
+      [ "$explicit" = 1 ] && die "claim refused: $cand files_owned '$ov_cpat' $ov_msg '$ov_apat' — re-groom or wait for $ov_id"
       # auto-pick → park the bad pairing in blocked/ with the remedy ON THE RECORD (ONE board
       # commit), release its lock, and keep claiming — the next candidate gets its own gate pass.
-      note "⛔ $cand files_owned '$ov_cpat' overlaps active $ov_id '$ov_apat' → blocked/ — claiming the next candidate"
-      mutex_on
+      note "⛔ $cand files_owned '$ov_cpat' $ov_msg '$ov_apat' → blocked/ — claiming the next candidate"
       mv "$BOARD/ready/$cand.md" "$BOARD/blocked/$cand.md"
       set_fm status blocked "$BOARD/blocked/$cand.md"
-      printf -- "- ⛔ ownership overlap: files_owned '%s' overlaps active %s '%s' — re-groom or wait for %s\n" \
-        "$ov_cpat" "$ov_id" "$ov_apat" "$ov_id" >> "$BOARD/blocked/$cand.md"
+      printf -- "- ⛔ ownership overlap: files_owned '%s' %s '%s' — re-groom or wait for %s\n" \
+        "$ov_cpat" "$ov_msg" "$ov_apat" "$ov_id" >> "$BOARD/blocked/$cand.md"
       evt blocked "$cand" "ownership overlap with $ov_id"
       board_commit "chore(board): block $cand (ownership overlap)"
       sync_board
@@ -88,7 +107,7 @@ EOF_CPAT
       FAIL_LOCK_ID=""; trap - EXIT
       continue
     fi
-    got="$cand"; break
+    got="$cand"; break   # mutex still HELD — released after the ready→active mv below
   done <<EOF
 $candidates
 EOF
@@ -97,7 +116,8 @@ EOF
   FAIL_LOCK_ID="$id"; trap on_die EXIT
 
   local pts; pts="$(fm_get points "$BOARD/ready/$id.md")"
-  mutex_on
+  # NO mutex_on here: the disjointness gate above took it and still holds it, so the scan that
+  # cleared this candidate and the move that acts on it cannot be split by another session.
   mv "$BOARD/ready/$id.md" "$BOARD/active/$id.md"   # plain mv: board paths are untracked on base
   who; set_fm owner "$WHO" "$BOARD/active/$id.md"
   set_fm branch "feat/$id" "$BOARD/active/$id.md"

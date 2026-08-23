@@ -512,8 +512,14 @@ pat_overlap() { # heuristic: can patterns A and B claim a common path?
   # Proves: identical · exact⊂glob · exact⊂dir/ · dir/⊂dir/ · glob∩glob with nested literal dirs.
   local a="$1" b="$2"
   [ "$a" = "$b" ] && return 0
-  printf '%s\n' "$b" | owned_match "$a" && return 0   # pattern B matches A taken as a literal path
-  printf '%s\n' "$a" | owned_match "$b" && return 0   # pattern A matches B taken as a literal path
+  # match_one (lib/ownership.sh), NOT `printf | owned_match`: with exactly one pattern the pipeline
+  # reduced to precisely this call, and a pipeline is a fork PER DIRECTION — two per comparison. The
+  # sweep above is O(tasks x patterns squared): measured over 600 comparisons (a 5-lane board's full
+  # sweep), 18.4s of forking became 0.053s of `case`. cmd_drift runs that sweep, cmd_qa runs drift
+  # --strict and cmd_finish runs cmd_qa — the fork tax was on every finish. Semantics are identical:
+  # owned_match skips empty patterns, and both-empty already returned above.
+  match_one "$a" "$b" && return 0   # pattern B matches A taken as a literal path
+  match_one "$b" "$a" && return 0   # pattern A matches B taken as a literal path
   case "$a" in */) case "$b" in "$a"*) return 0;; esac;; esac
   case "$b" in */) case "$a" in "$b"*) return 0;; esac;; esac
   # glob ∩ glob: exact intersection is undecidable, but the collision that bites in practice is
