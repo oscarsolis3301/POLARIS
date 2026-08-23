@@ -149,6 +149,15 @@ EOF
   # nothing. Contract paths stay repo-relative: contracts live on base, present in every worktree.
   note "read: task file at \"$BOARD/active/$id.md\" + its contract + context_files. Build only inside files_owned."
   note "when green: polaris handoff   ·   to abort: polaris release $id --to ready"
+  # T-087 (shared-checkout v2 §4): claim CLOSES with an instruction, not an observation — a printed
+  # `cd` is prose a session can skip, and a session that skips it works in the shared primary.
+  # TWO callers, two entries, both pinned: a top-level session (the human's parallel-chat workflow,
+  # and every fleet pane) enters with EnterWorktree and gets no prompt; a conductor-spawned subagent
+  # has its cwd PINNED at launch and EnterWorktree REFUSES there — it only accepts paths under
+  # .claude/worktrees/ — so absolute paths under the worktree are that caller's PRIMARY instruction.
+  # Each line stays ON ONE LINE, never hard-wrapped: verify: greps them, here and in the role files.
+  note "now enter the worktree — every command until handoff runs there"
+  note "top-level session: EnterWorktree({path: \".polaris/wt/<ID>\"}) · pinned-cwd subagent or any other CLI: run everything via absolute paths under .polaris/wt/<ID> (or cd there — the shell's cwd persists between calls)"
 }
 
 cmd_verify() {

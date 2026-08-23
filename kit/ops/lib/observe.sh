@@ -1860,7 +1860,13 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
 
   # The long form on purpose: this printed line is pasted into ANY agent CLI, including ones with no
   # POLARIS skill to route a bare `start`. In Claude Code, `start` alone does the same thing.
-  local msg="You are a BUILDER. Claim the top ready task and complete it end to end. Stop at the review handoff.$loop"
+  # T-087 (shared-checkout v2 §4): fleet panes are TOP-LEVEL sessions, so the kickoff carries the
+  # EnterWorktree entry line — claim only prints a cd, and prose a session can skip is how five
+  # sessions ended up sharing the primary. The absolute-paths form rides along because this same
+  # line is pasted into CLIs that have no such tool. NOTE the quoting: `msg` must stay free of
+  # double quotes — the tmux branch below embeds it as "$claude_cmd$mtok \"$msg\"" and sh would
+  # then read `.polaris/wt/<ID>` unquoted, where `<` is a redirection. Single quotes are safe here.
+  local msg="You are a BUILDER. Claim the top ready task and complete it end to end, then enter its worktree — every command until handoff runs there: EnterWorktree({path: '.polaris/wt/<ID>'}), or run everything via absolute paths under .polaris/wt/<ID>. Stop at the review handoff.$loop"
   note "kickoff (paste into $n parallel sessions of ANY agent CLI — in Claude Code, \"start\" alone does it):"
   printf '   %s\n' "$msg"
 

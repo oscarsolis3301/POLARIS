@@ -5,10 +5,20 @@ Run N in parallel. The Planner guaranteed every ready task is file-disjoint, so 
 ```bash
 bash ops/polaris claim          # takes the top-wsjf ready task, or: claim <ID>
 ```
-One command does it all atomically: lock → board move (ready→active, committed) → worktree at `.polaris/wt/<ID>` on branch `feat/<ID>`. `cd` into the printed worktree path — ALL code work happens there, NEVER in the primary checkout.
+One command does it all atomically: lock → board move (ready→active, committed) → worktree at `.polaris/wt/<ID>` on branch `feat/<ID>`. ALL code work happens in that worktree, NEVER in the primary checkout.
 
 **Another chat may already hold the one you wanted, and that is a non-event, not a question:**
 claim says taken → claim the next task; the lock already chose for you — re-run `bash ops/polaris claim` and build what it hands you.
+
+**1b. Enter the worktree — a step, not a suggestion.** Claim ends by telling you to; do it before
+anything else, because a session that stays put edits the checkout four other chats are using. Two
+callers, and you are one of them — use the line that matches how you were started:
+- **Top-level session** (a chat or a fleet pane, the human at the keyboard): `EnterWorktree({path: ".polaris/wt/<ID>"})` — no prompt, this file is your instruction to run it.
+- **Pinned-cwd subagent or any other CLI:** run everything via absolute paths under .polaris/wt/<ID> (or `cd` there — a shell's cwd persists between calls). `EnterWorktree` refuses here: your cwd was fixed at launch, and the tool only accepts paths under `.claude/worktrees/`.
+
+Which one you used is convenience; staying in the primary is what actually fails. The ownership
+guard denies writes to shared source the moment any task lock exists, so "I forgot to enter" shows
+up as a blocked edit, not as a merge conflict someone else pays for.
 
 ## 2. Read — ONE command, then stop
 ```bash

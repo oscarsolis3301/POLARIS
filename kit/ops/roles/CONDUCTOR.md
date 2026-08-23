@@ -134,13 +134,17 @@ call per spawn; routing never blocks work.
    lanes in ONE message, in the background, each pinned to a distinct task ID from the ready queue
    (top-wsjf first — you know the queue; the lock still protects against races). Route each lane
    first — `bash ops/polaris route <ID>`, per the preamble rule — so every builder spawns at its
-   own task's tier:
+   own task's tier. The entry line below names the FALLBACK on purpose: a spawned subagent's cwd is
+   pinned at launch, so the harness's worktree-entry tool refuses every time — and a kickoff step
+   that always fails is how builders learn to skip the step entirely (shared-checkout v2 §4). Do not
+   add it back here; top-level sessions get it from `claim` and from `BUILDER.md` step 1b.
    > You are a BUILDER, conductor-entered. Read ops/roles/BUILDER.md and execute it. Claim <ID> and
    > complete it end to end. A spec ambiguity → return the question as your result instead of asking
    > the human. Stop at the review handoff; return: ID · branch · one-line summary · test results.
    > FIRST run `bash ops/polaris pack <ID>` — that output IS your context: the task, its contract,
    > the house style to match, what you own, the API surface not to break, and your verify: list.
    > Anything it does not answer: `bash ops/polaris find <symbol>`, one hop, before any Grep.
+   > you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout.
    > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    Say once where to watch (`bash ops/polaris dash` · 127.0.0.1:7373). As each lane reports, relay
    ONE line in `voice:` — "✅ 2 of 5 done — the new navigation is in, every check passed" — useful, plain,

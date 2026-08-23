@@ -21,6 +21,11 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   grant <ID> <path> -m "why"     append one path to a CLAIMED task's files_owned (sanctioned
                                  amendment; REFUSES any overlap with another ready/active task's
                                  ownership — refusal mutates nothing; RULES.tsv still binds)
+  approve <ID> <scope> -m "why"  record a HUMAN's yes to an `ask` rule on one task's approved:
+                                 list (the sibling of grant: grant widens ownership, approve
+                                 clears a policy gate — and only approve needs a human. REFUSES
+                                 when no ask rule gates <scope> and on any feat/* branch, so a
+                                 Builder can never approve itself; refusal mutates nothing)
   kickback <ID> [-m note]        Integrator: red merge → review→active
   audit <ID>                     Integrator: ownership check of feat/<ID>
   run-verify <ID>                Integrator: re-run task verify: commands in CWD
@@ -161,6 +166,11 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  tmux windows or Windows Terminal panes (--dry-run previews the command)
   upgrade                        migrate an OLD BOARD (v3/v4→v5). Idempotent. Downloads NOTHING.
                                    want a newer KIT? that is `update` — one letter, unrelated job.
+  adopt                          append a COMMENTED stub to ops/CONVENTIONS.md for every key this
+                                 repo has never set — each carries the key's default and what it
+                                 unlocks (from ops/KEYS.tsv). Uncomment a line to enable that
+                                 feature; adopt itself never edits a value, never uncomments, and
+                                 never changes behavior. Idempotent — a second run appends nothing
   slim [--apply | --restore]     the per-context TOKEN TAX, measured: every skill/agent/command
                                  definition under ~/.claude injects its name+description into the
                                  system prompt of every session AND every subagent it spawns,
