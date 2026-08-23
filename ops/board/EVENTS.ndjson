@@ -327,3 +327,4 @@
 {"ts":1787510623,"ev":"amend","id":"T-090","who":"Owner@DESKTOP","note":"verify[1] corrected to match keyed VERSION format"}
 {"ts":1787510740,"ev":"handoff","id":"T-090","who":"Owner@DESKTOP","note":""}
 {"ts":1787510740,"ev":"all-review","id":"T-090","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
+{"ts":1787511682,"ev":"done","id":"T-090","who":"Owner@DESKTOP","note":"","pts":2}
