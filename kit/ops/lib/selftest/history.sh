@@ -251,3 +251,62 @@ drill_busyint() {
     rm -f "$T/bi-conv.bak" "$T/bi-sprint.bak"
     git add -A; git commit -qm 'busyint drill cleanup' >/dev/null 2>&1 || true
 }
+drill_selfland() {
+    # ---- T-089 selfland drill (ops/contracts/shared-checkout.md v2 §5) ----
+    # `landing:` unset composes to self — DEFAULT IN CODE, because `update` never rewrites an
+    # installed CONVENTIONS.md (the 6.0.0 lesson) — so a handoff CONTINUES into land, and the last
+    # lane out seals + finishes the wave. Hard stop no knob softens: risk: high never self-lands.
+    # landing: integrator restores the classic notice byte-for-byte.
+    # FIXTURES DECLARE risk: EXPLICITLY — self_land fails CLOSED and refuses SILENTLY on a task
+    # carrying no risk: frontmatter at all (T-088's recorded decision: unclassified cannot prove it
+    # is not stop-and-ask material), so a risk-less fixture here would go green while testing
+    # NOTHING. The happy path asserts the landing POSITIVELY (done/, stamp, main, lease) — nothing
+    # here passes on the strength of "nothing errored".
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/sl-conv.bak"; else rm -f "$T/sl-conv.bak"; fi
+    [ -f ops/SPRINT.md ] && cp ops/SPRINT.md "$T/sl-sprint.bak" || rm -f "$T/sl-sprint.bak"
+    printf '# SPRINT 12 — selfland drill  capacity: 5\n' > ops/SPRINT.md   # moved set: disk-only, ignored on base
+    sl_gcd="$(git rev-parse --git-common-dir)"
+    # (a) unset knob + risk: normal → the handoff itself lands, seals (last lane out) and finishes:
+    #     task in done/ with the landed: stamp, squash on the base branch, lease + lock released.
+    printf -- '---\nid: T-SL1\ntitle: self land one\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/sl1.txt\nverify: []\n---\n' > ops/board/ready/T-SL1.md
+    "$SELF" claim T-SL1 >/dev/null
+    ( cd .polaris/wt/T-SL1 && echo sl1 > src/sl1.txt && git add -A && git commit -qm ok && "$SELF" handoff T-SL1 > "$T/sl1.out" 2>&1 ) || { cat "$T/sl1.out"; echo "SELFLAND HANDOFF RC FAIL"; exit 1; }
+    grep -q 'landing: self — continuing into land T-SL1' "$T/sl1.out" || { cat "$T/sl1.out"; echo "SELFLAND NOTE FAIL (the handoff must announce the self-land)"; exit 1; }
+    [ -f ops/board/done/T-SL1.md ] || { cat "$T/sl1.out"; echo "SELFLAND DONE FAIL (the task must reach done/ — landed for real, not merely un-errored)"; exit 1; }
+    grep -q '^landed: ' ops/board/done/T-SL1.md || { echo "SELFLAND STAMP FAIL (done must stamp the squash SHA)"; exit 1; }
+    git log --format=%s main | grep -q '\[T-SL1\]$' || { echo "SELFLAND MAIN FAIL (the squash must be on the base branch)"; exit 1; }
+    git rev-parse -q --verify refs/tags/sprint/12 >/dev/null || { echo "SELFLAND SEAL FAIL (the last lane out must seal the wave)"; exit 1; }
+    [ -d "$sl_gcd/polaris-locks/.int-lease" ] && { echo "SELFLAND LEASE FAIL (the lease must release after the landing tail)"; exit 1; }
+    [ -d "$sl_gcd/polaris-locks/T-SL1" ] && { echo "SELFLAND LOCK FAIL (done must drop the claim lock)"; exit 1; }
+    # (b) risk: high → the pinned refusal, the task STAYS in review/, and NOTHING lands
+    printf -- '---\nid: T-SL2\ntitle: self land high\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: high\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/sl2.txt\nverify: []\n---\n' > ops/board/ready/T-SL2.md
+    "$SELF" claim T-SL2 >/dev/null
+    ( cd .polaris/wt/T-SL2 && echo sl2 > src/sl2.txt && git add -A && git commit -qm ok && "$SELF" handoff T-SL2 > "$T/sl2.out" 2>&1 ) || { cat "$T/sl2.out"; echo "SELFLAND HIGH RC FAIL (a refused self-land is still a clean handoff)"; exit 1; }
+    grep -q 'risk: high never self-lands — a human must approve the merge; task stays in review/' "$T/sl2.out" || { cat "$T/sl2.out"; echo "SELFLAND HIGH MSG FAIL (the pinned refusal must print ON ONE LINE)"; exit 1; }
+    [ -f ops/board/review/T-SL2.md ] || { echo "SELFLAND HIGH BOARD FAIL (the task must stay in review/)"; exit 1; }
+    git log --format=%s main | grep -q '\[T-SL2\]$' && { echo "SELFLAND HIGH LAND FAIL (a refused self-land must land NOTHING)"; exit 1; }
+    # (c) landing: integrator → byte-for-byte the classic handoff: the integrate notice, no
+    #     self-land note, no land. The knob edit is COMMITTED (land parks dirty trees) and undone
+    #     in teardown the same way.
+    printf 'landing: integrator\n' >> ops/CONVENTIONS.md
+    git add -A; git commit -qm 'selfland drill: integrator knob'
+    printf -- '---\nid: T-SL3\ntitle: self land classic\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/sl3.txt\nverify: []\n---\n' > ops/board/ready/T-SL3.md
+    "$SELF" claim T-SL3 >/dev/null
+    ( cd .polaris/wt/T-SL3 && echo sl3 > src/sl3.txt && git add -A && git commit -qm ok && "$SELF" handoff T-SL3 > "$T/sl3.out" 2>&1 ) || { cat "$T/sl3.out"; echo "SELFLAND INTEG RC FAIL"; exit 1; }
+    grep -q 'Integrate now' "$T/sl3.out" || { cat "$T/sl3.out"; echo "SELFLAND INTEG NOTICE FAIL (landing: integrator must print the classic notice)"; exit 1; }
+    grep -q 'landing: self' "$T/sl3.out" && { cat "$T/sl3.out"; echo "SELFLAND INTEG QUIET FAIL (no self-land note under landing: integrator)"; exit 1; }
+    [ -f ops/board/review/T-SL3.md ] || { echo "SELFLAND INTEG BOARD FAIL (the task must stay in review/)"; exit 1; }
+    git log --format=%s main | grep -q '\[T-SL3\]$' && { echo "SELFLAND INTEG LAND FAIL (a classic handoff must not land)"; exit 1; }
+    # teardown: drain the two review fixtures through the CLASSIC lane — the exact path both
+    # refusals point at (in a drill, this process stands in for the human's yes on T-SL2) — then
+    # CONVENTIONS + SPRINT back byte-exactly; the sealed wave stays, like the spine's own.
+    "$SELF" land T-SL2 >/dev/null 2>&1 || { echo "SELFLAND DRAIN LAND FAIL (T-SL2)"; exit 1; }
+    "$SELF" land T-SL3 >/dev/null 2>&1 || { echo "SELFLAND DRAIN LAND FAIL (T-SL3)"; exit 1; }
+    "$SELF" seal >/dev/null 2>&1 || { echo "SELFLAND DRAIN SEAL FAIL"; exit 1; }
+    "$SELF" done T-SL2 >/dev/null || { echo "SELFLAND DRAIN DONE FAIL (T-SL2)"; exit 1; }
+    "$SELF" done T-SL3 >/dev/null || { echo "SELFLAND DRAIN DONE FAIL (T-SL3)"; exit 1; }
+    if [ -f "$T/sl-conv.bak" ]; then cp "$T/sl-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    [ -f "$T/sl-sprint.bak" ] && cp "$T/sl-sprint.bak" ops/SPRINT.md || rm -f ops/SPRINT.md
+    rm -f "$T/sl-conv.bak" "$T/sl-sprint.bak"
+    git add -A; git commit -qm 'selfland drill cleanup' >/dev/null 2>&1 || true
+}

@@ -478,3 +478,94 @@ drill_bg() {
     rm -rf .polaris/bg
     rm -f "$T/bx1.out" "$T/bx2.out" "$T/bx3.out" "$T/bx4.out" "$T/bx5.out"
 }
+drill_checkoutguard() {
+    # ---- T-089 checkoutguard drill (ops/contracts/shared-checkout.md v2 §6) ----
+    # Layer 1 (checkout-guard.sh): a checkout-mutating git line from the PRIMARY denies via
+    # hookSpecificOutput JSON on STDOUT — contract v2.1, NOT ownership-guard's exit-2+stderr; the
+    # two hooks deny by DIFFERENT mechanisms and BOTH are correct as shipped, so this drill asserts
+    # each hook's own shape and never a shared one. Layer 2 (primary_gate): a primary write to
+    # tracked source while a task lock is live denies exit 2 + stderr; board surfaces and lock-free
+    # repos stay open. Plus the FALLBACK entry every conductor lane actually takes: cwd pinned at
+    # the primary, a write + commit via ABSOLUTE paths under .polaris/wt/<ID> is allowed by BOTH
+    # hooks and the commit lands on feat/<ID>.
+    # Payload paths are GIT-CANONICAL (rev-parse --show-toplevel, C:/… on Windows), never $PWD —
+    # ownership-guard norm()s both sides against git's own spelling, and a /tmp-style path here
+    # reads as "outside the repo" (the exact fragility that pulled the old wrapper harness).
+    ckg_hook="$(dirname "$SELF")/hooks/checkout-guard.sh"
+    ckg_og="$(dirname "$SELF")/hooks/ownership-guard.sh"
+    ckg_top="$(git rev-parse --show-toplevel)"
+    ckg_lk="$(git rev-parse --git-common-dir)/polaris-locks"
+    git checkout -q main
+    mkdir -p "$T/ckg"
+    # (1) the deny SHAPE: primary cwd + `git switch x` → rc 0, hookSpecificOutput JSON on STDOUT
+    #     carrying the pinned refusal, and NOTHING on stderr.
+    ckg_rc=0
+    printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"git switch x"}}' "$ckg_top" \
+      | bash "$ckg_hook" > "$T/ckg/1.out" 2> "$T/ckg/1.err" || ckg_rc=$?
+    [ "$ckg_rc" -eq 0 ] || { cat "$T/ckg/1.out" "$T/ckg/1.err"; echo "CKG DENY RC FAIL (the JSON deny exits 0, never 2)"; exit 1; }
+    grep -q '"hookSpecificOutput"' "$T/ckg/1.out" || { cat "$T/ckg/1.out"; echo "CKG DENY SHAPE FAIL (deny must be hookSpecificOutput JSON on STDOUT)"; exit 1; }
+    grep -q '"permissionDecision":"deny"' "$T/ckg/1.out" || { cat "$T/ckg/1.out"; echo "CKG DENY DECISION FAIL (the JSON must carry permissionDecision deny)"; exit 1; }
+    grep -q 'the primary checkout is shared' "$T/ckg/1.out" || { cat "$T/ckg/1.out"; echo "CKG DENY MSG FAIL (the pinned refusal must ride the JSON)"; exit 1; }
+    [ -s "$T/ckg/1.err" ] && { cat "$T/ckg/1.err"; echo "CKG DENY STDERR FAIL (stderr denies are ownership-guard's mechanism, never this hook's)"; exit 1; }
+    # (2) the same command with cwd inside .polaris/wt/<ID> → rc 0 and NO output at all
+    printf '{"cwd":"%s/.polaris/wt/T-000","tool_name":"Bash","tool_input":{"command":"git switch x"}}' "$ckg_top" \
+      | bash "$ckg_hook" > "$T/ckg/2.out" 2>&1 || { echo "CKG WT RC FAIL"; exit 1; }
+    [ -s "$T/ckg/2.out" ] && { cat "$T/ckg/2.out"; echo "CKG WT ALLOW FAIL (a task worktree keeps every git form)"; exit 1; }
+    # (3) read-only git in the primary passes silently — and `git stash list` / `git stash show`
+    #     are the §1 carve-out: the only read-only stash forms, allowed on purpose (denying them
+    #     would break the allow/deny disjointness the two-hook design rests on).
+    for ckg_c in 'git status' 'git stash list' 'git stash show'; do
+      printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$ckg_top" "$ckg_c" \
+        | bash "$ckg_hook" > "$T/ckg/3.out" 2>&1 || { echo "CKG READONLY RC FAIL ($ckg_c)"; exit 1; }
+      [ -s "$T/ckg/3.out" ] && { cat "$T/ckg/3.out"; echo "CKG READONLY FAIL ($ckg_c must pass silently in the primary)"; exit 1; }
+    done
+    # (4) primary_gate. Precondition: no live task locks leaked here by a sibling drill — a leak
+    #     would flip the no-lock case, so name it honestly instead of failing cryptically.
+    for ckg_d in "$ckg_lk"/*/; do
+      [ -d "$ckg_d" ] || continue
+      case "${ckg_d%/}" in */.int-lease|*/.board-mutex) continue;; esac
+      echo "CKG PRECOND FAIL (unexpected live lock $ckg_d — a prior drill leaked)"; exit 1
+    done
+    # The throwaway repo has no ops/polaris (init-board installs none) and the hook stands down
+    # without one — plant a forwarder to "$SELF" so the gate is armed, remove it in teardown.
+    printf '#!/bin/sh\nexec "%s" "$@"\n' "$SELF" > ops/polaris
+    chmod +x ops/polaris
+    mkdir -p "$ckg_lk/T-CKL"
+    ckg_rc=0
+    printf '{"cwd":"%s","tool_input":{"file_path":"%s/src/a.txt","new_string":"ckg"}}' "$ckg_top" "$ckg_top" \
+      | bash "$ckg_og" > /dev/null 2> "$T/ckg/4.err" || ckg_rc=$?
+    [ "$ckg_rc" -eq 2 ] || { cat "$T/ckg/4.err"; echo "CKG PRIMARY DENY FAIL (tracked source + live lock + non-feat HEAD must exit 2, got $ckg_rc)"; exit 1; }
+    grep -q 'builders never edit the shared primary' "$T/ckg/4.err" || { cat "$T/ckg/4.err"; echo "CKG PRIMARY MSG FAIL (the pinned refusal must reach stderr — THIS hook's mechanism)"; exit 1; }
+    ckg_rc=0
+    printf '{"cwd":"%s","tool_input":{"file_path":"%s/ops/board/backlog/IDEAS.md","new_string":"ckg"}}' "$ckg_top" "$ckg_top" \
+      | bash "$ckg_og" > /dev/null 2> "$T/ckg/5.err" || ckg_rc=$?
+    [ "$ckg_rc" -eq 0 ] || { cat "$T/ckg/5.err"; echo "CKG BOARD ALLOW FAIL (ops/board/ is a primary-role surface, got rc $ckg_rc)"; exit 1; }
+    rm -rf "$ckg_lk/T-CKL"
+    ckg_rc=0
+    printf '{"cwd":"%s","tool_input":{"file_path":"%s/src/a.txt","new_string":"ckg"}}' "$ckg_top" "$ckg_top" \
+      | bash "$ckg_og" > /dev/null 2> "$T/ckg/6.err" || ckg_rc=$?
+    [ "$ckg_rc" -eq 0 ] || { cat "$T/ckg/6.err"; echo "CKG NOLOCK ALLOW FAIL (no live locks = nobody to collide with = no gate, got rc $ckg_rc)"; exit 1; }
+    # (5) the FALLBACK entry (contract v2.6): a REAL claim, then everything via absolute paths from
+    #     the pinned primary cwd — allowed by both hooks, and the commit advances feat/<ID>.
+    printf -- '---\nid: T-CKF\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/ckf.txt\nverify: []\n---\n' > ops/board/ready/T-CKF.md
+    "$SELF" claim T-CKF >/dev/null
+    ckg_wt="$ckg_top/.polaris/wt/T-CKF"
+    ckg_rc=0
+    printf '{"cwd":"%s","tool_input":{"file_path":"%s/src/ckf.txt","new_string":"ckg"}}' "$ckg_top" "$ckg_wt" \
+      | bash "$ckg_og" > /dev/null 2> "$T/ckg/7.err" || ckg_rc=$?
+    [ "$ckg_rc" -eq 0 ] || { cat "$T/ckg/7.err"; echo "CKG FALLBACK OG FAIL (an absolute .polaris/wt/<ID> write from the primary rides the allowlist, got rc $ckg_rc)"; exit 1; }
+    printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"git -C %s commit -am ok"}}' "$ckg_top" "$ckg_wt" \
+      | bash "$ckg_hook" > "$T/ckg/8.out" 2>&1 || { echo "CKG FALLBACK HOOK RC FAIL"; exit 1; }
+    [ -s "$T/ckg/8.out" ] && { cat "$T/ckg/8.out"; echo "CKG FALLBACK HOOK FAIL (git commit is not checkout-mutating)"; exit 1; }
+    ckg_pre="$(git rev-parse feat/T-CKF)"
+    echo ckg > "$ckg_wt/src/ckf.txt"
+    git -C "$ckg_wt" add -A
+    git -C "$ckg_wt" commit -qm 'ckg: fallback entry'
+    [ "$(git rev-parse feat/T-CKF)" != "$ckg_pre" ] || { echo "CKG FALLBACK COMMIT FAIL (the commit must advance feat/T-CKF)"; exit 1; }
+    [ "$(git -C "$ckg_wt" rev-parse --abbrev-ref HEAD)" = "feat/T-CKF" ] || { echo "CKG FALLBACK BRANCH FAIL (the worktree HEAD must be feat/T-CKF)"; exit 1; }
+    # hermetic teardown: forwarder gone, fixture task gone, branch gone, scratch gone
+    "$SELF" release T-CKF --to ready -m drill >/dev/null
+    rm -f ops/board/ready/T-CKF.md ops/polaris
+    git branch -q -D feat/T-CKF 2>/dev/null || true
+    rm -rf "$T/ckg"
+}

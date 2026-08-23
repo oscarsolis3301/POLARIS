@@ -1,0 +1,37 @@
+deny:switch  git switch main
+deny:checkout  git checkout feature-x
+deny:checkout  git checkout -- .
+deny:reset  git reset --hard HEAD~1
+deny:stash  git stash
+deny:stash  git stash pop
+deny:stash  git stash apply
+deny:stash  git stash drop
+deny:merge  git merge feature-x
+deny:rebase  git rebase main
+deny:cherry-pick  git cherry-pick abc123
+deny:worktree  git worktree add /tmp/x
+deny:branch  git branch -D topic
+deny:branch  git branch -m old new
+deny:rebase  git fetch && git rebase origin/main
+deny:switch  echo done; git switch -
+deny:switch  env git switch main
+deny:checkout  /usr/bin/git checkout .
+deny:reset  git -C . reset --hard
+allow  git status
+allow  git log --oneline -5
+allow  git diff --stat
+allow  git stash list
+allow  git stash show
+allow  git stash list; git log -1
+allow  git branch -a
+allow  git branch --show-current
+allow  echo "git switch main"
+allow  grep -rn 'git switch' docs/
+allow  bash ops/polaris claim T-001
+wt:allow  git switch main
+wt:allow  git reset --hard HEAD~1
+wt:allow  git stash pop
+wt:allow  git rebase main
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"the primary checkout is shared by every session — never switch it: work in your task's worktree (bash ops/polaris claim, then cd .polaris/wt/<ID>); a dirty tree is parked (bash ops/polaris park), never switched around"}}
+pinned-refusal-lines: 1
+json-deny-emitter-lines: 1

@@ -380,12 +380,15 @@ kit/ops/lib/selftest/board.sh	fn	drill_claimguard
 kit/ops/lib/selftest/board.sh	fn	drill_fmlist
 kit/ops/lib/selftest/board.sh	fn	drill_grant
 kit/ops/lib/selftest/board.sh	fn	drill_newcmds
+kit/ops/lib/selftest/board.sh	fn	drill_readyoverlap
 kit/ops/lib/selftest/brain.sh	fn	drill_brain
 kit/ops/lib/selftest/history.sh	fn	drill_busyint
 kit/ops/lib/selftest/history.sh	fn	drill_express
 kit/ops/lib/selftest/history.sh	fn	drill_pr-publish
+kit/ops/lib/selftest/history.sh	fn	drill_selfland
 kit/ops/lib/selftest/history.sh	fn	drill_tcm
 kit/ops/lib/selftest/policy.sh	fn	drill_bg
+kit/ops/lib/selftest/policy.sh	fn	drill_checkoutguard
 kit/ops/lib/selftest/policy.sh	fn	drill_claudemd
 kit/ops/lib/selftest/policy.sh	fn	drill_drift
 kit/ops/lib/selftest/policy.sh	fn	drill_finish
