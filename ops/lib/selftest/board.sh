@@ -168,3 +168,39 @@ drill_claimguard() {
     rm -f ops/board/ready/T-CGA.md ops/board/ready/T-CGC.md ops/board/blocked/T-CGB.md
     git branch -q -D feat/T-CGA feat/T-CGC 2>/dev/null || true
 }
+drill_readyoverlap() {
+    # ---- T-089 readyoverlap drill (ops/contracts/shared-checkout.md v2 §3) ----
+    # The claim gate sweeps ready ∪ active: two READY tasks sharing a file are caught at claim
+    # time — an explicit claim dies naming `overlaps ready`, auto-pick parks the colliding
+    # candidate in blocked/ with the remedy on the record and claims the next free one in the same
+    # pass — and `drift` REPORTS the overlap always, while only --strict turns it into a failing
+    # exit (plain drift stays rc 0: an audit, not a gate).
+    printf -- '---\nid: T-ROA\npoints: 1\nwsjf: 9\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/roa.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-ROA.md
+    printf -- '---\nid: T-ROB\npoints: 1\nwsjf: 8\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/roa.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-ROB.md
+    printf -- '---\nid: T-ROC\npoints: 1\nwsjf: 1\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/roc.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-ROC.md
+    # (1) drift: plain run reports but exits 0; --strict fails. Subshells on purpose — --strict
+    #     exits the script on findings (spine precedent, observe.sh:1515).
+    ( "$SELF" drift > "$T/ro1.out" 2>&1 ) || { cat "$T/ro1.out"; echo "READYOVERLAP DRIFT RC FAIL (plain drift must exit 0 on findings)"; exit 1; }
+    grep -q 'OWNERSHIP OVERLAP' "$T/ro1.out" || { cat "$T/ro1.out"; echo "READYOVERLAP DRIFT FIND FAIL (the ready∩ready overlap must be reported)"; exit 1; }
+    ( "$SELF" drift --strict > "$T/ro2.out" 2>&1 ) && { echo "READYOVERLAP STRICT RC FAIL (--strict must exit nonzero on an overlap)"; exit 1; }
+    grep -q 'OWNERSHIP OVERLAP' "$T/ro2.out" || { cat "$T/ro2.out"; echo "READYOVERLAP STRICT FIND FAIL (the failing exit must still name the finding)"; exit 1; }
+    # (2) explicit claim of the second dies `overlaps ready`, board untouched, lock released
+    "$SELF" claim T-ROB > "$T/ro3.out" 2>&1 && { echo "READYOVERLAP EXPLICIT RC FAIL (an explicit overlap claim must die)"; exit 1; }
+    grep -q 'overlaps ready T-ROA' "$T/ro3.out" || { cat "$T/ro3.out"; echo "READYOVERLAP EXPLICIT MSG FAIL (the die must carry the pinned overlaps ready fragment + the task)"; exit 1; }
+    [ -f ops/board/ready/T-ROB.md ] || { echo "READYOVERLAP EXPLICIT BOARD FAIL (a refused claim must move nothing)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-ROB" ] && { echo "READYOVERLAP EXPLICIT LOCK FAIL (the refused claim's lock must release)"; exit 1; }
+    # (3) auto-pick: the top-wsjf candidate collides with ready T-ROB → parked in blocked/ with the
+    #     ready-variant note + remedy, ONE board commit — and the SAME pass claims the freed second
+    #     task (wsjf order holds: T-ROC stays ready).
+    "$SELF" claim > "$T/ro4.out" 2>&1 || { cat "$T/ro4.out"; echo "READYOVERLAP AUTO RC FAIL (auto-pick must park the collider and keep claiming)"; exit 1; }
+    [ -f ops/board/blocked/T-ROA.md ] || { echo "READYOVERLAP AUTO BLOCK FAIL (the colliding candidate must park in blocked/)"; exit 1; }
+    grep -q 'overlaps ready' ops/board/blocked/T-ROA.md || { echo "READYOVERLAP AUTO VARIANT FAIL (the note must carry the ready variant, not overlaps active)"; exit 1; }
+    grep -q 're-groom or wait for T-ROB' ops/board/blocked/T-ROA.md || { echo "READYOVERLAP AUTO REMEDY FAIL (the ⛔ note must carry the remedy)"; exit 1; }
+    git log --format=%s refs/heads/polaris/board | grep -qx 'chore(board): block T-ROA (ownership overlap)' || { echo "READYOVERLAP AUTO COMMIT FAIL (ONE board commit, contract subject)"; exit 1; }
+    [ -f ops/board/active/T-ROB.md ] || { echo "READYOVERLAP AUTO NEXT FAIL (the pass must claim the freed second task)"; exit 1; }
+    [ -f ops/board/ready/T-ROC.md ] || { echo "READYOVERLAP AUTO ORDER FAIL (wsjf order must hold — T-ROC stays ready)"; exit 1; }
+    # hermetic teardown
+    "$SELF" release T-ROB --to ready -m drill >/dev/null
+    rm -f ops/board/ready/T-ROB.md ops/board/ready/T-ROC.md ops/board/blocked/T-ROA.md
+    git branch -q -D feat/T-ROB 2>/dev/null || true
+}

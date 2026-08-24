@@ -512,8 +512,14 @@ pat_overlap() { # heuristic: can patterns A and B claim a common path?
   # Proves: identical · exact⊂glob · exact⊂dir/ · dir/⊂dir/ · glob∩glob with nested literal dirs.
   local a="$1" b="$2"
   [ "$a" = "$b" ] && return 0
-  printf '%s\n' "$b" | owned_match "$a" && return 0   # pattern B matches A taken as a literal path
-  printf '%s\n' "$a" | owned_match "$b" && return 0   # pattern A matches B taken as a literal path
+  # match_one (lib/ownership.sh), NOT `printf | owned_match`: with exactly one pattern the pipeline
+  # reduced to precisely this call, and a pipeline is a fork PER DIRECTION — two per comparison. The
+  # sweep above is O(tasks x patterns squared): measured over 600 comparisons (a 5-lane board's full
+  # sweep), 18.4s of forking became 0.053s of `case`. cmd_drift runs that sweep, cmd_qa runs drift
+  # --strict and cmd_finish runs cmd_qa — the fork tax was on every finish. Semantics are identical:
+  # owned_match skips empty patterns, and both-empty already returned above.
+  match_one "$a" "$b" && return 0   # pattern B matches A taken as a literal path
+  match_one "$b" "$a" && return 0   # pattern A matches B taken as a literal path
   case "$a" in */) case "$b" in "$a"*) return 0;; esac;; esac
   case "$b" in */) case "$a" in "$b"*) return 0;; esac;; esac
   # glob ∩ glob: exact intersection is undecidable, but the collision that bites in practice is
@@ -1854,7 +1860,13 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
 
   # The long form on purpose: this printed line is pasted into ANY agent CLI, including ones with no
   # POLARIS skill to route a bare `start`. In Claude Code, `start` alone does the same thing.
-  local msg="You are a BUILDER. Claim the top ready task and complete it end to end. Stop at the review handoff.$loop"
+  # T-087 (shared-checkout v2 §4): fleet panes are TOP-LEVEL sessions, so the kickoff carries the
+  # EnterWorktree entry line — claim only prints a cd, and prose a session can skip is how five
+  # sessions ended up sharing the primary. The absolute-paths form rides along because this same
+  # line is pasted into CLIs that have no such tool. NOTE the quoting: `msg` must stay free of
+  # double quotes — the tmux branch below embeds it as "$claude_cmd$mtok \"$msg\"" and sh would
+  # then read `.polaris/wt/<ID>` unquoted, where `<` is a redirection. Single quotes are safe here.
+  local msg="You are a BUILDER. Claim the top ready task and complete it end to end, then enter its worktree — every command until handoff runs there: EnterWorktree({path: '.polaris/wt/<ID>'}), or run everything via absolute paths under .polaris/wt/<ID>. Stop at the review handoff.$loop"
   note "kickoff (paste into $n parallel sessions of ANY agent CLI — in Claude Code, \"start\" alone does it):"
   printf '   %s\n' "$msg"
 
@@ -1866,7 +1878,7 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
   fi
 
   # Cap auto-launched sessions — screen + cost discipline. The printed kickoff above stays uncapped.
-  local cap launch_n; cap="$(cfg autolaunch_max 3)"; case "$cap" in ''|*[!0-9]*) cap=3;; esac
+  local cap launch_n; cap="$(cfg autolaunch_max 5)"; case "$cap" in ''|*[!0-9]*) cap=5;; esac   # T-088: 3 → 5, re-sized for 5 lanes
   launch_n="$n"; [ "$launch_n" -gt "$cap" ] && launch_n="$cap"
 
   # Model routing (ops/contracts/model-routing.md § Consumers): panes claim RACILY — any pane may

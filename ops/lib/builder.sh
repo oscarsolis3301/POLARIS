@@ -23,7 +23,7 @@ cmd_claim() {
   fi
 
   local got="" cand
-  local ov_id="" ov_cpat="" ov_apat=""
+  local ov_id="" ov_cpat="" ov_apat="" ov_col="" ov_msg=""
   local af aid apat cpat
   while IFS= read -r cand; do
     [ -z "$cand" ] && continue
@@ -45,15 +45,30 @@ cmd_claim() {
       fi
     fi
     FAIL_LOCK_ID="$cand"; trap on_die EXIT   # we hold the lock from here — any die below must release it
-    # T-059 claim-time disjointness gate: the locked candidate's files_owned vs EVERY active/ task,
-    # both directions via pat_overlap (observe.sh). Two planners racing can put overlapping tasks in
-    # ready/, and the ready-gate never re-checks against already-claimed work — without this the
-    # overlap surfaces two builds later as an integrator squash conflict. Clean board → zero output,
-    # zero extra git work: the scan is frontmatter reads only.
-    ov_id=""; ov_cpat=""; ov_apat=""
-    for af in "$BOARD/active/"*.md; do
-      [ -e "$af" ] || break
+    # T-059 claim-time disjointness gate, widened to ready ∪ active by T-086 (shared-checkout § v2.3):
+    # the locked candidate's files_owned vs EVERY task in ready/ AND active/, both directions via
+    # pat_overlap (observe.sh). Two planners racing can put overlapping tasks in ready/, and the
+    # ready-gate never re-checks against already-claimed work — without this the overlap surfaces
+    # two builds later as an integrator squash conflict. Clean board → zero output, zero extra git
+    # work: the scan is frontmatter reads and (since T-086) fork-free pattern matching.
+    #
+    # The scan runs INSIDE the board mutex, and the placement IS the gate. Where it used to sit —
+    # after lock_take, before the mutex — two sessions claiming two overlapping tasks could each
+    # scan a board that showed neither of them in active/ yet, both pass, and both mv: the mutex was
+    # taken after the decision it exists to protect. Held from here through the ready→active mv
+    # below, decision and move are one atomic step. mutex_on is NOT re-entrant, so there is exactly
+    # ONE acquisition per candidate and every exit from this iteration releases it — blocked/ below,
+    # die (on_die runs mutex_off), or the claim after the loop.
+    mutex_on
+    ov_id=""; ov_cpat=""; ov_apat=""; ov_col=""
+    # active/ FIRST, deliberately: when a candidate collides with both columns the active one is the
+    # live conflict — someone is building it right now — and reporting it keeps T-059's message for
+    # every board that already had one. ready/ is the addition, not the new precedence.
+    for af in "$BOARD/active/"*.md "$BOARD/ready/"*.md; do
+      [ -e "$af" ] || continue          # `continue`, not `break`: an empty column must not stop the other
       aid="$(basename "$af" .md)"
+      [ "$aid" = "$cand" ] && continue  # the candidate is still in ready/ — it never overlaps itself
+      case "$af" in "$BOARD/ready/"*) ov_col=ready;; *) ov_col=active;; esac
       while IFS= read -r cpat; do
         [ -z "$cpat" ] && continue
         while IFS= read -r apat; do
@@ -70,16 +85,20 @@ EOF_CPAT
       [ -n "$ov_id" ] && break
     done
     if [ -n "$ov_id" ]; then
-      # explicit ID → refuse, naming the active task and both patterns (on_die releases our lock).
-      [ "$explicit" = 1 ] && die "claim refused: $cand files_owned '$ov_cpat' overlaps active $ov_id '$ov_apat' — re-groom or wait for $ov_id"
+      # Both phrasings are spelled out here as literals, not composed from $ov_col, so they stay
+      # greppable in the source: `overlaps active` (T-059) and `overlaps ready` (T-086) are pinned
+      # in the contract and grepped by verify: and the readyoverlap drill. Output is byte-identical
+      # to T-059's for the active case.
+      if [ "$ov_col" = ready ]; then ov_msg="overlaps ready $ov_id"; else ov_msg="overlaps active $ov_id"; fi
+      # explicit ID → refuse, naming the task and both patterns (on_die releases lock AND mutex).
+      [ "$explicit" = 1 ] && die "claim refused: $cand files_owned '$ov_cpat' $ov_msg '$ov_apat' — re-groom or wait for $ov_id"
       # auto-pick → park the bad pairing in blocked/ with the remedy ON THE RECORD (ONE board
       # commit), release its lock, and keep claiming — the next candidate gets its own gate pass.
-      note "⛔ $cand files_owned '$ov_cpat' overlaps active $ov_id '$ov_apat' → blocked/ — claiming the next candidate"
-      mutex_on
+      note "⛔ $cand files_owned '$ov_cpat' $ov_msg '$ov_apat' → blocked/ — claiming the next candidate"
       mv "$BOARD/ready/$cand.md" "$BOARD/blocked/$cand.md"
       set_fm status blocked "$BOARD/blocked/$cand.md"
-      printf -- "- ⛔ ownership overlap: files_owned '%s' overlaps active %s '%s' — re-groom or wait for %s\n" \
-        "$ov_cpat" "$ov_id" "$ov_apat" "$ov_id" >> "$BOARD/blocked/$cand.md"
+      printf -- "- ⛔ ownership overlap: files_owned '%s' %s '%s' — re-groom or wait for %s\n" \
+        "$ov_cpat" "$ov_msg" "$ov_apat" "$ov_id" >> "$BOARD/blocked/$cand.md"
       evt blocked "$cand" "ownership overlap with $ov_id"
       board_commit "chore(board): block $cand (ownership overlap)"
       sync_board
@@ -88,7 +107,7 @@ EOF_CPAT
       FAIL_LOCK_ID=""; trap - EXIT
       continue
     fi
-    got="$cand"; break
+    got="$cand"; break   # mutex still HELD — released after the ready→active mv below
   done <<EOF
 $candidates
 EOF
@@ -97,7 +116,8 @@ EOF
   FAIL_LOCK_ID="$id"; trap on_die EXIT
 
   local pts; pts="$(fm_get points "$BOARD/ready/$id.md")"
-  mutex_on
+  # NO mutex_on here: the disjointness gate above took it and still holds it, so the scan that
+  # cleared this candidate and the move that acts on it cannot be split by another session.
   mv "$BOARD/ready/$id.md" "$BOARD/active/$id.md"   # plain mv: board paths are untracked on base
   who; set_fm owner "$WHO" "$BOARD/active/$id.md"
   set_fm branch "feat/$id" "$BOARD/active/$id.md"
@@ -129,6 +149,15 @@ EOF
   # nothing. Contract paths stay repo-relative: contracts live on base, present in every worktree.
   note "read: task file at \"$BOARD/active/$id.md\" + its contract + context_files. Build only inside files_owned."
   note "when green: polaris handoff   ·   to abort: polaris release $id --to ready"
+  # T-087 (shared-checkout v2 §4): claim CLOSES with an instruction, not an observation — a printed
+  # `cd` is prose a session can skip, and a session that skips it works in the shared primary.
+  # TWO callers, two entries, both pinned: a top-level session (the human's parallel-chat workflow,
+  # and every fleet pane) enters with EnterWorktree and gets no prompt; a conductor-spawned subagent
+  # has its cwd PINNED at launch and EnterWorktree REFUSES there — it only accepts paths under
+  # .claude/worktrees/ — so absolute paths under the worktree are that caller's PRIMARY instruction.
+  # Each line stays ON ONE LINE, never hard-wrapped: verify: greps them, here and in the role files.
+  note "now enter the worktree — every command until handoff runs there"
+  note "top-level session: EnterWorktree({path: \".polaris/wt/<ID>\"}) · pinned-cwd subagent or any other CLI: run everything via absolute paths under .polaris/wt/<ID> (or cd there — the shell's cwd persists between calls)"
 }
 
 cmd_verify() {
@@ -209,6 +238,73 @@ cmd_handoff() {
     integrate) say "all lanes done — nothing left building. Integrate now: \"You are the INTEGRATOR. Land everything in ops/board/review/.\"";;
     queue)     note "$nrdy ready task(s) still queued — say start (or: bash ops/polaris fleet $nrdy --launch) to build them";;
   esac
+  # T-088 (shared-checkout v2 §5): under landing: self the handoff CONTINUES into the landing —
+  # the last statement on purpose, so its rc (0, or 3 for a queued lane) is the handoff's rc.
+  self_land "$id" "$notice"
+}
+
+self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout.md v2 §5): under
+  # `landing: self` — the DEFAULT IN CODE, because `update` never rewrites an installed
+  # CONVENTIONS.md (the 6.0.0 lesson), so unset must compose to the new behavior — a handoff
+  # continues into `land <ID>` in this same session. The integration lease already provides
+  # wait-your-turn (int_on: atomic lease, 2s poll, stale steal, `queued: ` + rc 3 past the
+  # bounded wait) and land/seal/done run as child invocations from the PRIMARY (`land` refuses
+  # worktrees), so every one of their gates, parks and rc semantics applies UNCHANGED. Runs
+  # AFTER handoff's mutex_off: the lease is OUTERMOST (contract § Lock ordering) and is never
+  # taken while the board mutex is held. Self-landing runs NO full suite — `land` is
+  # squash + audit; the suite stays per-wave (integration: batch economics unchanged).
+  #
+  # HARD STOPS no knob softens, gated on the task's OWN frontmatter (no new classifiers):
+  # risk: high, and any recorded ask-rule approval on the task (approved: entries mark
+  # STOP-AND-ASK surfaces a human had to clear — their merge stays a human-lane decision).
+  # FAIL-CLOSED on a task with NO risk: frontmatter at all: an unclassified task cannot prove
+  # it is not stop-and-ask material, so it keeps today's integrator path silently — which also
+  # keeps every pre-6.1 fixture (none carry risk:) byte-identical. On EVERY refusal or skip,
+  # behavior before this call is byte-for-byte today's handoff.
+  local id="$1" notice="${2:-}"
+  local lk; lk="$(cfg landing self)"
+  [ "$lk" = "self" ] || return 0     # landing: integrator (or any other value) → classic handoff
+  local tf="$BOARD/review/$id.md"
+  [ -f "$tf" ] || return 0
+  local rk; rk="$(fm_get risk "$tf" 2>/dev/null || true)"
+  local ap; ap="$(fm_list approved "$tf" 2>/dev/null || true)"
+  if [ "$rk" = "high" ] || [ -n "$ap" ]; then
+    say "risk: high never self-lands — a human must approve the merge; task stays in review/"
+    return 0
+  fi
+  [ -n "$rk" ] || return 0           # no risk: frontmatter → unclassified → integrator path
+  note "landing: self — continuing into land $id (the lease is the integration lane: this waits its turn)"
+  local lrc=0
+  ( cd "$PRIMARY" && "$SELF" land "$id" ) || lrc=$?
+  if [ "$lrc" -eq 3 ]; then
+    return 3                         # int_on printed the final `queued: ` line — nothing after it
+  fi
+  if [ "$lrc" -ne 0 ]; then
+    note "⚠ self-land failed (rc $lrc) — the work is safe on feat/$id and $id stays in review/ for the integration lane"
+    return 0
+  fi
+  if [ "$notice" != "integrate" ]; then
+    note "$id landed on the wave — mid-wave lands never seal; the last lane out seals"
+    return 0
+  fi
+  # last lane out seals the wave, then finishes every LANDED review task (a refused risk: high
+  # task has no landed commit and stays in review/ for the human lane).
+  local src=0
+  ( cd "$PRIMARY" && "$SELF" seal ) || src=$?
+  if [ "$src" -ne 0 ]; then
+    note "⚠ wave not sealed (rc $src) — $id is landed and safe; close the wave with: bash ops/polaris seal"
+    return 0
+  fi
+  local f tid
+  for f in "$BOARD/review/"*.md; do
+    [ -f "$f" ] || continue
+    tid="$(fm_get id "$f" 2>/dev/null || true)"
+    [ -n "$tid" ] || continue
+    landed_sha "$tid" >/dev/null 2>&1 || continue
+    ( cd "$PRIMARY" && "$SELF" done "$tid" ) \
+      || note "⚠ done $tid failed — finish it by hand: bash ops/polaris done $tid"
+  done
+  return 0
 }
 
 cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
