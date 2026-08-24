@@ -1,4 +1,4 @@
-# MAP — POLARIS            (updated: 2026-08-04, by EVOLVE)
+# MAP — POLARIS            (updated: 2026-08-23, by EVOLVE)
 
 ## Stack
 Bash (>= 3.2 — macOS default; no mapfile, no assoc arrays) + Python 3 stdlib only.
@@ -10,7 +10,8 @@ The repo is BOTH the product and a user of it. `kit/` is what ships. `ops/` is a
 installation running this repo's board. Never hand-edit `ops/` — see ops/CONVENTIONS.md § THE SPLIT.
 The installed copy also LAGS the source mid-sprint, and the tell that a selftest ran on the right
 driver is the LABEL LIST: `bash kit/ops/polaris doctor --selftest` registers kit-only drill labels
-(kit 28 vs the installed 27 at 5.24.0 — `adopt` is kit-only until the 6.0.0 dogfood), so a green
+(kit 31 = installed 31 since the 6.1.0 dogfood — checkoutguard · readyoverlap · selfland landed and
+the counts converge at every dogfood, diverging again the first sprint that adds a drill), so a green
 from `ops/polaris` can silently prove none of the sprint's new behavior. The counts move every
 sprint: recount `SELFTEST_LABELS` in both `lib/selftest/spine.sh` copies rather than trusting this line.
 
@@ -23,7 +24,8 @@ sprint: recount `SELFTEST_LABELS` in both `lib/selftest/spine.sh` copies rather 
 | kit/ops/bootstrap.py | The zipapp entry — packed to the archive ROOT as `__main__.py`, so `python polaris-v5.zip` just works. Also arms the machine (~/.claude skill + cached kit + permission rules). |
 | kit/ops/pack.py | Kit-repo tool, never shipped. Builds polaris-v5.zip from `git ls-files` run inside kit/. `--dogfood` installs the published release here. |
 | kit/ops/dashboard.py | `polaris dash` — read-only live board on 127.0.0.1:7373. stdlib http.server. |
-| kit/ops/hooks/ownership-guard.sh | Claude Code PreToolUse guard. Two gates: RULES (every session) + files_owned (feat/<ID> only). Fails OPEN by design. |
+| kit/ops/hooks/ownership-guard.sh | Claude Code PreToolUse guard. Three gates since 6.1.0: RULES (every session) + files_owned (feat/<ID> only) + primary_gate — writes to tracked source in the shared PRIMARY are denied while any task lock exists and HEAD is not feat/*. Fails OPEN by design. |
+| kit/ops/hooks/checkout-guard.sh | Claude Code PreToolUse deny hook (6.1.0): checkout-mutating git is refused in the shared primary, allowed inside `.polaris/wt/<ID>`. |
 | kit/ops/hooks/readonly-allow.sh | Claude Code PreToolUse auto-approver for Bash. Proves a command read-only, token by token, and skips the prompt. Deny by default: anything unparsed prompts as before. |
 | kit/ops/index.py | The code index behind `find`/`show`. SQLite + FTS5, rebuilt per query. Contract: ops/contracts/code-index.md. |
 | kit/ops/bench.sh | Startup + lookup benchmark. Run before/after any change to the startup path. |
@@ -65,6 +67,12 @@ sprint: recount `SELFTEST_LABELS` in both `lib/selftest/spine.sh` copies rather 
 - 6.0 autonomy defaults: unset knobs compose auto / default-safe / auto-reversible;
   `autonomy: standard` is the one-line opt-out; doctor prints the effective composition
   unconditionally (ops/contracts/hands-free-knobs.md v2).
+- 6.1 enforced isolation: CONVENTIONS key `landing` (self|integrator, default self IN CODE) —
+  `handoff` continues into `land` through the existing integration lease (the lease holder IS the
+  Integrator — Invariant 9 reworded in kit/CLAUDE.md); `autolaunch_max` default 5; `claim`'s
+  disjointness gate sweeps `ready/` as well as `active/`; `drift --strict` exits nonzero on
+  OWNERSHIP OVERLAP; `self_land` refuses silently on tasks with no `risk:` frontmatter and refuses
+  outright on risk: high / STOP-AND-ASK — hard gates move nowhere.
 - 6.0 discovery loop (key-registry.md § 2-4): doctor reads `ops/KEYS.tsv` and reports CONVENTIONS
   keys absent from the live file as ONE summary line naming the remedy (`ops/polaris adopt`) —
   the drift class the CLAUDE.md stamp check covers for exactly one file; `update` prints the
@@ -81,7 +89,9 @@ become named stashes) · `approve <ID> <scope> -m "why"` (records a human's yes 
 `notify-gate <kind> [ID]` + `POLARIS_SEVERITY` in the notify env contract · `finish` (pends on
 running bg jobs) · `bg run/status/tail/wait` (see the lib row above) · `adopt` (appends a
 commented stub — default + rationale — for every KEYS.tsv key missing from CONVENTIONS.md;
-never edits a value, idempotent; drill label `adopt` in remote.sh proves it).
+never edits a value, idempotent; drill label `adopt` in remote.sh proves it) · selftest labels
+now 31: `checkoutguard` · `readyoverlap` · `selfland` (6.1.0), with golden pairs
+checkout-guard-denies + ownership-primary pinning the two guards' refusal wording.
 
 ## Danger zones — agents NEVER edit these (machine-enforced, ops/RULES.tsv)
 | Path | Why |
@@ -113,13 +123,3 @@ not installed code — they are written normally, by the board scripts and by th
   tarball/raw-channel paths working regardless, so this is untested-in-the-wild, not unsafe.
 
 ## Deltas
-
-- "kit/ops/hooks/checkout-guard.sh — new PreToolUse deny hook: checkout-mutating git is refused in the shared primary, allowed inside .polaris/wt/<ID>"  (T-084, 2026-08-23)
-
-- "ownership-guard gains primary_gate — writes to tracked source in the shared primary are denied while any task lock exists and HEAD is not feat/*"  (T-085, 2026-08-23)
-
-- "claim disjointness gate sweeps ready/ as well as active/; drift --strict exits nonzero on OWNERSHIP OVERLAP"  (T-086, 2026-08-23)
-
-- "CONVENTIONS key landing (self|integrator, default self in code) — handoff continues into land through the shared lease; autolaunch_max default 5; Invariant 9 reworded in kit/CLAUDE.md (the lease holder IS the Integrator)"  (T-088, 2026-08-23)
-
-- "doctor --selftest gains checkoutguard, readyoverlap and selfland drills (labels 28 to 31); golden pairs checkout-guard-denies + ownership-primary pin the refusal wording"  (T-089, 2026-08-23)
