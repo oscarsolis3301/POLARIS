@@ -282,130 +282,33 @@ exercises but a Builder cannot.
 | 2026-07-18 | 13 (T-003, T-007..T-010) | 7 (T-004..T-006) · cycle p50 0.5h · kickbacks 0 |
 
 ## Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
-- A GOLDEN CAN GO STALE ON BASE WITH NOBODY NOTICING, AND THE WAVE GATE IS WHERE IT SURFACES —
-  sprint 11 W1's uat came back red on `cli-help` and the diff LOOKED like this wave's doing (the
-  `approve` block, kin to the wave's ask/approve subject matter), but base-comparison proved
-  otherwise: `kit/ops/polaris` carries the `approve` help text on main (landed sprint 10 with
-  T-048) while `ops/tests/cli-help.expected` was never refreshed, and the wave touched neither
-  file — byte-identical to base, so red-on-base, not the tasks'. The rot vector: `test:` (selftest)
-  never runs `check`, `qa`'s suite stamp can skip it, and sprint 10's gates evidently never ran
-  this golden after `approve` landed. Rule confirmed cheap: before ANY red-suite kickback, diff
-  the failing gate's inputs against base FIRST — here it replaced a 3-way bisect with one
-  `git diff --stat`. Repair is deliberately NOT the integrator's: `check --update` is a
-  human/Builder decision — Planner, queue the `cli-help` golden refresh (1-pt rider, or fold into
-  T-089 which already owns golden files this sprint). — three
-  instances now, so treat it as structural, not bad luck. Sprint 7: T-047 added fns to `ownership.sh`
-  without owning `ops/tests/api-kit.expected`. Sprint 8: T-063 (docs) added ONE PROTOCOL heading —
-  `api-kit` records headings too, not just fns — while T-062 (tests) owned the golden; `files_owned`
-  were disjoint, the ready gate was satisfied, and the two lanes were still coupled through a file
-  neither could reconcile alone. Bisect named T-063 the offender (T-064 green → +T-063 red → +T-062
-  red, same single line) while only T-062 could legally fix it, so the bounce went to T-062 — the
-  mechanical offender and the legal fixer are NOT always the same task. The live-board variant is the
-  same shape: `triage-lane` pins `triage`'s output against the real board, so the Planner filing T-064
-  mid-wave turned it red with zero code changed (T-062 made it hermetic). PLANNER: either the golden's
-  owner owns every file feeding it, or surface-touching tasks get an explicit `depends_on` chain
-  instead of parallel lanes — the ready gate compares paths and CANNOT see this. INTEGRATOR: never
-  `check --update` yourself; its own help says "a human/Builder decision, never automatic".
-  THE PRESCRIPTION NOW HAS ITS FIRST POSITIVE RESULT (sprint 9 W1). Five parallel lanes touched the
-  `api-kit` surface and it cost zero kickbacks, because the plan did all three things at once: ONE
-  owner for the golden per wave (T-065), the cross-lane edit — T-066's PROTOCOL heading swap, the
-  exact shape that bounced T-063 — pinned BYTE-EXACT in the contract so the golden's owner could
-  write the matching line without seeing T-066's diff, and every other lane surface-frozen. Worth
-  knowing for nerve: this makes `api-kit` legitimately RED mid-wave whenever only one of the pair has
-  landed. That is the design working, not a defect — which is why the wave gate is the run that
-  counts, and why an integrator landing pipelined must NOT gate on the golden task-by-task.
-  IT HELD ALL THREE WAVES (T-065 → T-070 → T-071 as sole `api-kit.expected` owner, one per wave,
-  exactly as the sprint plan carved it), across 5 lanes then 2 then 2, for ZERO kickbacks and a
-  first-pass-green gate every time. Three sprints of this defect, one sprint of the prescription, no
-  recurrences: the rule is now earned, not theoretical. Keep carving it this way.
-  SPRINT 10 W1 FOUND THE PRESCRIPTION'S OWN DEADLOCK: `handoff` re-runs `verify:`, the golden's sole
-  owner (T-048) pinned `check --only api-kit` in its verify list, and the golden was legitimately red
-  from OTHER lanes' landings (T-074's 37 key rows, T-079's INIT heading tail) — so the one lane
-  allowed to reconcile the golden was the one lane that could not hand off. Under one-owner-per-wave
-  the owner handing off LAST is the norm, so this is structural, not bad luck. The resolution that
-  keeps every gate: the INTEGRATOR records the landed surface mid-wave on the integrate branch —
-  derive from the live `.cmd` output, cross-check against the owner's copy stripped of its unlanded
-  lines (two independent derivations must agree), review the commit diff line-by-line, never
-  `check --update` on faith — and the owner's handoff retries green. After the owner lands, the
-  golden must gain exactly its own lines on top; anything else is a finding. EVOLVE: write this into
-  key-registry § 5 — the pinned-pair design assumed the owner could hand off red, and it cannot.
-  SECOND OCCURRENCE, SECOND VARIANT (sprint 10 W2): T-077 was blocked not by other lanes' surface
-  drift but by the exact fn it was contractually recording FOR T-078 — the moment T-078 landed, the
-  golden it could not touch went red. Same recipe, same result (recording commit 2642cd9, two
-  derivations agreed, owner's land added exactly `+cmd_adopt`). Two waves, two variants, zero
-  luck involved: when one task owns a golden that another task's landing moves, either the OWNER
-  lands first or the integrator records mid-wave — every time. EVOLVE proposal 4 is earned.
-- A BASE-BOUND COMMIT LANDS ON WHATEVER THE SHARED CHECKOUT HAS OUT — AND DURING A WAVE THAT IS THE
-  INTEGRATE BRANCH. Sprint 9 W1: while I held `integrate/2026-08-03`, the Planner authored
-  `docs(contract): bg-jobs v1.1 (T-072)` and it committed onto MY branch, then rode my `--no-ff` seal
-  into `main`. Content-wise a non-event — `ops/contracts/**` and `ops/MAP.md` are explicitly NOT in
-  the board's moved set (`ops/MANUAL.md`:57), so base is exactly where it belonged, and it touched no
-  file any task owned. The hazard is ENTANGLEMENT, not correctness: an unrelated contract is now
-  inside a sprint's seal merge, so `rollback sprint/<n>` would revert it too. Structural, not a
-  one-off — board writes are protected by living on their own ref, contracts and MAP have no such
-  protection, and the Planner grooms the next wave during precisely the window the integrate branch
-  is checked out. INTEGRATOR: `git log <base>..integrate/<date>` before sealing and read every commit
-  you did not land — a subject without a `[<ID>]` suffix is the tell, and it is invisible after the
-  merge. Cheap fix if it recurs: groom onto `<base>` from a second worktree, or seal sooner.
-  IT RECURRED IN THE SAME SPRINT, so treat it as certain rather than possible: wave 3 captured
-  `docs(contract): bg-jobs v1.2 (T-073)` exactly as wave 1 captured v1.1. Twice in one sprint, both
-  times the Planner authoring the NEXT task's contract during the landing window — which is not bad
-  luck, it is the two roles' schedules overlapping by design. The pre-seal log read caught both; make
-  it a reflex, not a reaction.
-  SAME FAMILY, MY OWN NEAR-MISS: DO NOT TOUCH TAGS BY HAND. Closing wave 2 I ran
-  `git push origin --tags --force`, which is on the STOP-AND-ASK list and which I should have asked
-  about first. It was a harmless no-op only because `seal` had already moved `sprint/9` via its own
-  compare-and-swap, and I verified all seven sprint tags still pointed where they belonged. The
-  lesson is that there was never a reason to reach for it: `seal` OWNS the tag in both publish modes,
-  so an integrator pushing tags manually is already off the sanctioned path, and `--force` on a ref
-  namespace holding every sprint's history is the one place a no-op and a catastrophe look identical
-  until you check.
-- A RAW SHELL BACKGROUND JOB IS OWNED BY NOBODY THE MOMENT A SUBAGENT'S TURN ENDS. TWICE in sprint
-  10 an agent (the W1 integrator first — conductor-entered, so a subagent) launched a long suite
-  through the harness's background shell and ended its turn expecting a completion notification —
-  but a completed subagent receives none, so the job ran orphaned with nothing watching it, and a
-  crash would have been indistinguishable from still-running. It survived only because the
-  conductor independently armed a watch on process exit covering both outcomes. `bg run` + chunked
-  `bg wait` exists for exactly this — the verdict lives in an rc file ANY session can collect
-  later — so a long command in a subagent goes through the bg machinery or stays foreground with an
-  explicit timeout; a bare background shell is only safe in a session that will still be alive to
-  reap it. AND THE LIST OF LONG COMMANDS HAS A GAP THAT CAUGHT THE CONDUCTOR THIS RUN:
-  `polaris finish` re-runs the suite internally, so it exceeds the 600s tool ceiling exactly as
-  `test:` (805s) and `qa` (1225s) do — but the CONVENTIONS measured-times comment names the suites
-  and not `finish`. Until that comment is amended (EVOLVE proposal queued), treat `finish` as a
-  `qa`-class command: background it and poll.
-- A NEW GOLDEN IS INVISIBLE TO ITS OWN AUTHOR'S VERIFY. `cmd_check` reads `$OPS/tests` and runs
-  from `$PRIMARY` (observe.sh:1244,1251), so a pair created inside a Builder worktree prints
-  `no goldens matched` and the builder's `check --only <name>` passes VACUOUSLY — all three new
-  pairs this wave (keys-drift · adopt-stub · plain-voice) shipped never having executed. The
-  integrate branch is the first place they run for real. INTEGRATOR: after landing any task that
-  ADDS a golden, run `check --only <name>` explicitly and — when the golden exists to guard a
-  register or invariant — sabotage it yourself (red) and restore (green); a golden nobody has seen
-  fail is not evidence. EVOLVE: either `check` learns to see the worktree's own new pairs, or
-  BUILDER.md names the gap so builders prove pairs by hand as T-076's did.
-- PARALLEL BUILDERS SHARE ONE SCRATCHPAD AND CAN DESTROY EACH OTHER'S FIXTURE TREES — a silent
-  cross-lane corruption channel, seen once for real (sprint 10 W4): T-080's setup `rm -rf
-  scratchpad/sab` deleted T-050's in-use sabotage tree mid-selftest, fabricating a spine failure
-  that reads exactly like a regression (`kit/ops/polaris: No such file or directory` →
-  SECOND-SEAL LAND FAIL); T-050's cleanup then cost T-080 a run in return. The tell that it is
-  corruption and not code: the failure point MOVES between runs — a real regression fails
-  identically every time. Rules until EVOLVE fixes the substrate: (a) namespace scratch paths
-  per lane (`scratchpad/<ID>/…`), never a bare shared name; (b) never `rm -rf` a scratch path
-  another lane might be standing in — leave trees in place; (c) integrator meeting a
-  moved-failure-point red re-runs before believing it, and any sabotage evidence from a
-  possibly-corrupted run is re-proven in a clean directory (T-080 did exactly this, all four
-  failure points reproduced identically). Related reflex, same wave: VERIFY THE SABOTAGE TOOK
-  by reading its diff before running — an off-by-one sed is a no-op whose green is vacuous, the
-  same trap as the primary-anchored golden, one layer down.
-- A GOLDEN REFRESH SCOPED BY COMMIT RANGE MISSES GAPS OLDER THAN THE RANGE — sprint 11's
-  cli-help rider (T-091) bounced on its first claim because the task scoped the expected diff off
-  `4e9fa63..HEAD` (the `approve` block) while a SECOND uncaptured block (`adopt`) predated that
-  range; the builder's STOP-on-unexpected-hunk gate worked exactly as written and the hand-back
-  was correct, not friction. PLANNER: scope a golden refresh by diffing the golden's CONTENT
-  against live output (`cmd | diff - golden`), never by a commit range — the Planner's re-scope
-  did exactly this and the re-run landed clean, additions-only, 17/17. The read-the-diff-before-
-  committing clause is what turned a silent mis-capture into a clean bounce; keep writing it into
-  every golden task.
+- A DERIVED-SURFACE GOLDEN COUPLES EVERY LANE THAT TOUCHES ITS SURFACE — the discipline is EARNED
+  (three sprints of defects, then sprints 9–11 at 0 kickbacks), keep carving it: ONE owner per wave
+  for `ops/tests/api-kit.expected`, every cross-lane delta pinned BYTE-EXACT in the contract,
+  everyone else surface-frozen. Three refinements, each proven the hard way: (a) PIN BY SURFACE
+  KIND — the index records fns AND markdown headings AND KEYS.tsv key rows, so a task adding a key
+  row needs that row pinned beside the fn (T-088's true delta was TWO lines where the contract
+  pinned one; the owner caught it inside its own ownership). (b) THE OWNER CANNOT HAND OFF RED, and
+  under one-owner-per-wave the owner handing off last is the norm — when another lane's landing
+  moves the golden, either the owner lands FIRST or the integrator records the landed surface
+  mid-wave (key-registry/shared-checkout § 5 recipe: two independent derivations must agree, review
+  the commit line-by-line, never `check --update` on faith) — two occurrences, two variants, zero
+  luck. (c) SCOPE A REFRESH BY CONTENT DIFF, NEVER COMMIT RANGE — diff the golden against live
+  output (`cmd | diff - golden`); a range hides gaps older than itself (T-091 bounced exactly
+  there, and the STOP-on-unexpected-hunk clause is what turned a silent mis-capture into a clean
+  bounce — keep writing it into every golden task). Related, one layer down: a NEW golden is
+  invisible to its author's own verify — `cmd_check` is primary-anchored, so a pair born in a
+  worktree passes VACUOUSLY (`no goldens matched`); after landing one, the integrator runs
+  `check --only <name>`, sabotages it red, restores it green — a golden nobody has seen fail is
+  not evidence.
+- A BASE-BOUND COMMIT DURING A WAVE LANDS ON THE CHECKED-OUT INTEGRATE BRANCH AND RIDES THE SEAL —
+  and it is schedule overlap BY DESIGN, not bad luck: the Planner grooms the next wave's contracts
+  during exactly the landing window (twice in sprint 9; zero recurrences since the pre-seal read
+  became reflex — every sprint-11 wave read `git log <base>..integrate/<date>` before sealing).
+  INTEGRATOR: read every commit you did not land; a subject without a `[<ID>]` suffix is the tell,
+  and it is invisible after the merge. Same family: never touch tags by hand — `seal` OWNS
+  `sprint/<n>` in both publish modes, and a manual `--force` push on the ref namespace holding
+  every sprint's history is the one place a no-op and a catastrophe look identical until you check.
 - A VERIFICATION REQUIREMENT MUST NAME A CALLER WHO CAN ACTUALLY RUN IT — T-087's contract
   demanded the top-level `EnterWorktree` entry be re-verified LIVE, but the builder was a
   pinned-cwd subagent, the one caller structurally unable to test it (the tool refuses there by
@@ -425,14 +328,6 @@ exercises but a Builder cannot.
   silently refuses and the drill tests NOTHING — a silently-vacuous drill is worse than a missing
   one. PLANNER: when a default-in-code feature meets legacy fixtures, refusing on the
   unclassifiable is the carve that keeps the suite stable AND every new test honest.
-- PIN GOLDEN DELTAS BY SURFACE KIND, NOT JUST FN NAMES (sprint 11 W3): the api-kit index records
-  KEYS.tsv KEY rows as well as fns and headings (headings were sprint 8's lesson), so
-  shared-checkout §5's pinned ONE-line delta was incomplete — the true delta for T-088 is TWO
-  lines, the pinned `self_land` fn plus `kit/ops/KEYS.tsv	key	landing`. The builder caught and
-  corrected it inside its own ownership (it owns the golden this wave), and `check` 17/17 at the
-  primary-anchored gate confirmed; shipping only the pinned line would have gone red AFTER
-  landing. PLANNER: a contract that pins an api-kit delta for a task adding a KEYS.tsv row must
-  pin the key row alongside the fns.
 - A NEUTERED GUARD STILL TALKS — TRUST THE RC, NOT THE REFUSAL TEXT (sprint 11 W4, T-089's sabotage evidence).
   When `primary_gate`'s deny exit was dropped in a throwaway kit copy, the refusal message still
   printed while the hook exited 0 — a fail-open that reads as a deny to any eye parsing prose. The
