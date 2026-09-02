@@ -137,6 +137,36 @@ wt_remove() { # wt_remove <ID> <done|release|sweep> — THE removal primitive (o
   local wt; wt="$(wt_path "$id")"
   if [ ! -d "$wt" ]; then git -C "$PRIMARY" worktree prune 2>/dev/null || true; return 0; fi
   local beat="$GCD/worktrees/$id/polaris-beat"
+  # v1.2 (T-114) — never remove the ground you are standing on. This outranks EVERY row of the
+  # table and runs BEFORE beat_age/beat_live, so no beat age, no caller and no --fix can lift it:
+  # on 2026-09-02 a self-landing lane's tail (lease wait → land → seal → suite → fan-out) outran
+  # wt_live_minutes with nothing re-beating, and its own `done` — run from $PRIMARY, so the $PWD
+  # test below could not fire — deleted the worktree the running script was executing out of,
+  # stranding six landed tasks. Hard refusal: LEFT, rc 1, nothing touched.
+  # Paths compare in TWO shapes because one alone is not enough on Windows: the canonical shape
+  # ($wt through the same cd+pwd that produced $SELF and $PWD — git hands back `C:/…` while both
+  # of those are `/c/…`), case- and separator-folded exactly as next_route folds bg-job cwds; and
+  # the `*/.polaris/wt/<ID>` suffix shape, which is what the pre-v1.2 own-lane test used and which
+  # holds whatever prefix form a path arrives in. Either shape matching is a refusal.
+  local wtn sn pn self_in=0 pwd_in=0
+  wtn="$(cd "$wt" 2>/dev/null && pwd)"; [ -n "$wtn" ] || wtn="$wt"
+  wtn="$(printf '%s' "$wtn" | tr 'A-Z\\' 'a-z/')"
+  sn="$(printf '%s' "${SELF:-}" | tr 'A-Z\\' 'a-z/')"
+  pn="$(printf '%s' "$PWD" | tr 'A-Z\\' 'a-z/')"
+  case "$sn" in "$wtn"/*) self_in=1;; esac
+  case "${SELF:-}" in */.polaris/wt/"$id"/*) self_in=1;; esac
+  case "$pn" in "$wtn"|"$wtn"/*) pwd_in=1;; esac
+  case "$PWD" in */.polaris/wt/"$id"|*/.polaris/wt/"$id"/*) pwd_in=1;; esac
+  if [ "$self_in" -eq 1 ]; then                    # the $SELF note wins when both conditions hold
+    note "worktree LEFT: .polaris/wt/$id holds the running script — never remove the ground you are standing on; a later sweep --fix finishes it once the session is gone"
+    return 1
+  fi
+  if [ "$pwd_in" -eq 1 ]; then
+    note "worktree LEFT: .polaris/wt/$id is your current directory — cd out and run: bash ops/polaris sweep --fix"
+    return 1
+  fi
+  # past the guard `own` is always 0 (the $PWD arm above covers every case that set it); the two
+  # `own` reads below are v1's own-lane rows, kept verbatim so no other cell of the table moves.
   local own=0 live=0 dirty=0 refuse=0 age
   case "$PWD" in */.polaris/wt/"$id"|*/.polaris/wt/"$id"/*) own=1;; esac
   age="$(beat_age "$id")"; beat_live "$id" && live=1
