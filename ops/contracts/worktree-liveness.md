@@ -201,6 +201,76 @@ Every other v1 rule stands: best-effort, zero forks in the hooks, a missing dir 
 verdict never changes. The `wtreap` drill (T-104) adds one assertion: a hook payload from a
 `.polaris/wt/T-NOPE` cwd whose worktrees dir does not exist produces EMPTY stderr and the normal verdict.
 
+## v1.2 — never remove the ground you are standing on (2026-09-02, T-114 · T-115; the ARC-428 class, observed live)
+
+**v1's own words were the bug.** § The decision table closes with "Own-worktree `done` is designed OUT
+rather than handled: under `landing: self` the handoff just beat, so `done` on the builder's own
+worktree hits clean+LIVE ⇒ LEFT + kept branch … Nothing ever removes the worktree a session is
+standing in." That reasoning holds only while the beat stays fresh. It does not.
+
+Observed live on 2026-09-02, T-104's lane: a builder runs `handoff` FROM its worktree, so `$SELF` is
+`.polaris/wt/<ID>/ops/polaris` — the running script lives inside the worktree. `cmd_handoff` beats
+once (builder.sh:213) and then the landing tail runs lease wait → `land` → `seal` → suite →
+fan-out, with NOTHING re-beating. That tail outran `wt_live_minutes` (15). The `self_land` fan-out
+then ran `( cd "$PRIMARY" && "$SELF" done "$tid" )` for every landed review task INCLUDING its own
+id; `done <own-ID>` saw clean+IDLE, `wt_remove` returned 0, the worktree was deleted, `$SELF`
+vanished mid-execution, and every remaining `done` in the loop failed — stranding six landed tasks
+in `review/` with their worktrees orphaned (beats 14–79 minutes old at the time of writing).
+
+Beat age must NEVER be able to license removing the running script's own directory. Two narrow
+guards, one per file, both mandatory before 6.2.0 ships:
+
+### Guard 1 — `wt_remove` refuses when the target holds the running script or the caller's cwd (T-114, `kit/ops/lib/workspace.sh`)
+- Evaluated **BEFORE** the liveness/dirty decision, so no beat age, no caller and no `--fix` can
+  override it. It is a hard refusal: **LEFT, rc 1**, nothing touched, for EVERY caller
+  (`done`, `release`, `sweep`) and every cell of the decision table.
+- Two conditions, either one refuses, both resolved to absolute real paths before comparison (the
+  worktree path may arrive with mixed separators on Windows — normalize the same way `next_route`
+  does for bg cwds):
+  1. `$SELF` (the running script, resolved absolute) is inside the target worktree.
+  2. `$PWD` is the target worktree or inside it.
+- Pinned notes (prefix `worktree LEFT: ` unchanged so the existing drill greps still match):
+```
+worktree LEFT: .polaris/wt/<ID> holds the running script — never remove the ground you are standing on; a later sweep --fix finishes it once the session is gone
+worktree LEFT: .polaris/wt/<ID> is your current directory — cd out and run: bash ops/polaris sweep --fix
+```
+  The `$SELF` note wins when both conditions hold.
+- **Inline the guard: NO new top-level function** (the shared-checkout v1.1 precedent). The api-kit
+  census of `workspace.sh` is unchanged.
+- The decision table above is amended by one sentence that outranks every row: *a target worktree
+  containing `$SELF` or `$PWD` is LEFT rc 1 regardless of caller, dirt or beat age.* Rows otherwise
+  stand exactly as v1 wrote them.
+
+### Guard 2 — the seal fan-out skips its own task (T-115, `kit/ops/lib/builder.sh`, `self_land`)
+- The `for f in "$BOARD/review/"*.md` loop that follows a successful `seal` MUST skip `$tid` = the
+  lane's own `$id` and leave that one `done` to the next `sweep --fix` / the next session. v1 already
+  says own-worktree `done` is "designed out"; the loop never implemented it.
+- Pinned note, emitted once, after the loop, only when the own id was skipped:
+```
+<ID> stays in review/ — a lane never runs done on its own task; the next sweep --fix or session finishes it
+```
+- Everything else in `self_land` is unchanged: same ordering, same rc semantics, same refusals.
+- Guard 2 alone is NOT sufficient and Guard 1 alone is NOT sufficient: Guard 2 removes the observed
+  trigger, Guard 1 makes the whole class impossible (`sweep --fix` from inside a worktree, a hand-run
+  `done`, any future caller). Ship both.
+
+### The beat file may legitimately be EMPTY — do not "fix" `beat_touch`
+`beat_age` reads content FIRST and falls back to the file's mtime (`stat -c %Y`, then `stat -f %m`).
+That fallback is the DESIGNED path, not a workaround: three of the four beat writers are the zero-fork
+hooks, whose whole point is `: 2>/dev/null > "$file"` — a truncate that updates mtime and forks
+nothing (v1.1). An empty `polaris-beat` is therefore CORRECT and reads as fresh. Nobody may "repair"
+those writers into writing content, and nobody may make `beat_age` treat empty as absent — that would
+silently mark every hook-beaten worktree idle and re-arm exactly the failure this section exists to
+end. `echo 1 > <beat>` stays the documented drill backdate.
+
+### Executable check (T-114 owns the regression proof; both directions)
+A fixture worktree whose beat is deliberately backdated PAST `wt_live_minutes`, with the CLI under
+test living inside that worktree, must still be LEFT by `done` and by `sweep --fix`, rc 1, with the
+pinned `holds the running script` note — and the worktree directory must still exist afterwards.
+Sabotage both ways: remove the guard ⇒ the fixture worktree is deleted and the assertion reds;
+restore it ⇒ green. Assert the DIRECTORY's survival and the rc, never the note alone.
+
 ## Changelog
 - v1 2026-09-01: created for T-092, T-093, T-096, T-097, T-098, T-099, T-100, T-103, T-104 (plan: cant-eat-itself, 6.2.0)
 - v1.1 2026-09-01: beat writers redirect stderr FIRST (`: 2>/dev/null > "$file" || true`) — bash applies redirections left to right, so the v1 order printed `No such file or directory` on every Bash call from a worktree whose worktrees dir was missing (T-093 lane, live); T-093 shipped the fix, T-092 told, T-101's preamble must use it.
+- v1.2 2026-09-02: never remove the ground you are standing on — `wt_remove` refuses (LEFT rc 1) when the target holds `$SELF` or `$PWD`, before any beat check (T-114), and the `self_land` seal fan-out skips its own task id (T-115). v1 assumed the handoff beat kept the own worktree LIVE through the landing tail; T-104's tail outran `wt_live_minutes` and the fan-out deleted the running script, stranding six landed tasks in `review/`. Also records that an EMPTY beat file is correct (the zero-fork hooks touch mtime only; `beat_age`'s mtime fallback is the designed path).
