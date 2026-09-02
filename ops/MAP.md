@@ -137,3 +137,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "done removes a task worktree only via wt_remove (live ⇒ LEFT + branch kept, dirty ⇒ archived); land/seal re-stamp the integration lease between long steps; audit lists .polaris/shots/<ID>-*.png captures"  (T-099, 2026-09-02)
 
 - "sweep gains the worktree pass (LIVE reported, IDLE clean removed / dirty archived with --fix), 120 s orphan-lock grace, last-activity + session-alive lines, .archive and handover-dir pruning; doctor warns when keep-awake is unarmed/disabled; qa stamps only when HEAD and the tree are unchanged AFTER the suite; finish stamps the session's finished marker; fleet kickoff ends in polaris next"  (T-100, 2026-09-02)
+
+- "new module lib/awake.sh (awake status|start|stop|disable|enable|install, awake_ensure); entry loader +awake +handover after bg; dispatch awake + next; preamble beats the worktree on every CLI call; awake_ensure fires from claim/status/doctor/handoff/bg run"  (T-101, 2026-09-02)
