@@ -467,7 +467,7 @@ permission-rules.md § role prose — copy them, do not paraphrase.
 - [ ] `python kit/ops/pack.py --allow-dirty` green; `bash kit/ops/polaris doctor --selftest --only claudemd,hint` green (foreground, ≥600000 ms timeout)
 
 ## T-108 — "Release 6.2.0 — parallel work that can't eat itself ships to every POLARIS repo"
-points 2 · risk normal · landed 003838f (2026-09-02) · claimed 2026-09-02
+points 2 · risk normal · landed 003838f (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: CHANGELOG.md, kit/ops/VERSION
 
 ### Why
@@ -807,3 +807,33 @@ parallel, and neither depends on the other.
 - [ ] Every other landed task still gets its `done`, and a failing one still prints the existing
 - [ ] A lane whose own task is NOT in the landed set (refused `risk: high`, nothing to skip) prints no
 - [ ] `bash -n` clean, function count unchanged, `self_land` still a single definition (verify 1, 4, 5)
+
+## T-116 — "SOURCE.md's vendoring provenance line false-matches the version sweep regex"
+points 1 · risk normal · landed 817243f (2026-09-02) · claimed 2026-09-02
+files touched: kit/.claude/skills/i-have-adhd/SOURCE.md
+
+### Why
+CI's "one version, everywhere" job (`.github/workflows/ci.yml`, job `consistency`) sweeps
+`README.md`, `kit/.claude/skills/` and `kit/ops/*.md` for any literal `POLARIS <x.y.z>` and reds if
+it finds one that isn't the current `kit/ops/VERSION` (6.2.0). `kit/.claude/skills/i-have-adhd/SOURCE.md`
+line 12 reads:
+
+    | vendored | 2026-07-26, for POLARIS 5.23.0 |
+
+That's a provenance record of when the vendored upstream skill was copied in — genuinely true at the
+time, and it will never stop matching the regex, so the job has been red since 5.24.0 (this predates
+today's 6.2.0 release and isn't caused by it). The fix is NOT to bump the number — that would state a
+falsehood (it wasn't vendored at 6.2.0) and would need re-bumping every release forever. Instead reword
+the line so it keeps the same meaning and the same date but no longer matches `POLARIS <x.y.z>`:
+
+    | vendored | 2026-07-26, at kit 5.23.0 |
+
+Only that one line changes. Everything else in SOURCE.md (upstream URL, author, licence, the "Why it
+ships" prose) and the table shape stay untouched. `SKILL.md` and `LICENSE` are not touched — this
+directory is a byte-for-byte vendored copy of upstream and `ops/tests/adhd-skill-installed` pins that
+it shipped, kept its licence/attribution, and kept its opt-in frontmatter flag.
+
+### Acceptance
+- [ ] `kit/.claude/skills/i-have-adhd/SOURCE.md` line 12 no longer matches `POLARIS [0-9]+\.[0-9]+\.[0-9]+`
+- [ ] the CI sweep command, run locally, returns an empty `bad` set at `ver=6.2.0`
+- [ ] `ops/tests/adhd-skill-installed` golden stays green (SKILL.md/LICENSE untouched, opt-in flag intact)
