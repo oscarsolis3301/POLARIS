@@ -133,3 +133,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "checkout-guard.sh denies worktree remove/prune/move, clean (except -n), push --delete, rm/Remove-Item on .polaris and broad process kills (mutating_other); both guards touch the worktree beat"  (T-093, 2026-09-02)
 
 - "claim/resume/verify/handoff beat the worktree; resume and release refuse a live worktree (takeover = rm the beat file); pack prints the SEE YOUR WORK section from shot:/visual:/port_base:/serve:; handoff refuses a visual change without a fresh .polaris/shots/<ID>-*.png"  (T-098, 2026-09-02)
+
+- "done removes a task worktree only via wt_remove (live ⇒ LEFT + branch kept, dirty ⇒ archived); land/seal re-stamp the integration lease between long steps; audit lists .polaris/shots/<ID>-*.png captures"  (T-099, 2026-09-02)
