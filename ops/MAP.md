@@ -143,3 +143,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "kit/ops/hooks/awake-hook.sh (SessionStart/UserPromptSubmit/Stop/SessionEnd machine hooks + the daemon loop, verdict from transcript mtime + live bg jobs, WMI spawn) and awake-press.ps1 (ES_SYSTEM_REQUIRED one-shot + F-key only when the user is idle and unlocked) — installed to ~/.claude/polaris/ by T-103"  (T-102, 2026-09-02)
 
 - "new module lib/handover.sh — polaris next [--do|--brief]: resume/integrate/stop/build/promote/wait/finish off the board (T-101 wires the dispatch + loader)"  (T-109, 2026-09-02)
+
+- "kit/ops/hooks/handover-hook.sh — Stop (block once per board-proven completion event with the next role's instruction), SessionStart compact|resume (re-anchor via next --brief), UserPromptSubmit (prompted-at clock); wired in kit/.claude/settings.json; readonly-allow auto-approves next and next --brief"  (T-110, 2026-09-02)
