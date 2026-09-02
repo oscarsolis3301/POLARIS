@@ -141,3 +141,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "new module lib/awake.sh (awake status|start|stop|disable|enable|install, awake_ensure); entry loader +awake +handover after bg; dispatch awake + next; preamble beats the worktree on every CLI call; awake_ensure fires from claim/status/doctor/handoff/bg run"  (T-101, 2026-09-02)
 
 - "kit/ops/hooks/awake-hook.sh (SessionStart/UserPromptSubmit/Stop/SessionEnd machine hooks + the daemon loop, verdict from transcript mtime + live bg jobs, WMI spawn) and awake-press.ps1 (ES_SYSTEM_REQUIRED one-shot + F-key only when the user is idle and unlocked) — installed to ~/.claude/polaris/ by T-103"  (T-102, 2026-09-02)
+
+- "new module lib/handover.sh — polaris next [--do|--brief]: resume/integrate/stop/build/promote/wait/finish off the board (T-101 wires the dispatch + loader)"  (T-109, 2026-09-02)
