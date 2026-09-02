@@ -182,5 +182,25 @@ $ bash ops/polaris done T-101          # T-101's builder is still inside .polari
    branch feat/T-101 kept — checked out in a live worktree; sweep --fix finishes the cleanup once idle
 ```
 
+## v1.1 — the beat writers redirect stderr FIRST (2026-09-01, board amendment; proved live by the T-093 lane)
+v1 pinned the beat touches as `: > "$file" 2>/dev/null || true`. Bash applies redirections LEFT TO RIGHT:
+the `>` open runs while stderr is still the terminal, so when `$GCD/worktrees/<ID>/` does not exist (a
+`.polaris/wt/` path that is not a git worktree, a hook fired before `wt_add`, a CI checkout) every Bash call
+from a worktree printed `No such file or directory` — a hook that is supposed to be silent talking on every
+turn. The correction is ordering only: `2>/dev/null` BEFORE the `>`. Pinned, byte-exact, for ALL FOUR writers:
+- `kit/ops/polaris` preamble (T-101 — MUST use this form, not v1's):
+  `case "$PWD" in */.polaris/wt/*) _w="${PWD##*/.polaris/wt/}"; _w="${_w%%/*}"; : 2>/dev/null > "$GCD/worktrees/$_w/polaris-beat" || true;; esac`
+- `kit/ops/hooks/checkout-guard.sh` gate 2 (T-093 shipped this form):
+  `_p="${CWD//\\//}"; _w="${_p##*/.polaris/wt/}"; _w="${_w%%/*}"; : 2>/dev/null > "${_p%%/.polaris/wt/*}/.git/worktrees/$_w/polaris-beat" || true`
+- `kit/ops/hooks/ownership-guard.sh` after the `WT_ID=`/`PRIMARY=` anchor (T-093 shipped this form):
+  `[ -n "$WT_ID" ] && : 2>/dev/null > "$PRIMARY/.git/worktrees/$WT_ID/polaris-beat" || true`
+- `beat_touch` (workspace.sh, T-092 — told mid-build): the epoch write is
+  `printf '%s\n' "$(date +%s)" 2>/dev/null > "$GCD/worktrees/$1/polaris-beat" || true` (after its `mkdir -p`,
+  which is itself `2>/dev/null || true`).
+Every other v1 rule stands: best-effort, zero forks in the hooks, a missing dir is silently skipped, the
+verdict never changes. The `wtreap` drill (T-104) adds one assertion: a hook payload from a
+`.polaris/wt/T-NOPE` cwd whose worktrees dir does not exist produces EMPTY stderr and the normal verdict.
+
 ## Changelog
 - v1 2026-09-01: created for T-092, T-093, T-096, T-097, T-098, T-099, T-100, T-103, T-104 (plan: cant-eat-itself, 6.2.0)
+- v1.1 2026-09-01: beat writers redirect stderr FIRST (`: 2>/dev/null > "$file" || true`) — bash applies redirections left to right, so the v1 order printed `No such file or directory` on every Bash call from a worktree whose worktrees dir was missing (T-093 lane, live); T-093 shipped the fix, T-092 told, T-101's preamble must use it.

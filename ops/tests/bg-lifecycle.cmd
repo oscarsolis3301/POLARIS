@@ -14,6 +14,7 @@
 KIT="$(pwd)/kit/ops/polaris"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
+export POLARIS_AWAKE_HOME="$FIX/awake-home"
 ( set -e
   git init -q -b main "$FIX/repo" 2>/dev/null || { git init -q "$FIX/repo"; git -C "$FIX/repo" symbolic-ref HEAD refs/heads/main; }
   cd "$FIX/repo"
@@ -81,3 +82,22 @@ echo '== refusals: the name grammar, and a job that was never started =='
 B run bad/name -- true
 B status never-ran
 B tail ok -n 1
+
+echo '== a same-name job from ANOTHER cwd is refused, --force included =='
+# The exact case v1 got wrong: repo/src and repo resolve to the SAME primary, so both sessions see
+# ONE registry — and the second `bg run own` used to rotate the live job away, with --force killing
+# a pid Windows may already have handed to somebody else. Ownership is the job's cwd (bg-jobs.md
+# v2), so from the repo root the subdir's live job is untouchable, --force included. $FIX is the
+# fourth machine-specific byte bg emits here (the owner's cwd), so it normalizes like the others.
+printf 'bg run own -- sleep 8   [started from repo/src]\n'
+out="$( cd "$FIX/repo/src" && bash "$KIT" bg run own -- sleep 8 2>&1 )"; rc=$?
+printf '%s\n' "$out" | N
+printf 'rc %s\n' "$rc"
+B run own -- true         | sed "s#$FIX#<fix>#g"
+B run own --force -- true | sed "s#$FIX#<fix>#g"
+B wait own --max 30
+
+echo '== a third run archives the old .prev instead of deleting it =='
+B run ok -- echo third-run
+printf 'archived ok-*: '; ls "$FIX/repo/.polaris/bg/.archive" | grep -c '^ok-'
+printf 'ok.prev/cmd: '; cat "$FIX/repo/.polaris/bg/ok.prev/cmd"

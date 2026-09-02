@@ -37,7 +37,7 @@ pays for, and every one of these rules is strictly less output:
 
 1. **Lead with the action**, not the context. Answer first, explain only if asked.
 2. **Number multi-step work; cap every list at 5.** More than five is a dump, not a report.
-3. **End with ONE concrete next step**, doable in under two minutes. Not three options.
+3. **End with ONE concrete next step** — one only the human can take, doable in under two minutes; a step this chat could take itself, it takes before closing. Not three options.
 4. **No preamble, no recap, no closing pleasantry.** Start at the answer, stop when it ends.
 5. **Restate where things stand, every message** — "3 of 5 done, 2 to go", never "good progress".
 6. **Give time in real units** — "about 15 minutes", never "some work" or "almost there".
@@ -84,6 +84,9 @@ not a ceremony.
 
 Every `caveat:` line `finish` printed — blocked tasks, work still queued — goes into the message in
 plain words, under the H1. **Exit 0 means "the run is over", never "nothing was left behind."**
+
+**A hop is not an ending.** No H1 until `bash ops/polaris next` says `finish` and `finish` returns
+0 — a role change mid-chat is the next context, not the close.
 
 ### The endings that are not exit 0
 

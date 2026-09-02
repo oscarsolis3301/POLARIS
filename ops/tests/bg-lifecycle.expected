@@ -69,3 +69,22 @@ rc 1
 bg tail ok -n 1
 second-run
 rc 0
+== a same-name job from ANOTHER cwd is refused, --force included ==
+bg run own -- sleep 8   [started from repo/src]
+✅ bg: 'own' started (pid <pid>) — log: <reg>/own/log · collect: bash ops/polaris bg wait own
+rc 0
+bg run own -- true
+⛔ job 'own' is RUNNING from another session (cwd <fix>/repo/src) — pick a distinct name (bg run own-<ID>); --force never kills a foreign live job
+rc 1
+bg run own --force -- true
+⛔ job 'own' is RUNNING from another session (cwd <fix>/repo/src) — pick a distinct name (bg run own-<ID>); --force never kills a foreign live job
+rc 1
+bg wait own --max 30
+✅ 'own' green — rc 0 in <dur>
+rc 0
+== a third run archives the old .prev instead of deleting it ==
+bg run ok -- echo third-run
+✅ bg: 'ok' started (pid <pid>) — log: <reg>/ok/log · collect: bash ops/polaris bg wait ok
+rc 0
+archived ok-*: 1
+ok.prev/cmd: echo second-run
