@@ -41,7 +41,7 @@ autonomy: trusted           # owner decision 2026-08-03: composes plan_gate=auto
 drain: plan                 # plan | queue | backlog. CHANGED DEFAULT: one "go" authorizes the plan the human just approved, not the whole ready queue. Dependency chains inside the plan still loop automatically
 run_max_tasks: 24           # tasks a single run will BUILD (0 = unbounded) Raised 12→24 by owner decision 2026-09-01 for the 6.2.0 program (20 approved tasks, 4 waves); revisit downward after 6.2.0 ships
 run_max_minutes: 360        # wall clock since kickoff; checked at wave boundaries only, never mid-task. Raised 90→180 by owner decision 2026-08-04, mid-run and deliberately: the 6.0.0 program is ~2h of waves plus a full qa, so 90 stopped it cleanly halfway two runs running. 180 is sized to "one program, one run", not to "no ceiling" — the point of this block is still that a loop without a ceiling is not autonomy. Revisit downward once 6.0.0 ships; a routine sprint should not need this much Raised 180→360 by owner decision 2026-09-01 for the same program
-run_max_agents: 20          # cumulative subagent spawns per run
+run_max_agents: 40          # cumulative subagent spawns per run Raised 20→40 by owner decision 2026-09-01 for the 6.2.0 program (20 tasks + planner, integrators, evolve); revisit downward after 6.2.0 ships
 run_fix_waves: 2            # was hard-coded in CONDUCTOR step 6.5
 qa_scout: auto              # auto | off | always. auto spawns the scout ONLY when uat: is empty AND the run touched a runnable: path. runnable: unset ⇒ off
 runnable:                   # globs of this repo's runnable surface. Deliberately UNSET: `test:` already drives the whole CLI end-to-end across 18 drills, so a scout here is pure duplication
