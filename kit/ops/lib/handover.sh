@@ -239,7 +239,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
 next_brief() { # next_brief — `--brief`: ≤8 lines, no `|` anywhere, markers verbatim, so a compacted
   # chat re-anchors from disk: role (my live lock on an active task ⇒ BUILDER · lease mine ⇒
   # INTEGRATOR · else none) · task and worktree (only with a lock, and only when the dir exists) ·
-  # up to three of MY last events, newest first · line 1 of `next` · the role file it implies.
+  # up to three of MY last events, newest first · line 1 of `next` · the role file it implies (omitted at `role: none`).
   local sid lk id="" col="" role=none wt n line1 rfile now ts ev eid line
   sid="${CLAUDE_CODE_SESSION_ID:--}"
   if [ "$sid" != "-" ]; then
@@ -273,7 +273,7 @@ EOF_EV
     integrate|promote) rfile=INTEGRATOR;;
     *)                 rfile="$role";;
   esac
-  printf 'read ops/roles/%s.md if this context lost it\n' "$rfile"
+  [ "$rfile" = none ] || printf 'read ops/roles/%s.md if this context lost it\n' "$rfile"
   return 0
 }
 
