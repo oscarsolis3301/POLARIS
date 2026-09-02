@@ -324,7 +324,7 @@ this is machine-level. Every name, path, default and word is pinned in keep-awak
 - [ ] proven by hand with the drill seams (`POLARIS_AWAKE_HOME=$T POLARIS_AWAKE_PRESSER="touch $T/pressed" TICK=1 IDLE=3 STALE=5 GRACE=2 SPAWN=inline`): busy + fresh fake transcript ⇒ `pressed` within 3 s; all idle ⇒ self-exit after GRACE with `lock/` gone (drill `awake` in W3 automates it)
 
 ## T-103 — "Install side — VISUAL.md ships, new hooks are executable, keep-awake reaches every armed machine, uninstall refuses archives and strips every hook entry"
-points 3 · risk normal · landed 64eeaca (2026-09-02) · claimed 2026-09-02
+points 3 · risk normal · landed 64eeaca (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/.claude/skills/polaris-install/SKILL.md, kit/ops/bootstrap.py, kit/ops/install.sh, kit/ops/lib/admin.sh
 
 ### Why
@@ -356,7 +356,7 @@ role-handover.md (uninstall strip), visual-check.md (manifest).
 - [ ] `bash kit/ops/polaris doctor --selftest --only upgrade,adopt` green (foreground, ≥600000 ms timeout); `python kit/ops/pack.py --allow-dirty` green (the build:)
 
 ## T-104 — "Prove it — drills wtreap + awake, selfland keeps its own worktree, checkoutguard/bg learn the new cases, hermetic awake home in the spine; api-kit owner W3"
-points 5 · risk normal · landed 725bfa3 (2026-09-02) · claimed 2026-09-02
+points 5 · risk normal · landed 725bfa3 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/selftest/history.sh, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/spine.sh, ops/tests/api-kit.expected
 
 ### Why
@@ -390,7 +390,7 @@ api-kit owner: the four pinned rows (three drills + `merge_awake_hooks`). Specs:
 - [ ] api-kit.expected = 629 lines: the four pinned W3 rows in `find --api` order; completeness `<` count 0 here; the only sibling `>` rows until the wave lands are `drill_handover` (T-111) and `merge_awake_hooks` (T-103)
 
 ## T-105 — "Golden pack-visual — the SEE YOUR WORK section, the per-task port, and the handoff capture gate, hermetically"
-points 2 · risk normal · landed a02d0f9 (2026-09-02) · claimed 2026-09-02
+points 2 · risk normal · landed a02d0f9 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: ops/tests/pack-visual.cmd, ops/tests/pack-visual.expected
 
 ### Why
@@ -414,7 +414,7 @@ and T-207 in `review/`. Spec: visual-check.md § executable check.
 - [ ] proven from the worktree with the `.cmd`-body diff; sabotaged red once (port_base 4001 ⇒ 4008) before trusting green; after landing, the integrator runs `check --only pack-visual` on the primary, sabotages it red, restores green (a golden nobody has seen fail is not evidence)
 
 ## T-106 — "Golden awake-hook — every hook subcommand's --test line, a stub-presser tick, the disabled flag, silence on the live path"
-points 1 · risk normal · landed 045257e (2026-09-02) · claimed 2026-09-02
+points 1 · risk normal · landed 045257e (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: ops/tests/awake-hook.cmd, ops/tests/awake-hook.expected
 
 ### Why
@@ -435,7 +435,7 @@ mktemp `POLARIS_AWAKE_HOME`; never touches the owner's registry. Spec: keep-awak
 - [ ] proven from the worktree with the `.cmd`-body diff; sabotaged red once (a stray `echo` in `ah_hook_idle` in a throwaway copy) before trusting green
 
 ## T-107 — "Role prose for 6.2.0 — see your work, the port rule, Loop mode becomes handover, Invariant 5 per context, an approved plan is a kickoff"
-points 3 · risk normal · landed e460cdc (2026-09-02) · claimed 2026-09-02
+points 3 · risk normal · landed e460cdc (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/.claude/skills/polaris/SKILL.md, kit/CLAUDE.md, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INIT.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md
 
 ### Why
@@ -527,7 +527,7 @@ and file is pinned in role-handover.md; T-111 goldens the ladder in W3.
 - [ ] never mutates the board; never forks `ops/polaris` before the `block:collect` rung
 
 ## T-111 — "Drill handover + goldens handover-route / handover-stop — every verb, --do, the hook ladder, hop cap, handover: off; cli-help-parity learns next"
-points 3 · risk normal · landed 1a34c67 (2026-09-02) · claimed 2026-09-02
+points 3 · risk normal · landed 1a34c67 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/selftest/board.sh, ops/tests/cli-help-parity.cmd, ops/tests/cli-help-parity.expected, ops/tests/handover-route.cmd, ops/tests/handover-route.expected, ops/tests/handover-stop.cmd, ops/tests/handover-stop.expected
 
 ### Why
@@ -559,7 +559,7 @@ Spec: role-handover.md § executable check.
 - [ ] `bash kit/ops/polaris doctor --selftest --only handover` green (foreground, ≥600000 ms timeout) once T-104's label has landed (before that, run the drill body directly from a scratch spine copy and say so in Notes); goldens proven from the worktree with the `.cmd`-body form; after landing, the integrator sabotages each golden red on the primary and restores green
 
 ## T-112 — "polaris next --brief — a session with no role must not be told to read ops/roles/none.md"
-points 1 · risk normal · landed 568c4a0 (2026-09-02) · claimed 2026-09-02
+points 1 · risk normal · landed 568c4a0 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/handover.sh
 
 ### Why
@@ -599,7 +599,7 @@ assertions run with a live lock, so they never see `role: none`.
 - [ ] `bash -n` clean, bash 3.2 constructs only (verify 1)
 
 ## T-113 — "Drill upgrade is red — the migration fixture must finish like a session that walked away, not one still sitting in its worktree"
-points 1 · risk normal · landed 90a6d40 (2026-09-02) · claimed 2026-09-02
+points 1 · risk normal · landed 90a6d40 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/selftest/remote.sh
 
 ### Why
@@ -665,3 +665,118 @@ green drill is its own risk.
 - [ ] The seam sits within four lines above the `done T-M` call it sets up (verify 4)
 - [ ] All six drills still present, `bash -n` clean (verify 1, 2)
 - [ ] Every other claim→handoff→done site in `remote.sh` reviewed; any left unchanged, say why in one line in Notes
+
+## T-114 — "wt_remove must never delete the worktree holding the running script or your cwd — beat age must not be able to override it"
+points 2 · risk normal · landed 41ba554 (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/workspace.sh
+
+### Why
+**This one deleted work.** On 2026-09-02 the T-104 lane's own self-land removed the worktree it was
+running from; `$SELF` vanished mid-execution and the seal fan-out died, stranding six landed tasks in
+`review/` with orphaned worktrees. It is the ARC-428 class this whole sprint exists to end, and it is
+live in `main` right now.
+
+The chain, all of it landed code, every step behaving as designed:
+
+1. A builder runs `bash ops/polaris handoff` FROM its worktree, so `$SELF` is
+   `.polaris/wt/<ID>/ops/polaris` — **the running script lives inside the worktree.**
+2. `cmd_handoff` beats that worktree once (`kit/ops/lib/builder.sh:213`).
+3. The landing tail is long: lease wait → `land` → `seal` → suite → fan-out. **Nothing re-beats
+   during it.** T-104's tail ran well past `wt_live_minutes` (default 15).
+4. The fan-out runs `( cd "$PRIMARY" && "$SELF" done "$tid" )` for every landed review task,
+   including the lane's own id. `done <own-ID>` runs from the primary, so `wt_remove`'s existing
+   `own` test (`case "$PWD" in */.polaris/wt/<ID>...`) does not fire.
+5. `beat_live` says idle → `refuse=0` → `git worktree remove` → rc 0. The worktree, and the script
+   executing out of it, are gone. Every remaining `done` in the loop then fails.
+
+The contract's § decision table literally asserted this could not happen — "the handoff just beat, so
+`done` on the builder's own worktree hits clean+LIVE ⇒ LEFT … Nothing ever removes the worktree a
+session is standing in." That reasoning is only true while the beat stays fresh, and the tail outlives
+it. `ops/contracts/worktree-liveness.md` § v1.2 now pins the correction; build to it.
+
+**The change.** In `wt_remove`, add a refusal evaluated **BEFORE** the liveness/dirty decision — before
+`beat_age`/`beat_live` are consulted at all, so no beat age, no caller and no `--fix` can override it.
+Hard refusal: **LEFT, rc 1**, nothing touched, for every caller (`done`, `release`, `sweep`) and every
+cell of the decision table. Two conditions, either one refuses:
+
+1. `$SELF` — the running script, resolved to an absolute real path — is inside the target worktree.
+2. `$PWD` is the target worktree or inside it.
+
+Resolve both sides to absolute paths and normalize separators before comparing: on Windows the
+worktree path can arrive with mixed `\` and `/`. `next_route` in `kit/ops/lib/handover.sh` already
+does this for bg-job cwds (`tr 'A-Z\' 'a-z/'`) — copy that shape rather than inventing one.
+
+Pinned notes, byte-exact (the `worktree LEFT: ` prefix is unchanged so existing drill greps still
+match; the `$SELF` note wins when both conditions hold):
+
+```
+worktree LEFT: .polaris/wt/<ID> holds the running script — never remove the ground you are standing on; a later sweep --fix finishes it once the session is gone
+worktree LEFT: .polaris/wt/<ID> is your current directory — cd out and run: bash ops/polaris sweep --fix
+```
+
+**Inline the guard — NO new top-level function.** `workspace.sh` has exactly 14 top-level functions
+and the api-kit golden pins every name; adding one reds a golden this task does not own. (Same call
+the shared-checkout v1.1 amendment made for the mutex owner guard.)
+
+This is one of two guards. T-115 stops the observed trigger by making the fan-out skip its own task;
+this task makes the whole class impossible — a hand-run `done`, a `sweep --fix` from inside a
+worktree, any future caller. Both are required before T-108 ships 6.2.0. They own different files and
+can run in parallel.
+
+### Acceptance
+- [ ] **Regression proof, both directions.** A fixture worktree whose beat is deliberately backdated
+- [ ] **Sabotage:** with the guard removed the same fixture DELETES the worktree and the assertion
+- [ ] Standing inside the target worktree, `sweep --fix` refuses with the `is your current directory` note
+- [ ] The guard runs before any beat/liveness call (verify 4)
+- [ ] A worktree that holds neither `$SELF` nor `$PWD` behaves EXACTLY as the v1 decision table says —
+- [ ] No new top-level function; `bash -n` clean (verify 5, 1)
+
+## T-115 — "The seal fan-out must skip its own task — a lane never runs done on the task it is landing"
+points 1 · risk normal · landed f38871a (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/builder.sh
+
+### Why
+`self_land`'s post-seal fan-out finishes every landed task in `review/`:
+
+```
+  for f in "$BOARD/review/"*.md; do
+    ...
+    ( cd "$PRIMARY" && "$SELF" done "$tid" ) \
+      || note "⚠ done $tid failed — finish it by hand: bash ops/polaris done $tid"
+  done
+```
+
+That loop includes **the lane's own `$id`**. Running `done` on your own task from the primary is
+exactly the case the plan says is "designed out" — and the loop is where it was supposed to be
+designed out, but never was.
+
+It bit on 2026-09-02: T-104's lane self-landed, the landing tail (lease wait → `land` → `seal` →
+suite → fan-out) outran `wt_live_minutes`, so by the time the loop reached T-104's own id the beat was
+stale, `wt_remove` returned 0, and `done` deleted the worktree that `$SELF` was executing from. The
+script vanished mid-loop and every remaining `done` failed — six landed tasks left stranded in
+`review/` with orphaned worktrees.
+
+**The change, and nothing else:** skip `$tid` when it equals the lane's own `$id`, and leave that one
+`done` to the next `sweep --fix` or the next session. Emit this note once, after the loop, only when
+the own id was actually skipped — byte-exact:
+
+```
+<ID> stays in review/ — a lane never runs done on its own task; the next sweep --fix or session finishes it
+```
+
+Everything else in `self_land` stays byte-identical: same ordering, same rc semantics, same hard stops
+(`risk: high` and any `approved:` entry still never self-land), same `queued:`/rc 3 path, same
+`⚠ done <tid> failed` fallback for every OTHER task. No new function — `builder.sh` has exactly 13
+top-level functions and the api-kit golden pins the names.
+
+This is one of two guards pinned by `ops/contracts/worktree-liveness.md` § v1.2. This one removes the
+observed trigger; T-114 (`kit/ops/lib/workspace.sh`) makes the class impossible by refusing in
+`wt_remove` itself. Both are required before T-108 ships 6.2.0. Different files — they can run in
+parallel, and neither depends on the other.
+
+### Acceptance
+- [ ] After a successful seal, the fan-out runs `done` for every landed `review/` task EXCEPT the
+- [ ] The skip note is emitted exactly once, and only when the own id was in the landed set
+- [ ] Every other landed task still gets its `done`, and a failing one still prints the existing
+- [ ] A lane whose own task is NOT in the landed set (refused `risk: high`, nothing to skip) prints no
+- [ ] `bash -n` clean, function count unchanged, `self_land` still a single definition (verify 1, 4, 5)
