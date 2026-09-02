@@ -142,9 +142,9 @@ cmd_awake <status|start|stop|disable|enable|install>
 `awake status|start|stop|disable|enable` · "`finish` never stops it; the next prompt anywhere respawns it" ·
 opt-out = the `disabled` flag (`awake disable`) · `KEY=none` keeps only the invisible execution-state half ·
 lid-close/power-button/critical-battery are out of reach for any user-mode program.
-`kit/.claude/skills/polaris-install/SKILL.md`'s "arms the machine" sentence should one day mention the
-keep-awake hooks — NO task in plans/v2.md's table owns that file, so it is an IDEAS.md line (1-pt rider),
-not a silent edit by T-103 (which owns install.sh, bootstrap.py and admin.sh only).
+`kit/.claude/skills/polaris-install/SKILL.md`'s "arms the machine" sentence gains the keep-awake hooks —
+T-103 owns that file (board amendment 2026-09-01); one sentence, no heading change (the skill is indexed
+by api-kit). The project skill `kit/.claude/skills/polaris/SKILL.md` is T-107's.
 
 ## Executable check
 ### Drill `awake` (T-104, policy.sh after `drill_checkoutguard`, template `drill_bg` :419-480; label `awake`)
