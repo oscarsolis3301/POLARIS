@@ -206,6 +206,25 @@ refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with wh
     [ -f "$s" ] && { cp "$s" "$dest/SKILL.md" 2>/dev/null; break; }
   done
 
+  # The keep-awake hook and its presser ride the same tarball, and the MACHINE is where they live:
+  # one keep-awake owner per box, hooked into ~/.claude/settings.json (ops/contracts/keep-awake.md).
+  # `update` has to arm them too, or a box armed before 6.2.0 never gets them — the same "update the
+  # repo, update the machine" reasoning as the cached kit above. Same two-path source order (kit/
+  # first, root fallback), and SILENT: fails open, and the hook's own stdout would land in the
+  # quiet-line count above the ▶ NEXT epilogue.
+  local awake="$HOME/.claude/polaris"
+  if mkdir -p "$awake" 2>/dev/null; then
+    for a in awake-hook.sh awake-press.ps1; do
+      for s in "$kitsrc/kit/ops/hooks/$a" "$kitsrc/ops/hooks/$a"; do
+        [ -f "$s" ] && { cp "$s" "$awake/$a" 2>/dev/null; break; }
+      done
+    done
+    if [ -f "$awake/awake-hook.sh" ]; then
+      chmod +x "$awake/awake-hook.sh" 2>/dev/null || true
+      bash "$awake/awake-hook.sh" install >/dev/null 2>&1 || true
+    fi
+  fi
+
   # The zip cannot be rebuilt here (Git Bash ships no `zip`, and ops/pack.py is never shipped), so
   # fetch the published release — the same pinned URL the installer's own permission rule names.
   [ -n "$zipurl" ] || { note "⚠ no zip: in ops/VERSION — machine cache not refreshed"; return 0; }
@@ -678,6 +697,12 @@ cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and re
   [ "$n" = "0" ] || die "$n task(s) still in active/ — finish or release them first (this is unfinished work)"
   n="$(ls "$BOARD/review" 2>/dev/null | grep -v '^\.gitkeep$' | wc -l | tr -d ' ')"
   [ "$n" = "0" ] || die "$n task(s) still in review/ — land or kick them back first"
+  # An archive is a worktree that was dirty when it was reaped: those bytes exist NOWHERE else —
+  # no branch, no stash, no commit (ops/contracts/worktree-liveness.md). Nothing in the kit ever
+  # deletes one, and uninstall is the one command that would take the whole .polaris/ tree with it,
+  # so it refuses first and lets the human decide what that work was worth.
+  n="$(ls "$PRIMARY/.polaris/wt-archive" 2>/dev/null | grep -c . || true)"
+  [ "$n" = "0" ] || die "$n archived worktree(s) in .polaris/wt-archive/ — uncommitted work lives there; move it out (or delete it yourself) before uninstall"
   n="$(git -C "$PRIMARY" worktree list | grep -c '\.polaris[/\\]wt' || true)"
   [ "$n" = "0" ] || die "$n POLARIS worktree(s) still checked out — run: ops/polaris sweep --fix"
 
@@ -724,17 +749,27 @@ cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and re
   python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
   # Widened past `ownership-guard` in 5.23.0: a repo whose guard entry was already gone would
   # otherwise keep a dangling "outputStyle" pointing at a style this command just deleted.
-  if [ -f "$SJ" ] && grep -qE 'ownership-guard|"outputStyle"' "$SJ" 2>/dev/null; then
+  # Widened again in 6.2.0, past PreToolUse: POLARIS now ships Stop, SessionStart and
+  # UserPromptSubmit hooks too, and a Stop entry left pointing at the deleted ops/hooks/ would
+  # error on EVERY turn in that repo, forever. Identity is the `ops/hooks/` PATH — exactly what
+  # install.sh merges by (install.sh:293-306) — so every event is swept and every foreign entry,
+  # whatever it runs, is kept.
+  if [ -f "$SJ" ] && grep -qE 'ops[/\]hooks|"outputStyle"' "$SJ" 2>/dev/null; then
     if [ -n "$PY" ]; then
       "$PY" - "$SJ" <<'EOF'
-import json, sys
+import json, re, sys
 p = sys.argv[1]
 d = json.load(open(p))
+ours = re.compile(r"ops/hooks/")                          # PATH, never a basename — install.sh's rule
+mine = lambda e: isinstance(e, dict) and any(
+    isinstance(c, dict) and ours.search(str(c.get("command", "")).replace("\\", "/"))
+    for c in (e.get("hooks") or []))                      # backslashes folded: Windows commands match too
 h = d.get("hooks", {})
-pre = [e for e in h.get("PreToolUse", [])
-       if "ownership-guard" not in json.dumps(e)]        # keep every hook that isn't ours
-if pre: h["PreToolUse"] = pre
-else:   h.pop("PreToolUse", None)
+if isinstance(h, dict):
+    for ev in list(h):                                    # EVERY event: Stop, SessionStart, PreToolUse …
+        keep = [e for e in h[ev] if not mine(e)] if isinstance(h[ev], list) else h[ev]
+        if keep: h[ev] = keep                             # keep every hook that isn't ours
+        else:    h.pop(ev, None)                          # an event with nothing left goes too
 if not h: d.pop("hooks", None)
 if d.get("outputStyle") == "polaris":
     d.pop("outputStyle", None)                            # only OUR value — a style they chose is theirs
@@ -751,6 +786,14 @@ EOF
   rm -f  "$PRIMARY/.claude/output-styles/polaris.md"   # ONLY ours — other styles are theirs to keep
   rmdir "$PRIMARY/.claude/output-styles" 2>/dev/null || true
   rmdir "$PRIMARY/.claude/skills" "$PRIMARY/.claude" 2>/dev/null || true   # only if now empty
+
+  # --- the machine's keep-awake registry: THIS repo's registration, and nothing else.
+  # The daemon, the two hook scripts and every other repo's entry belong to the MACHINE, and other
+  # repos are still using them (ops/contracts/keep-awake.md) — uninstalling one repo deregisters
+  # one repo. `awake stop` / `awake disable` is how a human turns the machine-wide half off.
+  local awake="${POLARIS_AWAKE_HOME:-${HOME:-.}/.claude/polaris/awake}" cks
+  cks="$(printf '%s' "$PRIMARY" | cksum)"; cks="${cks%% *}"
+  case "$cks" in ''|*[!0-9]*) ;; *) rm -f "$awake/repos/$cks" 2>/dev/null || true;; esac
 
   # --- the lines install.sh appended
   local GI="$PRIMARY/.gitignore" GA="$PRIMARY/.gitattributes"

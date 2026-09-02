@@ -57,10 +57,12 @@ start to continue` · then run `bash ops/polaris finish`. A budgeted stop is the
 as a normal ending, never as an apology. (`finish` exiting 0 at a cap means the board really is
 clear — then celebrate.)
 
-**Context compacted mid-run?** The board is the run's memory, not your context. Re-anchor from
-`bash ops/polaris status`: tasks in `active/` → wait on those lanes · `review/` non-empty → integrate ·
-`ready/` non-empty → spawn lanes · everything landed → qa → evolve → report. Never re-interview,
-never re-plan.
+**Context compacted mid-run?** The board is the run's memory, not your context — and
+the anchor hook already re-read the board for you the moment the compaction finished, so continue
+from its `next:` line: `build <ID>` → spawn that lane · `integrate` → spawn the integrator ·
+`wait` → those lanes are still running · `promote`/`finish` → you are at the tail, so qa → evolve →
+report. Never re-interview, never re-plan. (No anchor line in your context? `bash ops/polaris
+next --brief` prints it again.)
 
 ## Protocol
 **Route every spawn.** Before you spawn ANY subagent, ask the oracle which model it gets: `bash
@@ -81,6 +83,9 @@ call per spawn; routing never blocks work.
    line (neither checked off by the human nor evidenced done) is the candidate objective — confirm
    first: "Next on your roadmap: <line> — plan it?". It substitutes ONLY for the typed objective:
    0b, 0c and the plan gate (step 3) still run in full. Agents never write or check off ROADMAP.md.
+
+**Entered from an approved plan?** The plan IS the brief: skip step 1's interview and the 0c brief (the human approved the text), carry the plan path verbatim into the planner kickoff, and treat step 3 as passed unless the plan names a `risk: high` task or a STOP-AND-ASK item — those are still relayed. Budget caps and every other rule stand.
+
 2. **Plan (subagent).** Spawn ONE planner:
    > You are the PLANNER, conductor-entered. Read ops/roles/PLANNER.md and execute it. The interview
    > and brief gate are already done — do not re-ask; if truly blocked, return the question as your
@@ -129,7 +134,8 @@ call per spawn; routing never blocks work.
      `confirm` does. Converting a rule between `path` and `ask` is a HUMAN decision, never an agent's.
    - `ops/CONVENTIONS.md` sets `builders: panes`? Run `bash ops/polaris fleet <N> --launch` instead
      of steps 4–6 and stop — the human chose to watch sessions in terminal panes (classic flow).
-     Default (`subagents` or unset) → continue.
+     Each pane loops itself via `bash ops/polaris next` after its handoff, so the queue drains
+     without `start` nudges from you. Default (`subagents` or unset) → continue.
 4. **Build (parallel subagents).** Lanes = min(ready tasks, `autolaunch_max`, default 5). Spawn ALL
    lanes in ONE message, in the background, each pinned to a distinct task ID from the ready queue
    (top-wsjf first — you know the queue; the lock still protects against races). Route each lane
@@ -148,6 +154,7 @@ call per spawn; routing never blocks work.
    > FIRST run `bash ops/polaris pack <ID>` — that output IS your context: the task, its contract,
    > the house style to match, what you own, the API surface not to break, and your verify: list.
    > Anything it does not answer: `bash ops/polaris find <symbol>`, one hop, before any Grep.
+   > Touching a visual: path? run the shot: line pack printed, READ the png, and put a saw: line in your report — handoff refuses without the capture.
    > you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout.
    > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    Say once where to watch (`bash ops/polaris dash` · 127.0.0.1:7373). As each lane reports, relay
@@ -165,7 +172,8 @@ call per spawn; routing never blocks work.
      fix, hand off"). Still red → `bash ops/polaris release <ID> --to blocked -m "<why>"`, tell the
      human plainly what's parked and why, keep the other lanes going.
    - Builder dies without reporting → a lane gone silent past `stale_hours` is a DEAD lane, not a
-     slow one. First try to resume the same agent — its context is intact, so a nudge usually revives
+     slow one. **A lane that stopped on a capture refusal is not dead** — it needs the shot: line run,
+     not a respawn. First try to resume the same agent — its context is intact, so a nudge usually revives
      it right where it left off. No response → re-anchor from `bash ops/polaris status` +
      `git status` in its worktree to see how far it got, then release the task back to `ready/` and
      respawn one fresh builder per the retry path above.

@@ -1,0 +1,35 @@
+finish
+1
+0
+build T-HR1
+1
+1
+resume T-HR1
+1
+1
+integrate
+1
+2
+wait
+1
+1
+promote
+1
+1
+build T-HR1
+1
+1
+stop
+1
+1
+build T-HR5
+1
+3
+promoted: T-HR5
+T-HR5.md
+1
+chore(board): promote T-HR5
+build T-HR5
+1
+2
+nothing to promote

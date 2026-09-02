@@ -13,7 +13,7 @@ claim says taken → claim the next task; the lock already chose for you — re-
 **1b. Enter the worktree — a step, not a suggestion.** Claim ends by telling you to; do it before
 anything else, because a session that stays put edits the checkout four other chats are using. Two
 callers, and you are one of them — use the line that matches how you were started:
-- **Top-level session** (a chat or a fleet pane, the human at the keyboard): `EnterWorktree({path: ".polaris/wt/<ID>"})` — no prompt, this file is your instruction to run it.
+- **Top-level session** (a chat or a fleet pane, the human at the keyboard): `EnterWorktree({path: ".polaris/wt/<ID>"})` — no prompt: the kit's own permission rule allows it (6.2.0).
 - **Pinned-cwd subagent or any other CLI:** run everything via absolute paths under .polaris/wt/<ID> (or `cd` there — a shell's cwd persists between calls). `EnterWorktree` refuses here: your cwd was fixed at launch, and the tool only accepts paths under `.claude/worktrees/`.
 
 Which one you used is convenience; staying in the primary is what actually fails. The ownership
@@ -43,12 +43,14 @@ Hit a wall? Two kinds, two responses:
 - **Structural block** — a needed file isn't in `files_owned`, a hidden dependency, a missing or self-contradictory contract. Output `⛔ <why>` and go to the Failure path. Do NOT improvise around it.
 - **Spec ambiguity** — a detail of *your own task* is genuinely underspecified (which of two behaviors? what wording? which edge case?) and guessing could ship the wrong thing. Ask the human **one** concise question in the repo's `voice:` (Claude Code: `AskUserQuestion`), then build on the answer. **Conductor-entered?** You are a subagent and cannot reach the human — return the question as your result instead; the conductor asks and re-dispatches. Don't guess — but don't stack up questions either: if it takes more than one or two, the task itself is underspecified, so hand it back to `blocked/` with a note for the Planner.
 
-builder_questions in ops/CONVENTIONS.md defaults to default-safe since 6.0 (builder_questions: ask — or autonomy: standard — restores exactly the above), and default-safe narrows ONLY the spec-ambiguity path: you may default the most conventional interpretation instead of asking, ONLY when certain the choice is BOTH reversible AND low-stakes, and MUST append one Notes line: `- assumed: <choice> (default-safe)`. Not certain → ask / return the question exactly as above; a question the run cannot answer degrades to `release --to blocked` — never a stall. Structural blocks and seam/contract gaps keep the invariant-3 `blocked/` path, and `risk: high` tasks ALWAYS ask — those behaviors never change under any setting.
+builder_questions in ops/CONVENTIONS.md defaults to default-safe since 6.0 (builder_questions: ask — or autonomy: standard — restores exactly the above), and default-safe narrows ONLY the spec-ambiguity path: you may default the most conventional interpretation instead of asking, ONLY when certain the choice is BOTH reversible AND low-stakes, and MUST append one Notes line: `- assumed: <choice> (default-safe)`. Not certain → ask / return the question exactly as above; a question the run cannot answer degrades to `release --to blocked` — never a stall. Structural blocks and seam/contract gaps keep the invariant-3 `blocked/` path, and `risk: high` tasks ALWAYS ask — those behaviors never change under any setting. A port in use is someone else's — take the port `pack` gave you; never reclaim a port by killing.
 
 ## 4. Test
 Write tests covering EVERY acceptance checkbox. Then run the commands from `ops/CONVENTIONS.md`: **`test_fast:` if it is set, otherwise `test:`** — plus `lint:` and `typecheck:`. All green or you stay in `active/`. (`test_fast:` is the per-task gate; the full `test:` still runs at the wave gate, in the Integrator's `qa`, and in CI — you are not skipping a gate, you are not re-paying the wave's gate on every handoff. A suite over the harness's tool timeout returns NOTHING and gets re-run, which is worse than useless.)
 
 Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+
+**4b. See your work.** If `pack` printed a SEE YOUR WORK section and your diff touches a `visual:` path: run the printed `shot:` line (unique filename carrying your ID; the capture lock queues you — never fight it), then READ the image and put one `saw: <what the screenshot shows>` line in your handoff. A blank image is a failure. Never build your own capture tool or force opacity to fake a paint; a screenshot nobody opened proves nothing. `handoff` refuses when the capture is missing.
 
 ## 5. Prove and hand off
 ```bash
@@ -65,14 +67,16 @@ Two paths keep the classic ending, byte-for-byte: `landing: integrator` in `ops/
 
 An ownership violation means you revert the stray change (or hand back if it was necessary) — never argue with the gate. After the collect, report: task ID, branch, one-line summary, test results — and whether the task landed, queued, or stays in `review/`.
 
-**You never end the run.** Do not run `bash ops/polaris finish`, never fire `notify-gate done`, and
-never open a reply with `# 🎉 Complete!` or any `🎉`. Your task going green is a **handoff, not an
-ending** — even when your own tail landed and sealed it, the run is still checked, reported and
-closed by whoever holds the loop, and a
+**Conductor-entered? You never end the run.** Do not run `bash ops/polaris finish`, never fire
+`notify-gate done`, and never open a reply with `# 🎉 Complete!` or any `🎉`. Your task going green is
+a **handoff, not an ending** — even when your own tail landed and sealed it, the run is still checked,
+reported and closed by the conductor that spawned you, and a
 builder celebrating is how a human gets told the work is done while three lanes are still running.
 Your close is the four-part report above and nothing more. (`finish` would refuse you anyway: it runs
 only in the primary checkout, and your own task sitting in `review/` is itself a pending item — but
-the rule is yours to keep, not the command's to enforce.)
+the rule is yours to keep, not the command's to enforce.) **Top-level?** The report is still your
+close, then Loop mode below takes over: `finish` only when `next` says `finish`, never on your own read
+of the board.
 
 ## Failure path (any abort)
 ```bash
@@ -81,4 +85,6 @@ bash ops/polaris release <ID> --to ready -m "why"      # or --to blocked when so
 Moves the task back, releases the lock, removes the worktree (your branch survives if it has commits). A clean hand-back is success, not failure.
 
 ## Loop mode
-Default is one task per session. If your kickoff says "loop": after each handoff, `claim` again — stop when it reports ready/ is empty or your context is degrading (you notice re-reading things you already summarized). Fresh sessions stay sharper and cheaper; prefer them.
+**This is the default now, under `handover: auto`.** After every handoff run `bash ops/polaris next` and follow its line 1 — it reads the board and names the one thing this chat does next: `build <ID>` (claim it and start over at step 1) · `integrate` · `promote` · `wait` · `stop` · `finish`. Shed the finished task's context and continue as the role it names; the hop is the next context, not a second role in this one (Invariant 5). A compaction along the way is fine — the anchor hook re-reads the board for you.
+
+`handover: off` in `ops/CONVENTIONS.md` restores one task per session: report, and stop at the handoff. Either way, notice your own context degrading (you are re-reading things you already summarized) and hand the rest to a fresh session — sharper and cheaper.

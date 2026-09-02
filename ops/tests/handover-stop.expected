@@ -1,0 +1,26 @@
+allow:no-state
+allow:off
+allow:no-event
+allow:consumed
+allow:finished
+allow:harness-cap
+allow:cap
+allow:subagent
+allow:question
+block:collect
+hops-after-collect: none
+block:build
+block:integrate
+block:promote
+block:finish
+allow:wait
+allow:stop
+allow:resume
+allow:no-verb
+block:finish
+hops-after-block: 1
+hopped-event-matches-last: yes
+allow:consumed
+block:build
+{"decision":"block","reason":"This run's board is done. From the primary: bash ops/polaris finish — its exit code decides your close (0 opens with # 🎉 Complete!; otherwise no H1, name the one pending thing)."}
+pinned-reason-lines: 1

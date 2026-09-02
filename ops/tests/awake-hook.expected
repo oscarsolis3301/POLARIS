@@ -1,0 +1,41 @@
+== SessionStart creates the session as idle, and decodes the escaped Windows transcript_path ==
+start: s1 idle (created)
+sessions/s1 line 1: idle <epoch>
+sessions/s1 line 2: C:\Users\dev\.claude\projects\demo\s1.jsonl
+sessions/s1 line 3: -
+sessions/s1 line 4: <fix>/repo
+== UserPromptSubmit marks it busy, rewrites lines 2-4 and registers the repo behind the cwd ==
+busy: s1 busy
+sessions/s1 line 1: busy <epoch>
+sessions/s1 line 2: <fix>/tx/s1.jsonl
+sessions/s1 line 3: -
+sessions/s1 line 4: <fix>/repo
+repos/<cksum>: <fix>/repo
+== a second SessionStart (compact, resume) KEEPS the session — it never downgrades busy ==
+start: s1 busy (kept)
+== tick: one verdict pass, at most one press, and the presser word lands in daemon/last-press ==
+tick: active pressed
+presser side-effect: yes
+daemon/last-press: pressed
+== the disabled flag: the verdict is still reached and logged, the press never happens ==
+tick: active disabled
+daemon/last-press: disabled
+== every session idle and its transcript cold: quiet, and nothing is pressed at all ==
+idle: s1 idle
+tick: quiet no-press
+== SessionEnd forgets the session outright ==
+end: s1 removed
+== the registry this run built, paths normalized ==
+<home>/daemon
+<home>/daemon/last-press
+<home>/repos
+<home>/repos/<cksum>
+<home>/sessions
+== THE LIVE PATH: zero bytes on stdout and rc 0, for every one of the four ==
+live start rc 0  live-stdout-bytes: 0
+live busy  rc 0  live-stdout-bytes: 0
+live idle  rc 0  live-stdout-bytes: 0
+live end   rc 0  live-stdout-bytes: 0
+daemon/hook.log (the live path stderr sink): present
+daemon lock: absent
+daemon/pid: absent

@@ -47,7 +47,7 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 2b. **Enter that worktree** — a step, not a suggestion, and the one step every collision so far
    skipped. You share this checkout; work only inside `files_owned`, and only in there. Two callers,
    one of which is you:
-   - **Top-level session** (a chat or a fleet pane): `EnterWorktree({path: ".polaris/wt/<ID>"})` — no prompt, this file is your instruction to run it.
+   - **Top-level session** (a chat or a fleet pane): `EnterWorktree({path: ".polaris/wt/<ID>"})` — no prompt: the kit's own permission rule allows it (6.2.0).
    - **Pinned-cwd subagent or any other CLI:** run everything via absolute paths under .polaris/wt/<ID> (or `cd` there — a shell's cwd persists between calls). `EnterWorktree` refuses here: your cwd was fixed at launch, and the tool only accepts paths under `.claude/worktrees/`.
 
    Which one you used is convenience; staying in the primary is what actually fails — the ownership
@@ -56,6 +56,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    conventions, so you do not have to infer them.
 4. **Verify** — `bash ops/polaris verify`. Proves diff ⊆ `files_owned` and runs your `verify:` list.
    Then the repo's fast tier: `test_fast:` from `ops/CONVENTIONS.md` if it is set, else `test:`.
+   Touching a `visual:` path? Run the `shot:` line `pack` printed, READ the png, carry a `saw:` line
+   into your close — `handoff` refuses without the capture.
 5. **Handoff — and, by default, the landing.** Under `landing: self` (since 6.1.0 unset composes to
    `self`) `bash ops/polaris handoff` continues into the land in this same session: it takes the
    integration lease (wait-your-turn behind every other session), squashes `feat/<ID>` onto the
@@ -73,7 +75,10 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    suite ONCE, seal, run-verify, done, branch cleanup. A red suite unwinds the commit and kicks the
    task back to you — fix it here, in this session, and land again. (After a step-5 self-land there
    is nothing left to do here — the task is already done and sealed.)
-7. **Finish** — `bash ops/polaris finish`. It runs `qa` for you (free when HEAD has not moved since
+7. **Finish — only when `next` says so.** `bash ops/polaris next` names the one thing this chat does
+   next; anything but `finish` on line 1 (`build <ID>` · `integrate` · `promote` · `wait`) is more
+   work, so follow it — that hop is the next context, not a second role. Line 1 `finish` →
+   `bash ops/polaris finish`. It runs `qa` for you (free when HEAD has not moved since
    an express land's green suite — the stamp is per-commit; after a step-5 self-land there is no
    stamp yet, so `finish` pays the suite here: that is the wave's ONE full run, arriving at the
    finish line instead of the express lane) and then proves the **RUN** is over, not just the
@@ -99,6 +104,7 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
   are why `triage` refuses them; if one surfaces mid-build, stop and hand back.
 - **Scope = the task.** No drive-by refactors. Something else needs doing → one line in
   `ops/board/backlog/IDEAS.md` for the Planner.
+- A port in use is someone else's — take the port `pack` gave you; never reclaim a port by killing.
 - **A RULES rejection or a guard block is an answer, not an obstacle.** Hand back or ask. Never
   edit `ops/RULES.tsv` to get unstuck (Invariant 11). Converting a rule between `path` and `ask` is
   a HUMAN decision, never an agent's.
@@ -113,7 +119,8 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
 
 ## What you must NOT skip
 Every gate the long path runs, you run: `verify` (ownership + RULES) · the task's `verify:` list ·
-the full suite once — at `land --express`, or at `finish` after a step-5 self-land · `finish`.
+the full suite once — at `land --express`, or at `finish` after a step-5 self-land ·
+the capture, when `pack` printed one · `finish`.
 SOLO collapses SESSIONS, never CHECKS — the same
 principle `ops/contracts/express-lane.md` is built on. If you find yourself skipping a gate to make
 the change fit the lane, the lane is wrong.

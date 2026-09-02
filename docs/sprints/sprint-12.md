@@ -171,7 +171,7 @@ role-handover.md § session state.
 - [ ] `bash kit/ops/polaris doctor --selftest --only syncrace,claimguard,busyint` green (foreground, ≥600000 ms timeout)
 
 ## T-098 — "builder.sh — beats on every step, resume/release respect a live worktree, pack prints SEE YOUR WORK, handoff needs the capture"
-points 5 · risk normal · landed 5053399 (2026-09-02) · claimed 2026-09-02
+points 5 · risk normal · landed 5053399 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/builder.sh
 
 ### Why
@@ -204,7 +204,7 @@ visual-check.md (section lines, gate rule), role-handover.md (state dir, the not
 - [ ] `bash kit/ops/polaris doctor --selftest --only claimguard,selfland,park` green (foreground, ≥600000 ms timeout); `resume` on a fresh-beat lock from a DIFFERENT sid dies, from the SAME sid succeeds (drill wtreap automates in W3)
 
 ## T-099 — "integrate.sh — done removes a worktree only through wt_remove, keeps the branch of a live one, re-stamps the lease during long steps"
-points 2 · risk normal · landed 2efabcc (2026-09-02) · claimed 2026-09-02
+points 2 · risk normal · landed 2efabcc (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/integrate.sh
 
 ### Why
@@ -228,7 +228,7 @@ table (the `done` row), § steals (the re-stamp).
 - [ ] no new fn; `bash kit/ops/polaris doctor --selftest --only selfland,express,busyint` green (foreground, ≥600000 ms timeout) — `done` on the self-landed task's OWN live worktree now LEAVES it (drill_selfland's new assert lands with T-104; keep the existing asserts green)
 
 ## T-100 — "observe.sh — sweep reaps idle worktrees and reports live ones, orphan grace, qa stamps after, doctor sees keep-awake, finish and fleet learn the handover"
-points 5 · risk normal · landed 93cd6e4 (2026-09-02) · claimed 2026-09-02
+points 5 · risk normal · landed 93cd6e4 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/observe.sh
 
 ### Why
@@ -260,7 +260,7 @@ dir, kickoff), bg-jobs.md v2 (archive pruning), visual-check.md (kickoff sentenc
 - [ ] no new fn; `startup-budget` unchanged; `bash kit/ops/polaris doctor --selftest --only finish,qa,drift,hint` green (foreground, ≥600000 ms timeout)
 
 ## T-101 — "polaris awake + polaris next reach the CLI — lib/awake.sh, loader +awake +handover, dispatch, usage blocks, preamble beat, awake_ensure; api-kit owner W2"
-points 5 · risk normal · landed 02a941e (2026-09-02) · claimed 2026-09-02
+points 5 · risk normal · landed 02a941e (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/awake.sh, kit/ops/polaris, ops/tests/api-kit.expected
 
 ### Why
@@ -288,7 +288,7 @@ parallel-build note), module-layout.md v5, key-registry.md §7.
 - [ ] no other fn anywhere; no heading; no KEYS row
 
 ## T-102 — "awake-hook.sh + awake-press.ps1 — the machine-level keep-awake daemon: silent hooks, transcript-mtime verdict, WMI spawn, lock-screen-safe press"
-points 3 · risk normal · landed fb5bf3c (2026-09-02) · claimed 2026-09-02
+points 3 · risk normal · landed fb5bf3c (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/hooks/awake-hook.sh, kit/ops/hooks/awake-press.ps1
 
 ### Why
@@ -323,8 +323,151 @@ this is machine-level. Every name, path, default and word is pinned in keep-awak
 - [ ] `--test start|busy|idle|end|tick` print exactly the pinned one-liners and never spawn or sleep
 - [ ] proven by hand with the drill seams (`POLARIS_AWAKE_HOME=$T POLARIS_AWAKE_PRESSER="touch $T/pressed" TICK=1 IDLE=3 STALE=5 GRACE=2 SPAWN=inline`): busy + fresh fake transcript ⇒ `pressed` within 3 s; all idle ⇒ self-exit after GRACE with `lock/` gone (drill `awake` in W3 automates it)
 
+## T-103 — "Install side — VISUAL.md ships, new hooks are executable, keep-awake reaches every armed machine, uninstall refuses archives and strips every hook entry"
+points 3 · risk normal · landed 64eeaca (2026-09-02) · claimed 2026-09-02
+files touched: kit/.claude/skills/polaris-install/SKILL.md, kit/ops/bootstrap.py, kit/ops/install.sh, kit/ops/lib/admin.sh
+
+### Why
+Everything the sprint built has to reach installed repos and armed machines, and be removable.
+`install.sh`: `VISUAL.md` joins the `KIT_CODE` manifest (so `ops/VISUAL.md` exists in every repo and
+is RULES-guarded like its siblings) and the chmod list gains the two new hooks. `bootstrap.py`
+(`arm_machine`, the installer's machine step): extract `awake-hook.sh` + `awake-press.ps1` from the
+archive into `~/.claude/polaris/` and run the hook's `install` through ONE new fn
+`merge_awake_hooks` (fails open with one ⚠ line — a machine problem never fails a repo install).
+`admin.sh` (`refresh_machine_kit`, the `update` path): copy the same two files (source `kit/ops/hooks/`
+first, `ops/hooks/` fallback — the existing two-path pattern) and run `install`. `cmd_uninstall`:
+die BEFORE the worktree check when `.polaris/wt-archive/` is non-empty (uncommitted work lives there
+— the human moves it out), deregister this repo from `~/.claude/polaris/awake/repos/` (never the
+daemon or the hooks — other repos use them), and strip EVERY `ops/hooks/` entry across ALL hook
+events (Stop, SessionStart, UserPromptSubmit, PreToolUse …), foreign entries kept — today it strips
+only the ownership guard, and a dangling Stop hook would error on every turn of an uninstalled
+repo. The machine-level install skill (`kit/.claude/skills/polaris-install/SKILL.md`) says what
+"arms the machine" now includes: its sentence gains the keep-awake hooks — one prose edit, no
+heading change. Specs: keep-awake.md § installers, worktree-liveness.md § wt-archive,
+role-handover.md (uninstall strip), visual-check.md (manifest).
+
+### Acceptance
+- [ ] `install.sh`: `KIT_CODE` += `VISUAL.md`; chmod line (:106) += `ops/hooks/awake-hook.sh` and `ops/hooks/handover-hook.sh`; fresh and live-board paths both copy it (they share the list); nothing else changes
+- [ ] `bootstrap.py`: `merge_awake_hooks(bash_path)` (the ONLY new def; no new module-level constant) extracts both files to `~/.claude/polaris/`, chmods the .sh, runs `bash <abs>/awake-hook.sh install`; called from `arm_machine`; any failure ⇒ one ⚠ line, install continues; `PERMS` untouched
+- [ ] `admin.sh` `refresh_machine_kit`: copies both files (two-path fallback like :204-207) to `~/.claude/polaris/` and runs `install`; fails open; no new fn
+- [ ] `cmd_uninstall`: the pinned wt-archive die (count in the message) BEFORE the existing worktree-count die; removes `~/.claude/polaris/awake/repos/<cksum>` for THIS primary only; the settings-strip python removes every entry whose command matches `ops/hooks/` under EVERY hook event, keeps foreign entries and empties-out events with no entries left; existing prompts/notes unchanged
+- [ ] proven by hand in a throwaway repo (scratchpad/T-103/): `bash kit/ops/install.sh <dir>` then plant a foreign Stop entry + the three handover entries + the awake-style entries in its `.claude/settings.json`, `uninstall --yes` ⇒ exactly the foreign entry remains; with a non-empty `.polaris/wt-archive/x-1/` ⇒ the pinned die; `HOME=$T/home python kit/ops/bootstrap.py`-style arm on a fixture home ⇒ `~/.claude/polaris/awake-hook.sh` present and four hook entries merged (never against your real `~/.claude`)
+- [ ] `kit/.claude/skills/polaris-install/SKILL.md`: the "arms the machine" sentence mentions the keep-awake hooks (plans/v2.md WS3); the `^#` line set byte-identical to `main` (the skill is indexed by api-kit); nothing else in the file changes
+- [ ] `bash kit/ops/polaris doctor --selftest --only upgrade,adopt` green (foreground, ≥600000 ms timeout); `python kit/ops/pack.py --allow-dirty` green (the build:)
+
+## T-104 — "Prove it — drills wtreap + awake, selfland keeps its own worktree, checkoutguard/bg learn the new cases, hermetic awake home in the spine; api-kit owner W3"
+points 5 · risk normal · landed 725bfa3 (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/selftest/history.sh, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/spine.sh, ops/tests/api-kit.expected
+
+### Why
+Behavior that prose cannot hold must be drilled or it silently regresses — that is the Learned log's
+first lesson and why sprint 11 held at zero kickbacks. Three drills for the sprint's mechanics, two
+of them here: `wtreap` (history.sh, after `drill_selfland`) walks the worktree-liveness decision
+table end to end — dirty + backdated beat ⇒ `done` archives with the bytes intact and deletes the
+branch; fresh beat ⇒ `done` LEAVES it and keeps the branch; `release` from outside on a dirty live
+worktree dies naming the beat file, `rm <beat>` ⇒ archives; `resume` from another session id is
+refused, from the same id succeeds; `sweep` reports LIVE, backdated ⇒ `sweep --fix` removes clean /
+archives dirty. `awake` (policy.sh, after `drill_checkoutguard`, on the `drill_bg` template) proves
+the daemon hermetically with the contract's seams: silent hooks, never-downgrade start, press within
+3 s when busy, self-exit after GRACE, stale steal, stop, disabled, re-entrant start, the bg-job
+clause, and `install`'s merge on a fixture settings.json. `drill_selfland` gains the assertion that
+the self-landed handoff's OWN worktree survives (LEFT) and a later backdated `sweep --fix` removes
+it; `drill_checkoutguard` gains the worktree/rm/kill cases; `drill_bg` the foreign-cwd refusal. The
+spine registers the three labels (`wtreap awake handover` — the `handover` body is T-111's, board.sh)
+and exports `POLARIS_AWAKE_HOME="$T/awake-home"` right after `T="$(mktemp -d)"` so `bg run` inside
+ANY drill never registers a fixture repo on the owner's real machine. This task is also the W3
+api-kit owner: the four pinned rows (three drills + `merge_awake_hooks`). Specs: worktree-liveness.md
+§ executable check, keep-awake.md § drill, shared-checkout.md v2.5 §3, bg-jobs.md v2, key-registry.md §7.
+
+### Acceptance
+- [ ] `drill_wtreap` asserts every numbered item of worktree-liveness.md § executable check with rcs and file states (bytes in the archive, branch presence, beat-file path in the die text), `export CLAUDE_CODE_SESSION_ID=drill-sid` for the claiming session and a different sid for the refusal case; hermetic (`git status --porcelain` unchanged across it, green twice in a row)
+- [ ] `drill_awake` asserts the eight numbered items of keep-awake.md § drill with the pinned seams; every daemon it starts is stopped or has exited before the drill returns; skips the `install` merge with a note when `python` is absent
+- [ ] `drill_selfland`: after case (a), the handoff's own worktree still exists (`worktree LEFT` in the land tail) and a backdated `sweep --fix` removes it; existing asserts unchanged
+- [ ] `drill_checkoutguard` + `drill_bg` gain the pinned cases (shared-checkout v2.5 §3, bg-jobs v2); rc + JSON shape asserted, never message presence alone
+- [ ] spine: `SELFTEST_LABELS` ends `… checkoutguard readyoverlap selfland wtreap awake handover`; `drill_on` blocks for all three in run order (wtreap after selfland, awake after checkoutguard, handover after readyoverlap); the `POLARIS_AWAKE_HOME` export at :115; `--only` selects each individually; full-run label count 31 → 34
+- [ ] each new assertion watched RED once under a semantic sabotage in a throwaway kit copy (read the sabotage diff), then green on restore; sabotage evidence from a possibly-corrupted run re-proven in a clean dir
+- [ ] `bash kit/ops/polaris doctor --selftest --only wtreap,awake,selfland,checkoutguard,bg` green (foreground, ≥600000 ms timeout, or `bg run` + chunked `bg wait`); `--only handover` green once T-111 has landed
+- [ ] api-kit.expected = 629 lines: the four pinned W3 rows in `find --api` order; completeness `<` count 0 here; the only sibling `>` rows until the wave lands are `drill_handover` (T-111) and `merge_awake_hooks` (T-103)
+
+## T-105 — "Golden pack-visual — the SEE YOUR WORK section, the per-task port, and the handoff capture gate, hermetically"
+points 2 · risk normal · landed a02d0f9 (2026-09-02) · claimed 2026-09-02
+files touched: ops/tests/pack-visual.cmd, ops/tests/pack-visual.expected
+
+### Why
+The capture step is absent-by-default and driven by four keys, which is exactly the kind of
+behavior that rots invisibly: a repo without `visual:` must see nothing, a repo with it must see
+the section with the right port, and `handoff` must refuse a visual change without a fresh capture
+and pass with one. This golden pins all of it in ONE hermetic fixture repo (the `keys-drift`/
+`triage-lane` pattern: throwaway repo, CLI run from inside it, byte-identical from any board state):
+`visual: web/*`, `shot: snap {ID} {PORT}`, `serve: dev {PORT}`, `port_base: 4000`,
+`landing: integrator` (so the handoff never runs a land tail), `T-207` owning `web/a.txt` and
+`T-300` owning `src/b.txt`. Asserts: `pack T-207` prints the section verbatim with port 4007
+(207 mod 100 = 7) and `touches it: yes`; `pack T-300` ⇒ `touches it: no`; `visual:` removed ⇒ the
+unset line only; claim T-207, commit a `web/a.txt` change, `handoff` without a capture ⇒ the pinned
+refusal and rc 1 with T-207 still in `active/`; a non-empty `.polaris/shots/T-207-home.png` ⇒ rc 0
+and T-207 in `review/`. Spec: visual-check.md § executable check.
+
+### Acceptance
+- [ ] the five numbered asserts of visual-check.md § executable check, each printing the CLI lines that matter plus `rc N`; machine-specific bytes (paths, pids, durations, epochs) normalized like `bg-lifecycle.cmd`'s `N()`; no kit version number in the expected file
+- [ ] hermetic: builds its own repo under `mktemp -d`, `trap … EXIT` cleanup, never reads the live board, config or registry; byte-identical on a second run; total runtime measured and written in the `.cmd` header (target < 10 s — if the two handoffs push it over, keep them and say so: `check` pays it once per run)
+- [ ] the `.cmd` header comment explains WHY each assert exists (the house style of every golden here); no `#`-leading line problem (goldens are not indexed)
+- [ ] proven from the worktree with the `.cmd`-body diff; sabotaged red once (port_base 4001 ⇒ 4008) before trusting green; after landing, the integrator runs `check --only pack-visual` on the primary, sabotages it red, restores green (a golden nobody has seen fail is not evidence)
+
+## T-106 — "Golden awake-hook — every hook subcommand's --test line, a stub-presser tick, the disabled flag, silence on the live path"
+points 1 · risk normal · landed 045257e (2026-09-02) · claimed 2026-09-02
+files touched: ops/tests/awake-hook.cmd, ops/tests/awake-hook.expected
+
+### Why
+The keep-awake hook's ONE hard contract is silence — a byte on stdout from UserPromptSubmit lands
+in the model's context, an rc 2 from Stop tells the harness to keep going — and the `--test` words
+are what the drill and the humans read. This 1-point golden pins both, cheaply, on every `check`:
+each of `start busy idle end` via `--test` (with `start` run twice to prove `(kept)` never
+downgrades busy, and a Windows-escaped `transcript_path` in the JSON), `--test tick` with the stub
+presser (`tick: active pressed`), with the `disabled` flag (`tick: active disabled`), and with every
+session idle (`tick: quiet no-press`); then the LIVE subcommands once each with stdout byte-counted
+(`live-stdout-bytes: 0`) and rc printed. Registry paths normalized to `<home>`. Hermetic under a
+mktemp `POLARIS_AWAKE_HOME`; never touches the owner's registry. Spec: keep-awake.md § golden.
+
+### Acceptance
+- [ ] the `.cmd` sets `POLARIS_AWAKE_HOME=<mktemp>`, `POLARIS_AWAKE_PRESSER="touch $H/pressed"`, `POLARIS_AWAKE_SPAWN=inline`, `POLARIS_AWAKE_TICK=1`; never spawns a daemon (only `--test tick`, which does one pass); cleans up with `trap … EXIT`
+- [ ] the pinned lines for each case exactly as keep-awake.md § `--test` specifies; `live-stdout-bytes: 0` and `rc 0` for the four live subcommands; paths normalized to `<home>`
+- [ ] runtime < 3 s; byte-identical on a second run; no kit version number in the expected file
+- [ ] proven from the worktree with the `.cmd`-body diff; sabotaged red once (a stray `echo` in `ah_hook_idle` in a throwaway copy) before trusting green
+
+## T-107 — "Role prose for 6.2.0 — see your work, the port rule, Loop mode becomes handover, Invariant 5 per context, an approved plan is a kickoff"
+points 3 · risk normal · landed e460cdc (2026-09-02) · claimed 2026-09-02
+files touched: kit/.claude/skills/polaris/SKILL.md, kit/CLAUDE.md, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INIT.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md
+
+### Why
+Every mechanic this sprint ships needs one sentence in the role that uses it, or it is a feature
+nobody follows. Bold paragraphs and list items ONLY — the api-kit golden records every `#` line
+(fenced ones included), so the heading set of all eight files stays byte-identical to `main`.
+BUILDER: `**4b. See your work.**` between §4 and §5 (run the printed `shot:` line, READ the image,
+one `saw:` line, blank = failure, never build your own capture tool, `handoff` refuses without the
+capture), the port sentence in §3, step 1b's "no prompt" reason becomes the kit's own rule (6.2.0),
+`## Loop mode`'s body becomes the default under `handover: auto` (run `next` after every handoff and
+follow it; `off` restores one task per session), and "you never end the run" narrows to
+conductor-entered builders. SOLO: step 4 + "What you must NOT skip" + the port bullet + the close
+follows `next`. PLANNER: 7c (a visual surface names its capture) + may continue as BUILDER at the
+boundary. CONDUCTOR: the visual kickoff line, the dead-lane sentence, "compacted mid-run?" → the
+anchor already re-read the board, panes loop via `next`, and **Entered from an approved plan?** —
+the plan IS the brief. INTEGRATOR: open the capture before landing; §5 promote → `next --do`. INIT:
+the DERIVE row for the four keys + four skeleton lines beside `runnable:` + the §2c allow-rule note.
+`kit/CLAUDE.md`: Invariant 5 rewritten per context (verbatim from role-handover.md), the :45-47
+bullet, the "approved plan" dispatch row + bullet; `SKILL.md`:5 + the step-1 routing row. Every
+line is pinned verbatim in visual-check.md § role prose, role-handover.md § role prose / § WS8 and
+permission-rules.md § role prose — copy them, do not paraphrase.
+
+### Acceptance
+- [ ] every pinned line landed byte-exact in its named place (visual-check.md, role-handover.md, permission-rules.md); the `^#` line set of all eight files identical to `main`'s
+- [ ] BUILDER `## Loop mode` heading kept, body rewritten; "You never end the run" paragraph narrowed to conductor-entered builders; `kit/CLAUDE.md` keeps `subagent never ends a run` and `🎉 Complete!` (`output-style-installed` golden green)
+- [ ] `kit/CLAUDE.md` § ROLE DISPATCH table gains the approved-plan row (3 columns, the table still renders) and the bold bullet; Invariant 5 reads exactly the pinned text; the :45-47 bullet reworded per role-handover.md
+- [ ] INIT skeleton lines carry trailing `#` comments only, in the `runnable:` style; the DERIVE row fits the table; §2c note added
+- [ ] `kit/CLAUDE.md` byte budget respected: the file is injected into every subagent — the two additions total ≤ 6 lines
+- [ ] `python kit/ops/pack.py --allow-dirty` green; `bash kit/ops/polaris doctor --selftest --only claudemd,hint` green (foreground, ≥600000 ms timeout)
+
 ## T-109 — "lib/handover.sh — polaris next: the seven-verb router off the board, --do promotes under the lock, --brief re-anchors a compacted chat"
-points 5 · risk normal · landed 0c1c6fe (2026-09-02) · claimed 2026-09-02
+points 5 · risk normal · landed 0c1c6fe (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/handover.sh
 
 ### Why
@@ -353,7 +496,7 @@ goldens (T-111) and the role prose (T-107) all build against that table, so no v
 - [ ] no other fn; nothing in this task touches `kit/ops/polaris` (T-101 wires dispatch/loader/usage)
 
 ## T-110 — "handover-hook.sh — the Stop backstop, the compaction anchor and the prompt clock; kit settings entries; readonly-allow learns next"
-points 3 · risk normal · landed 74effdb (2026-09-02) · claimed 2026-09-02
+points 3 · risk normal · landed 74effdb (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/.claude/settings.json, kit/ops/hooks/handover-hook.sh, kit/ops/hooks/readonly-allow.sh, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected
 
 ### Why
@@ -382,3 +525,143 @@ and file is pinned in role-handover.md; T-111 goldens the ladder in W3.
 - [ ] `readonly-allow.sh` `polaris_ok`: `next` bare and `--brief` allow, `--do` asks; golden +2 lines (`allow  bash ops/polaris next` · `ask  bash ops/polaris next --do`); every existing line byte-identical
 - [ ] the four build-time verifications recorded in Notes: `stop_hook_active`/cap semantics, the Stop block JSON shape, subagents-dir mtime freshness, the last-assistant-text shape; a fact that does not hold ⇒ that rung fails OPEN (allow) and Notes say so
 - [ ] never mutates the board; never forks `ops/polaris` before the `block:collect` rung
+
+## T-111 — "Drill handover + goldens handover-route / handover-stop — every verb, --do, the hook ladder, hop cap, handover: off; cli-help-parity learns next"
+points 3 · risk normal · landed 1a34c67 (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/selftest/board.sh, ops/tests/cli-help-parity.cmd, ops/tests/cli-help-parity.expected, ops/tests/handover-route.cmd, ops/tests/handover-route.expected, ops/tests/handover-stop.cmd, ops/tests/handover-stop.expected
+
+### Why
+`polaris next` is now the router every role follows and the Stop hook's oracle — a wrong line 1
+misroutes a whole session, and a hook that blocks when it should allow traps a chat in a loop. Both
+must be proven where prose cannot hold them. `drill_handover` (board.sh, `export
+CLAUDE_CODE_SESSION_ID=drill-sid`, hermetic on the spine repo) walks the contract's assertion list
+in order: help lists `next`; a ready task ⇒ `build`; claim ⇒ `task` + `last-event` + `resume`;
+self-land handoff ⇒ `done` event ⇒ `finish` and the hook says `block:finish` with `hops`=1; `finish`
+rc 0 ⇒ `finished` ⇒ `allow:finished`; a backlog task whose dep is done ⇒ `promote`, `--do` moves it
+with the event and the board subject, a second `--do` ⇒ `nothing to promote`, an overlapping one is
+held; an un-hopped fresh event ⇒ `block:build` then `allow:consumed`; release ⇒ `avoid`; hop cap ⇒
+`stop` + `allow:cap`; foreign lock ⇒ `wait`; live foreign lease ⇒ `wait`, stale ⇒ `integrate`;
+risk-high review alone ⇒ `finish` + the approve note; `handover: off` ⇒ `allow:off`;
+`stop_hook_active` ⇒ `allow:harness-cap`; a newer `subagents/x.jsonl` ⇒ `allow:subagent`; `--brief`
+≤8 lines with the markers and no `|`. Two goldens carry the cheap half on every `check`:
+`handover-route` (the `triage-lane` fixture pattern: per board state line 1, the verb regex count,
+the 3-space count; the `--do` state adds `ls ready`, the promote-event count and the board subject)
+and `handover-stop` (a fixture state dir, `POLARIS_HANDOVER_NEXT` for the rail cases both ways, one
+un-stubbed real-`next` case via `POLARIS_HANDOVER_CLI`, one raw JSON invocation pinning the shipped
+block shape, `pinned-reason-lines: 1`). `cli-help-parity`'s alternation gains `next` (expected 10).
+Spec: role-handover.md § executable check.
+
+### Acceptance
+- [ ] `drill_handover` asserts every item of role-handover.md § drill, in order, by rc and file state (never message presence alone); fixtures declare `risk:` explicitly; the sh forwarder to `$SELF` is planted as `ops/polaris` in the throwaway repo (the hook and `next` need a CLI at `<primary>/ops/polaris`, or `POLARIS_HANDOVER_CLI=$SELF`); hermetic — `git status --porcelain` unchanged across it, green twice in a row, no daemon or job left behind
+- [ ] `handover-route.{cmd,expected}` and `handover-stop.{cmd,expected}` as pinned; machine-specific bytes normalized; no kit version number; each < 10 s and byte-identical on a second run
+- [ ] `cli-help-parity.cmd` alternation `…|finish|next)`, expected `10`; every other byte of the `.cmd` unchanged
+- [ ] each new assertion watched RED once under a semantic sabotage in a throwaway kit copy (e.g. drop the `consumed` rung; swap rows 3/4 in `next_route`), then green on restore — read the sabotage diff
+- [ ] `bash kit/ops/polaris doctor --selftest --only handover` green (foreground, ≥600000 ms timeout) once T-104's label has landed (before that, run the drill body directly from a scratch spine copy and say so in Notes); goldens proven from the worktree with the `.cmd`-body form; after landing, the integrator sabotages each golden red on the primary and restores green
+
+## T-112 — "polaris next --brief — a session with no role must not be told to read ops/roles/none.md"
+points 1 · risk normal · landed 568c4a0 (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/handover.sh
+
+### Why
+`bash ops/polaris next --brief` is what a compacted chat runs to find out who it is. Its last line
+points at the role file to re-read — `read ops/roles/BUILDER.md if this context lost it`. The role
+name comes from the `role:` line, and when the session holds no task lock and no integration lease
+that value is the literal word `none`. So the one command whose whole job is to re-orient a lost
+session currently ends by telling it to read `ops/roles/none.md`, a file that does not exist. The
+session is then either stuck or invents a role, which is the exact failure the anchor exists to
+prevent.
+
+T-109 built this straight from the contract, which said to take the name off the `role:` line. The
+contract was wrong, not the build; `ops/contracts/role-handover.md` § v1.1 item 2 now pins the fix.
+
+Change ONE line, the tail of `next_brief` — guard the pointer so it prints only when it names a real
+file. Everything else about `--brief` is untouched: same markers, same order, still no `|`, still
+≤8 lines. A `role: none` brief simply ends at its `next:` line.
+
+```
+  case "${line1%% *}" in
+    resume|build)      rfile=BUILDER;;
+    integrate|promote) rfile=INTEGRATOR;;
+    *)                 rfile="$role";;
+  esac
+  [ "$rfile" = none ] || printf 'read ops/roles/%s.md if this context lost it\n' "$rfile"
+```
+
+No new function, no new heading: the file's EIGHT-function census and the api-kit rows T-101 wrote
+stay exactly as they are. T-111 is independent of this task in both directions — its `--brief`
+assertions run with a live lock, so they never see `role: none`.
+
+### Acceptance
+- [ ] `next --brief` with no lock and no lease prints `role: none` and NO `read ops/roles/…` line (verify 4)
+- [ ] `next --brief` with a live lock on an active task still prints `read ops/roles/BUILDER.md if this context lost it`
+- [ ] the pointer `printf` still exists exactly once in the file (verify 2) — guarded, not deleted
+- [ ] the file still defines exactly 8 functions, names unchanged (verify 3)
+- [ ] `bash -n` clean, bash 3.2 constructs only (verify 1)
+
+## T-113 — "Drill upgrade is red — the migration fixture must finish like a session that walked away, not one still sitting in its worktree"
+points 1 · risk normal · landed 90a6d40 (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/selftest/remote.sh
+
+### Why
+`bash kit/ops/polaris doctor --selftest --only upgrade` is RED on `main` right now. I reproduced it
+before filing this: it fails at `kit/ops/lib/selftest/remote.sh:240` with
+
+```
+UNINSTALL SUMMARY FAIL (pre-confirm must name the board-history branch)
+⛔ selftest FAILED — do not trust this environment until fixed
+```
+
+**The drill is not wrong about uninstall — its fixture is just untidy.** This is the same interaction
+that reddened `drill_qa`, and it is a deliberate wave-2 design change catching up with a wave-0
+fixture:
+
+1. `cmd_handoff` now beats its own worktree (`kit/ops/lib/builder.sh:213`, T-098) — on purpose, so
+   `done` sees a LIVE own lane and WS1 designs own-worktree `done` out.
+2. `wt_remove` returns 1 (LEFT) for a live worktree (`kit/ops/lib/workspace.sh`, T-099), so `cmd_done`
+   keeps both the worktree and the branch and prints its kept-branch note.
+3. `drill_upgrade`'s fixture claims `T-M`, hands off, merges and calls `done` — all inside seconds —
+   so `.polaris/wt/T-M` is still checked out when the drill reaches `uninstall`.
+4. `uninstall`'s pre-existing guard (`kit/ops/lib/admin.sh:707`) dies with
+   `N POLARIS worktree(s) still checked out — run: ops/polaris sweep --fix` **before** printing the
+   summary, so the summary never names `polaris/board` and line 240's grep fails.
+
+Every one of those four steps is behaving as designed. The only thing that is unrealistic is the
+fixture: a real builder's worktree goes quiet when the session walks away, and `sweep`/`done` reap it
+once idle. The drill finishes in under 15 minutes, so its beat is always fresh and the worktree is
+never idle.
+
+**Fix direction — use the contract's own seam, nothing else.** `ops/contracts/worktree-liveness.md`
+line 22 sanctions exactly this for drills: the beat file is
+`$(git rev-parse --git-common-dir)/worktrees/<ID>/polaris-beat`, and *absent or unreadable → idle
+(age 999999)*, with `echo 1 > <beat>` as the documented backdate. Immediately before the `done T-M`
+at remote.sh:233, make `T-M`'s worktree look idle (remove the beat file, or backdate it), so `done`
+takes the idle path, `wt_remove` actually removes the worktree, and the fixture is clean by the time
+`uninstall` runs. The `grep -B4` verify pins the seam to within four lines above that `done` so it
+cannot drift away from the call it exists to set up.
+
+**Three things NOT to do** (each has its own verify guard):
+- Do NOT weaken or skip `uninstall`'s "worktrees still checked out" die. It is a real safety check and
+  it is doing its job here; the fixture is what is wrong.
+- Do NOT remove worktrees by hand (`rm -rf`, `git worktree remove`). A worktree is removed only by
+  `wt_remove`, only when idle — that rule is the contract's, and a drill that breaks it stops proving
+  anything about the code that ships.
+- Do NOT touch any file outside `files_owned`. `admin.sh`, `workspace.sh` and `builder.sh` are
+  read-only context here.
+
+**Then sweep the rest of the file for the same latent failure.** Any drill that claims, hands off and
+finishes inside 15 minutes has a live worktree at `done` for the same reason. The claim→handoff→done
+sites in this file are: `drill_remote` T-C (~:9-13, note it already expects a stray and runs
+`sweep --fix` — check before changing it), `drill_notify` T-PU (~:37-46) and T-PF (~:53-64),
+`drill_upgrade` T-M (~:211-233, the one that is red), `drill_pushdegrade` T-PD (~:320-329) and T-PD2
+(~:335-346). Apply the same seam only where a live worktree actually changes the assertion — a drill
+that is green today and does not assert anything about worktree count needs no edit, and churn in a
+green drill is its own risk.
+
+### Acceptance
+- [ ] `bash kit/ops/polaris doctor --selftest --only upgrade` exits 0 (measured ~4m35s — see Notes)
+- [ ] Sabotage check: restore the un-faked beat (drop the seam), re-run, and the drill goes RED again at `UNINSTALL SUMMARY FAIL` — then restore the fix
+- [ ] The seam is the contract's (beat file removed or backdated); no worktree is deleted by hand (verify 6)
+- [ ] `uninstall`'s "worktrees still checked out" die is untouched (verify 5)
+- [ ] The seam sits within four lines above the `done T-M` call it sets up (verify 4)
+- [ ] All six drills still present, `bash -n` clean (verify 1, 2)
+- [ ] Every other claim→handoff→done site in `remote.sh` reviewed; any left unchanged, say why in one line in Notes

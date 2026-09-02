@@ -278,6 +278,19 @@ drill_selfland() {
     git rev-parse -q --verify refs/tags/sprint/12 >/dev/null || { echo "SELFLAND SEAL FAIL (the last lane out must seal the wave)"; exit 1; }
     [ -d "$sl_gcd/polaris-locks/.int-lease" ] && { echo "SELFLAND LEASE FAIL (the lease must release after the landing tail)"; exit 1; }
     [ -d "$sl_gcd/polaris-locks/T-SL1" ] && { echo "SELFLAND LOCK FAIL (done must drop the claim lock)"; exit 1; }
+    # T-104 (ops/contracts/worktree-liveness.md — own-worktree `done` is designed OUT, not handled):
+    # the handoff BEAT its own worktree on the way in, so the `done` at the end of its own tail sees
+    # clean + LIVE and LEAVES the directory the session is standing in, branch kept. Nothing in this
+    # protocol removes a worktree it cannot prove dead — the cleanup is the NEXT idle sweep, so
+    # backdate the beat (the contract's fake-idle form) and prove --fix actually finishes the job.
+    grep -q 'worktree LEFT' "$T/sl1.out" || { cat "$T/sl1.out"; echo "SELFLAND WT LEFT FAIL (the landing tail must LEAVE the handoff's own worktree)"; exit 1; }
+    [ -d .polaris/wt/T-SL1 ] || { echo "SELFLAND WT GONE FAIL (a self-landing session must never lose the worktree it is standing in)"; exit 1; }
+    [ -n "$(git branch --list feat/T-SL1)" ] || { echo "SELFLAND WT BRANCH FAIL (a LEFT worktree keeps feat/T-SL1)"; exit 1; }
+    echo 1 2>/dev/null > "$sl_gcd/worktrees/T-SL1/polaris-beat" || true
+    "$SELF" sweep --fix > "$T/sl1sw.out" 2>&1 || true
+    [ -d .polaris/wt/T-SL1 ] && { cat "$T/sl1sw.out"; echo "SELFLAND SWEEP FAIL (once the beat goes quiet, sweep --fix removes the worktree)"; exit 1; }
+    [ -z "$(git branch --list feat/T-SL1)" ] || { cat "$T/sl1sw.out"; echo "SELFLAND SWEEP BRANCH FAIL (a removed worktree on a done task takes feat/T-SL1 with it)"; exit 1; }
+    rm -f "$T/sl1sw.out"
     # (b) risk: high → the pinned refusal, the task STAYS in review/, and NOTHING lands
     printf -- '---\nid: T-SL2\ntitle: self land high\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: high\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/sl2.txt\nverify: []\n---\n' > ops/board/ready/T-SL2.md
     "$SELF" claim T-SL2 >/dev/null
@@ -309,4 +322,142 @@ drill_selfland() {
     [ -f "$T/sl-sprint.bak" ] && cp "$T/sl-sprint.bak" ops/SPRINT.md || rm -f ops/SPRINT.md
     rm -f "$T/sl-conv.bak" "$T/sl-sprint.bak"
     git add -A; git commit -qm 'selfland drill cleanup' >/dev/null 2>&1 || true
+}
+drill_wtreap() {
+    # ---- T-104 worktree-liveness drill (ops/contracts/worktree-liveness.md § executable check) ----
+    # A sibling's seal fan-out once ran `done ARC-428`, which `git worktree remove --force`d a
+    # worktree another session was still typing in; everything uncommitted died. The repair is a
+    # DECISION TABLE — caller × dirty × live — behind ONE removal primitive, and a table is only real
+    # if every row is a test. So this drill walks all of them against the shipped CLI: `done`,
+    # `release` from outside its lane, `resume`, and `sweep --fix`.
+    # Liveness is the BEAT and nothing else, which is what makes the table drillable: `echo 1 > <beat>`
+    # is a session that walked away, a fresh beat is one still typing, and no sleeping is involved.
+    # `export CLAUDE_CODE_SESSION_ID=drill-sid` gives the claiming session an identity so the resume
+    # gate has two distinct sessions to tell apart — the ONE thing the beat alone cannot decide.
+    # The fixture declares `risk:` EXPLICITLY (T-089) and pins `landing: integrator`, because a
+    # self-landing handoff would land these tasks before the drill has looked at their worktrees.
+    wr_gcd="$(git rev-parse --git-common-dir)"
+    wr_top="$(git rev-parse --show-toplevel)"
+    mkdir -p "$T/wr"
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/wr/conv.bak"; else rm -f "$T/wr/conv.bak"; fi
+    [ -f ops/SPRINT.md ] && cp ops/SPRINT.md "$T/wr/sprint.bak" || rm -f "$T/wr/sprint.bak"
+    printf '# SPRINT 14 — wtreap drill  capacity: 5\n' > ops/SPRINT.md   # moved set: disk-only, ignored on base
+    printf 'landing: integrator\n' >> ops/CONVENTIONS.md
+    git add -A; git commit -qm 'wtreap drill: integrator knob'
+    wr_sid="${CLAUDE_CODE_SESSION_ID:-}"
+    export CLAUDE_CODE_SESSION_ID=drill-sid
+    # two lanes through the classic path: T-WR1 will be dirty and idle at `done` (archive), T-WR2
+    # clean and live (LEFT). One land per task, one seal for the wave — the spine's own recipe.
+    printf -- '---\nid: T-WR1\ntitle: reap a dead lane\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/wr1.txt\nverify: []\n---\n' > ops/board/ready/T-WR1.md
+    printf -- '---\nid: T-WR2\ntitle: leave a live lane\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/wr2.txt\nverify: []\n---\n' > ops/board/ready/T-WR2.md
+    "$SELF" claim T-WR1 >/dev/null
+    ( cd .polaris/wt/T-WR1 && echo wr1 > src/wr1.txt && git add -A && git commit -qm ok && "$SELF" handoff T-WR1 >/dev/null ) \
+      || { echo "WTREAP HANDOFF FAIL (T-WR1)"; exit 1; }
+    "$SELF" claim T-WR2 >/dev/null
+    ( cd .polaris/wt/T-WR2 && echo wr2 > src/wr2.txt && git add -A && git commit -qm ok && "$SELF" handoff T-WR2 >/dev/null ) \
+      || { echo "WTREAP HANDOFF FAIL (T-WR2)"; exit 1; }
+    "$SELF" land T-WR1 > "$T/wr/land1.out" 2>&1 || { cat "$T/wr/land1.out"; echo "WTREAP LAND FAIL (T-WR1)"; exit 1; }
+    "$SELF" land T-WR2 > "$T/wr/land2.out" 2>&1 || { cat "$T/wr/land2.out"; echo "WTREAP LAND FAIL (T-WR2)"; exit 1; }
+    "$SELF" seal > "$T/wr/seal.out" 2>&1 || { cat "$T/wr/seal.out"; echo "WTREAP SEAL FAIL"; exit 1; }
+    # (1) done · dirty + idle ⇒ ARCHIVED, rc 0, the uncommitted bytes intact, feat/T-WR1 deleted.
+    #     Untracked counts as dirty by the contract, which is the case that matters: the file that
+    #     died in ARC-428 was never added.
+    printf 'uncommitted\n' > .polaris/wt/T-WR1/dirt.txt
+    echo 1 2>/dev/null > "$wr_gcd/worktrees/T-WR1/polaris-beat" || true
+    wr_rc=0; "$SELF" done T-WR1 > "$T/wr/1.out" 2>&1 || wr_rc=$?
+    [ "$wr_rc" -eq 0 ] || { cat "$T/wr/1.out"; echo "WTREAP DONE ARCHIVE RC FAIL (an archived worktree is a SUCCESSFUL done, got rc $wr_rc)"; exit 1; }
+    grep -q 'worktree archived → .polaris/wt-archive/T-WR1-' "$T/wr/1.out" || { cat "$T/wr/1.out"; echo "WTREAP DONE ARCHIVE LINE FAIL"; exit 1; }
+    [ -d .polaris/wt/T-WR1 ] && { echo "WTREAP DONE ARCHIVE MOVE FAIL (the worktree must leave .polaris/wt/)"; exit 1; }
+    wr_arc=''; for wr_d in .polaris/wt-archive/T-WR1-*/; do [ -d "$wr_d" ] && wr_arc="$wr_d"; done
+    [ -n "$wr_arc" ] || { echo "WTREAP DONE ARCHIVE DIR FAIL (.polaris/wt-archive/T-WR1-<epoch>/ must exist)"; exit 1; }
+    [ "$(cat "$wr_arc/dirt.txt" 2>/dev/null)" = uncommitted ] || { echo "WTREAP DONE ARCHIVE BYTES FAIL (the uncommitted file must survive, byte for byte)"; exit 1; }
+    [ -e "$wr_arc/.git" ] && { echo "WTREAP DONE ARCHIVE POINTER FAIL (the .git pointer goes — git forgets it, the bytes stay)"; exit 1; }
+    [ -z "$(git branch --list feat/T-WR1)" ] || { echo "WTREAP DONE ARCHIVE BRANCH FAIL (done drops the branch after rc 0 or 2)"; exit 1; }
+    # (2) done · clean + LIVE ⇒ LEFT, rc 0, branch KEPT with the pinned note. Nothing removes the
+    #     directory a session may be standing in, whatever the board says about the task.
+    wr_rc=0; "$SELF" done T-WR2 > "$T/wr/2.out" 2>&1 || wr_rc=$?
+    [ "$wr_rc" -eq 0 ] || { cat "$T/wr/2.out"; echo "WTREAP DONE LEFT RC FAIL (a LEFT worktree is not a failed done, got rc $wr_rc)"; exit 1; }
+    grep -q 'worktree LEFT: .polaris/wt/T-WR2 is live' "$T/wr/2.out" || { cat "$T/wr/2.out"; echo "WTREAP DONE LEFT LINE FAIL"; exit 1; }
+    grep -q 'branch feat/T-WR2 kept — checked out in a live worktree; sweep --fix finishes the cleanup once idle' "$T/wr/2.out" \
+      || { cat "$T/wr/2.out"; echo "WTREAP DONE LEFT NOTE FAIL (the pinned kept-branch note must print)"; exit 1; }
+    [ -d .polaris/wt/T-WR2 ] || { echo "WTREAP DONE LEFT DIR FAIL (a live worktree must still be there)"; exit 1; }
+    [ -n "$(git branch --list feat/T-WR2)" ] || { echo "WTREAP DONE LEFT BRANCH FAIL (a LEFT worktree keeps its branch)"; exit 1; }
+    # (3) release from OUTSIDE the lane · dirty + LIVE ⇒ DIES before any board write, naming the beat
+    #     file so takeover stays explicit; rm the beat ⇒ the same command archives and moves the task.
+    printf -- '---\nid: T-WR3\ntitle: refuse a live lane\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/wr3.txt\nverify: []\n---\n' > ops/board/ready/T-WR3.md
+    "$SELF" claim T-WR3 >/dev/null
+    printf 'uncommitted\n' > .polaris/wt/T-WR3/dirt.txt
+    wr_rc=0; "$SELF" release T-WR3 --to ready -m drill > "$T/wr/3.out" 2>&1 || wr_rc=$?
+    [ "$wr_rc" -ne 0 ] || { cat "$T/wr/3.out"; echo "WTREAP RELEASE REFUSE RC FAIL (a live dirty worktree must die, rc != 0)"; exit 1; }
+    grep -q 'release refused: .polaris/wt/T-WR3 is live' "$T/wr/3.out" || { cat "$T/wr/3.out"; echo "WTREAP RELEASE REFUSE LINE FAIL"; exit 1; }
+    grep -q 'worktrees/T-WR3/polaris-beat' "$T/wr/3.out" || { cat "$T/wr/3.out"; echo "WTREAP RELEASE BEAT PATH FAIL (the die must name the beat file — takeover is explicit)"; exit 1; }
+    [ -f ops/board/active/T-WR3.md ] || { echo "WTREAP RELEASE BOARD FAIL (the refusal comes BEFORE any board write)"; exit 1; }
+    [ -d .polaris/wt/T-WR3 ] || { echo "WTREAP RELEASE WT FAIL (a refused release touches nothing)"; exit 1; }
+    rm -f "$wr_gcd/worktrees/T-WR3/polaris-beat"
+    wr_rc=0; "$SELF" release T-WR3 --to ready -m drill > "$T/wr/3b.out" 2>&1 || wr_rc=$?
+    [ "$wr_rc" -eq 0 ] || { cat "$T/wr/3b.out"; echo "WTREAP RELEASE RC FAIL (with the beat gone the release goes through, got rc $wr_rc)"; exit 1; }
+    grep -q 'worktree archived → .polaris/wt-archive/T-WR3-' "$T/wr/3b.out" || { cat "$T/wr/3b.out"; echo "WTREAP RELEASE ARCHIVE FAIL (a dirty worktree is archived, never deleted)"; exit 1; }
+    [ -f ops/board/ready/T-WR3.md ] || { echo "WTREAP RELEASE MOVE FAIL (the task must land back in ready/)"; exit 1; }
+    [ -d .polaris/wt/T-WR3 ] && { echo "WTREAP RELEASE MOVE WT FAIL (the archived worktree must leave .polaris/wt/)"; exit 1; }
+    # (4) resume · the lock's line 4 is the ONLY thing that distinguishes two live sessions. A foreign
+    #     sid is refused; the SAME sid (a compacted session re-entering its own task) is admitted.
+    printf -- '---\nid: T-WR4\ntitle: guard a live lane\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/wr4.txt\nverify: []\n---\n' > ops/board/ready/T-WR4.md
+    "$SELF" claim T-WR4 >/dev/null
+    [ "$(sed -n 4p "$wr_gcd/polaris-locks/T-WR4/meta" 2>/dev/null | tr -d ' \r')" = drill-sid ] \
+      || { echo "WTREAP LOCK SID FAIL (lock_take must record the claiming session id on meta line 4)"; exit 1; }
+    wr_rc=0; CLAUDE_CODE_SESSION_ID=other-sid "$SELF" resume T-WR4 > "$T/wr/4.out" 2>&1 || wr_rc=$?
+    [ "$wr_rc" -ne 0 ] || { cat "$T/wr/4.out"; echo "WTREAP RESUME FOREIGN RC FAIL (a live lane held by another session must refuse)"; exit 1; }
+    grep -q 'resume refused: .polaris/wt/T-WR4 is live' "$T/wr/4.out" || { cat "$T/wr/4.out"; echo "WTREAP RESUME FOREIGN LINE FAIL"; exit 1; }
+    grep -q 'worktrees/T-WR4/polaris-beat' "$T/wr/4.out" || { cat "$T/wr/4.out"; echo "WTREAP RESUME BEAT PATH FAIL"; exit 1; }
+    [ "$(sed -n 4p "$wr_gcd/polaris-locks/T-WR4/meta" 2>/dev/null | tr -d ' \r')" = drill-sid ] \
+      || { echo "WTREAP RESUME FOREIGN LOCK FAIL (a refused resume must not adopt the lock)"; exit 1; }
+    wr_rc=0; "$SELF" resume T-WR4 > "$T/wr/4b.out" 2>&1 || wr_rc=$?
+    [ "$wr_rc" -eq 0 ] || { cat "$T/wr/4b.out"; echo "WTREAP RESUME SAME-SID RC FAIL (a session re-entering its OWN live task is allowed, got rc $wr_rc)"; exit 1; }
+    grep -q 'resumed T-WR4' "$T/wr/4b.out" || { cat "$T/wr/4b.out"; echo "WTREAP RESUME SAME-SID LINE FAIL"; exit 1; }
+    # (5) sweep · reports LIVE and leaves it; backdated + clean ⇒ --fix removes; backdated + dirty ⇒
+    #     --fix archives. T-WR2's LEFT worktree from (2) is the dirty half — the exact leftover the
+    #     kept-branch note promised sweep would finish.
+    "$SELF" sweep > "$T/wr/5.out" 2>&1 || true
+    grep -q 'LIVE worktree: .polaris/wt/T-WR4 (beat .*s ago) — left alone' "$T/wr/5.out" \
+      || { cat "$T/wr/5.out"; echo "WTREAP SWEEP LIVE FAIL (a live worktree is reported and left alone)"; exit 1; }
+    echo 1 2>/dev/null > "$wr_gcd/worktrees/T-WR4/polaris-beat" || true
+    printf 'uncommitted\n' > .polaris/wt/T-WR2/dirt.txt
+    echo 1 2>/dev/null > "$wr_gcd/worktrees/T-WR2/polaris-beat" || true
+    "$SELF" sweep > "$T/wr/6.out" 2>&1 || true
+    grep -q 'IDLE worktree: .polaris/wt/T-WR4 (task active, beat .*m ago, clean) — sweep --fix removes it' "$T/wr/6.out" \
+      || { cat "$T/wr/6.out"; echo "WTREAP SWEEP IDLE CLEAN FAIL"; exit 1; }
+    grep -q 'IDLE worktree: .polaris/wt/T-WR2 (task done, beat .*m ago, dirty) — sweep --fix archives it' "$T/wr/6.out" \
+      || { cat "$T/wr/6.out"; echo "WTREAP SWEEP IDLE DIRTY FAIL"; exit 1; }
+    [ -d .polaris/wt/T-WR4 ] || { echo "WTREAP SWEEP REPORT-ONLY FAIL (a bare sweep removes nothing)"; exit 1; }
+    "$SELF" sweep --fix > "$T/wr/7.out" 2>&1 || true
+    [ -d .polaris/wt/T-WR4 ] && { cat "$T/wr/7.out"; echo "WTREAP SWEEP FIX CLEAN FAIL (an idle clean worktree must go)"; exit 1; }
+    [ -d .polaris/wt/T-WR2 ] && { cat "$T/wr/7.out"; echo "WTREAP SWEEP FIX DIRTY FAIL (an idle dirty worktree must leave .polaris/wt/)"; exit 1; }
+    wr_arc=''; for wr_d in .polaris/wt-archive/T-WR2-*/; do [ -d "$wr_d" ] && wr_arc="$wr_d"; done
+    [ -n "$wr_arc" ] || { echo "WTREAP SWEEP FIX ARCHIVE FAIL (the dirty one is archived, never removed)"; exit 1; }
+    [ "$(cat "$wr_arc/dirt.txt" 2>/dev/null)" = uncommitted ] || { echo "WTREAP SWEEP FIX BYTES FAIL"; exit 1; }
+    [ -n "$(git branch --list feat/T-WR2)" ] || { echo "WTREAP SWEEP FIX ARCHIVE BRANCH FAIL (an ARCHIVED worktree keeps its branch — those commits are still recoverable)"; exit 1; }
+    [ -n "$(git branch --list feat/T-WR4)" ] || { echo "WTREAP SWEEP FIX ACTIVE BRANCH FAIL (an active task's branch survives its worktree)"; exit 1; }
+    # (6) the v1.1 correction, which is a SILENCE and can only be tested as one: the beat writers put
+    #     2>/dev/null BEFORE the > (bash applies redirections left to right), so a hook payload whose
+    #     .polaris/wt/<ID> has no $GCD/worktrees/<ID>/ behind it writes nothing and SAYS nothing. The
+    #     v1 order made every Bash call from such a cwd print "No such file or directory".
+    wr_rc=0
+    printf '{"cwd":"%s/.polaris/wt/T-NOPE","tool_name":"Bash","tool_input":{"command":"git status"}}' "$wr_top" \
+      | bash "$(dirname "$SELF")/hooks/checkout-guard.sh" > "$T/wr/8.out" 2> "$T/wr/8.err" || wr_rc=$?
+    [ "$wr_rc" -eq 0 ] || { cat "$T/wr/8.err"; echo "WTREAP BEAT HOOK RC FAIL (a read-only git form is allowed, rc 0)"; exit 1; }
+    [ -s "$T/wr/8.err" ] && { cat "$T/wr/8.err"; echo "WTREAP BEAT STDERR FAIL (a missing worktrees dir must be SILENT — 2>/dev/null comes BEFORE the >)"; exit 1; }
+    [ -s "$T/wr/8.out" ] && { cat "$T/wr/8.out"; echo "WTREAP BEAT VERDICT FAIL (the beat touch never changes the verdict)"; exit 1; }
+    # teardown: the fixture back as it was found — the two ready fixtures gone, every feat/T-WR*
+    # branch gone (a drill's litter, not a human's), the archives it made removed (the contract's
+    # "archives are the human's to delete" is about real work; these are three files this drill
+    # wrote itself), CONVENTIONS + SPRINT restored byte-exactly and the session id put back.
+    "$SELF" release T-WR4 --to ready -m drill >/dev/null 2>&1 || true
+    rm -f ops/board/ready/T-WR3.md ops/board/ready/T-WR4.md
+    git branch -q -D feat/T-WR2 feat/T-WR3 feat/T-WR4 >/dev/null 2>&1 || true
+    rm -rf .polaris/wt-archive
+    if [ -f "$T/wr/conv.bak" ]; then cp "$T/wr/conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    [ -f "$T/wr/sprint.bak" ] && cp "$T/wr/sprint.bak" ops/SPRINT.md || rm -f ops/SPRINT.md
+    rm -rf "$T/wr"
+    if [ -n "$wr_sid" ]; then export CLAUDE_CODE_SESSION_ID="$wr_sid"; else unset CLAUDE_CODE_SESSION_ID; fi
+    git add -A; git commit -qm 'wtreap drill cleanup' >/dev/null 2>&1 || true
 }

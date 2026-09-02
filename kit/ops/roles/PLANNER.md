@@ -35,6 +35,8 @@ When `.polaris/brain/` exists, `read .polaris/brain/INDEX.md FIRST, repo second`
 Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
 
 7b. **Interactive means wired.** Never plan an interactive control (button, toggle, input) as "display-only for now" — deferred wiring gets lost across sessions and ships things that look broken. If the write path is blocked by a missing dependency, plan a static placeholder instead, or chain the task behind the dependency.
+
+7c. **A visual surface names its capture.** A task whose `files_owned` touch a `visual:` path carries an acceptance box "capture .polaris/shots/<ID>-*.png shows <what>" — `pack` prints the `shot:` line and `handoff` refuses without the capture.
 8. **Set `risk:`.** `high` for anything touching auth, payments, secrets handling, DB schema/migrations, or prod config — the Integrator MUST get human approval before merging these. Everything else `normal`.
 9. **Set `map_delta`** on any task that adds/moves a module or entry point: one line describing the MAP change. `polaris done` appends it to MAP.md automatically.
 10. **Write/extend contracts** in `ops/contracts/` for every seam between leaves, from `ops/templates/CONTRACT.md`. Builders code against the contract, so integration is mechanical. Where the seam is code-level, give the contract an **executable check**: a small test file owned by the *earlier* task and listed in the *later* task's `verify:` — the seam stays honest without prose. Contracts are append-only once any dependent task is claimed; breaking changes require a new version section + a migration task.
@@ -52,6 +54,7 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
     - `off` → `bash ops/polaris fleet <N>` (prints the kickoff; the human starts sessions themselves).
     Say what happened in the report ("…and I opened 3 builders beside you"). If `wt`/tmux/`claude` aren't present, `fleet` prints the kickoff instead — report that, don't pretend windows opened.
     **Entered from a CONDUCTOR?** Skip fan-out entirely — the conductor runs the builders as subagents. Return your report (plan summary + ready queue) as your result and stop.
+15. **Then follow the board.** A committed plan is a boundary the board can prove, so a top-level planner does not stop here: run `bash ops/polaris next` and follow line 1 — a planner may continue as BUILDER in the next context (shed the planning context, read `ops/roles/BUILDER.md`, claim what `next` named). That hop is the next context, not a second role in this one (Invariant 5). Panes you just opened loop the same way.
 
 ## Pointing — Fibonacci (measures blast radius + uncertainty, not hours)
 | Pts | Meaning | Claimable? |
