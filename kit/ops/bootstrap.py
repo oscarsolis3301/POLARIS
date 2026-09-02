@@ -11,8 +11,9 @@ makes polaris-v5.zip a Python zipapp — so the whole install is one command, no
                           --no-permissions   #   ...without touching ~/.claude/settings.json
 
 ARMING THE MACHINE is what makes the SECOND install — and every one after it, in any repo —
-free. It writes three things to ~/.claude/: the polaris-install skill (so Claude Code knows the
-procedure), the kit itself (so installing is a local file copy, never a download), and six
+free. It writes four things to ~/.claude/: the polaris-install skill (so Claude Code knows the
+procedure), the kit itself (so installing is a local file copy, never a download), the
+keep-awake hooks (so the box stays awake while any session is still working), and six
 pinned Bash rules in permissions.allow (so nothing gets denied). It is idempotent and it is now
 the DEFAULT, not a flag you had to know existed.
 
@@ -271,16 +272,57 @@ def merge_permissions(settings):
     return True
 
 
+def merge_awake_hooks(archive, bash_path):
+    """Land the keep-awake hook + its presser under ~/.claude/polaris/ and register the four hooks.
+
+    ONE keep-awake owner per MACHINE: awake while any session is still working, silent once they
+    are all done, never nudging a human who is typing. It has to be machine-level — the hooks live
+    in ~/.claude/settings.json and no repo setting can gate them — so the installer is the only
+    place that can arm it. ops/contracts/keep-awake.md pins every path and default; the CLI face is
+    `ops/polaris awake status|start|stop|disable|enable|install`.
+
+    Fails OPEN, with ONE ⚠ line. A box that sleeps mid-run is a nuisance; an install that died over
+    a machine-level extra is a disaster, and the repo being installed is not the thing at fault.
+
+    The success path is SILENT unless --verbose, so the hook's own stdout is captured rather than
+    let through: a quiet install prints at most two lines above the epilogue and that count is a CI
+    tripwire (ops/contracts/install-parity.md).
+    """
+    dest_dir = os.path.join(os.path.expanduser("~"), ".claude", "polaris")
+    hook = os.path.join(dest_dir, "awake-hook.sh")
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+        with zipfile.ZipFile(archive) as z:
+            for name in ("awake-hook.sh", "awake-press.ps1"):
+                with open(os.path.join(dest_dir, name), "wb") as fh:
+                    fh.write(z.read(f"{PREFIX}ops/hooks/{name}"))
+        os.chmod(hook, 0o755)          # the .ps1 is read by powershell, never executed as a program
+        if not bash_path:
+            raise OSError("no working bash on this machine")
+        # Forward slashes, for main()'s reason: bash reads `C:\Users\x` as escape sequences.
+        done = subprocess.run([bash_path, hook.replace("\\", "/"), "install"],
+                              capture_output=True, text=True, timeout=60)
+        if done.returncode != 0:
+            raise OSError(f"awake-hook.sh install exited {done.returncode}")
+    except (KeyError, OSError, ValueError, subprocess.SubprocessError) as exc:
+        print(f"⚠ keep-awake not armed on this machine ({exc}) — arm it later: ops/polaris awake install")
+        return
+    out(f"✅ keep-awake armed:      {hook}")
+    for line in done.stdout.splitlines():
+        out(f"   {line}")
+
+
 def arm_machine(archive, permissions=True):
     """Teach Claude Code, on THIS machine, how to install POLARIS into ANY repo.
 
     The project skill (.claude/skills/polaris/) only exists once POLARIS is installed, so it
     cannot help you install it. This one is USER-level (~/.claude/skills/).
 
-    Three things land, and all three are needed for "install POLARIS" to just work:
+    Four things land, and the first three are needed for "install POLARIS" to just work:
       1. the skill      — teaches Claude the install procedure
       2. the kit itself — cached, so installing is a LOCAL file copy and not a download
       3. the rules      — so the commands in (1) are pre-authorized and never prompt
+      4. keep-awake     — one machine-wide owner that keeps the box awake while sessions work
 
     Without (2) and (3) the skill told Claude to curl a zip from GitHub and run it, which the
     permission classifier denies whenever the user didn't name that URL themselves. It looked
@@ -326,6 +368,11 @@ def arm_machine(archive, permissions=True):
         shutil.copyfile(archive, cached)
         changed = True
     out(f"✅ kit cached:            {cached}")
+
+    # (4) keep-awake. Deliberately NOT folded into `changed`: the two hook files are rewritten on
+    # every install, so counting them as a change would make the one-off "machine armed" line nag
+    # forever — the same mistake the cmp guard above exists to undo.
+    merge_awake_hooks(archive, find_bash())
 
     if permissions:
         if merge_permissions(os.path.join(os.path.expanduser("~"), ".claude", "settings.json")):

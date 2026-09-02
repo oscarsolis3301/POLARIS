@@ -62,8 +62,10 @@ python polaris-v5.zip
 ```
 
 This rung only ever runs **once per machine**: a normal install also arms the machine (caches the
-kit into `~/.claude/skills/polaris-install/` and pre-authorizes the commands in
-`~/.claude/settings.json`), so every install after this one takes rung 1 — offline, no prompt.
+kit into `~/.claude/skills/polaris-install/`, lands the **keep-awake hooks** in `~/.claude/polaris/`
+so one owner per box keeps it awake while any session is still working, and pre-authorizes the
+commands in `~/.claude/settings.json`), so every install after this one takes rung 1 — offline, no
+prompt.
 `--no-machine-setup` opts out; `--verbose` prints the full install log instead of the result.
 
 No `python`? Fall back to `unzip polaris-v5.zip && bash polaris-v5/ops/install.sh`.

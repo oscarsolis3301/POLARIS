@@ -73,7 +73,7 @@ fi
 PY=""; python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
 
 # --- ops/ ---------------------------------------------------------------------
-KIT_CODE="polaris dashboard.py index.py bench.sh PROTOCOL.md MANUAL.md PROMPTS.md install.sh VERSION KEYS.tsv"  # + roles/ templates/ hooks/ ci/
+KIT_CODE="polaris dashboard.py index.py bench.sh PROTOCOL.md MANUAL.md PROMPTS.md VISUAL.md install.sh VERSION KEYS.tsv"  # + roles/ templates/ hooks/ ci/
                                                                    # (pack.py stays in the kit — never shipped)
 # KEYS.tsv is kit DATA, not board state: the registry of every CONVENTIONS.md key, which `doctor`
 # reads to report what an installed repo is missing and `adopt` reads to offer it. It belongs on
@@ -103,7 +103,7 @@ else
   done
   UPGRADE=0
 fi
-chmod +x "$TARGET/ops/polaris" "$TARGET/ops/hooks/ownership-guard.sh" "$TARGET/ops/hooks/readonly-allow.sh" "$TARGET/ops/hooks/checkout-guard.sh" "$TARGET/ops/hooks/commit-msg" "$TARGET/ops/install.sh" 2>/dev/null || true
+chmod +x "$TARGET/ops/polaris" "$TARGET/ops/hooks/ownership-guard.sh" "$TARGET/ops/hooks/readonly-allow.sh" "$TARGET/ops/hooks/checkout-guard.sh" "$TARGET/ops/hooks/awake-hook.sh" "$TARGET/ops/hooks/handover-hook.sh" "$TARGET/ops/hooks/commit-msg" "$TARGET/ops/install.sh" 2>/dev/null || true
 say "ops/ installed"
 
 # --- VERSION provenance ---------------------------------------------------------
