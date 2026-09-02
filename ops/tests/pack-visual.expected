@@ -1,0 +1,36 @@
+== 1. a task that touches a visual: path sees the whole section, on ITS port ==
+visual: web/* · this task touches it: yes
+serve: dev 4007
+shot: snap T-207 4007
+port: 4007
+proof: .polaris/shots/T-207-*.png — then READ it and write one "saw: <what it shows>" line in your handoff
+read: ops/VISUAL.md
+== 2. a task that does not touch it still sees the section — with touches it: no ==
+visual: web/* · this task touches it: no
+serve: dev 4000
+shot: snap T-300 4000
+port: 4000
+proof: .polaris/shots/T-300-*.png — then READ it and write one "saw: <what it shows>" line in your handoff
+read: ops/VISUAL.md
+== 3. visual: unset ⇒ ONE line, and nothing else changes anywhere ==
+(visual: unset — no capture step; ops/VISUAL.md explains how to add one)
+== 4. a committed visual change with NO capture is refused, rc 1, task stays in active/ ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+⛔ handoff refused: T-207 changed a visual: path but .polaris/shots/T-207-*.png has no capture newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off
+rc 1
+active: T-207.md
+review:
+== 5. an EMPTY png is not a capture — a blank image is a failure (VISUAL.md doctrine) ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+⛔ handoff refused: T-207 changed a visual: path but .polaris/shots/T-207-*.png has no capture newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off
+rc 1
+== 6. a non-empty capture newer than the branch base passes: rc 0, T-207 in review/ ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+✅ T-207 → review/. Lock stays until the Integrator lands it. Session may close.
+   1 ready task(s) still queued — the board hands you the next step: bash ops/polaris next
+rc 0
+active:
+review: T-207.md
