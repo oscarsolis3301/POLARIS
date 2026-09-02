@@ -1,3 +1,43 @@
+# SPRINT 12 — Parallel work that can't eat itself (6.2.0)          capacity: 67   dates: 2026-09-01–
+
+Five parallel chats on one repo still break four ways: a sibling's seal fan-out force-removed a
+worktree another session was typing in (ARC-428), auto mode still prompts for the harness's own
+tools, the machine sleeps mid-run, and "seeing your work" is pasted by hand — plus a session ends
+with its task, so every next role needs a human kickoff, and an approved plan still closed with
+"open a new chat and say…". plans/v2.md (approved 2026-09-01) is the brief; eight workstreams land as
+20 tasks / 67 pts / 4 waves under plan `cant-eat-itself`: W1 (ready, 6 lanes) T-092 workspace
+primitives (beat + `wt_remove`, never `--force`) · T-093 guard verbs (worktree remove/prune/move,
+clean, push --delete, rm on .polaris, broad kills) + beat touches · T-094 cwd-owned bg jobs · T-095
+seven bare tool-name rules (owner PRE-APPROVED 2026-09-01, `risk: normal`) · T-096 keys + VISUAL.md +
+PROTOCOL/output-style/MANUAL (api-kit owner W1) · T-097 core lock meta/steals/evt state; W2 (7)
+T-098 builder · T-099 integrate · T-100 observe · T-101 awake.sh + entry (api-kit owner W2) · T-102
+awake hook + presser · T-109 `polaris next` · T-110 handover hook (after T-109); W3 (6) T-103
+installers · T-104 drills wtreap/awake + spine (api-kit owner W3) · T-105/T-106 goldens · T-111
+handover drill + goldens · T-107 role prose; W4 T-108 release 6.2.0. Contracts written on base
+BEFORE any claim: NEW worktree-liveness · permission-rules · keep-awake · visual-check ·
+role-handover; APPENDED shared-checkout v2.5 · bg-jobs v2 · key-registry §7 · module-layout v5 ·
+run-finish v3. Pre-mortem applied from the Learned log: (1) api-kit is a derived surface — ONE
+owner per wave (T-096 → T-101 → T-104) writes the WHOLE union up front from names pinned per
+surface KIND (fn at any depth, `#` lines incl. fenced, KEYS rows, python defs/consts; 562 → 581 → 625
+→ 629), everyone else surface-frozen; (2) a base-bound commit during a wave rides the seal — the
+contracts land NOW, before W1 claims, and the integrator reads `<base>..integrate/<date>` before
+every seal; (3) a verification requirement names a caller who can run it — the EnterWorktree entry
+is settled by the tool's own description + T-095's rule (no live re-verify from a pinned-cwd
+subagent), and the ONE human click (dogfood rewriting ~/.claude/settings.json) is pre-announced;
+(4) fail-closed beats fixture churn — `wt_remove` LEAVES anything live, drill fixtures declare
+`risk:` explicitly; (5) trust the rc, not the refusal text — every new drill asserts rc + file
+state. Hard gates move NOWHERE. LIVE RACE all sprint (installed CLI stays 6.1.0 until dogfood):
+every builder leaves its worktree clean and steps out after `bg wait ship-<ID>`; never
+`git worktree remove`, `git clean`, `rm -rf .polaris`, or kill by name. Two parallel-build traps
+are pinned in role-handover.md: T-109 tests `next` in a throwaway kit copy; T-101's loader gains
+`+handover` before T-109's module exists in its worktree (untracked stub, never committed; the
+integrator lands T-109 first). Drills are acceptance boxes (≥600000 ms or `bg run`), verify: lines
+< 10 s and unquoted, owned goldens proven with the `.cmd`-body diff, never `check --only`.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 11 — Enforced isolation (6.1.0)          capacity: 23   dates: 2026-08-23–
 
 Five parallel sessions on one repo collide because POLARIS's isolation machinery is not ENFORCED:
