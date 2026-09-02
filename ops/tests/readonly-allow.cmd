@@ -37,6 +37,9 @@ bash ops/polaris check --only api-kit
 bash ops/polaris check --only api-kit && bash ops/polaris route --role BUILDER
 bash ops/polaris pack T-001
 bash ops/polaris slim
+# `next` reads the board and names the one thing this context does next, writing nothing. Every role
+# runs it at EVERY boundary now, so a prompt on it would be the loudest in the kit. `--do` is below.
+bash ops/polaris next
 # --- must ALLOW: find -exec recursed into a READ-ONLY verb (5.21.0) ------------
 # -exec is a launcher, so it is exactly as safe as what it launches — same reasoning as xargs.
 # `{}` is find's placeholder and is accepted as a literal token: bash requires whitespace after
@@ -92,6 +95,9 @@ git worktree add /tmp/x
 bash ops/polaris claim T-001
 bash ops/polaris slim --apply
 bash ops/polaris slim --restore
+# `next --do` promotes backlog→ready under the board lock. The read/write split is the same one
+# that governs slim, bg and check: the bare read is silent, the writer always asks.
+bash ops/polaris next --do
 # `bg run` spawns a detached process and writes the job registry — every form of it asks, and so
 # does a bare `bg` and any word the gate has not proven, deny-by-default. The compound case is the
 # one that matters: one refused segment must refuse the whole line, however green its neighbour.

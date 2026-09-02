@@ -233,6 +233,12 @@ polaris_ok() {
         shift
       done
       return 0;;
+    # `next` is `triage` for a session: it reads the board and prints the one verb this context does
+    # next, writing nothing — and every role now runs it at EVERY boundary, so a prompt here would
+    # be the loudest in the kit. `--brief` is the same read, re-anchoring a compacted chat. `--do`
+    # promotes backlog→ready under the board lock, so it keeps its prompt, and so does any word we
+    # have not proven — the same deny-by-default that governs every other arm here.
+    next) case "${2:-}" in ''|--brief) return 0;; *) return 1;; esac;;
     *) return 1;;
   esac
 }
