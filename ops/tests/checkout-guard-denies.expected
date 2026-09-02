@@ -17,6 +17,26 @@ deny:switch  echo done; git switch -
 deny:switch  env git switch main
 deny:checkout  /usr/bin/git checkout .
 deny:reset  git -C . reset --hard
+deny:worktree-remove  git worktree remove .polaris/wt/T-001
+deny:worktree-remove  git worktree remove --force /x/.polaris/wt/T-001
+deny:worktree-prune  git worktree prune
+deny:worktree-move  git worktree move .polaris/wt/T-001 /tmp/x
+deny:clean  git clean -fdx
+deny:clean  git clean -f
+deny:push-delete  git push origin --delete feat/T-001
+deny:push-delete  git push -d origin feat/T-001
+deny:push-delete  git push origin :refs/heads/feat/T-001
+deny:rm-polaris  rm -rf .polaris
+deny:rm-polaris  rm -r .polaris/wt/T-001
+deny:rm-polaris  Remove-Item -Recurse -Force .polaris
+deny:kill-broad  taskkill /IM node.exe /F
+deny:kill-broad  Stop-Process -Name node
+deny:kill-broad  Get-Process node | Stop-Process
+deny:kill-broad  pkill -f uvicorn
+deny:kill-broad  killall node
+deny:kill-broad  kill -9 -1
+deny:kill-broad  npx kill-port 8001
+deny:kill-broad  fuser -k 8001/tcp
 allow  git status
 allow  git log --oneline -5
 allow  git diff --stat
@@ -28,10 +48,25 @@ allow  git branch --show-current
 allow  echo "git switch main"
 allow  grep -rn 'git switch' docs/
 allow  bash ops/polaris claim T-001
+allow  git clean -n
+allow  git clean --dry-run
+allow  git push -u origin feat/T-001
+allow  rm -f .polaris/shots/T-001-a.png
+allow  rm -rf node_modules
+allow  kill 1234
+allow  kill -9 1234
+allow  taskkill /PID 1234 /F
+allow  Stop-Process -Id 1234
 wt:allow  git switch main
 wt:allow  git reset --hard HEAD~1
 wt:allow  git stash pop
 wt:allow  git rebase main
+wt:deny:worktree-remove  git worktree remove .polaris/wt/T-000
+wt:deny:rm-polaris  rm -rf .polaris
+wt:deny:kill-broad  pkill node
 {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"the primary checkout is shared by every session — never switch it: work in your task's worktree (bash ops/polaris claim, then cd .polaris/wt/<ID>); a dirty tree is parked (bash ops/polaris park), never switched around"}}
 pinned-refusal-lines: 1
+pinned-worktree-lines: 1
+pinned-push-lines: 1
+pinned-kill-lines: 1
 json-deny-emitter-lines: 1

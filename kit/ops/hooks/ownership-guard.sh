@@ -209,6 +209,7 @@ case "$TOP" in
   */.polaris/wt/*) WT_ID="${TOP##*/}"; PRIMARY="${TOP%/.polaris/wt/*}";;
   *) PRIMARY="$TOP";;
 esac
+[ -n "$WT_ID" ] && : 2>/dev/null > "$PRIMARY/.git/worktrees/$WT_ID/polaris-beat" || true
 [ -n "$PRIMARY" ] && [ -x "$PRIMARY/ops/polaris" ] || PRIMARY=""   # odd layout → resolve it lazily
 BR="$(git -C "$CWD" rev-parse --abbrev-ref HEAD 2>/dev/null)" || exit 0
 case "$FILE" in /*) ABS="$FILE";; *) ABS="$CWD/$FILE";; esac
