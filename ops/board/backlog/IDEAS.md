@@ -23,4 +23,3 @@
 - Sprint-12 planner 2026-09-01: a PowerShell-tool matcher for checkout-guard — the hook is wired on matcher `Bash` only; install's merge identity is per script path, so a second `PowerShell` entry + the hook reading the same `tool_input.command` closes the gap in ~10 lines.
 - Sprint-12 planner 2026-09-01: per-repo keep-awake opt-out ONLY if a repo ever needs one — 6.2.0 deliberately has no CONVENTIONS key (machine-level `disabled` flag, `awake disable`); do not add a key on speculation.
 - Sprint-12 planner 2026-09-01: `finish` run through `bg run finish` self-blocks — the finish guard sees its own runner job as a pending job; finish should exempt the job that is running it.
-- Sprint-12 planner 2026-09-01: kit/.claude/skills/polaris-install/SKILL.md's "arms the machine" sentence should mention the keep-awake hooks (6.2.0) — no task in plans/v2.md owns that file, so it is a 1-pt rider, not a silent edit by T-103.
