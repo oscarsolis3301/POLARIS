@@ -65,7 +65,14 @@
       "PowerShell(Resolve-Path:*)",
       "PowerShell(Split-Path:*)",
       "PowerShell(Join-Path:*)",
-      "PowerShell(ConvertFrom-Json:*)"
+      "PowerShell(ConvertFrom-Json:*)",
+      "EnterWorktree",
+      "ExitWorktree",
+      "Workflow",
+      "Task",
+      "Agent",
+      "TodoWrite",
+      "SendMessage"
     ]
   },
   "hooks": {

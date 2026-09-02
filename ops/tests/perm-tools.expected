@@ -1,0 +1,4 @@
+settings.json: EnterWorktree ExitWorktree Workflow Task Agent TodoWrite SendMessage → 7 of 7
+bootstrap.py PERMS: EnterWorktree ExitWorktree Workflow Task Agent TodoWrite SendMessage → 7 of 7
+gates absent (ExitPlanMode AskUserQuestion): settings.json 0 · bootstrap.py 0
+union blocks intact: bootstrap.py 1 · admin.sh 1

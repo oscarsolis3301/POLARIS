@@ -106,6 +106,22 @@ PERMS = [
     "PowerShell(Select-String:*)", "PowerShell(Select-Object:*)", "PowerShell(Where-Object:*)",
     "PowerShell(Measure-Object:*)", "PowerShell(Sort-Object:*)", "PowerShell(Resolve-Path:*)",
     "PowerShell(Split-Path:*)", "PowerShell(Join-Path:*)", "PowerShell(ConvertFrom-Json:*)",
+    # --- the harness's OWN tools: bare names, no parenthesised argument ---
+    # A rule with no specifier matches EVERY invocation of that tool, which is exactly what these
+    # need. Auto mode was still stopping five parallel sessions on the same "do you want to proceed
+    # with EnterWorktree?" click, because every rule above is a Bash/PowerShell PREFIX and none of
+    # them can pre-authorize a harness tool. Entering the worktree is step 1b of the Builder role —
+    # the kit's own instruction — so it must never arrive as a question.
+    #
+    # Two names are missing on purpose and must STAY missing: the plan-approval gate and the
+    # ask-the-human gate are the only two clicks POLARIS keeps, and allowing either would hand the
+    # loop the one thing it may never grant itself. The notebook editor is absent for a different
+    # reason — the ownership guard denies it whatever this list says, so a rule here would only
+    # pretend otherwise.
+    #
+    # A name this build has no tool for is INERT, not an error, so both spellings of the
+    # worktree/workflow tool ship and an older harness simply ignores the one it lacks.
+    "EnterWorktree", "ExitWorktree", "Workflow", "Task", "Agent", "TodoWrite", "SendMessage",
 ]
 
 
