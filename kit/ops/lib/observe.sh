@@ -104,15 +104,28 @@ cmd_status() {
     printf 'integration lane: held by %s · %sm — a session is landing; wait for it, never steal\n' \
       "${lho:-unknown}" "$(( ( $(date +%s) - lag ) / 60 ))"
   fi
-  # One line per park, newest first. `git stash list` is the source of truth, not a guess: the human
-  # can act on the printed stash@{N} directly if unpark's newest-first order is not what they want.
-  local pk
-  while IFS= read -r pk; do
-    [ -n "$pk" ] || continue
-    printf 'parked: %s — bash ops/polaris unpark restores the newest\n' "$pk"
-  done <<EOF
-$(git -C "$PRIMARY" stash list --format='%gd %gs' 2>/dev/null | grep 'polaris/park-' || true)
+  # One line per park, newest first (ops/contracts/worktree-liveness.md § park): name · age · why.
+  # The epoch is IN the stash name, so the age costs no extra git call, and the `why` a caller gave
+  # `park` is what says whose interruption this was — a bare stash ref told a second chat nothing
+  # about whether the dirt was minutes old or three days stale. The summary line above the list
+  # keeps the remedy attached and stays the greppable "something is parked here" marker.
+  # `git stash list` remains the source of truth: the human can act on stash@{N} directly.
+  local pk pks pnm pwhy pep pn=0
+  pks="$(git -C "$PRIMARY" stash list --format='%gs' 2>/dev/null | grep 'polaris/park-' || true)"
+  [ -n "$pks" ] && pn="$(printf '%s\n' "$pks" | grep -c .)"
+  if [ "$pn" -gt 0 ]; then
+    printf 'parked: %s stash(es) — bash ops/polaris unpark restores the newest\n' "$pn"
+    while IFS= read -r pk; do
+      [ -n "$pk" ] || continue
+      pnm="polaris/park-${pk#*polaris/park-}"
+      case "$pnm" in *' — '*) pwhy="${pnm#* — }"; pnm="${pnm%% — *}";; *) pwhy="no reason recorded";; esac
+      pep="${pnm#polaris/park-}"; pep="${pep%%-*}"
+      case "$pep" in ''|*[!0-9]*) pep="$(date +%s)";; esac
+      printf 'park: %s · %sm · %s\n' "$pnm" "$(( ( $(date +%s) - pep ) / 60 ))" "$pwhy"
+    done <<EOF
+$pks
 EOF
+  fi
 }
 
 cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatter a Planner actually
@@ -141,20 +154,92 @@ cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatte
   done
 }
 
-cmd_sweep() { # report orphans + stale locks + >24h bg jobs + remote strays; --fix removes true
-  # orphans, rotates finished/crashed stale jobs, and deletes merged strays
+cmd_sweep() { # report orphans + stale locks + idle worktrees + >24h bg jobs/archives + remote
+  # strays; --fix removes true orphans, reaps idle worktrees through wt_remove, rotates
+  # finished/crashed stale jobs, prunes day-old runtime archives, and deletes merged strays
   local fix="${1:-}" d id found=0
+  local la lpid lalive psl="" psgot=0
   for d in "$LOCKS"/*/; do
     [ -e "$d" ] || break
     id="$(basename "$d")"; [ "$id" = ".board-mutex" ] && continue
+    la="$(lock_age "$id")"
     if ! task_file "$id" active >/dev/null && ! task_file "$id" review >/dev/null; then
-      found=1; printf '⚠ ORPHAN lock: %s (age %sh, no active/review task)\n' "$id" "$(( $(lock_age "$id") / 3600 ))"
-      [ "$fix" = "--fix" ] && { lock_drop "$id"; note "removed"; }
-    elif task_file "$id" active >/dev/null && [ "$(lock_age "$id")" -gt $((STALE_H*3600)) ]; then
-      found=1; printf '⚠ STALE lock: %s (%ss > %sh) — take it over: polaris resume %s · or hand back: polaris release %s --to ready\n' \
-        "$id" "$(lock_age "$id")" "$STALE_H" "$id" "$id"
+      found=1
+      # A claim is not atomic end to end: the lock lands before the task file moves into active/,
+      # so a lock younger than the mutex's own steal window is a claim IN FLIGHT, not an orphan.
+      # Dropping it there hands the same task to a second session. Reported, so nothing is hidden —
+      # never dropped, `--fix` included (ops/contracts/worktree-liveness.md § orphan-lock drop).
+      if [ "$la" -lt 120 ]; then
+        printf '⚠ ORPHAN lock: %s (age %ss — younger than 120s, left alone: a claim may be mid-flight)\n' "$id" "$la"
+      else
+        printf '⚠ ORPHAN lock: %s (age %sh, no active/review task)\n' "$id" "$(( la / 3600 ))"
+        [ "$fix" = "--fix" ] && { lock_drop "$id"; note "removed"; }
+      fi
+    elif task_file "$id" active >/dev/null && [ "$la" -gt $((STALE_H*3600)) ]; then
+      # Lock age says when the task was CLAIMED; it never said whether anyone is still working.
+      # The beat says that, and meta line 5 says whether the session that took the lock is even on
+      # the machine any more. A stale lock behind a live session is patience; a stale lock behind a
+      # dead one is yours to take — and until now both printed the identical line.
+      lpid="$(sed -n 5p "$d/meta" 2>/dev/null | tr -d ' \r')"
+      lalive="session gone"
+      case "$lpid" in
+        ''|-|*[!0-9]*) : ;;
+        *) # ONE `ps -W` for the whole sweep, and only once a stale lock actually names a pid: on
+           # Windows an MSYS pid is invisible to `kill -0` across runtimes, so the PID column of a
+           # ps listing is the only honest answer — and it costs ~0.4s, which is fine once per
+           # sweep, absurd once per lock, and pure waste on the sweeps that find nothing stale.
+           if [ "$psgot" -eq 0 ]; then
+             psgot=1
+             case "${OSTYPE:-}" in msys*|cygwin*) psl="$(ps -W 2>/dev/null || true)";; esac
+           fi
+           if [ -n "$psl" ]; then
+             if printf '%s\n' "$psl" | awk -v p="$lpid" '$1==p{f=1} END{exit !f}'; then lalive="session alive"; fi
+           elif kill -0 "$lpid" 2>/dev/null; then
+             lalive="session alive"
+           fi;;
+      esac
+      found=1; printf '⚠ STALE lock: %s (%ss > %sh) — take it over: polaris resume %s · or hand back: polaris release %s --to ready · last activity %sm ago · %s\n' \
+        "$id" "$la" "$STALE_H" "$id" "$id" "$(( $(beat_age "$id") / 60 ))" "$lalive"
     fi
   done
+  # WORKTREE PASS (ops/contracts/worktree-liveness.md § sweep lines). git's own registry is the
+  # source of truth: a bare directory under .polaris/wt/ that git no longer knows about is not a
+  # worktree, and `worktree list --porcelain` is the one read that never guesses. Liveness is the
+  # BEAT and nothing else — a LIVE worktree is reported and LEFT, `--fix` included, because no
+  # session may remove a worktree it cannot prove dead (a seal fan-out once did, and everything
+  # uncommitted inside it died). An IDLE one goes through wt_remove, the ONE removal primitive,
+  # which removes it clean and ARCHIVES it dirty. This pass is what finally makes `finish`'s
+  # worktree caveat and `uninstall`'s "run sweep --fix" remedy TRUE.
+  local wl wid wcol wage wrc
+  while IFS= read -r wl; do
+    case "$wl" in 'worktree '*) wl="${wl#worktree }";; *) continue;; esac
+    wl="${wl%$'\r'}"; wl="${wl//\\//}"
+    case "$wl" in */.polaris/wt/*) wid="${wl##*/.polaris/wt/}"; wid="${wid%%/*}";; *) continue;; esac
+    [ -n "$wid" ] || continue
+    wcol="$(task_col "$wid" 2>/dev/null || true)"; wcol="${wcol:-none}"
+    wage="$(beat_age "$wid")"
+    found=1
+    if beat_live "$wid"; then
+      note "LIVE worktree: .polaris/wt/$wid (beat ${wage}s ago) — left alone"
+      continue
+    fi
+    if [ -n "$(git -C "$wl" status --porcelain 2>/dev/null)" ]; then
+      printf '⚠ IDLE worktree: .polaris/wt/%s (task %s, beat %sm ago, dirty) — sweep --fix archives it\n' "$wid" "$wcol" "$(( wage / 60 ))"
+    else
+      printf '⚠ IDLE worktree: .polaris/wt/%s (task %s, beat %sm ago, clean) — sweep --fix removes it\n' "$wid" "$wcol" "$(( wage / 60 ))"
+    fi
+    if [ "$fix" = "--fix" ]; then
+      wrc=0; wt_remove "$wid" sweep || wrc=$?
+      # The local branch goes only with a worktree that actually LEFT (rc 0), and only for a task
+      # the board already calls done — an active or review branch is live work whatever state its
+      # worktree is in, and an archived one still has its commits to recover.
+      if [ "$wrc" -eq 0 ] && [ -f "$BOARD/done/$wid.md" ]; then
+        git -C "$PRIMARY" branch -D "feat/$wid" >/dev/null 2>&1 && note "branch feat/$wid deleted" || true
+      fi
+    fi
+  done <<EOF
+$(git -C "$PRIMARY" worktree list --porcelain 2>/dev/null)
+EOF
   # background jobs (ops/contracts/bg-jobs.md): a non-.prev job dir whose start is >24h old is
   # leftover runtime state. Always reported; --fix rotates it to <name>.prev (archive, never
   # delete) — but NEVER a still-running job: rotating a live job's dir out from under its runner
@@ -178,11 +263,45 @@ cmd_sweep() { # report orphans + stale locks + >24h bg jobs + remote strays; --f
       [ "$fix" = "--fix" ] && { bg_rotate "$bgn"; note "rotated to $bgn.prev"; }
     fi
   done
+  # RUNTIME ARCHIVES (ops/contracts/bg-jobs.md § v2 · ops/contracts/role-handover.md § state dir).
+  # Rotation now ARCHIVES a finished job instead of deleting it, and every session that hops roles
+  # leaves a handover state dir behind — both deliberate, both unbounded without a reaper. A day is
+  # long enough that a human can still read yesterday's evidence and short enough that neither
+  # grows forever. Reported first so a `--fix` is never a surprise. `.polaris/wt-archive/` is NOT
+  # here on purpose: it holds uncommitted WORK, and only its owner deletes that.
+  local ad an at now hd hn hf ht
+  now="$(date +%s)"
+  for ad in "$PRIMARY/.polaris/bg/.archive"/*/; do
+    [ -e "$ad" ] || break
+    an="$(basename "$ad")"
+    at="$(stat -c %Y "${ad%/}" 2>/dev/null || stat -f %m "${ad%/}" 2>/dev/null || echo 0)"
+    case "$at" in ''|*[!0-9]*) at=0;; esac
+    [ $(( now - at )) -gt 86400 ] || continue
+    found=1; printf '⚠ STALE bg archive: .polaris/bg/.archive/%s (%sh old) — bash ops/polaris sweep --fix prunes it\n' "$an" "$(( ( now - at ) / 3600 ))"
+    [ "$fix" = "--fix" ] && { rm -rf "$ad"; note "pruned"; }
+  done
+  for hd in "$PRIMARY/.polaris/handover"/*/; do
+    [ -e "$hd" ] || break
+    hn="$(basename "$hd")"
+    # NEWEST file, not the directory's own mtime: a state dir is written into for the whole life of
+    # its session, and on some filesystems the dir mtime stops moving once the names stop changing.
+    ht=0
+    for hf in "$hd"*; do
+      [ -e "$hf" ] || break
+      at="$(stat -c %Y "$hf" 2>/dev/null || stat -f %m "$hf" 2>/dev/null || echo 0)"
+      case "$at" in ''|*[!0-9]*) at=0;; esac
+      [ "$at" -gt "$ht" ] && ht="$at"
+    done
+    [ $(( now - ht )) -gt 86400 ] || continue
+    found=1; printf '⚠ STALE handover state: .polaris/handover/%s (%sh since its newest file) — bash ops/polaris sweep --fix prunes it\n' "$hn" "$(( ( now - ht ) / 3600 ))"
+    [ "$fix" = "--fix" ] && { rm -rf "$hd"; note "pruned"; }
+  done
   # remote hygiene: a landed task should have taken its feat/<ID> branch with it (done does this
   # since 5.11). This pass catches strays from before — or from any path that skipped `done`.
   # Only branches whose task is in done/ are touched; active/review branches are live work.
   if has_remote; then
-    local rline rsha rref rid lsha lf
+    local rline rsha rref rid lsha lf itoday
+    itoday="integrate/$(date +%F)"
     while IFS= read -r rline; do
       [ -n "$rline" ] || continue
       rsha="${rline%%$'\t'*}"; rref="${rline#*$'\t'}"
@@ -217,6 +336,11 @@ EOF
       [ -n "$rline" ] || continue
       rsha="${rline%%$'\t'*}"; rref="${rline#*$'\t'}"
       case "$rref" in refs/heads/integrate/*) rid="${rref#refs/heads/}";; *) continue;; esac
+      # TODAY's wave is never swept (ops/contracts/worktree-liveness.md § sweep lines). Under a
+      # pipelined landing the branch is merged into $BASE after every task and reused for the next,
+      # so "merged" proves only that the LAST land arrived — deleting it there pulls the branch out
+      # from under an integrator that is still mid-wave.
+      [ "$rid" = "$itoday" ] && continue
       if git -C "$PRIMARY" cat-file -e "$rsha" 2>/dev/null \
          && git -C "$PRIMARY" merge-base --is-ancestor "$rsha" "$BASE" 2>/dev/null; then
         found=1; printf '⚠ REMOTE stray: %s — wave merged into %s, branch still on origin\n' "$rid" "$BASE"
@@ -478,6 +602,22 @@ cmd_doctor() {
       note "⚠ the managed CLAUDE.md block predates version stamping (pre-5.23.0) while this kit is ${iv:-unknown} — it may be several releases behind. Refresh it: ops/polaris update"
     elif [ -n "$iv" ] && [ "$cmv" != "$iv" ]; then
       note "⚠ ops/VERSION says $iv but the managed CLAUDE.md block is $cmv — the protocol injected into every session is NOT the kit you are running. Fix: ops/polaris update"
+    fi
+  fi
+  # KEEP-AWAKE (ops/contracts/keep-awake.md § installers and doctor). The daemon is MACHINE-level —
+  # its hooks live in ~/.claude/settings.json and its registry beside them — so a repo can be
+  # perfectly healthy while the box still sleeps mid-run, and nothing said so. Two states are worth
+  # a line: never armed, and armed but switched off. Both are silent otherwise, and the whole check
+  # is gated on ~/.claude existing so CI and a bare shell never see a word about it.
+  if [ -d "$HOME/.claude" ]; then
+    local awn awh
+    awn="$(grep -o 'polaris/awake-hook\.sh' "$HOME/.claude/settings.json" 2>/dev/null | grep -c . || true)"
+    case "$awn" in ''|*[!0-9]*) awn=0;; esac
+    awh="${POLARIS_AWAKE_HOME:-$HOME/.claude/polaris/awake}"
+    if [ "$awn" -lt 4 ]; then
+      note "⚠ keep-awake not armed on this machine — ops/polaris awake install"
+    elif [ -e "$awh/disabled" ]; then
+      note "⚠ keep-awake is DISABLED (ops/polaris awake enable)"
     fi
   fi
   say "doctor: OK"
@@ -1532,9 +1672,21 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
   # Stamp only a suite we actually RAN and that was fully green. Never stamp a skipped run (it
   # would just re-write the same sha) and never stamp a dirty tree — the stamp claims "this commit
   # is proven", and an uncommitted edit means the thing proven is not the thing on disk.
-  if [ "$ran" -ge 1 ] && [ "$head" != "none" ] && [ -z "$dirty" ]; then
-    mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
-    printf '%s %s\n' "$head" "$(date +%s)" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
+  # The AFTER reads are the parallel-wave half of that same claim: a sibling lane lands while the
+  # suite is halfway through, HEAD moves under it, and a stamp keyed on the BEFORE sha would green
+  # a later `finish` on code nobody has ever tested. So HEAD must be where it started AND the tree
+  # must still be clean when the suite ends. Anything else withholds the stamp and says so — the
+  # next qa simply runs the suite again, which is cheap next to blessing an untested commit.
+  local head2 dirty2
+  head2="$(git -C "$PRIMARY" rev-parse HEAD 2>/dev/null || echo none)"
+  dirty2="$(git -C "$PRIMARY" status --porcelain 2>/dev/null | head -1)"
+  if [ "$ran" -ge 1 ] && [ "$head" != "none" ]; then
+    if [ "$head2" = "$head" ] && [ -z "$dirty" ] && [ -z "$dirty2" ]; then
+      mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+      printf '%s %s\n' "$head" "$(date +%s)" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
+    else
+      note "⚠ HEAD moved or the tree is not clean — stamp withheld, so the next qa re-runs the suite"
+    fi
   fi
   say "qa: all green"
 }
@@ -1709,6 +1861,19 @@ EOF
     die "finish: not done — $PEND $w pending; fix $it and run finish again"
   fi
 
+  # From here down the verdict is rc 0 — the die above is the only exit. The Stop hook reads this
+  # marker to know a session has already ended its RUN (ops/contracts/role-handover.md, the
+  # `allow:finished` rung), so a finished session is never hopped into another role and made to
+  # start work after its own close. Best-effort and sid-only: without a session id there is no
+  # session to hop, and nothing to write. Redirection AFTER 2>/dev/null on purpose — bash opens
+  # left to right, and a missing dir would otherwise talk on the way past (worktree-liveness v1.1).
+  local hsd
+  if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+    hsd="$PRIMARY/.polaris/handover/$CLAUDE_CODE_SESSION_ID"
+    mkdir -p "$hsd" 2>/dev/null || true
+    date +%s 2>/dev/null > "$hsd/finished" || true
+  fi
+
   say "board clear — $(fin_count done) done · $bl blocked · $rd queued · nothing building · nothing waiting to land"
   while IFS= read -r line; do
     [ -n "$line" ] || continue
@@ -1866,7 +2031,10 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
   # line is pasted into CLIs that have no such tool. NOTE the quoting: `msg` must stay free of
   # double quotes — the tmux branch below embeds it as "$claude_cmd$mtok \"$msg\"" and sh would
   # then read `.polaris/wt/<ID>` unquoted, where `<` is a redirection. Single quotes are safe here.
-  local msg="You are a BUILDER. Claim the top ready task and complete it end to end, then enter its worktree — every command until handoff runs there: EnterWorktree({path: '.polaris/wt/<ID>'}), or run everything via absolute paths under .polaris/wt/<ID>. Stop at the review handoff.$loop"
+  # The handoff is a BOUNDARY, not an ending (ops/contracts/role-handover.md): the board itself
+  # names the next step, so the pane asks it instead of going quiet with work still queued. The
+  # capture sentence rides along because a fleet pane never sees the conductor's kickoff template.
+  local msg="You are a BUILDER. Claim the top ready task and complete it end to end, then enter its worktree — every command until handoff runs there: EnterWorktree({path: '.polaris/wt/<ID>'}), or run everything via absolute paths under .polaris/wt/<ID>, then bash ops/polaris next and follow it. Touching a visual: path? run the shot: line pack printed, READ the png, and put a saw: line in your report.$loop"
   note "kickoff (paste into $n parallel sessions of ANY agent CLI — in Claude Code, \"start\" alone does it):"
   printf '   %s\n' "$msg"
 

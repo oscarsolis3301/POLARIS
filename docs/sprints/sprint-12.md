@@ -1,7 +1,7 @@
 # Sprint 12 — Parallel work that can't eat itself (6.2.0) (2026-09-01–)
 
 ## T-092 — "workspace.sh — beats, wt_remove (archive, never --force), pid-aware lease steal, owned parks"
-points 5 · risk normal · landed ff868a8 (2026-09-02) · claimed 2026-09-02
+points 5 · risk normal · landed ff868a8 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/workspace.sh
 
 ### Why
@@ -32,7 +32,7 @@ resume) are other tasks in wave 2; this task ships the primitives only.
 - [ ] no new fn beyond the four pinned; `bash kit/ops/polaris doctor --selftest --only park,busyint` green (foreground, ≥600000 ms timeout)
 
 ## T-093 — "checkout-guard learns the other destroyers — worktree remove/prune/move, clean, push --delete, rm on .polaris, broad kills; both hooks beat"
-points 3 · risk normal · landed fe25859 (2026-09-02) · claimed 2026-09-02
+points 3 · risk normal · landed fe25859 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/hooks/checkout-guard.sh, kit/ops/hooks/ownership-guard.sh, ops/tests/checkout-guard-denies.cmd, ops/tests/checkout-guard-denies.expected
 
 ### Why
@@ -60,7 +60,7 @@ labels, golden lines) + worktree-liveness.md § beat writers (the two pinned tou
 - [ ] `bash kit/ops/polaris doctor --selftest --only checkoutguard` green (foreground, ≥600000 ms timeout) — the existing drill must not red on the widened gate 1
 
 ## T-094 — "bg.sh — jobs are owned by their cwd: foreign same-name live jobs refuse, .prev archives instead of dying"
-points 2 · risk normal · landed ecd3856 (2026-09-02) · claimed 2026-09-02
+points 2 · risk normal · landed ecd3856 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/bg.sh, ops/tests/bg-lifecycle.cmd, ops/tests/bg-lifecycle.expected
 
 ### Why
@@ -85,7 +85,7 @@ existing line stays byte-identical. Spec: bg-jobs.md v2.
 - [ ] `bash kit/ops/polaris doctor --selftest --only bg` green (foreground, ≥600000 ms timeout)
 
 ## T-095 — "Auto mode prompts for nothing it doesn't have to — seven bare tool-name rules in kit settings + bootstrap PERMS, golden perm-tools"
-points 2 · risk normal · landed fa4e3b2 (2026-09-02) · claimed 2026-09-02
+points 2 · risk normal · landed fa4e3b2 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/.claude/settings.json, kit/ops/bootstrap.py, ops/tests/perm-tools.cmd, ops/tests/perm-tools.expected
 
 ### Why
@@ -112,7 +112,7 @@ dir — the missing rule was the whole defect. Spec: permission-rules.md.
 - [ ] the pre-approval below is understood: it covers exactly these seven names; anything else is a plan-gate decision
 
 ## T-096 — "Docs + keys for 6.2.0 — six KEYS rows, ops/VISUAL.md, PROTOCOL AWAKE + rows, rule 3 rewrite in both copies, MANUAL without --force; api-kit owner W1"
-points 4 · risk normal · landed c0a5c56 (2026-09-02) · claimed 2026-09-02
+points 4 · risk normal · landed c0a5c56 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/.claude/output-styles/polaris.md, kit/ops/KEYS.tsv, kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/VISUAL.md, ops/tests/api-kit.expected
 
 ### Why
@@ -143,7 +143,7 @@ worktree-liveness.md (MANUAL recipes, the N-CHATS row).
 - [ ] no other `#` line added anywhere under kit/ by this task; no fn; no python
 
 ## T-097 — "core.sh — lock meta learns the session (sid + claude pid), pid-aware mutex steal, ls-remote board tip, evt writes the handover last-event"
-points 2 · risk normal · landed a5bb2dc (2026-09-02) · claimed 2026-09-02
+points 2 · risk normal · landed a5bb2dc (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/core.sh
 
 ### Why
@@ -169,3 +169,216 @@ role-handover.md § session state.
 - [ ] `evt()`: when `$CLAUDE_CODE_SESSION_ID` is set, `mkdir -p "$PRIMARY/.polaris/handover/<sid>"`, overwrite `last-event` with the exact `<ts> <kind> <id>` just appended, create `started` on first write, append the id to `avoid` for kinds release/blocked/kickback — all best-effort (`2>/dev/null || true`), never a failed evt; unset sid ⇒ no state write
 - [ ] no new fn (38 before and after); `startup-budget`, `triage-lane` goldens green from the worktree
 - [ ] `bash kit/ops/polaris doctor --selftest --only syncrace,claimguard,busyint` green (foreground, ≥600000 ms timeout)
+
+## T-098 — "builder.sh — beats on every step, resume/release respect a live worktree, pack prints SEE YOUR WORK, handoff needs the capture"
+points 5 · risk normal · landed 5053399 (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/builder.sh
+
+### Why
+This is where the worktree-liveness primitives (T-092) and the capture step (visual-check.md) meet
+the builder's own commands. Beats: `claim`, `resume`, `verify` and `handoff` each touch the worktree
+beat so a working session is provably live. Resume: today it adopts ANY lock unconditionally — the
+documented takeover path and the lock-side twin of the worktree bug; now a live beat from a
+different session refuses with the pinned message naming the beat file (takeover is explicit:
+`rm <beat>`), the same session (after a compaction) is allowed, an idle one is adopted, and its meta
+rewrite writes all five lines. Release: the worktree goes through `wt_remove <ID> release` (dirty
+own-lane ⇒ archive; outside + dirty + live ⇒ the pinned die BEFORE any board write). Pack: a new
+"SEE YOUR WORK" section, driven by real `cfg` reads of `visual:`/`shot:`/`port_base:`/`serve:` with
+`{ID}`/`{PORT}` substituted (per-task port = port_base + numeric tail mod 100 — T-207 ⇒ 4007), and
+the unset line when a repo declares no visual surface. Handoff: when the diff touches a `visual:`
+path and `shot:` is set, a non-empty `.polaris/shots/<ID>-*.png` newer than the branch base must
+exist, else the pinned refusal (verify only warns). Claim records `task` and `plan` in the session's
+handover state dir; the queue notice stops telling the HUMAN to "say start" — the board hands the
+session its next step: `bash ops/polaris next`. Specs: worktree-liveness.md (beats, die texts),
+visual-check.md (section lines, gate rule), role-handover.md (state dir, the notice).
+
+### Acceptance
+- [ ] `beat_touch "$id"` in cmd_claim (after wt_add), cmd_resume, cmd_verify, cmd_handoff — best-effort
+- [ ] `cmd_resume`: `beat_live` AND lock meta line 4 ≠ my sid (or `-`) ⇒ die with the pinned resume text (beat age + absolute beat path); same sid ⇒ allowed; idle ⇒ adopt; the meta rewrite writes 5 lines; vanished worktree ⇒ `wt_add "$id" resume` (the recreate warning is workspace.sh's)
+- [ ] `cmd_release`: `wt_remove "$id" release` replaces the `--force` line; from outside on dirty+live ⇒ the pinned release die BEFORE `mutex_on`/`mv`; the success line reads `worktree removed|archived|LEFT` per rc; lock dropped in every non-die path
+- [ ] `cmd_pack`: the `SEE YOUR WORK — capture before handoff (ops/VISUAL.md)` section between §7 and §8 with the exact lines of visual-check.md § cmd_pack (unset line; `visual: <globs> · this task touches it: yes|no` via `owned_match` both directions; serve/shot substituted; `port:`; `proof:`; `read:`); inline, no new fn at any depth
+- [ ] `cmd_handoff`: after `run_verify_cmds` — visual set AND shot set AND diff ∩ visual ≠ ∅ ⇒ require a non-empty `$PRIMARY/.polaris/shots/<ID>-*.png` with mtime ≥ merge-base commit time, else the pinned `⛔ handoff refused: …` die (rc 1, task stays active); `cmd_verify` prints the `⚠` variant and continues
+- [ ] `cmd_claim` writes `.polaris/handover/<sid>/task` (every claim) and `plan` (first claim only, from the task's `plan:`), only when `$CLAUDE_CODE_SESSION_ID` is set; best-effort
+- [ ] handoff queue notice (:239) reads `$nrdy ready task(s) still queued — the board hands you the next step: bash ops/polaris next`; the `integrate` notice unchanged
+- [ ] the hermetic pack probe (verify) prints `shot: snap T-207 4007` and `this task touches it: yes`; a task owning `src/b.txt` prints `touches it: no`
+- [ ] `bash kit/ops/polaris doctor --selftest --only claimguard,selfland,park` green (foreground, ≥600000 ms timeout); `resume` on a fresh-beat lock from a DIFFERENT sid dies, from the SAME sid succeeds (drill wtreap automates in W3)
+
+## T-099 — "integrate.sh — done removes a worktree only through wt_remove, keeps the branch of a live one, re-stamps the lease during long steps"
+points 2 · risk normal · landed 2efabcc (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/integrate.sh
+
+### Why
+`done` is the command that killed ARC-428's worktree: it ran `git worktree remove --force` on
+whatever `.polaris/wt/<ID>` existed, then deleted the branch. Now it asks `wt_remove <ID> done`
+(T-092): clean and idle ⇒ removed and the local branch deleted as before; dirty and idle ⇒ archived
+to `.polaris/wt-archive/<ID>-<epoch>` and the branch deleted; live ⇒ LEFT with the pinned
+`branch feat/<ID> kept — checked out in a live worktree; sweep --fix finishes the cleanup once idle`
+note and NO `branch -D` — a checked-out branch cannot be deleted anyway, and the builder standing in
+it may still need it. The remote-branch cleanup (tip-equality proof) is unchanged. Two riders in the
+same file: `land` and `seal` re-stamp the integration lease's epoch after each suite command and each
+per-task land while they hold it, so a slow suite never looks abandoned to the pid-aware steal
+(T-092); and `audit` prints one `capture: <path>` line per `.polaris/shots/<ID>-*.png` so the
+Integrator sees what the builder looked at (visual-check.md). Spec: worktree-liveness.md § decision
+table (the `done` row), § steals (the re-stamp).
+
+### Acceptance
+- [ ] `cmd_done`: `wt_remove "$id" done`; `branch -q -D feat/$id` runs ONLY after rc 0 or 2; rc 1 prints the pinned kept-branch note; remote cleanup unchanged; no `--force` remains in integrate.sh
+- [ ] `land`/`land --express`/`seal`: `date +%s > "$LOCKS/.int-lease/epoch" 2>/dev/null || true` after each suite command and after each per-task land, only while `INT_HELD` is set (at least two sites)
+- [ ] `cmd_audit`: prints `capture: <path>` for each `$PRIMARY/.polaris/shots/<ID>-*.png` (none ⇒ nothing); read-only
+- [ ] no new fn; `bash kit/ops/polaris doctor --selftest --only selfland,express,busyint` green (foreground, ≥600000 ms timeout) — `done` on the self-landed task's OWN live worktree now LEAVES it (drill_selfland's new assert lands with T-104; keep the existing asserts green)
+
+## T-100 — "observe.sh — sweep reaps idle worktrees and reports live ones, orphan grace, qa stamps after, doctor sees keep-awake, finish and fleet learn the handover"
+points 5 · risk normal · landed 93cd6e4 (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/observe.sh
+
+### Why
+The observing commands learn what the primitives now make true. `sweep` gains a worktree pass:
+every `.polaris/wt/<ID>` is reported as LIVE (beat age, left alone) or IDLE (task column, age,
+clean/dirty), and `--fix` removes idle clean ones (plus `branch -D` when the task is in done/) and
+archives idle dirty ones through `wt_remove <ID> sweep` — which is what finally makes `finish`'s
+caveat and `uninstall`'s "run sweep --fix" remedy true. Stale-lock lines gain "last activity <m>m
+ago · session alive|gone" (lock meta line 5 via ONE `ps -W` on Windows, else `kill -0`); an orphan
+lock younger than 120 s is reported but never dropped (a claim may be mid-flight); today's
+`integrate/<date>` is never swept; `.polaris/bg/.archive/*` and `.polaris/handover/<sid>/` older than
+24 h are pruned by `--fix`; `status` lists parks with age. `qa` writes its suite stamp only when HEAD
+is unmoved AND the tree is clean AFTER the suite (`stamp withheld` otherwise) — a stamp taken before
+a sibling's land could green a `finish` on code nobody tested. `doctor` warns when the keep-awake
+hooks are not merged into `~/.claude/settings.json` or the daemon is disabled (gated on
+`~/.claude` existing). `finish` rc 0 writes `.polaris/handover/<sid>/finished` so the Stop hook
+never hops a finished session. The fleet kickoff carries the visual sentence and ends with
+`then bash ops/polaris next and follow it` instead of "Stop at the review handoff". Specs:
+worktree-liveness.md (sweep lines, grace), keep-awake.md (doctor lines), role-handover.md (state
+dir, kickoff), bg-jobs.md v2 (archive pruning), visual-check.md (kickoff sentence).
+
+### Acceptance
+- [ ] `cmd_sweep` worktree pass over `git worktree list --porcelain` paths under `.polaris/wt/`: LIVE/IDLE lines byte-exact per contract; `--fix` ⇒ `wt_remove <ID> sweep`, `branch -D` on rc 0 when the task is in done/; `integrate/<date>` of today untouched; `--fix` prunes `.polaris/bg/.archive/*` and `.polaris/handover/<sid>/` older than 24 h
+- [ ] orphan lock < 120 s ⇒ the pinned "younger than 120s" line, never dropped; STALE line gains ` · last activity <m>m ago · session alive|gone` (line 5 pid; `-` ⇒ gone); ONE `ps -W` per sweep on Windows
+- [ ] `cmd_qa`: stamp written only when `git rev-parse HEAD` before == after AND `git status --porcelain` empty after; else one `⚠ … stamp withheld` line
+- [ ] `cmd_doctor`: the two pinned keep-awake lines, gated on `[ -d "$HOME/.claude" ]`; silent when armed and enabled; `keys-drift` golden byte-identical
+- [ ] `cmd_finish` rc 0 ⇒ `.polaris/handover/<sid>/finished` (epoch, best-effort, only with a sid); `cmd_status` lists parks `park: <name> · <age>m · <why>`
+- [ ] `cmd_fleet` kickoff `msg` (:1869): visual sentence appended (single quotes only inside `msg`), `Stop at the review handoff.` → `then bash ops/polaris next and follow it.`; `--launch`/tmux quoting unchanged
+- [ ] no new fn; `startup-budget` unchanged; `bash kit/ops/polaris doctor --selftest --only finish,qa,drift,hint` green (foreground, ≥600000 ms timeout)
+
+## T-101 — "polaris awake + polaris next reach the CLI — lib/awake.sh, loader +awake +handover, dispatch, usage blocks, preamble beat, awake_ensure; api-kit owner W2"
+points 5 · risk normal · landed 02a941e (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/awake.sh, kit/ops/polaris, ops/tests/api-kit.expected
+
+### Why
+Two new commands reach the CLI here: `polaris awake` (the machine's keep-awake face, T-102 builds
+the hook it drives) and `polaris next` (the handover router, T-109 builds the module). This task owns
+the entry script — the ONE owner of `kit/ops/polaris` this sprint — and `lib/awake.sh`: `awake_home`,
+`awake_conf`, `awake_ensure` (fork-free when the daemon's beat is fresh; a silent no-op on an unarmed
+machine or in CI), `awake_status_line` (three pinned shapes) and `cmd_awake` (status · start · stop =
+60 minutes off · disable · enable · install). The loader gains `awake` after `bg` and `handover`
+after `awake` (module-layout v5); the guard path stays `core ownership`. Dispatch: `awake`, `next`;
+the two byte-pinned usage blocks (`cli-help-parity` learns `next` in W3; `cli-help.expected` moves
+only after dogfood — T-108). The preamble gets the builtins-only worktree beat below `EVENTS=`, so
+every CLI call from inside a worktree keeps it live; `awake_ensure || true` fires from the dispatch
+arms of `claim`, `status`, `doctor`, `handoff` and `bg run`. This task is also the W2 api-kit owner:
+it writes the whole 44-row union — its own 5, the 19 awake-hook fns (T-102), the 8 handover fns
+(T-109) and the 12 handover-hook fns (T-110) — from the names the contracts pin. Specs: keep-awake.md
+(awake.sh + entry wiring + usage bytes), role-handover.md (next usage bytes + dispatch + the
+parallel-build note), module-layout.md v5, key-registry.md §7.
+
+### Acceptance
+- [ ] `lib/awake.sh`: exactly the five fns, ≤150 lines; `awake_ensure` returns 0 without forking when `daemon/beat` < 3×TICK old, returns 0 silently when neither `$POLARIS_AWAKE_HOME` nor `~/.claude/polaris/awake-hook.sh` exists, else backgrounds `bash <hook> ensure "$PRIMARY"`; `stop` = stop flag + kill MSYS pid + rm lock + `disabled` with a 60-min expiry; status line shapes byte-exact
+- [ ] entry: loader `… admin bg awake handover` (guard list untouched); `awake)` and `next)` dispatch arms (no `update_check_maybe` on `next`); the preamble beat `case` below `EVENTS=` and above the dispatch; `awake_ensure || true` inside the five arms; both usage blocks byte-exact (3 lines each, description column 34); entry < 500 lines; `startup-budget` unchanged
+- [ ] api-kit.expected = 625 lines: the 44 pinned W2 rows in `find --api` order; completeness `<` count 0 in this worktree; sibling `>` rows are exactly the awake-hook/handover/handover-hook rows until the wave lands
+- [ ] `bash kit/ops/polaris awake status` prints one of the three shapes (tested with the untracked stub described in Notes, then the stub deleted); `bash kit/ops/polaris doctor --selftest --only fmlist,newcmds` green after T-109 lands (or with the stub, foreground ≥600000 ms)
+- [ ] no other fn anywhere; no heading; no KEYS row
+
+## T-102 — "awake-hook.sh + awake-press.ps1 — the machine-level keep-awake daemon: silent hooks, transcript-mtime verdict, WMI spawn, lock-screen-safe press"
+points 3 · risk normal · landed fb5bf3c (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/hooks/awake-hook.sh, kit/ops/hooks/awake-press.ps1
+
+### Why
+The machine sleeps mid-run. One keep-awake owner per machine, never one per session, never
+interrupting a human who is typing, and it must keep working on the LOCK screen — synthetic
+keypresses never reach the secure desktop, which is exactly the moment the box is about to sleep.
+Two files: `awake-hook.sh` is both the four machine-level hooks (`start` `busy` `idle` `end` — zero
+stdout, rc 0 always, because UserPromptSubmit stdout enters the model's context and rc 2 on Stop
+means "keep going") and the daemon (`daemon`/`tick`: one pass per TICK over the registry under
+`~/.claude/polaris/awake/`; a session is active when it is busy and its transcript — or a
+`<sid>/subagents/*.jsonl` — moved within STALE, or idle-but-recently-active, or any registered repo
+has a live bg job; quiet for GRACE ⇒ exit; `stop` ⇒ exit; two spawners ⇒ `mkdir lock` decides;
+a stale beat is stolen). The daemon is spawned via `Invoke-CimMethod Win32_Process Create` so it
+lives outside every caller's Job Object and survives the spawning terminal; `Start-Process` and
+inline are fallbacks. `awake-press.ps1` ALWAYS calls `SetThreadExecutionState(ES_SYSTEM_REQUIRED)`
+one-shot (works locked, holds nothing) and adds the F-key (F15 default, `none` disables) only when
+the station is unlocked and the user has been input-idle > 60 s; it prints one word
+(`pressed|skipped-active|skipped-locked|state-only`). `install` merges the four hook entries into
+`~/.claude/settings.json` by script-path identity, foreign entries untouched, fails open. `--test`
+prints one line per subcommand for the golden (T-106) and the drill (T-104). No CONVENTIONS key —
+this is machine-level. Every name, path, default and word is pinned in keep-awake.md.
+
+### Acceptance
+- [ ] exactly the 19 pinned fns (`jstr` verbatim from checkout-guard.sh:59-95 + 18 `ah_*`); dispatch `start|busy|idle|end|ensure|daemon|tick|install|--test`; ≤320 lines; bash 3.2; `set -u`
+- [ ] the four hook subcommands: `exec >/dev/null 2>>hook.log`, `set +e`, `trap 'exit 0' EXIT`, exit 0 always, ZERO stdout even on malformed input; `start` creates idle only when absent (never downgrades busy); `busy` writes busy + registers the repo + ensures the daemon; `end` deletes
+- [ ] registry root resolution (`POLARIS_AWAKE_HOME` → `${0%/*}/awake` under `.claude/polaris/` → `$HOME/.claude/polaris/awake`); `config` parsed by `case`, never sourced; `POLARIS_AWAKE_<KEY>` env wins; defaults KEY=F15 TICK=55 STALE=2700 IDLE=900 GRACE=300 DISPLAY=1 INPUT_IDLE=60
+- [ ] `ah_verdict` per contract (dead pid ⇒ rm session; >24 h ⇒ rm; transcript + newest subagents jsonl mtime; busy/idle rules; bg-job clause); `ah_press` writes `daemon/last-press`; presser failure logs once per 100 ticks, never kills the daemon; `disabled` ⇒ no press
+- [ ] `ah_daemon`: mkdir-lock singleton, stale-beat steal (> 3×TICK), `daemon/beat` each tick, `stop` flag, GRACE exit, `sleep TICK & wait $!`, TERM/INT trap removes the lock
+- [ ] `ah_spawn`: WMI Create with `POLARIS_AWAKE_CMD` (records `daemon/winpid`), `Start-Process -WindowStyle Hidden -PassThru` fallback, inline last resort with a logged warning; `POLARIS_AWAKE_SPAWN=inline` seam; mac/Linux `nohup … & disown`; powershell path per contract
+- [ ] `ah_install`: python heredoc (stdlib), identity regex `polaris/awake-hook\.sh`, replace ours / append absent / foreign untouched, tmp + os.replace, fails open; entries SessionStart(5) UserPromptSubmit(10) Stop(5) SessionEnd(5) with the pinned command shape and ABSOLUTE paths (never `$HOME`)
+- [ ] `awake-press.ps1` ≤80 lines with the four P/Invokes and the pinned word contract; `POLARIS_AWAKE_PRESSER` replaces it wholesale; mac `caffeinate -u -t 75` (`-i` when DISPLAY=0); Linux xdotool → xdg-screensaver → log once
+- [ ] `--test start|busy|idle|end|tick` print exactly the pinned one-liners and never spawn or sleep
+- [ ] proven by hand with the drill seams (`POLARIS_AWAKE_HOME=$T POLARIS_AWAKE_PRESSER="touch $T/pressed" TICK=1 IDLE=3 STALE=5 GRACE=2 SPAWN=inline`): busy + fresh fake transcript ⇒ `pressed` within 3 s; all idle ⇒ self-exit after GRACE with `lock/` gone (drill `awake` in W3 automates it)
+
+## T-109 — "lib/handover.sh — polaris next: the seven-verb router off the board, --do promotes under the lock, --brief re-anchors a compacted chat"
+points 5 · risk normal · landed 0c1c6fe (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/handover.sh
+
+### Why
+A session ends with its task, so every next role needs a human kickoff — and a five-pane run needs
+`start` nudges at every wave. `polaris next` reads the board and says, in ONE word on line 1, what
+THIS session does next: `resume <ID>` (my own live lock — never a second task mid-task),
+`integrate` (something landable in review/ and the lease is free, stale or mine — under both landing
+modes, because a self-land tail that queued leaves its task for nobody), `stop` (a run budget hit —
+the conductor's verbatim budget line), `build <ID>` (an unlocked, un-avoided, non-foreign ready
+task, top wsjf), `promote` (backlog work that passes the full ready gate), `wait` (only with work
+genuinely in flight — never with nothing), else `finish`. Notes follow on three-space lines (the
+`triage` shape); `next` writes nothing. `--do` performs the promote reusing what exists — `mutex_on`,
+drift's ready-gate checks, `rules_gate`, claim's disjointness loop (including tasks promoted earlier
+in the same pass), `mv` + `set_fm` + `evt promote` + ONE `board_commit` + `sync_board`, then `drift`
+as audit; a second `--do` says `nothing to promote`. `--brief` prints ≤8 lines (`role:` `task:`
+`worktree:` `last:` `next:` and the role-file pointer) so a compacted chat re-anchors from disk.
+Every rule, note text and marker is pinned in role-handover.md — the hook (T-110), the drill and
+goldens (T-111) and the role prose (T-107) all build against that table, so no verb may drift.
+
+### Acceptance
+- [ ] exactly the eight pinned fns, ≤300 lines, bash 3.2; line 1 always `<verb>[ <ID>]`, every other line `^   `, rc 0 (rc 1 only on a usage error); `next` never writes the board or the state dir
+- [ ] `next_route` implements the seven rows IN ORDER with the pinned note texts; `wait` never with nothing in flight; `stop` only when a build/promote would otherwise fire; foreign = `drain: plan` ∧ task `plan:` set ∧ ≠ `<dir>/plan` (missing `plan` file ⇒ nothing foreign); `avoid` honored; budget = hops ≥ `run_max_tasks` (≠0) or minutes since max(`started`, `prompted-at`) ≥ `run_max_minutes` (≠0)
+- [ ] `--do`: the promotion algorithm exactly as pinned (mutex, re-check inside, `held:` notes for ask scopes and overlaps, ONE `board_commit "chore(board): promote <IDs>"` + EVENTS, `sync_board`, `mutex_off; trap - EXIT`, `cmd_drift` audit); nothing eligible ⇒ `nothing to promote` rc 0; `evt promote "$id" "deps done: <list>" "$pts"`
+- [ ] `--brief`: ≤8 lines, no `|`, markers `role:` `task:` `worktree:` `last:` `next:` + `read ops/roles/<ROLE>.md if this context lost it`
+- [ ] proven in a throwaway kit copy (the verify harness): empty board ⇒ `finish`; one ready task ⇒ `build T-1`; a backlog task with its dep in done/ ⇒ `promote`, then `--do` moves it to ready/ with the promote event and board subject, and a second `--do` prints `nothing to promote`; an overlapping backlog task is held with the note; a lock with a foreign sid on an active task ⇒ `wait`; `run_max_tasks: 1` with `hops`=1 ⇒ `stop` + the budget line
+- [ ] no other fn; nothing in this task touches `kit/ops/polaris` (T-101 wires dispatch/loader/usage)
+
+## T-110 — "handover-hook.sh — the Stop backstop, the compaction anchor and the prompt clock; kit settings entries; readonly-allow learns next"
+points 3 · risk normal · landed 74effdb (2026-09-02) · claimed 2026-09-02
+files touched: kit/.claude/settings.json, kit/ops/hooks/handover-hook.sh, kit/ops/hooks/readonly-allow.sh, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected
+
+### Why
+The loop lives in role prose (every role runs `polaris next` at its boundary); this hook is the
+backstop for a model that stopped anyway, and the re-entry after a compaction. `stop` runs a ladder
+of cheap gates — no state dir (ordinary Q&A pays ~150 ms and is allowed), `handover: off`, an event
+that is not a completion, an event already hopped (string equality of `last-event` and
+`hopped-event`: ONE event, ONE hop), a finished run, the harness cap, our own hop cap, a subagent's
+event in the parent's dir (a conductor is never hopped into BUILDER), a session that stopped to ask
+(`⛔` line or trailing `?`), a `ship-<ID>` job still running (block with "collect it") — and only then
+asks `polaris next`, blocking with the pinned reason for `build`/`integrate`/`promote`/`finish` and
+allowing `wait`/`stop`/`resume`. It NEVER writes the board: `promote` tells the model to run
+`next --do` in its own turn. `anchor` prints `next --brief` after a compaction or resume when the
+state dir exists; `prompt` writes `prompted-at` with zero stdout (UserPromptSubmit stdout enters the
+model's context). The three entries land in `kit/.claude/settings.json` (the same file T-095 gave
+the seven tool names in W1); `readonly-allow.sh` auto-approves `next` and `next --brief` (reads)
+and keeps asking for `--do` (a board write), with two golden lines. Every rung word, reason template
+and file is pinned in role-handover.md; T-111 goldens the ladder in W3.
+
+### Acceptance
+- [ ] exactly the 12 pinned fns; subcommands `stop|anchor|prompt|--test [stop|anchor|prompt]`; ≤220 lines; bash 3.2; reads `session_id` `transcript_path` `cwd` `stop_hook_active` from stdin JSON (`hh_jstr`, the checkout-guard reader); primary per `hh_primary`'s pinned order (cwd segment · cwd with `ops/board` · `$CLAUDE_PROJECT_DIR` · rev-parse); `hh_cfg` reads CONVENTIONS with `sed`, never `ops/polaris`, on the allow path
+- [ ] the ladder in the pinned order with the pinned `--test` words; a block writes `hops` (+1) and `hopped-event` BEFORE emitting; `--test` differs from live ONLY in output shape; `POLARIS_HANDOVER_NEXT` replaces the `next` call; `POLARIS_HANDOVER_CLI` replaces `<primary>/ops/polaris`
+- [ ] `hh_emit` is the ONE emitter: block = `{"decision":"block","reason":"…"}` on stdout, exit 0 — or the shape the harness docs specify at build (verify and record in Notes; exit 2 + stderr as the documented fallback); allow = no output, exit 0; the five reason templates byte-exact with N/<cap>/IDs/PRIMARY substituted
+- [ ] `anchor`: prints `bash <primary>/ops/polaris next --brief` output only when the state dir exists (else nothing); `prompt`: builtins only, writes `prompted-at`, zero stdout, rc 0
+- [ ] `kit/.claude/settings.json`: Stop (30 s) · SessionStart matcher `compact|resume` (10 s) · UserPromptSubmit (5 s) entries with `bash "$CLAUDE_PROJECT_DIR/ops/hooks/handover-hook.sh" <sub>`; the seven tool names and every existing entry untouched; `perm-tools` + `output-style-installed` goldens green
+- [ ] `readonly-allow.sh` `polaris_ok`: `next` bare and `--brief` allow, `--do` asks; golden +2 lines (`allow  bash ops/polaris next` · `ask  bash ops/polaris next --do`); every existing line byte-identical
+- [ ] the four build-time verifications recorded in Notes: `stop_hook_active`/cap semantics, the Stop block JSON shape, subagents-dir mtime freshness, the last-assistant-text shape; a fact that does not hold ⇒ that rung fails OPEN (allow) and Notes say so
+- [ ] never mutates the board; never forks `ops/polaris` before the `block:collect` rung

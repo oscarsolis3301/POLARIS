@@ -250,5 +250,93 @@ next: resume T-098
 read ops/roles/BUILDER.md if this context lost it
 ```
 
+## v1.1 — human-gated review is `wait`; `--brief` names no role file when there is no role (2026-09-02, T-109 · T-112)
+
+Found live by the T-109 lane. v1's decision table put human-gated review work — a `review/` task with
+`risk: high`, or an `ask` scope awaiting approval — in BOTH row 5's condition column (⇒ `wait`, note
+`   review/ awaits a human: <IDs>`) AND row 6's note list under `finish` (`   risk: high awaiting
+approval: <IDs>`). Both cannot be reachable, and the drill spec in § Executable check was written to
+the row-6 reading. **T-109 shipped the row-5 reading.** This section pins WHAT SHIPPED, byte-exact
+against `kit/ops/lib/handover.sh` as landed (`0c1c6fe`, `integrate/2026-09-02`), so T-111's
+`handover-route` golden and the `handover` drill are written to what runs — not to the contradiction.
+No interface any claimed task implements changes: T-110's ladder already maps line 1 `wait` ⇒
+`allow:wait`, and the anchor hook prints the `--brief` command without parsing its output.
+
+### 1. Human-gated review work routes to `wait`, and row 6's approval note is unreachable
+- **Human-gated** is decided in `next_landable`: a `review/` task counts as human-gated when
+  `risk: high` **OR** its `approved:` list is non-empty. Those IDs collect in `NX_REV_HUMAN`; the
+  rest in `NX_REV_OK`. (A recorded `ask` approval keeps the MERGE in human hands on purpose — the
+  approval licensed the write, not the land. This is row 1's v1 condition, unchanged.)
+- Row 1 fires only when `NX_REV_OK` is non-empty and the lane is open. Human-gated tasks ALONE never
+  open row 1 — `next_landable` returns 1.
+- Row 5's condition includes `[ -n "$NX_REV_HUMAN" ]`. So the moment anything human-gated sits in
+  `review/`, row 5 fires as soon as rows 0–4 do not, with `   review/ awaits a human: <IDs>` — IDs
+  space-separated in glob order, printed LAST among row 5's notes (`active` · `lease` · `bg` ·
+  `review`). This does NOT violate "`wait` is never emitted with nothing in flight": a task waiting
+  on a human IS in flight, with the human.
+- Row 6 is therefore reached only with `NX_REV_HUMAN` EMPTY, which makes its third note,
+  `   risk: high awaiting approval: <IDs>`, **UNREACHABLE**. It survives in the source as a guarded
+  dead line (`handover.sh` row-6 block) and is deliberately NOT removed — deleting it is a diff on a
+  landed file for zero behaviour. **T-111 writes no case for it**, and no case may assert `finish`
+  for human-gated review work.
+- Still reachable, unchanged: landable AND human-gated together ⇒ row 1 `integrate`, with
+  `   risk: high, human approves: <IDs>` under it.
+- **Correction to § Executable check.** The drill line "`risk: high` review alone ⇒ `finish` + the
+  approve note" is VOID. It reads: **`risk: high` review alone ⇒ `wait` + `   review/ awaits a
+  human: <ID>`**. Verified on a hermetic fixture (one `risk: high` task in `review/`, nothing else
+  on the board, no lock, no lease):
+```
+$ bash ops/polaris next
+wait
+   review/ awaits a human: T-H1
+```
+
+### 2. `--brief` omits the pointer line at `role: none` (T-112)
+- Shipped: `--brief`'s last line is `read ops/roles/<ROLE>.md if this context lost it`, where ROLE
+  falls back to the `role:` line whenever line 1 is not `resume`/`build`/`integrate`/`promote`. With
+  no lock and no lease that value is `none`, so a session with no role literally prints
+  `read ops/roles/none.md if this context lost it` — a path that does not exist. T-109 implemented
+  v1 literally, which was correct; v1 was wrong.
+- **T-112** (`kit/ops/lib/handover.sh`, `depends_on: [T-109]`, 1 pt) changes exactly one line — the
+  tail of `next_brief`, byte-exact:
+```
+  case "${line1%% *}" in
+    resume|build)      rfile=BUILDER;;
+    integrate|promote) rfile=INTEGRATOR;;
+    *)                 rfile="$role";;
+  esac
+  [ "$rfile" = none ] || printf 'read ops/roles/%s.md if this context lost it\n' "$rfile"
+```
+- **Amended `--brief` shape.** Still ≤8 lines, still no `|` anywhere, all other markers verbatim and
+  unchanged. The pointer line is present for every ROLE that names a real file and ABSENT exactly
+  when `role: none` (i.e. no live lock on an active task and the lease is not mine — line 1 is then
+  `wait`, `stop` or `finish`). A `role: none` brief has no `task:` and no `worktree:` either, so it
+  is at most 5 lines: `role:` · up to three `last:` · `next:`.
+```
+$ bash ops/polaris next --brief        # no lock, no lease, nothing on the board
+role: none
+next: finish
+```
+- T-112 adds no function and no heading: the EIGHT-fn census of `lib/handover.sh` and the § api-kit
+  rows stand exactly as v1 wrote them.
+- **T-111 stays INDEPENDENT of T-112** (no dep either way; disjoint `files_owned`). The drill's
+  `--brief` assertion runs with a live lock — it asserts `task:` is present, hence `role: BUILDER` —
+  so it never reaches `role: none`. **T-111 MUST NOT** assert the pointer line's presence, nor a
+  fixed line count, for a `role: none` brief in either golden; that is the only thing that would
+  couple the two, and it would go red whichever order they land in.
+
+### 3. The settings entries are JSON — assert the ESCAPED bytes, never the shell string
+- v1's § Interface — `kit/ops/hooks/handover-hook.sh` writes the three entries as the SHELL command
+  (`bash "$CLAUDE_PROJECT_DIR/ops/hooks/handover-hook.sh" stop`), which is what the harness runs and
+  stays correct as prose. What lands in `kit/.claude/settings.json` is that string JSON-encoded:
+  `"command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/handover-hook.sh\" stop"` — exactly as the
+  pre-existing `ownership-guard.sh\"` entry does it.
+- So any `verify:` line or golden that greps `settings.json` for these entries MUST match the
+  escaped bytes: `grep -q 'handover-hook.sh\\" stop' kit/.claude/settings.json` (`\\` = a literal
+  backslash). A grep for the un-escaped `handover-hook.sh" stop` can never match a valid file, and
+  is mutually exclusive with the `json.load` line sitting next to it. T-110's three verify lines
+  were written against the shell string and were corrected on the board (2026-09-02).
+
 ## Changelog
 - v1 2026-09-01: created for T-096, T-097, T-098, T-100, T-101, T-103, T-104, T-107, T-109, T-110, T-111 (plan: cant-eat-itself, 6.2.0)
+- v1.1 2026-09-02: pinned what T-109 SHIPPED where v1 contradicted itself — human-gated `review/` routes to row 5 `wait` (row 6's approval note is unreachable; the drill line saying `finish` is void), `--brief` drops its pointer line at `role: none` (T-112), and the settings-entry assertions must match the JSON-escaped quote (T-110). No claimed task's interface changes.

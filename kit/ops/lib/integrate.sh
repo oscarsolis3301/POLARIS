@@ -21,6 +21,13 @@ cmd_audit() { # Integrator: ownership check of a review branch, from anywhere
   local tf; tf="$(task_file "$id")" || die "no task file for $id"
   check_ownership "$tf" "feat/$id"
   check_rules "feat/$id" "$id"     # ID threaded: an `ask` rule cleared by <ID>'s approved: list
+  # ops/contracts/visual-check.md: NAME the Builder's captures so the Integrator opens them before
+  # landing — a green suite shipped a broken page once. Read-only, one line each; no shots ⇒ nothing.
+  local shot
+  for shot in "$PRIMARY/.polaris/shots/$id"-*.png; do
+    [ -e "$shot" ] || continue
+    note "capture: $shot"
+  done
 }
 
 cmd_run_verify() { # Integrator: re-run a task's verify commands in CWD (e.g. on integrate branch)
@@ -97,12 +104,23 @@ EOF
   board_changed_touch   # freshness beacon for the brain (ops/contracts/brain.md) — best-effort
   brain_refresh_if_present  # v1.1: done mirrors seal — refresh AFTER the touch so the wave close
                             # (land → seal → run-verify → done) ends fresh; ⚠ note on failure, never a red done
-  local wt; wt="$(wt_path "$id")"
-  [ -d "$wt" ] && git -C "$PRIMARY" worktree remove --force "$wt" 2>/dev/null || true
+  # THE removal goes through wt_remove (ops/contracts/worktree-liveness.md, the `done` row) — this
+  # is the line that killed ARC-428 back when it forced the removal. clean+idle ⇒ removed,
+  # rc 0 · dirty+idle ⇒ archived to .polaris/wt-archive/<ID>-<epoch>, rc 2 · LIVE ⇒ LEFT, rc 1,
+  # whatever the dirt: a session is typing in there and nothing of ours is worth its work.
+  local wtrc=0
+  wt_remove "$id" done || wtrc=$?
   # LOCAL tip before the branch dies — a squash-landed branch is never an ancestor of $BASE,
   # so remote cleanup proves the remote is ours by TIP EQUALITY with this SHA instead.
   local ltip; ltip="$(git -C "$PRIMARY" rev-parse -q --verify "refs/heads/feat/$id" 2>/dev/null || true)"
-  git -C "$PRIMARY" branch -q -D "feat/$id" 2>/dev/null || true
+  # the local branch dies ONLY after a removal (rc 0) or an archive (rc 2). A LEFT worktree keeps
+  # it: git cannot delete a checked-out branch anyway, and the builder standing in it may still
+  # need it. sweep --fix finishes both once the beat goes quiet.
+  if [ "$wtrc" -eq 1 ]; then
+    note "branch feat/$id kept — checked out in a live worktree; sweep --fix finishes the cleanup once idle"
+  else
+    git -C "$PRIMARY" branch -q -D "feat/$id" 2>/dev/null || true
+  fi
   # handoff pushed feat/<ID> to origin; a landed task must not leave a dead branch there —
   # that is how a sprint turns into a wall of stale branches on the host. Delete only when the
   # remote tip == the local tip we just landed from (squash landings), or is provably in $BASE
@@ -122,7 +140,11 @@ EOF
     fi
   fi
   lock_drop "$id"; [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$id"
-  say "$id → done/ · lock, worktree, branch$remote_note cleaned$( [ $applied -eq 1 ] && echo ' · map_delta applied')"
+  # the closing line tells the truth about the two outcomes — under landing: self a builder's own
+  # worktree is live by definition, so "cleaned" would be a lie on the commonest path of all.
+  local swept="lock, worktree, branch$remote_note cleaned"
+  [ "$wtrc" -eq 1 ] && swept="lock cleaned · live worktree + branch feat/$id left for sweep --fix" || true
+  say "$id → done/ · $swept$( [ $applied -eq 1 ] && echo ' · map_delta applied')"
 }
 
 # ------------------------------------------------- clean history (land · seal)
@@ -292,6 +314,9 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   fi
   git commit -q -F "$msgf" || { rm -f "$msgf"; git reset -q --hard; int_off; die "commit failed — squash unwound, $br clean"; }
   rm -f "$msgf"
+  # re-stamp the lease after the land (worktree-liveness.md § steals): a drain of many tasks, or a
+  # slow suite around this one, must never let an ALIVE integrator look abandoned to the steal.
+  [ -n "${INT_HELD:-}" ] && date +%s > "$LOCKS/.int-lease/epoch" 2>/dev/null || true
   [ -n "$land_had" ] || int_off        # our lane work is done; a nested (express) hold stays held
   say "landed $id on $br — $(git log -1 --format=%s)"
   note "goes red on the suite? unwind: git reset --hard HEAD~1   ·   bounce: polaris kickback $id -m \"<why>\""
@@ -362,6 +387,9 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
     if ( cd "$PRIMARY" && bash -c "$c" ) >"$out" 2>&1; then
+      # the suite is the longest thing the lane ever does — re-stamp after EACH command so a
+      # 13-minute test run stays visibly alive to the pid-aware steal (worktree-liveness.md)
+      [ -n "${INT_HELD:-}" ] && date +%s > "$LOCKS/.int-lease/epoch" 2>/dev/null || true
       say "$k — green"
     else
       printf '⛔ %s — RED: %s\n' "$k" "$c" >&2
@@ -499,6 +527,9 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
     int_off
     die "merge conflict sealing integrate/$date into $BASE — resolve by hand; seal never auto-resolves"
   fi
+  # the merge is behind us and the pushes below are the network-slow stretch — re-stamp so the
+  # lease reads fresh across them (worktree-liveness.md § steals)
+  [ -n "${INT_HELD:-}" ] && date +%s > "$LOCKS/.int-lease/epoch" 2>/dev/null || true
   local old7="" new7=""
   if [ -n "$oldtag" ]; then
     old7="$(git rev-parse --short "$oldtag")"
