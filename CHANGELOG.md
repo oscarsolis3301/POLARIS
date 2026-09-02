@@ -4,6 +4,116 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.2.0 — 2026-09-02
+
+**Five sessions on one machine, and any one of them could still delete another's work.**
+
+The last release made isolation enforceable — guards on the shared checkout, a disjointness gate at
+claim, a builder that lands its own work. What it never stopped was a session destroying the ground
+another session was standing on. A sibling's seal fan-out ran `done`, which
+`git worktree remove --force`d a worktree somebody was still typing in, and everything uncommitted
+in it died. That is not a merge conflict, it is data loss, and nothing could see it coming because
+"is anyone in there?" was a question the system never asked. 6.2.0 gives a worktree a pulse and
+makes every remover read it, teaches the guard the five other verbs that destroy, and gives a
+background job an owner. Then, with the machinery open, it closes the three things that still made a
+run stop and wait for a person: the harness's own tools kept asking permission, the machine went to
+sleep mid-run, and every change of role needed somebody to open a new chat. **BREAKING: none.**
+
+| | before | after |
+|---|---|---|
+| removing a task worktree | `git worktree remove --force` — whatever was uncommitted in it is gone | `wt_remove` reads a beat file: live ⇒ LEFT with a note · dirty ⇒ archived to `.polaris/wt-archive/` · `--force` gone from lib code |
+| `worktree remove` · `git clean` · `push --delete` · `rm -rf .polaris` · `pkill` / `taskkill /IM` | allowed, from anywhere | denied by `checkout-guard.sh`, each with one line naming the safe command instead |
+| five sessions each running `bg run qa` | the same name silently rotated another session's live job, and `--force` killed by a reusable pid | a live job whose `cwd` is not yours is refused, `--force` included; old logs are archived, never deleted |
+| `EnterWorktree`, `Task`, `TodoWrite` and four more under auto mode | a permission prompt, every session | pre-authorised by name in the kit's own settings; the two human gates stay prompts forever |
+| the machine, mid-run | sleeps, and the run sleeps with it | ONE keep-awake owner per machine — awake while any session is busy, gone once all of them are idle |
+| a change you can only judge by looking | "did anyone actually look?", answered by hope | a capture step in `pack`, a `handoff` that refuses without a fresh screenshot, and a `saw:` line in the report |
+| the end of a task | the chat ends; a person opens a new one for the next role | `polaris next` reads the board and names the next role, and the same chat carries on into it |
+| a plan you just got approved | a report, ending in "open a new chat and say start" | the kickoff — the approval is the go for the whole run, in this chat |
+
+- **Nothing removes a worktree it cannot prove dead.** Every task worktree now carries a beat file in
+  git's own per-worktree directory, touched by `claim`, `resume`, `verify` and `handoff`, by the CLI
+  preamble on any command run from inside one, and by two hooks — so a session that is merely typing
+  still counts as alive. One primitive, `wt_remove <ID> <caller>`, is the only thing in the kit that
+  removes a worktree, and its answer is a table: clean and idle ⇒ removed · dirty ⇒ **archived** to
+  `.polaris/wt-archive/<ID>-<epoch>` · live ⇒ **left alone**, with a note naming the next step.
+  `--force` is gone from `kit/ops/lib/*.sh` for good, nothing in the kit ever deletes an archive, and
+  `uninstall` refuses while one is non-empty. `resume` and `release` die on a live worktree with a
+  one-line takeover recipe instead of guessing. A session's `done` on its own lane lands on
+  clean-and-live and leaves it standing: **nothing removes the ground you are standing on**, and an
+  idle `sweep --fix` finishes the cleanup later. The lease and the board mutex now check a pid before
+  stealing, `sweep` reports whether the owning session is alive or gone, and a lock younger than two
+  minutes with no task behind it is left alone — a claim may simply be mid-flight.
+- **The guard learns the other five destroyers.** `checkout-guard.sh` gains one function and three
+  pinned refusals. Removing, pruning or moving a worktree, a recursive `rm` or `Remove-Item` that
+  touches `.polaris`, and every kill-by-name (`pkill`, `killall`, `taskkill /IM`,
+  `Stop-Process -Name`, `kill -9 -1`, `npx kill-port`, `fuser -k`) are denied **everywhere** — there
+  is no checkout where those are safe, including the worktree you are sitting in, whose removal would
+  take the script that is running with it. `git clean` and a remote-branch delete are denied in the
+  shared primary. Still allowed, deliberately: `kill <pid>`, `taskkill /PID`, `Stop-Process -Id`,
+  `rm -rf node_modules`, `rm -f` a single file, `git clean -n`, `git push -u`. Deny stays narrow,
+  silence stays the default, and the common path still forks nothing.
+- **A background job belongs to the folder that started it.** The job's `cwd` is the ownership key: a
+  live job of the same name started from somewhere else is refused, with or without `--force`, and
+  the message names the fix (`bg run <name>-<ID>`). Rotating a job no longer deletes the previous
+  run — the old directory moves into `.polaris/bg/.archive/<name>-<epoch>`, invisible to every
+  reader, pruned by `sweep --fix` after a day. Job directories also record the session that started
+  them.
+- **Seven of the harness's own tools are pre-authorised.** `EnterWorktree`, `ExitWorktree`,
+  `Workflow`, `Task`, `Agent`, `TodoWrite` and `SendMessage` ship as bare tool names in the kit's
+  settings and in the machine-arming list, riding the set-if-absent merges that were already there —
+  no code change, and they arrive on the next update. Entering your worktree stops being a prompt.
+  `ExitPlanMode` and `AskUserQuestion` are deliberately **absent and stay that way**: a plan approval
+  and a direct question are the two clicks POLARIS must never take for you. The read-allow hook is
+  not widened — its contract is that it only ever allows.
+- **One keep-awake daemon per machine.** Four machine-level hooks merge into `~/.claude/settings.json`
+  and keep a small registry under `~/.claude/polaris/awake/`. While any session anywhere is busy — or
+  any registered repo has a background job still running — the daemon resets the system idle timer
+  every tick and, on an unlocked station where nobody has typed for a minute, taps F15 so the display
+  stays up too. It never presses while a human is typing, never touches a locked screen, and exits by
+  itself once every session and repo has gone quiet; a second one cannot start, and a dead one is
+  taken over. `ops/polaris awake status|start|stop|disable|enable|install` drives it, `doctor` says
+  when it is unarmed or disabled, and `awake stop` buys an hour of silence. There is no CONVENTIONS
+  key for it on purpose — a repo setting cannot gate machine-level hooks. Lid-close, the power button
+  and a critical battery stay out of reach of any user-mode program; `ops/PROTOCOL.md` says so
+  plainly.
+- **The capture step, for work you can only judge by looking.** Four new keys — `shot:` (how to take
+  a screenshot), `visual:` (which paths are visual), `port_base:` (each task gets its own port, so
+  parallel builders never fight over one dev server) and `serve:` (how to start this worktree's app)
+  — turn "SEEING YOUR WORK", pasted by hand on every visual task, into part of the Builder contract.
+  `pack` prints a SEE YOUR WORK section naming the exact commands and where the image goes;
+  `handoff` refuses when a task changed a visual path and there is no capture newer than the branch
+  base, while `verify` only warns; and the prose half stays human — the report carries a `saw:` line
+  and the Integrator opens the picture. `ops/VISUAL.md` explains how a repo plugs in its own tool. A
+  repo that sets no `visual:` key sees none of it.
+- **`polaris next` — one chat, role after role.** A session used to end with its task, so every next
+  role needed a human kickoff. `next` reads the board and answers in one verb — `resume`, `build`,
+  `integrate`, `promote`, `wait`, `stop` or `finish` — with the reasoning underneath; `--do` promotes
+  everything that passes the full ready gate under the board lock; `--brief` re-anchors a chat that
+  lost its context. Three hooks carry it: a `Stop` hook that hands a finished session into the next
+  role once per completion event (never a subagent, never a session that stopped to ask you
+  something, never past the run's budget), a `SessionStart` hook that re-enters a compacted chat from
+  the board, and a stamp on every prompt. Invariant 5 is reworded to match: one task and one role per
+  **context**, hopping only at a boundary the board can prove. Compaction is the context reset; the
+  anchor hook is the re-entry.
+- **An approved plan is a kickoff, not a report.** New dispatch row: a plan you wrote and just got
+  approved means you run it, in the same chat, starting now. Closing with "open a new chat and say
+  start" is exactly the failure that row exists to end. The rule about ending on one concrete next
+  step now says the rest out loud too — a step this chat could take itself, it takes before closing.
+- **New defaults, arriving on `update` without touching a single repo's config.** `wt_live_minutes`
+  defaults to 15 (how long after its last beat a worktree counts as live) and `handover` defaults to
+  `auto` (a session hops into the role `next` names). Both live in kit code, by the pattern the
+  autonomy release established, because `update` must never rewrite a repo's own CONVENTIONS.md. The
+  opt-outs are one line each: `handover: off` restores one task per session, `wt_live_minutes: 0`
+  makes every worktree removable the moment it goes quiet, and `ops/polaris awake disable` silences
+  the keep-awake owner without unarming the machine. **NEW at update time:** the keep-awake hooks
+  reach every armed machine on the next `polaris update` — they are machine-level, so updating one
+  repo arms the whole box.
+- Four contracts land with this release — `worktree-liveness.md`, `keep-awake.md`, `visual-check.md`
+  and `role-handover.md` — plus a new section on `shared-checkout.md` (the added deny classes) and on
+  `bg-jobs.md` (cwd ownership, archived logs). Three new drills — `wtreap`, `awake` and `handover` —
+  bring the labeled suite to 34, and five new goldens (`perm-tools`, `pack-visual`, `awake-hook`,
+  `handover-route`, `handover-stop`) bring `check` to 24/24.
+
 ## 6.1.0 — 2026-08-23
 
 **Every piece of parallel isolation was already here except the part that enforces it.**
