@@ -60,6 +60,7 @@ Step 1 already read every manifest. Use it:
 | `base:` | `git symbolic-ref --short refs/remotes/origin/HEAD` (strip `origin/`), else the current branch |
 | origin remote? | `git remote` |
 | `publish:` | `git remote get-url origin` matches `bitbucket.org` → suggest `pr` (a protected `<base>` rejects direct pushes); else default `direct` |
+| `shot:` `visual:` `port_base:` `serve:` | `tools/shot*.py` · screenshot scripts · playwright/puppeteer deps ⇒ suggest `shot:`; the app's page/component dirs ⇒ `visual:` globs; the dev-server script ⇒ `serve:` + a free `port_base:`; on Windows write python, never python3 |
 | candidate danger zones | what the survey saw: `.env*`, migrations dirs, prod config, lockfiles, generated/vendored dirs |
 | `stale_hours:` `reports:` `uat:` `notify:` | defaults; EVOLVE tunes them later from real data |
 
@@ -89,6 +90,10 @@ IN THEIR VOICE — under `voice: standard` you MUST translate, never make a huma
    Multi-select, **pre-ticked with the candidates from 2b**, plus a free-text escape. Each answer
    becomes an armed `path` line in `ops/RULES.tsv` — machine-enforced, not prose. If they name
    forbidden *content* (secret patterns, banned APIs), that is a `content` rule.
+
+**Derived a `shot:` command?** Add its command prefix to `.claude/settings.json` `permissions.allow`
+as one more line — `readonly-allow.sh` never auto-approves `python …`, so without it every capture
+stops for a click.
 
 Everything else INIT used to ask — suite duration, DoD extras, capacity, cadence, past scars — is
 either derivable, defaultable, or EVOLVE's job once there is real data. Do not ask it. A human who
@@ -154,6 +159,14 @@ qa_scout: auto              # auto (spawn the runtime QA scout ONLY when uat: is
                             # broken flows genuinely evade the suite). Default: auto.
 runnable: <globs or omit>   # optional: this repo's runnable surface (app entry points, CLI, endpoints).
                             # Unset ⇒ qa_scout: auto resolves to off.
+shot: <cmd or omit>         # optional: capture one screenshot of a changed surface. {ID} → the task id,
+                            # {PORT} → its port; output .polaris/shots/<ID>-<name>.png. On Windows the
+                            # command says python, never python3.
+visual: <globs or omit>     # optional: the surface a human LOOKS at (files_owned-style patterns).
+                            # Unset ⇒ no capture step at all: pack prints nothing, handoff gates nothing.
+port_base: <number or omit> # optional: per-task port = port_base + (numeric tail of ID mod 100), so
+                            # parallel builders never collide. Unset ⇒ {PORT} stays literal.
+serve: <cmd or omit>        # optional: how to start THIS worktree's server on {PORT} for the capture.
 test_fast: <cmd or omit>    # optional: the BUILDER's pre-handoff gate when the full test: suite is slow.
                             # test: still runs at the wave gate, in qa, and in CI — no gate disappears.
                             # Set this the moment test: approaches your harness's tool timeout: a suite
