@@ -125,3 +125,5 @@ not installed code — they are written normally, by the board scripts and by th
 ## Deltas
 
 - "lib/workspace.sh gains beat_touch/beat_age/beat_live (the worktree liveness signal, $GCD/worktrees/<ID>/polaris-beat) and wt_remove — the ONLY worktree-removal primitive (rc 0 removed / 1 left / 2 archived to .polaris/wt-archive/, never --force)"  (T-092, 2026-09-02)
+
+- "kit/ops/VISUAL.md — the SEEING YOUR WORK doctrine ships in the kit (installed as ops/VISUAL.md by T-103); KEYS.tsv gains wt_live_minutes shot visual port_base serve handover; PROTOCOL gains  (T-096, 2026-09-02)
