@@ -466,6 +466,33 @@ permission-rules.md § role prose — copy them, do not paraphrase.
 - [ ] `kit/CLAUDE.md` byte budget respected: the file is injected into every subagent — the two additions total ≤ 6 lines
 - [ ] `python kit/ops/pack.py --allow-dirty` green; `bash kit/ops/polaris doctor --selftest --only claudemd,hint` green (foreground, ≥600000 ms timeout)
 
+## T-108 — "Release 6.2.0 — parallel work that can't eat itself ships to every POLARIS repo"
+points 2 · risk normal · landed 003838f (2026-09-02) · claimed 2026-09-02
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+The sprint's last task: bump `kit/ops/VERSION` to 6.2.0 and write the CHANGELOG entry in the 6.1.0
+style — a before/after table (worktree removal · auto-mode prompts · machine sleep · visual proof ·
+guard verbs · bg ownership · role handover · approval is the kickoff), the two new defaults that
+live in code (`wt_live_minutes` 15, `handover` auto), the awake `disabled` opt-out, the three drills
+(`wtreap` `awake` `handover`) and the five goldens (`perm-tools` `pack-visual` `awake-hook`
+`handover-route` `handover-stop`); BREAKING: none; NEW: the awake hooks reach every armed machine on
+`update`. The bump is the WHOLE release (CONVENTIONS § Release ritual, CI's one-version job):
+after this task lands and the board is drained, the conductor tags `v6.2.0`, waits for the
+published zip, runs `python kit/ops/pack.py --dogfood` (the ONE pre-announced classifier click when
+it rewrites `~/.claude/settings.json`), re-pins `ops/tests/cli-help.expected` (it runs the INSTALLED
+`ops/polaris`, which only now knows `awake` and `next` — the golden moves here and nowhere earlier),
+commits the refreshed `ops/`, and confirms `bash ops/polaris version` reads 6.2.0. This task's own
+verify proves the bump and the entry; the installed `ops/VERSION` must still read 6.1.0 at handoff —
+dogfood is the finish ritual's, never a build step.
+
+### Acceptance
+- [ ] `kit/ops/VERSION` `version: 6.2.0`; nothing else in the file changes
+- [ ] `CHANGELOG.md` `## 6.2.0 — <date>` above 6.1.0, in the 6.1.0 style, naming every item above; no other version quoted in the entry except the single "since 6.1.0" reference; docs elsewhere quote no version (CI's one-version sweep)
+- [ ] `ops/tests/cli-help.expected` untouched at handoff (it is re-pinned by the release tail after dogfood — the task owns it so the re-pin commit is inside a task's ownership); at the tail: `bash ops/polaris check --only cli-help` green, the diff against `main` shows ONLY the `awake` and `next` usage blocks added
+- [ ] installed `ops/VERSION` still 6.1.0 at handoff; `polaris-v5.zip` still STALE — by design until the tail
+- [ ] release tail (conductor + human, after finish): `git tag v6.2.0 && git push --tags` → zip published → `python kit/ops/pack.py --dogfood` (one click) → re-pin cli-help → commit `ops/` → `bash ops/polaris version` = 6.2.0 → the keep-awake manual checklist from a fresh chat → product repo `polaris update` + keys (owner names the path)
+
 ## T-109 — "lib/handover.sh — polaris next: the seven-verb router off the board, --do promotes under the lock, --brief re-anchors a compacted chat"
 points 5 · risk normal · landed 0c1c6fe (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/handover.sh
@@ -667,7 +694,7 @@ green drill is its own risk.
 - [ ] Every other claim→handoff→done site in `remote.sh` reviewed; any left unchanged, say why in one line in Notes
 
 ## T-114 — "wt_remove must never delete the worktree holding the running script or your cwd — beat age must not be able to override it"
-points 2 · risk normal · landed 41ba554 (2026-09-02) · claimed 2026-09-02
+points 2 · risk normal · landed 41ba554 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/workspace.sh
 
 ### Why
@@ -732,7 +759,7 @@ can run in parallel.
 - [ ] No new top-level function; `bash -n` clean (verify 5, 1)
 
 ## T-115 — "The seal fan-out must skip its own task — a lane never runs done on the task it is landing"
-points 1 · risk normal · landed f38871a (2026-09-02) · claimed 2026-09-02
+points 1 · risk normal · landed f38871a (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/builder.sh
 
 ### Why
