@@ -402,3 +402,5 @@
 {"ts":1788389540,"ev":"done","id":"T-114","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1788390144,"ev":"done","id":"T-115","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1788390431,"ev":"claim","id":"T-108","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1788391231,"ev":"handoff","id":"T-108","who":"Owner@DESKTOP","note":""}
+{"ts":1788391232,"ev":"all-review","id":"T-108","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
