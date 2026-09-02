@@ -217,6 +217,33 @@ authority on where code lives and the loader's shape.
 The `_match|_rules|_guard` guard path stays EXACTLY `core ownership` — the write-guard's latency
 budget (v2's whole point) never pays for job plumbing. Both lists stay LITERAL, never a glob.
 
+## v5 — lib/awake.sh and lib/handover.sh join the census (2026-09-01, plan cant-eat-itself, 6.2.0)
+
+Two new modules (T-101 owns the loader and `lib/awake.sh`; T-109 owns `lib/handover.sh`):
+- `kit/ops/lib/awake.sh` (≤150 lines): `awake_home` · `awake_conf` · `awake_ensure` · `awake_status_line` ·
+  `cmd_awake` — semantics in `ops/contracts/keep-awake.md`.
+- `kit/ops/lib/handover.sh` (≤300 lines): `cmd_next` · `next_dir` · `next_route` · `next_landable` ·
+  `next_claimable` · `next_promote` · `next_budget` · `next_brief` — semantics in `ops/contracts/role-handover.md`.
+THIS contract stays the authority on where code lives and the loader's shape.
+
+**The loader, v5:** the FULL-load `_mods` list gains `awake` immediately after `bg`, then `handover`
+immediately after `awake` (`… admin bg awake handover selftest/spine …`). The `_match|_rules|_guard` guard
+path stays EXACTLY `core ownership`. Both lists stay LITERAL, never a glob.
+
+**The entry preamble (T-101):** the worktree beat touch (worktree-liveness.md § beat writers) is ONE
+builtins-only `case` placed BELOW the `EVENTS=` line and ABOVE the dispatch `case` — after the loader, so it
+never runs on the guard path, and before any command, so every CLI call from inside a worktree beats.
+`awake_ensure || true` calls sit INSIDE the dispatch arms for `claim`, `status`, `doctor`, `handoff` and
+`bg run` (bg's arm tests `"$2" = run`), never above the dispatch. `startup-budget` golden unchanged.
+
+**Hooks are not modules** but are counted here so the census stays complete: `kit/ops/hooks/awake-hook.sh`
+(≤320) and `kit/ops/hooks/handover-hook.sh` (≤220) are standalone scripts that never source `lib/`
+(hook latency: the ownership-guard lesson). `kit/ops/hooks/awake-press.ps1` (≤80) is not indexed.
+
+**Budgets, binding:** entry `kit/ops/polaris` < 500 lines (today 332; this sprint adds ≈20) · awake.sh ≤ 150 ·
+handover.sh ≤ 300 · workspace.sh ≤ 350 stays (T-092 adds ≈90 to today's ≈210) · new fns land in the module
+this census names, never in the entry script.
+
 ## Changelog
 - v4 2026-08-03: bg.sh joins the census (≤300 lines, fn census in bg-jobs.md); loader full-load
   list gains `bg` after `admin` (guard path unchanged).
@@ -230,3 +257,4 @@ budget (v2's whole point) never pays for job plumbing. Both lists stay LITERAL, 
 - v1.1 2026-07-21: grand-total band [3750, 3985] → [3750, 4120] — v1 under-counted T-040's
   deliberate `--parallel` code (~150 measured lines) + 10 module headers; band re-derived itemized
   (T-042 builder's measurement: 3998 on main pre-T-042). Entry <500 and per-module ≤1,200 UNCHANGED.
+- v5 2026-09-01: lib/awake.sh (5 fns, ≤150) and lib/handover.sh (8 fns, ≤300) join the census; loader `+awake +handover` after `bg`; entry preamble beat is builtins-only below `EVENTS=` (T-101, T-109; plan cant-eat-itself).

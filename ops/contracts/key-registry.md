@@ -122,5 +122,64 @@ arrive. Repair, precisely scoped:
 - Hard gates unchanged (hands-free-knobs.md v1 list). No new dependencies. bash 3.2 compatible
   (no `case` inside `$(...)`); Python for JSON only, stdlib only.
 
+## 7. Cross-wave surface registry, sprint 12 (2026-09-01, plan cant-eat-itself, 6.2.0) — ONE owner per wave
+§5's rule, restated with what the index actually records (Learned log, sprint 11): `ops/tests/api-kit.expected`
+indexes every **fn at ANY nesting depth** (index.py: `^\s*name\s*\(\)\s*\{` — indented fns count), every
+**markdown heading levels 1-4** (`^#{1,4}\s`, so `###`/`####` lines count) INCLUDING any `#`-leading line
+inside a fenced block in a `.md`, every **python `def` AND module-level constant** (`const` rows), and every
+**`kit/ops/KEYS.tsv` row**. Rows are sorted by path, then by name within a file. (§5 said "top-level fn and
+markdown heading" — that was the under-count that cost T-088 a two-line delta.)
+
+**Owners.** W1 **T-096** · W2 **T-101** · W3 **T-104** · W4 none (T-108 owns `cli-help.expected` only — it
+runs the INSTALLED `ops/polaris`, so it moves only after dogfood). Every other task is **surface-frozen**:
+no new fn at any depth, no new `#` line (fenced included), no new KEYS row, no new python `def`/constant;
+bold paragraphs and list items only in prose files.
+
+**The owner's recipe** (write the wave's WHOLE union up front, from the names pinned in the contracts,
+before your own code is finished — never from a sibling's diff):
+1. add the rows below IN PLACE in `find --api` order (path, then name);
+2. verify: `test "$(wc -l < ops/tests/api-kit.expected | tr -d ' ')" = <n>` and the completeness check
+   `POLARIS_ROOT="$PWD" python kit/ops/index.py find --api 'kit/*' | grep -v '^kit/\.claude/skills/i-have-adhd/' | diff - ops/tests/api-kit.expected | grep -c '^<'`
+   = `0` — every row in THIS tree is recorded; `>` rows are siblings' deltas until the wave lands;
+3. NEVER `check --only api-kit` from a worktree (`cmd_check` is primary-anchored — it passes vacuously), and
+   note that `bash ops/polaris find --api` is ALSO primary-anchored — so the owner's proof is step 2 (the
+   `POLARIS_ROOT` form reads the worktree), and the integrator's proof is `check` on the primary after the
+   wave lands;
+4. the ROW LIST wins over the count: a name a contract pinned that the index records differently (e.g. a
+   fn the builder had to nest) is reported in the handoff Notes with the corrected count — never silently
+   re-pinned; the §5 mid-wave recording recipe stands if an owner deadlocks (shared-checkout v2 §5).
+
+**W1 union — 19 rows (562 → 581), T-096 writes:**
+`kit/ops/KEYS.tsv	key	handover` · `…	port_base` · `…	serve` · `…	shot` · `…	visual` · `…	wt_live_minutes` ·
+`kit/ops/PROTOCOL.md	heading	AWAKE — one keep-awake daemon per machine` ·
+`kit/ops/VISUAL.md	heading	Adding it to a repo` · `…	Doctrine` · `…	SEEING YOUR WORK — the capture is the proof` ·
+`…	The keys (ops/CONVENTIONS.md)` · `…	The rule` · `…	What handoff checks` · `…	What pack prints` ·
+`kit/ops/hooks/checkout-guard.sh	fn	mutating_other` ·
+`kit/ops/lib/workspace.sh	fn	beat_age` · `…	beat_live` · `…	beat_touch` · `…	wt_remove`.
+Surface-frozen in W1: T-092 (only those four), T-093 (only `mutating_other`), T-094, T-095, T-097.
+
+**W2 union — 44 rows (581 → 625), T-101 writes:**
+`kit/ops/hooks/awake-hook.sh	fn	<19 names>` (keep-awake.md fn list, `jstr` included) ·
+`kit/ops/hooks/handover-hook.sh	fn	<12 hh_* names>` (role-handover.md) ·
+`kit/ops/lib/awake.sh	fn	awake_conf` · `…	awake_ensure` · `…	awake_home` · `…	awake_status_line` · `…	cmd_awake` ·
+`kit/ops/lib/handover.sh	fn	cmd_next` · `…	next_brief` · `…	next_budget` · `…	next_claimable` · `…	next_dir` ·
+`…	next_landable` · `…	next_promote` · `…	next_route`.
+Surface-frozen in W2: T-098, T-099, T-100, T-102 (only the 19), T-109 (only the 8), T-110 (only the 12; the
+kit `settings.json` and `readonly-allow.sh` edits add no fn).
+
+**W3 union — 4 rows (625 → 629), T-104 writes:**
+`kit/ops/bootstrap.py	fn	merge_awake_hooks` · `kit/ops/lib/selftest/board.sh	fn	drill_handover` ·
+`kit/ops/lib/selftest/history.sh	fn	drill_wtreap` · `kit/ops/lib/selftest/policy.sh	fn	drill_awake`.
+Surface-frozen in W3: T-103 (only `merge_awake_hooks`; no new module-level constant in bootstrap.py), T-105,
+T-106, T-107 (the `^#` line set of every role file, `kit/CLAUDE.md` and `SKILL.md` byte-identical to `main`),
+T-111 (only `drill_handover`).
+
+**W4:** T-108 changes no indexed surface (VERSION, CHANGELOG.md at the repo root — not under `kit/`).
+
+**KEYS rows are data, but they are ALSO index rows**: `keys-drift` ties every `cfg` read to a row, so the six
+rows land in W1 (T-096) before the `cfg` reads that need them land in W2 — a `cfg` read without its row would
+red `keys-drift`; a row without its read is inert. Both directions are safe in this order.
+
 ## Changelog
 - v1 2026-08-03: created for T-074/T-076/T-077/T-078/T-080 (POLARIS 6.0.0 "autonomy by default").
+- §7 2026-09-01: sprint-12 api-kit owners W1 T-096 · W2 T-101 · W3 T-104 with the exact row unions (19/44/4) and the index-depth correction (plan cant-eat-itself).

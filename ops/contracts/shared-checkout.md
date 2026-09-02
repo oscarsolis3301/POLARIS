@@ -330,6 +330,73 @@ mention is dropped from every kickoff, and the finding goes in the handoff repor
 - Only the deny messages above are new agent-facing strings; each lives ON ONE LINE.
 - bash >= 3.2 everywhere; hooks stay fork-free pure bash.
 
+## v2.5 — the guard learns the other destroyers (2026-09-01, plan cant-eat-itself, T-093 · T-096)
+Companion contracts: `worktree-liveness.md` (the beat the hooks touch; why a worktree is never removed by
+hand), `permission-rules.md` (the EnterWorktree entry §4 left open is now settled: the tool accepts
+`.polaris/wt/<ID>` on first entry from the launch dir — the ONLY defect was the missing allow rule, which
+T-095 lands; §4's contingency does not fire). Everything in §1-§6 stands byte-for-byte; this section ADDS.
+
+### 1. `checkout-guard.sh` — five new deny classes, one new fn, three new pinned messages (T-093)
+Contract unchanged in spirit: deny is narrow, silence is the default, the common path forks nothing.
+- **Gate 1 widens** to `*git*|*rm*|*Remove-Item*|*kill*|*Stop-Process*|*fuser*` (still one `case`, zero forks).
+- **Gate 2** (a `/.polaris/wt/` segment in cwd) now allows ONLY when the command contains NONE of
+  `worktree` · `rm` · `Remove-Item` · `kill` · `Stop-Process` · `fuser`; those fall through to the parsers.
+  Gate 2 also touches the beat (worktree-liveness.md § beat writers — the pinned string-ops line) BEFORE
+  deciding; the touch is best-effort and never changes the verdict.
+- **`mutating_git` grows three verbs** (the `:196` fall-through narrows as above):
+  `worktree)` — `add` ⇒ `HIT=worktree` (as today) · `remove` ⇒ `HIT=worktree-remove` · `prune` ⇒ `HIT=worktree-prune`
+  · `move` ⇒ `HIT=worktree-move` · anything else (`list`) ⇒ no hit ·
+  `clean)` — `-n` or `--dry-run` anywhere in THIS invocation ⇒ allow, else `HIT=clean` ·
+  `push)` — `--delete` or `-d` anywhere, or any argument starting with `:` ⇒ `HIT=push-delete`.
+- **ONE new top-level fn `mutating_other`** (W1 api-kit row, T-096 writes it): pure-bash tokenizing like
+  `mutating_git`; rc 0 + `HIT` when: `rm` with an `r` in its flags (`-r`, `-rf`, `-fr`, `-R`, `--recursive`) AND any
+  argument containing `.polaris` ⇒ `rm-polaris` · `Remove-Item` with `-Recurse` AND `.polaris` ⇒ `rm-polaris` ·
+  `taskkill` with `/IM` · `Stop-Process -Name` · `Get-Process … | Stop-Process` · `pkill` · `killall` ·
+  `kill -9 -1` (any `kill` whose target is `-1`) · `npx kill-port` · `fuser -k` ⇒ `kill-broad`.
+  ALLOWED (rc 1): `kill <pid>`, `kill -9 <pid>`, `taskkill /PID <pid>`, `Stop-Process -Id <pid>`, `rm -f <file>`,
+  `rm -rf node_modules` (no `.polaris`), `git clean -n`, `git push -u origin feat/x`.
+- **Where each class is denied:** `worktree-remove|prune|move`, `rm-polaris`, `kill-broad` ⇒ EVERYWHERE
+  (gate 4's `rev-parse` placement probe is skipped — there is no checkout where these are safe);
+  `clean`, `push-delete` and every v2 verb ⇒ the PRIMARY only (gate 4 unchanged).
+- **`deny <sub> <msg>`** — the JSON emitter stays ONE `printf` (`json-deny-emitter-lines: 1`) with the message
+  as a variable; `--test` prints `deny:<sub>`. The v2 `MSG` is byte-identical. Three new pinned one-liners:
+  - `MSG_WT` (worktree-remove/prune/move · clean · rm-polaris): `a task worktree may be another session's whole working state — never remove, prune, move or clean one by hand: bash ops/polaris sweep --fix reaps idle worktrees safely, and done/release archive dirty ones`
+  - `MSG_PUSH` (push-delete): `a remote feat/<ID> may still be a live worktree's base — never delete origin refs by hand: done and sweep --fix delete landed branches with proof`
+  - `MSG_KILL` (kill-broad): `never kill by name or kill the whole tree — five sessions share this machine and their suites: kill one pid you own (kill <pid> · taskkill /PID <pid> · Stop-Process -Id <pid>)`
+- Top-level fns EXACTLY (sorted): `deny` · `jstr` · `mutating_git` · `mutating_other`. No others.
+- `ownership-guard.sh` (T-093, same task): ONE added line after the `WT_ID=`/`PRIMARY=` anchor — the beat
+  touch pinned in worktree-liveness.md. No other change; `ownership-primary` golden byte-identical.
+
+### 2. Golden `checkout-guard-denies` grows (T-093; every existing line byte-identical, in place)
+Deny cases appended to the primary block: `git worktree remove .polaris/wt/T-001` · `git worktree remove --force /x/.polaris/wt/T-001`
+· `git worktree prune` · `git worktree move .polaris/wt/T-001 /tmp/x` · `git clean -fdx` · `git clean -f` ·
+`git push origin --delete feat/T-001` · `git push -d origin feat/T-001` · `git push origin :refs/heads/feat/T-001` ·
+`rm -rf .polaris` · `rm -r .polaris/wt/T-001` · `Remove-Item -Recurse -Force .polaris` · `taskkill /IM node.exe /F` ·
+`Stop-Process -Name node` · `Get-Process node | Stop-Process` · `pkill -f uvicorn` · `killall node` · `kill -9 -1` ·
+`npx kill-port 8001` · `fuser -k 8001/tcp` (20 lines: `deny:worktree-remove` ×2 · `deny:worktree-prune` ·
+`deny:worktree-move` · `deny:clean` ×2 · `deny:push-delete` ×3 · `deny:rm-polaris` ×3 · `deny:kill-broad` ×8).
+Allow cases appended: `git clean -n` · `git clean --dry-run` · `git push -u origin feat/T-001` ·
+`rm -f .polaris/shots/T-001-a.png` · `rm -rf node_modules` · `kill 1234` · `kill -9 1234` · `taskkill /PID 1234 /F` ·
+`Stop-Process -Id 1234` (9 lines). The wt-cwd block gains `git worktree remove .polaris/wt/T-000` ⇒
+`wt:deny:worktree-remove`, `rm -rf .polaris` ⇒ `wt:deny:rm-polaris`, `pkill node` ⇒ `wt:deny:kill-broad`,
+while `wt:allow  git switch main` stays. Count lines: `pinned-refusal-lines: 1` unchanged, then
+`pinned-worktree-lines: 1` (`grep -c "a task worktree may be another session"`) · `pinned-push-lines: 1`
+(`never delete origin refs by hand`) · `pinned-kill-lines: 1` (`never kill by name or kill the whole tree`) ·
+`json-deny-emitter-lines: 1`. Proven from the worktree with
+`bash -c "$(cat ops/tests/checkout-guard-denies.cmd)" | diff - ops/tests/checkout-guard-denies.expected`.
+
+### 3. Drill `checkoutguard` gains the worktree cases (T-104, policy.sh): a `git worktree remove` payload from a
+`.polaris/wt/` cwd ⇒ JSON deny on stdout carrying `a task worktree may be another session`; `rm -rf .polaris`
+from the primary ⇒ deny; `kill 1234` ⇒ no output, exit 0; `git clean -n` in the primary ⇒ no output. rc + shape,
+never message presence alone.
+
+### v2.5 invariants
+- Deny stays narrow: every new class needs a pinned message, a `--test` label and its golden lines, or it is
+  not shipped. Pid-targeted kills, dry-run cleans and ordinary pushes are never denied.
+- The two hooks stay disjoint: `readonly-allow.sh` never allows any of the new classes (`rm`, `kill`,
+  `git clean`, `git push` all fall through its parsers already), and it never touches the beat.
+- Zero forks on the common path; the beat touch is string ops + `: >`.
+
 ## Changelog
 - v2 2026-08-23: enforced isolation - checkout-guard hook, ownership-guard primary_gate, ready-union-active claim sweep, drift --strict fails overlap, landing: self knob + autolaunch_max 5, drills checkoutguard/readyoverlap/selfland (T-084..T-090, plan enforced-isolation).
 - v2 amended pre-claim 2026-08-23 (T-088 unclaimed, so edited in place per the append-only rule): integration_wait_minutes REVERTED to 10 - the foreground int_on poll makes 10min exactly the harness 600s tool cap, so 20 loses the whole wait (detach with bg run ship-<ID> + chunked bg wait --max 300 instead); Invariant 9 reworded (human-approved verbatim: the lease holder IS the Integrator) - kit/CLAUDE.md joins T-088's files_owned. Wave-1 sections 1-4 and 6 byte-identical.
@@ -340,3 +407,4 @@ mention is dropped from every kickoff, and the finding goes in the handoff repor
 - v1 2026-08-03: created for T-057 (module + CLI + on_die), T-058 (integration lane), T-059
   (claim/handoff/resume), T-060 (finish/status/doctor/update), T-062 (drills), T-063 (docs
   pinned phrases). plan: n-chats-one-repo.
+- v2.5 2026-09-01: checkout-guard learns worktree remove/prune/move, clean, push --delete, rm/Remove-Item on .polaris and broad process kills (`mutating_other`, 3 pinned messages); the EnterWorktree entry is settled by permission-rules.md (T-093, T-096; plan cant-eat-itself).

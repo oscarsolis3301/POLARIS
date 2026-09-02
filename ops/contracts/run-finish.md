@@ -186,3 +186,23 @@ a question deserves an answer, not a ceremony.
 for the MAIN conversation. It does **not** reach subagents — which is precisely why `kit/CLAUDE.md`
 keeps the trigger and the subagent ban, and why the output style is additive rather than a
 replacement. See `ops/contracts/output-style.md`.
+
+## v3 — a hop ends a CONTEXT; `finish` ends a RUN   (2026-09-01, POLARIS 6.2.0, plan cant-eat-itself)
+
+v2's trigger — "any session that changed the repo ends by running `finish` as its last command" — and
+`ops/contracts/role-handover.md` (a session continues as the next role at every board-proven boundary)
+contradict each other exactly once: at a handoff, v2 says run `finish`, WS7 says run `next`. Ruling:
+- **A hop is not an ending.** Under `handover: auto` (the 6.2.0 default), a session that finished a task
+  runs `bash ops/polaris next` and follows its line 1. It runs `finish` ONLY when `next` says `finish` —
+  and then `finish` IS the last command, exactly as v2 says. `handover: off` restores v2 verbatim.
+- **The H1 rule tightens:** no `# 🎉 Complete!` until `next` says `finish` AND `finish` returns 0. A role
+  change mid-chat is the next context, not the close. The output style carries this as ONE bold line in
+  "How a session ends", above `## What a close reads like` (T-096 — pinned in role-handover.md); PROTOCOL
+  § VOICE's numbered rules are untouched (`plain-voice` diffs them).
+- **`finish` rc 0 writes `.polaris/handover/<sid>/finished`** (T-100, best-effort, after the stamp) so the
+  handover Stop hook allows the stop (`allow:finished`) and never hops a session whose run is over.
+- **BUILDER's "you never end the run"** narrows to conductor-entered builders — a top-level builder session
+  follows `next`, which names `finish` when the board is drained. `kit/CLAUDE.md`'s `subagent never ends a
+  run` phrase stays byte-for-byte (the `output-style-installed` golden pins it): a SUBAGENT still never
+  runs `finish`, never fires `notify-gate done`, never opens with the H1.
+- Every other rule of v1/v2 — exit codes, frozen tokens, the stamp, the four non-rc-0 endings — unchanged.

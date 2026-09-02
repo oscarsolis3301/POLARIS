@@ -122,8 +122,43 @@ archives, and `cmd_finish` implemented it literally: a `--force`-killed job rota
 `bg_status` and `sweep` already skip archives). Clarified: the guard scans LIVE job dirs only —
 `*.prev` is history, never pending. Live rc-less dirs pend exactly as v1 states, both wordings.
 
+## v2 — jobs are owned by their cwd; archives keep history (2026-09-01, plan cant-eat-itself, T-094 · T-100 · T-104)
+G6 from plans/v2.md: five sessions each `bg run qa` — the same name from another session silently rotated a
+live job's `.prev`, and `--force` killed by a pid Windows may have reused. v1's verdict codes, registry
+files and every existing golden line stand byte-for-byte; this section ADDS.
+- **Ownership key = the job's `cwd` file** (already recorded). In `bg_run`, a live same-name job (no `rc`, pid
+  alive) whose `cwd` ≠ the caller's `$PWD` — compare after normalizing `\` to `/` and case-folding (Windows) —
+  dies, WITH or WITHOUT `--force`:
+  `die "job '<name>' is RUNNING from another session (cwd <cwd>) — pick a distinct name (bg run <name>-<ID>); --force never kills a foreign live job"`.
+  Same cwd: the v1 refusal and the v1 `--force` behavior, byte-identical. `qa` jobs always record
+  `cwd = $PRIMARY`, so two `bg run qa` hit the v1 refusal — correct: one primary, one qa.
+- **`bg_rotate`**: an existing `<name>.prev` is no longer `rm -rf`ed — `mkdir -p "$root/.archive"` then
+  `mv "$root/$name.prev" "$root/.archive/$name-$(date +%s)"` (a dot-dir is invisible to every `*/` loop:
+  `bg status`, `sweep`, the finish guard — no other reader changes). `sweep --fix` (T-100) prunes
+  `.polaris/bg/.archive/*` older than 24 h (dir mtime).
+- The job dir also records **`sid`** = `$CLAUDE_CODE_SESSION_ID` or `-` (informational; cwd stays the key —
+  it also works in CI where no sid exists).
+- **`ops/tests/bg-lifecycle.cmd`** (T-094): +2 blocks at the END, existing lines byte-identical —
+  `== a same-name job from ANOTHER cwd is refused, --force included ==` (start `own -- sleep 8` from
+  `$FIX/repo/src`, then from `$FIX/repo`: `bg run own -- true` and `bg run own --force -- true` both rc 1 with
+  the pinned message, `$FIX` normalized to `<fix>`; then `bg wait own --max 30` rc 0) and
+  `== a third run archives the old .prev instead of deleting it ==` (`bg run ok -- echo third-run`, then
+  `ls .polaris/bg/.archive | grep -c '^ok-'` prints `1`, `ok.prev/cmd` prints `echo second-run`).
+  T-094 also adds `export POLARIS_AWAKE_HOME="$FIX/awake-home"` right after the `trap … EXIT` line (hermetic
+  for keep-awake.md — unused until W2, harmless before; `.expected` unchanged by that line).
+- **`finish` guard, `sweep` and `bg status` unchanged**: they never descend into `.archive/`.
+- No new fn in bg.sh (surface-frozen in W1); `bg_run`/`bg_rotate` change inside their bodies.
+- Drill `bg` (T-104, W3): one added assertion — a foreign-cwd same-name run is refused rc 1 and the live
+  job survives (`bg status` still rc 2).
+
+### v2 invariants
+- A live job is killed only by its own cwd's `--force`, never by another session and never by name.
+- Nothing under `.polaris/bg/` is ever `rm -rf`ed by rotation; `.archive/` is pruned by age alone.
+- Existing verdict codes (0/1/2/3) and every v1 message stay byte-identical.
+
 ## Changelog
 - v1.2 2026-08-03: finish guard scans live job dirs only — `*.prev` archives never pend (T-073).
 - v1.1 2026-08-03: `check` write flags (`--update`/`--scaffold`) refuse hook auto-approval;
   T-072 files the arm + golden cases (read forms unchanged).
 - v1 2026-08-03: created for T-065, T-066, T-067, T-068, T-069, T-070, T-071 (plan: routing-and-bg)
+- v2 2026-09-01: jobs owned by cwd — a foreign same-name live job is refused (--force included); `.prev` rotates into `.archive/<name>-<epoch>`; job dirs record `sid` (T-094, T-100, T-104; plan cant-eat-itself).
