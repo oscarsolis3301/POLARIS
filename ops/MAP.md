@@ -151,3 +151,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "doctor --selftest gains wtreap (history.sh), awake (policy.sh) and the handover label (drill body in board.sh, T-111) — 31 to 34 labels; selfland asserts the self-landed worktree survives; the spine exports POLARIS_AWAKE_HOME so no drill touches the owner's awake registry"  (T-104, 2026-09-02)
 
 - "doctor --selftest gains the handover drill body (board.sh; label registered by T-104); goldens handover-route + handover-stop pin every next verb and hook rung; cli-help-parity counts next (10)"  (T-111, 2026-09-02)
+
+- "POLARIS 6.2.0 — worktree liveness, guard verbs, bg ownership, bare tool-name permissions, keep-awake daemon, SEE YOUR WORK, role handover, approval-is-the-kickoff"  (T-108, 2026-09-02)
