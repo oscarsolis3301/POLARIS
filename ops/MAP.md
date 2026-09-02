@@ -123,3 +123,5 @@ not installed code — they are written normally, by the board scripts and by th
   tarball/raw-channel paths working regardless, so this is untested-in-the-wild, not unsafe.
 
 ## Deltas
+
+- "lib/workspace.sh gains beat_touch/beat_age/beat_live (the worktree liveness signal, $GCD/worktrees/<ID>/polaris-beat) and wt_remove — the ONLY worktree-removal primitive (rc 0 removed / 1 left / 2 archived to .polaris/wt-archive/, never --force)"  (T-092, 2026-09-02)
