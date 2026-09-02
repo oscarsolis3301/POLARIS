@@ -147,3 +147,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "kit/ops/hooks/handover-hook.sh — Stop (block once per board-proven completion event with the next role's instruction), SessionStart compact|resume (re-anchor via next --brief), UserPromptSubmit (prompted-at clock); wired in kit/.claude/settings.json; readonly-allow auto-approves next and next --brief"  (T-110, 2026-09-02)
 
 - "install.sh ships ops/VISUAL.md and chmods awake-hook.sh + handover-hook.sh; bootstrap.py arm_machine and admin.sh refresh copy the two awake files to ~/.claude/polaris/ and merge the four machine hooks (merge_awake_hooks); uninstall dies on a non-empty .polaris/wt-archive/, deregisters the repo from the awake registry, and strips every ops/hooks/ entry across all hook events"  (T-103, 2026-09-02)
+
+- "doctor --selftest gains wtreap (history.sh), awake (policy.sh) and the handover label (drill body in board.sh, T-111) — 31 to 34 labels; selfland asserts the self-landed worktree survives; the spine exports POLARIS_AWAKE_HOME so no drill touches the owner's awake registry"  (T-104, 2026-09-02)
