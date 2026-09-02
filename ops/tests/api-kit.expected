@@ -39,6 +39,7 @@ kit/ops/KEYS.tsv	key	drain_slices
 kit/ops/KEYS.tsv	key	evolve_apply
 kit/ops/KEYS.tsv	key	express
 kit/ops/KEYS.tsv	key	generated
+kit/ops/KEYS.tsv	key	handover
 kit/ops/KEYS.tsv	key	integration
 kit/ops/KEYS.tsv	key	integration_stale_minutes
 kit/ops/KEYS.tsv	key	integration_wait_minutes
@@ -49,6 +50,7 @@ kit/ops/KEYS.tsv	key	model_mid
 kit/ops/KEYS.tsv	key	model_strong
 kit/ops/KEYS.tsv	key	notify
 kit/ops/KEYS.tsv	key	plan_gate
+kit/ops/KEYS.tsv	key	port_base
 kit/ops/KEYS.tsv	key	publish
 kit/ops/KEYS.tsv	key	qa_scout
 kit/ops/KEYS.tsv	key	reports
@@ -57,12 +59,16 @@ kit/ops/KEYS.tsv	key	run_max_agents
 kit/ops/KEYS.tsv	key	run_max_minutes
 kit/ops/KEYS.tsv	key	run_max_tasks
 kit/ops/KEYS.tsv	key	runnable
+kit/ops/KEYS.tsv	key	serve
+kit/ops/KEYS.tsv	key	shot
 kit/ops/KEYS.tsv	key	stale_hours
 kit/ops/KEYS.tsv	key	test
 kit/ops/KEYS.tsv	key	test_fast
 kit/ops/KEYS.tsv	key	typecheck
 kit/ops/KEYS.tsv	key	uat
+kit/ops/KEYS.tsv	key	visual
 kit/ops/KEYS.tsv	key	voice
+kit/ops/KEYS.tsv	key	wt_live_minutes
 kit/ops/MANUAL.md	heading	<ID> — <title>
 kit/ops/MANUAL.md	heading	Board commit by hand — the `polaris/board` ref (EVERY mutation below uses this)
 kit/ops/MANUAL.md	heading	Board ref lifecycle by hand — fresh install · fresh clone · migrate 5.13→5.14
@@ -101,6 +107,7 @@ kit/ops/PROMPTS.md	heading	Once per repo — only if you're doing it manually
 kit/ops/PROMPTS.md	heading	PROMPTS — copy, paste, go
 kit/ops/PROMPTS.md	heading	Replies the human gives mid-run
 kit/ops/PROMPTS.md	heading	Watching
+kit/ops/PROTOCOL.md	heading	AWAKE — one keep-awake daemon per machine
 kit/ops/PROTOCOL.md	heading	LANES — why the lane is a command, and why a role never does two jobs
 kit/ops/PROTOCOL.md	heading	LONG COMMANDS — living under the 600s tool cap
 kit/ops/PROTOCOL.md	heading	MODEL NOTES (whichever model runs this)
@@ -111,6 +118,13 @@ kit/ops/PROTOCOL.md	heading	STATE = THE BOARD (git-tracked, human-readable)
 kit/ops/PROTOCOL.md	heading	THE TOOL — `ops/polaris`
 kit/ops/PROTOCOL.md	heading	TOKEN DISCIPLINE — this is how we stay cheap and fast
 kit/ops/PROTOCOL.md	heading	VOICE — how you TALK to the human (`voice:` in `ops/CONVENTIONS.md`, default `standard`)
+kit/ops/VISUAL.md	heading	Adding it to a repo
+kit/ops/VISUAL.md	heading	Doctrine
+kit/ops/VISUAL.md	heading	SEEING YOUR WORK — the capture is the proof
+kit/ops/VISUAL.md	heading	The keys (ops/CONVENTIONS.md)
+kit/ops/VISUAL.md	heading	The rule
+kit/ops/VISUAL.md	heading	What handoff checks
+kit/ops/VISUAL.md	heading	What pack prints
 kit/ops/bench.sh	fn	ctx_b
 kit/ops/bench.sh	fn	ms
 kit/ops/bootstrap.py	const	FLAGS
@@ -151,6 +165,7 @@ kit/ops/dashboard.py	fn	signature
 kit/ops/hooks/checkout-guard.sh	fn	deny
 kit/ops/hooks/checkout-guard.sh	fn	jstr
 kit/ops/hooks/checkout-guard.sh	fn	mutating_git
+kit/ops/hooks/checkout-guard.sh	fn	mutating_other
 kit/ops/hooks/ownership-guard.sh	fn	cleanup
 kit/ops/hooks/ownership-guard.sh	fn	jstr
 kit/ops/hooks/ownership-guard.sh	fn	lc
@@ -411,6 +426,9 @@ kit/ops/lib/selftest/spine.sh	fn	drill_on
 kit/ops/lib/selftest/spine.sh	fn	ensure_origin
 kit/ops/lib/selftest/spine.sh	fn	ngwait
 kit/ops/lib/selftest/spine.sh	fn	selftest
+kit/ops/lib/workspace.sh	fn	beat_age
+kit/ops/lib/workspace.sh	fn	beat_live
+kit/ops/lib/workspace.sh	fn	beat_touch
 kit/ops/lib/workspace.sh	fn	cmd_park
 kit/ops/lib/workspace.sh	fn	cmd_unpark
 kit/ops/lib/workspace.sh	fn	id_ok
@@ -421,6 +439,7 @@ kit/ops/lib/workspace.sh	fn	stray_feat_repair
 kit/ops/lib/workspace.sh	fn	unpark
 kit/ops/lib/workspace.sh	fn	wave_on
 kit/ops/lib/workspace.sh	fn	wt_add
+kit/ops/lib/workspace.sh	fn	wt_remove
 kit/ops/pack.py	const	DATA_MODE
 kit/ops/pack.py	const	EXEC_MODE
 kit/ops/pack.py	const	KIT

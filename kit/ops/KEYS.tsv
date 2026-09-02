@@ -51,3 +51,9 @@ autolaunch_max	5.7.0	5	at most 5 Builder panes open themselves; the printed kick
 integration_wait_minutes	5.24.0	10	a second session waits 10 minutes for the integration lane before it gives up — NEVER raise past 10: the wait polls in the foreground, so 10 minutes is already the harness's 600s tool cap and a bigger bound makes the tool call return nothing and lose the whole wait; the long-wait fix is detaching (bg run + chunked bg wait --max 300), never a bigger number
 integration_stale_minutes	5.24.0	45	an integration lease held this long counts as crashed and may be stolen
 landing	6.1.0	self	a handoff lands its own task through the integration lease and the last lane out seals the wave; integrator restores the classic wait-for-an-integrator handoff
+wt_live_minutes	6.2.0	15	a task worktree counts as live for 15 minutes after its last beat; done/release/sweep never remove a live worktree
+shot	6.2.0	<cmd or omit>	no capture step: pack prints no SEE YOUR WORK section and handoff never asks for a screenshot
+visual	6.2.0	<globs or omit>	this repo declares no visual surface, so shot: never runs and a visually broken page can ship green
+port_base	6.2.0	<number or omit>	{PORT} in shot:/serve: stays literal — parallel builders share one dev-server port
+serve	6.2.0	<cmd or omit>	pack prints no way to start the app for a capture; builders improvise a server
+handover	6.2.0	auto	a session hops into the role polaris next names at each board-proven boundary; off restores one task per session
