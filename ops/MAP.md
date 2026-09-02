@@ -149,3 +149,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "install.sh ships ops/VISUAL.md and chmods awake-hook.sh + handover-hook.sh; bootstrap.py arm_machine and admin.sh refresh copy the two awake files to ~/.claude/polaris/ and merge the four machine hooks (merge_awake_hooks); uninstall dies on a non-empty .polaris/wt-archive/, deregisters the repo from the awake registry, and strips every ops/hooks/ entry across all hook events"  (T-103, 2026-09-02)
 
 - "doctor --selftest gains wtreap (history.sh), awake (policy.sh) and the handover label (drill body in board.sh, T-111) — 31 to 34 labels; selfland asserts the self-landed worktree survives; the spine exports POLARIS_AWAKE_HOME so no drill touches the owner's awake registry"  (T-104, 2026-09-02)
+
+- "doctor --selftest gains the handover drill body (board.sh; label registered by T-104); goldens handover-route + handover-stop pin every next verb and hook rung; cli-help-parity counts next (10)"  (T-111, 2026-09-02)
