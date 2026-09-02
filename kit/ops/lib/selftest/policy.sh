@@ -445,6 +445,21 @@ drill_bg() {
     grep -q 'already RUNNING' "$T/bx2.out" || { cat "$T/bx2.out"; echo "BG DUPLICATE MSG FAIL (the refusal must say why and name bg status)"; exit 1; }
     "$SELF" bg run bxslow --force -- echo bx-forced >/dev/null || { echo "BG FORCE FAIL (--force must kill, rotate and start fresh)"; exit 1; }
     "$SELF" bg wait bxslow --max 60 >/dev/null 2>&1 || { echo "BG FORCE FAIL (the forced replacement must run to green)"; exit 1; }
+    # 3b) T-104 (bg-jobs.md v2): OWNERSHIP is the job's own `cwd` file. Five sessions each running
+    #     `bg run qa` used to rotate one another's LIVE job into .prev, and --force killed by a pid
+    #     Windows may since have reused. A live same-name job started from ANOTHER cwd is refused
+    #     with AND without --force, and — the part that matters — it survives the refusal untouched.
+    "$SELF" bg run bxown -- sleep 30 >/dev/null || { echo "BG RUN FAIL (the ownership fixture job must start)"; exit 1; }
+    bx_rc=0; ( cd src && "$SELF" bg run bxown -- true ) > "$T/bx6.out" 2>&1 || bx_rc=$?
+    [ "$bx_rc" = 1 ] || { cat "$T/bx6.out"; echo "BG FOREIGN RC FAIL (a live job owned by another cwd must refuse rc 1, got $bx_rc)"; exit 1; }
+    grep -q "is RUNNING from another session" "$T/bx6.out" || { cat "$T/bx6.out"; echo "BG FOREIGN MSG FAIL (the refusal must name the owning cwd, not the v1 duplicate line)"; exit 1; }
+    bx_rc=0; ( cd src && "$SELF" bg run bxown --force -- true ) > "$T/bx7.out" 2>&1 || bx_rc=$?
+    [ "$bx_rc" = 1 ] || { cat "$T/bx7.out"; echo "BG FOREIGN FORCE RC FAIL (--force must NOT lift a foreign refusal, got $bx_rc)"; exit 1; }
+    bx_rc=0; "$SELF" bg status bxown >/dev/null 2>&1 || bx_rc=$?
+    [ "$bx_rc" = 2 ] || { echo "BG FOREIGN SURVIVE FAIL (the refused-against job must still be RUNNING, got $bx_rc)"; exit 1; }
+    [ -d .polaris/bg/bxown.prev ] && { echo "BG FOREIGN ROTATE FAIL (a foreign run must not rotate a live job away)"; exit 1; }
+    "$SELF" bg run bxown --force -- echo bx-own-forced >/dev/null || { echo "BG OWN FORCE FAIL (the job's OWN cwd may still --force it)"; exit 1; }
+    "$SELF" bg wait bxown --max 60 >/dev/null 2>&1 || { echo "BG OWN FORCE FAIL (the forced replacement must collect green)"; exit 1; }
     # 4) rotation ARCHIVES: one .prev slot per name, holding the run it replaced — never a delete.
     "$SELF" bg run bxok -- echo bx-second >/dev/null || { echo "BG ROTATE FAIL (a finished name must be re-runnable)"; exit 1; }
     [ -d .polaris/bg/bxok.prev ] || { echo "BG ROTATE FAIL (the finished run must archive to <name>.prev)"; exit 1; }
@@ -476,7 +491,7 @@ drill_bg() {
     [ -d .polaris/bg/bxred ] && { echo "BG SWEEP FIX FAIL (the stale job must leave the LIVE registry)"; exit 1; }
     # hermetic teardown: no job dirs, no scratch output — the fixture as it was found
     rm -rf .polaris/bg
-    rm -f "$T/bx1.out" "$T/bx2.out" "$T/bx3.out" "$T/bx4.out" "$T/bx5.out"
+    rm -f "$T/bx1.out" "$T/bx2.out" "$T/bx3.out" "$T/bx4.out" "$T/bx5.out" "$T/bx6.out" "$T/bx7.out"
 }
 drill_checkoutguard() {
     # ---- T-089 checkoutguard drill (ops/contracts/shared-checkout.md v2 §6) ----
@@ -510,7 +525,61 @@ drill_checkoutguard() {
     # (2) the same command with cwd inside .polaris/wt/<ID> → rc 0 and NO output at all
     printf '{"cwd":"%s/.polaris/wt/T-000","tool_name":"Bash","tool_input":{"command":"git switch x"}}' "$ckg_top" \
       | bash "$ckg_hook" > "$T/ckg/2.out" 2>&1 || { echo "CKG WT RC FAIL"; exit 1; }
-    [ -s "$T/ckg/2.out" ] && { cat "$T/ckg/2.out"; echo "CKG WT ALLOW FAIL (a task worktree keeps every git form)"; exit 1; }
+    [ -s "$T/ckg/2.out" ] && { cat "$T/ckg/2.out"; echo "CKG WT ALLOW FAIL (a task worktree keeps every git form that cannot destroy one)"; exit 1; }
+    # (2b) T-104 (shared-checkout.md v2.5 §3): the guard learned the OTHER destroyers. Removing a
+    #      worktree, `rm -rf`ing .polaris and killing by name end another session's work from ANY
+    #      checkout — there is no cwd where they are the right move — so gate 2's worktree carve-out
+    #      does not cover them and gate 4's placement probe is skipped entirely: same JSON deny,
+    #      everywhere. Asserted three ways, because two of them are not enough: rc, the JSON shape,
+    #      and --test's CLASS word. The class is the load-bearing one — every deny arm falls back to
+    #      the generic switch-the-primary message, so "it denied" and even "it denied with SOME
+    #      message" both stay true while the class silently drops out of its own arm.
+    ckg_rc=0
+    printf '{"cwd":"%s/.polaris/wt/T-000","tool_name":"Bash","tool_input":{"command":"git worktree remove .polaris/wt/T-001"}}' "$ckg_top" \
+      | bash "$ckg_hook" > "$T/ckg/2b.out" 2> "$T/ckg/2b.err" || ckg_rc=$?
+    [ "$ckg_rc" -eq 0 ] || { cat "$T/ckg/2b.out" "$T/ckg/2b.err"; echo "CKG WT-REMOVE RC FAIL (the JSON deny exits 0, never 2)"; exit 1; }
+    grep -q '"permissionDecision":"deny"' "$T/ckg/2b.out" || { cat "$T/ckg/2b.out"; echo "CKG WT-REMOVE SHAPE FAIL (a removal from a worktree cwd must deny, never ride the carve-out)"; exit 1; }
+    grep -q 'a task worktree may be another session' "$T/ckg/2b.out" || { cat "$T/ckg/2b.out"; echo "CKG WT-REMOVE MSG FAIL (the pinned worktree refusal must ride the JSON)"; exit 1; }
+    [ -s "$T/ckg/2b.err" ] && { cat "$T/ckg/2b.err"; echo "CKG WT-REMOVE STDERR FAIL (this hook denies on stdout, never stderr)"; exit 1; }
+    ckg_rc=0
+    printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"rm -rf .polaris"}}' "$ckg_top" \
+      | bash "$ckg_hook" > "$T/ckg/2c.out" 2>&1 || ckg_rc=$?
+    [ "$ckg_rc" -eq 0 ] || { cat "$T/ckg/2c.out"; echo "CKG RM-POLARIS RC FAIL"; exit 1; }
+    grep -q '"permissionDecision":"deny"' "$T/ckg/2c.out" || { cat "$T/ckg/2c.out"; echo "CKG RM-POLARIS SHAPE FAIL (rm -rf .polaris takes every session's worktrees, locks and jobs at once)"; exit 1; }
+    #      And the message, per class, on the JSON path — because --test prints the class out of
+    #      $HIT, so it reads deny:rm-polaris whichever arm of the dispatch actually fired. Only the
+    #      text tells you a class fell through to the generic refusal and started telling people to
+    #      work in their worktree when what they did was delete everyone's.
+    for ckg_c in "git worktree remove .polaris/wt/T-001|a task worktree may be another session" \
+                 "rm -rf .polaris|a task worktree may be another session" \
+                 "git push origin --delete feat/T-001|never delete origin refs by hand" \
+                 "pkill -f uvicorn|never kill by name or kill the whole tree"; do
+      ckg_want="${ckg_c#*|}"; ckg_case="${ckg_c%%|*}"
+      printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$ckg_top" "$ckg_case" \
+        | bash "$ckg_hook" > "$T/ckg/2e.out" 2>&1 || { cat "$T/ckg/2e.out"; echo "CKG MSG RC FAIL ($ckg_case)"; exit 1; }
+      grep -q "$ckg_want" "$T/ckg/2e.out" || { cat "$T/ckg/2e.out"; echo "CKG MSG FAIL ($ckg_case must carry its OWN pinned refusal, never another arm's)"; exit 1; }
+    done
+    for ckg_c in "$ckg_top/.polaris/wt/T-000|git worktree remove .polaris/wt/T-001|deny:worktree-remove" \
+                 "$ckg_top|git worktree prune|deny:worktree-prune" \
+                 "$ckg_top|rm -rf .polaris|deny:rm-polaris" \
+                 "$ckg_top|pkill -f uvicorn|deny:kill-broad" \
+                 "$ckg_top|git clean -fdx|deny:clean"; do
+      ckg_want="${ckg_c##*|}"; ckg_case="${ckg_c%|*}"
+      [ "$(bash "$ckg_hook" --test "$ckg_case" | tr -d ' \r')" = "$ckg_want" ] \
+        || { echo "CKG CLASS FAIL ($ckg_case must fire $ckg_want, not another arm's message)"; exit 1; }
+    done
+    #      The allows are as load-bearing as the denies: a pid-targeted kill is how a session ends
+    #      its OWN job, a dry-run clean is how anyone checks what a real one would take, and
+    #      node_modules is not .polaris. Deny narrowly, or the guard becomes noise and gets removed.
+    for ckg_c in 'kill 1234' 'kill -9 1234' 'taskkill /PID 1234 /F' 'git clean -n' 'rm -rf node_modules'; do
+      ckg_rc=0
+      printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$ckg_top" "$ckg_c" \
+        | bash "$ckg_hook" > "$T/ckg/2d.out" 2>&1 || ckg_rc=$?
+      [ "$ckg_rc" -eq 0 ] || { cat "$T/ckg/2d.out"; echo "CKG ALLOW RC FAIL ($ckg_c)"; exit 1; }
+      [ -s "$T/ckg/2d.out" ] && { cat "$T/ckg/2d.out"; echo "CKG ALLOW FAIL ($ckg_c must pass silently)"; exit 1; }
+      [ "$(bash "$ckg_hook" --test "$ckg_top|$ckg_c" | tr -d ' \r')" = allow ] \
+        || { echo "CKG ALLOW CLASS FAIL ($ckg_c must reach no parser at all)"; exit 1; }
+    done
     # (3) read-only git in the primary passes silently — and `git stash list` / `git stash show`
     #     are the §1 carve-out: the only read-only stash forms, allowed on purpose (denying them
     #     would break the allow/deny disjointness the two-hook design rests on).
@@ -568,4 +637,189 @@ drill_checkoutguard() {
     rm -f ops/board/ready/T-CKF.md ops/polaris
     git branch -q -D feat/T-CKF 2>/dev/null || true
     rm -rf "$T/ckg"
+}
+drill_awake() {
+    # ---- T-104 keep-awake drill (ops/contracts/keep-awake.md § drill) ----
+    # ONE keep-awake owner per MACHINE: awake while ANY session is still working, gone once they all
+    # are, never pressing at a human who is typing. Every one of those words is a race, a registry
+    # file or a process lifetime, so prose cannot hold it — but neither can a drill that waits on
+    # real clocks. The contract answers that with SEAMS: POLARIS_AWAKE_HOME moves the whole registry
+    # into the fixture, POLARIS_AWAKE_PRESSER replaces the key press with `touch` (nothing on this
+    # machine is ever pressed by a test), TICK/IDLE/STALE/GRACE shrink minutes into seconds, and
+    # POLARIS_AWAKE_SPAWN=inline keeps the daemon inside this process tree so the drill can prove it
+    # LEFT. Everything here is rc + file state.
+    # CLAUDE_PID is pinned to `-` on the four hook calls: ah_verdict reaps a session whose recorded
+    # pid is dead, and inheriting a real harness pid would make the verdict depend on `ps -W` telling
+    # the truth about a process this drill does not own. `-` is the documented "no pid" and is the
+    # same on every platform.
+    aw_hook="$(dirname "$SELF")/hooks/awake-hook.sh"
+    aw_home="${POLARIS_AWAKE_HOME:-$T/awake-home}"
+    aw_cwd="$(git rev-parse --show-toplevel)"
+    aw_wtp='C:\\Users\\x\\.claude\\projects\\p\\drill-sid-1.jsonl'   # JSON-escaped, as a real Windows payload arrives
+    rm -rf "$aw_home" "$T/aw"
+    mkdir -p "$aw_home/sessions" "$aw_home/repos" "$aw_home/daemon" "$T/aw"
+    aw_tp="$T/aw/transcript.jsonl"; : > "$aw_tp"
+    export POLARIS_AWAKE_PRESSER="touch $T/aw/pressed"
+    export POLARIS_AWAKE_IDLE=3 POLARIS_AWAKE_STALE=5 POLARIS_AWAKE_GRACE=2 POLARIS_AWAKE_SPAWN=inline
+    # (1) the four hooks. They run on EVERY turn of every session, so their contract is silence:
+    #     UserPromptSubmit stdout is injected into the model's context and rc 2 on Stop means "keep
+    #     going". Zero stdout, zero stderr, rc 0 — and `start` never downgrades a session mid-turn.
+    export POLARIS_AWAKE_TICK=60                      # a wide freshness window: step 1 wants no daemon
+    date +%s > "$aw_home/daemon/beat"
+    for aw_sub in start busy idle end; do
+      aw_rc=0
+      printf '{"session_id":"drill-sid-1","transcript_path":"%s","cwd":"%s","hook_event_name":"x"}' "$aw_wtp" "$aw_cwd" \
+        | CLAUDE_PID=- bash "$aw_hook" "$aw_sub" > "$T/aw/h.out" 2> "$T/aw/h.err" || aw_rc=$?
+      [ "$aw_rc" -eq 0 ] || { cat "$T/aw/h.err"; echo "AWAKE HOOK RC FAIL ($aw_sub must always exit 0)"; exit 1; }
+      [ -s "$T/aw/h.out" ] && { cat "$T/aw/h.out"; echo "AWAKE HOOK STDOUT FAIL ($aw_sub must print NOTHING)"; exit 1; }
+      [ -s "$T/aw/h.err" ] && { cat "$T/aw/h.err"; echo "AWAKE HOOK STDERR FAIL ($aw_sub must print NOTHING)"; exit 1; }
+      case "$aw_sub" in
+        start)
+          [ "$(sed -n 1p "$aw_home/sessions/drill-sid-1" | cut -d' ' -f1)" = idle ] || { echo "AWAKE START FAIL (an unknown session is created idle)"; exit 1; }
+          [ "$(sed -n 2p "$aw_home/sessions/drill-sid-1" | tr -d '\r')" = 'C:\Users\x\.claude\projects\p\drill-sid-1.jsonl' ] \
+            || { echo "AWAKE START PATH FAIL (jstr must decode the escaped backslashes of a Windows transcript path)"; exit 1; }
+          [ "$(sed -n 3p "$aw_home/sessions/drill-sid-1" | tr -d '\r')" = '-' ] || { echo "AWAKE START PID FAIL (an absent pid is the dash, never empty)"; exit 1; }
+          ;;
+        busy)
+          [ "$(sed -n 1p "$aw_home/sessions/drill-sid-1" | cut -d' ' -f1)" = busy ] || { echo "AWAKE BUSY FAIL"; exit 1; }
+          aw_k="$(printf '%s' "$aw_cwd" | cksum)"; aw_k="${aw_k%% *}"
+          [ -f "$aw_home/repos/$aw_k" ] || { echo "AWAKE BUSY REPO FAIL (a busy session registers its primary)"; exit 1; }
+          # the whole reason `start` is conditional: a compact or resume fires SessionStart mid-turn
+          printf '{"session_id":"drill-sid-1","transcript_path":"%s","cwd":"%s","hook_event_name":"x"}' "$aw_wtp" "$aw_cwd" \
+            | CLAUDE_PID=- bash "$aw_hook" start >/dev/null 2>&1 || { echo "AWAKE RESTART RC FAIL"; exit 1; }
+          [ "$(sed -n 1p "$aw_home/sessions/drill-sid-1" | cut -d' ' -f1)" = busy ] \
+            || { echo "AWAKE NO-DOWNGRADE FAIL (a compact/resume SessionStart must never turn a busy session idle)"; exit 1; }
+          ;;
+        idle) [ "$(sed -n 1p "$aw_home/sessions/drill-sid-1" | cut -d' ' -f1)" = idle ] || { echo "AWAKE IDLE FAIL"; exit 1; };;
+        end)  [ -f "$aw_home/sessions/drill-sid-1" ] && { echo "AWAKE END FAIL (SessionEnd forgets the session outright)"; exit 1; };;
+      esac
+    done
+    # (2) a busy session whose transcript was touched NOW is work in flight: the daemon comes up
+    #     inline and presses within a tick. The presser is the stub, so the proof is a file appearing.
+    export POLARIS_AWAKE_TICK=1
+    rm -f "$aw_home/daemon/beat" "$T/aw/pressed"
+    : > "$aw_tp"
+    printf '{"session_id":"drill-sid-2","transcript_path":"%s","cwd":"%s","hook_event_name":"UserPromptSubmit"}' "$aw_tp" "$aw_cwd" \
+      | CLAUDE_PID=- bash "$aw_hook" busy >/dev/null 2>&1 || { echo "AWAKE BUSY SPAWN RC FAIL"; exit 1; }
+    aw_i=0; while [ "$aw_i" -lt 40 ]; do [ -f "$T/aw/pressed" ] && break; sleep 0.1; aw_i=$((aw_i+1)); done
+    [ -f "$T/aw/pressed" ] || { cat "$aw_home/daemon/log" 2>/dev/null; echo "AWAKE PRESS FAIL (a busy session with a live transcript must press within 3s)"; exit 1; }
+    [ "$(tr -d ' \r' < "$aw_home/daemon/last-press")" = pressed ] || { echo "AWAKE PRESS WORD FAIL (the presser's ONE word is recorded verbatim)"; exit 1; }
+    [ -d "$aw_home/lock" ] || { echo "AWAKE LOCK FAIL (the running daemon holds the mkdir singleton)"; exit 1; }
+    # (3) every session idle and stale ⇒ nothing presses, and the daemon LEAVES on its own after
+    #     GRACE. A keep-awake that needs stopping by hand is a keep-awake nobody dares to start.
+    rm -f "$T/aw/pressed"
+    touch -t 200001010000 "$aw_tp"
+    printf '{"session_id":"drill-sid-2","transcript_path":"%s","cwd":"%s","hook_event_name":"Stop"}' "$aw_tp" "$aw_cwd" \
+      | CLAUDE_PID=- bash "$aw_hook" idle >/dev/null 2>&1 || { echo "AWAKE IDLE RC FAIL"; exit 1; }
+    aw_i=0; while [ "$aw_i" -lt 150 ]; do [ -d "$aw_home/lock" ] || break; sleep 0.1; aw_i=$((aw_i+1)); done
+    [ -d "$aw_home/lock" ] && { cat "$aw_home/daemon/log"; echo "AWAKE GRACE FAIL (a quiet machine must let the daemon go, and the lock with it)"; exit 1; }
+    [ -f "$T/aw/pressed" ] && { echo "AWAKE QUIET PRESS FAIL (nothing presses once every session is idle)"; exit 1; }
+    # (4) the stale-daemon steal: a lock left by a hard-killed daemon must not deadlock the machine
+    #     forever. The BEAT decides, never the lock — plant a lock with a backdated beat and a pid
+    #     nobody answers, and the next ensure takes over. Exactly one new daemon, and a fresh beat.
+    #     Put the session back to work FIRST, under a wide TICK and a fresh beat, so that `busy` —
+    #     which ensures a daemon of its own — spawns nothing: this step must have exactly one
+    #     spawner, or it measures the setup instead of the steal.
+    : > "$aw_tp"
+    date +%s > "$aw_home/daemon/beat"
+    printf '{"session_id":"drill-sid-2","transcript_path":"%s","cwd":"%s","hook_event_name":"UserPromptSubmit"}' "$aw_tp" "$aw_cwd" \
+      | CLAUDE_PID=- POLARIS_AWAKE_TICK=60 bash "$aw_hook" busy >/dev/null 2>&1 || { echo "AWAKE STEAL BUSY RC FAIL"; exit 1; }
+    [ -d "$aw_home/lock" ] && { echo "AWAKE STEAL SETUP FAIL (a fresh beat must cost the busy hook no daemon)"; exit 1; }
+    mkdir -p "$aw_home/lock"
+    printf '999999\n' > "$aw_home/daemon/pid"
+    printf '0\n' > "$aw_home/daemon/beat"; touch -t 200001010000 "$aw_home/daemon/beat"
+    aw_n0="$(grep -c 'daemon up' "$aw_home/daemon/log" 2>/dev/null)" || aw_n0=0
+    bash "$aw_hook" ensure "$aw_cwd" >/dev/null 2>&1 || { echo "AWAKE ENSURE RC FAIL (ensure is rc 0 always)"; exit 1; }
+    aw_b=0
+    aw_i=0; while [ "$aw_i" -lt 80 ]; do
+      aw_b="$(cat "$aw_home/daemon/beat" 2>/dev/null)" || aw_b=0
+      case "$aw_b" in ''|*[!0-9]*) aw_b=0;; esac
+      [ "$aw_b" -gt 0 ] && [ $(( $(date +%s) - aw_b )) -lt 30 ] && break
+      sleep 0.1; aw_i=$((aw_i+1))
+    done
+    [ "$aw_b" -gt 0 ] || { cat "$aw_home/daemon/log"; echo "AWAKE STEAL FAIL (a stale lock must be taken over, and the new daemon must beat)"; exit 1; }
+    aw_n1="$(grep -c 'daemon up' "$aw_home/daemon/log" 2>/dev/null)" || aw_n1=0
+    [ "$aw_n1" -eq "$(( aw_n0 + 1 ))" ] || { cat "$aw_home/daemon/log"; echo "AWAKE STEAL COUNT FAIL (a steal starts ONE daemon, got $(( aw_n1 - aw_n0 )))"; exit 1; }
+    # (5) `stop` is the flag, not a kill: the loop reads it, consumes it and leaves within a tick.
+    #     Then `disabled` — the opt-out that still keeps the verdicts honest: an ACTIVE tick, and
+    #     nothing pressed.
+    : > "$aw_home/stop"
+    aw_i=0; while [ "$aw_i" -lt 80 ]; do [ -d "$aw_home/lock" ] || break; sleep 0.1; aw_i=$((aw_i+1)); done
+    [ -d "$aw_home/lock" ] && { cat "$aw_home/daemon/log"; echo "AWAKE STOP FAIL (the stop flag must end the loop within a tick)"; exit 1; }
+    [ -e "$aw_home/stop" ] && { echo "AWAKE STOP FLAG FAIL (the daemon consumes the flag on its way out)"; exit 1; }
+    rm -f "$T/aw/pressed"
+    : > "$aw_home/disabled"; : > "$aw_tp"
+    bash "$aw_hook" --test tick > "$T/aw/tick.out" 2>&1 || { cat "$T/aw/tick.out"; echo "AWAKE TICK RC FAIL"; exit 1; }
+    grep -qx 'tick: active disabled' "$T/aw/tick.out" || { cat "$T/aw/tick.out"; echo "AWAKE DISABLED VERDICT FAIL (the opt-out silences the press, never the verdict)"; exit 1; }
+    [ "$(tr -d ' \r' < "$aw_home/daemon/last-press")" = disabled ] || { echo "AWAKE DISABLED WORD FAIL"; exit 1; }
+    [ -f "$T/aw/pressed" ] && { echo "AWAKE DISABLED PRESS FAIL (a disabled daemon presses NOTHING)"; exit 1; }
+    rm -f "$aw_home/disabled"
+    # (6) re-entrant ensure: it fires from claim, status, doctor, handoff and bg run, so the second
+    #     one has to cost nothing. A fresh beat ⇒ no second daemon, no fork.
+    rm -rf "$aw_home/lock"; rm -f "$aw_home/daemon/beat"
+    aw_n0="$(grep -c 'daemon up' "$aw_home/daemon/log" 2>/dev/null)" || aw_n0=0
+    bash "$aw_hook" ensure "$aw_cwd" >/dev/null 2>&1 || { echo "AWAKE REENTRANT RC FAIL"; exit 1; }
+    aw_i=0; while [ "$aw_i" -lt 80 ]; do [ -s "$aw_home/daemon/beat" ] && break; sleep 0.1; aw_i=$((aw_i+1)); done
+    [ -s "$aw_home/daemon/beat" ] || { cat "$aw_home/daemon/log"; echo "AWAKE REENTRANT BEAT FAIL (the first ensure must bring a daemon up)"; exit 1; }
+    bash "$aw_hook" ensure "$aw_cwd" >/dev/null 2>&1 || { echo "AWAKE REENTRANT RC FAIL (2)"; exit 1; }
+    sleep 0.5
+    aw_n1="$(grep -c 'daemon up' "$aw_home/daemon/log" 2>/dev/null)" || aw_n1=0
+    [ "$aw_n1" -eq "$(( aw_n0 + 1 ))" ] || { cat "$aw_home/daemon/log"; echo "AWAKE REENTRANT FAIL (two ensures, ONE daemon — got $(( aw_n1 - aw_n0 )))"; exit 1; }
+    : > "$aw_home/stop"
+    aw_i=0; while [ "$aw_i" -lt 80 ]; do [ -d "$aw_home/lock" ] || break; sleep 0.1; aw_i=$((aw_i+1)); done
+    [ -d "$aw_home/lock" ] && { echo "AWAKE REENTRANT STOP FAIL"; exit 1; }
+    # (7) the bg-job clause. A detached suite is work with nobody at a keyboard and no transcript
+    #     moving — the case the machine used to sleep through. Every session idle, and the verdict
+    #     is still ACTIVE because a registered repo holds a live job with no rc file.
+    rm -f "$T/aw/pressed"
+    touch -t 200001010000 "$aw_tp"
+    printf '{"session_id":"drill-sid-2","transcript_path":"%s","cwd":"%s","hook_event_name":"Stop"}' "$aw_tp" "$aw_cwd" \
+      | CLAUDE_PID=- bash "$aw_hook" idle >/dev/null 2>&1 || { echo "AWAKE BGJOB IDLE RC FAIL"; exit 1; }
+    bash "$aw_hook" --test tick > "$T/aw/t7a.out" 2>&1 || { cat "$T/aw/t7a.out"; echo "AWAKE BGJOB PRE RC FAIL"; exit 1; }
+    grep -qx 'tick: quiet no-press' "$T/aw/t7a.out" || { cat "$T/aw/t7a.out"; echo "AWAKE BGJOB PRE FAIL (with no live job the same registry must read quiet)"; exit 1; }
+    mkdir -p "$T/aw/repo/.polaris/bg/awjob"
+    sleep 30 & aw_job=$!
+    printf '%s\n' "$aw_job" > "$T/aw/repo/.polaris/bg/awjob/pid"
+    printf 'sleep 30\n' > "$T/aw/repo/.polaris/bg/awjob/cmd"
+    date +%s > "$T/aw/repo/.polaris/bg/awjob/start"
+    : > "$T/aw/repo/.polaris/bg/awjob/log"
+    aw_k="$(printf '%s' "$T/aw/repo" | cksum)"; aw_k="${aw_k%% *}"
+    printf '%s\n' "$T/aw/repo" > "$aw_home/repos/$aw_k"
+    bash "$aw_hook" --test tick > "$T/aw/t7b.out" 2>&1 || { cat "$T/aw/t7b.out"; echo "AWAKE BGJOB RC FAIL"; exit 1; }
+    grep -qx 'tick: active pressed' "$T/aw/t7b.out" || { cat "$T/aw/t7b.out"; echo "AWAKE BGJOB FAIL (a live rc-less job in a registered repo is an ACTIVE machine)"; exit 1; }
+    [ -f "$T/aw/pressed" ] || { echo "AWAKE BGJOB PRESS FAIL"; exit 1; }
+    kill "$aw_job" >/dev/null 2>&1 || true
+    wait "$aw_job" 2>/dev/null || true
+    rm -f "$aw_home/repos/$aw_k"
+    # (8) install: the ONE subcommand that writes outside the registry, so HOME moves to the fixture
+    #     too. Identity is the PATH polaris/awake-hook.sh — an entry running OUR script is replaced
+    #     wholesale (a wrong timeout stays correctable), and every other entry is the human's.
+    if python -c pass >/dev/null 2>&1 || python3 -c pass >/dev/null 2>&1; then
+      mkdir -p "$T/aw/home/.claude"
+      printf '%s\n' '{' '  "hooks": {' '    "Stop": [' \
+        '      {"hooks": [{"type": "command", "command": "echo foreign-stop"}]},' \
+        '      {"hooks": [{"type": "command", "timeout": 99, "command": "\"bash\" \"/old/polaris/awake-hook.sh\" idle 2>/dev/null || true"}]}' \
+        '    ]' '  }' '}' > "$T/aw/home/.claude/settings.json"
+      aw_sj="$T/aw/home/.claude/settings.json"
+      HOME="$T/aw/home" bash "$aw_hook" install > "$T/aw/inst.out" 2>&1 || { cat "$T/aw/inst.out"; echo "AWAKE INSTALL RC FAIL"; exit 1; }
+      grep -q 'foreign-stop' "$aw_sj" || { cat "$aw_sj"; echo "AWAKE INSTALL FOREIGN FAIL (someone else's Stop hook is theirs — never rewritten)"; exit 1; }
+      grep -q '/old/polaris/awake-hook.sh' "$aw_sj" && { cat "$aw_sj"; echo "AWAKE INSTALL STALE FAIL (an entry running OUR script is replaced wholesale)"; exit 1; }
+      [ "$(grep -c 'awake-hook' "$aw_sj")" = 4 ] || { cat "$aw_sj"; echo "AWAKE INSTALL COUNT FAIL (exactly four entries, never a fifth on re-run)"; exit 1; }
+      for aw_ev in SessionStart UserPromptSubmit Stop SessionEnd; do
+        grep -q "\"$aw_ev\"" "$aw_sj" || { cat "$aw_sj"; echo "AWAKE INSTALL EVENT FAIL ($aw_ev missing)"; exit 1; }
+      done
+      for aw_sub in start busy idle end; do
+        [ "$(grep -c "\" $aw_sub 2>/dev/null" "$aw_sj")" = 1 ] || { cat "$aw_sj"; echo "AWAKE INSTALL SUB FAIL ($aw_sub must appear exactly once)"; exit 1; }
+      done
+    else
+      note "awake drill: no python on this machine — the settings.json merge is skipped (keep-awake.md § install)"
+    fi
+    # hermetic teardown: no daemon outlives the drill, the seams leave the environment, and the
+    # registry goes back to the empty shape the spine's export creates.
+    : 2>/dev/null > "$aw_home/stop" || true
+    aw_i=0; while [ "$aw_i" -lt 80 ]; do [ -d "$aw_home/lock" ] || break; sleep 0.1; aw_i=$((aw_i+1)); done
+    [ -d "$aw_home/lock" ] && { cat "$aw_home/daemon/log"; echo "AWAKE TEARDOWN FAIL (a drill must never leave a daemon running)"; exit 1; }
+    unset POLARIS_AWAKE_PRESSER POLARIS_AWAKE_TICK POLARIS_AWAKE_IDLE POLARIS_AWAKE_STALE POLARIS_AWAKE_GRACE POLARIS_AWAKE_SPAWN
+    rm -rf "$aw_home" "$T/aw"
+    mkdir -p "$aw_home/sessions" "$aw_home/repos" "$aw_home/daemon"
 }

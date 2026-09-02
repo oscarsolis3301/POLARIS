@@ -137,6 +137,7 @@ kit/ops/bootstrap.py	fn	die
 kit/ops/bootstrap.py	fn	find_bash
 kit/ops/bootstrap.py	fn	git_toplevel
 kit/ops/bootstrap.py	fn	main
+kit/ops/bootstrap.py	fn	merge_awake_hooks
 kit/ops/bootstrap.py	fn	merge_permissions
 kit/ops/bootstrap.py	fn	out
 kit/ops/bootstrap.py	fn	perm_snippet
@@ -438,6 +439,7 @@ kit/ops/lib/search.sh	fn	index_root
 kit/ops/lib/selftest/board.sh	fn	drill_claimguard
 kit/ops/lib/selftest/board.sh	fn	drill_fmlist
 kit/ops/lib/selftest/board.sh	fn	drill_grant
+kit/ops/lib/selftest/board.sh	fn	drill_handover
 kit/ops/lib/selftest/board.sh	fn	drill_newcmds
 kit/ops/lib/selftest/board.sh	fn	drill_readyoverlap
 kit/ops/lib/selftest/brain.sh	fn	drill_brain
@@ -446,6 +448,8 @@ kit/ops/lib/selftest/history.sh	fn	drill_express
 kit/ops/lib/selftest/history.sh	fn	drill_pr-publish
 kit/ops/lib/selftest/history.sh	fn	drill_selfland
 kit/ops/lib/selftest/history.sh	fn	drill_tcm
+kit/ops/lib/selftest/history.sh	fn	drill_wtreap
+kit/ops/lib/selftest/policy.sh	fn	drill_awake
 kit/ops/lib/selftest/policy.sh	fn	drill_bg
 kit/ops/lib/selftest/policy.sh	fn	drill_checkoutguard
 kit/ops/lib/selftest/policy.sh	fn	drill_claudemd
