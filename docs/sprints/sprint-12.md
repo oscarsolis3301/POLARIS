@@ -839,7 +839,7 @@ it shipped, kept its licence/attribution, and kept its opt-in frontmatter flag.
 - [ ] `ops/tests/adhd-skill-installed` golden stays green (SKILL.md/LICENSE untouched, opt-in flag intact)
 
 ## T-117 — "--no-permissions still armed the keep-awake hooks — one call sat outside the gate"
-points 1 · risk normal · landed 6ee28f5 (2026-09-02) · claimed 2026-09-02
+points 1 · risk normal · landed 6ee28f5 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: CHANGELOG.md, kit/ops/VERSION, kit/ops/bootstrap.py
 
 ### Why
@@ -870,3 +870,48 @@ reach anybody.
 - [ ] moving the call back outside the gate makes the CI assertion fire again
 - [ ] `kit/ops/VERSION` says 6.2.1 and the newest CHANGELOG heading is 6.2.1
 - [ ] `bash kit/ops/selftest-install.sh` green and the archive-integrity check passes on the rebuilt zip
+
+## T-118 — "The seal fan-out runs its OWN done LAST, never skips it — landing: self must reach done/"
+points 1 · risk normal · landed e2cdb59 (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/builder.sh, ops/contracts/worktree-liveness.md
+
+### Why
+Two things that shipped in the same release disagree, and the disagreement fails
+`doctor --selftest` deterministically:
+
+```
+HANDOVER SELFLAND FAIL (landing: self must carry the task to done/)
+```
+
+`kit/ops/lib/builder.sh` (worktree-liveness v1.2 "Guard 2", T-115) makes the post-seal fan-out SKIP
+`done` for the lane's own task and print that the task stays in `review/`. `kit/ops/lib/selftest/board.sh:260`
+(drill `handover`, T-111) asserts that the self-landed task reaches `ops/board/done/`. One of them
+has to give.
+
+**The drill is right, and the skip is now an over-correction.** Guard 2 was written when nothing
+protected the running script: the fan-out ran `done <own-ID>`, `wt_remove` deleted the worktree the
+script was executing from, and every later `done` in the loop died — that is how six tasks were
+stranded earlier in this sprint. T-114 then landed the real protection in `wt_remove`: it refuses,
+LEFT with rc 1, whenever the target worktree holds the running script (`$SELF`) or the caller's
+`$PWD`, and that guard is evaluated BEFORE beat age, so nothing can override it.
+
+With Guard 1 in place, `done <own-ID>` is safe: the worktree is LEFT, the branch is kept (`cmd_done`
+deletes the branch only on `wt_remove` rc 0 or 2), the board still moves to `done/`, and the script
+survives to finish the loop. The leftover worktree is reaped later by `sweep --fix` once it goes idle.
+Skipping instead breaks the promise of `landing: self` — that one command carries a task from claim
+to done — and leaves a task stranded in `review/` after every solo run, which is the exact mess this
+sprint exists to end.
+
+So the fan-out stops skipping. It runs every landed task's `done`, with the lane's OWN id LAST, so
+that a failure there cannot strand the siblings behind it in the loop. The two fixes forbidden in
+T-115 stay forbidden: the loop must NOT be made to tolerate a vanished `$SELF`, and nothing re-beats
+to survive the landing tail. Guard 1 is the protection; own-last is only ordering.
+
+### Acceptance
+- [x] `self_land`'s post-seal fan-out no longer `continue`s past the lane's own id; it defers that
+- [x] The "stays in review/ — a lane never runs done on its own task" note is gone.
+- [x] The deferred call carries a comment naming T-114's Guard 1 in `wt_remove` as the reason
+- [x] No new top-level function in `builder.sh` (the api-kit census stays at 13).
+- [x] `ops/contracts/worktree-liveness.md` gains an append-only `## v1.3` section recording that
+- [x] `bash kit/ops/polaris doctor --selftest --only handover,selfland,wtreap` is green.
+- [x] Sabotaged both ways: restore the skip → the drill reds; restore the fix → green.
