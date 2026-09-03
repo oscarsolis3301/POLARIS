@@ -4,6 +4,15 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.2.1 — 2026-09-02
+
+**The release below was tagged and never published — this is the fix that lets it out.**
+`--claude-skill --no-permissions` armed the keep-awake hooks anyway: item (4) of `arm_machine`
+sat outside the `permissions` gate, so the four hook entries landed in `~/.claude/settings.json`
+under a flag whose entire promise is that the file is not touched. CI caught it on Linux, macOS
+and Windows before any artifact shipped, so this is the first published 6.2 kit — everything in
+the entry below ships with it.
+
 ## 6.2.0 — 2026-09-02
 
 **Five sessions on one machine, and any one of them could still delete another's work.**

@@ -369,16 +369,22 @@ def arm_machine(archive, permissions=True):
         changed = True
     out(f"✅ kit cached:            {cached}")
 
-    # (4) keep-awake. Deliberately NOT folded into `changed`: the two hook files are rewritten on
-    # every install, so counting them as a change would make the one-off "machine armed" line nag
+    # (4) keep-awake, INSIDE the same gate as (3), because the two write the SAME file:
+    # `awake-hook.sh install` registers four hooks in ~/.claude/settings.json, exactly where
+    # merge_permissions puts the allow rules. --no-permissions promises that file is not touched,
+    # so it has to skip both. This call sat ABOVE the gate until 6.2.1 and quietly broke that
+    # promise on every OS (CI: "--no-permissions wrote to settings.json anyway"). --no-machine-setup
+    # is the wider opt-out and is unaffected either way — it never calls arm_machine at all.
+    #
+    # Still deliberately NOT folded into `changed`: the two hook files are rewritten on every
+    # install, so counting them as a change would make the one-off "machine armed" line nag
     # forever — the same mistake the cmp guard above exists to undo.
-    merge_awake_hooks(archive, find_bash())
-
     if permissions:
+        merge_awake_hooks(archive, find_bash())
         if merge_permissions(os.path.join(os.path.expanduser("~"), ".claude", "settings.json")):
             changed = True
     else:
-        out("   --no-permissions: ~/.claude/settings.json not touched.")
+        out("   --no-permissions: ~/.claude/settings.json not touched (keep-awake included).")
         perm_snippet()
 
     out()
