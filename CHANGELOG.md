@@ -4,14 +4,28 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.2.2 — 2026-09-02
+
+**The first published 6.2 kit.** 6.2.0 and 6.2.1 were both tagged, but neither ever published —
+each release run failed its smoke step, so no artifact exists for either one. The blocker was the
+brain's house-style detection: it samples tracked source files and pipes them through `xargs` into
+one `awk` pass, and on a repo with no application code that sample is empty. GNU `xargs` still runs
+the utility once on empty input; BSD `xargs` (macOS) does not run it at all, so `awk` never
+executed, `prefs.md` lost its `indent` row entirely, and the selftest drill asserting that row went
+red — aborting the suite before the bash-3.2 step downstream ever got to run. That failure was not
+introduced by this sprint: it has been in the code since 5.19.0 (2026-07-25) and had been failing
+macOS CI, undetected, for six weeks. Fixed by handing `awk` one extra empty file argument so it
+always runs regardless of what the sample contains. This tag carries all of 6.2.0's content.
+
 ## 6.2.1 — 2026-09-02
 
 **The release below was tagged and never published — this is the fix that lets it out.**
 `--claude-skill --no-permissions` armed the keep-awake hooks anyway: item (4) of `arm_machine`
 sat outside the `permissions` gate, so the four hook entries landed in `~/.claude/settings.json`
 under a flag whose entire promise is that the file is not touched. CI caught it on Linux, macOS
-and Windows before any artifact shipped, so this is the first published 6.2 kit — everything in
-the entry below ships with it.
+and Windows before any artifact shipped, but a second, unrelated release-blocking failure kept
+this tag from publishing too — 6.2.2 is the first published 6.2 kit, and everything in the entry
+below ships with it.
 
 ## 6.2.0 — 2026-09-02
 
