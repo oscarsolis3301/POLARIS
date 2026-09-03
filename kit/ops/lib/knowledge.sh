@@ -422,10 +422,19 @@ brain_prefs() { # prefs.md — house style DETECTED from the repo, never declare
   # `ops/` and `.claude/` are POLARIS's OWN installed code, not this repo's style. Counting them
   # told a fresh repo its convention was snake_case on the strength of 165 bash functions that
   # shipped with the tool — a confident wrong answer, and the worst kind for this file to give.
-  git -C "$PRIMARY" ls-files 2>/dev/null \
-    | grep -Ev '^(ops|kit/ops|\.claude|kit/\.claude)/' \
-    | grep -Ei '\.(py|js|jsx|mjs|cjs|ts|tsx|go|rs|java|kt|c|h|cc|cpp|cs|rb|php|sh|bash|css|scss)$' \
-    | head -200 \
+  # The `/dev/null` sentinel is LOAD-BEARING, and only on BSD: GNU xargs runs the utility once even
+  # when its input is empty (stdin from /dev/null), which is how the END block below got to print
+  # its "not detected" row for a repo with no application code. FreeBSD/macOS xargs does NOT run the
+  # utility at all on empty input, so awk never ran, prefs.md lost the row entirely, and the brain
+  # drill's `^| indent |` gate went red — macOS CI, and only macOS CI, from 5.19.0 to 6.2.1. One
+  # extra file argument that is empty by construction fixes it: awk always runs, and it contributes
+  # nothing to any count, so every number on every platform is byte-identical to before.
+  { git -C "$PRIMARY" ls-files 2>/dev/null \
+      | grep -Ev '^(ops|kit/ops|\.claude|kit/\.claude)/' \
+      | grep -Ei '\.(py|js|jsx|mjs|cjs|ts|tsx|go|rs|java|kt|c|h|cc|cpp|cs|rb|php|sh|bash|css|scss)$' \
+      | head -200
+    printf '%s\n' /dev/null
+  } \
     | tr '\n' '\0' 2>/dev/null | xargs -0 awk '
       # Length and quotes are counted on EVERY line, BEFORE the indent rules — those end in `next`,
       # so anything indented used to skip both. Since virtually all code inside a function IS
