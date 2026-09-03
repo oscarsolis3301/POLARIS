@@ -917,7 +917,7 @@ to survive the landing tail. Guard 1 is the protection; own-last is only orderin
 - [x] Sabotaged both ways: restore the skip → the drill reds; restore the fix → green.
 
 ## T-119 — "The handover drill puts CONVENTIONS.md back instead of deleting it — hermetic teardown after the self-land"
-points 1 · risk normal · landed 5d667b2 (2026-09-02) · claimed 2026-09-02
+points 1 · risk normal · landed 5d667b2 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/selftest/board.sh
 
 ### Why
@@ -939,3 +939,38 @@ touching it, and put that copy back at the end. Nothing about what the drill che
 - [ ] the drill adds no new shell function (the kit's public-surface golden stays green)
 - [ ] `bash ops/polaris doctor --selftest --only handover` is green twice in a row
 - [ ] the full `bash ops/polaris doctor --selftest` is green
+
+## T-120 — The house-style sample must still speak when the sample is empty — macOS CI has been red since 5.19.0
+points 1 · risk normal · landed c13b69c (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/knowledge.sh
+
+### Why
+The macOS side of CI has been failing for weeks and nobody could see why, because the job log is
+only reachable to someone signed in. It fails seven seconds in, always at the same place: the step
+that runs the full mechanics drill.
+
+The drill that dies is the one that checks the repo's "house style" summary — the little table that
+tells the next session whether this codebase indents with tabs or spaces, prefers single or double
+quotes, and how long its longest line is. That table is produced by sampling the repo's own source
+files and counting. In the drill's throwaway repo there is no application code at all, so the sample
+is legitimately empty — and the summary is supposed to say exactly that, in a row that reads
+"not detected".
+
+On Linux and on Windows it does. On macOS it prints nothing at all, so the row is missing and the
+drill correctly reports that the house-style table came out blank.
+
+The reason is a one-word difference between two versions of the same standard tool. The list of
+files to sample is handed to the counter through `xargs`. When the list is empty, the GNU version
+still runs the counter once — which is how the "not detected" row gets written. The BSD version
+that macOS ships does not run it at all, so nothing is written. The counter's own
+"nothing was sampled, say so" branch never gets a chance to run.
+
+The fix is one line: always hand the counter at least one file to open — the system's empty file —
+so it runs on every platform and the summary always speaks. An empty file contributes nothing to
+any count, so on Linux and Windows every number stays exactly what it was.
+
+### Acceptance
+- [ ] `brain_prefs` hands its counter a `/dev/null` sentinel, so the counter runs even when the
+- [ ] With a BSD-`xargs` stand-in on PATH (one that skips the utility on empty input, as macOS
+- [ ] With the normal GNU tools, the same drill stays green and the counted rows are unchanged for
+- [ ] `bash -n kit/ops/lib/knowledge.sh` is clean; no other file changes.
