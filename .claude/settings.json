@@ -31,6 +31,40 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/handover-hook.sh\" stop",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/handover-hook.sh\" anchor",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/handover-hook.sh\" prompt",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   },
   "includeCoAuthoredBy": false,
@@ -98,7 +132,14 @@
       "PowerShell(Resolve-Path:*)",
       "PowerShell(Split-Path:*)",
       "PowerShell(Join-Path:*)",
-      "PowerShell(ConvertFrom-Json:*)"
+      "PowerShell(ConvertFrom-Json:*)",
+      "EnterWorktree",
+      "ExitWorktree",
+      "Workflow",
+      "Task",
+      "Agent",
+      "TodoWrite",
+      "SendMessage"
     ]
   },
   "outputStyle": "polaris"

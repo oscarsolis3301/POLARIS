@@ -1,4 +1,4 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.1.0] -->
+<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.2.2] -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 Model-agnostic operating system for running N coding agents in parallel on this repo with zero merge
@@ -11,6 +11,7 @@ Your kickoff names your role. Read `ops/roles/<ROLE>.md` and execute it. Nothing
 | Kickoff says | Read | Sessions |
 |---|---|---|
 | **`start`** · `start building` · `go` · `let's build` · `polaris start` | **run `bash ops/polaris triage` — line 1 names your lane** (below) | per lane |
+| a plan you wrote was just approved (harness plan mode, `plan_gate`, or a typed yes) | `ops/roles/CONDUCTOR.md` in THIS chat — no subagent tool → `PLANNER.md`, then the handover loop | 1 |
 | "You are INIT" | `ops/roles/INIT.md` | 1, once per repo |
 | "You are the PLANNER" | `ops/roles/PLANNER.md` | 1 at a time |
 | "You are SOLO" | `ops/roles/SOLO.md` | 1 — one small change, start to merged, no subagents |
@@ -30,6 +31,8 @@ Your kickoff names your role. Read `ops/roles/<ROLE>.md` and execute it. Nothing
 
 - **`start` is the everyday kickoff.** It means "take the next piece of work". Empty board → the
   triage answer routes you to PLANNER instead of erroring.
+- **An approved plan is a kickoff, not a report.** The approval is the go for the whole run, in the
+  same chat; closing with "open a new chat and say…" is the exact failure this row exists to end.
 - **Scope guard:** `start` fires only when the message *is* a start phrase. "start the dev server",
   "go fix the header" name an object — they are ordinary requests, not kickoffs.
 - **Unprompted work request → run `triage`, same as `start`.** No role named, not a start phrase,
@@ -43,9 +46,10 @@ Your kickoff names your role. Read `ops/roles/<ROLE>.md` and execute it. Nothing
   intent to *understand or operate* it. Genuinely unclear → ask in one line.
 - No role given and `ops/CONVENTIONS.md` does NOT exist → INIT has never run → you are INIT.
   That file is the ONLY "has INIT run?" test; an `ops/board/` from an older installer proves nothing.
-- **NEVER act as two roles in one session.** Sole exception: the one-time INIT → PLANNER bootstrap.
-  The CONDUCTOR is not a second exception — it holds NO role and delegates each to a fresh subagent.
-  (Why, and the SOLO cost argument: `ops/PROTOCOL.md` § LANES.)
+- **NEVER act as two roles inside one CONTEXT.** A hop at a board-proven boundary is not a second
+  role — it is the next context (Invariant 5). Sole in-context exception: the INIT → PLANNER
+  bootstrap. The CONDUCTOR is not a second one — it holds NO role and delegates each to a fresh
+  subagent. (Why, and the SOLO cost argument: `ops/PROTOCOL.md` § LANES.)
 
 ## THE ONE IDEA
 All coordination is front-loaded into the Planner. Every task gets a **disjoint set of files it may
@@ -83,8 +87,7 @@ need one section or none.
    interface.
 4. **Green before `review/`.** Test commands from CONVENTIONS green AND `polaris verify` green. Red
    work never leaves `active/`.
-5. **One task per session, one role per session.** Finish or hand back before claiming another.
-   Sessions are disposable; the board is the memory.
+5. **One task per context, one role per context.** A session hops roles only at a boundary the board proves (a completion event), into the role `polaris next` names, with the hop logged; compaction is the context reset and the anchor hook the re-entry. Sessions are disposable; the board is the memory.
 6. **Board mutations go through `ops/polaris`** (they commit on `refs/heads/polaris/board`, never on
    `<base>`). Code commits go on `feat/<ID>` in your worktree. Never mix the two.
 7. **Claim = `polaris claim`.** Lock exists → task is taken → take the next one. Never edit a task

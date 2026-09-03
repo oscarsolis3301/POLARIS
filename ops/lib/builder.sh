@@ -132,6 +132,20 @@ EOF
   # cmd_resume. index.lock-only retries, ONE stray-feat repair, and any other failure re-emits
   # git's REAL stderr instead of the old blanket "git index busy" guess.
   wt_add "$id"
+  # the worktree beat (ops/contracts/worktree-liveness.md): claim is the first writer, so a session
+  # that never runs another command is still provably live for wt_live_minutes. Best-effort, rc 0.
+  beat_touch "$id"
+  # session state (ops/contracts/role-handover.md § session state): `task` on every claim, `plan`
+  # on the FIRST claim only (the task's plan: slug, may be empty) — `next` reads `plan` to tell a
+  # foreign task from this run's under drain: plan. Per checkout, gitignored, every line best-effort,
+  # and nothing without a session id (a plain shell, CI) — the same shape evt() uses for last-event.
+  local hs
+  if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+    hs="$PRIMARY/.polaris/handover/$CLAUDE_CODE_SESSION_ID"
+    mkdir -p "$hs" 2>/dev/null || true
+    printf '%s\n' "$id" 2>/dev/null > "$hs/task" || true
+    [ -e "$hs/plan" ] || printf '%s\n' "$(fm_get plan "$BOARD/active/$id.md" 2>/dev/null || true)" 2>/dev/null > "$hs/plan" || true
+  fi
   say "claimed $id → cd \"$wt\""
   # bootstrap: a fresh worktree is a bare checkout — node_modules/.venv/target are gitignored and
   # absent, so a real repo's `verify:`/full suite fails until deps are installed, in a dir the Builder
@@ -163,18 +177,72 @@ EOF
 cmd_verify() {
   local id="${1:-}"; [ -n "$id" ] || id="$(current_task_id)" || die "not on a feat/<ID> branch — pass the ID"
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
+  beat_touch "$id"                 # worktree-liveness: a verifying session is a live one
   check_ownership "$tf" HEAD
   check_rules HEAD "$id"           # ID threaded: an `ask` rule cleared by <ID>'s approved: list
   run_verify_cmds "$tf"
+  # capture check, the ⚠ twin of handoff's gate (ops/contracts/visual-check.md): same test, same
+  # sentence, but mid-flight it only warns — a Builder may verify before the shot is taken. Inline
+  # on purpose (SURFACE-FROZEN wave: no new fn); the die lives in cmd_handoff.
+  local vis shot vf vhit vbase vshot vmt vok
+  vis="$(cfg visual "")"; shot="$(cfg shot "")"
+  if [ -n "$vis" ] && [ -n "$shot" ]; then
+    vhit=0
+    while IFS= read -r vf; do
+      [ -n "$vf" ] || continue
+      if printf '%s\n' "$vis" | tr ' ' '\n' | owned_match "$vf"; then vhit=1; break; fi
+    done <<EOF
+$(git diff --name-only --no-renames "$BASE...HEAD")
+EOF
+    if [ "$vhit" -eq 1 ]; then
+      vbase="$(git log -1 --format=%ct "$(git merge-base "$BASE" HEAD)" 2>/dev/null || echo 0)"
+      vok=0
+      for vshot in "$PRIMARY/.polaris/shots/$id-"*.png; do
+        [ -s "$vshot" ] || continue
+        vmt="$(stat -c %Y "$vshot" 2>/dev/null || stat -f %m "$vshot" 2>/dev/null || echo 0)"
+        if [ "${vmt:-0}" -ge "${vbase:-0}" ]; then vok=1; break; fi
+      done
+      [ "$vok" -eq 1 ] || note "⚠ $id changed a visual: path but .polaris/shots/$id-*.png has no capture newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off"
+    fi
+  fi
 }
 
 cmd_handoff() {
   local id="${1:-}"; [ -n "$id" ] || id="$(current_task_id)" || die "not on a feat/<ID> branch — pass the ID"
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
+  beat_touch "$id"                 # worktree-liveness: the handoff beats, so done sees a LIVE own lane
   git diff --quiet && git diff --cached --quiet || die "uncommitted changes — commit on feat/$id first"
   check_ownership "$tf" "feat/$id"
   check_rules "feat/$id" "$id"     # ID threaded: an `ask` rule cleared by <ID>'s approved: list
   run_verify_cmds "$tf"
+  # capture-exists gate (ops/contracts/visual-check.md § cmd_handoff): a diff that touches a visual:
+  # path ships with a capture or not at all. Fires only when BOTH visual: and shot: are set (absent by
+  # default) AND the branch's diff has a path matching a visual: glob; then ONE non-empty
+  # .polaris/shots/<ID>-*.png in the PRIMARY must be newer than the branch base (the merge-base
+  # commit's time), else the handoff dies HERE — before any board write, so the task stays in
+  # active/. Existence and freshness only: LOOKING at it is prose (the saw: line, the Integrator
+  # opening the png). Inline on purpose (SURFACE-FROZEN wave: no new fn); cmd_verify carries the ⚠ twin.
+  local vis shot vf vhit vbase vshot vmt vok
+  vis="$(cfg visual "")"; shot="$(cfg shot "")"
+  if [ -n "$vis" ] && [ -n "$shot" ]; then
+    vhit=0
+    while IFS= read -r vf; do
+      [ -n "$vf" ] || continue
+      if printf '%s\n' "$vis" | tr ' ' '\n' | owned_match "$vf"; then vhit=1; break; fi
+    done <<EOF
+$(git -C "$PRIMARY" diff --name-only --no-renames "$BASE...feat/$id")
+EOF
+    if [ "$vhit" -eq 1 ]; then
+      vbase="$(git -C "$PRIMARY" log -1 --format=%ct "$(git -C "$PRIMARY" merge-base "$BASE" "feat/$id")" 2>/dev/null || echo 0)"
+      vok=0
+      for vshot in "$PRIMARY/.polaris/shots/$id-"*.png; do
+        [ -s "$vshot" ] || continue
+        vmt="$(stat -c %Y "$vshot" 2>/dev/null || stat -f %m "$vshot" 2>/dev/null || echo 0)"
+        if [ "${vmt:-0}" -ge "${vbase:-0}" ]; then vok=1; break; fi
+      done
+      [ "$vok" -eq 1 ] || die "handoff refused: $id changed a visual: path but .polaris/shots/$id-*.png has no capture newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off"
+    fi
+  fi
   map_delta_hint "$tf" "feat/$id"
   # publish: pr — feat branches never leave the machine; seal pushes ONE integrate branch instead
   # (ops/contracts/publish-modes.md). Everything else stays byte-identical to direct mode.
@@ -236,7 +304,7 @@ cmd_handoff() {
   [ "$pushed" -eq 0 ] && note "⚠ push failed ×3 — feat/$id is local-only; the board moved anyway and land merges the local branch"
   case "$notice" in
     integrate) say "all lanes done — nothing left building. Integrate now: \"You are the INTEGRATOR. Land everything in ops/board/review/.\"";;
-    queue)     note "$nrdy ready task(s) still queued — say start (or: bash ops/polaris fleet $nrdy --launch) to build them";;
+    queue)     note "$nrdy ready task(s) still queued — the board hands you the next step: bash ops/polaris next";;
   esac
   # T-088 (shared-checkout v2 §5): under landing: self the handoff CONTINUES into the landing —
   # the last statement on purpose, so its rc (0, or 3 for a queued lane) is the handoff's rc.
@@ -295,15 +363,37 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
     note "⚠ wave not sealed (rc $src) — $id is landed and safe; close the wave with: bash ops/polaris seal"
     return 0
   fi
-  local f tid
+  # worktree-liveness.md v1.3 supersedes v1.2's Guard 2: the fan-out finishes EVERY landed review
+  # task including its own, and the lane's own id goes LAST. v1.2 skipped it, which stranded the
+  # task in review/ after every self-land and broke the whole promise of `landing: self` — one
+  # command carrying a task from claim to done. Skipping was only ever a proxy for the real danger:
+  # we are executing from inside .polaris/wt/$id, so $SELF is that worktree's ops/polaris, and the
+  # pre-T-114 `done $id` deleted the directory the running script lived in, killing every remaining
+  # `done` in the loop (2026-09-02, T-104's lane: six landed tasks stranded).
+  # T-114 fixed that at the source: Guard 1 in wt_remove refuses — LEFT, rc 1, nothing touched —
+  # whenever the target worktree holds $SELF or the caller's $PWD, and it is evaluated BEFORE beat
+  # age, so no stale beat, no caller and no --fix can lift it. So `done <own-ID>` is now safe: the
+  # worktree is LEFT, cmd_done keeps feat/$id (it deletes the branch only on wt_remove rc 0 or 2),
+  # the board still moves to done/, and $SELF survives to the end of this function. The leftover
+  # worktree is sweep --fix's job, once the beat goes quiet.
+  # Own-LAST, not own-first: Guard 1 makes the deletion impossible, but ordering costs nothing and
+  # means that if that one `done` ever fails for some other reason, it cannot strand the siblings
+  # queued behind it. The two v1.2 non-fixes stay forbidden: this loop must NOT be taught to
+  # tolerate a vanished $SELF, and nothing here re-beats to survive the landing tail.
+  local f tid own_last=""
   for f in "$BOARD/review/"*.md; do
     [ -f "$f" ] || continue
     tid="$(fm_get id "$f" 2>/dev/null || true)"
     [ -n "$tid" ] || continue
     landed_sha "$tid" >/dev/null 2>&1 || continue
+    if [ "$tid" = "$id" ]; then own_last="$tid"; continue; fi
     ( cd "$PRIMARY" && "$SELF" done "$tid" ) \
       || note "⚠ done $tid failed — finish it by hand: bash ops/polaris done $tid"
   done
+  if [ -n "$own_last" ]; then
+    ( cd "$PRIMARY" && "$SELF" done "$own_last" ) \
+      || note "⚠ done $own_last failed — finish it by hand: bash ops/polaris done $own_last"
+  fi
   return 0
 }
 
@@ -315,6 +405,16 @@ cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
   esac; done
   [ "$to" = "ready" ] || [ "$to" = "blocked" ] || die "--to must be ready or blocked"
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
+  local wt; wt="$(wt_path "$id")"
+  # the refusal comes FIRST (ops/contracts/worktree-liveness.md, the release rows): from OUTSIDE the
+  # worktree, live + dirty means another session may be typing in it — die before any board write,
+  # naming the beat so takeover stays explicit. Own lane (cwd inside it) is live by definition and
+  # never refused; a clean or idle worktree falls through to wt_remove below, which decides the rest.
+  local own=0
+  case "$PWD" in */.polaris/wt/"$id"|*/.polaris/wt/"$id"/*) own=1;; esac
+  if [ "$own" -eq 0 ] && [ -d "$wt" ] && beat_live "$id" && [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then
+    die "release refused: .polaris/wt/$id is live (beat $(beat_age "$id")s ago) and dirty — another session may be working there; if you are sure it is dead: rm \"$GCD/worktrees/$id/polaris-beat\" then re-run"
+  fi
   mutex_on
   mv "$BOARD/active/$id.md" "$BOARD/$to/$id.md"
   set_fm owner null "$BOARD/$to/$id.md"; set_fm status "$to" "$BOARD/$to/$id.md"
@@ -327,10 +427,15 @@ cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
   board_commit "chore(board): release $id → $to"
   sync_board
   mutex_off; trap - EXIT
-  local wt; wt="$(wt_path "$id")"
-  [ -d "$wt" ] && git -C "$PRIMARY" worktree remove --force "$wt" 2>/dev/null || true
+  # wt_remove is THE removal primitive (workspace.sh; never --force): clean ⇒ removed (rc 0) · dirty ⇒
+  # archived to .polaris/wt-archive/<ID>-<epoch> (rc 2) · anything git or mv refuses ⇒ LEFT (rc 1)
+  # with its own note. The lock drops on every path — the task is claimable again whatever happened
+  # to the directory.
+  local wrc=0 wst
+  wt_remove "$id" release || wrc=$?
+  case "$wrc" in 0) wst=removed;; 2) wst=archived;; *) wst=LEFT;; esac
   lock_drop "$id"; [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$id"
-  say "$id → $to/ · lock released · worktree removed (branch feat/$id kept)"
+  say "$id → $to/ · lock released · worktree $wst (branch feat/$id kept)"
 }
 
 fm_append_item() { # fm_append_item <field> <item> <taskfile> — THE append-only front-matter list
@@ -572,6 +677,54 @@ EOF
       || printf '(none recorded for these paths)\n'
   fi
 
+  # 7b. SEE YOUR WORK (ops/contracts/visual-check.md § cmd_pack): the capture step, driven by real
+  # cfg reads of visual:/shot:/serve:/port_base: so each repo plugs in its own tool. Absent by
+  # default — no visual: ⇒ one line and nothing else changes. `touches it` = any files_owned
+  # pattern vs any visual: glob, both directions (pat_overlap, the claim gate's matcher); the globs
+  # are read through a here-doc, never a bare $vis, which the shell would expand against the cwd.
+  # Per-task port = port_base + (numeric tail of the ID mod 100): T-207 ⇒ +7, no digits ⇒
+  # port_base, no port_base ⇒ {PORT} stays literal. Inline on purpose (SURFACE-FROZEN: no new fn).
+  pack_section "SEE YOUR WORK — capture before handoff (ops/VISUAL.md)"
+  local vis vshot vserve vbase vport vnum vhit
+  vis="$(cfg visual "")"
+  if [ -z "$vis" ]; then
+    printf '(visual: unset — no capture step; ops/VISUAL.md explains how to add one)\n'
+  else
+    vshot="$(cfg shot "")"; vserve="$(cfg serve "")"; vbase="$(cfg port_base "")"
+    vhit=no
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      while IFS= read -r d; do
+        [ -n "$d" ] || continue
+        if [ "$vhit" = no ] && pat_overlap "$p" "$d"; then vhit=yes; fi
+      done <<EOF_VIS
+$(printf '%s\n' "$vis" | tr ' ' '\n')
+EOF_VIS
+    done <<EOF_OWN
+$owned
+EOF_OWN
+    vnum="${id##*[!0-9]}"
+    vport=""
+    case "$vbase" in ''|*[!0-9]*) ;; *)
+      vport="$vbase"; if [ -n "$vnum" ]; then vport=$(( vbase + 10#$vnum % 100 )); fi;;
+    esac
+    printf 'visual: %s · this task touches it: %s\n' "$vis" "$vhit"
+    if [ -n "$vserve" ]; then
+      if [ -n "$vport" ]; then vserve="${vserve//\{PORT\}/$vport}"; fi
+      printf 'serve: %s\n' "$vserve"
+    fi
+    if [ -n "$vshot" ]; then
+      vshot="${vshot//\{ID\}/$id}"
+      if [ -n "$vport" ]; then vshot="${vshot//\{PORT\}/$vport}"; fi
+      printf 'shot: %s\n' "$vshot"
+    else
+      printf 'shot: (unset — set shot: in ops/CONVENTIONS.md; ops/VISUAL.md)\n'
+    fi
+    if [ -n "$vport" ]; then printf 'port: %s\n' "$vport"; else printf 'port: (port_base unset — {PORT} stays literal)\n'; fi
+    printf 'proof: .polaris/shots/%s-*.png — then READ it and write one "saw: <what it shows>" line in your handoff\n' "$id"
+    printf 'read: ops/VISUAL.md\n'
+  fi
+
   # 8. what will actually be run against you. Knowing this up front is what stops a Builder
   # writing a verify: it cannot pass, or hand-checking something the list already proves.
   pack_section "WHAT PROVES IT — polaris verify runs exactly this"
@@ -589,12 +742,25 @@ cmd_resume() { # resume [ID] — re-enter an already-claimed active task without
   [ -n "$id" ] || id="$(current_task_id)" || die "usage: polaris resume <ID> (or run inside a feat/<ID> worktree)"
   board_materialize || true   # fresh clone: rebuild ops/board/ from polaris/board BEFORE the lookup
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/ — only a claimed task can be resumed; for a fresh one: polaris claim"
-  who; mkdir -p "$LOCKS/$id"; { date +%s; echo "$WHO"; echo "$id"; } > "$LOCKS/$id/meta"   # adopt + refresh the lock
+  # the takeover gate (ops/contracts/worktree-liveness.md § die texts): resume used to adopt ANY
+  # lock unconditionally — the lock-side twin of the worktree bug. Liveness is the beat alone; the
+  # lock's line 4 (session id) decides only the same-session exception: a compacted session
+  # re-entering its own task is allowed, a live worktree whose lock carries another session's id is
+  # refused, and takeover stays explicit (rm the beat). A missing line reads `-` (the installed 6.1
+  # CLI wrote 3-line metas), and so does an unset session id (a plain shell, CI) — two `-` are the
+  # same nobody, so a shell with no identity keeps re-entering its own claim. Idle ⇒ adopt, as before.
+  local lsid; lsid="$(sed -n 4p "$LOCKS/$id/meta" 2>/dev/null || true)"; [ -n "$lsid" ] || lsid="-"
+  if beat_live "$id" && [ "$lsid" != "${CLAUDE_CODE_SESSION_ID:--}" ]; then
+    die "resume refused: .polaris/wt/$id is live (beat $(beat_age "$id")s ago) — another session is inside it. Takeover is explicit: rm \"$GCD/worktrees/$id/polaris-beat\" then re-run (or work from inside that worktree)"
+  fi
+  # adopt + refresh the lock — all five lines (core.sh lock_take is the twin writer)
+  who; mkdir -p "$LOCKS/$id"; { date +%s; echo "$WHO"; echo "$id"; echo "${CLAUDE_CODE_SESSION_ID:--}"; echo "${CLAUDE_PID:--}"; } > "$LOCKS/$id/meta"
   local wt; wt="$(wt_path "$id")"
   if [ ! -d "$wt" ]; then
     note "worktree was gone — recreating it from feat/$id"
-    wt_add "$id"   # T-059: same primitive as claim — honest stderr, index.lock-only retries
+    wt_add "$id" resume   # T-059 primitive; `resume` recreates a deleted feat/<ID> from base with ONE ⚠ note (workspace.sh's)
   fi
+  beat_touch "$id"                 # worktree-liveness: the resumed lane is live from this moment
   say "resumed $id → cd \"$wt\""
   note "task file: \"$BOARD/active/$id.md\" (primary-anchored — worktrees do not contain ops/board)"
   if grep -q '⛔' "$tf" 2>/dev/null; then note "last note on this task (why it is back in active/):"; grep '⛔' "$tf" | tail -1 | sed 's/^[[:space:]]*/     /'; fi

@@ -97,7 +97,10 @@ acceptance boxes checked, append the handoff telemetry line, `board_commit "chor
 ## Release / abort (Builder)
 In the PRIMARY checkout: `mv` the task back to `ops/board/ready/` (or `ops/board/blocked/` + a note),
 append the release telemetry line, `board_commit "chore(board): release <ID>" <the two task paths> ops/board/EVENTS.ndjson`
-+ `sync_board`. Remove the lock (`rm -rf "$LOCKS/<ID>"`, and in claim-branch mode `git push origin :refs/heads/claim/<ID>`). `git worktree remove .polaris/wt/<ID> --force`.
++ `sync_board`. Remove the lock (`rm -rf "$LOCKS/<ID>"`, and in claim-branch mode `git push origin :refs/heads/claim/<ID>`).
+The worktree is `wt_remove`'s, never yours: `bash ops/polaris sweep --fix` removes it once idle; by hand only when the
+beat file is older than `wt_live_minutes`: `git worktree remove .polaris/wt/<ID>`
+(never `--force`; a dirty one is moved to `.polaris/wt-archive/`, never deleted).
 
 ## Grant (Builder) — amend `files_owned` mid-flight, the sanctioned way
 What `ops/polaris grant <ID> <path> -m "why"` does by hand. Preconditions — ALL must hold, else STOP and change NOTHING (no partial write, no commit):
@@ -119,7 +122,10 @@ Suite green (and `uat:` from CONVENTIONS.md, if set, run once on `integrate/<dat
 Then, per landed task (`publish: direct` → right after seal; `publish: pr` → after `seal --sync`): re-run its `verify:` commands on `<base>`, then **`done`**:
 - `mv ops/board/review/<ID>.md ops/board/done/<ID>.md`, stamp `landed: <sha>` onto its frontmatter, append the done telemetry line, `board_commit "chore(board): done <ID>" <the two task paths> ops/board/EVENTS.ndjson` + `sync_board`;
 - **map_delta is a SEPARATE base commit, not part of the board_commit:** ONLY when the task's `map_delta` is non-empty, append those lines to `ops/MAP.md` and commit on `<base>` as `docs(map): <ID> <first delta line>`. This is the ONLY commit any board mutation ever makes on `<base>`;
-- release its lock, `git worktree remove` + delete `feat/<ID>` local AND — `publish: direct` only — remote (`git push origin :refs/heads/feat/<ID>`; under `publish: pr` the feat branch was never pushed, so the remote delete is a no-op — skip it), `git worktree prune`.
+- release its lock and delete `feat/<ID>` local AND — `publish: direct` only — remote (`git push origin :refs/heads/feat/<ID>`; under `publish: pr` the feat branch was never pushed, so the remote delete is a no-op — skip it), then `git worktree prune`.
+  The worktree itself is `wt_remove`'s: `bash ops/polaris sweep --fix` removes it once idle; by hand only when the beat
+  file is older than `wt_live_minutes`: `git worktree remove .polaris/wt/<ID>`
+  (never `--force`; a dirty one is moved to `.polaris/wt-archive/`, never deleted).
 
 ## Land (Integrator) — what `ops/polaris land <ID>` does by hand
 Inside the PRIMARY checkout, on the `integrate/<date>` branch — NEVER on `<base>` (create `integrate/<date>` first if you're on it). Squashes one reviewed task into exactly one commit.

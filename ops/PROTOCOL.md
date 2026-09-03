@@ -127,6 +127,15 @@ The landing tail can wait on a busy lease, so a session detaches it (`bg run shi
 `bg wait --max 300` — § LONG COMMANDS) and polls the rc; `landing: integrator` restores the classic
 handoff byte-for-byte.
 
+**Handover is that chain's last link** (`handover:` in `ops/CONVENTIONS.md`, since 6.2.0; default
+`auto`). SOLO collapsed four contexts into one, `land --express` collapsed the Integrator's,
+`landing: self` gave every lane that landing, and handover finishes the argument: at a boundary the
+BOARD proves — a completion event `bash ops/polaris next` reads back — one chat sheds the finished
+task and continues as the role `next` names, compaction being the context reset. SESSIONS again,
+never CHECKS: every gate runs exactly as before, and **a hop consumes exactly one completion
+event** (the hook licenses it by string equality, so a hop can never fire twice on the same event).
+`handover: off` restores one task per session.
+
 ## N CHATS, ONE REPO — who waits, who parks, who queues
 Several chats, one checkout. The second session finds the task locked, the integration lane held, or
 somebody else's edits in the tree — and none of that is a question for the human:
@@ -140,6 +149,7 @@ improvised a question and stalled on a human who had walked away. This table is 
 | the integration lane is held | integration lane busy → wait; rc 3 with a queued: line means report queued and retry at the next wave boundary | `land` · `seal` take the lease for you |
 | the shared checkout is dirty | a dirty shared checkout is parked, never asked about: bash ops/polaris park | `bash ops/polaris unpark` puts it back |
 | a lock, lease or task that is not yours | another session's locks, leases and tasks are invisible — never steal unless sweep flags them STALE | `bash ops/polaris sweep` names stale locks |
+| a worktree that is not yours | a worktree is removed only by wt_remove, only when idle — never by hand; sweep --fix reaps idle ones | `bash ops/polaris sweep` shows beat age |
 
 Exit codes carry the same answer, so a subagent or a script reads it without prose:
 
@@ -242,6 +252,19 @@ Three bands, and the band is a property of the MEASURED time, not of how importa
 - Mechanics — registry layout, rc-file-first verdicts (a pid check alone NEVER declares one), one-slot
   rotation, the `finish` guard — are specified in `ops/contracts/bg-jobs.md`.
 
+## AWAKE — one keep-awake daemon per machine
+The box used to sleep mid-run. ONE daemon per MACHINE keeps it awake while any session is still
+working and exits by itself once every session and repo is idle — never one per chat. It lives in
+`~/.claude/polaris/awake/` (registry, daemon pid, beat, logs) and is driven by four machine-level
+hooks merged into `~/.claude/settings.json` — `SessionStart` · `UserPromptSubmit` · `Stop` ·
+`SessionEnd`; hook entries that are not ours are never touched.
+`bash ops/polaris awake status|start|stop|disable|enable` is the whole face: `status` prints one
+line, `start` arms it now, `stop` is 60 minutes off, `disable`/`enable` are the standing switch.
+`finish` never stops it; the next prompt anywhere respawns it. Opt out with the `disabled` flag
+(`awake disable`); `KEY=none` in the registry's `config` keeps only the invisible execution-state
+half, so nothing is ever typed. A closed lid, the power button and a critical battery are out of
+reach for any user-mode program — nothing here can help with those.
+
 ## VOICE — how you TALK to the human (`voice:` in `ops/CONVENTIONS.md`, default `standard`)
 | `voice:` | How you speak |
 |---|---|
@@ -258,7 +281,7 @@ of these rules is strictly less output:
 
 1. **Lead with the action**, not the context. Answer first, explain only if asked.
 2. **Number multi-step work; cap every list at 5.** More than five is a dump, not a report.
-3. **End with ONE concrete next step**, doable in under two minutes. Not three options.
+3. **End with ONE concrete next step** — one only the human can take, doable in under two minutes; a step this chat could take itself, it takes before closing. Not three options.
 4. **No preamble, no recap, no closing pleasantry.** Start at the answer, stop when it ends.
 5. **Restate where things stand, every message** — "3 of 5 done, 2 to go", never "good progress".
 6. **Give time in real units** — "about 15 minutes", never "some work" or "almost there".

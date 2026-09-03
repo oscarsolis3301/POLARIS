@@ -25,13 +25,18 @@ bg_age() { # bg_age <seconds> — humanize a second count for one-line reports: 
   else printf '%ss' "$s"; fi
 }
 
-bg_rotate() { # bg_rotate <name> — archive a job dir to its ONE .prev slot (bg-jobs.md:
-  # archive-not-delete; the previous archive is the only thing the slot replaces). No dir →
-  # silent rc 0. Windows can hold the dir open while a runner still writes its log — die honestly.
+bg_rotate() { # bg_rotate <name> — archive a job dir to its ONE .prev slot (bg-jobs.md v2:
+  # rotation NEVER deletes). The .prev an earlier run left behind is moved aside into
+  # .archive/<name>-<epoch> — a dot-dir, so every `*/` reader (bg status, sweep, the finish guard)
+  # keeps ignoring it for free, and `sweep --fix` prunes it by age. No dir → silent rc 0. Windows
+  # can hold the dir open while a runner still writes its log — die honestly.
   local root="$PRIMARY/.polaris/bg"
   local n="${1:-}"
   [ -d "$root/$n" ] || return 0
-  rm -rf "$root/$n.prev" 2>/dev/null || true
+  if [ -d "$root/$n.prev" ]; then
+    mkdir -p "$root/.archive"
+    mv "$root/$n.prev" "$root/.archive/$n-$(date +%s)" 2>/dev/null || true
+  fi
   mv "$root/$n" "$root/$n.prev" 2>/dev/null \
     || die "could not rotate '$n' to $n.prev — still running? bash ops/polaris bg status $n"
 }
@@ -75,6 +80,17 @@ bg_run() { # bg run <name> [--force] [-- <cmd…>] — start a detached job (bg-
   if [ -d "$dir" ]; then
     pid="$(cat "$dir/pid" 2>/dev/null | tr -d ' \r\n')"
     if [ ! -f "$dir/rc" ] && bg_alive "$pid"; then
+      # OWNERSHIP = the job's cwd, never its pid (bg-jobs.md v2). Five sessions on one machine share
+      # ONE registry, so a live same-name job started elsewhere belongs to somebody else: refuse it
+      # WITH or WITHOUT --force, because --force kills a pid Windows may already have handed on.
+      # Compare normalized (\ → /, case-folded) — the same dir reaches us spelled both ways. `qa`
+      # records $PRIMARY on every session, so two `bg run qa` are same-cwd and hit the v1 refusal.
+      local owner=""
+      owner="$(cat "$dir/cwd" 2>/dev/null | tr -d ' \r\n')"
+      if [ -n "$owner" ] \
+         && [ "$(printf '%s' "$owner" | tr 'A-Z\\' 'a-z/')" != "$(printf '%s' "$cwd" | tr 'A-Z\\' 'a-z/')" ]; then
+        die "job '$name' is RUNNING from another session (cwd $owner) — pick a distinct name (bg run $name-<ID>); --force never kills a foreign live job"
+      fi
       [ -n "$force" ] || die "job '$name' is already RUNNING (pid $pid) — bash ops/polaris bg status $name · rerun anyway: bg run $name --force"
       # best-effort kill: the direct children first (ps: PID=$2 PPID=$3 on Git Bash), then the
       # runner — grandchildren may survive; the rotate below dies honestly if they hold the log.
@@ -93,6 +109,7 @@ bg_run() { # bg run <name> [--force] [-- <cmd…>] — start a detached job (bg-
   date +%s > "$dir/start"
   printf '%s\n' "$cmdline" > "$dir/cmd"
   printf '%s\n' "$cwd" > "$dir/cwd"
+  printf '%s\n' "${CLAUDE_CODE_SESSION_ID:--}" > "$dir/sid"   # informational only — cwd is the ownership key (it also works in CI, where no sid exists)
   : > "$dir/log"
   # pid semantics from birth (the T-064 lesson): spawn, write the pid, nothing in between. The
   # runner writes end THEN rc — rc is written LAST, and its EXISTENCE means "finished". set +e

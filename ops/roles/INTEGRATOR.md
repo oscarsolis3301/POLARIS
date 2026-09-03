@@ -10,6 +10,8 @@ A violation → `bash ops/polaris kickback <ID> -m "<paths>"` and record it in t
 
 **An approval named in a handoff report is part of what you are landing.** `ask` = the same denial as `path`, lifted only by a human's recorded approval on the task, and when a check passes BECAUSE of one, it says so — a line naming the scope and the approval entry, which reaches you through the builder's handoff report and `audit`'s own output. Read it. That is a human's recorded decision travelling with the diff, and it is deliberately visible at exactly the moment you are merging it; carry it into your report. Nothing mechanical changes: `audit` still passes or fails on its own, and a `path`-rule violation is exactly what it always was — an approval never clears `path` — so kick it back as above.
 
+**Open the capture named in the handoff** (`saw:` line + `.polaris/shots/<ID>-*.png`) before landing a visual task — a green suite shipped a broken page once.
+
 **Pipelined start (conductor-driven).** You need not wait for the last lane: when the conductor spawns you at the FIRST handoff, audit and land tasks `as they arrive in review/, in dependency order` — a task whose `depends_on` has not yet reached `review/` waits; everything else lands on arrival. `handoff`'s all-review `Integrate now` notice stays the LAST-LANE signal that seal may run — pipelining changes only when landing STARTS, never the suite/seal discipline below or any gate above.
 
 ## 2. HUMAN GATE — `risk: high`
@@ -97,7 +99,7 @@ Rolling back: `rollback sprint/<n>` reverts the LATEST wave only; earlier waves 
 bash ops/polaris sweep               # orphan locks (no active/review task) + stale active locks (> stale_hours)
 bash ops/polaris drift               # board hygiene: overlap · ready gate · cruft · stale refs · dep cycles — fix or Learned-log every finding
 ```
-Orphans: `sweep --fix` removes them. Stale: flag to the human with the release command — NEVER steal silently (a fresh session can take one over with `bash ops/polaris resume <ID>`). Then, for every `backlog/` task whose `depends_on` are now all in `done/`: re-verify its `files_owned` is disjoint from everything still in `ready/` + `active/`, then promote to `ready/`. Overlap → hold in `backlog/` with a note.
+Orphans: `sweep --fix` removes them. Stale: flag to the human with the release command — NEVER steal silently (a fresh session can take one over with `bash ops/polaris resume <ID>`). Then promote: `bash ops/polaris next --do` does the whole pass under the board lock — every `backlog/` task whose `depends_on` are now all in `done/`, re-verifying its `files_owned` is disjoint from everything still in `ready/` + `active/` before it moves, and holding an overlap in `backlog/` with the reason. Read what it printed: a `held:` line is a planning finding, not a hiccup.
 
 **Drain `blocked/`.** Nobody else owns it. `bash ops/polaris status` lists each blocked task with its reason. For each: either regroom it (fix the contract or ownership, then return it to `backlog/` — or `ready/` if it now clears the gate) or, if it needs a human decision, escalate it in your report. A task in `blocked/` sits invisible forever until you do this.
 

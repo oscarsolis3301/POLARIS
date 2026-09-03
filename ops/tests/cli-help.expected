@@ -128,6 +128,9 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  maps that tier (model_strong/mid/cheap). Read-only: the
                                  CONDUCTOR asks it before every spawn; fleet rides the max
                                  tier over ready/
+  next [--do|--brief]            what this session does NEXT, read off the board — line 1 is ONE verb:
+                                 resume <ID> · build <ID> · integrate · promote · wait · stop · finish;
+                                 --do performs a promote under the board lock · --brief re-anchors a chat
   drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
   qa [--force]                   is everything okay, in ONE shot: test/lint/typecheck/build/uat
@@ -179,6 +182,9 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  6-8 context run pays for them. --apply MOVES those into
                                  ~/.claude/.polaris-archived/ (never deletes); --restore puts them
                                  all back. Report-only by default; the installer never applies it
+  awake [status|start|stop]      ONE keep-awake daemon per machine (~/.claude/polaris/awake): presses
+                                 F15 every ~55s while any session is busy; exits by itself once every
+                                 session and repo is idle. start = arm now · stop = 60 min off
   version                        installed version · commit · latest on the channel
   update [--repo-only]           fetch the latest KIT from the channel (manual; never automatic).
                                    also re-caches it into ~/.claude so the NEXT repo you install

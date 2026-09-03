@@ -230,6 +230,13 @@ drill_upgrade() {
       ( set -e; cd .polaris/wt/T-M; echo m > src/m.txt; git add -A; git commit -qm ok
         "$SELF" handoff T-M >/dev/null ) || exit 1
       git merge -q --no-ff feat/T-M -m merge
+      # T-113: the builder session walked away. handoff beats its own worktree (builder.sh, T-098),
+      # so inside a drill that runs in seconds .polaris/wt/T-M is still LIVE at `done` — wt_remove
+      # LEAVES it (rc 1) and `uninstall` below then dies on its "worktrees still checked out" guard
+      # before printing the summary line 240 greps for. Backdate the beat through the contract's own
+      # seam (ops/contracts/worktree-liveness.md § the beat: `echo 1 > <beat>` fakes idle) so `done`
+      # takes the idle path and reaps the worktree itself. NEVER remove a worktree by hand here.
+      echo 1 > "$(git rev-parse --git-common-dir)/worktrees/T-M/polaris-beat"
       "$SELF" done T-M >/dev/null || { echo "MIGRATED DONE FAIL"; exit 1; }
       git log --first-parent --format=%s "$mig..main" | grep -q '^chore(board):' && { echo "MIGRATED QUIET FAIL (no chore(board) on base after the migration commit)"; exit 1; }
       # uninstall: names the branch pre-confirm, deletes it locally AND on origin

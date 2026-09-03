@@ -153,6 +153,9 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  maps that tier (model_strong/mid/cheap). Read-only: the
                                  CONDUCTOR asks it before every spawn; fleet rides the max
                                  tier over ready/
+  next [--do|--brief]            what this session does NEXT, read off the board — line 1 is ONE verb:
+                                 resume <ID> · build <ID> · integrate · promote · wait · stop · finish;
+                                 --do performs a promote under the board lock · --brief re-anchors a chat
   drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
   qa [--force]                   is everything okay, in ONE shot: test/lint/typecheck/build/uat
@@ -204,6 +207,9 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  6-8 context run pays for them. --apply MOVES those into
                                  ~/.claude/.polaris-archived/ (never deletes); --restore puts them
                                  all back. Report-only by default; the installer never applies it
+  awake [status|start|stop]      ONE keep-awake daemon per machine (~/.claude/polaris/awake): presses
+                                 F15 every ~55s while any session is busy; exits by itself once every
+                                 session and repo is idle. start = arm now · stop = 60 min off
   version                        installed version · commit · latest on the channel
   update [--repo-only]           fetch the latest KIT from the channel (manual; never automatic).
                                    also re-caches it into ~/.claude so the NEXT repo you install
@@ -223,7 +229,7 @@ esac
 # (ops/contracts/module-layout.md v2 — both lists stay LITERAL, never a glob.)
 case "${1:-}" in
   _match|_rules|_guard) _mods="core ownership" ;;
-  *)             _mods="core ownership workspace builder integrate knowledge search observe admin bg
+  *)             _mods="core ownership workspace builder integrate knowledge search observe admin bg awake handover
                         selftest/spine selftest/board selftest/history selftest/report
                         selftest/brain selftest/policy selftest/remote" ;;
 esac
@@ -270,16 +276,25 @@ PUB="direct"
 PUBLISH_WARNED=""
 BOARD_REF="refs/heads/polaris/board"
 
+# --- worktree liveness beat (ops/contracts/worktree-liveness.md v1.1) ---------
+# Every CLI call made from inside a task worktree says "someone is in here", so done/release/sweep
+# never reap a worktree a session is still working in. Builtins only — string ops and one `: >`, zero
+# forks — and BELOW the EVENTS= line so `startup-budget`'s cfg-fork count over the resolve-env block
+# is untouched. `2>/dev/null` comes BEFORE the `>`: redirections apply left to right, so the v1 order
+# opened the file while stderr was still the terminal and printed "No such file or directory" on
+# every call from a worktree whose git worktrees dir does not exist yet. Best-effort, never fatal.
+case "$PWD" in */.polaris/wt/*) _w="${PWD##*/.polaris/wt/}"; _w="${_w%%/*}"; : 2>/dev/null > "$GCD/worktrees/$_w/polaris-beat" || true;; esac
+
 # ------------------------------------------------------------------- dispatch
 # update_check_maybe is wired ONLY into the human-facing commands below — deliberately not
 # into _match/_rules, which the write-guard fires on every single edit.
 case "${1:-}" in
   init-board) cmd_init_board;;
-  claim)      shift; update_check_maybe || true; cmd_claim "$@";;
+  claim)      shift; awake_ensure || true; update_check_maybe || true; cmd_claim "$@";;
   pack)       shift 2>/dev/null || true; cmd_pack "${1:-}";;
   resume)     shift; cmd_resume "$@";;
   verify)     shift; cmd_verify "$@";;
-  handoff)    shift; cmd_handoff "$@";;
+  handoff)    shift; awake_ensure || true; cmd_handoff "$@";;
   release)    shift; cmd_release "$@";;
   park)       shift; cmd_park "$@";;
   unpark)     shift; cmd_unpark "$@";;
@@ -295,7 +310,7 @@ case "${1:-}" in
   history)    shift; cmd_history "$@";;
   report)     shift; cmd_report "$@";;
   rollback)   shift; cmd_rollback "$@";;
-  status)     shift 2>/dev/null || true; update_check_maybe || true; cmd_status "${1:-}";;
+  status)     shift 2>/dev/null || true; awake_ensure || true; update_check_maybe || true; cmd_status "${1:-}";;
   brain)      shift 2>/dev/null || true; cmd_brain "${1:-}";;   # no update_check_maybe: agents run it cold and often — keep it quiet + pure
   # find/show are handled by the FAST PATH at the top of this file and never reach here — they
   # exit before the globals below them exist. They stay in `usage` above because that is what
@@ -304,7 +319,7 @@ case "${1:-}" in
   harness)    shift 2>/dev/null || true; cmd_harness "${1:-}";;
   board-fm)   shift 2>/dev/null || true; cmd_board_fm "$@";;
   sweep)      shift 2>/dev/null || true; cmd_sweep "${1:-}";;
-  doctor)     shift 2>/dev/null || true; update_check_maybe || true; cmd_doctor "$@";;
+  doctor)     shift 2>/dev/null || true; awake_ensure || true; update_check_maybe || true; cmd_doctor "$@";;
   metrics)    cmd_metrics;;
   why)        shift; cmd_why "$@";;
   triage)     cmd_triage;;
@@ -312,7 +327,11 @@ case "${1:-}" in
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
   rules)      cmd_rules;;
   qa)         shift 2>/dev/null || true; cmd_qa "${1:-}";;
-  bg)         shift; cmd_bg "$@";;   # no update_check_maybe: run/status/tail/wait ride hot agent loops — keep them quiet + pure
+  bg)         shift; case "${1:-}" in run) awake_ensure || true;; esac; cmd_bg "$@";;   # no update_check_maybe:
+              # run/status/tail/wait ride hot agent loops — keep them quiet + pure. Only `run` ensures the
+              # keep-awake daemon: a detached suite is exactly the stretch where nobody touches the keyboard.
+  awake) shift; cmd_awake "$@";;   # machine-level, never the board — the daemon outlives every session
+  next) shift; cmd_next "$@";;     # no update_check_maybe: read-only router, run at every role boundary
   finish)     shift 2>/dev/null || true; cmd_finish "${1:-}";;   # no update_check_maybe: a network
               # notice landing between the verdict and the celebration is the one place it would hurt
   notify-gate) shift; cmd_notify_gate "$@";;   # no update_check_maybe: must stay silent + pure

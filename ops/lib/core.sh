@@ -95,9 +95,25 @@ evt() { # evt <ev> <id> [note] [pts] — append one ndjson line. Call INSIDE the
   # v5: claim/done lines carry "pts" so `metrics` can calibrate per point bucket.
   local pts="${4:-}"; case "$pts" in ''|*[!0-9.]*) pts="";; esac
   who
+  local ts; ts="$(date +%s)"
   printf '{"ts":%s,"ev":"%s","id":"%s","who":"%s","note":"%s"%s}\n' \
-    "$(date +%s)" "$(jesc "$1")" "$(jesc "$2")" "$(jesc "$WHO")" "$(jesc "${3:-}")" \
+    "$ts" "$(jesc "$1")" "$(jesc "$2")" "$(jesc "$WHO")" "$(jesc "${3:-}")" \
     "${pts:+,\"pts\":$pts}" >> "$EVENTS"
+  # session state (ops/contracts/role-handover.md § session state): the handover hook and
+  # `polaris next` read .polaris/handover/<sid>/last-event to decide whether this session's turn
+  # should hop into the next role, and `avoid` to stop it re-taking what it just put down. Per
+  # checkout, gitignored, never the board. Every line best-effort — telemetry that cannot be
+  # written must never fail a board mutation. No session id (a plain shell, CI) ⇒ nothing written.
+  local hs
+  if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+    hs="$PRIMARY/.polaris/handover/$CLAUDE_CODE_SESSION_ID"
+    mkdir -p "$hs" 2>/dev/null || true
+    printf '%s %s %s\n' "$ts" "$1" "$2" > "$hs/last-event" 2>/dev/null || true
+    [ -e "$hs/started" ] || printf '%s\n' "$ts" > "$hs/started" 2>/dev/null || true
+    case "$1" in
+      release|blocked|kickback) printf '%s\n' "$2" >> "$hs/avoid" 2>/dev/null || true;;
+    esac
+  fi
   # optional notify hook: CONVENTIONS `notify: <cmd>` — background, output discarded,
   # failures ignored. It observes the board; it must never be able to stall or fail it.
   # v2 (ops/contracts/hands-free-knobs.md): POLARIS_SEVERITY rides along — ev "blocked"
@@ -194,7 +210,8 @@ mutex_off() { # release the board mutex if OURS (the $MUTEX/pid mutex_on wrote m
   # unconditional `rm -rf "$MUTEX"` at exit could delete a mutex a DIFFERENT session legitimately
   # holds and un-serialize two board mutations mid-flight. Removing our OWN mutex is byte-identical
   # to before. Crashed/legacy (pid-less) mutexes are NOT this function's job: the staleness steal in
-  # mutex_on stays deliberately pid-blind and remains the one recovery path.
+  # mutex_on remains the one recovery path — and since 6.2.0 it reads this same pid, so a pid-less
+  # or dead holder still goes at 120s while a live one keeps it to the 20-minute backstop.
   if [ -d "$MUTEX" ] && [ "$(cat "$MUTEX/pid" 2>/dev/null)" = "$$" ]; then
     rm -rf "$MUTEX" 2>/dev/null || true
   fi
@@ -217,9 +234,17 @@ mutex_on() {
   until mkdir "$MUTEX" 2>/dev/null; do
     i=$((i+1))
     if [ -f "$MUTEX/epoch" ]; then
-      local e age; e="$(cat "$MUTEX/epoch" 2>/dev/null)"; e="${e:-$(date +%s)}"
+      # The steal is pid-aware since 6.2.0 (ops/contracts/worktree-liveness.md § steals). Age alone
+      # stole the mutex out from under a holder that was merely slow — a board push over a bad
+      # network outlives 120s — and two sessions then mutated the board at once. A holder whose pid
+      # still answers keeps it until the 20-minute backstop; a dead or pid-less one goes at 120s,
+      # so a crashed holder is still recovered without anyone reaching for rm -rf.
+      local e age hp; e="$(cat "$MUTEX/epoch" 2>/dev/null)"; e="${e:-$(date +%s)}"
       age=$(( $(date +%s) - e ))
-      if [ "$age" -gt 120 ]; then note "stealing stale board mutex (${age}s)"; rm -rf "$MUTEX"; continue; fi
+      hp="$(cat "$MUTEX/pid" 2>/dev/null || true)"; case "$hp" in ''|*[!0-9]*) hp="";; esac
+      if [ "$age" -gt 1200 ] || { [ "$age" -gt 120 ] && { [ -z "$hp" ] || ! kill -0 "$hp" 2>/dev/null; }; }; then
+        note "stealing stale board mutex (${age}s)"; rm -rf "$MUTEX"; continue
+      fi
     fi
     [ "$i" -gt 150 ] && die "board mutex timeout — is another session stuck? rm -rf '$MUTEX'"
     sleep 0.2
@@ -303,9 +328,16 @@ sync_board() { # push polaris/board (NEVER $BASE), bounded retry. A rejection me
   git -C "$PRIMARY" rev-parse -q --verify "$BOARD_REF" >/dev/null || return 0
   local i rtip ltip subj new idx line
   for i in 1 2 3 4 5; do
+    # Five push/fetch/re-commit rounds over a slow network can outlast the mutex's 120s steal
+    # window, and the holder that looks abandoned is us. Re-stamp the epoch each pass — only when
+    # the mutex is still ours, so we never refresh someone else's.
+    if [ "$(cat "$MUTEX/pid" 2>/dev/null)" = "$$" ]; then date +%s > "$MUTEX/epoch" 2>/dev/null || true; fi
     git -C "$PRIMARY" push -q origin "$BOARD_REF:$BOARD_REF" 2>/dev/null && return 0
     git -C "$PRIMARY" fetch -q origin "$BOARD_REF" 2>/dev/null || true
-    rtip="$(git -C "$PRIMARY" rev-parse -q --verify FETCH_HEAD 2>/dev/null || true)"
+    # The remote tip BY NAME. FETCH_HEAD is a single shared file: any concurrent fetch of another
+    # ref (a sibling session pulling feat/*) overwrites it, and we would re-parent the board onto
+    # whatever that was. ls-remote answers for this ref and nothing else.
+    rtip="$(git -C "$PRIMARY" ls-remote origin refs/heads/polaris/board 2>/dev/null | cut -f1)"
     [ -n "$rtip" ] || { sleep 0.3; continue; }
     while IFS= read -r line; do
       [ -z "$line" ] && continue
@@ -363,9 +395,15 @@ board_materialize() { # fresh clone: the moved set is ignored on base, so a clon
 
 # --------------------------------------------------------------- lock helpers
 lock_take() { # lock_take <ID> — atomic; returns 1 if already taken
+  # meta is 5 lines since 6.2.0 (ops/contracts/worktree-liveness.md § lock meta): epoch · who · id ·
+  # session id · harness pid. Both env vars are exported into every Bash-tool environment and stay
+  # put for the whole session, unlike $$, which changes with every command. They decide NOTHING
+  # about liveness — the beat file does that — they only let `resume` recognise its own task after a
+  # compaction, `sweep` say whether the session is still around, and `next` name whose lock it is.
+  # Absent (a plain shell, CI) ⇒ "-". Readers of lines 1-3 are untouched; a missing line reads "-".
   mkdir -p "$LOCKS"
   mkdir "$LOCKS/$1" 2>/dev/null || return 1
-  who; { date +%s; echo "$WHO"; echo "$1"; } > "$LOCKS/$1/meta"
+  who; { date +%s; echo "$WHO"; echo "$1"; echo "${CLAUDE_CODE_SESSION_ID:--}"; echo "${CLAUDE_PID:--}"; } > "$LOCKS/$1/meta"
 }
 lock_drop() { rm -rf "${LOCKS:?}/$1" 2>/dev/null || true; }
 lock_age() { # seconds since lock creation; 0 if no meta

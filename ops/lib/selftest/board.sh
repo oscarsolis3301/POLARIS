@@ -204,3 +204,211 @@ drill_readyoverlap() {
     rm -f ops/board/ready/T-ROB.md ops/board/ready/T-ROC.md ops/board/blocked/T-ROA.md
     git branch -q -D feat/T-ROB 2>/dev/null || true
 }
+drill_handover() {
+    # ---- T-111 handover drill (ops/contracts/role-handover.md § Executable check) ----
+    # `polaris next` is the router every role follows at its boundary AND the Stop hook's oracle, so
+    # a wrong line 1 misroutes a whole session and a rung that blocks where it should allow traps a
+    # chat in a loop only the human can break. This walks the contract's assertion list IN ORDER on
+    # the spine's own repo, judging rc and FILE STATE — never the presence of a message.
+    # Contract v1.1 governs two of them: human-gated review work routes to `wait` (row 6's approval
+    # note is unreachable dead source and gets no case), and `--brief` is asserted only under a live
+    # lock, where the role is real and the pointer line is not in question.
+    # NO helper functions here: `find --api` extracts nested fns too, and this drill ships exactly
+    # one name. The hook reaches the router through POLARIS_HANDOVER_CLI rather than a forwarder
+    # planted at ops/polaris, because `finish` below gates on a clean `git status` and ops/ is
+    # tracked in this fixture — a planted CLI would be untracked dirt failing the step it serves.
+    [ -z "$(git status --porcelain)" ] || { git status --porcelain; echo "HANDOVER PRECONDITION FAIL (the tree is dirty on entry — an upstream drill leaked; this drill proves it changes nothing, which needs a clean start)"; exit 1; }
+    ho_n="$( { ls ops/board/active; ls ops/board/review; } 2>/dev/null | grep -c '\.md$' || true )"
+    [ "$ho_n" = "0" ] || { "$SELF" board-fm; echo "HANDOVER PRECONDITION FAIL (active/ or review/ still holds work — this drill needs a drained board to read the router honestly)"; exit 1; }
+    ho_sid0="${CLAUDE_CODE_SESSION_ID:-}"
+    export CLAUDE_CODE_SESSION_ID=drill-sid
+    ho_gcd="$(git rev-parse --git-common-dir)"
+    ho_dir=".polaris/handover/drill-sid"
+    ho_hook="$OPS_DIR/hooks/handover-hook.sh"
+    ho_tr="$T/ho-tr/session.jsonl"
+    mkdir -p "$T/ho-tr"
+    printf '{"type":"assistant","message":{"content":[{"type":"text","text":"done"}]}}\n' > "$ho_tr"
+    ho_json="{\"session_id\":\"drill-sid\",\"transcript_path\":\"$ho_tr\",\"cwd\":\"$PWD\",\"stop_hook_active\":false,\"hook_event_name\":\"Stop\"}"
+    ho_jsont="{\"session_id\":\"drill-sid\",\"transcript_path\":\"$ho_tr\",\"cwd\":\"$PWD\",\"stop_hook_active\":true,\"hook_event_name\":\"Stop\"}"
+    if [ -f ops/SPRINT.md ]; then cp ops/SPRINT.md "$T/ho-sprint.bak"; else rm -f "$T/ho-sprint.bak"; fi
+    printf '# SPRINT 14 — handover drill  capacity: 5\n' > ops/SPRINT.md   # moved set: disk-only, ignored on base
+    # (11) and (15)/(16) below OVERWRITE ops/CONVENTIONS.md to drive the knobs, so record here
+    # whether it was there at all when we arrived — the same entry snapshot busyint, selfland and
+    # wtreap take. SPRINT.md is gitignored and only has to come back for the drills after us;
+    # CONVENTIONS.md is TRACKED from drill_express onward (that drill commits it), so the teardown's
+    # old unconditional `rm -f` left the full run a tracked file short and the hermetic assertion at
+    # the bottom — correctly — fired on it. Absent at entry (any --only partition that skips
+    # express) means absent at exit: no snapshot file, and the restore removes it.
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/ho-conv.bak"; else rm -f "$T/ho-conv.bak"; fi
+    # (1) the router is documented. cli-docs-parity counts it too; here it is the precondition for
+    #     every role's boundary instruction actually being runnable.
+    "$SELF" help | grep -q '^  next ' || { echo "HANDOVER HELP FAIL (next missing from help — every role file tells the session to run it)"; exit 1; }
+    # (2) row 3: the only ready task, and the SHAPE — line 1 is the whole decision, everything under
+    #     it is a three-space note, so a caller branches on line 1 without parsing.
+    printf -- '---\nid: T-HO1\ntitle: hand over one\ntype: feature\nscope: src\npoints: 1\nwsjf: 7\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/ho1.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-HO1.md
+    "$SELF" next > "$T/ho1.out" 2>&1 || { cat "$T/ho1.out"; echo "HANDOVER NEXT RC FAIL (the router must exit 0 on every board state)"; exit 1; }
+    [ "$(sed -n 1p "$T/ho1.out")" = "build T-HO1" ] || { cat "$T/ho1.out"; echo "HANDOVER BUILD FAIL (row 3 must name the only claimable ready task)"; exit 1; }
+    [ "$(sed -n '2,$p' "$T/ho1.out" | grep -cv '^   ')" = "0" ] || { cat "$T/ho1.out"; echo "HANDOVER SHAPE FAIL (every line under line 1 must be a three-space note)"; exit 1; }
+    # (3) claim records the session state `next` and the hooks read back, and row 0 outranks it all.
+    "$SELF" claim T-HO1 >/dev/null || { echo "HANDOVER CLAIM FAIL"; exit 1; }
+    [ "$(tr -d ' \r\n' < "$ho_dir/task")" = "T-HO1" ] || { echo "HANDOVER TASK STATE FAIL (claim must record the task in .polaris/handover/<sid>/task)"; exit 1; }
+    tr -d '\r' < "$ho_dir/last-event" | grep -qE '^[0-9]+ claim T-HO1$' || { cat "$ho_dir/last-event"; echo "HANDOVER LAST-EVENT FAIL (evt must stamp <ts> <kind> <id>)"; exit 1; }
+    [ "$("$SELF" next | sed -n 1p)" = "resume T-HO1" ] || { echo "HANDOVER RESUME FAIL (row 0: my own live lock outranks every other row)"; exit 1; }
+    # (4) --brief re-anchors a compacted chat: under a live lock the role is real, so role/task/next
+    #     are all present. No pipe anywhere — the anchor is prose, and a table would break it.
+    "$SELF" next --brief > "$T/hob.out" 2>&1 || { cat "$T/hob.out"; echo "HANDOVER BRIEF RC FAIL"; exit 1; }
+    [ "$(grep -c . "$T/hob.out")" -le 8 ] || { cat "$T/hob.out"; echo "HANDOVER BRIEF LEN FAIL (--brief must stay within 8 lines)"; exit 1; }
+    grep -q '^role: ' "$T/hob.out" || { cat "$T/hob.out"; echo "HANDOVER BRIEF ROLE FAIL"; exit 1; }
+    grep -q '^task: T-HO1 ' "$T/hob.out" || { cat "$T/hob.out"; echo "HANDOVER BRIEF TASK FAIL (a live lock must name the task)"; exit 1; }
+    grep -q '^next: ' "$T/hob.out" || { cat "$T/hob.out"; echo "HANDOVER BRIEF NEXT FAIL"; exit 1; }
+    grep -q '|' "$T/hob.out" && { cat "$T/hob.out"; echo "HANDOVER BRIEF PIPE FAIL (no pipe anywhere in the anchor)"; exit 1; }
+    # (5) a self-landing handoff is a COMPLETION: the done event licenses exactly one hop, and the
+    #     hook hands the session the next role rather than letting the chat end mid-run.
+    ( cd .polaris/wt/T-HO1 && echo ho1 > src/ho1.txt && git add -A && git commit -qm ok && "$SELF" handoff T-HO1 > "$T/ho2.out" 2>&1 ) || { cat "$T/ho2.out"; echo "HANDOVER HANDOFF RC FAIL"; exit 1; }
+    [ -f ops/board/done/T-HO1.md ] || { cat "$T/ho2.out"; echo "HANDOVER SELFLAND FAIL (landing: self must carry the task to done/)"; exit 1; }
+    tr -d '\r' < "$ho_dir/last-event" | grep -qE '^[0-9]+ done T-HO1$' || { cat "$ho_dir/last-event"; echo "HANDOVER DONE EVENT FAIL (the landing tail must leave a done event as last-event)"; exit 1; }
+    [ "$("$SELF" next | sed -n 1p)" = "finish" ] || { "$SELF" next; echo "HANDOVER FINISH ROUTE FAIL (a drained board is the run's end)"; exit 1; }
+    ho_out="$(printf '%s' "$ho_json" | POLARIS_HANDOVER_CLI="$SELF" bash "$ho_hook" --test stop)"
+    [ "$ho_out" = "block:finish" ] || { echo "HANDOVER HOOK FINISH FAIL (got '$ho_out')"; exit 1; }
+    [ "$(tr -d ' \r\n' < "$ho_dir/hops")" = "1" ] || { echo "HANDOVER HOPS FAIL (a block must record the hop it spent)"; exit 1; }
+    # (6) `finish` rc 0 stamps the run closed, and the ladder allows from then on — the one thing
+    #     that stops a finished run being hopped back to life by its own last event.
+    #     `finish` runs the suite, and drift counts a feat/<ID> branch whose task is already done as
+    #     CRUFT, which reds it. Two sources of that here: a self-land BEATS its worktree seconds
+    #     before `done` asks to remove it, so wt_remove refuses a live lane and the branch stays
+    #     checked out; and under `--only handover` the history drills that sweep the spine's own
+    #     done branches never ran. A drill honest in only one partition is not honest, so reap
+    #     exactly what drift names — every DONE task's worktree, dead by definition — by clearing
+    #     the beat the way wt_remove's own note prescribes and running the tidy command the product
+    #     ships for it. The branch loop is the belt: a done task whose worktree is already gone.
+    for ho_f in ops/board/done/*.md; do [ -e "$ho_f" ] || break
+      rm -f "$ho_gcd/worktrees/$(basename "$ho_f" .md)/polaris-beat"
+    done
+    "$SELF" sweep --fix >/dev/null 2>&1 || true
+    for ho_f in ops/board/done/*.md; do [ -e "$ho_f" ] || break
+      git branch -q -D "feat/$(basename "$ho_f" .md)" 2>/dev/null || true
+    done
+    "$SELF" finish > "$T/ho3.out" 2>&1 || { cat "$T/ho3.out"; echo "HANDOVER FINISH RC FAIL (the board must be finishable after the self-land)"; exit 1; }
+    [ -f "$ho_dir/finished" ] || { echo "HANDOVER FINISHED STAMP FAIL (finish rc 0 must stamp the state dir)"; exit 1; }
+    #     the consumed rung sits ABOVE this one and the block at (5) already spent this event, so
+    #     clear the hop bookkeeping to read the rung under test; the event file is backdated so
+    #     "finished is newer than the event" is a stated ordering, not a same-second clock race.
+    rm -f "$ho_dir/hopped-event"
+    touch -t 202001010000 "$ho_dir/last-event"
+    ho_out="$(printf '%s' "$ho_json" | POLARIS_HANDOVER_CLI="$SELF" bash "$ho_hook" --test stop)"
+    [ "$ho_out" = "allow:finished" ] || { echo "HANDOVER HOOK FINISHED FAIL (got '$ho_out')"; exit 1; }
+    # (7) row 4 + `--do`: the ready gate decides, the board lock serializes, and the promote is
+    #     asserted from the BOARD — the file moved, the event landed, the commit carries the
+    #     contract's subject. The contract file appears only NOW: it is untracked, and `finish`
+    #     above gates on a clean tree.
+    printf '# fixture contract\n' > ops/contracts/ho.md
+    printf -- '---\nid: T-HO2\ntitle: hand over two\ntype: feature\nscope: src\npoints: 1\nwsjf: 6\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\ncontract: ops/contracts/ho.md\ndepends_on: [T-HO1]\nfiles_owned:\n  - src/ho2.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HO2.md
+    [ "$("$SELF" next | sed -n 1p)" = "promote" ] || { "$SELF" next; echo "HANDOVER PROMOTE ROUTE FAIL (a backlog task whose dep is done must offer the promote)"; exit 1; }
+    "$SELF" next --do > "$T/ho4.out" 2>&1 || { cat "$T/ho4.out"; echo "HANDOVER DO RC FAIL"; exit 1; }
+    [ -f ops/board/ready/T-HO2.md ] || { cat "$T/ho4.out"; echo "HANDOVER DO MOVE FAIL (--do must move the task into ready/)"; exit 1; }
+    grep -q '"ev":"promote","id":"T-HO2"' ops/board/EVENTS.ndjson || { echo "HANDOVER DO EVENT FAIL (the promote must be on the record)"; exit 1; }
+    git log -1 --format=%s refs/heads/polaris/board | grep -qx 'chore(board): promote T-HO2' || { git log -1 --format=%s refs/heads/polaris/board; echo "HANDOVER DO COMMIT FAIL (ONE board commit, contract subject)"; exit 1; }
+    "$SELF" next --do > "$T/ho5.out" 2>&1 || { cat "$T/ho5.out"; echo "HANDOVER DO2 RC FAIL (a promoter with nothing to do is still rc 0)"; exit 1; }
+    grep -qx '   nothing to promote' "$T/ho5.out" || { cat "$T/ho5.out"; echo "HANDOVER DO2 NOTE FAIL (an idempotent --do must say so)"; exit 1; }
+    # (8) disjointness at the gate: a candidate overlapping a ready task is HELD with the reason,
+    #     never promoted — this is what keeps parallel builders from ever meeting on a file.
+    printf -- '---\nid: T-HO3\ntitle: hand over three\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\ncontract: ops/contracts/ho.md\nfiles_owned:\n  - src/ho2.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HO3.md
+    "$SELF" next --do > "$T/ho6.out" 2>&1 || { cat "$T/ho6.out"; echo "HANDOVER HELD RC FAIL"; exit 1; }
+    grep -q "held: T-HO3 — overlaps T-HO2 on 'src/ho2.txt'" "$T/ho6.out" || { cat "$T/ho6.out"; echo "HANDOVER HELD NOTE FAIL (the hold must name the task, the collider and the pattern)"; exit 1; }
+    [ -f ops/board/backlog/T-HO3.md ] || { echo "HANDOVER HELD BOARD FAIL (a held candidate must stay in backlog/)"; exit 1; }
+    # (9) ONE EVENT, ONE HOP — by string equality, so a second stop on the same completion allows.
+    printf '%s done T-HO1\n' "$(date +%s)" > "$ho_dir/last-event"
+    rm -f "$ho_dir/hopped-event"
+    ho_out="$(printf '%s' "$ho_json" | POLARIS_HANDOVER_CLI="$SELF" bash "$ho_hook" --test stop)"
+    [ "$ho_out" = "block:build" ] || { echo "HANDOVER HOOK BUILD FAIL (got '$ho_out')"; exit 1; }
+    [ "$(tr -d ' \r\n' < "$ho_dir/hops")" = "2" ] || { echo "HANDOVER HOPS2 FAIL (the second block must spend the second hop)"; exit 1; }
+    ho_out="$(printf '%s' "$ho_json" | POLARIS_HANDOVER_CLI="$SELF" bash "$ho_hook" --test stop)"
+    [ "$ho_out" = "allow:consumed" ] || { echo "HANDOVER HOOK CONSUMED FAIL (got '$ho_out')"; exit 1; }
+    # (10) the avoid list stops the ping-pong: a task this session just put down is never the task
+    #      the router hands it straight back.
+    "$SELF" claim T-HO2 >/dev/null || { echo "HANDOVER RECLAIM FAIL"; exit 1; }
+    "$SELF" release T-HO2 --to ready -m drill >/dev/null || { echo "HANDOVER RELEASE FAIL"; exit 1; }
+    grep -qx 'T-HO2' "$ho_dir/avoid" || { cat "$ho_dir/avoid" 2>/dev/null; echo "HANDOVER AVOID FAIL (a release must add the ID to this session's avoid list)"; exit 1; }
+    [ "$("$SELF" next | sed -n 1p)" != "build T-HO2" ] || { echo "HANDOVER AVOID ROUTE FAIL (an avoided task must not be handed straight back)"; exit 1; }
+    # (11) row 2: the budget stops only what would otherwise start, and the hook allows at the cap —
+    #      a run ends where the human set it, never because a hook refused to let go.
+    printf 'handover: auto\nrun_max_tasks: 3\n' > ops/CONVENTIONS.md
+    printf -- '---\nid: T-HO4\ntitle: hand over four\ntype: feature\nscope: src\npoints: 1\nwsjf: 4\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/ho.md\nfiles_owned:\n  - src/ho4.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-HO4.md
+    printf '3\n' > "$ho_dir/hops"
+    "$SELF" next > "$T/ho7.out" 2>&1 || { cat "$T/ho7.out"; echo "HANDOVER STOP RC FAIL"; exit 1; }
+    [ "$(sed -n 1p "$T/ho7.out")" = "stop" ] || { cat "$T/ho7.out"; echo "HANDOVER STOP FAIL (row 2 must pre-empt the build it would otherwise have named)"; exit 1; }
+    grep -q '^   budget: run_max_tasks reached — ' "$T/ho7.out" || { cat "$T/ho7.out"; echo "HANDOVER STOP NOTE FAIL (the note must name the cap KEY, never a number of its own)"; exit 1; }
+    printf '%s done T-HO1\n' "$(date +%s)" > "$ho_dir/last-event"; rm -f "$ho_dir/hopped-event"
+    ho_out="$(printf '%s' "$ho_json" | POLARIS_HANDOVER_CLI="$SELF" bash "$ho_hook" --test stop)"
+    [ "$ho_out" = "allow:cap" ] || { echo "HANDOVER HOOK CAP FAIL (got '$ho_out')"; exit 1; }
+    # (12) row 5: someone else's lane is work in flight, so the answer is wait — not a second claim.
+    mv ops/board/ready/T-HO4.md ops/board/active/T-HO4.md
+    mkdir -p "$ho_gcd/polaris-locks/T-HO4"
+    printf '%s\nsomeone\nT-HO4\nother-sid\n-\n' "$(date +%s)" > "$ho_gcd/polaris-locks/T-HO4/meta"
+    rm -f "$ho_dir/hops"
+    "$SELF" next > "$T/ho8.out" 2>&1 || { cat "$T/ho8.out"; echo "HANDOVER WAIT RC FAIL"; exit 1; }
+    [ "$(sed -n 1p "$T/ho8.out")" = "wait" ] || { cat "$T/ho8.out"; echo "HANDOVER WAIT FAIL (a foreign lock on an active task is work in flight)"; exit 1; }
+    grep -qx '   active: T-HO4' "$T/ho8.out" || { cat "$T/ho8.out"; echo "HANDOVER WAIT NOTE FAIL"; exit 1; }
+    # (13) the lease IS the integrator: live and foreign closes the lane, stealably stale reopens it.
+    printf -- '---\nid: T-HO5\ntitle: hand over five\ntype: feature\nscope: src\npoints: 1\nwsjf: 3\nrisk: normal\nowner: null\nbranch: null\nstatus: review\ncontract: ops/contracts/ho.md\nfiles_owned:\n  - src/ho5.txt\nverify: []\n---\n## Notes\n' > ops/board/review/T-HO5.md
+    mkdir -p "$ho_gcd/polaris-locks/.int-lease"
+    printf 'other-agent\n' > "$ho_gcd/polaris-locks/.int-lease/who"
+    printf '99999\n' > "$ho_gcd/polaris-locks/.int-lease/pid"
+    printf '%s\n' "$(date +%s)" > "$ho_gcd/polaris-locks/.int-lease/epoch"
+    "$SELF" next > "$T/ho9.out" 2>&1 || { cat "$T/ho9.out"; echo "HANDOVER LEASE RC FAIL"; exit 1; }
+    [ "$(sed -n 1p "$T/ho9.out")" = "wait" ] || { cat "$T/ho9.out"; echo "HANDOVER LEASE LIVE FAIL (a live foreign lease closes the lane)"; exit 1; }
+    grep -q '^   lease: other-agent ' "$T/ho9.out" || { cat "$T/ho9.out"; echo "HANDOVER LEASE NOTE FAIL (the wait must name who holds it)"; exit 1; }
+    printf '%s\n' "$(( $(date +%s) - 9000 ))" > "$ho_gcd/polaris-locks/.int-lease/epoch"
+    "$SELF" next > "$T/ho10.out" 2>&1 || { cat "$T/ho10.out"; echo "HANDOVER LEASE STALE RC FAIL"; exit 1; }
+    [ "$(sed -n 1p "$T/ho10.out")" = "integrate" ] || { cat "$T/ho10.out"; echo "HANDOVER LEASE STALE FAIL (a stealable lease reopens the lane)"; exit 1; }
+    grep -qx '   review/: T-HO5' "$T/ho10.out" || { cat "$T/ho10.out"; echo "HANDOVER INTEGRATE NOTE FAIL"; exit 1; }
+    rm -rf "$ho_gcd/polaris-locks/.int-lease"
+    # (14) contract v1.1: human-gated review work ALONE is `wait` with the human named — NEVER
+    #      `finish`. A task waiting on a human is in flight, with the human; row 6's approval note
+    #      is unreachable dead source and gets no case at all.
+    rm -f ops/board/review/T-HO5.md ops/board/active/T-HO4.md
+    rm -rf "$ho_gcd/polaris-locks/T-HO4"
+    printf -- '---\nid: T-HO6\ntitle: hand over six\ntype: feature\nscope: src\npoints: 1\nwsjf: 2\nrisk: high\nowner: null\nbranch: null\nstatus: review\ncontract: ops/contracts/ho.md\nfiles_owned:\n  - src/ho6.txt\nverify: []\n---\n## Notes\n' > ops/board/review/T-HO6.md
+    "$SELF" next > "$T/ho11.out" 2>&1 || { cat "$T/ho11.out"; echo "HANDOVER HUMAN RC FAIL"; exit 1; }
+    [ "$(sed -n 1p "$T/ho11.out")" = "wait" ] || { cat "$T/ho11.out"; echo "HANDOVER HUMAN-GATED FAIL (role-handover.md v1.1: human-gated review alone is wait, never finish)"; exit 1; }
+    grep -qx '   review/ awaits a human: T-HO6' "$T/ho11.out" || { cat "$T/ho11.out"; echo "HANDOVER HUMAN NOTE FAIL"; exit 1; }
+    # (15) `handover: off` allows before any fork — the knob is the whole opt-out, and it is read
+    #      from CONVENTIONS with sed, never by paying for a CLI startup on the allow path.
+    printf 'handover: off\nrun_max_tasks: 3\n' > ops/CONVENTIONS.md
+    ho_out="$(printf '%s' "$ho_json" | POLARIS_HANDOVER_CLI="$SELF" bash "$ho_hook" --test stop)"
+    [ "$ho_out" = "allow:off" ] || { echo "HANDOVER HOOK OFF FAIL (got '$ho_out')"; exit 1; }
+    # (16) the harness's own consecutive-block cap outranks ours: stop_hook_active means let go.
+    printf 'handover: auto\nrun_max_tasks: 0\n' > ops/CONVENTIONS.md
+    ho_out="$(printf '%s' "$ho_jsont" | POLARIS_HANDOVER_CLI="$SELF" bash "$ho_hook" --test stop)"
+    [ "$ho_out" = "allow:harness-cap" ] || { echo "HANDOVER HOOK HARNESS FAIL (got '$ho_out')"; exit 1; }
+    # (17) a subagent's completion lands in the PARENT's state dir, so a conductor whose builders
+    #      just handed off must never be hopped into BUILDER itself. The event file is backdated so
+    #      the freshness comparison is decided by a stated ordering, not by a clock race.
+    rm -f "$ho_dir/finished"
+    touch -t 202001010000 "$ho_dir/last-event"
+    mkdir -p "$T/ho-tr/drill-sid/subagents"
+    printf '{}\n' > "$T/ho-tr/drill-sid/subagents/x.jsonl"
+    ho_out="$(printf '%s' "$ho_json" | POLARIS_HANDOVER_CLI="$SELF" bash "$ho_hook" --test stop)"
+    [ "$ho_out" = "allow:subagent" ] || { echo "HANDOVER HOOK SUBAGENT FAIL (got '$ho_out')"; exit 1; }
+    # hermetic teardown: the board drained, the ONE file this drill created (ops/contracts/ho.md)
+    # gone, CONVENTIONS + SPRINT put back the way we found them — restored, never deleted: whether
+    # CONVENTIONS.md is tracked here depends on which drills ran before us, and only the entry
+    # snapshot knows — the session state removed, the sid handed back to whatever runs next, and the
+    # tree byte-identical to the way we found it.
+    rm -f ops/board/review/T-HO6.md ops/board/ready/T-HO2.md ops/board/backlog/T-HO3.md ops/board/done/T-HO1.md
+    rm -rf "$ho_gcd/polaris-locks/T-HO2" "$ho_gcd/polaris-locks/T-HO4" "$ho_gcd/polaris-locks/.int-lease"
+    rm -rf "$ho_dir" "$T/ho-tr"
+    rm -f .polaris/finish-stamp ops/contracts/ho.md
+    git branch -q -D feat/T-HO2 2>/dev/null || true
+    # CONVENTIONS.md: put back what HEAD holds, not the byte copy. The neighbours that save/restore
+    # this file by `cp` all COMMIT afterwards, which is what makes their trees clean; this drill must
+    # not commit anything — proving it changes nothing is the whole point — so it restores through
+    # git instead, which is the one form that leaves `git status` with nothing to say. The entry
+    # backup is still the record of whether the file existed at all when we arrived (any --only
+    # partition that never tracked it) and the fallback if HEAD no longer carries it.
+    if [ -f "$T/ho-conv.bak" ]; then git checkout -q HEAD -- ops/CONVENTIONS.md 2>/dev/null || cp "$T/ho-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    if [ -f "$T/ho-sprint.bak" ]; then cp "$T/ho-sprint.bak" ops/SPRINT.md; else rm -f ops/SPRINT.md; fi
+    rm -f "$T/ho-conv.bak" "$T/ho-sprint.bak"
+    if [ -n "$ho_sid0" ]; then export CLAUDE_CODE_SESSION_ID="$ho_sid0"; else unset CLAUDE_CODE_SESSION_ID; fi
+    [ -z "$(git status --porcelain)" ] || { git status --porcelain; echo "HANDOVER HERMETIC FAIL (the drill must leave the tree exactly as it found it)"; exit 1; }
+}
