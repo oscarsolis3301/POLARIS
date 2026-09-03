@@ -363,23 +363,37 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
     note "⚠ wave not sealed (rc $src) — $id is landed and safe; close the wave with: bash ops/polaris seal"
     return 0
   fi
-  local f tid own_skipped=0
+  # worktree-liveness.md v1.3 supersedes v1.2's Guard 2: the fan-out finishes EVERY landed review
+  # task including its own, and the lane's own id goes LAST. v1.2 skipped it, which stranded the
+  # task in review/ after every self-land and broke the whole promise of `landing: self` — one
+  # command carrying a task from claim to done. Skipping was only ever a proxy for the real danger:
+  # we are executing from inside .polaris/wt/$id, so $SELF is that worktree's ops/polaris, and the
+  # pre-T-114 `done $id` deleted the directory the running script lived in, killing every remaining
+  # `done` in the loop (2026-09-02, T-104's lane: six landed tasks stranded).
+  # T-114 fixed that at the source: Guard 1 in wt_remove refuses — LEFT, rc 1, nothing touched —
+  # whenever the target worktree holds $SELF or the caller's $PWD, and it is evaluated BEFORE beat
+  # age, so no stale beat, no caller and no --fix can lift it. So `done <own-ID>` is now safe: the
+  # worktree is LEFT, cmd_done keeps feat/$id (it deletes the branch only on wt_remove rc 0 or 2),
+  # the board still moves to done/, and $SELF survives to the end of this function. The leftover
+  # worktree is sweep --fix's job, once the beat goes quiet.
+  # Own-LAST, not own-first: Guard 1 makes the deletion impossible, but ordering costs nothing and
+  # means that if that one `done` ever fails for some other reason, it cannot strand the siblings
+  # queued behind it. The two v1.2 non-fixes stay forbidden: this loop must NOT be taught to
+  # tolerate a vanished $SELF, and nothing here re-beats to survive the landing tail.
+  local f tid own_last=""
   for f in "$BOARD/review/"*.md; do
     [ -f "$f" ] || continue
     tid="$(fm_get id "$f" 2>/dev/null || true)"
     [ -n "$tid" ] || continue
     landed_sha "$tid" >/dev/null 2>&1 || continue
-    # worktree-liveness.md v1.2 Guard 2: the fan-out NEVER runs `done` on the lane's OWN task. We are
-    # executing from inside .polaris/wt/$id, so $SELF is that worktree's ops/polaris; `done $id` would
-    # remove the directory the running script lives in, deleting $SELF mid-loop and failing every
-    # remaining `done`. v1 called own-worktree `done` "designed out" — this line is where it is. The
-    # handoff beat going stale during a long landing tail is what let it through on 2026-09-02
-    # (T-104's lane: six landed tasks stranded). Left to the next sweep --fix / session, announced once.
-    if [ "$tid" = "$id" ]; then own_skipped=1; continue; fi
+    if [ "$tid" = "$id" ]; then own_last="$tid"; continue; fi
     ( cd "$PRIMARY" && "$SELF" done "$tid" ) \
       || note "⚠ done $tid failed — finish it by hand: bash ops/polaris done $tid"
   done
-  [ "$own_skipped" -eq 1 ] && note "$id stays in review/ — a lane never runs done on its own task; the next sweep --fix or session finishes it"
+  if [ -n "$own_last" ]; then
+    ( cd "$PRIMARY" && "$SELF" done "$own_last" ) \
+      || note "⚠ done $own_last failed — finish it by hand: bash ops/polaris done $own_last"
+  fi
   return 0
 }
 

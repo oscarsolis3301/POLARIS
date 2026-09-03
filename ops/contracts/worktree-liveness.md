@@ -270,7 +270,59 @@ pinned `holds the running script` note — and the worktree directory must still
 Sabotage both ways: remove the guard ⇒ the fixture worktree is deleted and the assertion reds;
 restore it ⇒ green. Assert the DIRECTORY's survival and the rc, never the note alone.
 
+## v1.3 — Guard 2 is superseded: the fan-out runs its OWN `done` LAST, never skips it (2026-09-02, T-118)
+
+**Two things that shipped in the same release disagreed, and the disagreement failed the suite.**
+v1.2's Guard 2 (T-115) made `self_land`'s post-seal fan-out skip `done` for the lane's own task and
+announce that the task stays in `review/`. Drill `handover` (T-111, `kit/ops/lib/selftest/board.sh:260`)
+asserts the opposite, byte-for-byte:
+
+```
+[ -f ops/board/done/T-HO1.md ] || { cat "$T/ho2.out"; echo "HANDOVER SELFLAND FAIL (landing: self must carry the task to done/)"; exit 1; }
+```
+
+**The drill is right.** `landing: self` promises that ONE command carries a task from claim to
+`done/`. A skip leaves a task stranded in `review/` after every solo run — the exact mess this plan
+exists to end — and it does so on the happy path, not on an error.
+
+**Guard 2 was a proxy for a danger Guard 1 now removes.** It was written when nothing protected the
+running script: the fan-out ran `done <own-ID>`, `wt_remove` deleted the worktree the script was
+executing from, `$SELF` vanished mid-loop, and every later `done` died (2026-09-02, T-104's lane —
+six landed tasks stranded). **Guard 1** (v1.2 above, T-114, `wt_remove`) fixed that at the source: a
+target worktree holding `$SELF` or the caller's `$PWD` is refused — **LEFT, rc 1, nothing touched** —
+for every caller and every cell of the decision table, and the check runs BEFORE beat age, so no
+stale beat can license the removal. That makes own-`done` safe by construction rather than by
+avoidance.
+
+### The rule
+- The `for f in "$BOARD/review/"*.md` fan-out that follows a successful `seal` runs `done` for
+  **every** landed review task, **including the lane's own `$id`**.
+- The lane's own id runs **LAST**. Guard 1 already makes the deletion impossible; ordering is the
+  belt, so that a failure on that one `done` can never strand the siblings queued behind it.
+- No note is emitted for the own task any more. The v1.2 pinned line
+  `<ID> stays in review/ — a lane never runs done on its own task; the next sweep --fix or session finishes it`
+  is **withdrawn** — it described an outcome that must no longer happen.
+- What own-`done` does now: the board moves `review/ → done/` normally; `wt_remove` returns 1 and
+  prints `worktree LEFT: .polaris/wt/<ID> holds the running script — …`; `cmd_done` therefore KEEPS
+  `feat/<ID>` (it runs `branch -D` only on `wt_remove` rc 0 or 2) and prints its pinned kept-branch
+  note; `$SELF` survives to the end of `self_land`. **The leftover worktree is `sweep --fix`'s job**,
+  reaped once the beat goes quiet and the session is gone.
+
+### Still forbidden — the two non-fixes T-115 named
+Neither returns under this section. The loop must **not** be taught to tolerate a vanished `$SELF`
+(that hides the deletion instead of preventing it), and nothing in the landing tail may **re-beat**
+to keep the own worktree looking live (liveness must stay an honest signal, and Guard 1 does not
+consult it anyway). Guard 1 is the protection; own-last is only ordering.
+
+### Executable check
+`bash kit/ops/polaris doctor --selftest --only handover,selfland,wtreap`. Drill `handover` case (5)
+is the assertion quoted above: the self-landed `T-HO1` must be in `ops/board/done/`. `drill_selfland`
+and `wtreap` still assert the other half — the handoff's OWN worktree survives the land tail
+(`worktree LEFT`) and a later backdated `sweep --fix` removes it. Sabotage both ways: restore the
+v1.2 skip ⇒ `HANDOVER SELFLAND FAIL`; restore own-last ⇒ green.
+
 ## Changelog
 - v1 2026-09-01: created for T-092, T-093, T-096, T-097, T-098, T-099, T-100, T-103, T-104 (plan: cant-eat-itself, 6.2.0)
 - v1.1 2026-09-01: beat writers redirect stderr FIRST (`: 2>/dev/null > "$file" || true`) — bash applies redirections left to right, so the v1 order printed `No such file or directory` on every Bash call from a worktree whose worktrees dir was missing (T-093 lane, live); T-093 shipped the fix, T-092 told, T-101's preamble must use it.
+- v1.3 2026-09-02: Guard 2 is superseded — the `self_land` seal fan-out runs `done` for its OWN task too, LAST rather than skipped (T-118). v1.2's skip contradicted drill `handover`'s `landing: self must carry the task to done/` assertion and stranded every self-landed task in `review/`; Guard 1 in `wt_remove` (T-114), which refuses LEFT rc 1 when the target holds `$SELF` or `$PWD` and runs before beat age, is what makes own-`done` safe. The worktree is LEFT, the branch kept, and `sweep --fix` reaps it once idle. The v1.2 "stays in review/" note is withdrawn; the two non-fixes T-115 named (tolerate a vanished `$SELF`, re-beat through the tail) stay forbidden.
 - v1.2 2026-09-02: never remove the ground you are standing on — `wt_remove` refuses (LEFT rc 1) when the target holds `$SELF` or `$PWD`, before any beat check (T-114), and the `self_land` seal fan-out skips its own task id (T-115). v1 assumed the handoff beat kept the own worktree LIVE through the landing tail; T-104's tail outran `wt_live_minutes` and the fan-out deleted the running script, stranding six landed tasks in `review/`. Also records that an EMPTY beat file is correct (the zero-fork hooks touch mtime only; `beat_age`'s mtime fallback is the designed path).
