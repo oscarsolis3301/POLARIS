@@ -941,7 +941,7 @@ touching it, and put that copy back at the end. Nothing about what the drill che
 - [ ] the full `bash ops/polaris doctor --selftest` is green
 
 ## T-120 — The house-style sample must still speak when the sample is empty — macOS CI has been red since 5.19.0
-points 1 · risk normal · landed c13b69c (2026-09-02) · claimed 2026-09-02
+points 1 · risk normal · landed c13b69c (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/knowledge.sh
 
 ### Why
@@ -974,3 +974,34 @@ any count, so on Linux and Windows every number stays exactly what it was.
 - [ ] With a BSD-`xargs` stand-in on PATH (one that skips the utility on empty input, as macOS
 - [ ] With the normal GNU tools, the same drill stays green and the counted rows are unchanged for
 - [ ] `bash -n kit/ops/lib/knowledge.sh` is clean; no other file changes.
+
+## T-121 — "Release 6.2.2 — the first published 6.2 kit"
+points 1 · risk normal · landed 43ab53a (2026-09-02) · claimed 2026-09-02
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+Neither `v6.2.0` nor `v6.2.1` ever published — both release workflow runs failed their smoke step,
+so no artifact exists for either tag. The blocker (T-120, already landed): the brain's house-style
+detection samples tracked source files and pipes them through `xargs` into one `awk` pass; on a repo
+with no application code that sample is empty. GNU `xargs` still runs the utility once on empty
+input, but BSD `xargs` (macOS) does not run it at all, so `awk` never executed, `prefs.md` lost its
+`indent` row, and the selftest drill asserting that row went red — aborting the suite before the
+bash-3.2 step downstream ever ran. That failure was NOT introduced by sprint 12: it has been in the
+code since 5.19.0 (2026-07-25) and had been failing macOS CI, undetected, for six weeks. CI on
+`main` (`ff11272`) is now green on all four jobs, including that bash-3.2 step.
+
+This task is the version cut only, two files, no logic: bump `kit/ops/VERSION` to `6.2.2` and add a
+short CHANGELOG entry above the existing 6.2.1 entry explaining the above, so 6.2.2 is documented as
+the first published 6.2 kit and carries all of 6.2.0's content. The existing 6.2.0 and 6.2.1 entries
+stay put — do not rewrite or remove them — except the 6.2.1 entry's own claim to be "the first
+published 6.2 kit" is now known false (it never published either) and gets that one clause
+corrected, nothing else in that entry touched.
+
+Do not tag, push tags, dogfood, or run `finish` — this task lands the two files only; the tag and
+publish are the human's, after the board is drained.
+
+### Acceptance
+- [ ] `kit/ops/VERSION` reads `version: 6.2.2`; nothing else in the file changes
+- [ ] `CHANGELOG.md` gains `## 6.2.2 — <date>` directly above `## 6.2.1`, short, no table, naming the
+- [ ] the 6.2.0 entry is byte-identical; the 6.2.1 entry is unchanged except its "first published 6.2
+- [ ] `grep -rhoE 'POLARIS [0-9]+\.[0-9]+\.[0-9]+' README.md kit/.claude/skills/ kit/ops/*.md` (CI's
