@@ -809,7 +809,7 @@ parallel, and neither depends on the other.
 - [ ] `bash -n` clean, function count unchanged, `self_land` still a single definition (verify 1, 4, 5)
 
 ## T-116 — "SOURCE.md's vendoring provenance line false-matches the version sweep regex"
-points 1 · risk normal · landed 817243f (2026-09-02) · claimed 2026-09-02
+points 1 · risk normal · landed 817243f (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/.claude/skills/i-have-adhd/SOURCE.md
 
 ### Why
@@ -837,3 +837,36 @@ it shipped, kept its licence/attribution, and kept its opt-in frontmatter flag.
 - [ ] `kit/.claude/skills/i-have-adhd/SOURCE.md` line 12 no longer matches `POLARIS [0-9]+\.[0-9]+\.[0-9]+`
 - [ ] the CI sweep command, run locally, returns an empty `bad` set at `ver=6.2.0`
 - [ ] `ops/tests/adhd-skill-installed` golden stays green (SKILL.md/LICENSE untouched, opt-in flag intact)
+
+## T-117 — "--no-permissions still armed the keep-awake hooks — one call sat outside the gate"
+points 1 · risk normal · landed 6ee28f5 (2026-09-02) · claimed 2026-09-02
+files touched: CHANGELOG.md, kit/ops/VERSION, kit/ops/bootstrap.py
+
+### Why
+`python polaris-v5.zip --claude-skill --no-permissions` writes the four keep-awake hook entries into
+`~/.claude/settings.json` even though the whole promise of that flag is "I will not touch your
+settings file". CI caught it on ubuntu, macOS and Windows with the assertion
+`--no-permissions wrote to settings.json anyway`, and the release workflow's smoke step went down
+with it — so v6.2.0 was tagged but never published, and there is no artifact for it.
+
+The cause is a one-line placement mistake in `kit/ops/bootstrap.py::arm_machine`. Item (4) of the
+four things that arm a machine, `merge_awake_hooks(archive, find_bash())`, sits ABOVE the
+`if permissions:` block instead of inside it. Both it and `merge_permissions` write to the same
+file — `merge_awake_hooks` registers SessionStart/UserPromptSubmit/Stop/SessionEnd via
+`awake-hook.sh install` — so both belong behind the same gate. Move the call inside, keep the
+comment above it accurate (its point still stands: the two hook files are rewritten on every
+install, so folding them into `changed` would make the one-off "machine armed" line nag forever),
+and add the reason the gate is shared. `--no-machine-setup` is a different, wider opt-out and keeps
+working exactly as it does: `arm_machine` is not called at all, so nothing outside the repo is
+written.
+
+Then ship it: `kit/ops/VERSION` to 6.2.1 and a CHANGELOG entry above the existing 6.2.0 one. The
+6.2.0 entry stays untouched — it is the real content release; this is only the fix that lets it
+reach anybody.
+
+### Acceptance
+- [ ] `--claude-skill --no-permissions` against a fixture HOME leaves `~/.claude/settings.json` byte-identical
+- [ ] the same run still caches the kit and installs the skill (the flag opts out of settings, not of arming)
+- [ ] moving the call back outside the gate makes the CI assertion fire again
+- [ ] `kit/ops/VERSION` says 6.2.1 and the newest CHANGELOG heading is 6.2.1
+- [ ] `bash kit/ops/selftest-install.sh` green and the archive-integrity check passes on the rebuilt zip
