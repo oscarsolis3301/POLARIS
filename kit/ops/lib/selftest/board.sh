@@ -232,6 +232,14 @@ drill_handover() {
     ho_jsont="{\"session_id\":\"drill-sid\",\"transcript_path\":\"$ho_tr\",\"cwd\":\"$PWD\",\"stop_hook_active\":true,\"hook_event_name\":\"Stop\"}"
     if [ -f ops/SPRINT.md ]; then cp ops/SPRINT.md "$T/ho-sprint.bak"; else rm -f "$T/ho-sprint.bak"; fi
     printf '# SPRINT 14 — handover drill  capacity: 5\n' > ops/SPRINT.md   # moved set: disk-only, ignored on base
+    # (11) and (15)/(16) below OVERWRITE ops/CONVENTIONS.md to drive the knobs, so record here
+    # whether it was there at all when we arrived — the same entry snapshot busyint, selfland and
+    # wtreap take. SPRINT.md is gitignored and only has to come back for the drills after us;
+    # CONVENTIONS.md is TRACKED from drill_express onward (that drill commits it), so the teardown's
+    # old unconditional `rm -f` left the full run a tracked file short and the hermetic assertion at
+    # the bottom — correctly — fired on it. Absent at entry (any --only partition that skips
+    # express) means absent at exit: no snapshot file, and the restore removes it.
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/ho-conv.bak"; else rm -f "$T/ho-conv.bak"; fi
     # (1) the router is documented. cli-docs-parity counts it too; here it is the precondition for
     #     every role's boundary instruction actually being runnable.
     "$SELF" help | grep -q '^  next ' || { echo "HANDOVER HELP FAIL (next missing from help — every role file tells the session to run it)"; exit 1; }
@@ -382,15 +390,25 @@ drill_handover() {
     printf '{}\n' > "$T/ho-tr/drill-sid/subagents/x.jsonl"
     ho_out="$(printf '%s' "$ho_json" | POLARIS_HANDOVER_CLI="$SELF" bash "$ho_hook" --test stop)"
     [ "$ho_out" = "allow:subagent" ] || { echo "HANDOVER HOOK SUBAGENT FAIL (got '$ho_out')"; exit 1; }
-    # hermetic teardown: the board drained, the two tracked files gone, the session state removed,
-    # the sid handed back to whatever runs next, and the tree byte-identical to the way we found it.
+    # hermetic teardown: the board drained, the ONE file this drill created (ops/contracts/ho.md)
+    # gone, CONVENTIONS + SPRINT put back the way we found them — restored, never deleted: whether
+    # CONVENTIONS.md is tracked here depends on which drills ran before us, and only the entry
+    # snapshot knows — the session state removed, the sid handed back to whatever runs next, and the
+    # tree byte-identical to the way we found it.
     rm -f ops/board/review/T-HO6.md ops/board/ready/T-HO2.md ops/board/backlog/T-HO3.md ops/board/done/T-HO1.md
     rm -rf "$ho_gcd/polaris-locks/T-HO2" "$ho_gcd/polaris-locks/T-HO4" "$ho_gcd/polaris-locks/.int-lease"
     rm -rf "$ho_dir" "$T/ho-tr"
-    rm -f .polaris/finish-stamp ops/contracts/ho.md ops/CONVENTIONS.md
+    rm -f .polaris/finish-stamp ops/contracts/ho.md
     git branch -q -D feat/T-HO2 2>/dev/null || true
+    # CONVENTIONS.md: put back what HEAD holds, not the byte copy. The neighbours that save/restore
+    # this file by `cp` all COMMIT afterwards, which is what makes their trees clean; this drill must
+    # not commit anything — proving it changes nothing is the whole point — so it restores through
+    # git instead, which is the one form that leaves `git status` with nothing to say. The entry
+    # backup is still the record of whether the file existed at all when we arrived (any --only
+    # partition that never tracked it) and the fallback if HEAD no longer carries it.
+    if [ -f "$T/ho-conv.bak" ]; then git checkout -q HEAD -- ops/CONVENTIONS.md 2>/dev/null || cp "$T/ho-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
     if [ -f "$T/ho-sprint.bak" ]; then cp "$T/ho-sprint.bak" ops/SPRINT.md; else rm -f ops/SPRINT.md; fi
-    rm -f "$T/ho-sprint.bak"
+    rm -f "$T/ho-conv.bak" "$T/ho-sprint.bak"
     if [ -n "$ho_sid0" ]; then export CLAUDE_CODE_SESSION_ID="$ho_sid0"; else unset CLAUDE_CODE_SESSION_ID; fi
     [ -z "$(git status --porcelain)" ] || { git status --porcelain; echo "HANDOVER HERMETIC FAIL (the drill must leave the tree exactly as it found it)"; exit 1; }
 }

@@ -872,7 +872,7 @@ reach anybody.
 - [ ] `bash kit/ops/selftest-install.sh` green and the archive-integrity check passes on the rebuilt zip
 
 ## T-118 — "The seal fan-out runs its OWN done LAST, never skips it — landing: self must reach done/"
-points 1 · risk normal · landed e2cdb59 (2026-09-02) · claimed 2026-09-02
+points 1 · risk normal · landed e2cdb59 (2026-09-02) · claimed 2026-09-02 → done 2026-09-02
 files touched: kit/ops/lib/builder.sh, ops/contracts/worktree-liveness.md
 
 ### Why
@@ -915,3 +915,27 @@ to survive the landing tail. Guard 1 is the protection; own-last is only orderin
 - [x] `ops/contracts/worktree-liveness.md` gains an append-only `## v1.3` section recording that
 - [x] `bash kit/ops/polaris doctor --selftest --only handover,selfland,wtreap` is green.
 - [x] Sabotaged both ways: restore the skip → the drill reds; restore the fix → green.
+
+## T-119 — "The handover drill puts CONVENTIONS.md back instead of deleting it — hermetic teardown after the self-land"
+points 1 · risk normal · landed 5d667b2 (2026-09-02) · claimed 2026-09-02
+files touched: kit/ops/lib/selftest/board.sh
+
+### Why
+The full check suite is failing. The handover drill borrows the project's settings file while it
+works, and when it finishes it throws that file away instead of putting the original back. On its
+own the drill never noticed, because in a small run there was no settings file to begin with. In the
+full run there is one, so the drill ends by leaving the project short a file it started with — and
+the drill's own last question, "did I leave everything exactly as I found it?", correctly answers no
+and stops the whole suite.
+
+The fix is the one every neighbouring drill already uses: take a copy of the settings file before
+touching it, and put that copy back at the end. Nothing about what the drill checks changes, and the
+"leave no trace" question it asks itself at the end is left exactly as strict as it is today.
+
+### Acceptance
+- [ ] the drill saves ops/CONVENTIONS.md before it overwrites it, and restores it byte-for-byte at teardown
+- [ ] a run with no settings file present still ends with no settings file present
+- [ ] the "leave no trace" assertion at the end of the drill is unchanged
+- [ ] the drill adds no new shell function (the kit's public-surface golden stays green)
+- [ ] `bash ops/polaris doctor --selftest --only handover` is green twice in a row
+- [ ] the full `bash ops/polaris doctor --selftest` is green
