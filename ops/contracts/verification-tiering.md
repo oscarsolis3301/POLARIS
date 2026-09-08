@@ -60,3 +60,28 @@ $ ops/polaris land T-042        # paranoid repo, suite stamp 178s
 
 ## Changelog
 - v1 2026-07-20: created for T-031 (stamp + hint) · T-033 (--only)
+
+## v2 — the express lane carries its suite verdict to `finish` (2026-09-08, plan feel-fast, 6.3.0)
+Measured cause of a 20-minute duplicate: `cmd_land_express` (kit/ops/lib/integrate.sh) runs the FULL
+suite at step 3 but never writes `.polaris/suite-stamp`; only `cmd_qa` does. So under
+`landing: integrator` the next `finish` runs the identical suite again over the identical tree.
+- NEW fn `suite_stamp_carry <tested-sha>` in integrate.sh (T-123; the W1 api-kit row T-122 writes).
+  Called ONCE, as the LAST thing express does before its closing `say` (after `cmd_done`, after the
+  integrate branch is deleted), in the primary on `<base>`. It writes `.polaris/suite-stamp` as
+  `"<HEAD-sha> <epoch>"` — the SAME shape `cmd_qa` writes and reads — ONLY when ALL hold:
+  the tree is clean (same porcelain read as qa) · `<tested-sha>` is an ancestor of HEAD ·
+  `git diff --name-only <tested-sha> HEAD` lists NOTHING outside `$(cfg reports docs/sprints/)`
+  and `ops/MAP.md` (the two things seal and done write after the suite ran). Otherwise it prints
+  `⚠ suite stamp withheld — HEAD gained more than the sprint report since the suite ran; finish will
+  re-run it` and writes nothing. Never changes express's exit status.
+- `<tested-sha>` = `git rev-parse HEAD` taken right after step 3's last green, on integrate/<date>.
+- Express also writes `.polaris/last-suite-seconds` (`"<seconds> <epoch>"`, wall time of step 3's
+  loop) when ≥ 1 suite command ran — the slow-suite hint reads it, same as after `qa`.
+- `cmd_qa` is UNTOUCHED: the stamp it finds is exactly the stamp it would have written.
+- Drill (inside the existing `drill_express`, history.sh — surface-frozen, no new drill fn): after
+  the happy-path express, line 1 of `.polaris/suite-stamp` equals `git rev-parse main` and `qa`
+  prints `suite already green`; then a commit on main → `qa` runs the suite again (stamp keyed on
+  the commit, exactly as before). Assert file content and rc, never the message alone.
+- Self-landing (`landing: self`) runs NO suite by design; nothing changes there — `finish` remains
+  that path's one full run, now sharded (ops/CONVENTIONS.md `test:`), and the in-process tier
+  (ops/contracts/fast-tier.md) is the per-change gate.

@@ -183,3 +183,20 @@ red `keys-drift`; a row without its read is inert. Both directions are safe in t
 ## Changelog
 - v1 2026-08-03: created for T-074/T-076/T-077/T-078/T-080 (POLARIS 6.0.0 "autonomy by default").
 - §7 2026-09-01: sprint-12 api-kit owners W1 T-096 · W2 T-101 · W3 T-104 with the exact row unions (19/44/4) and the index-depth correction (plan cant-eat-itself).
+
+## 8. Cross-wave surface registry, sprint 13 (2026-09-08, plan feel-fast, 6.3.0) — ONE owner per wave
+Same rule as § 5/§ 7: `ops/tests/api-kit.expected` records every top-level fn (any depth under
+`kit/`), every markdown heading under `kit/`, every KEYS.tsv row. One owner per wave writes the
+WHOLE wave's union up front from the names pinned in the contracts; everyone else is surface-frozen.
+- **W1 owner T-122** (fast tier): its own `selftest/fast.sh` fns `selftest_fast` · `ft_assert` ·
+  `ft_section`; T-123's `suite_stamp_carry` (integrate.sh); T-124's `update_latest` ·
+  `board_quiescent` · `update_dirt_overlaps_kit` · `cmd_update_auto` · `cmd_update_all` (admin.sh) and
+  the KEYS.tsv row `auto_update`. T-122 also owns `ops/tests/cli-help.expected` for the wave and
+  writes the `update` help line for T-124's flags (`update [--auto|--all] [--repo-only]`) from this
+  contract, not from T-124's diff. NO new markdown heading anywhere in W1 (PROTOCOL gains table rows).
+- **W2 owner T-125** (hook + installers): its own `hooks/update-hook.sh` fns `jstr` · `uh_primary` ·
+  `uh_main`; T-126's `drill_autoupdate` (remote.sh). T-126's fast.sh additions and T-127's role-file
+  edits add NO top-level fn and NO heading — surface-frozen.
+- **W3** T-128 (release): VERSION + CHANGELOG only; api-kit untouched.
+- Diff the golden against live output (`bash ops/polaris find --api 'kit/*' | grep -v i-have-adhd`),
+  never a commit range; an unexpected hunk is a STOP, not a refresh (Learned log).
