@@ -1,3 +1,35 @@
+# SPRINT 13 — Feel fast, stay fast (6.3.0)          capacity: 28   dates: 2026-09-08–
+
+The human asked whether POLARIS was worth keeping because small changes take an hour. Measured
+(plans/i-want-to-keep-groovy-parrot.md, approved 2026-09-08): building is ~15 min everywhere; the
+hour is the landing tail on repos running kits that predate `landing: self` and `handover:` — and,
+here, a suite that sits on the critical path three times per change (320s "fast" tier · wave gate
+· `finish` re-running an identical green). Owner decisions: FEATURE FREEZE — latency only; the two
+permitted new capabilities are the delivery mechanism (auto-update) and a genuinely seconds-long
+tier. Part 1 (other repos to 6.2.2, observatory hooks stripped) was done by the conductor before
+planning. Seven tasks / 28 pts / 3 waves under plan `feel-fast`: W1 (ready, 3 lanes) T-122
+`doctor --fast` in-process tier (W1 api-kit + cli-help owner) · T-123 express writes the suite stamp
+(the 20-min duplicate) · T-124 `update --auto|--all` + `board_quiescent` + the kit-footprint dirt
+rule + KEYS `auto_update`; W2 (3 lanes) T-125 SessionStart hook + install-time registry (W2 api-kit
+owner) · T-126 `autoupdate` drill + fast-tier gates · T-127 CONVENTIONS flip (`test:` sharded,
+`test_fast:` = the tier) + measurements + SOLO/BUILDER/PROTOCOL prose; W3 T-128 release 6.3.0.
+Contracts on base BEFORE any claim: NEW fast-tier · auto-update; APPENDED verification-tiering v2 ·
+key-registry § 8. Pre-mortem applied: (1) api-kit is a derived surface — ONE owner per wave
+(T-122 → T-125) writes the union from names PINNED in the contracts, everyone else surface-frozen,
+no new heading under kit/ this sprint; (2) never a bare suite in `verify:` — every task's verify:
+lines are grep/one-command checks under 10s, drills are acceptance boxes run at 600000 ms or via
+`bg run`; (3) selftest mid-edit trap — a lane editing kit/ops/lib/*.sh never runs `doctor
+--selftest` from the primary while a sibling's suite is running (run it in the worktree); (4) trust
+the rc, not the refusal text — every new assertion checks file state + rc; (5) the drill and the
+goldens never touch the owner's `~/.claude` — `--repo-only` in every drill apply, `POLARIS_AWAKE_HOME`
+per fixture. Not in this sprint: WSL (no distribution installed — T-127 records the fact and the
+re-measure command; installing one is the human's call), a global symlinked kit (rejected in the
+plan), any change to gates, invariants or the ready gate.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 12 — Parallel work that can't eat itself (6.2.0)          capacity: 67   dates: 2026-09-01–
 
 Five parallel chats on one repo still break four ways: a sibling's seal fan-out force-removed a
