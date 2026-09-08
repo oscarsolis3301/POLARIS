@@ -102,8 +102,24 @@ update_check_maybe() { # update_check_maybe [force] — notice engine. Throttles
   # every run, so an available update cannot be missed. Fails open, always: no curl, no network,
   # private/renamed repo, junk response → silent fallback to the cached value, exit 0.
   local force="${1:-}"
-  local cur chan cache today prev latest
+  local cur latest
   cur="$(ver version 2>/dev/null || true)"; [ -n "$cur" ] || return 0
+  latest="$(update_latest "$force")"
+  [ -n "$latest" ] || return 0
+  semver_gt "$latest" "$cur" || return 0
+  printf '⬆ POLARIS %s available — you have %s. Apply: ops/polaris update\n' "$latest" "$cur" >&2
+  return 0
+}
+
+update_latest() { # update_latest [force] — print the newest version on the channel, or nothing.
+  # The cache/network half of update_check_maybe, split out (6.3.0, ops/contracts/auto-update.md)
+  # so `update --auto` at session start shares the SAME `.polaris/update-cache` and the same
+  # once-a-day throttle: one network call per day per repo however many commands ask. "force"
+  # (explicit `version`) queries the channel this run. Fails open — no curl, no network, junk
+  # response → the cached value, or nothing at all; never a non-zero rc, never a word printed
+  # besides the version.
+  local force="${1:-}"
+  local chan cache today prev latest
   chan="$(ver channel 2>/dev/null || true)"; [ -n "$chan" ] || return 0
 
   cache="$PRIMARY/.polaris/update-cache"
@@ -123,10 +139,7 @@ update_check_maybe() { # update_check_maybe [force] — notice engine. Throttles
   else
     latest="$prev"
   fi
-
-  [ -n "$latest" ] || return 0
-  semver_gt "$latest" "$cur" || return 0
-  printf '⬆ POLARIS %s available — you have %s. Apply: ops/polaris update\n' "$latest" "$cur" >&2
+  [ -n "$latest" ] && printf '%s' "$latest"
   return 0
 }
 
@@ -323,16 +336,35 @@ AUTOMODE
   fi
 }
 
-cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-board path:
-  # kit code is refreshed; board, RULES, CONVENTIONS, MAP and SPRINT are never touched.
-  # `update` = fetch a newer KIT from the channel.  `upgrade` = migrate an OLD BOARD to v5.
-  # They are one letter apart and unrelated; update runs upgrade at the end, never the reverse.
+cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] · update --all [--repo-only]
+  # The explicit form reuses install.sh's live-board path: kit code is refreshed; board, RULES,
+  # CONVENTIONS, MAP and SPRINT are never touched. `--auto` is the SessionStart path (6.3.0,
+  # ops/contracts/auto-update.md): applies a minor/patch update by itself when the board is quiet,
+  # stays silent otherwise, never parks. `--all` walks the machine registry and runs `--auto` in
+  # every installed repo. `update` = fetch a newer KIT from the channel.  `upgrade` = migrate an
+  # OLD BOARD to v5. One letter apart and unrelated; update runs upgrade at the end, never the reverse.
+  local auto=0 say_=0 all=0 repo_only=0 a
+  for a in "$@"; do
+    case "$a" in
+      --auto)      auto=1;;
+      --say)       say_=1;;
+      --all)       all=1;;
+      --repo-only) repo_only=1;;
+      *) die "update: unknown flag ${a} (only --auto, --say, --all, --repo-only)";;
+    esac
+  done
 
   # Self-hosting repo (kit/ops/pack.py is the tell — ops/contracts/self-hosting.md): ops/ here
   # is an INSTALLATION and main's tarball serves that same installation, so update would install
   # ops/ over itself — a no-op that prints success and ships nothing from kit/. Refuse before
-  # the re-exec below, so we never pay for a temp copy we immediately throw away.
-  if [ -f "$PRIMARY/kit/ops/pack.py" ]; then
+  # the re-exec below, so we never pay for a temp copy we immediately throw away. Under `--auto`
+  # this is the algorithm's step 1: a silent rc 0 — a hook must never nag the kit's own repo.
+  # `--all` passes: the walk judges each registry entry itself (this repo comes out "skipped").
+  if [ "$all" = 0 ] && [ -f "$PRIMARY/kit/ops/pack.py" ]; then
+    if [ "$auto" = 1 ]; then
+      [ "$say_" = 1 ] && printf 'skipped: self-hosting\n'
+      return 0
+    fi
     note "this repo BUILDS POLARIS: ops/ is its installation, and the update tarball serves that same ops/."
     note "update here would install ops/ over itself and bring across nothing you wrote in kit/."
     die "self-hosting repo — the command you want is:  python kit/ops/pack.py --dogfood  (installs the published release)"
@@ -344,6 +376,7 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
   # offset inside the new bytes and executes garbage ("syntax error near unexpected token"), or
   # worse, half a command. This was latent from the day `update` was written; it only ever
   # survived because the old and new files happened to line up. It stopped lining up.
+  # Every form, `--all` included: the walk may reach this very repo.
   if [ "${POLARIS_UPDATE_REEXEC:-}" != "1" ]; then
     local tmp; tmp="$(mktemp -d)"
     cp "$SELF" "$tmp/polaris"
@@ -352,12 +385,17 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
     POLARIS_UPDATE_REEXEC=1 exec bash "$tmp/polaris" update "$@"
   fi
 
-  local repo_only=0
-  case "${1:-}" in
-    --repo-only) repo_only=1;;
-    "") ;;
-    *) die "update: unknown flag ${1} (only --repo-only)";;
-  esac
+  if [ "$all" = 1 ]; then
+    [ "$auto" = 0 ] && [ "$say_" = 0 ] || die "update: --all combines with --repo-only only"
+    cmd_update_all "$repo_only"
+    return 0
+  fi
+  if [ "$auto" = 1 ]; then
+    cmd_update_auto "$say_" "$repo_only"
+    return 0
+  fi
+  [ "$say_" = 0 ] || die "update: --say belongs to --auto (update --auto --say)"
+
   [ -f "$VER" ] || die "ops/VERSION missing — this kit predates versioning; reinstall from a fresh zip"
   command -v curl >/dev/null 2>&1 || die "update needs curl on PATH"
   command -v tar  >/dev/null 2>&1 || die "update needs tar on PATH"
@@ -376,17 +414,25 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
       note "  python ~/.claude/skills/polaris-install/polaris-v5.zip"
       die "worktree is dirty — use the installer above (then run setup), or commit/stash and re-run update"
     fi
-    # Configured repo (ops/contracts/shared-checkout.md): N chats share this one checkout, so
-    # "commit or stash first" hands whoever happened to run update a decision about work that is
-    # very likely somebody else's — the exact git question this contract exists to stop asking.
-    # Park it: named, listed by status, reversible in one command, and the update still lands as
-    # the reviewable diff that die was protecting. Only a stash that genuinely REFUSES falls back
-    # to the old die, and park guarantees the tree is untouched when it does.
-    # The `why` rides the stash NAME, which `status` prints in full on one line — so it is kept
-    # short on purpose. The reasoning belongs in this comment, not in every future status read.
-    park "dirty tree at update" \
-      || die "worktree is dirty — commit or stash first, so the update lands as a reviewable diff"
-    parked=1
+    if git -C "$PRIMARY" status --porcelain | update_dirt_overlaps_kit; then
+      # Configured repo (ops/contracts/shared-checkout.md): N chats share this one checkout, so
+      # "commit or stash first" hands whoever happened to run update a decision about work that is
+      # very likely somebody else's — the exact git question this contract exists to stop asking.
+      # Park it: named, listed by status, reversible in one command, and the update still lands as
+      # the reviewable diff that die was protecting. Only a stash that genuinely REFUSES falls back
+      # to the old die, and park guarantees the tree is untouched when it does.
+      # The `why` rides the stash NAME, which `status` prints in full on one line — so it is kept
+      # short on purpose. The reasoning belongs in this comment, not in every future status read.
+      park "dirty tree at update" \
+        || die "worktree is dirty — commit or stash first, so the update lands as a reviewable diff"
+      parked=1
+    else
+      # Dirt that touches nothing install.sh overwrites (6.3.0, auto-update.md § dirt rule) is the
+      # human's own app work. The field report: a repo with app-only dirt died on "commit or stash
+      # first" — a stash of somebody else's files to land a kit refresh that never touches them.
+      # Only overlapping dirt is parked; the rest is exactly as they left it.
+      note "your uncommitted changes are outside the kit's paths — left alone"
+    fi
   fi
 
   T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
@@ -453,6 +499,153 @@ cmd_update() { # explicit + manual, never automatic. Reuses install.sh's live-bo
     printf '  job, now. This holds whatever the human asked for: an unconfigured POLARIS is not\n'
     printf '  delivered. (No AI reading this? Ask your AI chat in this repo to set up POLARIS.)\n'
   fi
+}
+
+# ------------------------------------------------------------------ auto-update (6.3.0)
+# ops/contracts/auto-update.md. Three of the four POLARIS repos on the author's machine were months
+# stale while `update_check_maybe` printed a notice nobody acted on. These make the check ACT — at
+# session start, only when it is safe, and never with a stash or a question.
+
+board_quiescent() { # board_quiescent — rc 0 quiet · rc 1 busy; QUIET_WHY = the FIRST reason found.
+  # Reads ONLY $BOARD, $LOCKS and $PRIMARY/.polaris/bg — all overridable, so the fast tier tests it
+  # in a subshell over temp dirs. A dirty tree is NOT a reason (owner decision, 2026-09-08). A bg
+  # job is judged rc-file-FIRST, exactly bg-jobs.md's rule: a dead pid with no rc is crashed, not
+  # running, and Windows reuses pids so the pid alone is never a verdict.
+  QUIET_WHY=""
+  local col n d f p
+  for col in ready active review; do
+    n=0
+    for f in "$BOARD/$col"/*.md; do [ -f "$f" ] && n=$((n + 1)); done
+    if [ "$n" -gt 0 ]; then QUIET_WHY="$col: $n"; return 1; fi
+  done
+  for d in "$LOCKS"/*/; do
+    [ -d "$d" ] || continue
+    d="${d%/}"; d="${d##*/}"
+    [ "$d" = ".int-lease" ] && continue
+    QUIET_WHY="lock: $d"; return 1
+  done
+  if [ -e "$LOCKS/.int-lease" ]; then QUIET_WHY="integration lease held"; return 1; fi
+  for d in "$PRIMARY/.polaris/bg"/*/; do
+    [ -d "$d" ] || continue
+    d="${d%/}"; d="${d##*/}"
+    case "$d" in *.prev|.archive) continue;; esac
+    [ -f "$PRIMARY/.polaris/bg/$d/rc" ] && continue
+    p="$(cat "$PRIMARY/.polaris/bg/$d/pid" 2>/dev/null | tr -d ' \r\n')"
+    if bg_alive "$p"; then QUIET_WHY="bg job running: $d"; return 1; fi
+  done
+  return 0
+}
+
+update_dirt_overlaps_kit() { # stdin = `git status --porcelain`; rc 0 = some dirty path is one install.sh overwrites
+  # The kit's footprint and nothing else: everything under ops/ EXCEPT the repo's own state
+  # (board, contracts, CONVENTIONS, MAP, SPRINT, RULES, ROADMAP, tests), plus the .claude/ pieces,
+  # CLAUDE.md, .gitignore and .gitattributes. A rename (`R old -> new`) tests the NEW path. Any
+  # other dirty path is the human's work, outside the footprint, and must never block an update.
+  local line p cr; cr="$(printf '\r')"
+  while IFS= read -r line; do
+    p="${line#???}"; p="${p%$cr}"
+    case "$p" in *' -> '*) p="${p##* -> }";; esac
+    case "$p" in \"*\") p="${p#\"}"; p="${p%\"}";; esac   # git quotes paths with odd bytes
+    case "$p" in
+      ops/board/*|ops/contracts/*|ops/CONVENTIONS.md|ops/MAP.md|ops/SPRINT.md|ops/RULES.tsv|ops/ROADMAP.md|ops/tests/*) ;;
+      ops/*) return 0;;
+      .claude/settings.json|.claude/skills/polaris/*|.claude/skills/i-have-adhd/*|.claude/output-styles/polaris.md) return 0;;
+      CLAUDE.md|.gitignore|.gitattributes) return 0;;
+    esac
+  done
+  return 1
+}
+
+cmd_update_auto() { # cmd_update_auto <say> <repo_only> — the SessionStart path, auto-update.md § algorithm.
+  # Every early exit is a silent rc 0 (a busy board is normal; nothing to say); <say>=1 turns each
+  # into one `skipped: <reason>` line, which `--all` reads. Never parks, never asks, never exits
+  # non-zero, never prints more than one line: a hook must never fail the session or flood it.
+  local say_="${1:-0}" repo_only="${2:-0}" cur latest mode log rc new
+  # 1. self-hosting — this repo never self-updates (cmd_update exits before the re-exec; kept here
+  #    so the function stands alone for anyone who calls it directly)
+  if [ -f "$PRIMARY/kit/ops/pack.py" ]; then
+    [ "$say_" = 1 ] && printf 'skipped: self-hosting\n'; return 0
+  fi
+  # 2. the off switch — defaults ON in code; `update` never writes it into any repo. An unknown
+  #    value fails closed to today's behavior (the notice only) and says so once.
+  mode="$(cfg auto_update on)"
+  case "$mode" in
+    on) ;;
+    off) [ "$say_" = 1 ] && printf 'skipped: auto_update: off\n'; return 0;;
+    *) printf '⚠ auto_update: %s is not on|off — treated as off\n' "$mode" >&2
+       [ "$say_" = 1 ] && printf 'skipped: auto_update: %s (unknown — treated as off)\n' "$mode"; return 0;;
+  esac
+  # 3. the channel, through the same daily-throttled cache the notice uses
+  cur="$(ver version 2>/dev/null || true)"
+  [ -n "$cur" ] || { [ "$say_" = 1 ] && printf 'skipped: no ops/VERSION\n'; return 0; }
+  latest="$(update_latest)"
+  if [ -z "$latest" ] || ! semver_gt "$latest" "$cur"; then
+    [ "$say_" = 1 ] && printf 'skipped: up to date (%s)\n' "$cur"; return 0
+  fi
+  # 4. a MAJOR bump asks; it never applies itself
+  if [ "${latest%%.*}" -gt "${cur%%.*}" ] 2>/dev/null; then
+    printf '⬆ POLARIS %s is a MAJOR update (you have %s) — it will not apply itself; when you want it: bash ops/polaris update\n' "$latest" "$cur"
+    return 0
+  fi
+  # 5. a busy board is normal
+  if ! board_quiescent; then
+    [ "$say_" = 1 ] && printf 'skipped: %s\n' "$QUIET_WHY"; return 0
+  fi
+  # 6. dirt inside the kit's footprint — the explicit form parks it; a stash appearing at session
+  #    start is a surprise, so this form just waits for a cleaner day
+  if git -C "$PRIMARY" status --porcelain | update_dirt_overlaps_kit; then
+    [ "$say_" = 1 ] && printf 'skipped: uncommitted changes inside the kit'"'"'s paths\n'; return 0
+  fi
+  # 7. apply — the explicit body, verbatim, as a child of THIS re-exec'd copy ($SELF already lives
+  #    in the temp dir, so install.sh overwriting ops/polaris cannot bite), stdout+stderr to the
+  #    log, truncated per run. Its own dirt rule finds no overlap (step 6) and parks nothing.
+  mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+  log="$PRIMARY/.polaris/update.log"
+  rc=0
+  if [ "$repo_only" = 1 ]; then
+    (cd "$PRIMARY" && POLARIS_UPDATE_REEXEC=1 bash "$SELF" update --repo-only) > "$log" 2>&1 || rc=$?
+  else
+    (cd "$PRIMARY" && POLARIS_UPDATE_REEXEC=1 bash "$SELF" update) > "$log" 2>&1 || rc=$?
+  fi
+  new="$(ver version 2>/dev/null || true)"
+  if [ "$rc" -eq 0 ] && [ -n "$new" ] && [ "$new" != "$cur" ]; then
+    printf '✅ POLARIS updated %s → %s at session start — ops/ and CLAUDE.md are new; re-read your role file before acting\n' "$cur" "$new"
+  else
+    printf '⚠ auto-update %s → %s failed — see .polaris/update.log; the repo is unchanged unless the log says otherwise\n' "$cur" "$latest"
+  fi
+  return 0
+}
+
+cmd_update_all() { # cmd_update_all <repo_only> — walk the machine registry; every quiet installed repo updates.
+  # Registry root = awake_home (lib/awake.sh); one line per `repos/*` entry, in filename order.
+  # Never deletes an entry, never stops on one repo's failure, rc 0 always. Each repo runs ITS OWN
+  # `ops/polaris update --auto --say` from its own directory — its kit, its board, its rules — and
+  # this only prefixes what it said. (A repo still on a kit older than 6.3.0 answers "unknown flag"
+  # here: one explicit `update` in it, and every later walk reaches it.)
+  local repo_only="${1:-0}" home f p out line printed
+  home="$(awake_home)"
+  [ "$home" != "-" ] || die "no machine registry yet — open one POLARIS repo in Claude Code first, or: ops/polaris awake install"
+  for f in "$home"/repos/*; do
+    [ -f "$f" ] || continue
+    p="$(head -1 "$f" 2>/dev/null | tr -d '\r')"
+    [ -n "$p" ] || continue
+    if [ ! -d "$p" ]; then printf '%s: gone (registry entry left for you to remove)\n' "$p"; continue; fi
+    if [ -f "$p/kit/ops/pack.py" ]; then printf '%s: self-hosting — skipped\n' "$p"; continue; fi
+    if [ "$repo_only" = 1 ]; then
+      out="$( (cd "$p" && bash "$p/ops/polaris" update --auto --say --repo-only) 2>&1 || true)"
+    else
+      out="$( (cd "$p" && bash "$p/ops/polaris" update --auto --say) 2>&1 || true)"
+    fi
+    printed=0
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      printf '%s: %s\n' "$p" "$line"; printed=1
+    done <<EOF
+$out
+EOF
+    [ "$printed" = 1 ] || printf '%s: up to date\n' "$p"
+  done
+  return 0
 }
 
 # ------------------------------------------------------------------ adopt (6.0)

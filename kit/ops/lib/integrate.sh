@@ -229,6 +229,34 @@ land_slow_suite_hint() { # T-031 (ops/contracts/verification-tiering.md): after 
   return 0
 }
 
+suite_stamp_carry() { # suite_stamp_carry <tested-sha> — T-123 (ops/contracts/verification-tiering.md
+  # § v2): express runs the FULL suite at step 3 and used to throw the verdict away, so the next
+  # `finish` re-ran the identical suite over the identical tree — measured at ~20 wasted minutes per
+  # task. This carries the verdict forward: it writes .polaris/suite-stamp in exactly the shape
+  # cmd_qa writes and reads ("<HEAD-sha> <epoch>"), and ONLY when the carry is provably honest —
+  # tree clean · <tested-sha> an ancestor of HEAD · nothing changed since it outside the reports
+  # dir and ops/MAP.md (the two things seal and done write AFTER the suite ran). Anything else
+  # withholds the stamp and says so: finish then re-runs the suite, which is cheap next to blessing
+  # a commit nobody tested. cmd_qa is untouched. NEVER changes the caller's exit status.
+  local tested="${1:-}" head dirty rel changed extra
+  [ -n "$tested" ] || return 0
+  head="$(git -C "$PRIMARY" rev-parse HEAD 2>/dev/null || echo none)"
+  [ "$head" = "none" ] && return 0
+  dirty="$(git -C "$PRIMARY" status --porcelain 2>/dev/null | head -1)"
+  rel="$(cfg reports docs/sprints)"; rel="${rel%/}"; [ -n "$rel" ] || rel="docs/sprints"
+  if [ -z "$dirty" ] && git -C "$PRIMARY" merge-base --is-ancestor "$tested" "$head" 2>/dev/null; then
+    changed="$(git -C "$PRIMARY" diff --name-only "$tested" "$head" 2>/dev/null || true)"
+    extra="$(printf '%s\n' "$changed" | grep -v '^[[:space:]]*$' | grep -v "^$rel/" | grep -vx 'ops/MAP.md' || true)"
+    if [ -z "$extra" ]; then
+      mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+      printf '%s %s\n' "$head" "$(date +%s)" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
+      return 0
+    fi
+  fi
+  note "⚠ suite stamp withheld — HEAD gained more than the sprint report since the suite ran; finish will re-run it"
+  return 0
+}
+
 cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate branch: audit, then
   # squash feat/<ID> into exactly ONE commit whose message comes from the task file. Makes NO
   # board write, NO evt, NO board commit — a red task unwinds with a single
@@ -382,10 +410,13 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   # step 3: the FULL CONVENTIONS suite, ONCE (same set as qa). Red → unwind the land, kick the
   # task back carrying the failing tail, die — the board never keeps a green it didn't earn.
   local k c out tailtxt
+  local ex_ran=0 ex_t0 ex_t1 ex_tested=""
+  ex_t0="$(date +%s)"
   out="$(mktemp)"
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
+    ex_ran=$((ex_ran+1))
     if ( cd "$PRIMARY" && bash -c "$c" ) >"$out" 2>&1; then
       # the suite is the longest thing the lane ever does — re-stamp after EACH command so a
       # 13-minute test run stays visibly alive to the pid-aware steal (worktree-liveness.md)
@@ -403,6 +434,16 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
     fi
   done
   rm -f "$out"
+  # T-123 (verification-tiering v2): the commit the suite just proved — captured HERE, on
+  # integrate/<date>, right after the last green, before seal/done move anything. Plus the
+  # suite duration, same "<seconds> <epoch>" line qa writes, so the slow-suite hint works after
+  # an express land too. Both best-effort; neither can fail the lane.
+  if [ "$ex_ran" -ge 1 ]; then
+    ex_tested="$(git rev-parse HEAD 2>/dev/null || true)"   # nothing ran ⇒ nothing proven ⇒ no carry
+    ex_t1="$(date +%s)"
+    mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+    printf '%s %s\n' "$((ex_t1 - ex_t0))" "$ex_t1" > "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true
+  fi
   # step 4: seal — existing cmd_seal semantics, unchanged (tag sprint/<n>, pushes when remoted)
   cmd_seal "$date"
   # step 5: prove + close — verify: commands on the sealed base, done (landed: stamp + cleanup),
@@ -411,6 +452,8 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   cmd_done "$id"
   git branch -q -D "integrate/$date" 2>/dev/null || true
   [ -n "$ex_had" ] || int_off          # the lane's work is over — free it before the closing notes
+  # T-123: carry step 3's verdict to `finish` — the LAST thing express does before its closing say
+  suite_stamp_carry "$ex_tested"
   say "express: $id landed · sealed · done — one pass, integrate/$date cleaned"
   note "finish line: bash ops/polaris finish — it runs qa for you, proves the RUN is over, and signals done"
 }

@@ -25,6 +25,7 @@ kit/README.md	heading	Install (into any git repo)
 kit/README.md	heading	POLARIS v5 — parallel-sprint protocol
 kit/README.md	heading	The one idea
 kit/README.md	heading	The pieces
+kit/ops/KEYS.tsv	key	auto_update
 kit/ops/KEYS.tsv	key	autolaunch
 kit/ops/KEYS.tsv	key	autolaunch_max
 kit/ops/KEYS.tsv	key	autonomy
@@ -250,12 +251,15 @@ kit/ops/install.sh	fn	log
 kit/ops/install.sh	fn	note
 kit/ops/install.sh	fn	protocol_text
 kit/ops/install.sh	fn	say
+kit/ops/lib/admin.sh	fn	board_quiescent
 kit/ops/lib/admin.sh	fn	claude_home
 kit/ops/lib/admin.sh	fn	cmd_adopt
 kit/ops/lib/admin.sh	fn	cmd_init_board
 kit/ops/lib/admin.sh	fn	cmd_slim
 kit/ops/lib/admin.sh	fn	cmd_uninstall
 kit/ops/lib/admin.sh	fn	cmd_update
+kit/ops/lib/admin.sh	fn	cmd_update_all
+kit/ops/lib/admin.sh	fn	cmd_update_auto
 kit/ops/lib/admin.sh	fn	cmd_upgrade
 kit/ops/lib/admin.sh	fn	cmd_version
 kit/ops/lib/admin.sh	fn	kit_zip_version
@@ -263,6 +267,8 @@ kit/ops/lib/admin.sh	fn	refresh_machine_kit
 kit/ops/lib/admin.sh	fn	semver_gt
 kit/ops/lib/admin.sh	fn	slim_scan
 kit/ops/lib/admin.sh	fn	update_check_maybe
+kit/ops/lib/admin.sh	fn	update_dirt_overlaps_kit
+kit/ops/lib/admin.sh	fn	update_latest
 kit/ops/lib/admin.sh	fn	ver
 kit/ops/lib/awake.sh	fn	awake_conf
 kit/ops/lib/awake.sh	fn	awake_ensure
@@ -351,6 +357,7 @@ kit/ops/lib/integrate.sh	fn	in_primary
 kit/ops/lib/integrate.sh	fn	land_slow_suite_hint
 kit/ops/lib/integrate.sh	fn	landed_sha
 kit/ops/lib/integrate.sh	fn	seal_sync
+kit/ops/lib/integrate.sh	fn	suite_stamp_carry
 kit/ops/lib/integrate.sh	fn	tag_push_recovery_note
 kit/ops/lib/knowledge.sh	fn	all_sprint_numbers
 kit/ops/lib/knowledge.sh	fn	board_changed_touch
@@ -443,6 +450,9 @@ kit/ops/lib/selftest/board.sh	fn	drill_handover
 kit/ops/lib/selftest/board.sh	fn	drill_newcmds
 kit/ops/lib/selftest/board.sh	fn	drill_readyoverlap
 kit/ops/lib/selftest/brain.sh	fn	drill_brain
+kit/ops/lib/selftest/fast.sh	fn	ft_assert
+kit/ops/lib/selftest/fast.sh	fn	ft_section
+kit/ops/lib/selftest/fast.sh	fn	selftest_fast
 kit/ops/lib/selftest/history.sh	fn	drill_busyint
 kit/ops/lib/selftest/history.sh	fn	drill_express
 kit/ops/lib/selftest/history.sh	fn	drill_pr-publish
