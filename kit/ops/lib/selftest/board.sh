@@ -312,7 +312,10 @@ drill_handover() {
     grep -qx '   nothing to promote' "$T/ho5.out" || { cat "$T/ho5.out"; echo "HANDOVER DO2 NOTE FAIL (an idempotent --do must say so)"; exit 1; }
     # (8) disjointness at the gate: a candidate overlapping a ready task is HELD with the reason,
     #     never promoted — this is what keeps parallel builders from ever meeting on a file.
-    printf -- '---\nid: T-HO3\ntitle: hand over three\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\ncontract: ops/contracts/ho.md\nfiles_owned:\n  - src/ho2.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HO3.md
+    #     T-HO3 carries NO contract on purpose: an unset contract is legal (most small tasks have
+    #     no seam), so the candidate must reach the overlap check and be HELD by name — not dropped
+    #     silently by the gate, absent from the eligible list and the held list both.
+    printf -- '---\nid: T-HO3\ntitle: hand over three\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\ncontract:\nfiles_owned:\n  - src/ho2.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HO3.md
     "$SELF" next --do > "$T/ho6.out" 2>&1 || { cat "$T/ho6.out"; echo "HANDOVER HELD RC FAIL"; exit 1; }
     grep -q "held: T-HO3 — overlaps T-HO2 on 'src/ho2.txt'" "$T/ho6.out" || { cat "$T/ho6.out"; echo "HANDOVER HELD NOTE FAIL (the hold must name the task, the collider and the pattern)"; exit 1; }
     [ -f ops/board/backlog/T-HO3.md ] || { echo "HANDOVER HELD BOARD FAIL (a held candidate must stay in backlog/)"; exit 1; }
