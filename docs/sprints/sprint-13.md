@@ -159,7 +159,7 @@ command to re-measure — installing a distribution is the human's call, not thi
 - [ ] a `Planner calibration` line is NOT added — this is a config change, not a pointing lesson
 
 ## T-128 — "Release 6.3.0 — POLARIS feels fast, and it keeps itself that way"
-points 2 · risk normal · landed 330bcdf (2026-09-08) · claimed 2026-09-08
+points 2 · risk normal · landed 330bcdf (2026-09-08) · claimed 2026-09-08 → done 2026-09-08
 files touched: CHANGELOG.md, kit/ops/VERSION
 
 ### Why
@@ -212,3 +212,26 @@ itself carries no design note, so it is its own proof.
 - [x] The drift auditor's READY GATE check uses the same rule
 - [x] The board drill covers a contract-less candidate reaching the gate
 - [x] `bash ops/polaris next --do` promotes the contract-less T-128 out of backlog
+
+## T-131 — Prove the carried stamp, not the whole board — the express drill stops failing on other drills' cruft
+points 1 · risk normal · landed d26a5cf (2026-09-08) · claimed 2026-09-08
+files touched: kit/ops/lib/selftest/history.sh
+
+### Why
+The express drill added last sprint checks the right feature the wrong way. It asks whether the
+whole `qa` command comes back happy, but `qa` also audits board tidiness, and by the time this drill
+runs, earlier drills have left leftover branches lying around in the practice repo. So `qa` reports
+untidiness, the drill calls that a failure, and the whole suite goes red on all three operating
+systems — while the feature it was meant to check works perfectly. When the drills are split across
+three parallel workers the leftovers land somewhere else, everything looks green, and that is why
+this got through.
+
+The drill now checks what it actually means: that the carried-over green result makes the checks get
+skipped, and that one more change makes them run again. Both facts are read straight out of the
+command's own report, so nothing another drill leaves behind can move them.
+
+### Acceptance
+- [x] The express drill no longer treats `qa`'s overall result as its assertion.
+- [x] It still proves the skip happens, naming the exact sealed point.
+- [x] It still proves one further change makes the checks run again.
+- [x] The whole suite, run start to finish in one go, comes back clean.
