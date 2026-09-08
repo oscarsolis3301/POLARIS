@@ -84,7 +84,7 @@ files (the venzeti report: app-only dirt, "commit or stash first"). Only overlap
 - [ ] a manual proof in Notes: in a throwaway clone of `Desktop\polaris-testbed` (or a scratch installed repo) with `ops/VERSION` pinned low and a `file://` channel + tarball per the contract's drill recipe, `update --auto --say --repo-only` applies on a quiet board and skips with `active: 1` when a task file sits in active/ — the T-126 drill automates this; you prove it first
 
 ## T-125 — "Every session start checks for a newer kit, and every install registers its repo"
-points 5 · risk normal · landed 489df55 (2026-09-08) · claimed 2026-09-08
+points 5 · risk normal · landed 489df55 (2026-09-08) · claimed 2026-09-08 → done 2026-09-08
 files touched: kit/.claude/settings.json, kit/ops/hooks/update-hook.sh, kit/ops/install.sh, ops/tests/api-kit.expected
 
 ### Why
@@ -109,7 +109,7 @@ and update time with the same cksum-of-path formula the awake hook and uninstall
 - [ ] `bash kit/ops/polaris doctor --selftest --parallel 3` green (acceptance, via `bg run` + chunked `bg wait`)
 
 ## T-126 — "Prove auto-update the way the kit proves everything — a drill, plus the gates in the fast tier"
-points 5 · risk normal · landed adcfa1c (2026-09-08) · claimed 2026-09-08
+points 5 · risk normal · landed adcfa1c (2026-09-08) · claimed 2026-09-08 → done 2026-09-08
 files touched: kit/ops/lib/selftest/fast.sh, kit/ops/lib/selftest/remote.sh, kit/ops/lib/selftest/spine.sh
 
 ### Why
@@ -132,7 +132,7 @@ drill tests what T-124 shipped, and a red is a finding, never a weakened asserti
 - [ ] surface-frozen: no new top-level fn beyond `drill_autoupdate` (T-125 writes its api-kit row); no heading
 
 ## T-127 — "Seconds on every change, minutes at the wave gate, the full drill only in CI — measured and written down"
-points 3 · risk normal · landed c6667b1 (2026-09-08) · claimed 2026-09-08
+points 3 · risk normal · landed c6667b1 (2026-09-08) · claimed 2026-09-08 → done 2026-09-08
 files touched: kit/ops/PROTOCOL.md, kit/ops/roles/BUILDER.md, kit/ops/roles/SOLO.md, ops/CONVENTIONS.md
 
 ### Why
@@ -159,7 +159,7 @@ command to re-measure — installing a distribution is the human's call, not thi
 - [ ] a `Planner calibration` line is NOT added — this is a config change, not a pointing lesson
 
 ## T-129 — "keep-awake daemon spawns without a visible console window"
-points 1 · risk normal · landed b46fdf3 (2026-09-08) · claimed 2026-09-08
+points 1 · risk normal · landed b46fdf3 (2026-09-08) · claimed 2026-09-08 → done 2026-09-08
 files touched: kit/ops/hooks/awake-hook.sh
 
 ### Why
@@ -169,3 +169,25 @@ Every keep-awake daemon on Windows is started through WMI so it outlives the ses
 - [ ] `ah_spawn`'s WMI `Win32_Process.Create` passes a `Win32_ProcessStartup` with `ShowWindow = 0` (SW_HIDE): the spawned daemon owns NO visible window (EnumWindows finds none for its ProcessId while it is alive)
 - [ ] the presser invocation carries `-WindowStyle Hidden`; `ah_press` still captures exactly one word (golden `awake-hook` unchanged)
 - [ ] `--test` twins, macOS/Linux branches and the Start-Process fallback are byte-for-byte as before
+
+## T-130 — "An unset contract must not block a task from becoming ready"
+points 1 · risk normal · landed 7b9fba6 (2026-09-08) · claimed 2026-09-08
+files touched: kit/ops/lib/handover.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/board.sh
+
+### Why
+Most small jobs have no separate design note, and the written rules say so plainly. The code did not
+agree: the step that moves a planned job onto the "ready to pick up" pile treated "no design note"
+exactly like "the design note is named but the file is missing", and dropped the job on the floor
+without saying a word. The same wrong test was copied into the health check, so such a job was also
+reported as a rule violation once it did get through. Result: a fully-prepared piece of work could
+sit in the waiting pile forever while POLARIS announced there was nothing left to do.
+
+This task makes both places complain only when a design note is actually NAMED and actually MISSING
+— the way the third copy of this test, the one that was already right, has always behaved. This task
+itself carries no design note, so it is its own proof.
+
+### Acceptance
+- [x] The promoter only rejects a task whose contract is named but absent
+- [x] The drift auditor's READY GATE check uses the same rule
+- [x] The board drill covers a contract-less candidate reaching the gate
+- [x] `bash ops/polaris next --do` promotes the contract-less T-128 out of backlog
