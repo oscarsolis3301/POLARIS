@@ -214,6 +214,9 @@ kit/ops/hooks/readonly-allow.sh	fn	scan
 kit/ops/hooks/readonly-allow.sh	fn	sed_ok
 kit/ops/hooks/readonly-allow.sh	fn	verb_ok
 kit/ops/hooks/readonly-allow.sh	fn	xargs_ok
+kit/ops/hooks/update-hook.sh	fn	jstr
+kit/ops/hooks/update-hook.sh	fn	uh_main
+kit/ops/hooks/update-hook.sh	fn	uh_primary
 kit/ops/index.py	const	DDL
 kit/ops/index.py	const	EXT
 kit/ops/index.py	const	FIXTURES
@@ -471,6 +474,7 @@ kit/ops/lib/selftest/policy.sh	fn	drill_qa
 kit/ops/lib/selftest/policy.sh	fn	drill_route
 kit/ops/lib/selftest/policy.sh	fn	drill_rules
 kit/ops/lib/selftest/remote.sh	fn	drill_adopt
+kit/ops/lib/selftest/remote.sh	fn	drill_autoupdate
 kit/ops/lib/selftest/remote.sh	fn	drill_notify
 kit/ops/lib/selftest/remote.sh	fn	drill_pushdegrade
 kit/ops/lib/selftest/remote.sh	fn	drill_remote
