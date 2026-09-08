@@ -153,3 +153,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "doctor --selftest gains the handover drill body (board.sh; label registered by T-104); goldens handover-route + handover-stop pin every next verb and hook rung; cli-help-parity counts next (10)"  (T-111, 2026-09-02)
 
 - "POLARIS 6.2.0 — worktree liveness, guard verbs, bg ownership, bare tool-name permissions, keep-awake daemon, SEE YOUR WORK, role handover, approval-is-the-kickoff"  (T-108, 2026-09-02)
+
+- "lib/selftest/fast.sh — the in-process tier (`doctor --fast`): pure kit functions, no CLI re-invocation, no scratch repo, seconds; the drills stay the wave gate and CI"  (T-122, 2026-09-08)
