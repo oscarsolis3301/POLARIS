@@ -4,6 +4,83 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.3.0 — 2026-09-08
+
+**A one-line change took an hour, and none of that hour was the tests.**
+
+The complaint was simple: small work is slow. The measurement was not what anyone expected. The
+suite was never the bottleneck — the round trip was. A change handed off in one context and landed
+in another pays for a whole second context to spin up, re-read the board and re-run a suite that had
+already gone green minutes earlier; and the repos where that hurt most were running POLARIS from
+months ago, because the fixes for their own slow tail had shipped here and never reached them. Three
+installed repos measured today sat on 6.0.0, 5.23.0, and no version at all. A kit that improves
+itself weekly and arrives nowhere is a kit that improves nothing. 6.3.0 makes verification cheap
+enough to run on every change, stops the express lane paying for the same suite twice, and — the
+part that makes all the others matter — makes an installed repo update *itself*. **BREAKING: none.**
+
+| | before | after |
+|---|---|---|
+| checking your work mid-task | the fastest tier was four full drills, 320s, each re-invoking the CLI dozens of times | `doctor --fast` — 89 in-process checks in ~3s, zero subprocesses, zero scratch repos |
+| an express land, then `finish` | the same suite runs twice — roughly twenty minutes paid for one green | the land carries its own passing suite forward as a `suite-stamp`; `finish` sees it and skips |
+| an installed repo, months behind | it waits for someone to notice the notice and type `update` | a `SessionStart` hook runs `update --auto`: quiet board ⇒ it just updates |
+| the repos you never open | permanently stale | `polaris update --all` walks every POLARIS repo on this machine |
+| `update` on a tree with uncommitted app work | died on "commit or stash first" | app-only dirt proceeds untouched; dirt on kit-owned paths still parks |
+| `update --repo-only --auto` | only the FIRST flag ever reached `cmd_update` — the rest were silently dropped | every flag arrives |
+| a parallel build, on Windows | ~80 terminal windows opened and closed in 70 seconds | the keep-awake daemon spawns hidden |
+| a task with no `contract:` | promotion dropped it silently, contradicting SOLO.md and Invariant 3 | it promotes |
+
+- **`doctor --fast` — the tier that is actually seconds.** A new module,
+  `kit/ops/lib/selftest/fast.sh`, runs the kit's pure functions **in process**: no `polaris`
+  re-invocation, no `git init`, no reading the live board, nothing written under the primary. Its
+  whole fork budget is one `mktemp -d`, two `date` calls, and a subshell per section. Twelve sections
+  — semver, frontmatter, `cfg`, ownership matching, ids, commit messages, JSON escaping, RULES
+  parsing, keep-awake config, background-job ages, board quiescence, dirt classification — come to 89
+  assertions in 3 seconds, against a budget of 15. A red section does not abort the run: one pass
+  paints the whole picture. This sits **beside** the drills, never instead of them — the drills keep
+  proving the real entry point at the wave gate and in CI, and the fast tier proves the logic on
+  every change. It is now this repo's `test_fast:`; `test:` is the sharded `--selftest --parallel 3`.
+  The role files were fixed to match: an unset fast tier no longer silently falls back to the full
+  suite, which is how a "quick check" used to cost twenty minutes.
+- **The express lane stops paying twice.** `suite_stamp_carry` records the suite that already passed:
+  after an express land, `.polaris/suite-stamp` names the tested sha, and `finish` — which reruns the
+  suite only when HEAD has moved or the tree is dirty — reads it and moves on. The stamp is withheld,
+  loudly, if HEAD gained more than the sprint report since the suite ran; the cheap answer is never
+  the wrong answer.
+- **A repo updates itself, on four gates and no prompts.** `update --auto` is the new session-start
+  path, and every one of its refusals is a silent success. It applies only when the board is
+  **quiet** — nothing in `ready/`, `active/` or `review/`, no task lock, no integration lease, no
+  live background job, each reason named exactly. It applies **minor and patch only**: a MAJOR bump
+  prints one line and waits for a human to say yes. `auto_update: off` in CONVENTIONS turns it off
+  entirely; unknown values fail closed to today's behavior. It never parks, never asks, never exits
+  non-zero, and never prints more than one line. This repo is exempt by construction — a self-hosting
+  kit does not update itself from its own channel.
+- **`update --all`, and a registry that is finally complete.** The repos you don't happen to open
+  were the stale ones, so `update --all` walks the machine registry and runs the same quiet-board
+  logic in each, printing one line per repo and never stopping on a failure. Install and update both
+  register the repo now, byte-identically to how the keep-awake hook and `uninstall` compute the same
+  key — three call sites that had to agree, and now do. The explicit `update` also stopped dying on
+  dirt it has no business caring about: uncommitted work outside the kit's own paths is left alone
+  and the update proceeds; dirt on a path `install.sh` would overwrite still parks, exactly as before.
+- **Proof, not assertion.** A new labeled drill, `autoupdate`, drives the whole thing end to end
+  against a `file://` channel and a tarball built from the CLI under test: it updates on a quiet
+  board, does **not** with a task in `active/`, does not with `auto_update: off`, asks on a major,
+  applies over app-only dirt without stashing, and walks a temp registry with `--all` — asserting
+  file state and exit codes, never message presence alone. Two new fast-tier sections cover board
+  quiescence and dirt classification directly. `doctor --selftest` is green on Linux, macOS and
+  Windows with the new label in the labeled suite; the live testbed run — self-updates on a quiet
+  board, holds with a task in `active/`, asks on a major — is recorded in this sprint's report.
+- **Two small ones that were costing more than their size.** The keep-awake daemon now spawns with
+  `ShowWindow=0`, so a parallel build no longer flashes a terminal window per tick. And
+  `next_promote` and the drift auditor both treated an **unset** `contract:` as a gate failure and
+  dropped the task without a word — a task that needs no seam can be promoted again, which is what
+  SOLO.md and Invariant 3 always said.
+- Two contracts land with this release — `auto-update.md` and `fast-tier.md` — plus a new section in
+  `verification-tiering.md` for the stamp carry. The labeled suite grows to 35 drills.
+
+**One thing to do, once.** A repo already installed does not have the session-start hook yet, so it
+cannot receive this release by itself. Run `bash ops/polaris update` there one time; after that it
+never goes stale again.
+
 ## 6.2.2 — 2026-09-02
 
 **The first published 6.2 kit.** 6.2.0 and 6.2.1 were both tagged, but neither ever published —
