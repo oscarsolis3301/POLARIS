@@ -222,6 +222,7 @@ learn nothing, and re-run it. MEASURED on this repo, so nobody re-measures:
 
 | command | measured | under the cap? |
 |---|---|---|
+| `doctor --fast` — the in-process tier | 6s | yes |
 | `doctor --selftest` spine only | 144s | yes |
 | `test_fast:` — the 4-drill subset | 320s | yes |
 | `doctor --selftest --parallel 3` — 25 drills, sharded | 169-330s | yes |

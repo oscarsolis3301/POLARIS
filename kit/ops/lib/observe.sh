@@ -621,6 +621,13 @@ cmd_doctor() {
     fi
   fi
   say "doctor: OK"
+  # --fast (ops/contracts/fast-tier.md): the in-process tier — selftest_fast in lib/selftest/fast.sh,
+  # read as $1 exactly like --selftest below. It combines with NOTHING: an extra arg is a die, not a
+  # silent ignore, because "--fast --only x" is someone expecting a drill subset this tier cannot run.
+  if [ "${1:-}" = "--fast" ]; then
+    [ $# -eq 1 ] || die "doctor --fast takes no options"
+    if selftest_fast; then return 0; else return 1; fi
+  fi
   # --selftest [--only <patterns>] [--parallel <N>] (ops/contracts/verification-tiering.md +
   # ops/contracts/selftest-sharding.md): --only runs the always-on spine + just the labeled drills
   # matching ANY comma-separated shell glob; --parallel shards the selected labels into N child

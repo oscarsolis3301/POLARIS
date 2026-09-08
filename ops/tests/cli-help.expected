@@ -53,7 +53,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  into one sealed sprint's task commits, across all its waves
   rollback <ID|sprint/<n>>       revert one landed task (or the sprint's latest sealed wave, -m 1)
                                  on base — forward-only: never resets, never force-pushes
-  status [--brief] | sweep [--fix] | doctor [--selftest [--only <patterns>] [--parallel <N>]]
+  status [--brief] | sweep [--fix] | doctor [--selftest [--only <patterns>] [--parallel <N>] | --fast]
                                  status --brief = ONE plain-English paragraph, no table (plain status
                                  unchanged): Last landed: / Next up: markers + a sprint-column clause
                                  doctor --selftest --only <patterns> = the always-on spine + only the
@@ -62,6 +62,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  notify grant upgrade pr-publish express hint brief); a nonsense element dies
                                  before the spine (unknown drill label); --parallel <N> = run the
                                  selected drills as N parallel child shards (serial stays the default)
+                                 doctor --fast = the in-process tier: pure functions, no CLI re-invocation, no scratch repo — seconds
   check [--only <glob>] [--update]
                                  golden-output acceptance tests, ZERO LLM: ops/tests/<name>.cmd is
                                  run and its stdout diffed against <name>.expected (optional
@@ -186,7 +187,12 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  F15 every ~55s while any session is busy; exits by itself once every
                                  session and repo is idle. start = arm now · stop = 60 min off
   version                        installed version · commit · latest on the channel
-  update [--repo-only]           fetch the latest KIT from the channel (manual; never automatic).
-                                   also re-caches it into ~/.claude so the NEXT repo you install
-                                   into gets the new kit too. --repo-only skips that.
+  update [--auto|--all] [--repo-only]
+                                 fetch the latest KIT from the channel. Plain = explicit, as always.
+                                 --auto = the session-start path: self-updates when the board is
+                                 quiet (auto_update: off stops it), silent unless it acted; a MAJOR
+                                 version only ever asks. --all = walk the machine registry: every
+                                 quiescent installed repo updates. Also re-caches the kit into
+                                 ~/.claude so the NEXT repo you install into gets it too;
+                                 --repo-only skips that.
   uninstall --yes                remove POLARIS from this repo (keeps your CLAUDE.md + hooks)
