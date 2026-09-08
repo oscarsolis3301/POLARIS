@@ -157,3 +157,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "lib/selftest/fast.sh — the in-process tier (`doctor --fast`): pure kit functions, no CLI re-invocation, no scratch repo, seconds; the drills stay the wave gate and CI"  (T-122, 2026-09-08)
 
 - "admin.sh — update gains --auto (SessionStart apply: quiet board · minor/patch only · never parks · one line) and --all (walk ~/.claude/polaris/awake/repos); board_quiescent + update_dirt_overlaps_kit are the gates; KEYS gains auto_update (default on in code)"  (T-124, 2026-09-08)
+
+- "hooks/update-hook.sh — SessionStart (matcher startup) runs `update --auto`, its one line passed to the model; install.sh registers the repo in ~/.claude/polaris/awake/repos at install/update time, not only on awake activation"  (T-125, 2026-09-08)
