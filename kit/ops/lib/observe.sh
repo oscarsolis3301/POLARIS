@@ -763,7 +763,8 @@ EOF
   for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
     id="$(basename "$f" .md)"
     v="$(fm_get contract "$f")"
-    { [ -z "$v" ] || [ ! -f "$PRIMARY/$v" ]; } && finding "READY GATE: $id contract missing (${v:-unset}) — blocked/, not ready/"
+    # NAMED but MISSING only — an unset contract is legal (handover.sh next_promote, builder.sh pack).
+    [ -n "$v" ] && [ ! -f "$PRIMARY/$v" ] && finding "READY GATE: $id contract missing ($v) — blocked/, not ready/"
     while IFS= read -r d; do [ -z "$d" ] && continue
       task_file "$d" done >/dev/null || finding "READY GATE: $id depends_on $d which is NOT in done/"
     done <<EOF
