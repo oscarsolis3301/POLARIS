@@ -348,7 +348,7 @@ case "${1:-}" in
   adopt)      cmd_adopt;;
   slim)       shift 2>/dev/null || true; cmd_slim "${1:-}";;
   version)    update_check_maybe force || true; cmd_version;;
-  update)     shift; cmd_update "${1:-}";;
+  update)     shift; cmd_update "$@";;
   uninstall)  shift; cmd_uninstall "$@";;
   _match)     shift; cmd_match "$@";;
   _guard)     shift; cmd_guard "$@";;
