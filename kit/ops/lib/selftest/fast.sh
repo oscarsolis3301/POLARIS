@@ -192,6 +192,80 @@ EOF
     ft_assert 'junk → 0s'      test "$(bg_age abc)" = '0s'
     ft_section bg ) || ft_red=1
 
+  # ---- quiescent (auto-update.md § board_quiescent) — the gate that keeps `update --auto` from
+  # firing mid-task. One fixture tree per reason, so every case carries exactly ONE reason and the
+  # pinned QUIET_WHY is the first (and only) one found; the globals it reads are overridden inside
+  # the subshell, one assignment per case. The directories are the tier's one `mkdir -p` (a dir
+  # cannot be made with builtins); the files are `: >`. The live pid is this shell's own ($$) —
+  # a dead-pid case would be a guess about the pid table, and bg-jobs.md judges rc-file FIRST anyway.
+  mkdir -p "$FT_TMP/q/empty/board/ready" "$FT_TMP/q/empty/board/active" "$FT_TMP/q/empty/board/review" \
+    "$FT_TMP/q/empty/locks" "$FT_TMP/q/ready/board/ready" "$FT_TMP/q/active/board/active" \
+    "$FT_TMP/q/review/board/review" "$FT_TMP/q/lock/locks/T-7" "$FT_TMP/q/lease/locks" \
+    "$FT_TMP/q/bgrun/.polaris/bg/j1" "$FT_TMP/q/bgrc/.polaris/bg/j2" "$FT_TMP/q/bgprev/.polaris/bg/j3.prev"
+  : > "$FT_TMP/q/ready/board/ready/T-1.md"
+  : > "$FT_TMP/q/active/board/active/T-1.md"
+  : > "$FT_TMP/q/review/board/review/T-1.md"
+  : > "$FT_TMP/q/review/board/review/T-2.md"
+  : > "$FT_TMP/q/review/board/review/notes.txt"          # not a .md — never a task
+  : > "$FT_TMP/q/lease/locks/.int-lease"
+  printf '%s\n' "$$" > "$FT_TMP/q/bgrun/.polaris/bg/j1/pid"
+  printf '%s\n' "$$" > "$FT_TMP/q/bgrc/.polaris/bg/j2/pid"
+  printf '0\n'       > "$FT_TMP/q/bgrc/.polaris/bg/j2/rc"
+  printf '%s\n' "$$" > "$FT_TMP/q/bgprev/.polaris/bg/j3.prev/pid"
+  ( FT_SEC=quiescent
+    BOARD="$FT_TMP/q/empty/board"; LOCKS="$FT_TMP/q/empty/locks"; PRIMARY="$FT_TMP/q/empty"; QUIET_WHY=x
+    ft_assert 'empty dirs → quiet, rc 0'          board_quiescent
+    ft_assert 'quiet → QUIET_WHY empty'           test -z "$QUIET_WHY"
+    BOARD="$FT_TMP/q/ready/board"
+    ft_assert 'a .md in ready/ → busy'            ! board_quiescent
+    ft_assert 'QUIET_WHY = ready: 1'              test "$QUIET_WHY" = 'ready: 1'
+    BOARD="$FT_TMP/q/active/board"
+    ft_assert 'a .md in active/ → busy'           ! board_quiescent
+    ft_assert 'QUIET_WHY = active: 1'             test "$QUIET_WHY" = 'active: 1'
+    BOARD="$FT_TMP/q/review/board"
+    ft_assert 'two .md in review/ → busy'         ! board_quiescent
+    ft_assert 'QUIET_WHY = review: 2 (.txt not counted)' test "$QUIET_WHY" = 'review: 2'
+    BOARD="$FT_TMP/q/empty/board"; LOCKS="$FT_TMP/q/lock/locks"
+    ft_assert 'a task lock dir → busy'            ! board_quiescent
+    ft_assert 'QUIET_WHY = lock: T-7'             test "$QUIET_WHY" = 'lock: T-7'
+    LOCKS="$FT_TMP/q/lease/locks"
+    ft_assert '.int-lease alone → busy'           ! board_quiescent
+    ft_assert 'QUIET_WHY = integration lease held' test "$QUIET_WHY" = 'integration lease held'
+    LOCKS="$FT_TMP/q/empty/locks"; PRIMARY="$FT_TMP/q/bgrun"
+    ft_assert 'bg job: live pid, no rc → busy'    ! board_quiescent
+    ft_assert 'QUIET_WHY = bg job running: j1'    test "$QUIET_WHY" = 'bg job running: j1'
+    PRIMARY="$FT_TMP/q/bgrc"
+    ft_assert 'bg job: rc file present → not running (rc first)' board_quiescent
+    PRIMARY="$FT_TMP/q/bgprev"
+    ft_assert 'bg job: a .prev dir is never running' board_quiescent
+    ft_section quiescent ) || ft_red=1
+
+  # ---- dirt (auto-update.md § update_dirt_overlaps_kit) — stdin is `git status --porcelain`;
+  # rc 0 = a dirty path is one install.sh overwrites. Here-strings feed the function: no fork,
+  # and the leading space of ` M` survives quoting. The pinned five, then the edges: a rename
+  # tests its NEW path, the repo's own state under ops/ never counts, an empty status never overlaps.
+  ( FT_SEC=dirt
+    ft_assert '?? src/x.py → rc 1'                       ! update_dirt_overlaps_kit <<< '?? src/x.py'
+    ft_assert ' M ops/lib/core.sh → rc 0'                  update_dirt_overlaps_kit <<< ' M ops/lib/core.sh'
+    ft_assert ' M ops/CONVENTIONS.md → rc 1'             ! update_dirt_overlaps_kit <<< ' M ops/CONVENTIONS.md'
+    ft_assert 'R  a.txt -> CLAUDE.md → rc 0 (NEW path)'    update_dirt_overlaps_kit <<< 'R  a.txt -> CLAUDE.md'
+    ft_assert '?? ops/board/ready/T-1.md → rc 1'         ! update_dirt_overlaps_kit <<< '?? ops/board/ready/T-1.md'
+    ft_assert 'R  CLAUDE.md -> notes.md → rc 1 (OLD path ignored)' ! update_dirt_overlaps_kit <<< 'R  CLAUDE.md -> notes.md'
+    ft_assert ' M ops/contracts/x.md → rc 1'             ! update_dirt_overlaps_kit <<< ' M ops/contracts/x.md'
+    ft_assert ' M ops/RULES.tsv → rc 1'                  ! update_dirt_overlaps_kit <<< ' M ops/RULES.tsv'
+    ft_assert ' M ops/tests/x.expected → rc 1'           ! update_dirt_overlaps_kit <<< ' M ops/tests/x.expected'
+    ft_assert ' M ops/polaris → rc 0'                      update_dirt_overlaps_kit <<< ' M ops/polaris'
+    ft_assert ' M .claude/settings.json → rc 0'            update_dirt_overlaps_kit <<< ' M .claude/settings.json'
+    ft_assert ' M .claude/skills/polaris/SKILL.md → rc 0'  update_dirt_overlaps_kit <<< ' M .claude/skills/polaris/SKILL.md'
+    ft_assert ' M .claude/skills/mine/SKILL.md → rc 1'   ! update_dirt_overlaps_kit <<< ' M .claude/skills/mine/SKILL.md'
+    ft_assert ' M .gitignore → rc 0'                       update_dirt_overlaps_kit <<< ' M .gitignore'
+    ft_assert 'quoted path under ops/lib → rc 0'           update_dirt_overlaps_kit <<< '?? "ops/lib/we ird.sh"'
+    ft_assert 'CR-terminated kit path → rc 0'              update_dirt_overlaps_kit <<< " M ops/lib/core.sh${ft_cr}"
+    ft_assert 'app dirt then kit dirt → rc 0'              update_dirt_overlaps_kit <<< "?? src/x.py${ft_nl} M ops/lib/core.sh"
+    ft_assert 'app dirt only, two lines → rc 1'          ! update_dirt_overlaps_kit <<< "?? src/x.py${ft_nl} M README.md"
+    ft_assert 'empty status → rc 1'                      ! update_dirt_overlaps_kit <<< ''
+    ft_section dirt ) || ft_red=1
+
   # ---- verdict
   while IFS= read -r ft_k; do ft_n=$((ft_n + ft_k)); done < "$FT_TMP/n"
   ft_t1="$(date +%s)"
