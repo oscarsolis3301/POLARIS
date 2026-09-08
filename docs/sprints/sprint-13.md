@@ -158,6 +158,27 @@ command to re-measure — installing a distribution is the human's call, not thi
 - [ ] `bash kit/ops/polaris check` green after landing (integrator re-proves; `cli-help` is untouched here)
 - [ ] a `Planner calibration` line is NOT added — this is a config change, not a pointing lesson
 
+## T-128 — "Release 6.3.0 — POLARIS feels fast, and it keeps itself that way"
+points 2 · risk normal · landed 330bcdf (2026-09-08) · claimed 2026-09-08
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+Everything in this sprint is delivered by ONE mechanism: an installed repo noticing a newer
+`version:` on the channel. Until the number in `kit/ops/VERSION` moves, no repo learns that
+`update --auto`, `update --all`, `doctor --fast` or the express suite stamp exist — and the repos
+Part 1 hand-updated to 6.2.2 need exactly one more manual `update` to receive the session-start
+hook, after which they never go stale again. This task bumps the kit to 6.3.0 (a MINOR: new
+capability, nothing breaking, so it is the first release that the new hook applies silently) and
+writes the changelog entry in the house voice: what changed, why, what a repo has to do once.
+The tag, the dogfood and the publish are the human's release ritual at the finish line, exactly as
+T-121 and T-108 left them — this task ships the number and the words, nothing else.
+
+### Acceptance
+- [ ] `kit/ops/VERSION` `version: 6.3.0`; nothing else in the file changes
+- [ ] `CHANGELOG.md` gains `## 6.3.0 — <date>` above 6.2.2, in the existing voice, covering: `doctor --fast` (the in-process tier, measured seconds), `update --auto` at session start with the four gates (quiet board · minor/patch only · MAJOR asks · `auto_update: off`), `update --all`, install-time registry entries, the explicit `update` no longer blocked by app-only dirt, the express lane's suite stamp (the 20-minute duplicate), sharded `test:` by default here, and the ONE-TIME step for already-installed repos (`bash ops/polaris update` once to receive the hook)
+- [ ] the entry names the CI/testbed proof: `doctor --selftest` green on 3 OSes with the `autoupdate` label, and the testbed run (self-updates on a quiet board · does not with a task in active/ · asks on a major) recorded by the human/conductor in the sprint report — cite, do not claim
+- [ ] no tag, no dogfood, no publish, no `ops/VERSION` change in this task (the release ritual is the finish line's)
+
 ## T-129 — "keep-awake daemon spawns without a visible console window"
 points 1 · risk normal · landed b46fdf3 (2026-09-08) · claimed 2026-09-08 → done 2026-09-08
 files touched: kit/ops/hooks/awake-hook.sh
@@ -171,7 +192,7 @@ Every keep-awake daemon on Windows is started through WMI so it outlives the ses
 - [ ] `--test` twins, macOS/Linux branches and the Start-Process fallback are byte-for-byte as before
 
 ## T-130 — "An unset contract must not block a task from becoming ready"
-points 1 · risk normal · landed 7b9fba6 (2026-09-08) · claimed 2026-09-08
+points 1 · risk normal · landed 7b9fba6 (2026-09-08) · claimed 2026-09-08 → done 2026-09-08
 files touched: kit/ops/lib/handover.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/board.sh
 
 ### Why
