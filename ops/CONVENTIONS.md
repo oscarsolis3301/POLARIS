@@ -8,24 +8,38 @@ model_strong: fable         # owner decision 2026-08-02: fable carries planning,
 model_mid: opus             # opus carries ordinary execution — the everyday builder tier (2-3pts)
 model_cheap: sonnet         # sonnet carries the cheap tier (1pt). NEVER haiku here — same 2026-08-02 decision: too weak for this repo's bash/board work
 stale_hours: 1              # sweep warns on active locks older than this — build avg 0.2h (n=28); an hour-idle lock is a dead lane, not a slow one (sprint 4: 2 subagent stalls + 1 API-error death)
-test: bash kit/ops/polaris doctor --selftest
-test_fast: bash kit/ops/polaris doctor --selftest --only fmlist,tcm,brain,grant
-# ^ the BUILDER's pre-handoff gate. MEASURED 2026-07-25: spine+1 drill 144s · this 4-drill subset
-# 320s · full `test:` 805s (a 3-drill subset re-measured at 289s in 5.19.0, so the ~44s/drill budget
-# below still holds). A 60% cut, and critically it lands UNDER the harness's 600s tool ceiling,
-# so it COMPLETES instead of timing out and being re-run. Budget when editing this list: 144s of
-# unskippable spine (verification-tiering.md:17-19) + ~44s per drill — drills are NOT free, so keep
-# the subset to four and re-measure if you add one.
-# (ops/contracts/verification-tiering.md: "check what changed
-# often, prove everything once"). `test:` above is the WAVE gate — `qa`, the integrator, and CI
-# still run it in full, so no gate disappears; a defect only the full drill catches now surfaces
-# one wave later instead of one task later. That is a deliberate trade, made because `test:` is
-# MEASURED at 805s against the harness's 600s tool ceiling — every foreground full-suite run was
-# timing out, returning nothing, and being re-run. (`.polaris/last-suite-seconds` is NOT this
-# number: it stamps the whole `qa` loop, 1225s. Reading it as `test:` overstates this gate by 50%.)
-# Subset choice is NOT arbitrary: it excludes `rules` and `qa`, which the Learned log records as
-# fixture-coupled (`rules` leaves a contract-less ready task that only an intervening `drift` drill
-# masks). Adding either without `drift` produces FALSE reds — and a false red costs a whole fix wave.
+test: bash kit/ops/polaris doctor --selftest --parallel 3
+test_fast: bash kit/ops/polaris doctor --fast
+# ^ TWO tiers, and the split is the whole point ("check what changed often, prove everything once",
+# ops/contracts/verification-tiering.md). MEASURED 2026-09-08 on this machine (Windows/Git Bash):
+#   doctor --fast                        54 checks · 3s tier, 6s wall (doctor's env check is ~3.2s of it)
+#   doctor --selftest --parallel 3       34 drills in 3 shards of 11-12 · 729s wall on a BUSY box
+#                                        (169-378s is the quiet-box range measured earlier the same
+#                                        day). Sharding does not make the suite cheap, it makes it
+#                                        finish: still ~40% of serial, and on a loaded box it can
+#                                        cross the 600s tool ceiling — run it via `bg run test`,
+#                                        never a foreground call, when other lanes are working
+#   doctor --selftest (serial)           805s — NOT re-measured here, the 2026-07-25 number stands;
+#                                        the whole `qa` loop (test+build+uat) 1225s, same audit
+# WSL: no distribution installed on 2026-09-08 (`wsl.exe -l` — "no installed distributions"), so the
+#   Linux comparison could not be run; installing one is the human's call, not this task's. Git Bash
+#   baseline: one git subprocess costs 57ms (measured: 20 calls, 1145ms) vs ~5ms on Linux, and the
+#   suite is 394 `polaris` invocations across kit/ops/lib/selftest/*.sh — it is SPAWN-bound, not
+#   logic-bound, which is why sharding helps and why Linux would help more.
+#   Re-measure with: wsl bash kit/ops/polaris doctor --selftest --parallel 3
+# `test_fast:` is the per-change gate: the in-process tier — pure functions, no CLI re-invocation, no
+# throwaway git repo (ops/contracts/fast-tier.md). Seconds, so it runs on EVERY change. It sits
+# BESIDE the drills, never instead of them. The old `test_fast:` was a 4-drill subset at 320s; that
+# is 50x this tier's cost for a fraction of its assertions. Do not put drills back in this slot —
+# add sections inside `selftest_fast` instead.
+# `test:` is the WAVE gate, paid ONCE: by `qa`, by the integrator, by `finish`. An express land
+# stamps `.polaris/suite-stamp` with HEAD (6.3.0), so a following `finish` skips the suite instead of
+# paying it twice. Sharding trades CPU for wall clock — each shard pays its own ~144s spine — which
+# is why the honest instruction for this gate is `bash ops/polaris bg run test` + chunked `bg wait`,
+# NOT a foreground call: a foreground run that crosses 600s returns nothing at all and gets re-run,
+# which is exactly how the serial 805s suite used to burn whole waves.
+# CI still runs the FULL SERIAL drill on three OSes, so no coverage is lost by sharding here.
+# Budget when adding a drill: ~44s each, spread across 3 shards — re-measure this line if you add one.
 build: python kit/ops/pack.py --allow-dirty
 lint:                       # none — bash + python, no package manager
 typecheck:                  # none

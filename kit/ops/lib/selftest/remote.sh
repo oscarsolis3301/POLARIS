@@ -352,3 +352,142 @@ drill_pushdegrade() {
     git merge -q --no-ff feat/T-PD2 -m merge
     "$SELF" done T-PD2 >/dev/null
 }
+drill_autoupdate() {
+    # ============ T-126 auto-update drill (ops/contracts/auto-update.md § Executable check) ============
+    # An update that applies itself is proven by a test, never a promise. The fixture is THIS repo
+    # with a real kit installed into it — built from the CLI under test ($OPS_DIR + the .claude/ and
+    # CLAUDE.md beside it), pinned to 0.0.1 and committed — and a file:// channel + tarball that
+    # say 0.0.2. Every assertion reads rc AND file state (ops/VERSION, .polaris/update.log, the
+    # stash list), never a message alone; `--repo-only` on every apply so the owner's ~/.claude is
+    # never touched; git ls-remote and the machine cache are never reached (no repo:, no zip:).
+    # Hermetic (selftest-sharding.md v1.1): the installed tree lives in ONE commit that the teardown
+    # resets away; ops/VERSION, CONVENTIONS.md and src/a.txt come back exactly as found.
+    # Windows: curl is a native binary and cannot open `file:///tmp/…` — cygpath -m turns $T into
+    # `C:/Users/…`, and `file:///C:/…` reads; POSIX hosts use file://$T verbatim.
+    local au_pre au_st au_base au_url au_mp au_home au_v au_d
+    au_pre="$(git rev-parse HEAD)"
+    au_st="$(git status --porcelain)"
+    [ -f ops/VERSION ] && cp ops/VERSION "$T/au-ver.bak" || rm -f "$T/au-ver.bak"
+    [ -f ops/CONVENTIONS.md ] && cp ops/CONVENTIONS.md "$T/au-conv.bak" || rm -f "$T/au-conv.bak"
+    [ -z "$(git stash list)" ] || { echo "AUTOUPDATE PRECONDITION FAIL (a stash is already present — assertion 5 needs an empty list)"; exit 1; }
+    for au_d in ready active review; do
+      for au_v in ops/board/$au_d/*.md; do [ -f "$au_v" ] && { echo "AUTOUPDATE PRECONDITION FAIL ($au_v — the board must be quiet here)"; exit 1; }; done
+    done
+    # the kit behind the channel: the loaded kit's ops/ (+ .claude/, CLAUDE.md when present) at 0.0.2
+    au_url="$T"; command -v cygpath >/dev/null 2>&1 && au_url="/$(cygpath -m "$T")"
+    rm -rf "$T/polaris-v5" "$T/chan" "$T/kit.tgz"; mkdir -p "$T/polaris-v5" "$T/chan"
+    cp -R "$OPS_DIR" "$T/polaris-v5/ops"
+    [ -d "$OPS_DIR/../.claude" ] && cp -R "$OPS_DIR/../.claude" "$T/polaris-v5/.claude"
+    [ -f "$OPS_DIR/../CLAUDE.md" ] && cp "$OPS_DIR/../CLAUDE.md" "$T/polaris-v5/CLAUDE.md"
+    printf 'version: 0.0.2\nchannel: file://%s/chan/VERSION\ntarball: file://%s/kit.tgz\n' "$au_url" "$au_url" > "$T/polaris-v5/ops/VERSION"
+    printf 'version: 0.0.2\n' > "$T/chan/VERSION"
+    tar -czf "$T/kit.tgz" -C "$T" polaris-v5 || { echo "AUTOUPDATE FIXTURE FAIL (tar)"; exit 1; }
+    # the fixture: an INSTALLED repo (install.sh's own live-board path — CONVENTIONS.md marks it),
+    # then pinned back to 0.0.1 and committed, so every apply changes only TRACKED files and one
+    # `git reset --hard` is the whole reset between assertions.
+    [ -f ops/CONVENTIONS.md ] || printf 'voice: plain\n' > ops/CONVENTIONS.md
+    bash "$T/polaris-v5/ops/install.sh" --quiet "$(pwd)" > "$T/au-inst.out" 2>&1 || { cat "$T/au-inst.out"; echo "AUTOUPDATE FIXTURE FAIL (install)"; exit 1; }
+    printf 'version: 0.0.1\nchannel: file://%s/chan/VERSION\ntarball: file://%s/kit.tgz\n' "$au_url" "$au_url" > ops/VERSION
+    # stage ONLY what the install created or changed: paths in the status now that were not in the
+    # entry snapshot. A blanket `git add ops` would sweep up whatever a neighbour left untracked and
+    # the teardown's reset would then DELETE it — the entry snapshot is the fence.
+    if [ -n "$au_st" ]; then printf '%s
+' "$au_st" > "$T/au-st0"; else : > "$T/au-st0"; fi
+    git status --porcelain | grep -vxF -f "$T/au-st0" | cut -c4- | sed 's/^.* -> //' > "$T/au-new"
+    [ -s "$T/au-new" ] || { echo "AUTOUPDATE FIXTURE FAIL (the install changed nothing)"; exit 1; }
+    while IFS= read -r au_v; do git add -- "$au_v" 2>/dev/null; done < "$T/au-new"   # 2>: autocrlf chatter on Windows
+    git commit -qm 'autoupdate fixture: installed kit pinned at 0.0.1'
+    au_base="$(git rev-parse HEAD)"
+    au_mp="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"
+    # (1) quiet board + --auto --say → applied: VERSION 0.0.2, the log, the ONE ✅ line on stdout, no stash
+    rm -f .polaris/update-cache .polaris/update.log
+    "$SELF" update --auto --say --repo-only > "$T/au1.out" 2> "$T/au1.err" || { cat "$T/au1.out" "$T/au1.err"; echo "AUTOUPDATE (1) RC FAIL (--auto must exit 0)"; exit 1; }
+    au_v="$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')"
+    [ "$au_v" = "0.0.2" ] || { cat "$T/au1.out" "$T/au1.err"; echo "AUTOUPDATE (1) APPLY FAIL (quiet board: ops/VERSION must read 0.0.2, got '$au_v')"; exit 1; }
+    [ -f .polaris/update.log ] || { echo "AUTOUPDATE (1) LOG FAIL (.polaris/update.log must exist after an apply)"; exit 1; }
+    grep -q 'POLARIS 0.0.2 installed' .polaris/update.log || { cat .polaris/update.log; echo "AUTOUPDATE (1) LOG BODY FAIL (the install's output must land in the log)"; exit 1; }
+    [ "$(wc -l < "$T/au1.out" | tr -d ' ')" = "1" ] || { cat "$T/au1.out"; echo "AUTOUPDATE (1) ONE-LINE FAIL (--auto prints exactly one line)"; exit 1; }
+    grep -q '^✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting$' "$T/au1.out" \
+      || { cat "$T/au1.out"; echo "AUTOUPDATE (1) SAY FAIL (the pinned ✅ line)"; exit 1; }
+    [ -z "$(git stash list)" ] || { echo "AUTOUPDATE (1) STASH FAIL (--auto never parks)"; exit 1; }
+    # (2) a task in active/ → unchanged, `skipped: active: 1`
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache .polaris/update.log
+    printf -- '---\nid: T-AU\ntitle: someone is mid-task\ntype: feature\npoints: 1\nstatus: active\nfiles_owned:\n  - src/au.txt\n---\n' > ops/board/active/T-AU.md
+    "$SELF" update --auto --say --repo-only > "$T/au2.out" 2> "$T/au2.err" || { cat "$T/au2.out" "$T/au2.err"; echo "AUTOUPDATE (2) RC FAIL"; exit 1; }
+    rm -f ops/board/active/T-AU.md
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.1" ] || { echo "AUTOUPDATE (2) APPLY FAIL (a busy board must leave ops/VERSION at 0.0.1)"; exit 1; }
+    [ "$(cat "$T/au2.out")" = "skipped: active: 1" ] || { cat "$T/au2.out"; echo "AUTOUPDATE (2) SAY FAIL (--say must print 'skipped: active: 1')"; exit 1; }
+    [ -f .polaris/update.log ] && { echo "AUTOUPDATE (2) LOG FAIL (a skip writes no update.log)"; exit 1; }
+    # (2b) kit dirt under --auto → skipped, never parked
+    echo dirt >> ops/PROTOCOL.md
+    "$SELF" update --auto --say --repo-only > "$T/au2b.out" 2> "$T/au2b.err" || { cat "$T/au2b.out" "$T/au2b.err"; echo "AUTOUPDATE (2b) RC FAIL"; exit 1; }
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.1" ] || { echo "AUTOUPDATE (2b) APPLY FAIL (kit dirt must leave ops/VERSION at 0.0.1)"; exit 1; }
+    [ "$(cat "$T/au2b.out")" = "skipped: uncommitted changes inside the kit's paths" ] || { cat "$T/au2b.out"; echo "AUTOUPDATE (2b) SAY FAIL"; exit 1; }
+    [ -z "$(git stash list)" ] || { echo "AUTOUPDATE (2b) STASH FAIL (--auto never parks)"; exit 1; }
+    # (3) auto_update: off → unchanged, `skipped: auto_update: off`
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache
+    printf 'auto_update: off\n' >> ops/CONVENTIONS.md
+    "$SELF" update --auto --say --repo-only > "$T/au3.out" 2> "$T/au3.err" || { cat "$T/au3.out" "$T/au3.err"; echo "AUTOUPDATE (3) RC FAIL"; exit 1; }
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.1" ] || { echo "AUTOUPDATE (3) APPLY FAIL (auto_update: off must leave ops/VERSION at 0.0.1)"; exit 1; }
+    [ "$(cat "$T/au3.out")" = "skipped: auto_update: off" ] || { cat "$T/au3.out"; echo "AUTOUPDATE (3) SAY FAIL"; exit 1; }
+    # (4) a MAJOR on the channel → unchanged, the ask line, rc 0
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache
+    printf 'version: 1.0.0\n' > "$T/chan/VERSION"
+    "$SELF" update --auto --say --repo-only > "$T/au4.out" 2> "$T/au4.err" || { cat "$T/au4.out" "$T/au4.err"; echo "AUTOUPDATE (4) RC FAIL (a MAJOR bump must still exit 0)"; exit 1; }
+    printf 'version: 0.0.2\n' > "$T/chan/VERSION"
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.1" ] || { echo "AUTOUPDATE (4) APPLY FAIL (a MAJOR bump must never apply itself)"; exit 1; }
+    [ "$(cat "$T/au4.out")" = "⬆ POLARIS 1.0.0 is a MAJOR update (you have 0.0.1) — it will not apply itself; when you want it: bash ops/polaris update" ] \
+      || { cat "$T/au4.out"; echo "AUTOUPDATE (4) ASK FAIL (the pinned MAJOR line, and nothing else)"; exit 1; }
+    # (5) explicit update with app-only dirt → applies WITHOUT a stash, the left-alone note, dirt intact
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache
+    echo dirt >> src/a.txt
+    "$SELF" update --repo-only > "$T/au5.out" 2>&1 || { cat "$T/au5.out"; echo "AUTOUPDATE (5) RC FAIL (app-only dirt must not stop an explicit update)"; exit 1; }
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au5.out"; echo "AUTOUPDATE (5) APPLY FAIL (ops/VERSION must read 0.0.2)"; exit 1; }
+    [ -z "$(git stash list)" ] || { echo "AUTOUPDATE (5) STASH FAIL (app-only dirt is never parked)"; exit 1; }
+    grep -q "outside the kit's paths — left alone" "$T/au5.out" || { cat "$T/au5.out"; echo "AUTOUPDATE (5) NOTE FAIL (the left-alone note)"; exit 1; }
+    [ "$(tail -1 src/a.txt | tr -d '\r')" = "dirt" ] || { echo "AUTOUPDATE (5) DIRT FAIL (src/a.txt must keep its uncommitted line)"; exit 1; }
+    # (5b) explicit update with dirt on a kit path → parked as today, and the update still lands
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache
+    echo dirt >> ops/PROTOCOL.md
+    "$SELF" update --repo-only > "$T/au5b.out" 2>&1 || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) RC FAIL (kit dirt parks, then proceeds)"; exit 1; }
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) APPLY FAIL"; exit 1; }
+    [ "$(git stash list | wc -l | tr -d ' ')" = "1" ] || { echo "AUTOUPDATE (5b) PARK FAIL (kit dirt must be parked in exactly one stash)"; exit 1; }
+    grep -q '^✅ parked as polaris/park-' "$T/au5b.out" || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) PARK SAY FAIL (the park must announce itself)"; exit 1; }
+    git stash list | grep -q 'dirty tree at update' || { git stash list; echo "AUTOUPDATE (5b) PARK NAME FAIL (the stash must carry the why)"; exit 1; }
+    tail -1 ops/PROTOCOL.md | grep -qx 'dirt' && { echo "AUTOUPDATE (5b) DIRT FAIL (the parked line must have left the file)"; exit 1; }
+    git stash drop -q
+    # (6) --all over a temp registry holding this fixture, a gone path and a self-hosting repo
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache
+    au_home="$T/au-awake"; rm -rf "$au_home" "$T/au-self" "$T/au-gone"
+    mkdir -p "$au_home/repos" "$T/au-self/kit/ops"; : > "$T/au-self/kit/ops/pack.py"
+    printf '%s\n' "$au_mp"      > "$au_home/repos/1-fixture"
+    printf '%s\n' "$T/au-gone"  > "$au_home/repos/2-gone"
+    printf '%s\n' "$T/au-self"  > "$au_home/repos/3-self"
+    POLARIS_AWAKE_HOME="$au_home" "$SELF" update --all --repo-only > "$T/au6.out" 2> "$T/au6.err" || { cat "$T/au6.out" "$T/au6.err"; echo "AUTOUPDATE (6) RC FAIL (--all exits 0 always)"; exit 1; }
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au6.out" "$T/au6.err"; echo "AUTOUPDATE (6) APPLY FAIL (the walk must update this fixture to 0.0.2)"; exit 1; }
+    grep -qxF "$au_mp: ✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting" "$T/au6.out" \
+      || { cat "$T/au6.out"; echo "AUTOUPDATE (6) PREFIX FAIL (the fixture's line must carry its path prefix)"; exit 1; }
+    grep -qxF "$T/au-gone: gone (registry entry left for you to remove)" "$T/au6.out" || { cat "$T/au6.out"; echo "AUTOUPDATE (6) GONE FAIL"; exit 1; }
+    grep -qxF "$T/au-self: self-hosting — skipped" "$T/au6.out" || { cat "$T/au6.out"; echo "AUTOUPDATE (6) SELF-HOSTING FAIL"; exit 1; }
+    [ "$(wc -l < "$T/au6.out" | tr -d ' ')" = "3" ] || { cat "$T/au6.out"; echo "AUTOUPDATE (6) LINE COUNT FAIL (one line per registry entry)"; exit 1; }
+    [ -f "$au_home/repos/2-gone" ] || { echo "AUTOUPDATE (6) DELETE FAIL (--all never removes a registry entry)"; exit 1; }
+    # hermetic teardown: the installed tree and the pin commit reset away, the three files as found,
+    # the fixture's temp state gone, and the tree byte-identical to the way we found it.
+    git reset -q --hard "$au_pre"
+    # ops/VERSION and CONVENTIONS.md: put back what HEAD holds when the file was tracked and clean at
+    # entry (the one form that leaves `git status` with nothing to say — a byte copy can read as
+    # modified even when it is not: the handover drill's lesson), the entry bytes when it was dirty
+    # or untracked, nothing at all when it was absent.
+    for au_v in ops/VERSION ops/CONVENTIONS.md; do
+      au_d="$T/au-ver.bak"; [ "$au_v" = ops/CONVENTIONS.md ] && au_d="$T/au-conv.bak"
+      if [ ! -f "$au_d" ]; then rm -f "$au_v"
+      elif [ "${au_st#*$au_v}" != "$au_st" ]; then cp "$au_d" "$au_v"
+      else git checkout -q HEAD -- "$au_v" 2>/dev/null || cp "$au_d" "$au_v"
+      fi
+    done
+    rm -f .polaris/update-cache .polaris/update.log .polaris/install.log .polaris/CLAUDE.md.pre-heal
+    rm -rf "$T/polaris-v5" "$T/chan" "$T/kit.tgz" "$au_home" "$T/au-self" "$T/au-ver.bak" "$T/au-conv.bak"
+    [ "$(git rev-parse HEAD)" = "$au_pre" ] || { echo "AUTOUPDATE HERMETIC FAIL (HEAD must return to where the drill found it)"; exit 1; }
+    [ "$(git status --porcelain)" = "$au_st" ] || { echo "entry:"; printf '%s
+' "$au_st"; echo "now:"; git status --porcelain; echo "AUTOUPDATE HERMETIC FAIL (the drill must leave the tree exactly as it found it)"; exit 1; }
+}

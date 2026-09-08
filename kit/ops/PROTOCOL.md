@@ -47,7 +47,7 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris route [<ID> \| --role R \| --points N --risk R]` | which model tier a task or role deserves, in one hop: line 1 is a bare `strong` \| `mid` \| `cheap`, so a caller branches on it blind, and a three-space `model:` note follows ONLY when a `model_*` knob (or the task's own `model:` frontmatter) maps that tier to a real name. Unset knobs = tier words only, behaviour unchanged. The CONDUCTOR runs it before every spawn; `fleet` injects its answer into every pane |
 | `ops/polaris fleet <N> [--launch]` | print N Builder kickoffs; `--launch` opens a session per ready task in tmux windows or side-by-side Windows Terminal panes (`--dry-run` previews). Planner runs this per `autolaunch:` |
 | `ops/polaris slim [--apply\|--restore]` | the per-context TOKEN TAX, measured. Every skill/agent/command definition under `~/.claude` injects its name+description into the system prompt of every session AND every subagent, invoked or not. Reports bytes per family and what a 6-8 context run pays for them; `--apply` MOVES the identified claude-flow machinery into `~/.claude/.polaris-archived/` (never deletes, always `--restore`-able) and leaves anything it cannot positively identify alone |
-| `ops/polaris version / update` | which POLARIS this repo runs · **fetch the latest kit** — also re-caches it into `~/.claude` so the next repo gets it too (manual; POLARIS never self-updates mid-sprint) |
+| `ops/polaris version / update` | which POLARIS this repo runs · **fetch the latest kit** — also re-caches it into `~/.claude` so the next repo gets it too. An installed repo self-updates at session start when the board is quiet (`auto_update: off` stops it); a MAJOR version only ever asks; `update --all` walks every repo on this machine |
 | `ops/polaris upgrade` | migrate an OLD BOARD v3/v4→v5. Downloads nothing. **Not** `update` — one letter apart, unrelated jobs; "upgrade POLARIS" almost always means `update`. |
 
 History model, in one line: a task lands as one squash commit, a sprint seals as one tagged `--no-ff` merge (a later seal moves the tag to the sprint's latest sealed checkpoint), and `history` reads it back with board chores filtered out — `--tasks` spans all a sprint's waves.
@@ -222,11 +222,10 @@ learn nothing, and re-run it. MEASURED on this repo, so nobody re-measures:
 
 | command | measured | under the cap? |
 |---|---|---|
-| `doctor --fast` — the in-process tier | 6s | yes |
+| `doctor --fast` — the in-process tier, and this repo's `test_fast:` | 3s tier / 6s wall | yes |
 | `doctor --selftest` spine only | 144s | yes |
-| `test_fast:` — the 4-drill subset | 320s | yes |
-| `doctor --selftest --parallel 3` — 25 drills, sharded | 169-330s | yes |
-| `test:` — the full selftest, serial | 805s | **no** |
+| `doctor --selftest --parallel 3` — 34 drills, sharded; this repo's `test:` | 169-378s quiet · 729s busy | only on a quiet box |
+| the full selftest, SERIAL — CI's tier now, not a local gate | 805s | **no** |
 | `ops/polaris qa` — the whole loop | 1225s | **no** |
 
 Three bands, and the band is a property of the MEASURED time, not of how important the command feels:

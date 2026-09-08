@@ -103,8 +103,26 @@ else
   done
   UPGRADE=0
 fi
-chmod +x "$TARGET/ops/polaris" "$TARGET/ops/hooks/ownership-guard.sh" "$TARGET/ops/hooks/readonly-allow.sh" "$TARGET/ops/hooks/checkout-guard.sh" "$TARGET/ops/hooks/awake-hook.sh" "$TARGET/ops/hooks/handover-hook.sh" "$TARGET/ops/hooks/commit-msg" "$TARGET/ops/install.sh" 2>/dev/null || true
+chmod +x "$TARGET/ops/polaris" "$TARGET/ops/hooks/ownership-guard.sh" "$TARGET/ops/hooks/readonly-allow.sh" "$TARGET/ops/hooks/checkout-guard.sh" "$TARGET/ops/hooks/awake-hook.sh" "$TARGET/ops/hooks/handover-hook.sh" "$TARGET/ops/hooks/update-hook.sh" "$TARGET/ops/hooks/commit-msg" "$TARGET/ops/install.sh" 2>/dev/null || true
 say "ops/ installed"
+
+# --- machine registry: this repo, so `polaris update --all` can find it ---------
+# ~/.claude/polaris/awake/repos/<cksum of the primary path> ← the primary path. The keep-awake hook
+# writes this entry only when a session goes BUSY, so a repo nobody prompted in since it was
+# armed was invisible to `update --all` (measured 2026-09-08: 3 of 5 repos on this machine).
+# Written here on BOTH install paths, once, after the hooks copy. The formula is byte-identical
+# to awake-hook.sh's ah_register_repo and to `uninstall`'s deregistration, or one repo ends up
+# registered twice. Root = POLARIS_AWAKE_HOME, else $HOME/.claude/polaris/awake; skipped
+# silently when $HOME/.claude does not exist and the env is unset (CI, no Claude Code).
+# Best effort and SILENT: the quiet-line count above the epilogue is a CI contract.
+if [ -n "${POLARIS_AWAKE_HOME:-}" ] || [ -d "${HOME:-/nonexistent}/.claude" ]; then
+  _AW="${POLARIS_AWAKE_HOME:-$HOME/.claude/polaris/awake}"
+  _RP="$(git -C "$TARGET" rev-parse --show-toplevel 2>/dev/null)" || _RP=""
+  _RK="$(printf '%s' "$_RP" | cksum 2>/dev/null)" || _RK=""; _RK="${_RK%% *}"
+  case "$_RK" in ''|*[!0-9]*) _RP="";; esac       # no cksum, no entry — never a guessed name
+  [ -z "$_RP" ] || { mkdir -p "$_AW/repos" && printf '%s\n' "$_RP" > "$_AW/repos/$_RK"; } 2>/dev/null || true
+  unset _AW _RP _RK
+fi
 
 # --- VERSION provenance ---------------------------------------------------------
 # A packed release already carries commit:/built: (ops/pack.py stamps them into the zip).
