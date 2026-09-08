@@ -436,3 +436,5 @@
 {"ts":1788891808,"ev":"handoff","id":"T-123","who":"Owner@DESKTOP","note":""}
 {"ts":1788891976,"ev":"handoff","id":"T-122","who":"Owner@DESKTOP","note":""}
 {"ts":1788892039,"ev":"grant","id":"T-124","who":"Owner@DESKTOP","note":"kit/ops/polaris"}
+{"ts":1788892384,"ev":"handoff","id":"T-124","who":"Owner@DESKTOP","note":""}
+{"ts":1788892385,"ev":"all-review","id":"T-124","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
