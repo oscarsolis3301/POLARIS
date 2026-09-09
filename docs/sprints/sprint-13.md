@@ -214,7 +214,7 @@ itself carries no design note, so it is its own proof.
 - [x] `bash ops/polaris next --do` promotes the contract-less T-128 out of backlog
 
 ## T-131 — Prove the carried stamp, not the whole board — the express drill stops failing on other drills' cruft
-points 1 · risk normal · landed d26a5cf (2026-09-08) · claimed 2026-09-08
+points 1 · risk normal · landed d26a5cf (2026-09-08) · claimed 2026-09-08 → done 2026-09-08
 files touched: kit/ops/lib/selftest/history.sh
 
 ### Why
@@ -235,3 +235,44 @@ command's own report, so nothing another drill leaves behind can move them.
 - [x] It still proves the skip happens, naming the exact sealed point.
 - [x] It still proves one further change makes the checks run again.
 - [x] The whole suite, run start to finish in one go, comes back clean.
+
+## T-132 — Release 6.3.1 — the first published 6.3 kit
+points 1 · risk normal · landed 6eb763f (2026-09-08) · claimed 2026-09-08
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+Sprint 13 shipped ten tasks and the kit was bumped to 6.3.0 and tagged, but the release run refused
+to publish: CI was red. T-123's express drill asserted the whole exit code of `qa`, so leftover
+`feat/*` branches from earlier drills in the SERIAL selftest made `drift --strict` red and failed an
+assertion that was really about the suite stamp. Every builder gated on `--selftest --parallel 3`,
+where the fixtures do not share that state, so nobody saw it. T-131 narrowed the assertion; CI is
+green on Linux, macOS and Windows.
+
+Moving a tag that is already pushed is a destructive remote operation, so v6.3.0 stays where it is —
+a tag that was cut and never shipped, exactly as happened with 6.2.0 and 6.2.1. This bumps the kit
+to 6.3.1 from the fixed commit and records what happened, so the first published 6.3 kit carries the
+whole sprint plus the fix.
+
+### Acceptance
+- [x] `kit/ops/VERSION` reads `version: 6.3.1`; `channel:`, `zip:` and `tarball:` are untouched
+- [x] CHANGELOG has a `## 6.3.1 — 2026-09-08` entry above the 6.3.0 one
+- [x] The 6.3.0 entry is unchanged — its work is all still here
+- [ ] The full SERIAL suite (`doctor --selftest`) is green, because that is the tier CI runs
+
+## T-133 — "keep-awake: `disable` must stop the daemon SPAWNING, not just the key press"
+points 2 · risk normal · landed 2824276 (2026-09-08) · claimed 2026-09-08
+files touched: kit/ops/hooks/awake-hook.sh, kit/ops/lib/awake.sh, ops/contracts/keep-awake.md
+
+### Why
+Turning keep-awake off did not turn it off. `awake disable` writes the `disabled` flag, and the flag was read in exactly two places — the status line, and the moment just before a key is pressed. Nothing read it before STARTING a daemon. So `awake_ensure`, which fires from claim, status, doctor, handoff and every background job, kept starting a fresh daemon whenever the last one's heartbeat had gone cold, and the machine hook did the same on every single prompt. On Windows each start is a brand-new console, and the owner watched terminal windows keep appearing for hours after switching the feature off — with no way to stop them short of uninstalling.
+
+This makes the flag mean what it says in both places: nothing starts while keep-awake is off. The 60-minute self-rearm that `awake stop` relies on is preserved exactly — a flag with a timestamp inside it lapses after an hour and the machine arms itself again, while a bare flag (`awake disable`) stays until someone runs `awake enable`. The hot path stays fork-free: the check is a single builtin file test, so the cost on a normal command is unchanged.
+
+Keep-awake itself is not being switched off — it stays on, working, and invisible.
+
+### Acceptance
+- [ ] `awake_ensure` starts nothing while a bare `disabled` flag exists, and nothing while a timestamped one is still inside its hour
+- [ ] `awake_ensure` still starts the daemon once a timestamped flag is older than an hour, and whenever no flag exists — the self-rearm is intact
+- [ ] `awake_ensure`'s hot path adds no command substitution and no subshell: the new check is a shell builtin test only
+- [ ] the hook's own `ensure`/`busy` start path refuses the same way, so a stale caller cannot start one behind the flag
+- [ ] the `awake-hook` golden and the keep-awake drill are unchanged

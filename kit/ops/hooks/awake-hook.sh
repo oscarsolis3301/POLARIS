@@ -139,6 +139,17 @@ ah_spawn() { # ensure ONE daemon: fresh beat → nothing to do; stale lock → s
   local now beat b cmd out
   now="$(ah_now)"; beat="$(ah_mtime "$AWAKE/daemon/beat")"
   [ "$beat" -gt 0 ] && [ $(( now - beat )) -lt $(( AH_TICK * 3 )) ] && return 0
+  if [ -e "$AWAKE/disabled" ]; then            # OFF means off — belt and braces beside awake_ensure's
+    # own guard, so a stale caller (or `busy`, which fires on EVERY prompt) cannot start a daemon
+    # behind the flag. The expiry is ah_tick's, byte for byte: a STAMPED flag older than an hour is
+    # `awake stop`'s lapsed 60-minute window and the machine re-arms; a BARE one is `awake disable`
+    # and stands until `awake enable`.
+    if [ -s "$AWAKE/disabled" ] && [ $(( now - $(ah_mtime "$AWAKE/disabled") )) -ge 3600 ]; then
+      rm -f "$AWAKE/disabled" 2>/dev/null || true
+    else
+      return 0
+    fi
+  fi
   rm -rf "$AWAKE/lock" 2>/dev/null || true     # a beat this stale means the holder is gone
   if [ "${POLARIS_AWAKE_SPAWN:-}" = inline ]; then ( ah_daemon & ) ; return 0; fi
   if [ "$AH_WIN" != 1 ]; then nohup bash "$AH_SELF" daemon >/dev/null 2>&1 & disown 2>/dev/null; return 0; fi

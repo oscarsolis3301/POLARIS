@@ -4,6 +4,30 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.3.1 — 2026-09-08
+
+**The first published 6.3 kit.** 6.3.0 was tagged, but it never published — the release run's smoke
+step found CI red and refused to ship an artifact. The blocker was in this sprint's own express
+drill: it asserted the whole exit code of `qa`, which folds in `drift --strict`, so `feat/*`
+branches left behind by earlier drills in the serial fixture turned an assertion about the suite
+stamp red for a reason that had nothing to do with the stamp. Every builder gated on
+`--selftest --parallel 3`, where each shard gets a fresh fixture and those leftovers never
+accumulate, so nobody saw it until CI ran the serial tier. The assertion now checks what it means:
+the `suite already green at <sha> — skipped` line, the absence of `test — green`, and that a later
+commit invalidates the stamp so the suite genuinely re-runs. Green on Linux, macOS and Windows. The
+pushed v6.3.0 tag stays where it is — moving a published tag is a destructive remote operation — so
+it joins 6.2.0 and 6.2.1 as a tag that was cut and never shipped. This tag carries all of 6.3.0's
+content, plus the two fixes below.
+
+**Turning keep-awake off now actually turns it off.** The `disable` flag was read in exactly two
+places — the status line, and the instant before a key was pressed — so switching the feature off
+stopped the keystrokes and left the *starting* alone. Every routine command that makes sure the
+helper is alive, and the machine hook on every single prompt, kept launching a fresh one whenever
+the last had gone quiet; on Windows each launch is a brand-new terminal window. The owner turned
+keep-awake off and watched windows keep appearing for hours. Nothing starts now while it is off,
+and the flag tells its two cases apart: `awake disable` holds until you run `awake enable`, while
+`awake stop` lapses after its hour so the machine arms itself again on its own.
+
 ## 6.3.0 — 2026-09-08
 
 **A one-line change took an hour, and none of that hour was the tests.**
