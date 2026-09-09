@@ -125,14 +125,31 @@ ah_hook_end() { # SessionEnd: forget the session outright.
 # ---------------------------------------------------------------- daemon lifecycle
 ah_spawn() { # ensure ONE daemon: fresh beat → nothing to do; stale lock → steal it; else detach.
   # WMI Win32_Process.Create is the only real detach on Windows — the child belongs to WmiPrvSE, so
-  # it sits OUTSIDE every caller's Job Object (a Bash-tool child is inside one), has no console and
-  # survives the terminal. Start-Process falls back on the SAME fork (a second costs ~680 ms);
-  # inline is the last resort, and is logged because it dies with us. `bash -l` is LOAD-BEARING:
-  # a WMI child inherits the bare Windows environment, so without it PATH has no /usr/bin and the
-  # daemon dies on its first `mkdir`. POSIX $AH_SELF, never `cygpath -w` — bash cannot open C:\…
+  # it sits OUTSIDE every caller's Job Object (a Bash-tool child is inside one) and survives the
+  # terminal. It is NOT console-less: a WMI child of a console exe gets a brand-new console, and on
+  # Windows 11 a new console is a Windows Terminal window on top of the human's editor — one per
+  # daemon start, so a busy afternoon stacked dozens (owner screenshot, 2026-09-08). The
+  # Win32_ProcessStartup with ShowWindow=0 (SW_HIDE) is what keeps that console invisible; the
+  # presser then INHERITS the hidden console, so it never opens one either. Proven by EnumWindows,
+  # not by the flag: T-129's verify: spawns one and asserts no visible window for its ProcessId.
+  # Start-Process falls back on the SAME fork (a second costs ~680 ms); inline is the last resort,
+  # and is logged because it dies with us. `bash -l` is LOAD-BEARING: a WMI child inherits the bare
+  # Windows environment, so without it PATH has no /usr/bin and the daemon dies on its first
+  # `mkdir`. POSIX $AH_SELF, never `cygpath -w` — bash cannot open C:\…
   local now beat b cmd out
   now="$(ah_now)"; beat="$(ah_mtime "$AWAKE/daemon/beat")"
   [ "$beat" -gt 0 ] && [ $(( now - beat )) -lt $(( AH_TICK * 3 )) ] && return 0
+  if [ -e "$AWAKE/disabled" ]; then            # OFF means off — belt and braces beside awake_ensure's
+    # own guard, so a stale caller (or `busy`, which fires on EVERY prompt) cannot start a daemon
+    # behind the flag. The expiry is ah_tick's, byte for byte: a STAMPED flag older than an hour is
+    # `awake stop`'s lapsed 60-minute window and the machine re-arms; a BARE one is `awake disable`
+    # and stands until `awake enable`.
+    if [ -s "$AWAKE/disabled" ] && [ $(( now - $(ah_mtime "$AWAKE/disabled") )) -ge 3600 ]; then
+      rm -f "$AWAKE/disabled" 2>/dev/null || true
+    else
+      return 0
+    fi
+  fi
   rm -rf "$AWAKE/lock" 2>/dev/null || true     # a beat this stale means the holder is gone
   if [ "${POLARIS_AWAKE_SPAWN:-}" = inline ]; then ( ah_daemon & ) ; return 0; fi
   if [ "$AH_WIN" != 1 ]; then nohup bash "$AH_SELF" daemon >/dev/null 2>&1 & disown 2>/dev/null; return 0; fi
@@ -140,7 +157,7 @@ ah_spawn() { # ensure ONE daemon: fresh beat → nothing to do; stale lock → s
     b="$(cygpath -w "$(command -v bash)" 2>/dev/null)" || b=''; [ -n "$b" ] || b=bash
     cmd="\"$b\" -l \"$AH_SELF\" daemon"
     out="$(POLARIS_AWAKE_CMD="$cmd" POLARIS_AWAKE_EXE="$b" POLARIS_AWAKE_ARGS="-l \"$AH_SELF\" daemon" \
-      "$AH_PWSH" -NoProfile -NonInteractive -Command '$i=0; try{ $r=Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=$env:POLARIS_AWAKE_CMD} -ErrorAction Stop; $i=$r.ProcessId }catch{ $i=0 }; if(-not $i){ try{ $i=(Start-Process -FilePath $env:POLARIS_AWAKE_EXE -ArgumentList $env:POLARIS_AWAKE_ARGS -WindowStyle Hidden -PassThru -ErrorAction Stop).Id }catch{ $i=0 } }; $i' 2>/dev/null | tr -dc '0-9')" || out=''
+      "$AH_PWSH" -NoProfile -NonInteractive -Command '$i=0; try{ $su=New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ShowWindow=[uint16]0}; $r=Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=$env:POLARIS_AWAKE_CMD; ProcessStartupInformation=$su} -ErrorAction Stop; $i=$r.ProcessId }catch{ $i=0 }; if(-not $i){ try{ $i=(Start-Process -FilePath $env:POLARIS_AWAKE_EXE -ArgumentList $env:POLARIS_AWAKE_ARGS -WindowStyle Hidden -PassThru -ErrorAction Stop).Id }catch{ $i=0 } }; $i' 2>/dev/null | tr -dc '0-9')" || out=''
     if [ -n "$out" ] && [ "$out" != 0 ]; then printf '%s\n' "$out" > "$AWAKE/daemon/winpid"; return 0; fi
   fi
   ah_log 'spawn: WMI and Start-Process both failed — daemon runs INLINE and dies with this shell'
@@ -154,7 +171,9 @@ ah_press() { # run the presser ONCE; its one word lands in daemon/last-press and
   elif [ "$AH_MAC" = 1 ]; then w=pressed
     if [ "$AH_DISPLAY" = 1 ]; then caffeinate -u -t 75 >/dev/null 2>&1 & else caffeinate -i -t 75 >/dev/null 2>&1 & fi
   elif [ "$AH_WIN" = 1 ] && [ -n "$AH_PWSH" ] && [ -n "$AH_PS1" ]; then
-    w="$("$AH_PWSH" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$AH_PS1" \
+    # powershell.exe is a console exe: with the daemon's own console hidden (ah_spawn) it inherits
+    # that one; -WindowStyle Hidden covers the inline daemon that runs inside a console-less hook.
+    w="$("$AH_PWSH" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "$AH_PS1" \
       -Key "$AH_KEY" -Display "$AH_DISPLAY" -InputIdle "$AH_INPUT_IDLE" 2>/dev/null)" || rc=1
   elif [ "$AH_WIN" = 1 ]; then rc=1
   elif xdotool key "$AH_KEY" >/dev/null 2>&1; then w=pressed

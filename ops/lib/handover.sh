@@ -100,7 +100,9 @@ next_promote() { # next_promote [--do] — row 4's scan, and `--do`'s worker. Ev
     [ -n "$id" ] || continue
     f="$BOARD/backlog/$id.md"; [ -f "$f" ] || continue
     ok=1
-    v="$(fm_get contract "$f")"; { [ -z "$v" ] || [ ! -f "$PRIMARY/$v" ]; } && ok=0
+    # a contract is OPTIONAL (SOLO.md step 1: most small tasks have no seam). Only a contract that
+    # is NAMED but MISSING fails the gate — Invariant 3 forbids a missing one, never an absent one.
+    v="$(fm_get contract "$f")"; [ -n "$v" ] && [ ! -f "$PRIMARY/$v" ] && ok=0
     pts="$(fm_get points "$f")"; case "$pts" in ''|8|13) ok=0;; esac
     deps=""
     while IFS= read -r d; do [ -z "$d" ] && continue

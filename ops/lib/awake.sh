@@ -44,6 +44,20 @@ awake_ensure() { # awake_ensure — keep this machine's daemon alive on behalf o
   [ -f "$hook" ] || hook="${OPS_DIR:-}/hooks/awake-hook.sh"   # kit-local fallback: an armed-by-env drill
   [ -f "$hook" ] || return 0                                  # unarmed machine (or CI) — nothing to ensure
   [ -n "$h" ] || h="${HOME:-}/.claude/polaris/awake"
+  local off="" onow=""
+  if [ -e "$h/disabled" ]; then   # OFF means off: `disable` used to silence only the KEY PRESS, so this
+    # kept starting daemons behind the human's back — and on Windows every start is a new console.
+    # A BARE flag is `awake disable`: permanent, until `awake enable`. A STAMPED one is `awake stop`'s
+    # 60-minute expiry; it must still lapse here or a stopped machine, having no daemon left to reap
+    # the stamp (ah_tick), could never re-arm itself. The stamp is READ from the file (a builtin
+    # redirect) rather than taken from its mtime, because `stat` would be the fork this path forbids.
+    if [ ! -s "$h/disabled" ]; then return 0; fi
+    read -r off < "$h/disabled" 2>/dev/null || true
+    case "$off" in ''|*[!0-9]*) off=0 ;; esac
+    onow="${EPOCHSECONDS:-}"
+    [ -n "$onow" ] || onow="$(date +%s 2>/dev/null || echo 0)"   # bash 3.2 only, and only while OFF
+    if [ "$off" -gt 0 ] && [ "$(( onow - off ))" -lt 3600 ]; then return 0; fi
+  fi
   local tick="${POLARIS_AWAKE_TICK:-}" line="" beat="" now=""
   if [ -z "$tick" ] && [ -r "$h/config" ]; then
     while read -r line; do case "$line" in TICK=*) tick="${line#TICK=}" ;; esac; done < "$h/config"

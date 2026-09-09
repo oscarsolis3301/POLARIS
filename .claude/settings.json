@@ -53,6 +53,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/update-hook.sh\"",
+            "timeout": 120
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

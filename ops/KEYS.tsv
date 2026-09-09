@@ -57,3 +57,4 @@ visual	6.2.0	<globs or omit>	this repo declares no visual surface, so shot: neve
 port_base	6.2.0	<number or omit>	{PORT} in shot:/serve: stays literal — parallel builders share one dev-server port
 serve	6.2.0	<cmd or omit>	pack prints no way to start the app for a capture; builders improvise a server
 handover	6.2.0	auto	a session hops into the role polaris next names at each board-proven boundary; off restores one task per session
+auto_update	6.3.0	on	the repo updates itself at session start when the board is quiet; off leaves today's notice only

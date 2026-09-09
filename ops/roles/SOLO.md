@@ -55,7 +55,12 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 3. **Build.** Match the surrounding code: `.polaris/brain/prefs.md` records the repo's real
    conventions, so you do not have to infer them.
 4. **Verify** — `bash ops/polaris verify`. Proves diff ⊆ `files_owned` and runs your `verify:` list.
-   Then the repo's fast tier: `test_fast:` from `ops/CONVENTIONS.md` if it is set, else `test:`.
+   Then the repo's fast tier: `test_fast:` from `ops/CONVENTIONS.md` when it is set — seconds, on
+   every change. When it is UNSET there is NO fallback: do not run `test:` here. The full suite is
+   the WAVE gate and is paid once — at `land --express`, or at `finish` — and `finish` skips it
+   outright when `.polaris/suite-stamp` already names HEAD (an express land writes that stamp since
+   6.3.0). Reaching for `test:` per change is how a one-line edit came to pay the whole suite twice.
+   (Working on POLARIS itself? Its own seconds-long check is `bash ops/polaris doctor --fast`.)
    Touching a `visual:` path? Run the `shot:` line `pack` printed, READ the png, carry a `saw:` line
    into your close — `handoff` refuses without the capture.
 5. **Handoff — and, by default, the landing.** Under `landing: self` (since 6.1.0 unset composes to
@@ -79,8 +84,9 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    next; anything but `finish` on line 1 (`build <ID>` · `integrate` · `promote` · `wait`) is more
    work, so follow it — that hop is the next context, not a second role. Line 1 `finish` →
    `bash ops/polaris finish`. It runs `qa` for you (free when HEAD has not moved since
-   an express land's green suite — the stamp is per-commit; after a step-5 self-land there is no
-   stamp yet, so `finish` pays the suite here: that is the wave's ONE full run, arriving at the
+   an express land's green suite — since 6.3.0 an express land STAMPS `.polaris/suite-stamp` with the
+   commit it proved, so a following `finish` skips the suite instead of paying it a second time; the
+   stamp is per-commit, so after a step-5 self-land there is none yet and `finish` pays the suite here: that is the wave's ONE full run, arriving at the
    finish line instead of the express lane) and then proves the **RUN** is over, not just the
    task: nothing in `active/` or `review/`, `ready/` drained per `drain:`, no unmerged
    `integrate/<date>`, no orphan locks, clean tree on `<base>`. It names exactly what is pending, if
