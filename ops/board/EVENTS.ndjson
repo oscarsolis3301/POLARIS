@@ -473,3 +473,5 @@
 {"ts":1788918142,"ev":"claim","id":"T-132","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1788920570,"ev":"claim","id":"T-133","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1788922133,"ev":"handoff","id":"T-133","who":"Owner@DESKTOP","note":""}
+{"ts":1788923679,"ev":"handoff","id":"T-132","who":"Owner@DESKTOP","note":""}
+{"ts":1788923680,"ev":"all-review","id":"T-132","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
