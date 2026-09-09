@@ -25,7 +25,7 @@ daemon/pid            MSYS/posix pid of the daemon loop      daemon/winpid   Win
 daemon/beat           epoch, rewritten every tick            daemon/log      daemon stdout+stderr
 daemon/hook.log       every hook subcommand's stderr          daemon/last-press  one presser word per tick
 lock/                 mkdir singleton (the daemon holds it)   stop            flag: exit now
-disabled              flag: never press (daemon keeps ticking, verdicts still logged)
+disabled              flag: never press AND never spawn (a daemon already up keeps ticking + logging)
 config                KEY=F15 TICK=55 STALE=2700 IDLE=900 GRACE=300 DISPLAY=1 INPUT_IDLE=60
 ```
 `config` is parsed with `case` line by line, NEVER sourced; an env `POLARIS_AWAKE_<KEY>` wins over the
@@ -46,7 +46,15 @@ Dispatch `case "$1"`: `start|busy|idle|end|ensure|daemon|tick|install|--test`.
   `ah_register_repo` (cwd's primary via `${cwd%/.polaris/wt/*}`, `git rev-parse --show-toplevel` fallback,
   `-` on failure) and ensure the daemon. `idle`: write `idle <now>`. `end`: `rm -f sessions/<sid>`.
 - `ensure <primary>` (called by `awake_ensure`, T-101): register the repo, then spawn the daemon unless
-  `daemon/beat` is younger than 3×TICK; rc 0 always.
+  `daemon/beat` is younger than 3×TICK, or the `disabled` flag is in force (T-133); rc 0 always.
+- **`disabled` gates the SPAWN, not only the press** (T-133). `ah_spawn` and `awake_ensure` BOTH return
+  early while it is in force, so `disable` really is off: on Windows every daemon start is a new console,
+  and a flag that stopped only the key press left the human closing windows they had already opted out
+  of. In force = the flag exists AND (it is EMPTY — `awake disable`, no expiry — or its 60-minute stamp
+  has not lapsed). A STAMPED flag older than 3600 s is removed by whichever of the two reaches it first,
+  exactly as `ah_tick` does, so `awake stop`'s self-rearm survives having no daemon left to reap it.
+  `awake_ensure` reads the stamp from the file's CONTENT (a builtin redirect); `ah_spawn` uses its mtime.
+  Both are written by the same `cmd_awake stop`, so they agree.
 - `daemon`: the loop — `mkdir lock` or exit (loser); `trap 'rm -rf "$AWAKE/lock"; exit 0' TERM INT`;
   each iteration: `ah_tick`, `date +%s > daemon/beat`, `[ -e stop ]` ⇒ `rm -f stop`, rm lock, exit;
   quiet (no active verdict) for ≥ GRACE seconds ⇒ rm lock, exit; `sleep "$TICK" & wait $!` (so `stop`
@@ -102,7 +110,8 @@ awake_home                     # prints the registry root (same resolution as ah
 awake_conf <key> <default>     # env POLARIS_AWAKE_<KEY> → config line → default
 awake_ensure                   # fork-free when daemon/beat is fresh (< 3×TICK); no-op (rc 0) when neither
                                # $POLARIS_AWAKE_HOME nor ~/.claude/polaris/awake-hook.sh exists (unarmed
-                               # machine, CI); else `bash <hook> ensure "$PRIMARY" </dev/null >/dev/null 2>&1 &`
+                               # machine, CI) and no-op while `disabled` is in force (T-133 — one builtin
+                               # test, no command substitution); else `bash <hook> ensure "$PRIMARY" ... &`
 awake_status_line              # ONE of the three status shapes below
 cmd_awake <status|start|stop|disable|enable|install>
 ```
