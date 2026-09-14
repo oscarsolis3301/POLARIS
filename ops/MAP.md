@@ -176,3 +176,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 
 ## Deltas
 
+
+- "roles/CLAUDE.md/output-style carry the one-copy lane rule (CONDUCTOR 2.5 = run triage) and the named anti-pattern; TASK.md gains surface:; ops/RULES.tsv guards ops/SURFACES.tsv (16 rules)"  (T-139, 2026-09-14)
