@@ -159,3 +159,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "admin.sh — update gains --auto (SessionStart apply: quiet board · minor/patch only · never parks · one line) and --all (walk ~/.claude/polaris/awake/repos); board_quiescent + update_dirt_overlaps_kit are the gates; KEYS gains auto_update (default on in code)"  (T-124, 2026-09-08)
 
 - "hooks/update-hook.sh — SessionStart (matcher startup) runs `update --auto`, its one line passed to the model; install.sh registers the repo in ~/.claude/polaris/awake/repos at install/update time, not only on awake activation"  (T-125, 2026-09-08)
+
+- "core.sh gains the surface-map data plane (surfaces_lines/seed, surface_row_matches/rows_for/row_from_item, surface_change_set/select_cmd, suite_stamp_scope) reading ops/SURFACES.tsv + CONVENTIONS test_select:; KEYS gains test_select; init-board seeds ops/SURFACES.tsv"  (T-134, 2026-09-14)
