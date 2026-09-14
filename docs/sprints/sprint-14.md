@@ -168,7 +168,7 @@ byte-identical: the anti-pattern is a paragraph after the numbered rules, never 
 - [ ] `plain-voice`, `output-style-installed`, `cli-help-parity` goldens byte-identical and green; `bash kit/ops/polaris check` green at the wave gate (except `cli-help`, which regenerates at the release dogfood by design — say so in the handoff report)
 
 ## T-140 — "The scaffold engine — lib/surfaces.sh proposes a repo's test map from its own layout, and the entry learns surfaces --scaffold and interview"
-points 5 · risk normal · landed 42c7eb9 (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed 42c7eb9 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/surfaces.sh, kit/ops/polaris, ops/tests/api-kit.expected
 
 ### Why
@@ -204,8 +204,68 @@ never from a diff you cannot see.
 - [ ] `api-kit.expected`: your three rows + `arm_file` + `board_pull` added by content diff (§ 18); no other hunk
 - [ ] `doctor --fast` green; the `surfaces` and `qa` drills green at the wave gate (`bg run test`)
 
+## T-141 — "The first-run interview — KEYS.tsv learns to ask, polaris interview generates the questions and writes the answers, update carries the style and the ADHD skill to the machine"
+points 5 · risk normal · landed 9cd023d (2026-09-14) · claimed 2026-09-14
+files touched: kit/ops/KEYS.tsv, kit/ops/lib/admin.sh, ops/tests/interview.cmd, ops/tests/interview.expected
+
+### Why
+Installing POLARIS asks nothing. `voice:` is guessed by INIT, `claim:` is defaulted, and the
+vendored `/i-have-adhd` skill stays a secret unless someone reads PROTOCOL § VOICE. plans/v3.md § B1
+wants ONE round of at most four questions — how to be talked to, ADHD-shaped replies, one computer
+or several — and wants the questions to come from DATA, so they cannot drift from the keys they
+set. That is a fifth KEYS.tsv column, `ask`, on exactly three rows (one of them the new `adhd` key),
+and one command: `polaris interview` prints what is still unanswered as QUESTION/OPTION lines the
+model turns into a single AskUserQuestion; `--set key=value` validates every pair against the row's
+options and writes live lines into CONVENTIONS (a stub is replaced in place — one `adopt` run
+silences the interview, deliberately); `--pending` is the one-line probe `doctor` (T-142) and the
+explicit `update` epilogue (yours, admin.sh) print. `adhd: on` has a side effect: the repo's copy of
+the skill gets `disable-model-invocation: false` — the kit copy is never touched, and `install.sh`
+(T-143) keeps the flip across updates. `update --auto` stays exactly one pinned line: it never asks,
+never nudges. Your admin.sh also finishes B2's machine half: `refresh_machine_kit` re-caches the
+output style and the ADHD skill beside the installer skill, so an `update` in one repo arms the
+machine the way a fresh install (T-143) does. Contract first-run.md § 1–3 pins the rows, the
+grammar, every die text and the golden.
+
+### Acceptance
+- [ ] KEYS.tsv: the three `ask` rows verbatim from § 1 (voice · adhd · claim; `adhd` directly after `voice`), no other row gains a fifth column, the header comment describes column 5; `cmd_adopt` reads a fifth variable and its stub line is byte-identical (`adopt-stub` green; the `adopt` drill green)
+- [ ] `interview_pending` · `interview_set` · `cmd_interview` are the ONLY new top-level fns; grammar, tails, die texts, precedence (`feat/*` refusal, then the claim-branch remote check), the all-or-nothing validation, the three write modes (live / stub / absent), the adhd side effect and its `⚠ … not installed here` note — all per § 2
+- [ ] `update`'s explicit epilogue prints the pinned `preferences never set here:` line after `untouched:` when `$CONV` exists and something is pending; `update --auto` output unchanged (the `autoupdate` drill green)
+- [ ] `refresh_machine_kit` copies the output style + i-have-adhd trio from the tarball (kit/ path first, root fallback), silent, fail-open
+- [ ] golden `ops/tests/interview.cmd/.expected` per § 2 (hermetic fixture; the fake registry's ADHD row is named `adhd` so the side effect is exercised); `keys-drift` and `adopt-stub` byte-identical
+- [ ] no heading anywhere under kit/; `doctor --fast` green; `doctor --selftest --only adopt,autoupdate,upgrade` green in the worktree (explicit 600000 ms timeout)
+
+## T-142 — "surfaces --scaffold proposes the map and --apply writes the unambiguous rows; doctor and qa say when a repo has no map"
+points 5 · risk normal · landed b34be07 (2026-09-14) · claimed 2026-09-14
+files touched: kit/ops/lib/observe.sh, ops/tests/api-kit.expected, ops/tests/surfaces-scaffold.cmd, ops/tests/surfaces-scaffold.expected
+
+### Why
+T-140 built the engine; this is the command a human or a planner runs. `surfaces --scaffold` shows
+the proposal — the runner it found, the rows it would write, and every pairing it skipped with the
+reason — and writes nothing. `--scaffold --apply` writes exactly those rows into `ops/SURFACES.tsv`
+tagged `[scaffold]` and sets `test_select:` when the repo has never set it (a stub is replaced in
+place; a live value, even empty, is the human's and is kept), on `<base>` only, and then says
+"review, then commit" instead of committing. That makes it the second sanctioned writer of a
+RULES-guarded file, so the contract's § 16 widens D1/D2 for it and nothing else. The other half of
+activation is telling a repo its map is empty at the moments it matters: `doctor` (one line, after
+the config-drift line) and `qa` (one line, after a whole-suite run of a minute or more) — both gated
+on the engine detecting a runner, so a repo the scaffold cannot help (this one) is never nagged.
+`doctor` also prints the interview's `preferences never set here:` line (first-run.md § 2) through a
+`command -v` guard, because T-141 lands beside you this wave. You are this wave's single owner of
+`ops/tests/api-kit.expected`: write your `surfaces_apply` row and T-141's three fns + `adhd` key row
+from the contract's names. The golden `surfaces-scaffold` (§ 17, five fixtures) is yours and is the
+whole activation's regression lock — pin every byte the contract pins.
+
+### Acceptance
+- [ ] `cmd_surfaces` flags: none · `--scaffold` · `--scaffold --apply`; anything else dies with the pinned usage; plain `surfaces` byte-identical to v1 § 7 (the `surfaces` drill's steps 1–7 unchanged)
+- [ ] `--scaffold` renders per § 14: the `runner:` note, the three-column table, `   ⚠ skipped:` lines, the three tails; NORUNNER ⇒ the pinned note; rc 0 always; writes nothing (assert the map and CONVENTIONS byte-identical after)
+- [ ] `--scaffold --apply` per § 14: the `feat/*` and no-CONVENTIONS refusals; `surfaces_apply` (the ONLY new top-level fn) seeds, appends `[scaffold]` rows, handles `test_select:` live/stub/absent exactly as pinned, temp file + mv; the two tail lines; idempotent second run
+- [ ] doctor: the surfaces nudge directly after the CONFIG DRIFT block, gated on `$CONV` + `cfg test` + runner + empty map; then the guarded preferences line; `qa`: the whole-suite nudge after `last-suite-seconds`, gated on `ran ≥ 1`, no selection, `t1 - t0 ≥ 60`, runner, empty map — every existing drill that greps doctor/qa lines still green
+- [ ] golden `ops/tests/surfaces-scaffold.cmd/.expected` with the five § 17 fixtures — hermetic, run from the repo root, < 20 s; each fixture commits its files; case 1 asserts the four rows, the two skips, the apply, the health tail, the idempotent rerun, the stub replacement, the kept live value and the feat/* refusal
+- [ ] `api-kit.expected`: `surfaces_apply` + T-141's four pinned rows by content diff; no other hunk; `rules-health` unchanged (16)
+- [ ] `doctor --fast` green; `doctor --selftest --only surfaces,qa,finish,drift` green in the worktree (explicit 600000 ms timeout); the whole `test:` green at the wave gate via `bg run test`
+
 ## T-143 — "Arm the machine with the voice — bootstrap.py lands the output style and the ADHD skill in ~/.claude, install.sh honours adhd: on"
-points 3 · risk normal · landed 92c83dd (2026-09-14) · claimed 2026-09-14
+points 3 · risk normal · landed 92c83dd (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/bootstrap.py, kit/ops/install.sh, kit/ops/selftest-install.sh, ops/tests/machine-armed.cmd, ops/tests/machine-armed.expected
 
 ### Why
@@ -232,7 +292,7 @@ first-run.md § 2 (install.sh) and § 3 (arming + the golden) pin every path and
 - [ ] CI's own `--claude-skill` job (`.github/workflows/ci.yml`, human-owned — read, never edit) still passes by inspection: its asserts are about the skill and the permissions, both untouched
 
 ## T-146 — "SPIKE — skills POLARIS writes for itself: the token budget, the eviction rule, the gap-finder and the writer, designed before a line of code"
-points 3 · risk normal · landed ca2dddd (2026-09-14) · claimed 2026-09-14
+points 3 · risk normal · landed ca2dddd (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: plans/self-skills.md
 
 ### Why
@@ -259,7 +319,7 @@ tasks are carved from. Write no kit code. Measure first, decide second, propose 
 - [ ] Every open question you could not settle is listed under `## Proposed contract` as `OPEN:` lines with the two options and your recommendation — never silently defaulted
 
 ## T-148 — "The board follows you — board_pull fetches origin's board ref under claim-branch, so a second machine's status, next and claim read the truth"
-points 5 · risk normal · landed c225ba4 (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed c225ba4 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/core.sh, kit/ops/lib/handover.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/remote.sh
 
 ### Why
