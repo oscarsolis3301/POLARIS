@@ -63,6 +63,70 @@ drill_remote() {
     git merge -q --no-ff feat/T-PF -m merge
     "$SELF" done T-PF >/dev/null
     # ---- end T-059 handoff push resilience ----
+    # ---- T-148 board_pull (ops/contracts/first-run.md § 5): the READ side of claim: claim-branch ----
+    # Two checkouts of one origin. The second claims (its sync_board pushes the board ref); the first's
+    # status must FETCH it: active/ gains the task, the throttle stamp appears, the local ref lands on
+    # origin's tip. Then POLARIS_BOARD_PULL=0 keeps a later remote move stale; a plain status applies the
+    # move at the NEW path only (never twice); a stamp seconds old skips the fetch; a diverged local ref
+    # earns the pinned ⚠ note and not one file moves. rc + files, never prose alone (T-089). claim: is
+    # flipped UNCOMMITTED in both checkouts and the fixture's CONVENTIONS.md is restored byte-for-byte
+    # (or left absent) before the next step — every other drill runs under local-lock, and must.
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/bp-conv.bak"; else rm -f "$T/bp-conv.bak"; fi
+    { grep -v '^claim:' ops/CONVENTIONS.md 2>/dev/null || true; printf 'claim: claim-branch\n'; } > "$T/bp-conv"
+    cp "$T/bp-conv" ops/CONVENTIONS.md
+    rm -rf "$T/T-148"; mkdir -p "$T/T-148"
+    git clone -q -b main "$T/origin.git" "$T/T-148/clone" 2>/dev/null     # -b: the bare origin's HEAD names no branch
+    ( set -e; cd "$T/T-148/clone"; git config user.email c@c; git config user.name c
+      mkdir -p ops; cp "$T/bp-conv" ops/CONVENTIONS.md
+      "$SELF" doctor > "$T/bp-doc.out" 2>&1 || { cat "$T/bp-doc.out"; echo "BOARD PULL CLONE DOCTOR FAIL"; exit 1; }   # materializes ops/board/ from origin's ref
+      [ -d ops/board/ready ] || { echo "BOARD PULL CLONE SHAPE FAIL (doctor must materialize the clone's board)"; exit 1; }
+      printf -- '---\nid: T-BP\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/bp.txt\nverify: []\n---\n' > ops/board/ready/T-BP.md
+      "$SELF" claim T-BP > "$T/bp-claim.out" 2>&1 || { cat "$T/bp-claim.out"; echo "BOARD PULL CLONE CLAIM FAIL (a claim-branch claim in the second checkout must land)"; exit 1; } ) || exit 1
+    [ "$(git ls-remote origin refs/heads/polaris/board | cut -f1)" != "$(git rev-parse refs/heads/polaris/board)" ] \
+      || { echo "BOARD PULL SETUP FAIL (the other checkout's claim must move origin's board ref ahead of ours)"; exit 1; }
+    rm -f .polaris/board-pulled
+    "$SELF" status > "$T/bp1.out" 2>&1 || { cat "$T/bp1.out"; echo "BOARD PULL STATUS RC FAIL"; exit 1; }
+    [ -f ops/board/active/T-BP.md ] || { echo "BOARD PULL FF FAIL (a task claimed on the other machine must appear under active/)"; exit 1; }
+    [ -f .polaris/board-pulled ] || { echo "BOARD PULL STAMP FAIL (.polaris/board-pulled must exist after an attempt)"; exit 1; }
+    [ "$(git ls-remote origin refs/heads/polaris/board | cut -f1)" = "$(git rev-parse refs/heads/polaris/board)" ] \
+      || { echo "BOARD PULL REF FAIL (the local board ref must fast-forward to origin's tip)"; exit 1; }
+    grep -q 'board pulled: [0-9][0-9]* commit(s) from origin (claim-branch)' "$T/bp1.out" || { echo "BOARD PULL SAY FAIL (the pull must say so)"; exit 1; }
+    # the other machine moves it back to ready/ — env-skipped, the column stays stale and the ref stays put
+    ( cd "$T/T-148/clone" && "$SELF" release T-BP --to ready -m drill >/dev/null 2>&1 ) || { echo "BOARD PULL CLONE RELEASE FAIL"; exit 1; }
+    bptip="$(git rev-parse refs/heads/polaris/board)"
+    rm -f .polaris/board-pulled
+    POLARIS_BOARD_PULL=0 "$SELF" status >/dev/null 2>&1 || { echo "BOARD PULL SKIP RC FAIL"; exit 1; }
+    [ -f ops/board/active/T-BP.md ] && [ ! -f ops/board/ready/T-BP.md ] && [ "$(git rev-parse refs/heads/polaris/board)" = "$bptip" ] \
+      || { echo "BOARD PULL SKIP FAIL (POLARIS_BOARD_PULL=0 must leave board and ref exactly as they were)"; exit 1; }
+    # a plain status applies the move: the task sits at its NEW path only — the old path is unlinked
+    rm -f .polaris/board-pulled
+    "$SELF" status >/dev/null 2>&1 || { echo "BOARD PULL MOVE RC FAIL"; exit 1; }
+    [ -f ops/board/ready/T-BP.md ] && [ ! -f ops/board/active/T-BP.md ] \
+      || { echo "BOARD PULL MOVE FAIL (a task moved between columns on origin must show up ONCE, at the new path)"; exit 1; }
+    # throttle: the stamp is seconds old, so the other machine's next move is not fetched yet
+    ( cd "$T/T-148/clone" && "$SELF" claim T-BP >/dev/null 2>&1 ) || { echo "BOARD PULL CLONE RECLAIM FAIL"; exit 1; }
+    "$SELF" status >/dev/null 2>&1 || { echo "BOARD PULL THROTTLE RC FAIL"; exit 1; }
+    [ -f ops/board/ready/T-BP.md ] && [ ! -f ops/board/active/T-BP.md ] \
+      || { echo "BOARD PULL THROTTLE FAIL (a stamp under 60s old must skip the fetch)"; exit 1; }
+    # diverged: a local-only board commit beside origin's newer tip → the pinned note, no write, ref untouched
+    bptip="$(git rev-parse refs/heads/polaris/board)"
+    bpdvg="$(git commit-tree "$bptip^{tree}" -p "$bptip" -m 'chore(board): local-only, never pushed')"
+    git update-ref refs/heads/polaris/board "$bpdvg" "$bptip"
+    rm -f .polaris/board-pulled
+    "$SELF" status > "$T/bp3.out" 2>&1 || { cat "$T/bp3.out"; echo "BOARD PULL DIVERGED RC FAIL (a diverged board must not fail status)"; exit 1; }
+    grep -q 'board diverged from origin' "$T/bp3.out" || { echo "BOARD PULL DIVERGED NOTE FAIL (the ⚠ note must print)"; exit 1; }
+    [ -f ops/board/ready/T-BP.md ] && [ ! -f ops/board/active/T-BP.md ] && [ "$(git rev-parse refs/heads/polaris/board)" = "$bpdvg" ] \
+      || { echo "BOARD PULL DIVERGED WRITE FAIL (a diverged board must be left exactly as it was)"; exit 1; }
+    # restore: drop the local-only commit, let one more pull fast-forward, then take the drill's task off the board
+    git update-ref refs/heads/polaris/board "$bptip" "$bpdvg"
+    rm -f .polaris/board-pulled
+    "$SELF" status >/dev/null 2>&1 || { echo "BOARD PULL RESTORE RC FAIL"; exit 1; }
+    [ -f ops/board/active/T-BP.md ] && [ ! -f ops/board/ready/T-BP.md ] || { echo "BOARD PULL RESTORE FAIL (the fast-forward must land once the divergence is lifted)"; exit 1; }
+    rm -f ops/board/active/T-BP.md .polaris/board-pulled
+    git push -q origin ":refs/heads/claim/T-BP" 2>/dev/null || true
+    rm -rf "$T/T-148"
+    if [ -f "$T/bp-conv.bak" ]; then cp "$T/bp-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    # ---- end T-148 board_pull ----
 }
 drill_syncrace() {
     ensure_origin   # T-033: --only syncrace skips the remote drill above — self-provision origin (+ polaris/board)

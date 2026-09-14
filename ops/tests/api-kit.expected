@@ -134,6 +134,7 @@ kit/ops/bootstrap.py	const	PERMS
 kit/ops/bootstrap.py	const	PREFIX
 kit/ops/bootstrap.py	const	VERBOSE
 kit/ops/bootstrap.py	const	ZIP_NAME
+kit/ops/bootstrap.py	fn	arm_file
 kit/ops/bootstrap.py	fn	arm_machine
 kit/ops/bootstrap.py	fn	die
 kit/ops/bootstrap.py	fn	find_bash
@@ -306,6 +307,7 @@ kit/ops/lib/core.sh	fn	base_push_reject
 kit/ops/lib/core.sh	fn	board_commit
 kit/ops/lib/core.sh	fn	board_materialize
 kit/ops/lib/core.sh	fn	board_paths
+kit/ops/lib/core.sh	fn	board_pull
 kit/ops/lib/core.sh	fn	board_ref_commit
 kit/ops/lib/core.sh	fn	cfg
 kit/ops/lib/core.sh	fn	cfg_boot
@@ -501,6 +503,9 @@ kit/ops/lib/selftest/spine.sh	fn	drill_on
 kit/ops/lib/selftest/spine.sh	fn	ensure_origin
 kit/ops/lib/selftest/spine.sh	fn	ngwait
 kit/ops/lib/selftest/spine.sh	fn	selftest
+kit/ops/lib/surfaces.sh	fn	surfaces_pairs
+kit/ops/lib/surfaces.sh	fn	surfaces_proposal
+kit/ops/lib/surfaces.sh	fn	surfaces_runner
 kit/ops/lib/workspace.sh	fn	beat_age
 kit/ops/lib/workspace.sh	fn	beat_live
 kit/ops/lib/workspace.sh	fn	beat_touch

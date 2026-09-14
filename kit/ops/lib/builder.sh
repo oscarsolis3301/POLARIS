@@ -2,6 +2,7 @@
 # verify/handoff/release, the grant files_owned amendment, and resume.
 
 cmd_claim() {
+  board_pull   # T-148: before the wsjf pick — a task claimed on another machine has already left ready/ (first-run.md § 5)
   local id="${1:-}" f
   local explicit=1; [ -z "$id" ] && explicit=0
   # Candidate list: an explicit ID is the only candidate; auto-pick is EVERY ready task, sorted

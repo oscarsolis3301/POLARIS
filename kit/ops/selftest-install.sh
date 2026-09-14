@@ -20,7 +20,9 @@
 #   old-client  install by running <repo>/ops/install.sh — the path `polaris update` walks
 #               (the branch tarball's root ops/ IS our installation) — same no-leak + marker checks
 #   live-board  install twice over one target: second run says `live-board`, refreshes kit code,
-#               leaves board/CONVENTIONS/MAP/SPRINT/RULES byte-identical
+#               leaves board/CONVENTIONS/MAP/SPRINT/RULES byte-identical — then, with `adhd: on`
+#               in the target's CONVENTIONS, a third install flips the COPIED i-have-adhd skill to
+#               `disable-model-invocation: false` and leaves the kit's own copy opt-in
 #   hookmerge   settings.json holding a STALE POLARIS hook entry (ownership-guard at timeout 10)
 #               plus two hooks the human added — one of them sharing our basename — is merged:
 #               our entry is replaced with the kit's shipped fields, theirs come out untouched,
@@ -293,6 +295,19 @@ drill_live_board() {
   ! grep -qx 'corrupted' "$T_LIVE/ops/lib/core.sh"
   board_snapshot "$T_LIVE" > "$WORK/board-after"
   cmp "$WORK/board-before" "$WORK/board-after"
+  # adhd — the repo preference, re-applied on EVERY copy (ops/contracts/first-run.md § 2).
+  # The vendored skill is opt-in by its own frontmatter and is copied verbatim, so a repo that
+  # answered `adhd: on` once would have the flag silently re-armed by every update: the line still
+  # sits in CONVENTIONS.md and simply stops working. Both directions, because only the pair proves
+  # it — a copy that always writes `false` is just as wrong, and would load the skill into every
+  # session of every repo that never asked for it.
+  A_SKILL="$T_LIVE/.claude/skills/i-have-adhd/SKILL.md"
+  grep -q '^disable-model-invocation: true$' "$A_SKILL"
+  printf 'adhd: on
+' >> "$T_LIVE/ops/CONVENTIONS.md"
+  ( cd "$T_LIVE" && "$PY" "$ZIP" --no-machine-setup ) > "$WORK/live3.out"
+  grep -q '^disable-model-invocation: false$' "$A_SKILL"
+  grep -q '^disable-model-invocation: true$' "$KIT/.claude/skills/i-have-adhd/SKILL.md"
 }
 
 drill_hookmerge() {

@@ -62,6 +62,7 @@ status_brief() { # `status --brief` — ONE plain-English paragraph, no table (o
 }
 
 cmd_status() {
+  board_pull   # T-148: under claim: claim-branch, origin's board first — the other machine's moves are the truth (first-run.md § 5)
   [ "${1:-}" = "--brief" ] && { status_brief; return; }
   local col n
   printf 'POLARIS board — base: %s · claim: %s\n' "$BASE" "$CLAIM_MODE"
@@ -134,6 +135,7 @@ cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatte
   # PLANNER's "read ops/board/** frontmatter", which has no command behind it today — so the agent
   # reads whole task files and pays for the prose body, which dwarfs the frontmatter ~4:1.
   # Non-task files (backlog/IDEAS.md) carry no frontmatter and are skipped.
+  board_pull   # T-148: the board another machine moved, before a single row is read (first-run.md § 5)
   local cols="$*" col f id
   [ -n "$cols" ] || cols="ready active backlog blocked"
   for col in $cols; do
