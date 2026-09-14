@@ -590,6 +590,52 @@ board_materialize() { # fresh clone: the moved set is ignored on base, so a clon
   say "materialized ops/board/ + ops/SPRINT.md from polaris/board (fresh clone — board state lives on that ref)"
 }
 
+# The READ side of claim: claim-branch (ops/contracts/first-run.md § 5). sync_board pushes the board
+# ref after every mutation, but nothing fetched it, so a second machine read ops/board/ frozen at its
+# last clone. board_pull fast-forwards the local ref to origin's and writes ONLY the paths that differ
+# between the two tips (git diff --no-renames: a task moved between columns is unlinked at its old
+# path and written at its new one — never shown twice), through board_materialize's plumbing — a
+# SECONDARY index + checkout-index --prefix; never a branch switch, never the primary index. A path
+# unchanged between the tips is not touched, so an in-flight task file whose Notes this machine has
+# appended but not yet committed survives the pull. Writes land before unlinks and the ref moves LAST
+# (compare-and-swap): a failure midway leaves a duplicate at worst, never a task missing from the next
+# board commit — which rebuilds its tree from disk anyway: disk is the truth, the ref is its history.
+# Both lines go to stderr: this is the first statement of board-fm (a parsed TSV) and next (line 1 is
+# the verb), so stdout is not ours to write on. The throttle stamp holds the epoch of the last attempt
+# — read back with a builtin, because `find -mmin`/`stat` disagree between GNU and BSD.
+board_pull() { # rc 0 always. local-lock · no remote · POLARIS_BOARD_PULL=0 · an attempt <60s ago → nothing, no fork
+  [ "$CLAIM_MODE" = "claim-branch" ] && [ "${POLARIS_BOARD_PULL:-1}" != "0" ] || return 0
+  has_remote || return 0
+  local stamp="$PRIMARY/.polaris/board-pulled" now last="" ltip rtip n idx p
+  now="$(date +%s)"
+  [ -f "$stamp" ] && { IFS= read -r last < "$stamp" || true; }
+  case "$last" in ''|*[!0-9]*) last=0;; esac
+  [ $(( now - last )) -ge 60 ] || return 0
+  { mkdir -p "$PRIMARY/.polaris" && printf '%s\n' "$now" > "$stamp"; } 2>/dev/null || true   # touched on EVERY attempt
+  ltip="$(git -C "$PRIMARY" rev-parse -q --verify "$BOARD_REF" 2>/dev/null)" || return 0    # no local ref: board_materialize's job
+  git -C "$PRIMARY" fetch -q origin "$BOARD_REF" 2>/dev/null || return 0
+  # the remote tip BY NAME (sync_board's lesson): ls-remote answers for this ref and nothing else
+  rtip="$(git -C "$PRIMARY" ls-remote origin refs/heads/polaris/board 2>/dev/null | cut -f1)"
+  [ -n "$rtip" ] && [ "$rtip" != "$ltip" ] || return 0
+  git -C "$PRIMARY" cat-file -e "$rtip^{commit}" 2>/dev/null || return 0                   # pushed between fetch and ls-remote: next time
+  if git -C "$PRIMARY" merge-base --is-ancestor "$ltip" "$rtip" 2>/dev/null; then
+    n="$(git -C "$PRIMARY" rev-list --count "$ltip..$rtip" 2>/dev/null || echo '?')"
+    idx="$(mktemp)"
+    GIT_INDEX_FILE="$idx" git -C "$PRIMARY" read-tree "$rtip" 2>/dev/null \
+      && git -C "$PRIMARY" diff -z --no-renames --name-only --diff-filter=d "$ltip" "$rtip" \
+         | GIT_INDEX_FILE="$idx" git -C "$PRIMARY" checkout-index -z -q -f --prefix="$PRIMARY/" --stdin 2>/dev/null \
+      || { rm -f "$idx"; note "⚠ board pull could not write ops/board/ — left exactly as it was" >&2; return 0; }
+    rm -f "$idx"
+    git -C "$PRIMARY" diff -z --no-renames --name-only --diff-filter=D "$ltip" "$rtip" 2>/dev/null \
+      | while IFS= read -r -d '' p; do [ -n "$p" ] && rm -f "$PRIMARY/$p"; done || true
+    git -C "$PRIMARY" update-ref "$BOARD_REF" "$rtip" "$ltip" 2>/dev/null || true             # a local writer raced in: disk is truth, its commit re-parents
+    say "board pulled: $n commit(s) from origin (claim-branch)" >&2
+  elif ! git -C "$PRIMARY" merge-base --is-ancestor "$rtip" "$ltip" 2>/dev/null; then
+    note "⚠ board diverged from origin — local board commits were never pushed; run: ops/polaris sweep" >&2
+  fi   # else: local is ahead — the next mutation's sync_board pushes it
+  return 0
+}
+
 # --------------------------------------------------------------- lock helpers
 lock_take() { # lock_take <ID> — atomic; returns 1 if already taken
   # meta is 5 lines since 6.2.0 (ops/contracts/worktree-liveness.md § lock meta): epoch · who · id ·
