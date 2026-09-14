@@ -1,11 +1,11 @@
-# SPRINT 14 — Spend less, stay current (6.4.0)          capacity: 28   dates: 2026-09-14–
+# SPRINT 14 — Spend less, stay current (6.4.0)          capacity: 66   dates: 2026-09-14–
 
 Five complaints, each traced to code (plans/v3.md, approved 2026-09-14): it asks which lane to run
 (cmd_triage already answers; CONDUCTOR.md 2.5 restates the six conditions and DRIFTED, 2 vs 3
 points) · the full 729-805s suite for a one-line change (no change-scoped selection exists) · stale
 tests (nothing checks a feature's tests moved) · no install interview · a dashboard that cannot
-follow you. This sprint is SPRINT A only — the token half; Sprint B (interview, confetti gap,
-skills, cross-device) is deferred and NOT carved. One data file, `ops/SURFACES.tsv`, feeds both the
+follow you. Sprint A (the token half, six tasks) landed 2026-09-14; SPRINT B was carved the same
+day after the owner extended its scope (next paragraph). One data file, `ops/SURFACES.tsv`, feeds both the
 stale-tests gate and change-scoped `qa`; `test_select:` unset = byte-identical to 6.3, so `update`
 ships it everywhere and changes nothing. Six tasks / 28 pts / 3 waves under plan `spend-less`:
 W1 T-134 data plane (core.sh fns · KEYS test_select · usage · seeded SURFACES.tsv; W1 api-kit owner) ·
@@ -27,6 +27,42 @@ and never qa's rc inside a fixture (T-131); (6) fail-closed on legacy: a 2-field
 because every pre-6.4 writer ran everything, an empty carry scope withholds the stamp. Not in this
 sprint: any Sprint B item, the release itself (the conductor's ritual at the end of the run — cli-help
 regenerates at dogfood), any change to the ready gate or invariants.
+
+SPRINT B (carved 2026-09-14, same plan `spend-less`; the owner's extension: reach projects outside
+this computer and every existing install, and speed every project seamlessly — 9 tasks / 38 pts in
+4 waves, plus one 13-pt placeholder held by the ready gate). B0 activation carries the value:
+`update --auto` already propagates 6.4.0, but `test_select:` unset + an empty map = upgraded and not
+one second faster, so POLARIS must map a repo ITSELF — conservatively, because a mis-mapped row
+fails UNSAFE (D6). W1 T-140 the scaffold ENGINE (NEW lib/surfaces.sh: runner detection for pytest ·
+jest · vitest · go only, name-based pairing, ambiguous ⇒ no row, >200-path breadth cut, RUNNER/ROW/
+SKIP as data; + the entry's usage/dispatch for `surfaces --scaffold [--apply]` and `interview`; W1
+api-kit owner) ∥ T-143 B2 machine arming (bootstrap.py lands the output style + i-have-adhd in
+~/.claude, never `outputStyle` in the machine settings; install.sh honours `adhd: on`; golden
+machine-armed) ∥ T-146 the B3 SPIKE (plans/self-skills.md — measurements, budget, eviction,
+gap-finder, writer, names, a proposed contract + carve; T-149 (13 pts) depends on it and is
+re-carved after) ∥ T-148 B4 `board_pull` (the READ side of claim-branch — the ref was pushed on every
+mutation and never fetched) · W2 T-142 `surfaces --scaffold` / `--apply` (the second sanctioned
+writer, `<base>` only, rows tagged [scaffold]) + the doctor/qa nudges gated on a detectable runner +
+the five-fixture golden (observe.sh; W2 api-kit owner) ∥ T-141 B1 interview (KEYS.tsv column 5 `ask`
+on voice · adhd · claim, `adhd` a new key; `polaris interview` generates ≤4 questions from data and
+`--set` writes answers, `adhd: on` flips the repo's opt-in flag; update re-caches style + skill to
+the machine) · W3 T-144 tests (four fast sections + drill steps 8–10) ∥ T-145 prose (INIT's
+interview becomes ONE call; PLANNER 5b scaffolds at the plan gate; the install skill; W3 api-kit
+owner) · W4 T-147 Release 6.4.0 — LAST, four places at once, the SERIAL suite green in its own lane
+before any tag (sprint 13: a sharded green is not a CI green). Contracts on base before any claim:
+test-surfaces.md v2 (§ 13–19 pin every name, line, refusal and golden case), NEW first-run.md
+(interview · arming · board_pull), module-layout.md v6 (the loader). Pre-mortem applied: (1) api-kit
+ONE owner per wave (T-140 → T-142 → T-145) writing cross-lane rows from pinned names, never a strict
+diff on a cross-lane owner (calibration 2026-09-14); (2) no cross-file calls between parallel
+lanes — the one W2 call (doctor → interview_pending) is `command -v`-guarded and proven by W3's
+drill step 10; (3) never a bare suite in verify: — goldens, greps, `doctor --fast`, drills scoped
+with `--only` as acceptance boxes; (4) the installed CLI is 6.3.1 until the dogfood, so these tasks
+carry NO `surface:` items (6.3.1's `done` would drop them silently) — this repo's own rows are the
+next sprint's first task (IDEAS.md); (5) fail-closed on the unscaffoldable: NORUNNER, said aloud —
+this repo answers NORUNNER; (6) rc + file state, never prose (T-089), never qa's rc in a fixture
+(T-131). Not in this sprint: B3's real work (T-149, split after the spike), `update`'s epilogue
+nudge (dropped: the tmp-copy re-exec runs the PRE-update lib), a dashboard that follows you
+(`board_pull` gives `status` the same truth; dashboard.py is human-maintained).
 
 ## Burndown
 | date | done pts | remaining |
