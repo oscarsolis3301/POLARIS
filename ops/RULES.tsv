@@ -56,4 +56,7 @@ ops/KEYS.tsv	path	-	installed copy — edit kit/ops/KEYS.tsv
 # a handoff would guard nothing. `polaris done` is its only writer (a shell redirect from a task's `surface:` list,
 # which this write-time guard never sees), so the rule costs the one legitimate writer nothing; a wrong or missing
 # row is fixed on the TASK (its surface: items), never here.
-ops/SURFACES.tsv	path	-	rows are written only by polaris done from a task's surface: list — edit the task, never this file
+# Message widened 2026-09-14 (assistant, under invariant 11 — Sprint B plan `spend-less`, ops/contracts/test-surfaces.md v2 § 16):
+# `surfaces --scaffold --apply` is the SECOND sanctioned writer (on <base> only, rows tagged [scaffold], unambiguous pairings only).
+# The guard is unchanged: the file is still never hand-edited, and the rule count stays 16.
+ops/SURFACES.tsv	path	-	rows are written only by polaris done (a task's surface: list) or surfaces --scaffold --apply — edit the task, never this file

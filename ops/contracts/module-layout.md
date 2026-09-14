@@ -258,3 +258,24 @@ this census names, never in the entry script.
   deliberate `--parallel` code (~150 measured lines) + 10 module headers; band re-derived itemized
   (T-042 builder's measurement: 3998 on main pre-T-042). Entry <500 and per-module ≤1,200 UNCHANGED.
 - v5 2026-09-01: lib/awake.sh (5 fns, ≤150) and lib/handover.sh (8 fns, ≤300) join the census; loader `+awake +handover` after `bg`; entry preamble beat is builtins-only below `EVENTS=` (T-101, T-109; plan cant-eat-itself).
+
+## v6 — lib/surfaces.sh joins the census (2026-09-14, plan spend-less Sprint B, 6.4.0)
+New module `kit/ops/lib/surfaces.sh` (T-140, ≤ 350 lines, EXACTLY three top-level fns):
+`surfaces_runner` · `surfaces_pairs` · `surfaces_proposal` — the scaffold ENGINE, pure over the
+manifests under `$PRIMARY` and a tracked-file list it is handed. Semantics in
+`ops/contracts/test-surfaces.md` v2 § 13, which is the authority on their behavior; THIS contract
+stays the authority on where code lives and the loader's shape.
+
+**The loader, v6:** the FULL-load `_mods` list gains `surfaces`, inserted between `workspace` and
+`builder` (`core ownership workspace surfaces builder integrate knowledge search observe admin bg awake handover …`).
+The `_match|_rules|_guard` path stays EXACTLY `core ownership` — the write-guard never touches the
+engine, and its latency budget (v2's whole point) must not pay for it. Both lists stay LITERAL,
+never a glob. The COMMAND half (`cmd_surfaces`'s `--scaffold`/`--apply`, the helper
+`surfaces_apply`) stays in observe.sh beside `surfaces_health` (T-142).
+
+Census this sprint: +3 fns in the new module · +1 in observe.sh (`surfaces_apply`) · +3 in admin.sh
+(`cmd_interview` · `interview_pending` · `interview_set`, first-run.md § 2) · +1 in core.sh
+(`board_pull`, first-run.md § 5) · +1 python def in bootstrap.py (`arm_file`). observe.sh is already
+past the per-module 1,200-line guideline (2,355 lines at sprint 14); putting the engine in its own
+module is the first step back, not a new exception — the next observe.sh feature should ask the same
+question.

@@ -468,3 +468,258 @@ $ bash ops/polaris finish
   triage) · T-137 (express · carry · done) · T-138 (tests) · T-139 (prose · RULES · goldens W3).
   Extends verification-tiering.md v2 (stamp gains field 3) and ask-approval.md (approve's precondition
   widens to SURFACES rows).
+
+## v2 — ACTIVATION (2026-09-14, Sprint B of plan `spend-less`, 6.4.0)
+v1 shipped the machinery and, by design, changed nothing anywhere: `test_select:` unset and a
+header-only map ⇒ byte-identical to 6.3. `update --auto` therefore delivers 6.4.0 to every installed
+repo and makes none of them faster. This section is the activation: POLARIS proposes a repo's map
+ITSELF from the stack's own layout, writes only the unambiguous subset, and says exactly what it did.
+Governing constraint (plans/v3.md § B0, D6): a MIS-mapped row skips coverage while reporting green,
+so the generator is conservative BY CONSTRUCTION — unambiguous pairings only, over-select in doubt,
+`test_select:` only where the runner provably takes path arguments, and nothing on the release/CI
+path reads any of it (Invariant 6 stands). A scaffold that guesses to look useful is worse than one
+that emits three rows and admits the rest. Tasks: T-140 (engine + entry, W1) · T-142 (command +
+nudges, W2) · T-144 (tests, W3) · T-145 (prose, W3). The sprint's other seams — the interview, the
+machine arming, `board_pull` — live in `ops/contracts/first-run.md`; the loader change in
+`ops/contracts/module-layout.md` v6. Every name below is pinned so the waves build in parallel.
+
+### 13. The engine — NEW module `kit/ops/lib/surfaces.sh` (T-140, W1; ≤ 350 lines, EXACTLY 3 top-level fns)
+Pure: reads `$PRIMARY/<manifest>` files and a tracked-file LIST it is handed — never `git` itself,
+never `$SURFACES` (the caller passes the map), never the network. Every function is fast-tier
+testable with `PRIMARY` pointed at a fixture dir and the list a hand-written file. Loader: the
+FULL `_mods` list in `kit/ops/polaris` gains `surfaces` between `workspace` and `builder`; the
+`_match|_rules|_guard` list stays EXACTLY `core ownership` (module-layout.md v6). Matching uses
+`match_one <path> <pattern>` with ARGS (ownership.sh) — never a pipe (startup-budget). Helpers, if
+any, are inlined or nested INSIDE these three (the golden `api-kit` records column-0 definitions).
+
+```
+surfaces_runner <ls-file>            # stdout ONE line `<runner><TAB><template>`, rc 0 — or nothing, rc 1
+                                     # (no runner this contract knows how to scope). Detection ORDER,
+                                     # first match wins, over the list + the manifests it names:
+                                     #   node   `package.json` in the list AND, by grep on that file:
+                                     #          "test" script value contains `vitest` → vitest ·
+                                     #          contains `jest` → jest · else a `"vitest"` key → vitest ·
+                                     #          a `"jest"` key → jest · else NOT node (fall through)
+                                     #            vitest → `npx vitest run {tests}` · jest → `npx jest {tests}`
+                                     #   pytest `pytest.ini` in the list · any `conftest.py` in the list ·
+                                     #          `pyproject.toml` containing `[tool.pytest` · `setup.cfg`
+                                     #          containing `[tool:pytest]` · ≥1 list path matching
+                                     #          `^(tests?/|.*/tests?/).*test_[^/]*\.py$`   → `pytest {tests}`
+                                     #   go     `go.mod` in the list                        → `go test ./...`
+                                     #          (go takes PACKAGE paths, never test-file paths: the
+                                     #          template is the whole suite — over-selection by design —
+                                     #          and every scaffolded Go row carries a COMPLETE cmd)
+                                     # grep only, no python, bash 3.2. mocha · cargo · dotnet · rspec ·
+                                     # make · a bare `npm test` with an unknown script ⇒ rc 1: each of
+                                     # those either filters by NAME, not path, or cannot be proven to
+                                     # take a path — so the command says NORUNNER instead of guessing
+surfaces_pairs <runner> <ls-file>    # stdout: candidate rows `<surface><TAB><tests><TAB><cmd><TAB><note>`,
+                                     # sorted by surface (LC_ALL=C), rc 0 always. Rules below
+surfaces_proposal <ls-file> [<map-file>]
+                                     # the whole decision as DATA, rc 0 always; lines in this order:
+                                     #   RUNNER<TAB><runner><TAB><template>     — or, as the ONLY line:
+                                     #   NORUNNER<TAB>no test runner this kit can scope (pytest · jest · vitest · go) — seen: <manifests>
+                                     #   ROW<TAB><surface><TAB><tests><TAB><cmd><TAB><note>   (survivors, sorted)
+                                     #   SKIP<TAB><what><TAB><reason>                          (one per dropped pairing)
+                                     # <manifests> = the space-joined subset of `package.json pyproject.toml
+                                     # setup.cfg pytest.ini go.mod Cargo.toml Makefile Gemfile` present in
+                                     # the list, else `no manifest`. <map-file> supplies existing rows
+                                     # (caller passes $SURFACES when it exists; absent ⇒ none)
+```
+**Pairing rules (`surfaces_pairs`) — a row appears ONLY when the stack's own convention implies it;
+anything else is not a row (D3's principle applied to a generator).** `<name>` is used verbatim:
+no case-folding, no singular/plural guessing. `<dir>` never has a leading `./`; the repo root is
+never a surface. A "source dir" is a directory in the list holding ≥ 1 path, of ≤ 3 components,
+whose basename is not one of `tests test __tests__ spec __mocks__ node_modules`.
+- **pytest** (a) `tests/<name>/` or `test/<name>/` (≥ 1 tracked path) ↔ EXACTLY ONE source dir of
+  basename `<name>` outside the tests tree → `<dir>/<TAB>tests/<name>/<TAB>pytest tests/<name>/<TAB><name> tests`;
+  (b) `tests/…/test_<name>.py` ↔ EXACTLY ONE list path `**/<name>.py` outside the tests tree →
+  `<that path><TAB>tests/…/test_<name>.py<TAB>pytest tests/…/test_<name>.py<TAB><name>`;
+  (c) in-package `<dir>/tests/` ↔ its parent source dir `<dir>/` →
+  `<dir>/<TAB><dir>/tests/<TAB>pytest <dir>/tests/<TAB><basename of dir> tests`.
+- **jest / vitest** (`<run>` = `npx jest` | `npx vitest run`): (a) `<dir>/__tests__/` ↔ its parent
+  source dir → `<dir>/<TAB><dir>/__tests__/<TAB><run> <dir>/__tests__<TAB><basename> tests`;
+  (b) `tests/<name>/` · `test/<name>/` · `__tests__/<name>/` ↔ EXACTLY ONE source dir of basename
+  `<name>` → as pytest (a) with `<run> tests/<name>`; (c) co-located: every source dir `<dir>`
+  holding ≥ 1 list path `<dir>/*.test.<ext>` (ext ∈ js jsx ts tsx mjs cjs) →
+  `<dir>/<TAB><dir>/*.test.*<TAB><run> <dir><TAB><basename> co-located tests`; the same for `*.spec.<ext>`
+  with tests glob `<dir>/*.spec.*` (both present ⇒ two rows).
+- **go** every dir holding ≥ 1 list path `*_test.go` →
+  `<dir>/<TAB><dir>/*_test.go<TAB>go test ./<dir>/...<TAB><basename> package tests`.
+- **Shared filters, applied by `surfaces_pairs` AFTER the per-stack rules, in this order over the
+  candidates sorted by surface:**
+  1. AMBIGUITY (the `EXACTLY ONE` clauses): 0 or ≥ 2 matching source dirs/paths ⇒ no row; reported
+     by `surfaces_proposal` as `SKIP<TAB><tests-path><TAB>ambiguous: <name> matches <n> dirs (<d1> <d2> …)`
+     (dirs sorted, LC_ALL=C; `0` ⇒ `ambiguous: <name> matches 0 dirs`).
+  2. BREADTH: a surface matching > 200 list paths is dropped —
+     `SKIP<TAB><surface><TAB>surface matches <n> paths (>200)` — its descendants may qualify alone.
+  3. ANCESTOR: a candidate whose surface has an already-emitted surface as a prefix is dropped; ALL
+     such drops collapse into ONE line `SKIP<TAB><n> narrower pairing(s)<TAB>covered by an emitted ancestor row`.
+  4. every emitted surface and tests glob matches ≥ 1 list path; no TAB in any column.
+  `surfaces_pairs` emits the SKIP lines too (they are decisions, as data); `surfaces_proposal` then
+  drops, per row, an identical (surface, tests) pair already in `<map-file>`
+  (`SKIP<TAB><surface><TAB>already mapped to <tests>`) and a self-covering pair (`match_one <surface>
+  <tests>` — surfaces_health's exact test; `SKIP<TAB><surface><TAB>tests glob covers its own surface`).
+  Determinism is an invariant: same (manifests, list, map) ⇒ same bytes. ONE `git ls-files` per
+  command, run by the CALLER (§ 14).
+
+### 14. `surfaces --scaffold [--apply]` — `cmd_surfaces` in observe.sh (T-142, W2)
+**Usage entry** (kit/ops/polaris — T-140 writes it in W1 from here; the v1 § 4 `surfaces` lines are
+REPLACED by these, verbatim; the `qa` and `triage` entries of v1 § 4 are unchanged):
+```
+  surfaces [--scaffold [--apply]]
+                                 list + health-check ops/SURFACES.tsv (which tests cover which
+                                 source paths, as data): refuses a row whose tests glob covers its
+                                 own surface, flags a glob matching 0 or >200 tracked files. Rows
+                                 are written ONLY by `done` from a task's surface: list, or by
+                                 --scaffold --apply — never by hand (RULES-guarded); drift carries
+                                 the ⛔ findings. --scaffold PROPOSES rows from the stack's own
+                                 layout (pytest · jest · vitest · go): only pairings the layout
+                                 makes unambiguous, over-selecting in doubt, the ambiguous ones
+                                 listed as skipped; writes nothing. --apply writes those rows
+                                 (tagged [scaffold]) and sets test_select: when it is unset — on
+                                 <base> only; nothing is committed for you
+```
+Dispatch: `surfaces)   shift 2>/dev/null || true; cmd_surfaces "$@";;` (still no `update_check_maybe`).
+Flags: none · `--scaffold` · `--scaffold --apply`; anything else ⇒ `die "usage: polaris surfaces [--scaffold [--apply]]"`.
+Plain `surfaces` is byte-identical to v1 § 7.
+
+**`surfaces --scaffold`** (propose; writes nothing, ever): `git -C "$PRIMARY" ls-files` → temp file →
+`surfaces_proposal <tmp> [$SURFACES]`. Rendering, stdout:
+- NORUNNER ⇒ `note "<the NORUNNER text>. Map rows by hand: a task's surface: items (ops/roles/PLANNER.md step 5b)"`, rc 0.
+- else `note "runner: <runner> — test_select: <template>"`, then `printf '%-28s %-28s %s\n' SURFACE TESTS CMD`
+  and one such line per ROW, then one `   ⚠ skipped: <what> — <reason>` per SKIP, then the tail:
+  `say "<n> row(s) proposed · <s> skipped — write them: ops/polaris surfaces --scaffold --apply"` (n ≥ 1) ·
+  `note "nothing to propose — <s> pairing(s) skipped, listed above"` (n = 0, s ≥ 1) ·
+  `note "nothing to propose — no pairing the layout makes unambiguous (map rows by hand: surface: items)"` (n = s = 0).
+  rc 0 in every case. `<s>` = the number of SKIP lines.
+
+**`surfaces --scaffold --apply`** — the SECOND sanctioned writer (§ 16):
+- REFUSES on any `feat/*` branch: `die "surfaces --scaffold --apply runs on $BASE only — from a task, rows are surface: items (polaris done writes them)"`;
+  REFUSES without `$CONV`: `die "no ops/CONVENTIONS.md — run INIT first; the scaffold sets test_select: in it"`.
+- n = 0 ⇒ the same `nothing to propose` note, rc 0, no write.
+- else, through the helper **`surfaces_apply <proposal-file>`** (the ONLY new top-level fn in
+  observe.sh): `surfaces_seed`; append each ROW as `<surface><TAB><tests><TAB><cmd><TAB><note> [scaffold]`
+  with `printf '%s\n' >> "$SURFACES"`; then `test_select:` in `$CONV` —
+  a LIVE `^test_select:` line (any value, even empty) ⇒ untouched, reported `kept (already set here)` ·
+  a stub `^#[[:space:]]*test_select:` ⇒ replaced IN PLACE by
+  `test_select: <template>   # set by surfaces --scaffold --apply: {tests} = the changed rows' tests globs; delete this line to run the whole test: suite on every change` ·
+  neither ⇒ that line appended at the END (after one blank line). Temp file + `mv`, LF kept, never `sed -i`.
+- Tail: `say "<n> row(s) written to ops/SURFACES.tsv · test_select: <set|kept (already set here)>"` then
+  `note "review, then commit ops/SURFACES.tsv ops/CONVENTIONS.md — nothing was committed for you"`. rc 0.
+- Idempotent: a second run proposes nothing (`already mapped`) and writes nothing.
+
+### 15. The activation nudges — where a repo learns its map is empty (T-142; prose T-145 § 19)
+Three moments, three one-liners, ALL gated on `surfaces_runner` rc 0 (a repo the scaffold cannot
+help is never nagged — THIS repo, bash + drills, stays silent) AND on `surfaces_lines` printing no row:
+- **`doctor`**: directly AFTER the CONFIG DRIFT block, only when `$CONV` exists and `cfg test` is
+  non-empty: `note "surfaces: none mapped — every change runs the whole test: suite; propose a map: ops/polaris surfaces --scaffold"`.
+  Directly after it, the first-run.md § 2 preferences line (guarded: `command -v interview_pending`).
+- **`qa`**: after the `last-suite-seconds` write, only when the `test` key ran (`ran ≥ 1`), no
+  selection happened, and `t1 - t0 ≥ 60`:
+  `note "test — ran the whole suite (<t1-t0>s). A surface map runs only what a change can break: ops/polaris surfaces --scaffold"`.
+- **role prose** (§ 19): PLANNER step 5b · INIT step 3 · the install skill § Update.
+NOT a nudge site: `update --auto` (auto-update.md: one pinned line, never more) and `update`'s
+explicit epilogue — `cmd_update` re-execs from a tmp copy of the PRE-update lib, so a 6.3→6.4 update
+could never print it; dropped rather than shipped inert (IDEAS.md records it).
+Drill safety: every existing fixture has no manifest ⇒ `surfaces_runner` rc 1 ⇒ all three silent;
+the drills that grep doctor (`brain`, the knob, CLAUDE.md and self-hosting checks) and qa
+(`test — green`, `suite already green`, `running the whole suite`) lines are unaffected.
+
+### 16. Amendments to v1 (append-only; v1 stands, these override where they overlap)
+- **D1 / D2 / Invariant 7 — TWO writers now:** `polaris done` (a task's `surface:` items) and
+  `surfaces --scaffold --apply` (on `<base>` only, rows tagged `[scaffold]`, unambiguous pairings
+  only). Both write with a shell redirect; the RULES `path` guard still denies every hand edit and
+  every feat-branch diff. THIS repo's RULES line message becomes
+  `rows are written only by polaris done (a task's surface: list) or surfaces --scaffold --apply — edit the task, never this file`
+  (Planner-written with the plan under Invariant 11). The init-board seeded example line and the
+  `surfaces_seed` header (§ 1) are NOT changed — "never by hand" is still exactly true.
+- **§ 11's cli-help sentence:** until the release dogfood, `bash kit/ops/polaris help | diff - ops/tests/cli-help.expected`
+  differs by exactly the v1 § 4 hunks PLUS the § 14 `surfaces` hunk PLUS first-run.md § 2's
+  `interview` hunk; anything else is a defect. `cli-help-parity`'s 10-command list is not extended.
+- **Invariant 1** (`test_select:` absent ⇒ OFF) is unchanged — `--apply` is what sets it, only where
+  it derived a template; nothing in the kit derives selection from rows alone.
+
+### 17. Tests (T-144, W3) — `fast.sh` sections · the `surfaces` drill · one new golden (T-142, W2)
+- **NEW golden `ops/tests/surfaces-scaffold.cmd/.expected`** (T-142 owns; hermetic — throwaway repos,
+  run from inside them, the adopt-stub pattern; every fixture COMMITS its files, the list is
+  `git ls-files`; `KIT="$(pwd)/kit/ops/polaris"`). Cases, each its own fixture:
+  1. **pytest:** `pyproject.toml` containing `[tool.pytest.ini_options]` · `src/api/x.py` · `src/db/y.py` ·
+     `src/util.py` · `src/common/a.py` · `lib/common/b.py` · `tests/api/test_x.py` · `tests/db/test_y.py` ·
+     `tests/test_util.py` · `tests/common/test_a.py` · `README.md`; `init-board`; a CONVENTIONS with
+     `test: pytest -q`. `--scaffold` ⇒ runner pytest, template `pytest {tests}`, FOUR rows —
+     `src/api/`↔`tests/api/` · `src/common/a.py`↔`tests/common/test_a.py` · `src/db/`↔`tests/db/` ·
+     `src/util.py`↔`tests/test_util.py` — and TWO skips: `tests/common/ — ambiguous: common matches 2 dirs (lib/common src/common)`
+     and `2 narrower pairing(s) — covered by an emitted ancestor row`; rc 0; the map still header-only.
+     `--scaffold --apply` ⇒ 4 `[scaffold]` rows, `test_select: pytest {tests}` appended (the pinned
+     comment), the review note; `surfaces` ⇒ `✅ 4 surface row(s), all healthy`; again ⇒ `nothing to
+     propose — 4 pairing(s) skipped, listed above` and the two files byte-identical; a stub
+     `# test_select: x` in a fresh copy ⇒ replaced in place; a live `test_select: custom` ⇒ kept and
+     said; from `git checkout -b feat/T-X` ⇒ rc 1 + the refusal.
+  2. **jest:** `package.json` = `{"scripts":{"test":"jest"}}` · `src/foo/a.ts` · `src/foo/__tests__/a.test.ts` ·
+     `src/bar/b.ts` · `src/bar/b.test.ts` ⇒ runner jest, template `npx jest {tests}`, rows
+     `src/bar/`↔`src/bar/*.test.*` (`npx jest src/bar`) · `src/foo/`↔`src/foo/__tests__/` (`npx jest src/foo/__tests__`),
+     one skip `1 narrower pairing(s)`.
+  3. **go:** `go.mod` · `internal/foo/x.go` · `internal/foo/x_test.go` · `cmd/app/main.go` ⇒ one row
+     `internal/foo/`↔`internal/foo/*_test.go` cmd `go test ./internal/foo/...`, template `go test ./...`, 0 skips.
+  4. **no runner:** `Makefile` · `bin/tool.sh` ⇒ the NORUNNER note with `seen: Makefile`, rc 0; `--apply` writes nothing.
+  5. **breadth:** `package.json` with `"test":"vitest"` · `src/a.js` · `src/a.test.js` · 250 tracked
+     `src/gen/g<n>.js` ⇒ runner vitest, `src/ — surface matches 252 paths (>200)`, `nothing to propose — 1 pairing(s) skipped, listed above`.
+- **`fast.sh` sections INSIDE `selftest_fast`** (no new top-level fn): `surfaces-runner` ·
+  `surfaces-pairs` · `surfaces-proposal`, ≥ 4 asserts each, `PRIMARY` overridden to a fixture dir
+  under `$FT_TMP` inside the section subshell, the list a hand-written file.
+- **`drill_surfaces`** (policy.sh) gains steps 8–10 after step 7: (8) `surfaces --scaffold` ⇒ output
+  has `no test runner this kit can scope`, rc 0, the map still header-only; (9) add + commit
+  `pytest.ini`, `src/sf2/a.py`, `tests/sf2/test_a.py` ⇒ `--scaffold --apply` ⇒ exactly one
+  non-comment row, ending ` [scaffold]`, `^test_select: pytest {tests}` in CONVENTIONS, `surfaces`
+  rc 0; again ⇒ `nothing to propose`; from a `feat/*` worktree ⇒ rc 1 + the refusal on stderr;
+  (10) first-run.md § 2's doctor line: with `ops/KEYS.tsv` copied from the kit and a CONVENTIONS
+  holding only `voice: standard` + `test:`, `doctor` prints `preferences never set here: adhd · claim`;
+  after `interview --set adhd=off --set claim=local-lock` it does not. The hermetic cleanup already
+  restores the header and the keys. Budget +8 s (re-measure CONVENTIONS' `test:` comment — Integrator/EVOLVE).
+
+### 18. Goldens — ONE `api-kit.expected` owner per wave (key-registry.md § 5 rule; Sprint B)
+Diff by content (`POLARIS_ROOT=$PWD python kit/ops/index.py find --api 'kit/*' | grep -v '^kit/\.claude/skills/i-have-adhd/' | diff - ops/tests/api-kit.expected`),
+never by commit range; an unexpected hunk is a STOP. A cross-lane owner's `verify:` asserts the
+pinned sibling rows are PRESENT and diffs with those rows excluded from BOTH sides (CONVENTIONS
+§ Planner calibration 2026-09-14); the strict diff runs at the wave gate and in CI.
+- **W1 owner T-140:** its own `kit/ops/lib/surfaces.sh	fn	surfaces_pairs` · `surfaces_proposal` ·
+  `surfaces_runner`; T-143's pinned `kit/ops/bootstrap.py	fn	arm_file`; T-148's pinned
+  `kit/ops/lib/core.sh	fn	board_pull`. T-143, T-146 and T-148 add NO other top-level fn and NO
+  heading anywhere under kit/ (T-146 writes under plans/, outside the index).
+- **W2 owner T-142:** its own `kit/ops/lib/observe.sh	fn	surfaces_apply`; T-141's pinned
+  `kit/ops/lib/admin.sh	fn	cmd_interview` · `interview_pending` · `interview_set` and the row
+  `kit/ops/KEYS.tsv	key	adhd`. T-141 adds NO other top-level fn and NO heading.
+- **W3 owner T-145:** its own INIT.md heading rows (first-run.md § 4 pins the texts); T-144 adds
+  no fn (sections inside `selftest_fast`, steps inside `drill_surfaces`) and no heading.
+- **W4** T-147 (release): VERSION + CHANGELOG only; api-kit untouched; `cli-help.expected`
+  regenerates at the dogfood (`check --only cli-help --update` after a line-by-line review).
+- Unchanged and green: `startup-budget` (`rules-lines-memoized 3`; the engine matches with args) ·
+  `cli-help-parity` · `rules-health` (a message edit changes no count) · `triage-lane` · `keys-drift` ·
+  `adopt-stub` · `pack-visual` · `plain-voice` · `output-style-installed` · `adhd-skill-installed` ·
+  `perm-tools` (first-run.md says why for the last four).
+
+### 19. Prose (T-145, W3) — headings under kit/ unchanged except INIT.md's (first-run.md § 4)
+- **PLANNER.md step 5b** gains, as its FIRST sentence:
+  `No rows yet and the repo has tests? `bash ops/polaris surfaces --scaffold` proposes rows from the stack's own layout (pytest · jest · vitest · go) and lists what it skipped as ambiguous; `--scaffold --apply` writes the unambiguous ones and sets `test_select:` — run it here, at the plan gate, and commit both files with your contracts (a conductor-entered planner reports what it wrote instead of asking). Ambiguous pairings are skipped by design: map those with `surface:` items.`
+- **INIT.md step 3**, after arming the RULES line:
+  `Then `bash ops/polaris surfaces --scaffold --apply` — the survey already derived `test:`; this maps what the layout makes unambiguous (zero rows is a fine answer) and the step-5 report says how many.`
+- **polaris-install SKILL.md § Update**, after the one-line report rule:
+  `If `doctor` or the update says `surfaces: none mapped`, that repo's checks can get faster: run `bash ops/polaris surfaces --scaffold`, show them what it would map in one line, and apply on their yes (`--scaffold --apply`). One question, never folded into the update line.`
+- **PROTOCOL.md** THE TOOL row: `surfaces` → `surfaces [--scaffold [--apply]]` + `proposes a map from the layout`.
+  **MANUAL.md**: unchanged (a generator has no by-hand twin; its rows are reviewed in the diff).
+
+### Invariants (v2 additions)
+12. `--scaffold` alone writes nothing; `--apply` writes only on `<base>`, only rows the engine
+    proposed, and never touches a live `test_select:` line.
+13. The engine is deterministic over (manifests, tracked list, existing map): same input, same
+    bytes — it is goldened.
+14. `update --auto` never proposes, applies, or nudges; the doctor/qa nudges are gated on a
+    detectable runner AND an empty map.
+15. Every scaffolded runner both takes path arguments AND emits complete per-row cmds; a runner
+    that cannot is NORUNNER, said aloud.
+
+### Changelog
+- v2 2026-09-14: activation — engine (T-140), command + nudges + golden (T-142), tests (T-144),
+  prose (T-145); D1/D2/Invariant 7 widened to the second writer; § 11's cli-help sentence extended.
+  Sibling seams in `ops/contracts/first-run.md`; the loader in `ops/contracts/module-layout.md` v6.
