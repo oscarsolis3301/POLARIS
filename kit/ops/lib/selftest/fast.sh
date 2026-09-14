@@ -43,8 +43,8 @@ ft_section() { # ft_section <name> — close the section: hand this subshell's a
 selftest_fast() { # the run — rc 0 all green / rc 1 any red; last line on green:
   # `✅ fast tier passed — <n> checks in <s>s`. Sources NOTHING. Each section is one subshell that
   # sets FT_SEC first, overrides whatever globals it needs, asserts, and ends with ft_section.
-  local ft_t0 ft_t1 ft_red=0 ft_n=0 ft_k ft_tf ft_conv ft_rules ft_nl ft_cr
-  ft_nl=$'\n'; ft_cr=$'\r'
+  local ft_t0 ft_t1 ft_red=0 ft_n=0 ft_k ft_tf ft_conv ft_rules ft_nl ft_cr ft_tab ft_surf ft_sel
+  ft_nl=$'\n'; ft_cr=$'\r'; ft_tab="$POLARIS_TAB"
   ft_t0="$(date +%s)"
   FT_TMP="$(mktemp -d)"
   trap 'rm -rf "$FT_TMP"' EXIT
@@ -265,6 +265,155 @@ EOF
     ft_assert 'app dirt only, two lines → rc 1'          ! update_dirt_overlaps_kit <<< "?? src/x.py${ft_nl} M README.md"
     ft_assert 'empty status → rc 1'                      ! update_dirt_overlaps_kit <<< ''
     ft_section dirt ) || ft_red=1
+
+
+  # ---- surfaces-tsv (test-surfaces.md § 1, § 4) — surfaces_lines over a temp ops/SURFACES.tsv:
+  # comments, blank lines and CRs go, rows survive in file order, an absent file is zero rows at
+  # rc 0, and the memo holds until _SURFACES_CACHED is reset. The memo is primed by an ft_assert
+  # call in the section shell ITSELF — a $(...) primes only its own subshell, which exits with the
+  # cache (T-134's lesson) — so the read that follows, through $(...), inherits the primed state.
+  # surfaces_seed writes the header iff the path is absent and never rewrites what exists.
+  ft_surf="$FT_TMP/SURFACES.tsv"
+  printf '%s\n' '# POLARIS SURFACES — a header line' '' '   ' > "$ft_surf"
+  printf 'src/api/\ttests/api/\t-\tthe HTTP API [T-9]\r\n' >> "$ft_surf"
+  printf '   # an indented comment\n' >> "$ft_surf"
+  printf 'kit/ops/lib/integrate.sh\tkit/ops/lib/selftest/history.sh\tbash kit/ops/polaris doctor --selftest --only express,tcm\tthe integrator lane [T-140]\n' >> "$ft_surf"
+  printf 'src/*.py\ttests/unit/\t-\tevery python file [T-1]\n' >> "$ft_surf"
+  ( FT_SEC=surfaces-tsv; SURFACES="$ft_surf"; _SURFACES_CACHED=""; _SURFACES_CACHE=""
+    ft_out="$(surfaces_lines)" || ft_out=""
+    ft_k=0; while IFS= read -r ft_line; do ft_k=$((ft_k+1)); done <<EOF
+$ft_out
+EOF
+    ft_assert 'exactly the three rows survive'   test "$ft_k" = 3
+    ft_assert 'comments dropped'                 test "${ft_out#*#}" = "$ft_out"
+    ft_assert 'CR dropped'                       test "${ft_out#*$ft_cr}" = "$ft_out"
+    ft_assert 'file order kept: row 1 first'     test "${ft_out%%$ft_nl*}" = "src/api/${ft_tab}tests/api/${ft_tab}-${ft_tab}the HTTP API [T-9]"
+    ft_assert 'a complete cmd column survives'   test "${ft_out#*"--only express,tcm${ft_tab}the integrator lane [T-140]"}" != "$ft_out"
+    ft_assert 'primes the memo, rc 0'            surfaces_lines
+    printf 'src/db/\ttests/db/\t-\ta late row [T-2]\n' >> "$ft_surf"
+    ft_assert 'memoized: an append after priming is not seen' test "$(surfaces_lines)" = "$ft_out"
+    _SURFACES_CACHED=""
+    ft_assert 'reset re-reads: the late row appears'          test "$(surfaces_lines)" = "${ft_out}${ft_nl}src/db/${ft_tab}tests/db/${ft_tab}-${ft_tab}a late row [T-2]"
+    SURFACES="$FT_TMP/no-such-file"; _SURFACES_CACHED=""
+    ft_assert 'absent file → rc 0'               surfaces_lines
+    ft_assert 'absent file → nothing'            test -z "$(surfaces_lines)"
+    ft_assert 'seed writes where absent'         surfaces_seed "$FT_TMP/seed.tsv"
+    IFS= read -r ft_line < "$FT_TMP/seed.tsv" || ft_line=""
+    ft_assert 'seeded line 1 is the # POLARIS SURFACES header' test "${ft_line#"# POLARIS SURFACES"}" != "$ft_line"
+    printf 'keep me\n' > "$FT_TMP/keep.tsv"
+    surfaces_seed "$FT_TMP/keep.tsv"
+    IFS= read -r ft_line < "$FT_TMP/keep.tsv" || ft_line=""
+    ft_assert 'seed never rewrites an existing file' test "$ft_line" = 'keep me'
+    SURFACES="$FT_TMP/seed.tsv"; _SURFACES_CACHED=""
+    ft_assert 'a seeded file is zero rows'       test -z "$(surfaces_lines)"
+    ft_section surfaces-tsv ) || ft_red=1
+
+  # ---- surfaces-match — surface_row_matches (column 1 as a files_owned pattern: exact · dir/
+  # prefix · glob, by expansion + match_one, no pipe) and surface_rows_for (every covering row,
+  # whole line, file order; rc 1 and nothing printed when none). The tsv fixture above now carries
+  # four rows — src/api/util.py is covered by the dir/ row AND the src/*.py glob row, in that order.
+  ( FT_SEC=surfaces-match; SURFACES="$ft_surf"; _SURFACES_CACHED=""; _SURFACES_CACHE=""
+    ft_assert 'exact surface'                    surface_row_matches src/a.py "src/a.py${ft_tab}tests/${ft_tab}-${ft_tab}n"
+    ft_assert 'dir/ prefix'                      surface_row_matches src/api/x/y.py "src/api/${ft_tab}tests/api/${ft_tab}-${ft_tab}n"
+    ft_assert 'glob * crosses /'                 surface_row_matches src/api/x/util_a.py "src/*/util_*.py${ft_tab}tests/${ft_tab}-${ft_tab}n"
+    ft_assert 'glob non-match rc 1'              ! surface_row_matches src/api/x/other.py "src/*/util_*.py${ft_tab}tests/${ft_tab}-${ft_tab}n"
+    ft_assert 'dir/ does not match a sibling'    ! surface_row_matches src/apix/y.py "src/api/${ft_tab}tests/${ft_tab}-${ft_tab}n"
+    ft_assert 'empty row rc 1'                   ! surface_row_matches src/a.py ''
+    ft_assert 'a one-column row still matches'   surface_row_matches src/a.py src/a.py
+    ft_out="$(surface_rows_for src/api/util.py)" || ft_out=""
+    ft_k=0; while IFS= read -r ft_line; do ft_k=$((ft_k+1)); done <<EOF
+$ft_out
+EOF
+    ft_assert 'rows_for: both covering rows'     test "$ft_k" = 2
+    ft_assert 'rows_for: file order, dir/ row first (whole line)' test "${ft_out%%$ft_nl*}" = "src/api/${ft_tab}tests/api/${ft_tab}-${ft_tab}the HTTP API [T-9]"
+    ft_assert 'rows_for: the glob row second (whole line)'        test "${ft_out#*$ft_nl}" = "src/*.py${ft_tab}tests/unit/${ft_tab}-${ft_tab}every python file [T-1]"
+    ft_assert 'rows_for: rc 0 when one row covers'  surface_rows_for kit/ops/lib/integrate.sh
+    ft_assert 'rows_for: none → rc 1'            ! surface_rows_for docs/x.md
+    ft_assert 'rows_for: none → prints nothing'  test -z "$(surface_rows_for docs/x.md)"
+    ft_section surfaces-match ) || ft_red=1
+
+  # ---- surfaces-select (test-surfaces.md § 4, § 6) — surface_select_cmd <paths-file>: the commands
+  # to run INSTEAD of test:, or ONE reason (test_select unset · no rows · no changed paths ·
+  # unmapped: <p> (+n more)). Complete cmds deduped in first-appearance order, then ONE template
+  # line with every {tests} = the space-joined distinct tests globs of the matched - rows; a
+  # template with no {tests} runs verbatim, once. ALL-OR-NOTHING: one unmapped path is the reason.
+  ft_sel="$FT_TMP/SELECT.tsv"
+  printf 'src/api/\ttests/api/\t-\tapi [T-9]\n' > "$ft_sel"
+  printf 'src/db/\ttests/db/\t-\tdb [T-8]\n' >> "$ft_sel"
+  printf 'kit/ops/lib/integrate.sh\tkit/ops/lib/selftest/history.sh\tbash kit/ops/polaris doctor --selftest --only express,tcm\tlane [T-140]\n' >> "$ft_sel"
+  printf 'kit/ops/lib/core.sh\tkit/ops/lib/selftest/fast.sh\tbash kit/ops/polaris doctor --selftest --only express,tcm\tsame cmd [T-141]\n' >> "$ft_sel"
+  printf 'kit/ops/lib/builder.sh\tkit/ops/lib/selftest/board.sh\tbash kit/ops/polaris doctor --fast\tanother cmd [T-142]\n' >> "$ft_sel"
+  printf 'test_select: bash kit/ops/polaris doctor --selftest --only {tests}\n' > "$FT_TMP/CONV-select.md"
+  printf 'test_select: a {tests} b {tests}\n' > "$FT_TMP/CONV-twice.md"
+  printf 'test_select: run-everything\n' > "$FT_TMP/CONV-verbatim.md"
+  printf 'src/api/x.py\n' > "$FT_TMP/p-api"
+  printf 'src/api/x.py\nsrc/db/y.py\nsrc/api/z.py\n' > "$FT_TMP/p-two"
+  printf 'kit/ops/lib/integrate.sh\nkit/ops/lib/core.sh\nkit/ops/lib/builder.sh\nsrc/api/x.py\n' > "$FT_TMP/p-cmds"
+  printf 'docs/x.md\n' > "$FT_TMP/p-unmapped"
+  printf 'src/api/x.py\ndocs/x.md\nREADME.md\n' > "$FT_TMP/p-mixed"
+  : > "$FT_TMP/p-empty"
+  ( FT_SEC=surfaces-select; SURFACES="$ft_sel"; CONV="$ft_conv"; _SURFACES_CACHED=""; _SURFACES_CACHE=""
+    ft_assert 'test_select unset → rc 1'         ! surface_select_cmd "$FT_TMP/p-api"
+    ft_assert 'test_select unset → the reason'   test "$(surface_select_cmd "$FT_TMP/p-api")" = 'test_select unset'
+    CONV="$FT_TMP/CONV-select.md"; SURFACES="$FT_TMP/no-such-file"; _SURFACES_CACHED=""
+    ft_assert 'no rows → the reason'             test "$(surface_select_cmd "$FT_TMP/p-api")" = 'no rows'
+    SURFACES="$ft_sel"; _SURFACES_CACHED=""
+    ft_assert 'no changed paths → the reason'    test "$(surface_select_cmd "$FT_TMP/p-empty")" = 'no changed paths'
+    ft_assert 'unmapped path → rc 1'             ! surface_select_cmd "$FT_TMP/p-unmapped"
+    ft_assert 'unmapped: names the path'         test "$(surface_select_cmd "$FT_TMP/p-unmapped")" = 'unmapped: docs/x.md'
+    ft_assert 'all-or-nothing: one mapped, two unmapped → (+1 more)' test "$(surface_select_cmd "$FT_TMP/p-mixed")" = 'unmapped: docs/x.md (+1 more)'
+    ft_assert 'one - row → the template with {tests} = its glob' test "$(surface_select_cmd "$FT_TMP/p-api")" = 'bash kit/ops/polaris doctor --selftest --only tests/api/'
+    ft_assert 'two - rows → distinct globs, space-joined, first-appearance order' test "$(surface_select_cmd "$FT_TMP/p-two")" = 'bash kit/ops/polaris doctor --selftest --only tests/api/ tests/db/'
+    ft_assert 'complete cmds deduped + ordered, the template LAST' test "$(surface_select_cmd "$FT_TMP/p-cmds")" = "bash kit/ops/polaris doctor --selftest --only express,tcm${ft_nl}bash kit/ops/polaris doctor --fast${ft_nl}bash kit/ops/polaris doctor --selftest --only tests/api/"
+    CONV="$FT_TMP/CONV-twice.md"
+    ft_assert 'every {tests} is replaced'        test "$(surface_select_cmd "$FT_TMP/p-api")" = 'a tests/api/ b tests/api/'
+    CONV="$FT_TMP/CONV-verbatim.md"
+    ft_assert 'no {tests} in the template → verbatim, once' test "$(surface_select_cmd "$FT_TMP/p-two")" = 'run-everything'
+    ft_section surfaces-select ) || ft_red=1
+
+  # ---- surfaces-item (test-surfaces.md § 3) — surface_row_from_item <item> <ID> <title>: the
+  # grammar → ONE TSV row, or rc 1 + ONE reason line. Keywords in the order tests, cmd, note; tests:
+  # required and one token; cmd: everything up to note: (trimmed, empty → -); note: the rest,
+  # absent → the title with surrounding double quotes stripped; the note carries [ID].
+  ( FT_SEC=surfaces-item
+    ft_assert 'surface + tests + note'           test "$(surface_row_from_item 'src/api/ tests: tests/api/ note: the HTTP API' T-9 'x')" = "src/api/${ft_tab}tests/api/${ft_tab}-${ft_tab}the HTTP API [T-9]"
+    ft_assert 'cmd + note, the cmd kept whole'   test "$(surface_row_from_item 'kit/ops/lib/integrate.sh tests: kit/ops/lib/selftest/history.sh cmd: bash kit/ops/polaris doctor --selftest --only express,tcm note: the integrator lane' T-140 'x')" = "kit/ops/lib/integrate.sh${ft_tab}kit/ops/lib/selftest/history.sh${ft_tab}bash kit/ops/polaris doctor --selftest --only express,tcm${ft_tab}the integrator lane [T-140]"
+    ft_assert 'no note → the title'              test "$(surface_row_from_item 'src/ tests: t/' T-1 'Plain title')" = "src/${ft_tab}t/${ft_tab}-${ft_tab}Plain title [T-1]"
+    ft_assert 'title quotes stripped'            test "$(surface_row_from_item 'src/ tests: t/' T-1 '"Quoted title"')" = "src/${ft_tab}t/${ft_tab}-${ft_tab}Quoted title [T-1]"
+    ft_assert 'cmd without note → the title'     test "$(surface_row_from_item 'src/ tests: t/ cmd: make test' T-1 'T')" = "src/${ft_tab}t/${ft_tab}make test${ft_tab}T [T-1]"
+    ft_assert 'empty cmd: → -'                   test "$(surface_row_from_item 'src/ tests: t/ cmd: note: n' T-1 'T')" = "src/${ft_tab}t/${ft_tab}-${ft_tab}n [T-1]"
+    ft_assert 'cmd and note padding trimmed'     test "$(surface_row_from_item 'src/ tests: t/ cmd:    make test    note:   n  ' T-1 'T')" = "src/${ft_tab}t/${ft_tab}make test${ft_tab}n [T-1]"
+    ft_assert 'missing tests: → rc 1'            ! surface_row_from_item 'src/ note: n' T-1 'T'
+    ft_assert "missing tests: → needs 'tests: <glob>'" test "$(surface_row_from_item 'src/ note: n' T-1 'T')" = "needs 'tests: <glob>'"
+    ft_assert 'tests: with no glob → rc 1'       ! surface_row_from_item 'src/ tests:' T-1 'T'
+    ft_assert 'empty item → empty surface'       test "$(surface_row_from_item '' T-1 'T')" = 'empty surface'
+    ft_assert 'a TAB → a TAB in the item'        test "$(surface_row_from_item "src/${ft_tab}tests: t/" T-1 'T')" = 'a TAB in the item'
+    ft_assert 'two surface tokens → not one token' test "$(surface_row_from_item 'src/a src/b tests: t/' T-1 'T')" = 'surface or tests glob is not one token'
+    ft_assert 'two tests tokens → not one token'   test "$(surface_row_from_item 'src/ tests: t/ u/' T-1 'T')" = 'surface or tests glob is not one token'
+    ft_section surfaces-item ) || ft_red=1
+
+  # ---- stamp-scope (test-surfaces.md § 6, stamp v3) — suite_stamp_scope [<file>]: field 3 of
+  # `<sha> <epoch> <scope>`; a 2-field pre-6.4 stamp reads full (every pre-6.4 writer ran
+  # everything); a CR is not part of the word; missing or empty → nothing, rc 1. The default path
+  # is $PRIMARY/.polaris/suite-stamp — the quiescent fixture's bgrc/.polaris/ already exists, so
+  # that case borrows it (no extra mkdir fork; board_quiescent never reads a stamp).
+  printf 'abc1234 1790000000 scoped\n'   > "$FT_TMP/st-scoped"
+  printf 'abc1234 1790000000 full\n'     > "$FT_TMP/st-full"
+  printf 'abc1234 1790000000\n'          > "$FT_TMP/st-two"
+  printf 'abc1234 1790000000 scoped\r\n' > "$FT_TMP/st-cr"
+  : > "$FT_TMP/st-empty"
+  printf 'def5678 1790000001 scoped\n'   > "$FT_TMP/q/bgrc/.polaris/suite-stamp"
+  ( FT_SEC=stamp-scope
+    ft_assert 'scoped'                           test "$(suite_stamp_scope "$FT_TMP/st-scoped")" = scoped
+    ft_assert 'full'                             test "$(suite_stamp_scope "$FT_TMP/st-full")" = full
+    ft_assert '2-field (pre-6.4) → full'         test "$(suite_stamp_scope "$FT_TMP/st-two")" = full
+    ft_assert 'CR-terminated scoped → scoped'    test "$(suite_stamp_scope "$FT_TMP/st-cr")" = scoped
+    ft_assert 'missing file → rc 1'              ! suite_stamp_scope "$FT_TMP/no-such-file"
+    ft_assert 'missing file → nothing'           test -z "$(suite_stamp_scope "$FT_TMP/no-such-file")"
+    ft_assert 'empty file → rc 1'                ! suite_stamp_scope "$FT_TMP/st-empty"
+    PRIMARY="$FT_TMP/q/bgrc"
+    ft_assert 'default path = $PRIMARY/.polaris/suite-stamp' test "$(suite_stamp_scope)" = scoped
+    ft_section stamp-scope ) || ft_red=1
 
   # ---- verdict
   while IFS= read -r ft_k; do ft_n=$((ft_n + ft_k)); done < "$FT_TMP/n"
