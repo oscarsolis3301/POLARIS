@@ -50,3 +50,10 @@ ops/KEYS.tsv	path	-	installed copy — edit kit/ops/KEYS.tsv
 # kit/ops/VERSION rule LIFTED 2026-07-15 — repo owner authorized assistant-driven releases. Still a release act: bump ONLY as a full release (VERSION + CHANGELOG + tag + dogfood together). Re-enable: restore this as a `path` rule.
 # .github/ rule lifted ONCE 2026-07-16 (owner-approved, single commit) so the quiet-line drill could learn to count above the 5.9.1 install epilogue; restored immediately below.
 .github/	path	-	the CI drills are the last gate between a bad kit and every user — an agent must not edit its own tests
+# ops/SURFACES.tsv added 2026-09-14 (assistant, under invariant 11 — task T-139; decided as D2 of plans/v3.md in
+# the owner-approved plan `spend-less`, pinned in ops/contracts/test-surfaces.md § 0). The file is the test map the
+# stale-tests gate reads — which tests cover which source paths — and a row an agent could delete when it blocked
+# a handoff would guard nothing. `polaris done` is its only writer (a shell redirect from a task's `surface:` list,
+# which this write-time guard never sees), so the rule costs the one legitimate writer nothing; a wrong or missing
+# row is fixed on the TASK (its surface: items), never here.
+ops/SURFACES.tsv	path	-	rows are written only by polaris done from a task's surface: list — edit the task, never this file

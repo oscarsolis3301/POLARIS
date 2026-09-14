@@ -10,6 +10,8 @@ A violation → `bash ops/polaris kickback <ID> -m "<paths>"` and record it in t
 
 **An approval named in a handoff report is part of what you are landing.** `ask` = the same denial as `path`, lifted only by a human's recorded approval on the task, and when a check passes BECAUSE of one, it says so — a line naming the scope and the approval entry, which reaches you through the builder's handoff report and `audit`'s own output. Read it. That is a human's recorded decision travelling with the diff, and it is deliberately visible at exactly the moment you are merging it; carry it into your report. Nothing mechanical changes: `audit` still passes or fails on its own, and a `path`-rule violation is exactly what it always was — an approval never clears `path` — so kick it back as above.
 
+**`audit` and `land` run the stale-tests gate too.** `ops/SURFACES.tsv` maps which tests cover which source paths; a diff that changed a mapped surface without touching its tests is refused with `⛔ SURFACES stale …` exactly like a RULES hit — kick it back, never merge it (`audit` fails on its own, as before). A `⚠ SURFACES exception used` line is a human's recorded decision (`polaris approve <ID> <surface>`) travelling with the diff, the same way a RULES exception does — carry it into your report. `done` is the only writer of that file: it turns the task's `surface:` items into rows and commits them on `<base>` as `docs(surfaces): <ID> <surface>` (or riding the `docs(map):` commit when a `map_delta` lands too); a malformed item is skipped with a `⚠` and never blocks a landing.
+
 **Open the capture named in the handoff** (`saw:` line + `.polaris/shots/<ID>-*.png`) before landing a visual task — a green suite shipped a broken page once.
 
 **Pipelined start (conductor-driven).** You need not wait for the last lane: when the conductor spawns you at the FIRST handoff, audit and land tasks `as they arrive in review/, in dependency order` — a task whose `depends_on` has not yet reached `review/` waits; everything else lands on arrival. `handoff`'s all-review `Integrate now` notice stays the LAST-LANE signal that seal may run — pipelining changes only when landing STARTS, never the suite/seal discipline below or any gate above.
@@ -53,9 +55,11 @@ bash ops/polaris seal [<date>]       # default <date> = today. base ← --no-ff 
                                       # human resolves it — never auto-resolve.
 # then, per landed task, on <base>:
 bash ops/polaris run-verify <ID>     # acceptance stays true post-merge
-bash ops/polaris done <ID>           # review→done · applies map_delta to MAP.md · releases lock ·
-                                     # removes worktree + feat branch (local AND origin, so no stale
-                                     # branch pile-up on the host) · refuses if not actually landed
+bash ops/polaris done <ID>           # review→done · applies map_delta to MAP.md · writes the task's
+                                     # surface: rows to ops/SURFACES.tsv (docs(surfaces):, or riding
+                                     # docs(map):) · releases lock · removes worktree + feat branch
+                                     # (local AND origin, so no stale branch pile-up on the host) ·
+                                     # refuses if not actually landed
 git branch -d integrate/<date>
 bash ops/polaris finish              # the whole gate in one shot, on <base>: it RUNS qa (suite +
                                      # build + board hygiene + env) and then asks the run-level

@@ -29,6 +29,8 @@ contract:                # ops/contracts/<name>.md — MUST exist before ready/
 verify:                  # shell commands, repo root, each <~10s; `polaris verify` runs them,
   -                      # Integrator re-runs post-merge. No bare " #" inside a command — quote it.
 map_delta:               # optional, one line per structural change; `polaris done` appends to MAP.md
+surface:                 # optional; rows `polaris done` appends to ops/SURFACES.tsv (the ONLY writer)
+  -                      # <surface-glob> tests: <tests-glob> [cmd: <complete command | ->] [note: <plain English>]
 ---
 ## Why
 <!-- junior-dev-grade: plain enough a junior dev could land this unsupervised — what changes and why. Becomes the commit body verbatim at land. -->
