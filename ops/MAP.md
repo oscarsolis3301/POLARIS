@@ -163,3 +163,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "core.sh gains the surface-map data plane (surfaces_lines/seed, surface_row_matches/rows_for/row_from_item, surface_change_set/select_cmd, suite_stamp_scope) reading ops/SURFACES.tsv + CONVENTIONS test_select:; KEYS gains test_select; init-board seeds ops/SURFACES.tsv"  (T-134, 2026-09-14)
 
 - "ownership.sh gains check_freshness (the stale-tests gate over ops/SURFACES.tsv), reached through check_rules at verify/handoff/audit/land, never from the write guard; approve also clears a SURFACES row; pack prints the SURFACES section"  (T-135, 2026-09-14)
+
+- "integrate.sh: land --express selects test: commands exactly as qa does; suite_stamp_carry <sha> <scope> writes the 3-field stamp and allows ops/SURFACES.tsv since-tested; done applies a task's surface: items as rows (docs(surfaces): or riding docs(map):)"  (T-137, 2026-09-14)
