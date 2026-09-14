@@ -415,6 +415,7 @@ kit/ops/lib/observe.sh	fn	cmd_route
 kit/ops/lib/observe.sh	fn	cmd_rules
 kit/ops/lib/observe.sh	fn	cmd_scaffold
 kit/ops/lib/observe.sh	fn	cmd_status
+kit/ops/lib/observe.sh	fn	cmd_surfaces
 kit/ops/lib/observe.sh	fn	cmd_sweep
 kit/ops/lib/observe.sh	fn	cmd_triage
 kit/ops/lib/observe.sh	fn	cmd_why
@@ -437,9 +438,11 @@ kit/ops/lib/observe.sh	fn	rules_gate
 kit/ops/lib/observe.sh	fn	scaffold_dirs
 kit/ops/lib/observe.sh	fn	scaffold_try
 kit/ops/lib/observe.sh	fn	status_brief
+kit/ops/lib/observe.sh	fn	surfaces_health
 kit/ops/lib/ownership.sh	fn	ask_approval_covers
 kit/ops/lib/ownership.sh	fn	ask_approvals_load
 kit/ops/lib/ownership.sh	fn	ask_rule_matches
+kit/ops/lib/ownership.sh	fn	check_freshness
 kit/ops/lib/ownership.sh	fn	check_ownership
 kit/ops/lib/ownership.sh	fn	check_rules
 kit/ops/lib/ownership.sh	fn	cmd_guard

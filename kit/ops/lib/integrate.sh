@@ -65,12 +65,59 @@ cmd_done() { # Integrator only, after the task is landed (squash) or merged (leg
   fi
   local deltas; deltas="$(fm_list map_delta "$tf" 2>/dev/null || true)"   # BEFORE the mv — path vanishes after
   local pts; pts="$(fm_get points "$tf")"
+  # T-137 (ops/contracts/test-surfaces.md § 9): `done` is the ONE writer of ops/SURFACES.tsv, and
+  # the task's `surface:` items are the ONE channel into it. Parsed HERE, BEFORE the mv — the
+  # review/ path vanishes after it, exactly as map_delta's does. Writing the map from the
+  # single-threaded integrator lane is what keeps ops/SURFACES.tsv off every task's files_owned,
+  # so invariant 2 never has to reason about a file every task would otherwise share.
+  # A bad item is a ⚠ and nothing more — NEVER a die: a coverage row must not be the thing that
+  # blocks a landing, and drift already flags the same item while the task sits in ready/.
+  local sitems; sitems="$(fm_list surface "$tf" 2>/dev/null || true)"
+  local sitem srow rows="" sfirst="" ssurf stests spairs="" stitle="" snl
+  snl='
+'
+  if [ -n "$sitems" ]; then
+    stitle="$(fm_get title "$tf" 2>/dev/null || true)"
+    while IFS= read -r srow; do                       # the pairs already mapped — the dup test
+      [ -z "$srow" ] && continue
+      ssurf="${srow%%$POLARIS_TAB*}"; stests="${srow#*$POLARIS_TAB}"; stests="${stests%%$POLARIS_TAB*}"
+      spairs="$spairs$ssurf$POLARIS_TAB$stests$snl"
+    done <<EOF
+$(surfaces_lines)
+EOF
+    while IFS= read -r sitem; do
+      [ -z "$sitem" ] && continue
+      if ! srow="$(surface_row_from_item "$sitem" "$id" "$stitle")"; then
+        note "⚠ surface row skipped: $sitem — $srow"; continue      # rc 1 puts the reason on stdout
+      fi
+      ssurf="${srow%%$POLARIS_TAB*}"; stests="${srow#*$POLARIS_TAB}"; stests="${stests%%$POLARIS_TAB*}"
+      if match_one "$ssurf" "$stests"; then           # § 7's health check, applied before the write
+        note "⚠ surface row skipped: $sitem — tests glob covers its own surface"; continue
+      fi
+      case "$snl$spairs" in
+        *"$snl$ssurf$POLARIS_TAB$stests$snl"*)
+          note "⚠ surface row skipped: $sitem — already mapped to $stests"; continue;;
+      esac
+      spairs="$spairs$ssurf$POLARIS_TAB$stests$snl"
+      [ -n "$rows" ] || sfirst="$ssurf"
+      rows="$rows$srow$snl"
+    done <<EOF
+$sitems
+EOF
+  fi
   # A non-empty map_delta lands as ONE separate docs(map) commit on $BASE (quiet-board contract) —
   # the only base commit any board mutation makes. Require the checkout BEFORE mutating anything,
-  # so a wrong branch aborts clean; empty delta commits nothing on $BASE.
-  if [ -n "$deltas" ]; then
+  # so a wrong branch aborts clean; empty delta commits nothing on $BASE. Surface rows ride the
+  # SAME commit and so need the same checkout — the die names whichever of the two you carry.
+  if [ -n "$deltas" ] || [ -n "$rows" ]; then
     local br; br="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-    [ "$br" = "$BASE" ] || die "done: $id carries a map_delta — it lands as a docs(map) commit on $BASE; check out $BASE in the primary first (currently on ${br:-?})"
+    if [ "$br" != "$BASE" ]; then
+      # no rows ⇒ the 6.3 line, byte for byte; rows ⇒ the die names them, because "map_delta"
+      # alone would send the human looking for a map entry the task does not have.
+      [ -n "$rows" ] || die "done: $id carries a map_delta — it lands as a docs(map) commit on $BASE; check out $BASE in the primary first (currently on ${br:-?})"
+      local carries="surface rows"; [ -z "$deltas" ] || carries="a map_delta + surface rows"
+      die "done: $id carries $carries — they land as ONE docs commit on $BASE; check out $BASE in the primary first (currently on ${br:-?})"
+    fi
   fi
   mutex_on
   mv "$BOARD/review/$id.md" "$BOARD/done/$id.md"
@@ -87,15 +134,39 @@ cmd_done() { # Integrator only, after the task is landed (squash) or merged (leg
   done <<EOF
 $deltas
 EOF
-  if [ "$applied" -eq 1 ]; then   # MAP.md stays on $BASE — pathspec-limited commit, index.lock retry
-    local mi mok=0
+  # T-137 (§ 9): the rows go down beside the map delta — seed the header first (a header-only file
+  # is still zero rows everywhere), then append. Plain redirects, so neither the write-time guard
+  # (Edit/Write tools) nor check_rules (feat-branch diffs) ever sees this; the RULES `path` rule on
+  # ops/SURFACES.tsv guards every OTHER writer, which is the whole point of the guard.
+  local sapplied=0 srn=0
+  if [ -n "$rows" ]; then
+    surfaces_seed
+    while IFS= read -r srow; do
+      [ -z "$srow" ] && continue
+      printf '%s\n' "$srow" >> "$SURFACES"; sapplied=1; srn=$((srn+1))
+    done <<EOF
+$rows
+EOF
+    _SURFACES_CACHED=""            # a batch close calls done per task — the next dup test re-reads
+  fi
+  # ONE base commit for both (quiet-board contract). The pathspec goes through the positional
+  # params so a path with a space still arrives as one argument; cmd_done is finished with "$@"
+  # by here — $1 became $id at the top.
+  if [ "$applied" -eq 1 ] || [ "$sapplied" -eq 1 ]; then   # stays on $BASE — pathspec-limited commit, index.lock retry
+    local mi mok=0 msubj mkind="docs(map)"
+    if [ "$applied" -eq 1 ]; then
+      msubj="docs(map): $id $first"; set -- "$OPS/MAP.md"
+      if [ "$sapplied" -eq 1 ]; then set -- "$@" "$SURFACES"; fi
+    else
+      mkind="docs(surfaces)"; msubj="docs(surfaces): $id $sfirst"; set -- "$SURFACES"
+    fi
     for mi in 1 2 3 4 5; do
-      if git -C "$PRIMARY" add -- "$OPS/MAP.md" 2>/dev/null \
-         && git -C "$PRIMARY" commit -q -m "docs(map): $id $first" -- "$OPS/MAP.md" 2>/dev/null; then mok=1; break; fi
+      if git -C "$PRIMARY" add -- "$@" 2>/dev/null \
+         && git -C "$PRIMARY" commit -q -m "$msubj" -- "$@" 2>/dev/null; then mok=1; break; fi
       sleep 0.3
     done
-    [ "$mok" -eq 1 ] || { git -C "$PRIMARY" add -- "$OPS/MAP.md" && git -C "$PRIMARY" commit -q -m "docs(map): $id $first" -- "$OPS/MAP.md"; } \
-      || die "docs(map) commit failed for $id (error above)"
+    [ "$mok" -eq 1 ] || { git -C "$PRIMARY" add -- "$@" && git -C "$PRIMARY" commit -q -m "$msubj" -- "$@"; } \
+      || die "$mkind commit failed for $id (error above)"
   fi
   evt done "$id" "" "$pts"
   board_commit "chore(board): done $id"
@@ -144,7 +215,7 @@ EOF
   # worktree is live by definition, so "cleaned" would be a lie on the commonest path of all.
   local swept="lock, worktree, branch$remote_note cleaned"
   [ "$wtrc" -eq 1 ] && swept="lock cleaned · live worktree + branch feat/$id left for sweep --fix" || true
-  say "$id → done/ · $swept$( [ $applied -eq 1 ] && echo ' · map_delta applied')"
+  say "$id → done/ · $swept$( [ $applied -eq 1 ] && echo ' · map_delta applied')$( [ $sapplied -eq 1 ] && echo " · $srn surface row(s) written")"
 }
 
 # ------------------------------------------------- clean history (land · seal)
@@ -229,27 +300,32 @@ land_slow_suite_hint() { # T-031 (ops/contracts/verification-tiering.md): after 
   return 0
 }
 
-suite_stamp_carry() { # suite_stamp_carry <tested-sha> — T-123 (ops/contracts/verification-tiering.md
-  # § v2): express runs the FULL suite at step 3 and used to throw the verdict away, so the next
+suite_stamp_carry() { # suite_stamp_carry <tested-sha> <scope> — T-123 (verification-tiering.md
+  # § v2): express runs the suite at step 3 and used to throw the verdict away, so the next
   # `finish` re-ran the identical suite over the identical tree — measured at ~20 wasted minutes per
   # task. This carries the verdict forward: it writes .polaris/suite-stamp in exactly the shape
-  # cmd_qa writes and reads ("<HEAD-sha> <epoch>"), and ONLY when the carry is provably honest —
-  # tree clean · <tested-sha> an ancestor of HEAD · nothing changed since it outside the reports
-  # dir and ops/MAP.md (the two things seal and done write AFTER the suite ran). Anything else
-  # withholds the stamp and says so: finish then re-runs the suite, which is cheap next to blessing
-  # a commit nobody tested. cmd_qa is untouched. NEVER changes the caller's exit status.
-  local tested="${1:-}" head dirty rel changed extra
+  # cmd_qa writes and reads ("<HEAD-sha> <epoch> <scope>", T-137 / test-surfaces.md § 6 D5), and
+  # ONLY when the carry is provably honest — tree clean · <tested-sha> an ancestor of HEAD ·
+  # nothing changed since it outside the reports dir, ops/MAP.md and ops/SURFACES.tsv (the three
+  # things seal and done write AFTER the suite ran). Anything else withholds the stamp and says so:
+  # finish then re-runs the suite, which is cheap next to blessing a commit nobody tested.
+  # <scope> is `full` | `scoped` — WHAT the suite proved, not merely that it was green. An EMPTY
+  # scope withholds too: a caller with a tested sha but nothing to say about its breadth would
+  # otherwise write a 2-field stamp, which every reader charitably reads as `full`. Fail closed —
+  # the field is being ADDED here, no existing conservatism is being relaxed.
+  # NEVER changes the caller's exit status.
+  local tested="${1:-}" scope="${2:-}" head dirty rel changed extra
   [ -n "$tested" ] || return 0
   head="$(git -C "$PRIMARY" rev-parse HEAD 2>/dev/null || echo none)"
   [ "$head" = "none" ] && return 0
   dirty="$(git -C "$PRIMARY" status --porcelain 2>/dev/null | head -1)"
   rel="$(cfg reports docs/sprints)"; rel="${rel%/}"; [ -n "$rel" ] || rel="docs/sprints"
-  if [ -z "$dirty" ] && git -C "$PRIMARY" merge-base --is-ancestor "$tested" "$head" 2>/dev/null; then
+  if [ -n "$scope" ] && [ -z "$dirty" ] && git -C "$PRIMARY" merge-base --is-ancestor "$tested" "$head" 2>/dev/null; then
     changed="$(git -C "$PRIMARY" diff --name-only "$tested" "$head" 2>/dev/null || true)"
-    extra="$(printf '%s\n' "$changed" | grep -v '^[[:space:]]*$' | grep -v "^$rel/" | grep -vx 'ops/MAP.md' || true)"
+    extra="$(printf '%s\n' "$changed" | grep -v '^[[:space:]]*$' | grep -v "^$rel/" | grep -vx 'ops/MAP.md' | grep -vx 'ops/SURFACES.tsv' || true)"
     if [ -z "$extra" ]; then
       mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
-      printf '%s %s\n' "$head" "$(date +%s)" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
+      printf '%s %s %s\n' "$head" "$(date +%s)" "$scope" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
       return 0
     fi
   fi
@@ -407,39 +483,83 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   # step 2: audit + land — existing cmd_land semantics, unchanged (re-enters the lease, rc 0;
   # an already-landed <ID> skips there and express continues to the still-pending steps)
   cmd_land "$id"
-  # step 3: the FULL CONVENTIONS suite, ONCE (same set as qa). Red → unwind the land, kick the
+  # step 3: the CONVENTIONS suite, ONCE (same set as qa). Red → unwind the land, kick the
   # task back carrying the failing tail, die — the board never keeps a green it didn't earn.
+  # T-137 (ops/contracts/test-surfaces.md § 6): the `test` iteration — and ONLY it — asks the same
+  # two core.sh functions cmd_qa asks, so a scoped `qa` and an express land can never disagree
+  # about what was proven. The two loops stay SEPARATE on purpose — express re-stamps the lease
+  # per command and unwinds the land on red, which qa does neither of; it is the SELECTION that is
+  # shared, never the loop. `test_select:` unset (every repo until it maps a surface) ⇒ this block
+  # is inert and express is byte-identical to 6.3. Express never takes --full — it takes no flags
+  # at all; `qa --full` afterwards is the escape hatch.
   local k c out tailtxt
-  local ex_ran=0 ex_t0 ex_t1 ex_tested=""
+  local ex_ran=0 ex_t0 ex_t1 ex_tested="" ex_scope="" ex_cmds ex_paths ex_why ex_p ex_m=0 ex_n ex_selected
   ex_t0="$(date +%s)"
   out="$(mktemp)"
+  ex_paths="$(mktemp)"
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
-    ex_ran=$((ex_ran+1))
-    if ( cd "$PRIMARY" && bash -c "$c" ) >"$out" 2>&1; then
-      # the suite is the longest thing the lane ever does — re-stamp after EACH command so a
-      # 13-minute test run stays visibly alive to the pid-aware steal (worktree-liveness.md)
-      [ -n "${INT_HELD:-}" ] && date +%s > "$LOCKS/.int-lease/epoch" 2>/dev/null || true
-      say "$k — green"
+    ex_cmds="$c"; ex_selected=0
+    if [ "$k" = "test" ] && [ -n "$(cfg test_select "")" ]; then
+      if surface_change_set > "$ex_paths"; then
+        if ex_why="$(surface_select_cmd "$ex_paths")"; then
+          ex_cmds="$ex_why"; ex_m=0; ex_n=0; ex_selected=1
+          while IFS= read -r ex_p; do if [ -n "$ex_p" ]; then ex_m=$((ex_m+1)); fi; done <<EOF
+$ex_cmds
+EOF
+          while IFS= read -r ex_p; do if [ -n "$ex_p" ]; then ex_n=$((ex_n+1)); fi; done < "$ex_paths"
+          note "test — scoped to $ex_m command(s): $ex_n changed path(s) all mapped (qa --full runs test: verbatim)"
+        else
+          # the reason comes back in surface_select_cmd's vocabulary — say it in the human's
+          case "$ex_why" in
+            'no rows')     ex_why='ops/SURFACES.tsv has no rows';;
+            'unmapped: '*) ex_why="${ex_why#unmapped: }"; ex_p="${ex_why%% *}"
+                           ex_why="$ex_p has no ops/SURFACES.tsv row${ex_why#"$ex_p"}";;
+          esac
+          note "test — running the whole suite: $ex_why"
+        fi
+      else
+        note "test — running the whole suite: no proven baseline on $BASE (no stamp, --force, or a stamp that is not an ancestor)"
+      fi
+    fi
+    while IFS= read -r c; do
+      [ -z "$c" ] && continue
+      ex_ran=$((ex_ran+1))
+      if ( cd "$PRIMARY" && bash -c "$c" ) >"$out" 2>&1; then
+        # the suite is the longest thing the lane ever does — re-stamp after EACH command so a
+        # 13-minute test run stays visibly alive to the pid-aware steal (worktree-liveness.md)
+        [ -n "${INT_HELD:-}" ] && date +%s > "$LOCKS/.int-lease/epoch" 2>/dev/null || true
+      else
+        printf '⛔ %s — RED: %s\n' "$k" "$c" >&2
+        tail -15 "$out" | sed 's/^/     /' >&2
+        tailtxt="$(tail -3 "$out" | tr '\n' ' ' | cut -c1-200)"
+        rm -f "$out" "$ex_paths"
+        git reset -q --hard HEAD~1        # unwind the land — integrate/<date> back at $BASE state
+        cmd_kickback "$id" -m "express suite red on $k: $tailtxt"
+        int_off    # kickback's `trap - EXIT` disarmed the on_die net — release the lease by hand
+        die "express: $k red — land unwound on integrate/$date, $id kicked back with the failing tail"
+      fi
+    done <<EOF
+$ex_cmds
+EOF
+    if [ "$ex_selected" -eq 1 ]; then
+      ex_scope=scoped                  # only a `test` key that RAN a selection makes the stamp scoped
+      say "test — green (scoped: $ex_m command(s))"
     else
-      printf '⛔ %s — RED: %s\n' "$k" "$c" >&2
-      tail -15 "$out" | sed 's/^/     /' >&2
-      tailtxt="$(tail -3 "$out" | tr '\n' ' ' | cut -c1-200)"
-      rm -f "$out"
-      git reset -q --hard HEAD~1        # unwind the land — integrate/<date> back at $BASE state
-      cmd_kickback "$id" -m "express suite red on $k: $tailtxt"
-      int_off    # kickback's `trap - EXIT` disarmed the on_die net — release the lease by hand
-      die "express: $k red — land unwound on integrate/$date, $id kicked back with the failing tail"
+      say "$k — green"
     fi
   done
-  rm -f "$out"
+  rm -f "$out" "$ex_paths"
   # T-123 (verification-tiering v2): the commit the suite just proved — captured HERE, on
   # integrate/<date>, right after the last green, before seal/done move anything. Plus the
   # suite duration, same "<seconds> <epoch>" line qa writes, so the slow-suite hint works after
   # an express land too. Both best-effort; neither can fail the lane.
   if [ "$ex_ran" -ge 1 ]; then
     ex_tested="$(git rev-parse HEAD 2>/dev/null || true)"   # nothing ran ⇒ nothing proven ⇒ no carry
+    # T-137 (§ 6, stamp v3): WHAT it proved, not just that it was green. `full` for every path but
+    # one — selection off, no baseline, an unmapped path, or no `test:` key at all.
+    [ -n "$ex_scope" ] || ex_scope=full
     ex_t1="$(date +%s)"
     mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
     printf '%s %s\n' "$((ex_t1 - ex_t0))" "$ex_t1" > "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true
@@ -453,7 +573,7 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   git branch -q -D "integrate/$date" 2>/dev/null || true
   [ -n "$ex_had" ] || int_off          # the lane's work is over — free it before the closing notes
   # T-123: carry step 3's verdict to `finish` — the LAST thing express does before its closing say
-  suite_stamp_carry "$ex_tested"
+  suite_stamp_carry "$ex_tested" "$ex_scope"
   say "express: $id landed · sealed · done — one pass, integrate/$date cleaned"
   note "finish line: bash ops/polaris finish — it runs qa for you, proves the RUN is over, and signals done"
 }

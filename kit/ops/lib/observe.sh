@@ -729,7 +729,7 @@ EOF
 }
 
 cmd_drift() { # mechanical hygiene audit — the invariants, machine-checked. --strict: rc 1 on findings
-  local strict="${1:-}" n=0 f g id id2 v d p
+  local strict="${1:-}" n=0 f g id id2 v d p s t hk hn hs hr
   finding() { n=$((n+1)); printf '⚠ [%d] %s\n' "$n" "$1"; }
   # 1) THE invariant: files_owned disjoint across ready ∪ active (heuristic, see pat_overlap)
   local claimable=""; for d in ready active; do
@@ -782,6 +782,21 @@ EOF
     done <<EOF
 $(fm_list files_owned "$f")
 EOF
+    # surface: items (test-surfaces.md § 3, § 7): `done` writes each one as an ops/SURFACES.tsv row
+    # and merely skips a malformed one with a ⚠ — so the typo is caught HERE, at the plan gate, and
+    # never discovered at done. A tests glob covering its own surface is the one row shape the
+    # whole map cannot survive (D6), so it is refused before any builder claims the task.
+    v="$(fm_get title "$f")"
+    while IFS= read -r p; do [ -z "$p" ] && continue
+      if d="$(surface_row_from_item "$p" "$id" "$v")"; then
+        s="${d%%$POLARIS_TAB*}"; t="${d#*$POLARIS_TAB}"; t="${t%%$POLARIS_TAB*}"
+        match_one "$s" "$t" && finding "READY GATE: $id surface: '$p' — tests glob covers its own surface — fix the item before a builder claims it"
+      else
+        finding "READY GATE: $id surface: '$p' — $d — fix the item before a builder claims it"
+      fi
+    done <<EOF
+$(fm_list surface "$f")
+EOF
   done
   # 3) cruft: done tasks whose feat branch survived
   for f in "$BOARD/done/"*.md; do [ -e "$f" ] || break
@@ -819,6 +834,15 @@ EOF
       dep_reaches "$id" "$id" "" && finding "DEP CYCLE: $id sits in a depends_on ring — it can never satisfy the ready gate; break the cycle"
     done
   done
+  # 8) surfaces (test-surfaces.md § 7): a row that would make change-scoped selection lie — the E
+  # lines of surfaces_health. Its warnings (a glob in a rename window, an unarmed guard) never red
+  # a wave gate; `ops/polaris surfaces` shows them.
+  while IFS="$POLARIS_TAB" read -r hk hn hs hr; do
+    [ "$hk" = E ] || continue
+    finding "SURFACES: row $hn '$hs' — $hr (ops/polaris surfaces)"
+  done <<EOF
+$(surfaces_health || true)
+EOF
   if [ "$n" -eq 0 ]; then say "drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry · deps)"
   else printf '%d finding(s).\n' "$n"; [ "$strict" = "--strict" ] && exit 1; fi
   return 0
@@ -843,6 +867,89 @@ cmd_rules() { # list + health-check ops/RULES.tsv
 $(rules_lines)
 EOF
   [ "$bad" -eq 0 ] && say "$n rule(s), all healthy" || die "rules health check failed — fix ops/RULES.tsv"
+}
+
+surfaces_health() { # surfaces_health — ops/SURFACES.tsv health as DATA, one line per problem:
+  # E|W<TAB><row#>|0<TAB><surface>|-<TAB><reason>; rc = the number of E lines (0 = healthy). Row
+  # numbers are 1-based over surfaces_lines, row 0 = repo-level. cmd_surfaces renders these; drift
+  # turns the E lines into findings and never the W lines — a glob in a rename window must not red
+  # every wave gate (test-surfaces.md § 7). Selection fails UNSAFE (D6): a wrong tests glob skips
+  # coverage while reporting green, so the one row shape that would make the whole map lie — a
+  # tests glob covering its own surface, the tests pattern applied as a files_owned matcher to the
+  # surface taken as a path — is an E; a glob matching nothing or far too much is a W. No rows ⇒
+  # prints nothing, rc 0, no fork. ONE `git ls-files` fork, then match_one per file (builtins).
+  local lines row n=0 e=0 surface tests cmd rest tracked f cs ct tpl
+  lines="$(surfaces_lines)"
+  [ -n "$lines" ] || return 0
+  tracked="$(git -C "$PRIMARY" ls-files 2>/dev/null || true)"
+  tpl="$(cfg test_select "")"
+  while IFS= read -r row; do
+    [ -z "$row" ] && continue
+    n=$((n + 1))
+    surface="${row%%$POLARIS_TAB*}"
+    rest=""; case "$row" in *"$POLARIS_TAB"*) rest="${row#*$POLARIS_TAB}";; esac
+    tests="${rest%%$POLARIS_TAB*}"
+    cmd=""; case "$rest" in *"$POLARIS_TAB"*) cmd="${rest#*$POLARIS_TAB}"; cmd="${cmd%%$POLARIS_TAB*}";; esac
+    if [ -z "$surface" ] || [ -z "$tests" ]; then
+      e=$((e + 1)); printf 'E\t%s\t%s\t%s\n' "$n" "${surface:--}" "fewer than 2 columns"; continue
+    fi
+    if match_one "$surface" "$tests"; then
+      e=$((e + 1)); printf 'E\t%s\t%s\t%s\n' "$n" "$surface" "tests glob covers its own surface"
+    fi
+    cs=0; ct=0
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      match_one "$f" "$surface" && cs=$((cs + 1))
+      match_one "$f" "$tests" && ct=$((ct + 1))
+    done <<EOF
+$tracked
+EOF
+    [ "$cs" -eq 0 ] && printf 'W\t%s\t%s\t%s\n' "$n" "$surface" "surface matches 0 tracked files"
+    [ "$cs" -gt 200 ] && printf 'W\t%s\t%s\t%s\n' "$n" "$surface" "surface matches $cs tracked files (>200 — too broad to select anything)"
+    [ "$ct" -eq 0 ] && printf 'W\t%s\t%s\t%s\n' "$n" "$surface" "tests matches 0 tracked files"
+    [ "$cmd" = "-" ] && [ -z "$tpl" ] && printf 'W\t%s\t%s\t%s\n' "$n" "$surface" "cmd is - but test_select: is unset"
+  done <<EOF
+$lines
+EOF
+  # Repo-level: the file is meant to be written only by `done`. Without a RULES `path` rule over
+  # it, a row anyone could delete when it blocked them guards nothing (D2).
+  if rules_gate ops/SURFACES.tsv - && [ "$RULES_GATE" = "path" ]; then :; else
+    printf 'W\t0\t-\t%s\n' "ops/SURFACES.tsv is not RULES-guarded — arm a path rule so only done writes it"
+  fi
+  return "$e"
+}
+
+cmd_surfaces() { # surfaces — list + health-check ops/SURFACES.tsv (test-surfaces.md § 7); rc 1 iff
+  # any ⛔. Mirrors cmd_rules: the table, each row's problems indented beneath it, the repo-level
+  # warnings after the table, then ONE tail line carrying the counts.
+  if ! surfaces_lines | grep -q .; then
+    note "no surfaces yet — ops/SURFACES.tsv (init-board seeds the header; rows arrive from a task's surface: list when done lands it — never by hand)"
+    return 0
+  fi
+  local health surface tests cmd msg n=0 e=0 w=0 kind rn surf reason
+  health="$(surfaces_health || true)"   # the verdict is in the lines; the rc is recounted below
+  printf '%-28s %-28s %-32s %s\n' 'SURFACE' 'TESTS' 'CMD' 'NOTE'
+  while IFS="$POLARIS_TAB" read -r surface tests cmd msg; do
+    [ -n "$surface$tests$cmd$msg" ] || continue
+    n=$((n + 1)); printf '%-28s %-28s %-32s %s\n' "$surface" "${tests:--}" "${cmd:--}" "$msg"
+    while IFS="$POLARIS_TAB" read -r kind rn surf reason; do
+      [ "$rn" = "$n" ] || continue
+      case "$kind" in E) printf '   ⛔ %s\n' "$reason";; W) printf '   ⚠ %s\n' "$reason";; esac
+    done <<EOF2
+$health
+EOF2
+  done <<EOF
+$(surfaces_lines)
+EOF
+  while IFS="$POLARIS_TAB" read -r kind rn surf reason; do
+    case "$kind" in E) e=$((e + 1));; W) w=$((w + 1));; *) continue;; esac
+    [ "$rn" = 0 ] && printf '   ⚠ %s\n' "$reason"
+  done <<EOF
+$health
+EOF
+  [ "$e" -eq 0 ] || die "$n surface row(s), $e unhealthy"
+  [ "$w" -eq 0 ] || { say "$n surface row(s), all healthy · $w warning(s)"; return 0; }
+  say "$n surface row(s), all healthy"
 }
 
 scaffold_try() { # scaffold_try <name> <cmd-body> — write the pair, but ONLY if it is worth locking.
@@ -1497,7 +1604,7 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
   #   solo    one context does plan+build+integrate. No subagents at all.
   #   express conductor + ONE builder + ONE integrator, landing through `land --express`.
   #   full    the ordinary loop: planner, N builders, integrator, wave gate.
-  local n=0 id="" f base pts risk owned p why="" lane=full
+  local n=0 id="" f base pts risk owned p why="" lane=full k sum big
   for f in "$BOARD"/ready/*.md "$BOARD"/active/*.md; do
     [ -e "$f" ] || continue
     base="$(basename "$f")"; [ "$base" = "IDEAS.md" ] && continue
@@ -1508,7 +1615,59 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
     printf 'full\n'; note "nothing claimable — the board is empty, so a Planner runs first"; return 0
   fi
   if [ "$n" -gt 1 ]; then
-    printf 'full\n'; note "$n claimable tasks — parallel lanes are the point; solo/express land exactly one"; return 0
+    # Several tasks price CONTEXTS, not tasks (test-surfaces.md § 8). A `full` wave for n tasks
+    # opens n+3 cold starts — conductor, planner, n builders, integrator — of ~7,300 tokens EACH
+    # before any work happens, while four 1-point tasks landed one after another in ONE solo
+    # context pay for one. So small-and-few work stays solo, worked one task at a time, and the
+    # note states the arithmetic it used so the lane is auditable rather than felt. Rules, in
+    # order: a lane already building · any task failing its own gate (first offender, the
+    # single-task wording) · the express/publish knobs · the solo budget (≤4 tasks, ≤3 pts each,
+    # ≤6 pts in all) · otherwise full.
+    k=0
+    for f in "$BOARD"/active/*.md; do
+      [ -e "$f" ] || continue
+      [ "$(basename "$f")" = "IDEAS.md" ] && continue
+      k=$((k + 1))
+    done
+    if [ "$k" -gt 0 ]; then
+      printf 'full\n'; note "$k task(s) already active — another lane is building; parallel lanes are the point"; return 0
+    fi
+    sum=0; big=0
+    for f in "$BOARD"/ready/*.md; do
+      [ -e "$f" ] || continue
+      base="$(basename "$f")"; [ "$base" = "IDEAS.md" ] && continue
+      id="${base%.md}"
+      pts="$(fm_get points "$f")"; pts="${pts:-99}"
+      risk="$(fm_get risk "$f")"; risk="${risk:-normal}"
+      [ "$risk" = "normal" ] || why="risk: $risk (only a human may approve a merge)"
+      case "$pts" in ''|*[!0-9]*) [ -z "$why" ] && why="points '$pts' is not a plain number";; esac
+      if [ -z "$why" ]; then
+        owned="$(fm_list files_owned "$f")"
+        while IFS= read -r p; do
+          [ -z "$p" ] && continue
+          if rules_gate "$p" "$id"; then
+            if [ "$RULES_GATE" = "path" ]; then why="owns '$p' under RULES path scope '$RULES_GATE_SCOPE' — cannot be built as specified"
+            else why="owns '$p' under ask scope '$RULES_GATE_SCOPE' — get the human's yes before starting (polaris approve $id $RULES_GATE_SCOPE -m \"why\")"
+            fi
+            break
+          fi
+        done <<EOF
+$owned
+EOF
+      fi
+      if [ -n "$why" ]; then printf 'full\n'; note "$id: $why"; return 0; fi
+      sum=$((sum + pts)); [ "$pts" -gt "$big" ] && big="$pts"
+    done
+    if [ "$(cfg express auto)" = "off" ]; then printf 'full\n'; note "express: off in CONVENTIONS.md"; return 0; fi
+    if [ "$(cfg publish direct)" != "direct" ]; then printf 'full\n'; note "publish: pr — the wave needs a human merge"; return 0; fi
+    if [ "$big" -le 3 ] && [ "$n" -le 4 ] && [ "$sum" -le 6 ]; then
+      printf 'solo\n'
+      note "$n tasks · $sum pts ≤ 6 — one context (~7,300 tokens cold start) beats a full wave's $((n + 3)) contexts (~$(( (n + 3) * 7300 )) tokens); work them one at a time: claim → build → land --express → next"
+    else
+      printf 'full\n'
+      note "$n claimable tasks · $sum pts — over the solo budget (4 tasks / 6 pts / 3 pts each); parallel lanes are the point"
+    fi
+    return 0
   fi
 
   f="$(task_file "$id")" || { printf 'full\n'; note "cannot read task $id"; return 0; }
@@ -1517,7 +1676,7 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
 
   [ "$risk" = "normal" ] || why="risk: $risk (only a human may approve a merge)"
   case "$pts" in ''|*[!0-9]*) [ -z "$why" ] && why="points '$pts' is not a plain number";; esac
-  [ -z "$why" ] && [ "$(cfg express on)" = "off" ] && why="express: off in CONVENTIONS.md"
+  [ -z "$why" ] && [ "$(cfg express auto)" = "off" ] && why="express: off in CONVENTIONS.md"
   [ -z "$why" ] && [ "$(cfg publish direct)" != "direct" ] && why="publish: pr — the wave needs a human merge"
   # STOP-AND-ASK, mechanically — three cases, not one (ask-approval.md § 5):
   #   `path` scope       → full: the rule is a wall, no approval can lift it
@@ -1610,14 +1769,20 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
   return 0
 }
 
-cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS suite (test/lint/
-  # typecheck/build, uat if set), then drift --strict, then doctor's env check. Runs EVERY
+cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the full CONVENTIONS suite
+  # (test/lint/typecheck/build, uat if set), then drift --strict, then doctor's env check. Runs EVERY
   # check even after a red — one pass paints the whole picture — and exits 1 if anything was
   # red. The Conductor runs it after integration (a subagent's "green" is never taken on
   # faith), the Integrator runs it before reporting, CI and humans run it whenever.
-  local red=0 ran=0 k c out skip=0 force=0
+  # --force ignores the suite stamp (no skip, and on $BASE no baseline either ⇒ the whole suite);
+  # --full runs test: verbatim even where test_select: would have scoped it (test-surfaces.md § 6).
+  local red=0 ran=0 k c out skip=0 force=0 full=0 a
   local t0 t1 head stamped dirty
-  [ "${1:-}" = "--force" ] && force=1
+  local scope=full carry=0 sel="" csf="" np=0 m=0 why="" p sc bsha c2 sred=0 fflag=""
+  for a in "$@"; do
+    case "$a" in --force) force=1;; --full) full=1;; esac
+  done
+  [ "$force" -eq 1 ] && fflag="--force"   # a 0/1 counter, so ${force:+…} would always be true
 
   # SUITE STAMP. A green suite is a fact about a COMMIT, not about a moment: if HEAD has not moved
   # and the tree is clean, re-running it cannot learn anything new. Measured here: test: 805s and
@@ -1636,12 +1801,67 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
   t0="$(date +%s)"
   out="$(mktemp)"
   if [ "$skip" -eq 1 ]; then
-    say "suite already green at $(printf '%.7s' "$head") — skipped (qa --force re-runs it)"
+    sc="$(suite_stamp_scope "$PRIMARY/.polaris/suite-stamp" || true)"
+    say "suite already green at $(printf '%.7s' "$head") — skipped, proven ${sc:-full} (qa --force re-runs it)"
   else
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
+    # test — change-scoped selection (test-surfaces.md § 6), and ONLY when test_select: is set:
+    # which of the ops/SURFACES.tsv commands can this change break? The decision itself lives in
+    # core.sh (surface_change_set + surface_select_cmd) and is shared with `land --express`, so the
+    # two lanes cannot disagree. Unset ⇒ this block is never entered and the loop is 6.3, byte for
+    # byte. Selection is all-or-nothing: one changed path without a row ⇒ the whole suite (D3).
+    sel=""
+    if [ "$k" = test ] && [ "$full" -eq 0 ] && [ -n "$(cfg test_select "")" ]; then
+      csf="$(mktemp)"
+      if surface_change_set $fflag > "$csf"; then
+        if [ ! -s "$csf" ]; then
+          # BOUNDED and EMPTY: only board files moved since an ancestor stamp — the batch-wave
+          # finish case — so the baseline's verdict carries to HEAD: the whole loop is skipped and
+          # HEAD is re-stamped below with the scope that was actually proven.
+          bsha="${SURFACE_BASELINE:-$head}"; scope="${SURFACE_BASELINE_SCOPE:-full}"; carry=1
+          say "suite already green at $(printf '%.7s' "$bsha") — only board files changed since; skipped, proven $scope (qa --force re-runs it)"
+          rm -f "$csf"; break
+        fi
+        np="$(grep -c . "$csf" || true)"
+        if sel="$(surface_select_cmd "$csf")"; then
+          m="$(printf '%s\n' "$sel" | grep -c . || true)"
+          note "test — scoped to $m command(s): $np changed path(s) all mapped (qa --full runs test: verbatim)"
+        else
+          why="$sel"; sel=""
+          case "$why" in
+            'unmapped: '*) p="${why#unmapped: }"
+                           case "$p" in
+                             *' (+'*) why="${p%% (+*} has no ops/SURFACES.tsv row (+${p##* (+}";;
+                             *)       why="$p has no ops/SURFACES.tsv row";;
+                           esac;;
+            'no rows')     why="ops/SURFACES.tsv has no rows";;
+          esac
+          note "test — running the whole suite: $why"
+        fi
+      else
+        note "test — running the whole suite: no proven baseline on $BASE (no stamp, --force, or a stamp that is not an ancestor)"
+      fi
+      rm -f "$csf"
+    fi
     ran=$((ran+1))
+    if [ -n "$sel" ]; then
+      # scoped: each selected command in order, from the repo root in $PRIMARY; the first red stops
+      # — today's red shape exactly, naming the command that failed rather than test: itself.
+      scope=scoped; sred=0
+      while IFS= read -r c2; do
+        [ -z "$c2" ] && continue
+        if ( cd "$PRIMARY" && bash -c "$c2" ) >"$out" 2>&1; then continue; fi
+        printf '⛔ %s — RED: %s\n' "$k" "$c2"
+        tail -15 "$out" | sed 's/^/     /'
+        red=1; sred=1; break
+      done <<EOF
+$sel
+EOF
+      [ "$sred" -eq 0 ] && say "$k — green (scoped: $m command(s))"
+      continue
+    fi
     if ( cd "$PRIMARY" && bash -c "$c" ) >"$out" 2>&1; then
       say "$k — green"
     else
@@ -1659,7 +1879,7 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
     mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
     printf '%s %s\n' "$((t1 - t0))" "$t1" > "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true
   fi
-  [ "$ran" -eq 0 ] && [ "$skip" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
+  [ "$ran" -eq 0 ] && [ "$skip" -eq 0 ] && [ "$carry" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
   # drift --strict exits the script on findings, so both sub-checks run in subshells.
   if ( cmd_drift --strict ) >"$out" 2>&1; then
     say "drift — board clean"
@@ -1688,10 +1908,13 @@ cmd_qa() { # qa — ONE answer to "is everything okay?": the full CONVENTIONS su
   local head2 dirty2
   head2="$(git -C "$PRIMARY" rev-parse HEAD 2>/dev/null || echo none)"
   dirty2="$(git -C "$PRIMARY" status --porcelain 2>/dev/null | head -1)"
-  if [ "$ran" -ge 1 ] && [ "$head" != "none" ]; then
+  # Stamp v3 (test-surfaces.md § 6): ONE line `<sha> <epoch> <scope>` — scoped iff the test key
+  # ran a selection, full otherwise; a carried verdict re-stamps HEAD with the baseline's own scope.
+  # Readers go through suite_stamp_scope (a 2-field pre-6.4 stamp reads as full).
+  if { [ "$ran" -ge 1 ] || [ "$carry" -eq 1 ]; } && [ "$head" != "none" ]; then
     if [ "$head2" = "$head" ] && [ -z "$dirty" ] && [ -z "$dirty2" ]; then
       mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
-      printf '%s %s\n' "$head" "$(date +%s)" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
+      printf '%s %s %s\n' "$head" "$(date +%s)" "$scope" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
     else
       note "⚠ HEAD moved or the tree is not clean — stamp withheld, so the next qa re-runs the suite"
     fi
@@ -1715,7 +1938,7 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   # "nothing was left behind".
   # The verdict is recomputed on EVERY invocation; only the hook is memoised. That split is what
   # lets an agent re-run finish freely while chasing pendings without muting the signal.
-  local force="" PEND=0 CAV=0 CAVS="" br dr n out w it stamp key fired bl rd ib lk f line
+  local force="" PEND=0 CAV=0 CAVS="" br dr n out w it stamp key fired bl rd ib lk f line sc ssha
   local lho lag lsm
   [ "${1:-}" = "--force" ] && force=1
   fin_pending() { PEND=$((PEND+1)); printf '⛔ pending: %s\n' "$1"; }
@@ -1856,7 +2079,15 @@ EOF
     note "checking the suite on $BASE (quiet unless red; skipped when already green at this commit)"
     out="$(mktemp)"
     if ( cmd_qa ${force:+--force} ) >"$out" 2>&1; then
-      say "qa green on $BASE"
+      # Say what was proven (test-surfaces.md § 6): the stamp's scope — full, or scoped to the
+      # commands the changed surfaces map to. A scoped green is accepted, never rejected: refusing
+      # it would put the full suite back on the one lane a one-line change takes.
+      if sc="$(suite_stamp_scope)"; then
+        ssha="$(cut -d' ' -f1 < "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true)"
+        say "qa green on $BASE — proven $sc at $(printf '%.7s' "$ssha")"
+      else
+        say "qa green on $BASE"
+      fi
     else
       fin_pending "qa is red on $BASE"
       tail -6 "$out" | sed 's/^/     /'
