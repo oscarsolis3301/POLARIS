@@ -28,26 +28,34 @@ interrogation, and it is why installing POLARIS felt like a chore. Derive everyt
 the rest; move on.
 
 **Express lane — the DEFAULT, not an offer.** Greenfield or small repo, or a survey that derived
-every command → setup is TWO interactions: voice, then the goal. Take defaults for everything else:
-`claim: local-lock`, `integration: batch`, danger zones = only what the survey flagged,
-`bootstrap:`/`generated:` derived from the lockfile and any tracked build output. State the assumed
-config in one line of the step-5 report so they can correct it later. Interaction 3 then fires ONLY
-for what genuinely cannot default: danger-zone candidates the survey saw but could not classify, or
-a test/build command it could not derive. Two hard exceptions, always: never skip the goal, and
-never silently default a danger zone the survey could not see — on anything touching safety, ask.
+every command → setup is TWO interactions: the preferences (2a — voice among them), then the goal.
+Take defaults for everything else: `integration: batch`, danger zones = only what the survey
+flagged, `bootstrap:`/`generated:` derived from the lockfile and any tracked build output. State the
+assumed config in one line of the step-5 report so they can correct it later. Interaction 3 then
+fires ONLY for what genuinely cannot default: danger-zone candidates the survey saw but could not
+classify, or a test/build command it could not derive. Two hard exceptions, always: never skip the
+goal, and never silently default a danger zone the survey could not see — on anything touching
+safety, ask.
 
 Where your harness renders choices as clickable options (Claude Code: the `AskUserQuestion` tool),
 use it — it is faster and less intimidating than a wall of numbered markdown. Otherwise, a short
 numbered list. Never more than 4 questions in one call.
 
-### 2a. Interaction 1 — voice. Alone, first, before anything else.
-> Before we start — how would you like me to talk to you?
-> **Plain English** — friendly, everyday words, nothing technical. *(default)*
-> **Technical** — dense and terse. You know this stuff; don't pad it.
+### 2a. Interaction 1 — the preferences POLARIS asks for, in ONE call
+The questions are data, not prose. `bash ops/polaris interview` prints a `QUESTION` line and its
+`OPTION` lines for every preference this repo has never answered — on a fresh repo that is voice ·
+adhd · claim, i.e. the rows of `ops/KEYS.tsv` whose `ask` column is filled; the file is the list,
+this paragraph is not. Ask ALL of them in ONE `AskUserQuestion` (a numbered list where the harness
+has no choice UI): the voice question FIRST, the rest in the order printed, the `default`-marked
+option pre-selected. Never ask a question the CLI did not print, and never add one of your own.
 
-That answer is `voice:` (`standard` | `technical`) and it binds **from this moment on**, including
-everything below. Ask it by itself and wait. It is one round trip and it is the difference between
-a human who understands their own config and one who guessed.
+INIT runs before `ops/CONVENTIONS.md` exists, so at this point `interview` refuses — it writes into
+that file. Read the same questions straight off `ops/KEYS.tsv`'s `ask` column (the installer just
+copied it) and record the answers in step 3, where `interview --set` applies them.
+
+The voice answer binds **from the next message on**, including everything below — it is the
+difference between a human who understands their own config and one who guessed. The hard cap
+stays 3 interactions, the default 2: this call is interaction 1, whatever it carries.
 
 ### 2b. DERIVE — silently, from the survey you already did. Ask none of this.
 Step 1 already read every manifest. Use it:
@@ -74,7 +82,7 @@ It becomes the sprint goal AND the Planner's input in step 4. Take it in their w
 them phrase it as a ticket.
 
 **Interaction 3 — only what could not default.** Express lane active (the default)? Skip this
-entirely, or ask ONLY question 4 when the survey left danger zones unclassified — questions 1–3
+entirely, or ask ONLY question 3 when the survey left danger zones unclassified — questions 1–2
 fold into defaults plus one correction line in the step-5 report. The full batch below is for a
 repo that defied derivation or a human who asked for the long form. One batched call, ≤4 questions,
 IN THEIR VOICE — under `voice: standard` you MUST translate, never make a human choose between
@@ -82,11 +90,9 @@ IN THEIR VOICE — under `voice: standard` you MUST translate, never make a huma
 
 1. **Confirm what you found.** Show it compactly and let them correct it in one move:
    *"Tests: `pnpm test` · Build: `pnpm build` · Branch: `main`"* → **Looks right** | **Let me fix those**
-2. **`claim:`** — *"Will you run agents on one computer, or several?"* → one → `local-lock` ·
-   several → `claim-branch` (needs an origin remote — if there is none, say so and use `local-lock`)
-3. **`integration:`** — *"After each piece of work lands, should I re-run your whole test suite, or
+2. **`integration:`** — *"After each piece of work lands, should I re-run your whole test suite, or
    wait and run it once at the end?"* → every → `paranoid` · once → `batch`
-4. **Danger zones** — *"Anything I should treat as radioactive — files I must never touch?"*
+3. **Danger zones** — *"Anything I should treat as radioactive — files I must never touch?"*
    Multi-select, **pre-ticked with the candidates from 2b**, plus a free-text escape. Each answer
    becomes an armed `path` line in `ops/RULES.tsv` — machine-enforced, not prose. If they name
    forbidden *content* (secret patterns, banned APIs), that is a `content` rule.
@@ -100,7 +106,7 @@ either derivable, defaultable, or EVOLVE's job once there is real data. Do not a
 has just said "install polaris" does not yet know their own sprint capacity in points.
 
 ## 3. Write the artifacts — silently. No progress commentary.
-Instantiate the skeletons below with survey + interview results. Then run `bash ops/polaris init-board` (creates board dirs, gitignores `.polaris/`, prepares the lock dir, seeds `EVENTS.ndjson` telemetry with its union-merge gitattribute, seeds `ops/RULES.tsv`, and seeds `ops/SURFACES.tsv` header-only — the test map `polaris done` fills from tasks' `surface:` lists, never by hand). Turn every danger-zone/content answer from the interview into an armed RULES line (format documented at the top of the file), and arm the seeded `ops/SURFACES.tsv` line the same way — it ships commented in the RULES header; delete its leading `#` so the map is `path`-guarded and `done` stays its only writer. Run `bash ops/polaris rules` to health-check them, and commit everything as `chore(polaris): initialize`.
+Instantiate the skeletons below with survey + interview results — the `voice:`, `adhd:` and `claim:` lines carry the 2a answers. Then run `bash ops/polaris init-board` (creates board dirs, gitignores `.polaris/`, prepares the lock dir, seeds `EVENTS.ndjson` telemetry with its union-merge gitattribute, seeds `ops/RULES.tsv`, and seeds `ops/SURFACES.tsv` header-only — the test map `polaris done` fills from tasks' `surface:` lists and `surfaces --scaffold --apply` seeds from the layout, never a hand edit). Turn every danger-zone/content answer from the interview into an armed RULES line (format documented at the top of the file), and arm the seeded `ops/SURFACES.tsv` line the same way — it ships commented in the RULES header; delete its leading `#` so the map is `path`-guarded and only `ops/polaris` ever writes it. Now record the 2a answers where the kit applies them: `bash ops/polaris interview --set voice=<answer> --set adhd=<answer> --set claim=<answer>` — idempotent on the values you just wrote, and the one step that applies the `adhd:` side effect. `--set` refusing an answer means it cannot apply here yet: keep that key's default, quote the command's own remedy in the step-5 report, and move on. Then `bash ops/polaris surfaces --scaffold --apply` — the survey already derived `test:`; this maps what the layout makes unambiguous (zero rows is a fine answer) and the step-5 report says how many. Run `bash ops/polaris rules` to health-check them, and commit everything as `chore(polaris): initialize` — `interview --set` and the scaffold write, they never commit; this is that commit.
 
 Values you no longer ask for, so choose them: `stale_hours: 1`; `autolaunch: ask` (safe default — offers to open Builders after planning rather than surprising a brand-new user with spawned windows); SPRINT capacity — start at **10 points** and let EVOLVE calibrate it from real cycle data; omit `uat:` and `notify:` unless the survey found an obvious end-to-end command. Do not narrate any of this. The human sees one report, in step 4, after the Planner has run.
 
@@ -112,6 +118,7 @@ claim: local-lock           # local-lock | claim-branch (several machines; needs
 integration: batch          # batch (merge all, test once, halve on red) | paranoid (test every merge)
 voice: standard             # standard (plain, friendly) | technical (dense, terse) — how agents TALK to
                             # the human. Never changes what they write to disk, or any gate. Default: standard.
+adhd: off                   # off | on — on lets the vendored /i-have-adhd skill fire in every session here; the output style already keeps replies short and warm
 autolaunch: ask             # wt (Planner opens a Builder pane per ready task beside you) | ask (offer once
                             # after planning) | off (just print the kickoff). Windows Terminal only; harmless
                             # elsewhere — falls back to printing. Default: ask.

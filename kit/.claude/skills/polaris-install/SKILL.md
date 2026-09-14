@@ -62,10 +62,11 @@ python polaris-v5.zip
 ```
 
 This rung only ever runs **once per machine**: a normal install also arms the machine (caches the
-kit into `~/.claude/skills/polaris-install/`, lands the **keep-awake hooks** in `~/.claude/polaris/`
-so one owner per box keeps it awake while any session is still working, and pre-authorizes the
-commands in `~/.claude/settings.json`), so every install after this one takes rung 1 — offline, no
-prompt.
+kit into `~/.claude/skills/polaris-install/`, puts the POLARIS output style and the `/i-have-adhd`
+skill under `~/.claude/` so a fresh machine has them before any repo does, lands the **keep-awake
+hooks** in `~/.claude/polaris/` so one owner per box keeps it awake while any session is still
+working, and pre-authorizes the commands in `~/.claude/settings.json`), so every install after this
+one takes rung 1 — offline, no prompt.
 `--no-machine-setup` opts out; `--verbose` prints the full install log instead of the result.
 
 No `python`? Fall back to `unzip polaris-v5.zip && bash polaris-v5/ops/install.sh`.
@@ -147,11 +148,25 @@ bash ops/polaris update
 
 One command. It fetches the latest kit, refreshes **kit code only** (board, `RULES.tsv`,
 `CONVENTIONS.md`, `MAP.md` and `SPRINT.md` are never touched), **and re-caches the new kit into
-`~/.claude/`** so the next repo you install into on this machine gets it too. It refuses on a dirty
-worktree and commits nothing — the user reviews the diff. Never update mid-sprint.
+`~/.claude/`** — with its output style and the `/i-have-adhd` skill — so the next repo you install
+into on this machine gets it too. It refuses on a dirty worktree and commits nothing — the user
+reviews the diff. Never update mid-sprint.
 
 Report the result in **one line** (`updated 5.3.0 → 5.4.0`). Do not paste the changelog, list the
 refreshed files, or explain the managed block. If they want to know what changed, they'll ask.
+
+If `doctor` or the update says `surfaces: none mapped`, that repo's checks can get faster: run
+`bash ops/polaris surfaces --scaffold`, show them what it would map in one line, and apply on their
+yes (`--scaffold --apply`). One question, never folded into the update line.
+
+If the update or doctor printed 'preferences never set here', run `bash ops/polaris interview`, ask
+its questions in ONE AskUserQuestion, then `--set` the answers. That is the only question you add to
+an update.
+
+Both lines at once — the usual case the first time a kit that asks a new preference lands here — is
+still one round: the scaffold's yes/no rides in the same AskUserQuestion as the interview's
+questions. Their writes are uncommitted, like the update's own: one diff to review, still one line
+to report.
 
 **Then the terminal gate — same as installs.** After ANY update (or when update refuses), check
 `ops/CONVENTIONS.md`. Missing → the job is NOT done: go to § After the install and run INIT **now,
