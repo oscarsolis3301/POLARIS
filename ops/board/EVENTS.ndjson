@@ -529,3 +529,4 @@
 {"ts":1789427347,"ev":"promote","id":"T-145","who":"Owner@DESKTOP","note":"deps done: T-141, T-142","pts":5}
 {"ts":1789427489,"ev":"claim","id":"T-144","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1789427504,"ev":"claim","id":"T-145","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1789428394,"ev":"handoff","id":"T-145","who":"Owner@DESKTOP","note":""}
