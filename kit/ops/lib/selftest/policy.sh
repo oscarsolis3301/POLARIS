@@ -207,19 +207,84 @@ drill_surfaces() {
     sed -i.bak '/a self-covering row \[drill\]/d' ops/SURFACES.tsv && rm -f ops/SURFACES.tsv.bak
     "$SELF" drift > "$T/sfd2.out" 2>&1 || { cat "$T/sfd2.out"; echo "SURFACES DRIFT CLEAN RC FAIL (row removed ⇒ drift rc 0)"; exit 1; }
     grep -q 'drift: board clean' "$T/sfd2.out" || { cat "$T/sfd2.out"; echo "SURFACES DRIFT CLEAN FAIL (row removed ⇒ drift clean)"; exit 1; }
-    # hermetic: the sealed wave stays, like the spine's own; the probe commits go (reset to the
-    # post-done base), ops/SURFACES.tsv is header-only again (as found, from the pre-drill commit),
-    # the CONVENTIONS keys, both tasks, both branches, both worktrees and every stamp are gone.
+    # hermetic, phase 1: the sealed wave stays, like the spine's own; the probe commits go (reset to
+    # the post-done base), ops/SURFACES.tsv is header-only again (as found, from the pre-drill
+    # commit), the CONVENTIONS keys are gone. Steps 8–10 build on THIS base on purpose: the
+    # activation needs a map with no rows and a layout the engine has never seen.
     git reset -q --hard "$sfdone"
     git show "$sf0:ops/SURFACES.tsv" > ops/SURFACES.tsv
     if [ -f "$T/sf-conv.bak" ]; then cp "$T/sf-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
     git add -A; git commit -qm 'surfaces drill cleanup' >/dev/null 2>&1 || true
+    sfclean="$(git rev-parse main)"
+    cp ops/SURFACES.tsv "$T/sfmap0"
+    # (8) the activation (test-surfaces.md v2 § 14 · § 17): --scaffold on a repo with no manifest
+    #     says NORUNNER, rc 0, and the map is still the seeded header, byte for byte — the scaffold
+    #     never guesses a runner, and proposing writes nothing.
+    "$SELF" surfaces --scaffold > "$T/sfsc1.out" 2>&1 || { cat "$T/sfsc1.out"; echo "SURFACES NORUNNER RC FAIL (no runner is an answer, rc 0)"; exit 1; }
+    grep -q 'no test runner this kit can scope' "$T/sfsc1.out" || { cat "$T/sfsc1.out"; echo "SURFACES NORUNNER FAIL (no manifest ⇒ the NORUNNER line, never a guessed runner)"; exit 1; }
+    cmp -s "$T/sfmap0" ops/SURFACES.tsv || { echo "SURFACES NORUNNER WROTE FAIL (--scaffold writes nothing: the map must still be the seeded header)"; exit 1; }
+    # (9) the repo gains a pytest layout — pytest.ini · src/sf2/a.py · tests/sf2/test_a.py — plus
+    #     lib/sf/b.txt, a SECOND source dir named sf: the restored base still holds T-SF's src/sf/
+    #     and tests/sf/, which the engine pairs on its own (measured: two rows), so the twin makes
+    #     that pairing AMBIGUOUS and the engine must say so and write exactly the sf2 row (D6: the
+    #     refusal is the assertion). ops/KEYS.tsv from the kit and a CONVENTIONS holding only
+    #     voice: + test: make doctor print BOTH activation lines first — the surfaces nudge (a
+    #     runner it can scope, a map with no rows) and first-run's preferences line, which names
+    #     the pending keys in the REAL registry's order (claim sits above voice and adhd there).
+    #     Then --scaffold --apply: one [scaffold] row, test_select: set, the map healthy; a rerun
+    #     proposes nothing and writes nothing; from a feat/* worktree it refuses on stderr and
+    #     writes nothing. doctor's rc is never under test — it also checks CLAUDE.md, hooks and the
+    #     brain (T-131); every assertion is rc + file state + the line itself.
+    mkdir -p src/sf2 tests/sf2 lib/sf
+    printf 'A = 1\n' > src/sf2/a.py; printf 'def test_a():\n    pass\n' > tests/sf2/test_a.py; printf '[pytest]\n' > pytest.ini; echo b > lib/sf/b.txt
+    git add -A; git commit -qm 'surfaces drill: a pytest layout'
+    cp "$OPS_DIR/KEYS.tsv" ops/KEYS.tsv
+    printf 'voice: standard\ntest: true\n' > ops/CONVENTIONS.md
+    "$SELF" doctor > "$T/sfdoc1.out" 2>&1 || true
+    grep -q 'surfaces: none mapped' "$T/sfdoc1.out" || { cat "$T/sfdoc1.out"; echo "SURFACES NUDGE FAIL (a scopeable runner + an empty map ⇒ doctor says surfaces: none mapped)"; exit 1; }
+    grep -q 'preferences never set here: claim · adhd — one round of questions: ops/polaris interview' "$T/sfdoc1.out" || { cat "$T/sfdoc1.out"; echo "SURFACES PREFS FAIL (voice: set, claim and adhd not ⇒ doctor's preferences line names claim · adhd, registry order)"; exit 1; }
+    "$SELF" surfaces --scaffold --apply > "$T/sfsc2.out" 2>&1 || { cat "$T/sfsc2.out"; echo "SURFACES APPLY RC FAIL"; exit 1; }
+    grep -q 'skipped: tests/sf/ — ambiguous: sf matches 2 dirs (lib/sf src/sf)' "$T/sfsc2.out" || { cat "$T/sfsc2.out"; echo "SURFACES APPLY AMBIGUOUS FAIL (two sf dirs ⇒ tests/sf/ is skipped aloud, never guessed)"; exit 1; }
+    grep -q '1 row(s) written to ops/SURFACES.tsv · test_select: set' "$T/sfsc2.out" || { cat "$T/sfsc2.out"; echo "SURFACES APPLY LINE FAIL (exactly one row written and test_select: set)"; exit 1; }
+    sfrow="$(grep -v '^[[:space:]]*#' ops/SURFACES.tsv | grep -v '^[[:space:]]*$' || true)"
+    [ "$sfrow" = "$(printf 'src/sf2/\ttests/sf2/\tpytest tests/sf2/\tsf2 tests [scaffold]')" ] \
+      || { printf '%s\n' "$sfrow"; echo "SURFACES APPLY ROW FAIL (exactly ONE non-comment row — the sf2 pairing, ending [scaffold])"; exit 1; }
+    grep -q '^test_select: pytest {tests}' ops/CONVENTIONS.md || { cat ops/CONVENTIONS.md; echo "SURFACES APPLY SELECT FAIL (test_select: pytest {tests} must now be live in CONVENTIONS)"; exit 1; }
+    "$SELF" surfaces > "$T/sfsc3.out" 2>&1 || { cat "$T/sfsc3.out"; echo "SURFACES APPLY HEALTH FAIL (the written row must pass the health check: surfaces rc 0)"; exit 1; }
+    cp ops/SURFACES.tsv "$T/sfmap1"; cp ops/CONVENTIONS.md "$T/sfconv1"
+    "$SELF" surfaces --scaffold --apply > "$T/sfsc4.out" 2>&1 || { cat "$T/sfsc4.out"; echo "SURFACES REAPPLY RC FAIL"; exit 1; }
+    grep -q 'nothing to propose' "$T/sfsc4.out" || { cat "$T/sfsc4.out"; echo "SURFACES REAPPLY FAIL (a second run proposes nothing: the row is already mapped)"; exit 1; }
+    cmp -s "$T/sfmap1" ops/SURFACES.tsv && cmp -s "$T/sfconv1" ops/CONVENTIONS.md \
+      || { echo "SURFACES REAPPLY WROTE FAIL (a second run writes nothing: both files byte-identical)"; exit 1; }
+    git worktree add -q "$T/sf3wt" -b feat/T-SF3 >/dev/null 2>&1 || { echo "SURFACES WORKTREE FAIL"; exit 1; }
+    ( cd "$T/sf3wt" && "$SELF" surfaces --scaffold --apply > "$T/sfsc5.out" 2> "$T/sfsc5.err" ) \
+      && { cat "$T/sfsc5.out"; echo "SURFACES FEAT RC FAIL (--apply from a feat/* worktree must rc 1)"; exit 1; }
+    grep -q 'surfaces --scaffold --apply runs on main only' "$T/sfsc5.err" || { cat "$T/sfsc5.err"; echo "SURFACES FEAT MSG FAIL (the refusal, on stderr, naming the base)"; exit 1; }
+    cmp -s "$T/sfmap1" ops/SURFACES.tsv && cmp -s "$T/sfconv1" ops/CONVENTIONS.md \
+      || { echo "SURFACES FEAT WROTE FAIL (a refused --apply writes nothing)"; exit 1; }
+    git worktree remove --force "$T/sf3wt" >/dev/null 2>&1; git branch -qD feat/T-SF3 >/dev/null 2>&1 || true
+    # (10) the interview answers the two pending preferences on the base (first-run.md § 2): both
+    #      land as live lines in CONVENTIONS, and doctor's preferences line is gone — the surfaces
+    #      nudge too, now that a row exists.
+    "$SELF" interview --set adhd=off --set claim=local-lock > "$T/sfiv.out" 2>&1 || { cat "$T/sfiv.out"; echo "SURFACES INTERVIEW RC FAIL"; exit 1; }
+    grep -q '^adhd: off' ops/CONVENTIONS.md && grep -q '^claim: local-lock' ops/CONVENTIONS.md \
+      || { cat ops/CONVENTIONS.md; echo "SURFACES INTERVIEW WRITE FAIL (both answers must be live lines in CONVENTIONS)"; exit 1; }
+    "$SELF" doctor > "$T/sfdoc2.out" 2>&1 || true
+    grep -q 'preferences never set here' "$T/sfdoc2.out" && { cat "$T/sfdoc2.out"; echo "SURFACES PREFS GONE FAIL (every preference answered ⇒ no preferences line)"; exit 1; }
+    grep -q 'surfaces: none mapped' "$T/sfdoc2.out" && { cat "$T/sfdoc2.out"; echo "SURFACES NUDGE GONE FAIL (a mapped row ⇒ no nudge)"; exit 1; }
+    # hermetic, phase 2: steps 8–10 go the same way — reset to the restored base (the layout
+    # commit, the scaffold row and the CONVENTIONS keys with it), the copied registry and the probe
+    # worktree + branch gone; then the whole-drill checks prove nothing survived from any step.
+    git reset -q --hard "$sfclean"
+    rm -f ops/KEYS.tsv
+    [ -f "$T/sf-conv.bak" ] || rm -f ops/CONVENTIONS.md
     rm -f ops/board/done/T-SF.md .polaris/suite-stamp .polaris/last-suite-seconds "$T/sf.ran" "$T/sf-conv.bak"
     [ -z "$(git status --porcelain)" ] || { git status --porcelain; echo "SURFACES HERMETIC FAIL (the drill must leave the tree clean)"; exit 1; }
     grep -v '^[[:space:]]*#' ops/SURFACES.tsv | grep -q '[^[:space:]]' && { echo "SURFACES HERMETIC ROWS FAIL (ops/SURFACES.tsv must be header-only again)"; exit 1; }
     git rev-parse -q --verify refs/heads/feat/T-SF >/dev/null 2>&1 && { echo "SURFACES HERMETIC BRANCH FAIL (feat/T-SF must be gone)"; exit 1; }
     git rev-parse -q --verify refs/heads/feat/T-SF2 >/dev/null 2>&1 && { echo "SURFACES HERMETIC BRANCH2 FAIL (feat/T-SF2 must be gone)"; exit 1; }
-    [ -d .polaris/wt/T-SF ] || [ -d .polaris/wt/T-SF2 ] && { echo "SURFACES HERMETIC WORKTREE FAIL (both worktrees must be gone)"; exit 1; }
+    git rev-parse -q --verify refs/heads/feat/T-SF3 >/dev/null 2>&1 && { echo "SURFACES HERMETIC BRANCH3 FAIL (feat/T-SF3 must be gone)"; exit 1; }
+    [ -d .polaris/wt/T-SF ] || [ -d .polaris/wt/T-SF2 ] || [ -d "$T/sf3wt" ] && { echo "SURFACES HERMETIC WORKTREE FAIL (every probe worktree must be gone)"; exit 1; }
     true
 }
 drill_drift() {

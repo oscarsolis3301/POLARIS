@@ -43,7 +43,7 @@ ft_section() { # ft_section <name> — close the section: hand this subshell's a
 selftest_fast() { # the run — rc 0 all green / rc 1 any red; last line on green:
   # `✅ fast tier passed — <n> checks in <s>s`. Sources NOTHING. Each section is one subshell that
   # sets FT_SEC first, overrides whatever globals it needs, asserts, and ends with ft_section.
-  local ft_t0 ft_t1 ft_red=0 ft_n=0 ft_k ft_tf ft_conv ft_rules ft_nl ft_cr ft_tab ft_surf ft_sel
+  local ft_t0 ft_t1 ft_red=0 ft_n=0 ft_k ft_tf ft_conv ft_rules ft_nl ft_cr ft_tab ft_surf ft_sel ft_sc ft_iv
   ft_nl=$'\n'; ft_cr=$'\r'; ft_tab="$POLARIS_TAB"
   ft_t0="$(date +%s)"
   FT_TMP="$(mktemp -d)"
@@ -414,6 +414,190 @@ EOF
     PRIMARY="$FT_TMP/q/bgrc"
     ft_assert 'default path = $PRIMARY/.polaris/suite-stamp' test "$(suite_stamp_scope)" = scoped
     ft_section stamp-scope ) || ft_red=1
+
+  # ---- fixtures for the activation (test-surfaces.md v2 § 13 · first-run.md § 2): PRIMARY dirs
+  # holding only the manifests surfaces_runner greps, hand-written tracked LISTS — one per layout
+  # the pairing rules must pair, refuse or fold — two registries (five columns and four) and the
+  # CONVENTIONS shapes the interview reads. Every path in a list is a fixture, never a file on disk.
+  ft_sc="$FT_TMP/sc"; ft_iv="$FT_TMP/iv"
+  mkdir -p "$ft_sc/node" "$ft_sc/py" "$ft_iv/ops5" "$ft_iv/ops4"
+  printf '%s\n' pyproject.toml src/api/x.py src/db/y.py src/util.py src/common/a.py lib/common/b.py \
+    tests/api/test_x.py tests/db/test_y.py tests/test_util.py tests/common/test_a.py README.md > "$ft_sc/ls-py"
+  printf '%s\n' pytest.ini src/api/x.py src/api/tests/test_x.py tests/api/test_y.py > "$ft_sc/ls-pkg"
+  printf '%s\n' package.json src/foo/a.ts src/foo/__tests__/a.test.ts src/bar/b.ts src/bar/b.test.ts > "$ft_sc/ls-js"
+  printf '%s\n' package.json src/foo/a.ts tests/foo/z.test.ts src/qa/q.spec.ts node_modules/m/m.test.js \
+    a/b/c/deep/d.ts tests/deep/e.test.ts > "$ft_sc/ls-js2"
+  printf '%s\n' go.mod internal/foo/x.go internal/foo/x_test.go cmd/app/main.go main_test.go > "$ft_sc/ls-go"
+  printf '%s\n' Makefile bin/tool.sh > "$ft_sc/ls-mk"
+  printf '%s\n' Cargo.toml package.json src/x.js > "$ft_sc/ls-node"
+  printf '%s\n' package.json pytest.ini go.mod > "$ft_sc/ls-all"
+  printf '%s\n' pkg/conftest.py > "$ft_sc/ls-conftest"
+  printf '%s\n' tests/x_test.py > "$ft_sc/ls-xtest"
+  printf '%s\n' pkg/tests/test_x.py > "$ft_sc/ls-nested"
+  printf '%s\n' pyproject.toml > "$ft_sc/ls-pyproject"
+  printf '%s\n' setup.cfg > "$ft_sc/ls-setupcfg"
+  : > "$ft_sc/ls-empty"
+  printf '%s\n' package.json src/a.js src/a.test.js > "$ft_sc/ls-big"     # + 250 generated files under src/gen/
+  ft_k=1; while [ "$ft_k" -le 250 ]; do printf 'src/gen/g%s.js\n' "$ft_k" >> "$ft_sc/ls-big"; ft_k=$((ft_k+1)); done
+  printf '# a map header\nsrc/api/\ttests/api/\tpytest tests/api/\tapi tests [scaffold]\r\n\nsrc/db/\ttests/other/\t-\tx\n' > "$ft_sc/map-one"
+  printf 'src/api/\ttests/api/\t-\ta\nsrc/common/a.py\ttests/common/test_a.py\t-\tb\nsrc/db/\ttests/db/\t-\tc\nsrc/util.py\ttests/test_util.py\t-\td\n' > "$ft_sc/map-all"
+  printf '# registry\n\n' > "$ft_iv/ops5/KEYS.tsv"
+  printf 'voice\t5.2.0\tstandard\thow agents talk\tHow should I talk to you?|Plain=standard|Terse=technical\n' >> "$ft_iv/ops5/KEYS.tsv"
+  printf 'adhd\t6.4.0\toff\treplies not shaped\tWant ADHD?|Not needed=off|Yes, always=on\r\n' >> "$ft_iv/ops5/KEYS.tsv"
+  printf 'plan_gate\t5.0.0\tauto\tno question here\n' >> "$ft_iv/ops5/KEYS.tsv"
+  printf 'claim\t5.0.0\tlocal-lock\tlocks stay local\tOne or several?|One computer=local-lock|Several=claim-branch\n' >> "$ft_iv/ops5/KEYS.tsv"
+  printf 'voice\t5.2.0\tstandard\thow agents talk\nclaim\t5.0.0\tlocal-lock\tlocks stay local\n' > "$ft_iv/ops4/KEYS.tsv"
+  printf 'voice: standard   # c\n' > "$ft_iv/c-live"
+  printf 'voice: technical\n# claim: local-lock   # locks stay local (since 5.0.0)\n' > "$ft_iv/c-stub"
+  printf 'voice: standard\nadhd: on\nclaim: local-lock\n' > "$ft_iv/c-all"
+  : > "$ft_iv/c-empty"
+  printf 'adhd is great\n  claim: x\n#voice: y\n' > "$ft_iv/c-body"
+  printf 'claim: local-lock\r\nvoice: standard\r\n' > "$ft_iv/c-cr"
+
+  # ---- surfaces-runner (test-surfaces.md v2 § 13) — surfaces_runner <ls-file>: ONE
+  # `<runner><TAB><template>` line rc 0, or nothing rc 1. Detection order node → pytest → go over
+  # the list + the manifests it names under PRIMARY (a fixture dir here; package.json is rewritten
+  # between asserts because the fn greps the file). What it REFUSES is the point: mocha, cargo,
+  # make, an unknown npm script — each filters by name or cannot be proven to take a path — is
+  # rc 1 and silence, never a guess (D6: a guessed template skips coverage while reporting green).
+  ( FT_SEC=surfaces-runner; PRIMARY="$ft_sc/node"
+    printf '{"scripts":{"test":"vitest --run"}}\n' > "$ft_sc/node/package.json"
+    ft_assert 'a vitest test script → vitest'   test "$(surfaces_runner "$ft_sc/ls-node")" = "vitest${ft_tab}npx vitest run {tests}"
+    printf '{"scripts":{"test":"jest --ci"}}\n' > "$ft_sc/node/package.json"
+    ft_assert 'a jest test script → jest'       test "$(surfaces_runner "$ft_sc/ls-node")" = "jest${ft_tab}npx jest {tests}"
+    printf '{"scripts":{"test":"mocha"}}\n' > "$ft_sc/node/package.json"
+    ft_out="$(surfaces_runner "$ft_sc/ls-node")" && ft_rc=0 || ft_rc=1     # one call, two facts: the fn is ~10 greps
+    ft_assert 'mocha → rc 1'                    test "$ft_rc" = 1
+    ft_assert 'mocha → nothing'                 test -z "$ft_out"
+    ft_assert 'an unknown script falls through to the next stack' test "$(surfaces_runner "$ft_sc/ls-all")" = "pytest${ft_tab}pytest {tests}"
+    printf '{"scripts":{"test":"mocha"},"jest":{}}\n' > "$ft_sc/node/package.json"
+    ft_assert 'unknown script, a jest key → jest'     test "$(surfaces_runner "$ft_sc/ls-node")" = "jest${ft_tab}npx jest {tests}"
+    printf '{"scripts":{"test":"mocha"},"vitest":{}}\n' > "$ft_sc/node/package.json"
+    ft_assert 'unknown script, a vitest key → vitest' test "$(surfaces_runner "$ft_sc/ls-node")" = "vitest${ft_tab}npx vitest run {tests}"
+    printf '{"scripts":{"test":"jest"}}\n' > "$ft_sc/node/package.json"
+    ft_assert 'order: node before pytest before go'   test "$(surfaces_runner "$ft_sc/ls-all")" = "jest${ft_tab}npx jest {tests}"
+    ft_assert 'go.mod → go, the WHOLE suite as the template' test "$(surfaces_runner "$ft_sc/ls-go")" = "go${ft_tab}go test ./..."
+    ft_assert 'a conftest.py anywhere → pytest' surfaces_runner "$ft_sc/ls-conftest"
+    ft_assert 'a nested pkg/tests/test_x.py → pytest' surfaces_runner "$ft_sc/ls-nested"
+    ft_assert 'tests/x_test.py is not a pytest tell'  ! surfaces_runner "$ft_sc/ls-xtest"
+    PRIMARY="$ft_sc/py"
+    printf '[tool.black]\n' > "$ft_sc/py/pyproject.toml"
+    ft_assert 'pyproject.toml without [tool.pytest → rc 1' ! surfaces_runner "$ft_sc/ls-pyproject"
+    printf '[tool.pytest.ini_options]\n' > "$ft_sc/py/pyproject.toml"     # the with-case is the proposal section's RUNNER line
+    printf '[tool:pytest]\n' > "$ft_sc/py/setup.cfg"
+    ft_assert 'setup.cfg with [tool:pytest] → pytest'      surfaces_runner "$ft_sc/ls-setupcfg"
+    ft_section surfaces-runner ) || ft_red=1
+
+  # ---- surfaces-pairs (§ 13 pairing rules + the shared filters) — surfaces_pairs <runner> <ls-file>:
+  # candidate rows sorted by surface, then the SKIP decisions, rc 0 always. Pinned from the ENGINE's
+  # measured output, never the contract's worked arithmetic (T-140): a test file under
+  # <dir>/__tests__/ is rule (a)'s pairing, so the jest layout folds nothing; and the ANCESTOR fold
+  # is refused when the ancestor's cmd would not run the candidate's tests dir — folding
+  # src/api/ ↔ src/api/tests/ under src/api/ ↔ tests/api/ is D6's exact failure, so both rows stay.
+  ( FT_SEC=surfaces-pairs
+    ft_out="$(surfaces_pairs pytest "$ft_sc/ls-py")" || ft_out=""
+    ft_k=0; while IFS= read -r ft_line; do ft_k=$((ft_k+1)); done <<EOF
+$ft_out
+EOF
+    ft_assert 'pytest: four rows + two skips'   test "$ft_k" = 6
+    ft_assert 'pytest (a): tests/api/ ↔ the ONE src/api/, sorted first' test "${ft_out%%$ft_nl*}" = "src/api/${ft_tab}tests/api/${ft_tab}pytest tests/api/${ft_tab}api tests"
+    ft_assert 'pytest (b): tests/test_util.py ↔ the ONE util.py'      test "${ft_out#*"src/util.py${ft_tab}tests/test_util.py${ft_tab}pytest tests/test_util.py${ft_tab}util"}" != "$ft_out"
+    ft_assert 'pytest (b) under an ambiguous dir stands on its own'  test "${ft_out#*"src/common/a.py${ft_tab}tests/common/test_a.py${ft_tab}pytest tests/common/test_a.py${ft_tab}a"}" != "$ft_out"
+    ft_assert 'AMBIGUITY: two common dirs → no row; the skip names both, sorted' test "${ft_out#*"SKIP${ft_tab}tests/common/${ft_tab}ambiguous: common matches 2 dirs (lib/common src/common)"}" != "$ft_out"
+    ft_assert 'AMBIGUITY: nothing pairs tests/common/' test "${ft_out#*"${ft_tab}tests/common/${ft_tab}pytest"}" = "$ft_out"
+    ft_assert 'ANCESTOR: the per-file pairings under emitted dirs fold into ONE skip line' test "${ft_out##*$ft_nl}" = "SKIP${ft_tab}2 narrower pairing(s)${ft_tab}covered by an emitted ancestor row"
+    ft_out="$(surfaces_pairs pytest "$ft_sc/ls-pkg")" || ft_out=""
+    ft_assert 'pytest (c): in-package src/api/tests/ ↔ src/api/'      test "${ft_out#*"src/api/${ft_tab}src/api/tests/${ft_tab}pytest src/api/tests/${ft_tab}api tests"}" != "$ft_out"
+    ft_assert 'D6: src/api/ ↔ tests/api/ does NOT fold the in-package row its cmd never runs' test "${ft_out%%$ft_nl*}" = "src/api/${ft_tab}tests/api/${ft_tab}pytest tests/api/${ft_tab}api tests"
+    ft_assert 'D6: no narrower skip for the refused fold'  test "${ft_out#*narrower}" = "$ft_out"
+    ft_assert 'AMBIGUITY 0: a test file with no source twin → matches 0 dirs' test "${ft_out##*$ft_nl}" = "SKIP${ft_tab}tests/api/test_y.py${ft_tab}ambiguous: y matches 0 dirs"
+    ft_out="$(surfaces_pairs jest "$ft_sc/ls-js")" || ft_out=""
+    ft_assert 'jest (a): <dir>/__tests__/ ↔ its parent, never a co-located row' test "${ft_out##*$ft_nl}" = "src/foo/${ft_tab}src/foo/__tests__/${ft_tab}npx jest src/foo/__tests__${ft_tab}foo tests"
+    ft_assert 'jest (c): co-located *.test.* under src/bar/'   test "${ft_out%%$ft_nl*}" = "src/bar/${ft_tab}src/bar/*.test.*${ft_tab}npx jest src/bar${ft_tab}bar co-located tests"
+    ft_assert 'jest: the § 17 case-2 layout folds NOTHING (measured)' test "${ft_out#*SKIP}" = "$ft_out"
+    ft_out="$(surfaces_pairs vitest "$ft_sc/ls-js2")" || ft_out=""
+    ft_assert 'vitest (b): tests/foo/ ↔ the ONE src/foo/, the run form' test "${ft_out%%$ft_nl*}" = "src/foo/${ft_tab}tests/foo/${ft_tab}npx vitest run tests/foo${ft_tab}foo tests"
+    ft_assert 'vitest (c): *.spec.* gets its own glob'    test "${ft_out#*"src/qa/${ft_tab}src/qa/*.spec.*${ft_tab}npx vitest run src/qa${ft_tab}qa co-located tests"}" != "$ft_out"
+    ft_assert 'node_modules/ is never a source dir'       test "${ft_out#*node_modules}" = "$ft_out"
+    ft_assert 'a 4-component dir is never a source dir'   test "${ft_out##*$ft_nl}" = "SKIP${ft_tab}tests/deep/${ft_tab}ambiguous: deep matches 0 dirs"
+    ft_assert 'go: one row per dir holding *_test.go, a COMPLETE cmd; the root is never a surface' test "$(surfaces_pairs go "$ft_sc/ls-go")" = "internal/foo/${ft_tab}internal/foo/*_test.go${ft_tab}go test ./internal/foo/...${ft_tab}foo package tests"
+    ft_assert 'BREADTH: a surface over 200 paths → no row, and said' test "$(surfaces_pairs vitest "$ft_sc/ls-big")" = "SKIP${ft_tab}src/${ft_tab}surface matches 252 paths (>200)"
+    ft_out="$(surfaces_pairs cargo "$ft_sc/ls-py")" && ft_rc=0 || ft_rc=1
+    ft_assert 'an unknown runner → nothing'     test -z "$ft_out"
+    ft_assert 'an unknown runner → rc 0'        test "$ft_rc" = 0
+    ft_section surfaces-pairs ) || ft_red=1
+
+  # ---- surfaces-proposal (§ 13) — surfaces_proposal <ls-file> [<map-file>]: the whole decision as
+  # DATA, rc 0 always. NORUNNER as the ONLY line, naming the manifests it saw; else RUNNER first,
+  # the ROW survivors, then the SKIPs — a pair already in the map (`already mapped`) ahead of the
+  # engine's own, which is why an idempotent re-run counts 6 skips, not 4 (T-142's measured golden).
+  ( FT_SEC=surfaces-proposal; PRIMARY="$ft_sc/py"
+    ft_out="$(surfaces_proposal "$ft_sc/ls-mk")" && ft_rc=0 || ft_rc=1
+    ft_assert 'no runner → rc 0'                test "$ft_rc" = 0
+    ft_assert 'no runner → the ONE NORUNNER line, seen: Makefile' test "$ft_out" = "NORUNNER${ft_tab}no test runner this kit can scope (pytest · jest · vitest · go) — seen: Makefile"
+    ft_assert 'no runner, an empty list → seen: no manifest'     test "$(surfaces_proposal "$ft_sc/ls-empty")" = "NORUNNER${ft_tab}no test runner this kit can scope (pytest · jest · vitest · go) — seen: no manifest"
+    printf '{"scripts":{"test":"mocha"}}\n' > "$ft_sc/node/package.json"; PRIMARY="$ft_sc/node"
+    ft_assert 'no runner, mocha + Cargo.toml → both manifests named, kit order' test "$(surfaces_proposal "$ft_sc/ls-node")" = "NORUNNER${ft_tab}no test runner this kit can scope (pytest · jest · vitest · go) — seen: package.json Cargo.toml"
+    PRIMARY="$ft_sc/py"
+    ft_out="$(surfaces_proposal "$ft_sc/ls-py")" || ft_out=""
+    ft_assert 'RUNNER first'                    test "${ft_out%%$ft_nl*}" = "RUNNER${ft_tab}pytest${ft_tab}pytest {tests}"
+    ft_assert 'every survivor is a ROW line, sorted' test "${ft_out#*"${ft_nl}ROW${ft_tab}src/api/${ft_tab}tests/api/${ft_tab}pytest tests/api/${ft_tab}api tests${ft_nl}ROW${ft_tab}src/common/a.py"}" != "$ft_out"
+    ft_assert 'the engine skips come last'      test "${ft_out##*$ft_nl}" = "SKIP${ft_tab}2 narrower pairing(s)${ft_tab}covered by an emitted ancestor row"
+    ft_assert 'deterministic: the same input twice is the same bytes' test "$(surfaces_proposal "$ft_sc/ls-py")" = "$ft_out"
+    ft_assert 'an absent map file is no map'    test "$(surfaces_proposal "$ft_sc/ls-py" "$ft_sc/no-such-map")" = "$ft_out"
+    ft_out="$(surfaces_proposal "$ft_sc/ls-py" "$ft_sc/map-one")" || ft_out=""
+    ft_assert 'a mapped (surface, tests) pair is never a ROW (comment, CR and blank lines ignored)' test "${ft_out#*"ROW${ft_tab}src/api/"}" = "$ft_out"
+    ft_assert 'already mapped to <tests>, ahead of the engine skips' test "${ft_out#*"${ft_nl}SKIP${ft_tab}src/api/${ft_tab}already mapped to tests/api/${ft_nl}SKIP${ft_tab}tests/common/"}" != "$ft_out"
+    ft_assert 'the same surface mapped to OTHER tests masks nothing' test "${ft_out#*"ROW${ft_tab}src/db/${ft_tab}tests/db/"}" != "$ft_out"
+    ft_out="$(surfaces_proposal "$ft_sc/ls-py" "$ft_sc/map-all")" || ft_out=""
+    ft_assert 'idempotent re-run: no ROW at all' test "${ft_out#*ROW}" = "$ft_out"
+    ft_k=0; while IFS= read -r ft_line; do case "$ft_line" in "SKIP$ft_tab"*) ft_k=$((ft_k+1));; esac; done <<EOF
+$ft_out
+EOF
+    ft_assert 'idempotent re-run: 6 skips (4 mapped + 2 engine), never 4' test "$ft_k" = 6
+    ft_section surfaces-proposal ) || ft_red=1
+
+  # ---- interview-pending (first-run.md § 2) — interview_pending over fixture registries, OPS and
+  # CONV overridden: an `ask` row (column 5) is pending unless CONV answers it with a live `^key:`
+  # line or a `# key:` stub; KEYS.tsv order, ` · `-joined; rc 1 and silence when nothing is. Then
+  # interview_set's three write modes, proven on the file (read whole by a builtin, no fork).
+  ( FT_SEC=interview-pending; OPS="$ft_iv/ops5"; CONV="$ft_iv/c-live"
+    ft_assert 'voice live → adhd · claim pending' test "$(interview_pending)" = 'adhd · claim'
+    ft_assert 'pending → rc 0'                  interview_pending
+    CONV="$ft_iv/c-stub"
+    ft_assert 'a # claim: stub counts as answered' test "$(interview_pending)" = 'adhd'
+    CONV="$ft_iv/c-all"
+    ft_out="$(interview_pending)" && ft_rc=0 || ft_rc=1
+    ft_assert 'all answered → rc 1'             test "$ft_rc" = 1
+    ft_assert 'all answered → nothing'          test -z "$ft_out"
+    CONV="$ft_iv/c-empty"
+    ft_assert 'an empty CONVENTIONS → every ask row, registry order, plain rows never' test "$(interview_pending)" = 'voice · adhd · claim'
+    CONV="$ft_iv/c-body"
+    ft_assert 'a body mention and an indented key answer nothing; a #key: stub does' test "$(interview_pending)" = 'adhd · claim'
+    CONV="$ft_iv/c-cr"
+    ft_assert 'CRLF lines answer; the order stays the registry order' test "$(interview_pending)" = 'adhd'
+    OPS="$ft_iv/ops4"; CONV="$ft_iv/c-empty"
+    ft_assert 'a 4-column registry asks nothing → rc 1' ! interview_pending
+    OPS="$ft_iv/none"
+    ft_assert 'no KEYS.tsv → rc 1'              ! interview_pending
+    OPS="$ft_iv/ops5"; CONV="$ft_iv/no-such"
+    ft_assert 'no CONVENTIONS → rc 1 (interview itself is what dies)' ! interview_pending
+    printf 'voice: technical\n# claim: local-lock   # locks stay local (since 5.0.0)\n' > "$ft_iv/c-set"; CONV="$ft_iv/c-set"
+    ft_assert 'set: an absent key → rc 0'       interview_set adhd on
+    IFS= read -r -d '' ft_out < "$CONV" || true
+    ft_assert 'set: appended at the END after one blank line, the absent-cost as its comment' test "$ft_out" = "voice: technical${ft_nl}# claim: local-lock   # locks stay local (since 5.0.0)${ft_nl}${ft_nl}adhd: on   # replies not shaped${ft_nl}"
+    interview_set claim claim-branch
+    IFS= read -r -d '' ft_out < "$CONV" || true
+    ft_assert 'set: a stub is replaced IN PLACE by the live line' test "$ft_out" = "voice: technical${ft_nl}claim: claim-branch   # locks stay local${ft_nl}${ft_nl}adhd: on   # replies not shaped${ft_nl}"
+    interview_set voice standard
+    IFS= read -r -d '' ft_out < "$CONV" || true
+    ft_assert 'set: a live value changes in place' test "${ft_out%%$ft_nl*}" = 'voice: standard'
+    ft_assert 'set: every key answered → nothing pending' ! interview_pending
+    printf 'voice: standard   # c\n' > "$ft_iv/c-set2"; CONV="$ft_iv/c-set2"
+    interview_set voice technical
+    IFS= read -r -d '' ft_out < "$CONV" || true
+    ft_assert 'set: a live line keeps its trailing comment' test "$ft_out" = "voice: technical   # c${ft_nl}"
+    ft_section interview-pending ) || ft_red=1
 
   # ---- verdict
   while IFS= read -r ft_k; do ft_n=$((ft_n + ft_k)); done < "$FT_TMP/n"
