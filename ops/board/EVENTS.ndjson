@@ -501,3 +501,4 @@
 {"ts":1789417507,"ev":"handoff","id":"T-139","who":"Owner@DESKTOP","note":""}
 {"ts":1789418530,"ev":"handoff","id":"T-138","who":"Owner@DESKTOP","note":""}
 {"ts":1789418531,"ev":"all-review","id":"T-138","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
+{"ts":1789418600,"ev":"done","id":"T-139","who":"Owner@DESKTOP","note":"","pts":5}
