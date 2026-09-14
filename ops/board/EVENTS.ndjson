@@ -534,3 +534,4 @@
 {"ts":1789429473,"ev":"all-review","id":"T-144","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1789429556,"ev":"done","id":"T-145","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1789429595,"ev":"done","id":"T-144","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1789429683,"ev":"promote","id":"T-147","who":"Owner@DESKTOP","note":"deps done: T-143, T-144, T-145, T-146, T-148","pts":2}
