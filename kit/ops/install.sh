@@ -260,6 +260,24 @@ if [ -f "$KIT/.claude/skills/i-have-adhd/SKILL.md" ]; then
       && cp "$KIT/.claude/skills/i-have-adhd/$_f" "$TARGET/.claude/skills/i-have-adhd/$_f"
   done
   unset _f
+  # ...and then HONOUR the repo's answer. `adhd: on` in the target's own CONVENTIONS.md is a
+  # preference the human gave once (`ops/polaris interview`). The copy above is verbatim and the
+  # kit's copy is opt-in by its own frontmatter — ops/tests/adhd-skill-installed pins
+  # `disable-model-invocation: true` there and nothing may flip it — so without this block every
+  # `polaris update` would silently re-arm the flag and undo the answer, which is the worst shape
+  # of bug: the preference is still sitting in the file, and it simply stopped working.
+  # Applied to the COPY only; the kit's own file is never touched. ops/contracts/first-run.md § 2.
+  _ADHD="$TARGET/.claude/skills/i-have-adhd/SKILL.md"
+  if [ -f "$_ADHD" ] && [ -f "$TARGET/ops/CONVENTIONS.md" ] \
+     && grep -q '^adhd:[[:space:]]*on' "$TARGET/ops/CONVENTIONS.md"; then
+    if sed 's/^disable-model-invocation: true$/disable-model-invocation: false/' \
+         "$_ADHD" > "$_ADHD.polaris-tmp"; then
+      mv "$_ADHD.polaris-tmp" "$_ADHD"
+    else
+      rm -f "$_ADHD.polaris-tmp"
+    fi
+  fi
+  unset _ADHD
 fi
 # Output style — the layer that binds the MAIN conversation's own voice, which is the one thing
 # CLAUDE.md cannot do: CLAUDE.md is context the model weighs, an output style is the session's

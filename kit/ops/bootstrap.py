@@ -11,11 +11,13 @@ makes polaris-v5.zip a Python zipapp — so the whole install is one command, no
                           --no-permissions   #   ...without touching ~/.claude/settings.json
 
 ARMING THE MACHINE is what makes the SECOND install — and every one after it, in any repo —
-free. It writes four things to ~/.claude/: the polaris-install skill (so Claude Code knows the
+free. It writes five things to ~/.claude/: the polaris-install skill (so Claude Code knows the
 procedure), the kit itself (so installing is a local file copy, never a download), the
-keep-awake hooks (so the box stays awake while any session is still working), and six
-pinned Bash rules in permissions.allow (so nothing gets denied). It is idempotent and it is now
-the DEFAULT, not a flag you had to know existed.
+keep-awake hooks (so the box stays awake while any session is still working), six
+pinned Bash rules in permissions.allow (so nothing gets denied), and the VOICE — the POLARIS
+output style plus the vendored i-have-adhd skill, so the warm plain voice and its closing 🎉 are
+selectable in any repo on the box and not only where the installer ran. It is idempotent and it
+is now the DEFAULT, not a flag you had to know existed.
 
 That default reverses an earlier call in this file — "it writes outside the project, so it must
 never be implicit". The reasoning changed: a per-machine setup command nobody runs is a setup
@@ -312,17 +314,51 @@ def merge_awake_hooks(archive, bash_path):
         out(f"   {line}")
 
 
+def arm_file(z, member, dest):
+    """Copy ONE archive member into ~/.claude, and only when the bytes differ. True if it wrote.
+
+    The write-if-different half is the SKILL.md `existing != body` guard above, generalized — and
+    it is not a micro-optimisation: `changed` drives the one-off "machine armed" epilogue, so a
+    copy that rewrites an identical file makes that line nag on every install forever (the same
+    mistake the cmp guard on the cached kit exists to undo).
+
+    A member the archive does not carry is skipped SILENTLY. An older zip predates whatever we are
+    arming; refusing to install over it would punish the user for our release order.
+    """
+    try:
+        body = z.read(member)
+    except KeyError:
+        return False
+    existing = None
+    if os.path.isfile(dest):
+        try:
+            with open(dest, "rb") as fh:
+                existing = fh.read()
+        except OSError:
+            pass
+    if existing == body:
+        return False
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with open(dest, "wb") as fh:
+        fh.write(body)
+    return True
+
+
 def arm_machine(archive, permissions=True):
     """Teach Claude Code, on THIS machine, how to install POLARIS into ANY repo.
 
     The project skill (.claude/skills/polaris/) only exists once POLARIS is installed, so it
     cannot help you install it. This one is USER-level (~/.claude/skills/).
 
-    Four things land, and the first three are needed for "install POLARIS" to just work:
+    Five things land, and the first three are needed for "install POLARIS" to just work:
       1. the skill      — teaches Claude the install procedure
       2. the kit itself — cached, so installing is a LOCAL file copy and not a download
       3. the rules      — so the commands in (1) are pre-authorized and never prompt
       4. keep-awake     — one machine-wide owner that keeps the box awake while sessions work
+      5. the voice      — the output style and the vendored i-have-adhd skill, so a repo on THIS
+                          machine can select the POLARIS voice even when the installer never ran
+                          in it. Copied outside the (3)/(4) gate on purpose: they touch no
+                          settings file, so --no-permissions has nothing to promise about them.
 
     Without (2) and (3) the skill told Claude to curl a zip from GitHub and run it, which the
     permission classifier denies whenever the user didn't name that URL themselves. It looked
@@ -368,6 +404,37 @@ def arm_machine(archive, permissions=True):
         shutil.copyfile(archive, cached)
         changed = True
     out(f"✅ kit cached:            {cached}")
+
+    # (5) the VOICE — the half of "installed" that was only ever per-repo.
+    # install.sh copies the output style and the vendored i-have-adhd skill into <repo>/.claude,
+    # so on a SECOND computer — or in any repo where the installer never ran — there is no style
+    # to select and no /i-have-adhd to invoke. The human sees plain harness voice, never the 🎉
+    # that `finish` earns, and has no way to tell which of the two is missing. Landing both here
+    # makes them reachable from any repo on the machine, exactly like the installer skill above.
+    #
+    # Two NON-goals, pinned as hard as the goals (ops/contracts/first-run.md § 3):
+    #   - ~/.claude/settings.json is never created or touched by this step at all — not to select
+    #     the style, not for anything (ops/tests/machine-armed asserts the file's absence after
+    #     an arming run, which is the stronger claim and the cheaper one to check). A
+    #     machine-wide style selection would restyle every non-POLARIS repo on the box.
+    #     Selection stays per repo (install.sh seeds it set-if-absent, and `polaris doctor`
+    #     reports the EFFECTIVE one) or per session (`/output-style polaris`).
+    #   - the machine copy of i-have-adhd keeps `disable-model-invocation: true`. That flag is the
+    #     only thing stopping the skill loading into EVERY session on this machine, which is a
+    #     token cost on every context the human ever opens. The opt-in is a REPO preference
+    #     (`adhd:` in ops/CONVENTIONS.md, applied by install.sh), never a machine-wide one.
+    home_claude = os.path.join(os.path.expanduser("~"), ".claude")
+    style_dest = os.path.join(home_claude, "output-styles", "polaris.md")
+    adhd_dir = os.path.join(home_claude, "skills", "i-have-adhd")
+    with zipfile.ZipFile(archive) as z:
+        if arm_file(z, f"{PREFIX}.claude/output-styles/polaris.md", style_dest):
+            changed = True
+        for name in ("SKILL.md", "LICENSE", "SOURCE.md"):
+            if arm_file(z, f"{PREFIX}.claude/skills/i-have-adhd/{name}",
+                        os.path.join(adhd_dir, name)):
+                changed = True
+    out(f"✅ output style armed:   {style_dest}")
+    out(f"✅ ADHD skill armed:     {adhd_dir}")
 
     # (4) keep-awake, INSIDE the same gate as (3), because the two write the SAME file:
     # `awake-hook.sh install` registers four hooks in ~/.claude/settings.json, exactly where
