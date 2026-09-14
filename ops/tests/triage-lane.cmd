@@ -70,3 +70,26 @@ printf '%s\n' "$OUT" | sed -n 1p
 DR="$(cd "$FIX/repo" && bash "$KIT" drift 2>&1)"
 printf '%s\n' "$DR" | grep -c 'READY GATE: T-1'
 ( cd "$FIX/repo" && bash "$KIT" drift --strict >/dev/null 2>&1 ); echo "strict-rc=$?"
+# --- T-136: several SMALL tasks price CONTEXTS, not tasks (test-surfaces.md § 8). ----------------
+# n>1 used to be `full` unconditionally. A full wave for n tasks opens n+3 cold starts of ~7,300
+# tokens EACH before any work happens — two 1-pointers went to seven contexts of setup. Budget:
+# 4 tasks / 6 pts / 3 pts each, and the note must STATE the arithmetic it used, so the lane is
+# auditable rather than felt — the grep below pins the numbers, not just the word.
+# RULES cleared first: the `ask` scope above would gate T-2 (unapproved) and hide the budget path.
+printf '# none\n' > "$FIX/repo/ops/RULES.tsv"
+printf -- '---\nid: T-2\ntitle: second fixture task\ntype: feature\npoints: 1\nwsjf: 4\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/b.txt\nverify: []\n---\n' > "$FIX/repo/ops/board/ready/T-2.md"
+OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
+printf '%s\n' "$OUT" | sed -n 1p
+printf '%s\n' "$OUT" | grep -c '^   2 tasks · 2 pts ≤ 6 — one context (~7,300 tokens cold start) beats a full wave.s 5 contexts (~36500 tokens)'
+# 2) four 2-pointers: each ≤3 and n ≤4, but 8 pts in all — over the budget, and the note names it.
+for t in 1 2 3 4; do
+  printf -- '---\nid: T-%s\ntitle: fixture task %s\ntype: feature\npoints: 2\nwsjf: 4\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/%s.txt\nverify: []\n---\n' "$t" "$t" "$t" > "$FIX/repo/ops/board/ready/T-$t.md"
+done
+OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
+printf '%s\n' "$OUT" | sed -n 1p
+printf '%s\n' "$OUT" | grep -c '^   4 claimable tasks · 8 pts — over the solo budget (4 tasks / 6 pts / 3 pts each)'
+# 3) a lane already building wins over the budget: parallel lanes are the point.
+mv "$FIX/repo/ops/board/ready/T-4.md" "$FIX/repo/ops/board/active/T-4.md"
+OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
+printf '%s\n' "$OUT" | sed -n 1p
+printf '%s\n' "$OUT" | grep -c '^   1 task(s) already active — another lane is building'
