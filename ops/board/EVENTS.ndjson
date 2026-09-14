@@ -510,3 +510,5 @@
 {"ts":1789424362,"ev":"handoff","id":"T-143","who":"Owner@DESKTOP","note":""}
 {"ts":1789424599,"ev":"handoff","id":"T-146","who":"Owner@DESKTOP","note":""}
 {"ts":1789425085,"ev":"handoff","id":"T-148","who":"Owner@DESKTOP","note":""}
+{"ts":1789425344,"ev":"handoff","id":"T-140","who":"Owner@DESKTOP","note":""}
+{"ts":1789425344,"ev":"all-review","id":"T-140","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
