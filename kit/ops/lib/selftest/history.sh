@@ -137,7 +137,12 @@ drill_express() {
     exhead="$(git rev-parse main)"
     [ -f .polaris/suite-stamp ] || { echo "EXPRESS CARRY FAIL (express must stamp .polaris/suite-stamp)"; exit 1; }
     [ "$(cut -d' ' -f1 < .polaris/suite-stamp)" = "$exhead" ] || { echo "EXPRESS CARRY SHA FAIL (stamp line 1 must equal the sealed base HEAD)"; exit 1; }
-    grep -qE '^[0-9a-f]{7,} [0-9]+$' .polaris/suite-stamp || { echo "EXPRESS CARRY FORMAT FAIL (want one \"<sha> <epoch>\" line)"; exit 1; }
+    # T-137 (test-surfaces.md § 6, stamp v3): the stamp is THREE fields now — <sha> <epoch>
+    # full|scoped. This fixture sets no `test_select:`, so selection is off and express provably
+    # ran the whole suite: the third field must be `full`. A 2-field stamp here would mean a 6.4
+    # writer forgot the scope, and a `scoped` one would mean express selected with no map to
+    # select from — both are the stamp lying about what it proved, so the anchor stays END-anchored.
+    grep -qE '^[0-9a-f]{7,} [0-9]+ full$' .polaris/suite-stamp || { echo "EXPRESS CARRY FORMAT FAIL (want one \"<sha> <epoch> full\" line)"; exit 1; }
     grep -qE '^[0-9]+ [0-9]+$' .polaris/last-suite-seconds || { echo "EXPRESS SECONDS FAIL (express must stamp the suite duration like qa)"; exit 1; }
     exsk="$(printf '%.7s' "$exhead")"
     "$SELF" qa > "$T/exqa1.out" 2>&1 || true          # rc is not under test here — the suite report is
