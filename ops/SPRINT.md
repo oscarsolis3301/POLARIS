@@ -1,3 +1,37 @@
+# SPRINT 14 — Spend less, stay current (6.4.0)          capacity: 28   dates: 2026-09-14–
+
+Five complaints, each traced to code (plans/v3.md, approved 2026-09-14): it asks which lane to run
+(cmd_triage already answers; CONDUCTOR.md 2.5 restates the six conditions and DRIFTED, 2 vs 3
+points) · the full 729-805s suite for a one-line change (no change-scoped selection exists) · stale
+tests (nothing checks a feature's tests moved) · no install interview · a dashboard that cannot
+follow you. This sprint is SPRINT A only — the token half; Sprint B (interview, confetti gap,
+skills, cross-device) is deferred and NOT carved. One data file, `ops/SURFACES.tsv`, feeds both the
+stale-tests gate and change-scoped `qa`; `test_select:` unset = byte-identical to 6.3, so `update`
+ships it everywhere and changes nothing. Six tasks / 28 pts / 3 waves under plan `spend-less`:
+W1 T-134 data plane (core.sh fns · KEYS test_select · usage · seeded SURFACES.tsv; W1 api-kit owner) ·
+W2 T-135 the stale-tests gate (ownership.sh via check_rules, approve widens, pack section) ∥ T-136
+qa selection + stamp v3 + surfaces health + drift + triage cost model (observe.sh ONLY — five
+concerns, one file, one task; W2 api-kit + triage-lane owner) ∥ T-137 express lockstep + carry scope
++ done writes rows (integrate.sh + the express drill's regex) · W3 T-138 the surfaces drill + fast
+sections ∥ T-139 the "stop asking" prose + RULES guard + W3 goldens. Contract on base BEFORE any
+claim: NEW test-surfaces.md, pinning every name, message, flag and the D5 decision (stamp records
+full|scoped; finish accepts scoped; nothing that publishes reads the stamp). Pre-mortem applied:
+(1) api-kit is a derived surface — ONE owner per wave (T-134 → T-136 → T-139) writes the union from
+PINNED names, everyone else surface-frozen, no new heading under kit/; (2) never a bare suite in
+`verify:` — grep/one-command checks + `doctor --fast`, drills as acceptance boxes via `bg run`;
+(3) cross-file function calls between parallel W2 lanes were designed OUT — every function two lanes
+share lives in W1's core.sh, and the gate is reached through check_rules so integrate.sh needs no
+call site; (4) the express drill's END-anchored stamp regex would red on the third field — its owner
+(T-137) relaxes it in the same task; (5) trust the rc and file state, never a printed refusal (T-089)
+and never qa's rc inside a fixture (T-131); (6) fail-closed on legacy: a 2-field stamp reads `full`
+because every pre-6.4 writer ran everything, an empty carry scope withholds the stamp. Not in this
+sprint: any Sprint B item, the release itself (the conductor's ritual at the end of the run — cli-help
+regenerates at dogfood), any change to the ready gate or invariants.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 13 — Feel fast, stay fast (6.3.0)          capacity: 28   dates: 2026-09-08–
 
 The human asked whether POLARIS was worth keeping because small changes take an hour. Measured
