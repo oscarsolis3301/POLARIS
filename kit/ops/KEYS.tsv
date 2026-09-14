@@ -1,5 +1,5 @@
 # POLARIS key registry — every ops/CONVENTIONS.md key the kit reads, as DATA.
-# TAB-separated: key<TAB>since<TAB>default<TAB>absent-cost      ('#' lines and blank lines ignored)
+# TAB-separated: key<TAB>since<TAB>default<TAB>absent-cost[<TAB>ask]      ('#' lines and blank lines ignored)
 #   key          the CONVENTIONS.md header key, spelled exactly as `cfg` reads it
 #   since        the kit version that introduced it
 #   default      the EFFECTIVE value when the key is ABSENT — what the repo already behaves as, not
@@ -8,15 +8,20 @@
 #                means there is no effective value: the key is optional, unset does nothing, and the
 #                placeholder is what a human types in its place.
 #   absent-cost  one plain-English line — what the repo loses, or behaves as, while the key is unset
+#   ask          OPTIONAL, column 5 (6.4.0): <question>|<label>=<value>|<label>=<value> — the first-run
+#                interview asks it when the key is neither live nor stubbed (polaris interview); the
+#                FIRST option is the default it pre-selects. `|`, `=` and TAB never appear inside a
+#                question or a label. Empty on every row that is not one of the three interview keys.
 #
 # Rows DOCUMENT; they never execute. Adding a row is data, not behavior. `polaris doctor` reports
 # which of these an installed CONVENTIONS.md lacks, and `polaris adopt` appends one commented stub
 # per absent key. Contract: ops/contracts/key-registry.md. ORDER IS MEANINGFUL — doctor names the
 # first six absent keys in the order they appear below.
 base	5.0.0	main	branches cut from and merge into main; a repo whose trunk is named anything else breaks
-claim	5.0.0	local-lock	locks stay on this machine; several machines sharing one repo need claim-branch
+claim	5.0.0	local-lock	locks stay on this machine; several machines sharing one repo need claim-branch	Will you work on this project from one computer, or several?|One computer=local-lock|Several computers (the board follows a shared remote)=claim-branch
 integration	5.0.0	batch	merges land as one batch and halve on red; paranoid tests after every single merge
-voice	5.2.0	standard	agents talk to you in plain friendly English; technical makes them dense and terse
+voice	5.2.0	standard	agents talk to you in plain friendly English; technical makes them dense and terse	How should I talk to you?|Plain and warm, with a 🎉 when work lands=standard|Technical and terse=technical
+adhd	6.4.0	off	replies are not shaped for ADHD unless you type /i-have-adhd — on makes that skill fire on its own in every session here	Want replies shaped for ADHD — next action first, numbered steps, wins made visible?|Not needed=off|Yes, always=on
 autolaunch	5.7.0	ask	the Planner offers Builder panes once; wt opens them for you, off only prints kickoffs
 builders	5.9.0	subagents	a work request runs the whole loop in one chat; panes stops the conductor after planning
 model_strong	5.24.0	<name>	polaris route answers in bare tier words — no real model name reaches a spawn or a pane

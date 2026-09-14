@@ -413,6 +413,27 @@ cmd_doctor() {
     ' "$CONV" "$OPS/KEYS.tsv")"
     [ -n "$drift" ] && note "$drift"
   fi
+  # ACTIVATION NUDGE (ops/contracts/test-surfaces.md v2 § 15). 6.4.0 shipped change-scoped
+  # selection to every installed repo and, by design, changed nothing: an empty ops/SURFACES.tsv
+  # runs the whole suite on every change, exactly as before, and no line said so. This is the ONE
+  # doctor line that does — gated on a runner the scaffold can actually scope (surfaces_runner over
+  # the tracked list; THIS repo, bash + drills, answers NORUNNER and stays silent) AND on a map with
+  # no rows, so a repo the scaffold cannot help is never nagged and a repo that mapped its surfaces
+  # never hears it again. The cheap tests run first; the ls-files fork only when they all pass.
+  if [ -f "$CONV" ] && [ -n "$(cfg test "")" ] && ! surfaces_lines | grep -q .; then
+    local sls; sls="$(mktemp)"
+    git -C "$PRIMARY" ls-files > "$sls" 2>/dev/null || true
+    surfaces_runner "$sls" >/dev/null 2>&1 \
+      && note "surfaces: none mapped — every change runs the whole test: suite; propose a map: ops/polaris surfaces --scaffold"
+    rm -f "$sls"
+  fi
+  # The preferences a repo cannot derive (ops/contracts/first-run.md § 2): the same line `update`
+  # prints, rendered from interview_pending's answer. Guarded by `command -v` because the interview
+  # (admin.sh) and this line land in the same wave — before the wave gate the fn may not exist yet.
+  if [ -f "$CONV" ] && command -v interview_pending >/dev/null 2>&1; then
+    local ipend
+    ipend="$(interview_pending)" && note "preferences never set here: $ipend — one round of questions: ops/polaris interview"
+  fi
   # v6.0 autonomy knobs (ops/contracts/hands-free-knobs.md § v2). The 5.13 knobs shipped OFF and
   # stayed off in exactly the repos that never learned they existed, so 6.0 INVERTS the fallbacks
   # here, in kit code — the one mechanism `update` already refreshes in every installed repo — and
@@ -921,9 +942,56 @@ EOF
   return "$e"
 }
 
-cmd_surfaces() { # surfaces — list + health-check ops/SURFACES.tsv (test-surfaces.md § 7); rc 1 iff
-  # any ⛔. Mirrors cmd_rules: the table, each row's problems indented beneath it, the repo-level
-  # warnings after the table, then ONE tail line carrying the counts.
+cmd_surfaces() { # surfaces [--scaffold [--apply]] — list + health-check ops/SURFACES.tsv (test-surfaces.md
+  # § 7); rc 1 iff any ⛔. Mirrors cmd_rules: the table, each row's problems indented beneath it,
+  # the repo-level warnings after the table, then ONE tail line carrying the counts.
+  # --scaffold (v2 § 14) PROPOSES rows from the stack's own layout — the engine in surfaces.sh
+  # decides, this renders: the runner it found, the rows it would write, every pairing it skipped
+  # and why — and writes nothing, ever. --scaffold --apply writes exactly those rows (tagged
+  # [scaffold]) and sets test_select: where the repo never set it, on $BASE only, and commits
+  # nothing: the diff is the review. D6 is the rule here — an unmapped surface runs the whole suite
+  # (safe); a MIS-mapped one skips real coverage while reporting green, and in a repo nobody is
+  # watching nobody would notice — so the ambiguous pairings are said aloud as skips, never guessed.
+  # The `git ls-files` below is the caller's ONE fork, handed to the engine as a file, never a pipe.
+  local u="usage: polaris surfaces [--scaffold [--apply]]" mode=""
+  if [ $# -gt 0 ]; then
+    [ "$1" = --scaffold ] || die "$u"
+    case "$#:${2:-}" in 1:) mode=scaffold;; 2:--apply) mode=apply;; *) die "$u";; esac
+  fi
+  if [ -n "$mode" ]; then
+    local ls prop kind what why cmd rest n=0 s=0 rc=0
+    if [ "$mode" = apply ]; then
+      # feat/* is where Builders live, and a Builder never writes a row (D1: a row buys R1's savings
+      # and arms R2 against you). From a task, rows are surface: items and `done` writes them.
+      what="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+      case "$what" in feat/*) die "surfaces --scaffold --apply runs on $BASE only — from a task, rows are surface: items (polaris done writes them)";; esac
+      [ -f "$CONV" ] || die "no ops/CONVENTIONS.md — run INIT first; the scaffold sets test_select: in it"
+    fi
+    ls="$(mktemp)"; prop="$(mktemp)"
+    git -C "$PRIMARY" ls-files > "$ls" 2>/dev/null || true
+    if [ -f "$SURFACES" ]; then surfaces_proposal "$ls" "$SURFACES" > "$prop"; else surfaces_proposal "$ls" > "$prop"; fi
+    rm -f "$ls"
+    while IFS="$POLARIS_TAB" read -r kind what why cmd rest; do
+      case "$kind" in
+        NORUNNER) note "$what. Map rows by hand: a task's surface: items (ops/roles/PLANNER.md step 5b)"; rm -f "$prop"; return 0;;
+        RUNNER)   note "runner: $what — test_select: $why"; printf '%-28s %-28s %s\n' SURFACE TESTS CMD;;
+        ROW)      n=$((n + 1)); printf '%-28s %-28s %s\n' "$what" "$why" "$cmd";;
+        SKIP)     s=$((s + 1)); printf '   ⚠ skipped: %s — %s\n' "$what" "$why";;
+      esac
+    done < "$prop"
+    if [ "$n" -eq 0 ]; then
+      if [ "$s" -ge 1 ]; then note "nothing to propose — $s pairing(s) skipped, listed above"
+      else note "nothing to propose — no pairing the layout makes unambiguous (map rows by hand: surface: items)"; fi
+      rm -f "$prop"; return 0
+    fi
+    if [ "$mode" = scaffold ]; then
+      say "$n row(s) proposed · $s skipped — write them: ops/polaris surfaces --scaffold --apply"
+      rm -f "$prop"; return 0
+    fi
+    surfaces_apply "$prop" || rc=$?
+    rm -f "$prop"
+    return "$rc"
+  fi
   if ! surfaces_lines | grep -q .; then
     note "no surfaces yet — ops/SURFACES.tsv (init-board seeds the header; rows arrive from a task's surface: list when done lands it — never by hand)"
     return 0
@@ -952,6 +1020,43 @@ EOF
   [ "$e" -eq 0 ] || die "$n surface row(s), $e unhealthy"
   [ "$w" -eq 0 ] || { say "$n surface row(s), all healthy · $w warning(s)"; return 0; }
   say "$n surface row(s), all healthy"
+}
+
+surfaces_apply() { # surfaces_apply <proposal-file> — the SECOND sanctioned writer of ops/SURFACES.tsv
+  # (test-surfaces.md v2 § 14 · § 16; the first is `done`). Seeds the header when the file is
+  # absent, appends every ROW of the proposal as `<surface><TAB><tests><TAB><cmd><TAB><note> [scaffold]`
+  # by shell redirect — the RULES path guard sees Edit/Write tools and feat-branch diffs, never
+  # this, and still denies every hand edit — then test_select: in CONVENTIONS.md, ONLY where the
+  # repo never set it: a LIVE line (any value, even empty) is the human's and is kept; a
+  # `# test_select:` stub (adopt's "known and deliberately unset") is replaced in place; neither ⇒
+  # the line is appended at the end after one blank line. Temp file + mv, LF kept, never sed -i.
+  # Says exactly what it wrote and commits nothing: rows a human never sees written are rows nobody
+  # checks, and D6 makes an unchecked row the one thing this file must not hold. rc 0.
+  local prop="${1:-}" kind surface tests cmd rest tpl="" n=0 ts="" tmp line
+  surfaces_seed
+  while IFS="$POLARIS_TAB" read -r kind surface tests cmd rest; do
+    case "$kind" in
+      RUNNER) tpl="$tests";;
+      ROW)    printf '%s\n' "$surface$POLARIS_TAB$tests$POLARIS_TAB$cmd$POLARIS_TAB$rest [scaffold]" >> "$SURFACES"
+              n=$((n + 1));;
+    esac
+  done < "$prop"
+  if grep -q '^test_select:' "$CONV" 2>/dev/null; then
+    ts="kept (already set here)"
+  else
+    line="test_select: $tpl   # set by surfaces --scaffold --apply: {tests} = the changed rows' tests globs; delete this line to run the whole test: suite on every change"
+    tmp="$(mktemp)"
+    if grep -qE '^#[[:space:]]*test_select:' "$CONV" 2>/dev/null; then
+      awk -v rep="$line" 'BEGIN { hit = 0 } !hit && /^#[ \t]*test_select:/ { print rep; hit = 1; next } { print }' "$CONV" > "$tmp"
+    else
+      { cat "$CONV"; printf '\n%s\n' "$line"; } > "$tmp"
+    fi
+    mv "$tmp" "$CONV"
+    ts=set
+  fi
+  say "$n row(s) written to ops/SURFACES.tsv · test_select: $ts"
+  note "review, then commit ops/SURFACES.tsv ops/CONVENTIONS.md — nothing was committed for you"
+  return 0
 }
 
 scaffold_try() { # scaffold_try <name> <cmd-body> — write the pair, but ONLY if it is worth locking.
@@ -1880,6 +1985,17 @@ EOF
     t1="$(date +%s)"
     mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
     printf '%s %s\n' "$((t1 - t0))" "$t1" > "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true
+    # ACTIVATION NUDGE (test-surfaces.md v2 § 15): the moment a repo has just paid for the whole
+    # suite — a minute or more, test: ran, nothing was scoped — and a map would have let it pay
+    # less. Gated like doctor's line: a runner the scaffold can scope AND no rows, so a repo the
+    # scaffold cannot help (this one) never hears it, and a mapped repo never hears it again.
+    if [ "$scope" = full ] && [ -n "$(cfg test "")" ] && [ $((t1 - t0)) -ge 60 ] && ! surfaces_lines | grep -q .; then
+      csf="$(mktemp)"
+      git -C "$PRIMARY" ls-files > "$csf" 2>/dev/null || true
+      surfaces_runner "$csf" >/dev/null 2>&1 \
+        && note "test — ran the whole suite ($((t1 - t0))s). A surface map runs only what a change can break: ops/polaris surfaces --scaffold"
+      rm -f "$csf"
+    fi
   fi
   [ "$ran" -eq 0 ] && [ "$skip" -eq 0 ] && [ "$carry" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
   # drift --strict exits the script on findings, so both sub-checks run in subshells.

@@ -1,0 +1,79 @@
+== no ops/CONVENTIONS.md: die points at INIT, never creates the file ==
+⛔ no ops/CONVENTIONS.md — INIT has never run here; the interview writes into it (ops/roles/INIT.md)
+rc 1
+no file created
+== plain: the one pending key as QUESTION/OPTION lines, then the tail with its default filled in ==
+QUESTION	adhd	Want replies shaped for ADHD?
+OPTION	adhd	off	Not needed	default
+OPTION	adhd	on	Yes, always
+   1 preference(s) never set here — ask them in ONE round (never more than 4 questions), then: ops/polaris interview --set adhd=off
+rc 0
+== --pending: rc 1 + the one line doctor and update print ==
+   preferences never set here: adhd — one round of questions: ops/polaris interview
+rc 1
+== --set with a value outside the options: die names them; nothing written ==
+⛔ interview: fk_voice takes warm | terse, not 'x'
+rc 1
+file untouched
+== --set with a key that asks no question: die names the interview keys; nothing written ==
+⛔ interview: 'nope' is not an interview key (fk_voice · adhd · fk_claim)
+rc 1
+file untouched
+== --set is all-or-nothing: one bad pair blocks the good one, and the skill flag stays put ==
+⛔ interview: 'nope' is not an interview key (fk_voice · adhd · fk_claim)
+rc 1
+file untouched
+disable-model-invocation: true
+== --set from feat/x: refused before anything is written ==
+⛔ interview --set runs on main only
+rc 1
+file untouched
+== --set adhd=on: appended at the end after one blank line, and the repo copy of the skill flips ==
+✅ set adhd: on
+   review, then commit ops/CONVENTIONS.md — nothing was committed for you
+rc 0
+fk_voice: warm   # the human set this
+# fk_claim: one   # how many fake computers (since 0.4)
+prose the human wrote below the keys stays put
+
+adhd: on   # fake replies are not shaped for ADHD
+disable-model-invocation: false
+== --set fk_claim=many: the stub is replaced in place — same line, now live ==
+✅ set fk_claim: many
+   review, then commit ops/CONVENTIONS.md — nothing was committed for you
+rc 0
+fk_voice: warm   # the human set this
+fk_claim: many   # how many fake computers
+prose the human wrote below the keys stays put
+
+adhd: on   # fake replies are not shaped for ADHD
+== --set fk_voice=terse: a live value changes and its comment stays ==
+✅ set fk_voice: terse
+   review, then commit ops/CONVENTIONS.md — nothing was committed for you
+rc 0
+fk_voice: terse   # the human set this
+== every preference set: --pending is silent with rc 0, plain says there is nothing to ask ==
+rc 0
+✅ every preference is set — nothing to ask
+rc 0
+== --set adhd=off: the reverse flip on the skill ==
+✅ set adhd: off
+   review, then commit ops/CONVENTIONS.md — nothing was committed for you
+rc 0
+disable-model-invocation: true
+== --set adhd=on with no skill copy installed: the preference is written, the note names the fix ==
+   ⚠ .claude/skills/i-have-adhd/SKILL.md is not installed here — run: bash ops/polaris update
+✅ set adhd: on
+   review, then commit ops/CONVENTIONS.md — nothing was committed for you
+rc 0
+adhd: on   # fake replies are not shaped for ADHD
+== claim=claim-branch with no origin remote: refused, nothing written (the registry gains a real claim row here) ==
+⛔ claim-branch needs an origin remote — git remote add origin <url> first; nothing written
+rc 1
+file untouched
+== claim=local-lock needs no remote: written, and nothing is pending any more ==
+✅ set claim: local-lock
+   review, then commit ops/CONVENTIONS.md — nothing was committed for you
+rc 0
+claim: local-lock   # fake locks stay on this machine
+rc 0
