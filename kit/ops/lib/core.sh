@@ -139,6 +139,10 @@ POLARIS_TAB="$(printf '\t')"
 
 _RULES_CACHE=""
 _RULES_CACHED=""
+# ops/SURFACES.tsv (ops/contracts/test-surfaces.md) memoizes the same way, on its OWN pair: the
+# startup-budget golden counts the RULES sentinel's lines and must keep finding exactly three.
+_SURFACES_CACHE=""
+_SURFACES_CACHED=""
 rules_lines() { # normalized RULES.tsv: comments/blank/CR stripped. Memoized: check_rules alone
   # called this 4x (each 3 forks), and RULES.tsv cannot change mid-process.
   if [ -z "$_RULES_CACHED" ]; then
@@ -148,6 +152,199 @@ rules_lines() { # normalized RULES.tsv: comments/blank/CR stripped. Memoized: ch
     fi
   fi
   [ -n "$_RULES_CACHE" ] && printf '%s\n' "$_RULES_CACHE"
+  return 0
+}
+
+# ------------------------------------------------ surfaces: which tests cover which source paths
+# ops/SURFACES.tsv is repo data like RULES.tsv — surface<TAB>tests<TAB>cmd<TAB>note, one row per
+# (surface, tests) pair (ops/contracts/test-surfaces.md § 1). Two readers share it: the stale-tests
+# gate (a mapped surface changed, its tests did not) and change-scoped selection (run only what a
+# change can break). Everything below is pure enough for the fast tier — no polaris re-invocation;
+# surface_change_set alone runs git. Rows are written ONLY by `polaris done` from a task's
+# `surface:` list; nothing here writes a row.
+surfaces_lines() { # normalized SURFACES.tsv: comments/blank/CR stripped. Absent file → prints
+  # nothing, rc 0. Memoized per process; reset with _SURFACES_CACHED="" ALONE between fixtures —
+  # the reload clears the text too, so a reset that lands on an absent file replays nothing stale.
+  if [ -z "$_SURFACES_CACHED" ]; then
+    _SURFACES_CACHED=1; _SURFACES_CACHE=""
+    if [ -f "${SURFACES:-}" ]; then
+      _SURFACES_CACHE="$(tr -d '\r' < "$SURFACES" | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' || true)"
+    fi
+  fi
+  [ -n "$_SURFACES_CACHE" ] && printf '%s\n' "$_SURFACES_CACHE"
+  return 0
+}
+surfaces_seed() { # surfaces_seed [<path>] — write the header iff <path> (default $SURFACES) does
+  # not exist; rc 0 always, never rewrites an existing file. init-board seeds fresh repos, `done`
+  # seeds before its first row. Comment lines only: a header-only file is zero rows everywhere.
+  local f="${1:-${SURFACES:-}}"
+  [ -n "$f" ] && [ ! -f "$f" ] || return 0
+  { cat <<'SRF'
+# POLARIS SURFACES — which tests cover which source paths, as data. TAB-separated:
+#   surface<TAB>tests<TAB>cmd<TAB>note
+#   surface  glob of source paths, files_owned semantics: exact path · dir/ prefix · glob
+#   tests    glob of the test paths covering that surface — a changed surface must change these too
+#   cmd      the COMPLETE shell command that exercises just this surface (repo root), or `-` =
+#            derive from ops/CONVENTIONS.md test_select: ({tests} becomes this row's tests glob)
+#   note     plain English: what this surface is [the task that mapped it]
+# Read at verify/handoff/audit/land (the stale-tests gate) and by qa / land --express (which tests a
+# change can break). Written ONLY by `polaris done`, from a task's `surface:` list — never by hand: a
+# row you could delete when it blocked you would guard nothing. Health: ops/polaris surfaces
+SRF
+  } > "$f" 2>/dev/null || true
+  return 0
+}
+surface_row_matches() { # surface_row_matches <path> <row> — rc 0 when the row's column 1 (a
+  # files_owned-style pattern: exact · dir/ prefix · glob) matches <path>. Column 1 by expansion,
+  # match_one with ARGS — no pipe, no fork: this runs per (changed path × row) inside the gates.
+  local s="${2:-}"; s="${s%%$POLARIS_TAB*}"
+  [ -n "$s" ] || return 1
+  match_one "$1" "$s"
+}
+surface_rows_for() { # surface_rows_for <path> — every row (whole TSV line) whose surface matches
+  # <path>, in file order; rc 0 when ≥1, else rc 1 and prints nothing.
+  local p="${1:-}" row hit=1
+  while IFS= read -r row; do
+    surface_row_matches "$p" "$row" || continue
+    printf '%s\n' "$row"; hit=0
+  done <<EOF
+$(surfaces_lines)
+EOF
+  return $hit
+}
+surface_row_from_item() { # surface_row_from_item <item> <ID> <title> — one `surface:` frontmatter
+  # item (ops/contracts/test-surfaces.md § 3) → ONE TSV row on stdout, rc 0:
+  #   <surface> tests: <glob> [cmd: <complete command | ->] [note: <plain English>]
+  # first token = the surface · `tests:` required, ONE token · `cmd:` = everything up to ` note:`
+  # or the end, empty → `-` · `note:` = the rest, absent → the task's title (quotes stripped). The
+  # row's note carries the task: `<note> [<ID>]`. Malformed → rc 1 + ONE reason line on stdout:
+  # `needs 'tests: <glob>'` · `empty surface` · `a TAB in the item` · `surface or tests glob is
+  # not one token`. Builtins only — drift runs this per ready task, `done` per item.
+  local item="${1:-}" id="${2:-}" title="${3:-}" surface="" rest="" tests="" cmd="" note=""
+  case "$item" in *"$POLARIS_TAB"*) printf 'a TAB in the item\n'; return 1;; esac
+  read -r surface rest <<EOF
+$item
+EOF
+  case "$surface" in ''|tests:|cmd:|note:) printf 'empty surface\n'; return 1;; esac
+  case "$rest" in
+    'tests: '*)   rest="${rest#tests: }";;
+    *' tests: '*) printf 'surface or tests glob is not one token\n'; return 1;;
+    *)            printf "needs 'tests: <glob>'\n"; return 1;;
+  esac
+  read -r tests rest <<EOF
+$rest
+EOF
+  case "$tests" in ''|cmd:|note:) printf "needs 'tests: <glob>'\n"; return 1;; esac
+  case "$rest" in
+    '') ;;
+    cmd:*)  rest="${rest#cmd:}"
+            case "$rest" in
+              *' note:'*) cmd="${rest%% note:*}"; note="${rest#* note:}";;
+              *)          cmd="$rest";;
+            esac;;
+    note:*) note="${rest#note:}";;
+    *)      printf 'surface or tests glob is not one token\n'; return 1;;
+  esac
+  cmd="${cmd#"${cmd%%[! ]*}"}";   cmd="${cmd%"${cmd##*[! ]}"}"
+  note="${note#"${note%%[! ]*}"}"; note="${note%"${note##*[! ]}"}"
+  [ -n "$cmd" ] || cmd="-"
+  if [ -z "$note" ]; then
+    note="$title"
+    case "$note" in \"*\") note="${note#\"}"; note="${note%\"}";; esac
+  fi
+  printf '%s\t%s\t%s\t%s [%s]\n' "$surface" "$tests" "$cmd" "$note" "$id"
+  return 0
+}
+surface_change_set() { # surface_change_set [--force] — the paths a verdict is about, one per
+  # line; rc 0 = BOUNDED. $PRIMARY HEAD off $BASE (a feat/ or integrate/ branch) → the branch's
+  # own diff, `git diff --name-only $BASE...HEAD`, the stamp never consulted. On $BASE → the suite
+  # stamp's sha when it is an ancestor of HEAD: `git diff --name-only <sha> HEAD`, and
+  # SURFACE_BASELINE=<sha> SURFACE_BASELINE_SCOPE=<its scope> for the caller. --force, no stamp,
+  # or a non-ancestor sha → rc 1, prints nothing: UNBOUNDED, the caller runs everything. Both
+  # cases drop the board-noise paths — the reports dir, ops/MAP.md, ops/SURFACES.tsv — exactly the
+  # three suite_stamp_carry allows to change after a suite ran.
+  local force=0 cur="" list="" p rel sha="" junk="" stamp
+  [ "${1:-}" = "--force" ] && force=1
+  SURFACE_BASELINE=""; SURFACE_BASELINE_SCOPE=""
+  cur="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  if [ "$cur" = "$BASE" ]; then
+    [ "$force" -eq 0 ] || return 1
+    stamp="$PRIMARY/.polaris/suite-stamp"
+    [ -s "$stamp" ] || return 1
+    read -r sha junk < "$stamp" || true
+    [ -n "$sha" ] || return 1
+    git -C "$PRIMARY" merge-base --is-ancestor "$sha" HEAD 2>/dev/null || return 1
+    list="$(git -C "$PRIMARY" diff --name-only "$sha" HEAD 2>/dev/null)" || return 1
+    SURFACE_BASELINE="$sha"; SURFACE_BASELINE_SCOPE="$(suite_stamp_scope "$stamp" || true)"
+  else
+    list="$(git -C "$PRIMARY" diff --name-only "$BASE...HEAD" 2>/dev/null)" || return 1
+  fi
+  rel="$(cfg reports docs/sprints)"; rel="${rel%/}"; [ -n "$rel" ] || rel="docs/sprints"
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    case "$p" in "$rel/"*|ops/MAP.md|ops/SURFACES.tsv) continue;; esac
+    printf '%s\n' "$p"
+  done <<EOF
+$list
+EOF
+  return 0
+}
+surface_select_cmd() { # surface_select_cmd <paths-file> — rc 0: the commands to run INSTEAD of
+  # test:, one per line — every distinct non-`-` cmd of the rows the changed paths match
+  # (first-appearance order), then, if any matched row is `-`, ONE line = test_select with every
+  # {tests} replaced by the space-joined distinct tests globs of those rows. rc 1 + ONE reason on
+  # stdout, and the caller runs test: verbatim: `test_select unset` · `no rows` · `no changed
+  # paths` · `unmapped: <first path with no row> (+<n> more)`. ALL-OR-NOTHING: one unmapped changed
+  # path ⇒ the whole suite (D3 — never a gate whose cheapest satisfying move is silence).
+  local file="${1:-}" tpl lines p row rest tests cmd hit n=0 first="" more=0 cmds="" globs="" nl
+  nl=$'\n'
+  tpl="$(cfg test_select "")"
+  [ -n "$tpl" ] || { printf 'test_select unset\n'; return 1; }
+  lines="$(surfaces_lines)"
+  [ -n "$lines" ] || { printf 'no rows\n'; return 1; }
+  [ -f "$file" ] || file=/dev/null
+  while IFS= read -r p || [ -n "$p" ]; do
+    [ -z "$p" ] && continue
+    n=$((n+1)); hit=0
+    while IFS= read -r row; do
+      surface_row_matches "$p" "$row" || continue
+      rest="${row#*$POLARIS_TAB}"; [ "$rest" != "$row" ] || rest=""
+      tests="${rest%%$POLARIS_TAB*}"
+      [ -n "$tests" ] || continue                       # a row without a tests glob maps nothing
+      case "$rest" in *"$POLARIS_TAB"*) cmd="${rest#*$POLARIS_TAB}"; cmd="${cmd%%$POLARIS_TAB*}";; *) cmd="";; esac
+      hit=1
+      if [ -n "$cmd" ] && [ "$cmd" != "-" ]; then
+        case "$nl$cmds$nl" in *"$nl$cmd$nl"*) ;; *) cmds="${cmds:+$cmds$nl}$cmd";; esac
+      else
+        case " $globs " in *" $tests "*) ;; *) globs="${globs:+$globs }$tests";; esac
+      fi
+    done <<EOF
+$lines
+EOF
+    if [ "$hit" -eq 0 ]; then
+      if [ -z "$first" ]; then first="$p"; else more=$((more+1)); fi
+    fi
+  done < "$file"
+  [ "$n" -gt 0 ] || { printf 'no changed paths\n'; return 1; }
+  if [ -n "$first" ]; then
+    if [ "$more" -gt 0 ]; then printf 'unmapped: %s (+%s more)\n' "$first" "$more"
+    else printf 'unmapped: %s\n' "$first"; fi
+    return 1
+  fi
+  [ -z "$cmds" ] || printf '%s\n' "$cmds"
+  # bash 5.2 turns patsub_replacement ON: an unquoted replacement would expand `&` — quote it.
+  [ -z "$globs" ] || printf '%s\n' "${tpl//"{tests}"/"$globs"}"
+  return 0
+}
+suite_stamp_scope() { # suite_stamp_scope [<file>] — field 3 of the suite stamp (default
+  # $PRIMARY/.polaris/suite-stamp): `full` | `scoped`. A 2-field (pre-6.4) stamp → `full` — every
+  # pre-6.4 writer ran everything. Missing/empty file → prints nothing, rc 1.
+  local f="${1:-${PRIMARY:-}/.polaris/suite-stamp}" sha="" epoch="" scope=""
+  [ -s "$f" ] || return 1
+  read -r sha epoch scope < "$f" || true
+  [ -n "$sha" ] || return 1
+  scope="${scope%%[!a-z]*}"
+  case "$scope" in scoped) printf 'scoped\n';; *) printf 'full\n';; esac
   return 0
 }
 

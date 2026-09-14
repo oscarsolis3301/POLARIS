@@ -28,8 +28,13 @@ cmd_init_board() {
 #.env	path	-	secrets never enter the repo
 #migrations/	path	-	schema changes are a human decision (stop-and-ask)
 #src/	content	console\.log\(	no stray console.log in src — use the logger
+#ops/SURFACES.tsv	path	-	rows come from a task's surface: list via polaris done — edit the task, never this file
 RUL
   fi
+  # ops/SURFACES.tsv (ops/contracts/test-surfaces.md): the header only, and only when absent —
+  # rows arrive from a task's surface: list when `done` lands it. The RULES line above stays
+  # commented on purpose: armed in every drill fixture, check_rules would scan (and talk) in every drill.
+  surfaces_seed
   grep -q 'EVENTS\.ndjson merge=union' "$PRIMARY/.gitattributes" 2>/dev/null \
     || echo 'ops/board/EVENTS.ndjson merge=union' >> "$PRIMARY/.gitattributes"
   say "board ready at ops/board/ · worktrees in .polaris/wt/ (gitignored) · locks in $LOCKS"

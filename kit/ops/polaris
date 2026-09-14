@@ -141,11 +141,12 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)
   triage                         which LANE this board's work belongs in — line 1 is one word:
-                                 solo (one context, zero subagents; 1 task ≤3pts, risk normal,
-                                 express on, publish direct) · express (one task, one builder,
-                                 one integrator) · full (everything else). Reasons follow on
-                                 stderr-style note lines. Decide with this, never by re-reading
-                                 the board and weighing the six conditions by hand.
+                                 solo (one context, zero subagents; 1 task ≤3pts — or up to 4
+                                 tasks, ≤3pts each and ≤6pts in all, worked one at a time — risk
+                                 normal, express on, publish direct) · express (one task, one
+                                 builder, one integrator) · full (everything else). Reasons follow
+                                 on note lines. Decide with this, never by re-reading the board
+                                 and weighing the conditions by hand.
   route [<ID> | --role <R> | --points <N> [--risk <R>]]
                                  which MODEL TIER runs a piece of work — line 1 is always one
                                  word: strong | mid | cheap (a task's model: frontmatter
@@ -159,13 +160,21 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  --do performs a promote under the board lock · --brief re-anchors a chat
   drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
-  qa [--force]                   is everything okay, in ONE shot: test/lint/typecheck/build/uat
+  surfaces                       list + health-check ops/SURFACES.tsv (which tests cover which
+                                 source paths, as data): refuses a row whose tests glob covers its
+                                 own surface, flags a glob matching 0 or >200 tracked files. Rows
+                                 are written ONLY by `done` from a task's surface: list — never
+                                 by hand (RULES-guarded); drift carries the ⛔ findings
+  qa [--force] [--full]          is everything okay, in ONE shot: test/lint/typecheck/build/uat
                                  from CONVENTIONS + drift --strict + doctor env check. Runs every
                                  check even after a red; rc 1 if anything was red.
                                  SKIPS the suite when HEAD is unchanged since the last green run
                                  and the tree is clean (.polaris/suite-stamp) — drift and doctor
                                  still run every time. --force always re-runs the suite.
-                                 `finish` runs this for you at the close.
+                                 With test_select: set, test: runs ONLY the SURFACES.tsv commands
+                                 the changed paths map to (every changed path needs a row, else
+                                 the whole suite runs); the stamp records full|scoped.
+                                 --full runs test: verbatim. `finish` runs this for you at the close.
   bg run <name> [--force] [-- <cmd…>]
                                  detach a suite past the harness's 600s tool cap and keep working:
                                  a bare CONVENTIONS suite key (test test_fast lint typecheck build
@@ -276,6 +285,7 @@ WHO=""                                                     # filled on demand by
 EVENTS="$BOARD/EVENTS.ndjson"
 
 RULES="$OPS/RULES.tsv"
+SURFACES="$OPS/SURFACES.tsv"
 MUTEX="$LOCKS/.board-mutex"
 FAIL_LOCK_ID=""
 PUB="direct"
@@ -332,6 +342,7 @@ case "${1:-}" in
   route)      shift; cmd_route "$@";;   # no update_check_maybe: read-only oracle, called before EVERY spawn — keep it quiet + pure
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
   rules)      cmd_rules;;
+  surfaces)   cmd_surfaces;;   # no update_check_maybe: read-only, drift calls it
   qa)         shift 2>/dev/null || true; cmd_qa "${1:-}";;
   bg)         shift; case "${1:-}" in run) awake_ensure || true;; esac; cmd_bg "$@";;   # no update_check_maybe:
               # run/status/tail/wait ride hot agent loops — keep them quiet + pure. Only `run` ensures the

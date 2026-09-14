@@ -65,6 +65,7 @@ kit/ops/KEYS.tsv	key	shot
 kit/ops/KEYS.tsv	key	stale_hours
 kit/ops/KEYS.tsv	key	test
 kit/ops/KEYS.tsv	key	test_fast
+kit/ops/KEYS.tsv	key	test_select
 kit/ops/KEYS.tsv	key	typecheck
 kit/ops/KEYS.tsv	key	uat
 kit/ops/KEYS.tsv	key	visual
@@ -332,6 +333,14 @@ kit/ops/lib/core.sh	fn	publish_resolve
 kit/ops/lib/core.sh	fn	rules_lines
 kit/ops/lib/core.sh	fn	say
 kit/ops/lib/core.sh	fn	set_fm
+kit/ops/lib/core.sh	fn	suite_stamp_scope
+kit/ops/lib/core.sh	fn	surface_change_set
+kit/ops/lib/core.sh	fn	surface_row_from_item
+kit/ops/lib/core.sh	fn	surface_row_matches
+kit/ops/lib/core.sh	fn	surface_rows_for
+kit/ops/lib/core.sh	fn	surface_select_cmd
+kit/ops/lib/core.sh	fn	surfaces_lines
+kit/ops/lib/core.sh	fn	surfaces_seed
 kit/ops/lib/core.sh	fn	sync_board
 kit/ops/lib/core.sh	fn	task_col
 kit/ops/lib/core.sh	fn	task_file
