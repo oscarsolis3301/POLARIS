@@ -205,7 +205,7 @@ never from a diff you cannot see.
 - [ ] `doctor --fast` green; the `surfaces` and `qa` drills green at the wave gate (`bg run test`)
 
 ## T-141 — "The first-run interview — KEYS.tsv learns to ask, polaris interview generates the questions and writes the answers, update carries the style and the ADHD skill to the machine"
-points 5 · risk normal · landed 9cd023d (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed 9cd023d (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/KEYS.tsv, kit/ops/lib/admin.sh, ops/tests/interview.cmd, ops/tests/interview.expected
 
 ### Why
@@ -235,7 +235,7 @@ grammar, every die text and the golden.
 - [ ] no heading anywhere under kit/; `doctor --fast` green; `doctor --selftest --only adopt,autoupdate,upgrade` green in the worktree (explicit 600000 ms timeout)
 
 ## T-142 — "surfaces --scaffold proposes the map and --apply writes the unambiguous rows; doctor and qa say when a repo has no map"
-points 5 · risk normal · landed b34be07 (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed b34be07 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/observe.sh, ops/tests/api-kit.expected, ops/tests/surfaces-scaffold.cmd, ops/tests/surfaces-scaffold.expected
 
 ### Why
@@ -290,6 +290,56 @@ first-run.md § 2 (install.sh) and § 3 (arming + the golden) pin every path and
 - [ ] `kit/ops/selftest-install.sh` gains the two-way case inside its live-board section (no new top-level fn); run it once with `POLARIS_AWAKE_HOME` pointed at a scratch dir (foreground, explicit ≥ 180000 ms timeout) — green
 - [ ] golden `ops/tests/machine-armed.cmd/.expected` per first-run.md § 3: builds the zip with the repo's own `build:` (`python kit/ops/pack.py --allow-dirty`), arms a fake `HOME`/`USERPROFILE`, asserts the files, the kept flag, the absent settings.json, and a byte-identical second run; runs from the repo root, hermetic, < 15 s
 - [ ] CI's own `--claude-skill` job (`.github/workflows/ci.yml`, human-owned — read, never edit) still passes by inspection: its asserts are about the skill and the permissions, both untouched
+
+## T-144 — "Prove the activation — fast-tier sections for the engine and the interview, and the surfaces drill scaffolds, applies and asks"
+points 5 · risk normal · landed 51ee8ba (2026-09-14) · claimed 2026-09-14
+files touched: kit/ops/lib/selftest/fast.sh, kit/ops/lib/selftest/policy.sh
+
+### Why
+T-140's engine and T-141's interview are pure over files, which is exactly what the in-process tier
+is for: prove the runner table, the pairing filters, the RUNNER/ROW/SKIP grammar and the pending
+computation in milliseconds, on every change, with fixtures under `$FT_TMP` and `PRIMARY`/`OPS`/`CONV`
+overridden inside each section's subshell — no CLI re-invocation, no scratch repo. The drill proves
+the real entry point: the fixture that has no runner gets NORUNNER, the fixture that gains a pytest
+layout gets one `[scaffold]` row and a `test_select:` line from `--scaffold --apply`, the refusal
+from a task worktree fires, and doctor's `preferences never set here:` line appears and then
+disappears once `interview --set` has answered. Contract test-surfaces.md v2 § 17 and first-run.md
+§ Executable check pin the sections, the steps and their assertions. No new top-level function
+anywhere: sections live inside `selftest_fast`, steps inside `drill_surfaces` — this wave's golden
+owner is T-145 and you add no api-kit row.
+
+### Acceptance
+- [ ] fast.sh sections `surfaces-runner` · `surfaces-pairs` · `surfaces-proposal` · `interview-pending`, ≥ 4 asserts each, inside `selftest_fast`; fixtures written with builtins; the whole fast tier still under its budget (`doctor --fast` prints the pass line with the check count)
+- [ ] `drill_surfaces` steps 8–10 exactly per § 17: (8) NORUNNER, rc 0, header-only map; (9) pytest layout ⇒ one row ending ` [scaffold]`, `^test_select: pytest {tests}` in CONVENTIONS, `surfaces` rc 0, rerun ⇒ `nothing to propose`, feat/* worktree ⇒ rc 1; (10) `ops/KEYS.tsv` copied from the kit, CONVENTIONS with only `voice:` + `test:` ⇒ doctor has `preferences never set here: adhd · claim`; after `interview --set adhd=off --set claim=local-lock` it does not
+- [ ] hermetic: the drill's existing cleanup restores the header-only map and removes the CONVENTIONS keys it added — steps 8–10 leave nothing behind for step 11 or the next drill; assertions are rc + file state, never qa's rc
+- [ ] `bash kit/ops/polaris doctor --selftest --only surfaces,qa,finish` green in the worktree (explicit 600000 ms timeout); the sharded `test:` green at the wave gate via `bg run test`; re-measure the surfaces drill's cost and record it in Notes for EVOLVE (CONVENTIONS' `test:` comment budgets ~44 s per drill)
+
+## T-145 — "Teach the roles — INIT asks its questions in one call, the Planner scaffolds at the plan gate, the install skill knows both lines"
+points 5 · risk normal · landed 71ac854 (2026-09-14) · claimed 2026-09-14
+files touched: kit/.claude/skills/polaris-install/SKILL.md, kit/ops/PROTOCOL.md, kit/ops/roles/INIT.md, kit/ops/roles/PLANNER.md, ops/tests/api-kit.expected
+
+### Why
+The code landed in W1 and W2; nothing tells an agent to use it. INIT still asks its own hand-written
+voice question and a `claim:` question in the long form — now both come from `polaris interview`
+and are asked in ONE call, with the ADHD question beside them (first-run.md § 4 pins the new 2a
+heading, the 2c cut, the `adhd: off` skeleton line and the `interview --set` call in step 3, followed
+by `surfaces --scaffold --apply` so a fresh repo is mapped before its first sprint). The PLANNER's
+step 5b gains its first sentence: an empty map plus tests means scaffold at the plan gate and commit
+the two files with the contracts — a conductor-entered planner reports what it wrote rather than
+asking (test-surfaces.md v2 § 19). The install skill learns the two lines an update or a doctor can
+now print and what to do with each, in one question at most. PROTOCOL's tool row names the new flag.
+You are W3's single owner of `ops/tests/api-kit.expected`: INIT.md's renamed heading is a row change,
+and it is the only heading change in this task — every other edit is a paragraph, a list item or a
+table row (assert the `^#` counts of PROTOCOL.md and PLANNER.md are unchanged, and the skill's `## `
+count too). T-144, beside you, adds no fn and no heading.
+
+### Acceptance
+- [ ] INIT.md § 2 per first-run.md § 4: 2a renamed and rewritten (run `interview`, ask everything it prints in ONE AskUserQuestion, voice first; before CONVENTIONS exists read the questions off `ops/KEYS.tsv`'s ask column), 2b untouched, 2c heading untouched and its question 2 removed; § 3 skeleton gains `adhd: off` under `voice:`, step 3 runs `bash ops/polaris interview --set …` then `bash ops/polaris surfaces --scaffold --apply` (test-surfaces v2 § 19 wording); the 3-interaction cap sentence still holds
+- [ ] PLANNER.md step 5b's first sentence verbatim from test-surfaces v2 § 19; no other PLANNER change
+- [ ] polaris-install SKILL.md § Update gains the two pinned paragraphs (surfaces, preferences); `§ After the install` unchanged; no heading added or renamed
+- [ ] PROTOCOL.md THE TOOL row updated; no heading change; MANUAL.md, CLAUDE.md, BUILDER/SOLO/INTEGRATOR/CONDUCTOR/EVOLVE untouched
+- [ ] `api-kit.expected`: INIT.md's heading row updated by content diff — a strict diff is green in your worktree (you own every hunk this wave); `plain-voice`, `output-style-installed`, `adhd-skill-installed` green
+- [ ] `bash kit/ops/polaris doctor --selftest --only claudemd,brief,hint` green in the worktree (explicit 600000 ms timeout)
 
 ## T-146 — "SPIKE — skills POLARIS writes for itself: the token budget, the eviction rule, the gap-finder and the writer, designed before a line of code"
 points 3 · risk normal · landed ca2dddd (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
