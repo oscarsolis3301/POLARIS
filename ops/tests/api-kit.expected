@@ -25,6 +25,7 @@ kit/README.md	heading	Install (into any git repo)
 kit/README.md	heading	POLARIS v5 — parallel-sprint protocol
 kit/README.md	heading	The one idea
 kit/README.md	heading	The pieces
+kit/ops/KEYS.tsv	key	adhd
 kit/ops/KEYS.tsv	key	auto_update
 kit/ops/KEYS.tsv	key	autolaunch
 kit/ops/KEYS.tsv	key	autolaunch_max
@@ -260,6 +261,7 @@ kit/ops/lib/admin.sh	fn	board_quiescent
 kit/ops/lib/admin.sh	fn	claude_home
 kit/ops/lib/admin.sh	fn	cmd_adopt
 kit/ops/lib/admin.sh	fn	cmd_init_board
+kit/ops/lib/admin.sh	fn	cmd_interview
 kit/ops/lib/admin.sh	fn	cmd_slim
 kit/ops/lib/admin.sh	fn	cmd_uninstall
 kit/ops/lib/admin.sh	fn	cmd_update
@@ -267,6 +269,8 @@ kit/ops/lib/admin.sh	fn	cmd_update_all
 kit/ops/lib/admin.sh	fn	cmd_update_auto
 kit/ops/lib/admin.sh	fn	cmd_upgrade
 kit/ops/lib/admin.sh	fn	cmd_version
+kit/ops/lib/admin.sh	fn	interview_pending
+kit/ops/lib/admin.sh	fn	interview_set
 kit/ops/lib/admin.sh	fn	kit_zip_version
 kit/ops/lib/admin.sh	fn	refresh_machine_kit
 kit/ops/lib/admin.sh	fn	semver_gt
@@ -440,6 +444,7 @@ kit/ops/lib/observe.sh	fn	rules_gate
 kit/ops/lib/observe.sh	fn	scaffold_dirs
 kit/ops/lib/observe.sh	fn	scaffold_try
 kit/ops/lib/observe.sh	fn	status_brief
+kit/ops/lib/observe.sh	fn	surfaces_apply
 kit/ops/lib/observe.sh	fn	surfaces_health
 kit/ops/lib/ownership.sh	fn	ask_approval_covers
 kit/ops/lib/ownership.sh	fn	ask_approvals_load

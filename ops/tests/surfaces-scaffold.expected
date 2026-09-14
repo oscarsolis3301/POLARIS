@@ -1,0 +1,106 @@
+== 1a pytest --scaffold: the runner, four rows, two skips, and nothing written ==
+   runner: pytest — test_select: pytest {tests}
+SURFACE                      TESTS                        CMD
+src/api/                     tests/api/                   pytest tests/api/
+src/common/a.py              tests/common/test_a.py       pytest tests/common/test_a.py
+src/db/                      tests/db/                    pytest tests/db/
+src/util.py                  tests/test_util.py           pytest tests/test_util.py
+   ⚠ skipped: tests/common/ — ambiguous: common matches 2 dirs (lib/common src/common)
+   ⚠ skipped: 2 narrower pairing(s) — covered by an emitted ancestor row
+✅ 4 row(s) proposed · 2 skipped — write them: ops/polaris surfaces --scaffold --apply
+rc 0
+ops/SURFACES.tsv (still header-only): byte-identical
+ops/CONVENTIONS.md: byte-identical
+== 1b --scaffold --apply: four [scaffold] rows, test_select: appended, nothing committed ==
+   runner: pytest — test_select: pytest {tests}
+SURFACE                      TESTS                        CMD
+src/api/                     tests/api/                   pytest tests/api/
+src/common/a.py              tests/common/test_a.py       pytest tests/common/test_a.py
+src/db/                      tests/db/                    pytest tests/db/
+src/util.py                  tests/test_util.py           pytest tests/test_util.py
+   ⚠ skipped: tests/common/ — ambiguous: common matches 2 dirs (lib/common src/common)
+   ⚠ skipped: 2 narrower pairing(s) — covered by an emitted ancestor row
+✅ 4 row(s) written to ops/SURFACES.tsv · test_select: set
+   review, then commit ops/SURFACES.tsv ops/CONVENTIONS.md — nothing was committed for you
+rc 0
+src/api/	tests/api/	pytest tests/api/	api tests [scaffold]
+src/common/a.py	tests/common/test_a.py	pytest tests/common/test_a.py	a [scaffold]
+src/db/	tests/db/	pytest tests/db/	db tests [scaffold]
+src/util.py	tests/test_util.py	pytest tests/test_util.py	util [scaffold]
+-- ops/CONVENTIONS.md after --
+voice: standard
+test: pytest -q
+
+test_select: pytest {tests}   # set by surfaces --scaffold --apply: {tests} = the changed rows' tests globs; delete this line to run the whole test: suite on every change
+-- git status: written, not committed --
+ M ops/CONVENTIONS.md
+ M ops/SURFACES.tsv
+== 1c surfaces: the written map is healthy ==
+SURFACE                      TESTS                        CMD                              NOTE
+src/api/                     tests/api/                   pytest tests/api/                api tests [scaffold]
+src/common/a.py              tests/common/test_a.py       pytest tests/common/test_a.py    a [scaffold]
+src/db/                      tests/db/                    pytest tests/db/                 db tests [scaffold]
+src/util.py                  tests/test_util.py           pytest tests/test_util.py        util [scaffold]
+✅ 4 surface row(s), all healthy
+rc 0
+== 1d a second run proposes nothing and writes nothing ==
+   runner: pytest — test_select: pytest {tests}
+SURFACE                      TESTS                        CMD
+   ⚠ skipped: src/api/ — already mapped to tests/api/
+   ⚠ skipped: src/common/a.py — already mapped to tests/common/test_a.py
+   ⚠ skipped: src/db/ — already mapped to tests/db/
+   ⚠ skipped: src/util.py — already mapped to tests/test_util.py
+   ⚠ skipped: tests/common/ — ambiguous: common matches 2 dirs (lib/common src/common)
+   ⚠ skipped: 2 narrower pairing(s) — covered by an emitted ancestor row
+   nothing to propose — 6 pairing(s) skipped, listed above
+rc 0
+ops/SURFACES.tsv: byte-identical
+ops/CONVENTIONS.md: byte-identical
+== 1e a `# test_select:` stub is replaced in place, the prose after it stays put ==
+✅ 4 row(s) written to ops/SURFACES.tsv · test_select: set
+   review, then commit ops/SURFACES.tsv ops/CONVENTIONS.md — nothing was committed for you
+rc 0
+voice: standard
+test: pytest -q
+test_select: pytest {tests}   # set by surfaces --scaffold --apply: {tests} = the changed rows' tests globs; delete this line to run the whole test: suite on every change
+prose the human wrote after it
+== 1f a live test_select: is the human's: kept, and said ==
+✅ 4 row(s) written to ops/SURFACES.tsv · test_select: kept (already set here)
+   review, then commit ops/SURFACES.tsv ops/CONVENTIONS.md — nothing was committed for you
+rc 0
+test_select: custom
+== 1g on a feat/* branch --apply refuses: rc 1, nothing written ==
+⛔ surfaces --scaffold --apply runs on main only — from a task, rows are surface: items (polaris done writes them)
+rc 1
+ops/SURFACES.tsv: byte-identical
+ops/CONVENTIONS.md: byte-identical
+== 2 jest: two rows, complete cmds, zero skips ==
+   runner: jest — test_select: npx jest {tests}
+SURFACE                      TESTS                        CMD
+src/bar/                     src/bar/*.test.*             npx jest src/bar
+src/foo/                     src/foo/__tests__/           npx jest src/foo/__tests__
+✅ 2 row(s) proposed · 0 skipped — write them: ops/polaris surfaces --scaffold --apply
+rc 0
+== 3 go: one row, template go test ./..., zero skips ==
+   runner: go — test_select: go test ./...
+SURFACE                      TESTS                        CMD
+internal/foo/                internal/foo/*_test.go       go test ./internal/foo/...
+✅ 1 row(s) proposed · 0 skipped — write them: ops/polaris surfaces --scaffold --apply
+rc 0
+== 4a no runner: the NORUNNER note, rc 0 ==
+   no test runner this kit can scope (pytest · jest · vitest · go) — seen: Makefile. Map rows by hand: a task's surface: items (ops/roles/PLANNER.md step 5b)
+rc 0
+== 4b --apply without ops/CONVENTIONS.md refuses ==
+⛔ no ops/CONVENTIONS.md — run INIT first; the scaffold sets test_select: in it
+rc 1
+== 4c --apply with no runner writes nothing ==
+   no test runner this kit can scope (pytest · jest · vitest · go) — seen: Makefile. Map rows by hand: a task's surface: items (ops/roles/PLANNER.md step 5b)
+rc 0
+no ops/SURFACES.tsv written
+ops/CONVENTIONS.md: byte-identical
+== 5 breadth: src/ over 200 paths is skipped, nothing proposed ==
+   runner: vitest — test_select: npx vitest run {tests}
+SURFACE                      TESTS                        CMD
+   ⚠ skipped: src/ — surface matches 252 paths (>200)
+   nothing to propose — 1 pairing(s) skipped, listed above
+rc 0
