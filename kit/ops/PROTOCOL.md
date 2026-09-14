@@ -24,7 +24,7 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris pack <ID>` | **the whole context for one task, in ONE call** — frontmatter + Why + acceptance, the contract verbatim, the repo's detected house style, the code-map for every owned directory, the public API surface each owned path must not break, the gotchas/co-change lines that mention an owned path, and the exact `verify:` commands. Run it FIRST, before reading anything. It replaces the 6-15 exploratory round trips a cold Builder otherwise spends rediscovering its own task |
 | `ops/polaris find <symbol>` · `show <path>#<symbol>` | the 1-hop "where is X": `path:line` + signature per hit, ranked, from a generated index; `show` prints ONE symbol's body instead of the file. `--api <glob>` = the sorted public surface of a path (the shape goldens lock). Run these BEFORE Grep |
 | `ops/polaris claim [ID]` | atomic lock + ready→active + worktree (no ID = top wsjf) |
-| `ops/polaris verify` | proves `diff ⊆ files_owned` + runs the task's `verify:` commands |
+| `ops/polaris verify` | proves `diff ⊆ files_owned`, no `ops/RULES.tsv` hit, and the stale-tests gate (a mapped surface that changed must have changed its tests — `ops/SURFACES.tsv`) + runs the task's `verify:` commands |
 | `ops/polaris handoff` | verify + active→review; `publish: direct` pushes feat/<ID>, `publish: pr` keeps it local (seal pushes only integrate/<date>) — run inside your worktree |
 | `ops/polaris release <ID> --to ready\|blocked -m "why"` | clean abort |
 | `ops/polaris grant <ID> <path> -m "why"` | append one path to a CLAIMED task's files_owned; refuses any overlap with another ready/active task's ownership |
@@ -40,8 +40,8 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris dash / metrics` | live board at 127.0.0.1:7373 · cycle/kickbacks/per-point calibration (`metrics` opens with a plain-English summary line) |
 | `ops/polaris brain [--refresh]` | (re)build `.polaris/brain/` — a generated, gitignored, any-model knowledge base that kills cold-start re-derivation; `--refresh` = incremental rebuild. `doctor` warns when it's stale |
 | `ops/polaris notify-gate <kind> [ID]` | fire the notify: hook at a human gate — kinds `plan` · `risk <ID>` · `question <ID>` · `done [ID]`; observe-only, never writes the board |
-| `ops/polaris drift / rules` | mechanical board-hygiene audit (`--strict` for CI) · policy file list + health |
-| `ops/polaris qa` | "is everything okay?" in ONE shot: CONVENTIONS suite (test/lint/typecheck/build/uat) + `drift --strict` + doctor. Runs every check even after a red; rc 1 on any red. `finish` runs this for you at the close |
+| `ops/polaris drift / rules / surfaces` | mechanical board-hygiene audit (`--strict` for CI) · policy file list + health · the test map (`ops/SURFACES.tsv`: which tests cover which source paths) + its health — a `tests` glob that covers its own surface is refused, a glob matching 0 or >200 tracked files is flagged, and `drift` carries the refusals as findings. Rows are written only by `done` from a task's `surface:` list, never by hand |
+| `ops/polaris qa` | "is everything okay?" in ONE shot: CONVENTIONS suite (test/lint/typecheck/build/uat) + `drift --strict` + doctor. Runs every check even after a red; rc 1 on any red. `finish` runs this for you at the close. With `test_select:` set in `ops/CONVENTIONS.md`, `test:` is scoped to the `ops/SURFACES.tsv` rows a change can break (one unmapped changed path → the whole suite; `qa --full` runs `test:` verbatim); unset, every change runs the whole `test:` suite, byte-identical to before |
 | `ops/polaris bg run/status/tail/wait` | run and collect suite-length commands without blocking: `run <suite-key\|name -- cmd…>` detaches it, `wait` collects in bounded chunks (`--max` defaults to 300s, deliberately half the 600s tool cap). rc 0 green · 1 red · 2 running · 3 unknown — parse the code, never the prose. Past the cap this is the only way a result comes back at all, because a timed-out call returns NOTHING and gets re-run; see § LONG COMMANDS |
 | `ops/polaris finish` | "is the RUN over?" — the mechanical half of CONDUCTOR.md's run-over definition in ONE call: nothing building, nothing waiting to land, `ready/` drained per `drain:`, no unmerged `integrate/<date>`, no orphan lock, clean tree, `qa` green on `<base>`. rc 0 = complete, and the `notify-gate done` hook fires exactly once per finished state; rc 1 names every pending thing. `caveat:` lines are not gates — the close must mention them. **The last command of every lane**, and the only thing that licenses the `# 🎉 Complete!` H1 (ops/contracts/run-finish.md) |
 | `ops/polaris route [<ID> \| --role R \| --points N --risk R]` | which model tier a task or role deserves, in one hop: line 1 is a bare `strong` \| `mid` \| `cheap`, so a caller branches on it blind, and a three-space `model:` note follows ONLY when a `model_*` knob (or the task's own `model:` frontmatter) maps that tier to a real name. Unset knobs = tier words only, behaviour unchanged. The CONDUCTOR runs it before every spawn; `fleet` injects its answer into every pane |
@@ -94,8 +94,8 @@ So POLARIS collapses SESSIONS, never CHECKS:
 
 | lane | contexts | when `triage` picks it |
 |---|---|---|
-| `solo` | **1** | one task, ≤3 points, `risk: normal`, `express:` on, `publish: direct`, nothing RULES-guarded, or `ask`-guarded with a recorded approval |
-| `express` | 2 | one task, one builder, one integrator |
+| `solo` | **1** | small and few, nothing a human must decide — `triage` prints the budget it applied and the arithmetic behind it |
+| `express` | 2 | one small task, one builder, one integrator |
 | `full` | 4+ | anything else — real parallelism, real merge risk |
 
 Every gate the long path runs, SOLO runs: `verify` (ownership + RULES), the task's `verify:` list,
@@ -105,7 +105,11 @@ change fit the lane, **the lane is wrong** — release it back and take the full
 **`triage` is mechanical on purpose.** It reads points, risk, `express:`, `publish:` and the
 RULES-guarded paths straight off the board. A model weighing those six conditions from prose gets it
 wrong occasionally, and a wrong guess toward `full` costs a whole sprint of contexts while a wrong
-guess toward `solo` strands a half-built task. The command is free; the judgement is not.
+guess toward `solo` strands a half-built task. The command is free; the judgement is not. That is
+also why the conditions are written in the command and nowhere else: a role file that restated them
+drifted from the code within a release, a model reading both found itself holding a judgement call
+the protocol never gave it, and it handed the tie-break to the human as a menu of lanes. Never
+re-derive the lane in prose and never offer it as a choice — the interview is about the product.
 
 **One role per session** because a role's whole safety argument is its narrow context: a Builder that
 also plans starts inventing interfaces, and one that also integrates merges its own red work. The

@@ -21,6 +21,12 @@ is reading points, risk, `express:`, `publish:` and the RULES-guarded paths dire
 If `triage` says `full` because the board is empty and the human just asked for something small,
 you may author the single task yourself (step 1) and re-run `triage` to confirm `solo`.
 
+`triage` may also hand you up to 4 small tasks at once — its note states the budget it applied and
+the arithmetic behind it; never re-derive either. Work them ONE AT A TIME: claim → build → land
+(the step-5 tail, or `land --express`) → `bash ops/polaris next` → the next claim, and `finish`
+once, at the very end. Entered as a conductor's subagent? Stop after your last land and report —
+the conductor runs `finish`.
+
 **You share this checkout with other chats, and their dirt is not your question:**
 a dirty shared checkout is parked, never asked about: bash ops/polaris park
 — `bash ops/polaris unpark` puts it back, and a taken lock or a busy lane read the same way (`ops/PROTOCOL.md` § N CHATS, ONE REPO).
@@ -35,9 +41,12 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 ## The path
 1. **Author the task** (skip if one already sits in `ready/`). From `ops/templates/TASK.md`, into
    `ops/board/ready/<ID>.md`. Keep it honest and small:
-   - `points:` 1 to 3 · `risk: normal` · `files_owned:` the exact paths you will touch, nothing
-     speculative · `context_files:` the nearest existing example · `contract:` only if there is a
-     real seam — a change this size usually has none.
+   - `points:` small — `triage` holds the budget, so re-run it after authoring and let it confirm
+     `solo` · `risk: normal` · `files_owned:` the exact paths you will touch, nothing speculative ·
+     `context_files:` the nearest existing example · `contract:` only if there is a real seam — a
+     change this size usually has none · `surface:` only when the change touches code that has
+     tests (grammar in `ops/templates/TASK.md`) — `done` turns each item into an `ops/SURFACES.tsv`
+     row; nobody writes that file by hand.
    - `verify:` the NARROW check that proves THIS change, each under ~10s. **Never the full suite**
      — `polaris verify` now refuses it, because `verify:` is paid up to 3× per task while the wave
      gate already runs the suite once.
@@ -55,6 +64,12 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 3. **Build.** Match the surrounding code: `.polaris/brain/prefs.md` records the repo's real
    conventions, so you do not have to infer them.
 4. **Verify** — `bash ops/polaris verify`. Proves diff ⊆ `files_owned` and runs your `verify:` list.
+   It also refuses a change to a mapped surface whose tests did not change — `⛔ SURFACES stale`
+   (`ops/SURFACES.tsv` maps which tests cover which source paths; `pack` printed the rows that
+   cover what you own). Update the tests; a genuine exception is a human's recorded decision,
+   `polaris approve <ID> <surface> -m "why"`, never a row edit — that file is written only by
+   `polaris done` from a task's `surface:` list and is RULES-guarded. A wrong or missing row → one
+   line in `ops/board/backlog/IDEAS.md`, or a `surface:` item on the task (step 1).
    Then the repo's fast tier: `test_fast:` from `ops/CONVENTIONS.md` when it is set — seconds, on
    every change. When it is UNSET there is NO fallback: do not run `test:` here. The full suite is
    the WAVE gate and is paid once — at `land --express`, or at `finish` — and `finish` skips it
@@ -124,7 +139,7 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
   approve your own way forward is strongest where nobody else is watching.
 
 ## What you must NOT skip
-Every gate the long path runs, you run: `verify` (ownership + RULES) · the task's `verify:` list ·
+Every gate the long path runs, you run: `verify` (ownership + RULES + SURFACES freshness) · the task's `verify:` list ·
 the full suite once — at `land --express`, or at `finish` after a step-5 self-land ·
 the capture, when `pack` printed one · `finish`.
 SOLO collapses SESSIONS, never CHECKS — the same

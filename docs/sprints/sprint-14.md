@@ -32,7 +32,7 @@ diff, sorted into place. `cli-help.expected` is NOT yours — it regenerates at 
 - [ ] bash 3.2 clean: no `case` inside `$(...)`, no `mapfile`; `bash -n` on every touched script
 
 ## T-135 — "The stale-tests gate — a mapped surface can't hand off without its tests moving too"
-points 5 · risk normal · landed 481590b (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed 481590b (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/ownership.sh
 
 ### Why
@@ -62,7 +62,7 @@ the deny lines and the exemption; T-138 proves them in the drill, so make every 
 - [ ] no new top-level fn beyond `check_freshness` (T-136 writes its api-kit row); no heading; bash 3.2 clean
 
 ## T-136 — "qa runs only what a change can break, surfaces gets a health check, and triage prices contexts instead of tasks"
-points 5 · risk normal · landed b993918 (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed b993918 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/observe.sh, ops/tests/api-kit.expected, ops/tests/triage-lane.cmd, ops/tests/triage-lane.expected
 
 ### Why
@@ -94,7 +94,7 @@ multi-task cases; keep every existing line.
 - [ ] no new top-level fn beyond `cmd_surfaces` + `surfaces_health`; no heading; bash 3.2 clean; `doctor --fast` green; the `qa`, `finish`, `express` drills green at the wave gate (`bg run test`)
 
 ## T-137 — "The integrator lane keeps step — express selects like qa, the stamp carries its scope, done writes the rows"
-points 3 · risk normal · landed 69d5b97 (2026-09-14) · claimed 2026-09-14
+points 3 · risk normal · landed 69d5b97 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/integrate.sh, kit/ops/lib/selftest/history.sh
 
 ### Why
@@ -116,3 +116,53 @@ appears, so you own `history.sh` too and relax it to demand ` full` (its fixture
 - [ ] `cmd_done`: `surface:` items parsed BEFORE the mv via `surface_row_from_item`; malformed / self-covering / duplicate ⇒ `⚠ surface row skipped: … — <reason>` and continue; rows require `$BASE` checked out (die names surface rows); `surfaces_seed` then append; ONE base commit — `docs(map): …` gains the SURFACES pathspec when deltas exist, else `docs(surfaces): <ID> <first surface>`; no items ⇒ byte-identical
 - [ ] `drill_express` regex → `^[0-9a-f]{7,} [0-9]+ full$`; every other express assertion unchanged; drill green (`bg run` with `--only express`, record the seconds in Notes)
 - [ ] no new top-level fn in either file; no heading; bash 3.2 clean
+
+## T-138 — "Prove it — the surfaces drill and the fast-tier sections"
+points 5 · risk normal · landed 0c19364 (2026-09-14) · claimed 2026-09-14
+files touched: kit/ops/lib/selftest/fast.sh, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/spine.sh
+
+### Why
+Three waves of code are only as good as the proof that they stay honest. This task writes it at both
+tiers: five in-process fast sections (seconds, every change) over the pure functions — TSV parsing,
+glob matching, selection algebra, the item grammar, stamp scope — and ONE end-to-end drill,
+`surfaces`, in a throwaway repo that walks the whole path: a task's `surface:` row written by `done`,
+the stale-tests gate refusing and then passing, the comment-only exemption, the human's `approve`
+exemption, `qa` running only the mapped command and stamping `scoped`, the whole suite on an unmapped
+change, `--full`, a `-` template row, and the health check refusing a self-covering row through
+`drift --strict`. Contract § 10 lists the minimum assertions; every one checks rc, file state or qa's
+own report line — never qa's exit code and never a printed refusal alone (T-089, T-131). Keep the
+drill hermetic and under the ~44s budget, and record its measured seconds in Notes.
+
+### Acceptance
+- [ ] `drill_surfaces` in policy.sh with every § 10 assertion (1–7); label `surfaces` appended LAST in `SELFTEST_LABELS`; gate directly after the `rules` gate; hermetic restore of SURFACES.tsv (header-only), CONVENTIONS keys, tasks, branches, stamp; a sabotage in a throwaway copy (e.g. skip the tests change) reds the drill — record the sabotage diff in Notes
+- [ ] fast.sh sections `surfaces-tsv` · `surfaces-match` · `surfaces-select` · `surfaces-item` · `stamp-scope`, ≥4 asserts each, fixtures under `$FT_TMP`, globals overridden inside the section subshell only; no new top-level fn in fast.sh
+- [ ] `bash kit/ops/polaris doctor --selftest --only surfaces` green (600000 ms or `bg run`); full `bg run test` green at the wave gate; measured drill seconds in Notes
+- [ ] no new top-level fn beyond `drill_surfaces` (T-139 writes its api-kit row); no heading; bash 3.2 clean (no `case` inside `$(...)`)
+
+## T-139 — "Stop asking which lane — delete the second copy, name the anti-pattern, guard the map file, teach every role"
+points 5 · risk normal · landed 7d2e6fd (2026-09-14) · claimed 2026-09-14
+files touched: kit/.claude/output-styles/polaris.md, kit/CLAUDE.md, kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INIT.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md, kit/ops/templates/TASK.md, ops/RULES.tsv, ops/tests/api-kit.expected, ops/tests/rules-health.expected
+
+### Why
+The reason POLARIS asks "which lane?" is that the answer exists twice: `polaris triage` computes it,
+and CONDUCTOR.md step 2.5 restates the six conditions in prose — and the prose drifted (it says two
+points, the code says three). A model re-derives, disagrees with the CLI, finds itself holding a
+judgment call, and asks. Delete the second copy: step 2.5 becomes "run triage, branch on line 1",
+and the named anti-pattern — never offer a menu of execution strategies — goes into kit/CLAUDE.md,
+the output style and PLANNER 0b, verbatim from contract § 12. The same pass teaches every role the
+surface map: Builders and SOLO learn the stale-tests refusal and that the file is never edited by
+hand, SOLO learns to work several small tasks one at a time, the Integrator learns `done` writes
+the rows, INIT learns to arm the guard, the task template gains `surface:`, PROTOCOL and MANUAL
+learn the command and the by-hand proof. Finally this repo arms the RULES `path` line on
+`ops/SURFACES.tsv` (rules-health goes 15 → 16). You are W3's single owner of `api-kit.expected`:
+add T-138's pinned `drill_surfaces` row, and add no heading of your own — every edit is a
+paragraph, list item, step or table row. `plain-voice` and `output-style-installed` must stay
+byte-identical: the anti-pattern is a paragraph after the numbered rules, never rule 8.
+
+### Acceptance
+- [ ] CONDUCTOR.md 2.5 per contract § 12: `triage` → line 1 → solo (ONE SOLO subagent; conductor runs `finish`) · express (existing choreography verbatim) · full (steps 3–8, silently); no lane condition or point threshold restated anywhere in the file
+- [ ] the pinned anti-pattern paragraph, verbatim, in kit/CLAUDE.md (after `Not on it:`), the output style (after the numbered list, not as a rule) and PLANNER.md 0b (its one-line form); CLAUDE.md Invariant 1 gains the surfaces clause; CLAUDE.md net growth ≤ 4 lines
+- [ ] PLANNER.md step 5b (map the surfaces, § 3 grammar) · BUILDER.md + SOLO.md (stale-tests refusal, approve is the only exemption, never edit the file, IDEAS/Notes for a wrong row; SOLO: up to 4 tasks one at a time, subagent stops before `finish`) · INTEGRATOR.md (gate at audit/land, exception line carried, `done` writes rows) · INIT.md (seeded file, arm the commented RULES line) · TASK.md (`surface:` field) · PROTOCOL.md (THE TOOL rows) · MANUAL.md (by-hand freshness proof + rows commit)
+- [ ] `ops/RULES.tsv` gains the pinned `ops/SURFACES.tsv<TAB>path<TAB>-<TAB>…` line with a `#` comment naming who and why (Invariant 11); `rules-health.expected` = `✅ 16 rule(s), all healthy`; `bash ops/polaris rules` on base prints exactly that after landing (integrator re-proves — primary-anchored)
+- [ ] `api-kit.expected` gains exactly `kit/ops/lib/selftest/policy.sh	fn	drill_surfaces` and no heading rows (content diff, index.py recipe); an unexpected hunk is a STOP
+- [ ] `plain-voice`, `output-style-installed`, `cli-help-parity` goldens byte-identical and green; `bash kit/ops/polaris check` green at the wave gate (except `cli-help`, which regenerates at the release dogfood by design — say so in the handoff report)
