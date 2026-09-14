@@ -118,7 +118,7 @@ appears, so you own `history.sh` too and relax it to demand ` full` (its fixture
 - [ ] no new top-level fn in either file; no heading; bash 3.2 clean
 
 ## T-138 — "Prove it — the surfaces drill and the fast-tier sections"
-points 5 · risk normal · landed 0c19364 (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed 0c19364 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/selftest/fast.sh, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/spine.sh
 
 ### Why
@@ -140,7 +140,7 @@ drill hermetic and under the ~44s budget, and record its measured seconds in Not
 - [ ] no new top-level fn beyond `drill_surfaces` (T-139 writes its api-kit row); no heading; bash 3.2 clean (no `case` inside `$(...)`)
 
 ## T-139 — "Stop asking which lane — delete the second copy, name the anti-pattern, guard the map file, teach every role"
-points 5 · risk normal · landed 7d2e6fd (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed 7d2e6fd (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/.claude/output-styles/polaris.md, kit/CLAUDE.md, kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INIT.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md, kit/ops/templates/TASK.md, ops/RULES.tsv, ops/tests/api-kit.expected, ops/tests/rules-health.expected
 
 ### Why
@@ -166,3 +166,121 @@ byte-identical: the anti-pattern is a paragraph after the numbered rules, never 
 - [ ] `ops/RULES.tsv` gains the pinned `ops/SURFACES.tsv<TAB>path<TAB>-<TAB>…` line with a `#` comment naming who and why (Invariant 11); `rules-health.expected` = `✅ 16 rule(s), all healthy`; `bash ops/polaris rules` on base prints exactly that after landing (integrator re-proves — primary-anchored)
 - [ ] `api-kit.expected` gains exactly `kit/ops/lib/selftest/policy.sh	fn	drill_surfaces` and no heading rows (content diff, index.py recipe); an unexpected hunk is a STOP
 - [ ] `plain-voice`, `output-style-installed`, `cli-help-parity` goldens byte-identical and green; `bash kit/ops/polaris check` green at the wave gate (except `cli-help`, which regenerates at the release dogfood by design — say so in the handoff report)
+
+## T-140 — "The scaffold engine — lib/surfaces.sh proposes a repo's test map from its own layout, and the entry learns surfaces --scaffold and interview"
+points 5 · risk normal · landed 42c7eb9 (2026-09-14) · claimed 2026-09-14
+files touched: kit/ops/lib/surfaces.sh, kit/ops/polaris, ops/tests/api-kit.expected
+
+### Why
+Sprint A made `qa` and `land --express` able to run only the tests a change can break — and, by
+design, switched nothing on: `test_select:` unset plus an empty `ops/SURFACES.tsv` is byte-identical
+to 6.3. `update --auto` therefore delivers 6.4.0 to every installed repo and makes none of them
+faster. Somebody has to write the rows, and in a repo nobody is watching that somebody is POLARIS.
+This task is the engine that proposes them: given the repo's manifests and its tracked-file list, it
+names the test runner it can PROVE takes path arguments (pytest, jest, vitest — and go, whose rows
+carry complete package commands), pairs test dirs to source dirs only where the stack's own
+convention implies the pairing (`tests/api/` ↔ exactly one `api/` dir; `tests/test_util.py` ↔
+exactly one `util.py`; `src/foo/__tests__/` ↔ `src/foo/`; a dir with `*_test.go`), and refuses to
+guess: two candidate dirs is a SKIP that says so, a surface over 200 paths is a SKIP, a narrower
+pairing under an emitted one is folded. Mis-mapping is the unsafe failure (a row that skips real
+coverage while reporting green), so the whole engine leans toward emitting three honest rows and
+admitting the rest. It is pure — no git, no network, no map read — so the fast tier proves it in
+milliseconds and the golden pins every byte. Contract § 13 is the spec: three functions, exactly.
+
+You are also this wave's single owner of `kit/ops/polaris` and `ops/tests/api-kit.expected`: add
+`surfaces` to the loader (§ 13, module-layout v6), write the `surfaces [--scaffold [--apply]]` usage
+entry (§ 14 replaces the v1 lines verbatim) and the `interview` entry + dispatch (first-run.md § 2,
+verbatim — `cmd_interview` lands in W2; naming an undefined function until then is accepted), and
+write the api-kit rows for T-143's `arm_file` and T-148's `board_pull` from their pinned names (§ 18),
+never from a diff you cannot see.
+
+### Acceptance
+- [ ] `kit/ops/lib/surfaces.sh` exists, ≤ 350 lines, exactly three top-level functions (`surfaces_runner` · `surfaces_pairs` · `surfaces_proposal`), bash 3.2 clean, matching only via `match_one` with args
+- [ ] `surfaces_runner` answers the § 13 table in the § 13 order (node by grep on package.json → pytest by its five tells → go by go.mod); everything else rc 1
+- [ ] `surfaces_pairs` emits the per-stack rows and the three shared filters in order (ambiguity → breadth → ancestor), sorted `LC_ALL=C`, SKIP lines as data; `surfaces_proposal` adds `already mapped` and `tests glob covers its own surface`, and prints `NORUNNER … seen: <manifests>` as its only line when nothing scopes
+- [ ] contract § 17 case 1 by hand in a scratch repo (`scratchpad/T-140/…`): FOUR rows, TWO skips, byte-exact per the contract — the golden itself is T-142's, but its case 1 is your engine's spec
+- [ ] loader: `surfaces` between `workspace` and `builder`; the `_match|_rules|_guard` list untouched; `startup-budget` green
+- [ ] usage: the § 14 `surfaces` block replaces v1's, the first-run.md § 2 `interview` block sits directly after `adopt`; dispatch lines exactly as pinned; `cli-help-parity` still 10; `bash kit/ops/polaris help | diff - ops/tests/cli-help.expected` shows the v1 hunks + the two new ones and nothing else
+- [ ] `api-kit.expected`: your three rows + `arm_file` + `board_pull` added by content diff (§ 18); no other hunk
+- [ ] `doctor --fast` green; the `surfaces` and `qa` drills green at the wave gate (`bg run test`)
+
+## T-143 — "Arm the machine with the voice — bootstrap.py lands the output style and the ADHD skill in ~/.claude, install.sh honours adhd: on"
+points 3 · risk normal · landed 92c83dd (2026-09-14) · claimed 2026-09-14
+files touched: kit/ops/bootstrap.py, kit/ops/install.sh, kit/ops/selftest-install.sh, ops/tests/machine-armed.cmd, ops/tests/machine-armed.expected
+
+### Why
+`arm_machine()` teaches a machine how to install POLARIS: the installer skill, the cached kit, the
+permission rules, keep-awake. It does not teach it how to TALK. The output style (the warm, plain
+voice and the 🎉 that `finish` earns) and the vendored `/i-have-adhd` skill are copied per repo by
+`install.sh`, so on a second computer — or in any repo where the installer never ran — there is no
+style to select and no skill to invoke. That is the confetti gap. Land both in `~/.claude` from the
+archive, write-if-different so a repeat install stays quiet, and say what landed. Two things stay
+exactly as they are, on purpose: `outputStyle` in the MACHINE settings is never written (a
+machine-wide style would restyle every non-POLARIS repo — selection stays per repo or per session),
+and the machine copy of i-have-adhd keeps `disable-model-invocation: true` (the opt-in is a repo
+preference, `adhd:`, asked by the interview T-141 ships). The repo half of that preference is yours
+too: `install.sh` copies the kit's skill verbatim on every update, which would silently re-arm the
+opt-in flag in a repo that said `adhd: on` — so after the copy, honour the line. Contract
+first-run.md § 2 (install.sh) and § 3 (arming + the golden) pin every path and line.
+
+### Acceptance
+- [ ] `arm_file(z, member, dest) -> bool` is the ONLY new top-level def in bootstrap.py; `arm_machine` uses it for the style and the three i-have-adhd files, folds the results into `changed`, prints the two pinned `✅ … armed:` lines, skips a missing member silently
+- [ ] `--no-machine-setup` skips it; `--no-permissions` unaffected; `outputStyle` never appears in bootstrap.py; PERMS unchanged (`perm-tools` green)
+- [ ] `install.sh`: after the vendored copy, a live `^adhd:[[:space:]]*on` in the target's CONVENTIONS ⇒ the copied SKILL.md reads `disable-model-invocation: false` (temp file + mv); otherwise the copy stays verbatim — the kit copy is never touched (`adhd-skill-installed` green)
+- [ ] `kit/ops/selftest-install.sh` gains the two-way case inside its live-board section (no new top-level fn); run it once with `POLARIS_AWAKE_HOME` pointed at a scratch dir (foreground, explicit ≥ 180000 ms timeout) — green
+- [ ] golden `ops/tests/machine-armed.cmd/.expected` per first-run.md § 3: builds the zip with the repo's own `build:` (`python kit/ops/pack.py --allow-dirty`), arms a fake `HOME`/`USERPROFILE`, asserts the files, the kept flag, the absent settings.json, and a byte-identical second run; runs from the repo root, hermetic, < 15 s
+- [ ] CI's own `--claude-skill` job (`.github/workflows/ci.yml`, human-owned — read, never edit) still passes by inspection: its asserts are about the skill and the permissions, both untouched
+
+## T-146 — "SPIKE — skills POLARIS writes for itself: the token budget, the eviction rule, the gap-finder and the writer, designed before a line of code"
+points 3 · risk normal · landed ca2dddd (2026-09-14) · claimed 2026-09-14
+files touched: plans/self-skills.md
+
+### Why
+plans/v3.md § B3 asks for skills POLARIS writes for itself — a repo's `.claude/skills/<name>/SKILL.md`,
+committed, so a surface the agents keep rediscovering gets a skill that saves the rediscovery. No
+mechanism for that exists anywhere in the kit, and the governing tension is not a writer, it is a
+budget: every skill's frontmatter is injected into EVERY session's system prompt — `cmd_slim`
+measured 251 definitions / 34,119 B / ~8,500 tokens per context on this machine. A skill that saves
+5k tokens of rediscovery per use is a clear win; fifty speculative skills are a permanent tax on
+every session, including the ones that never needed them. Five points of greenfield off one
+paragraph would be a guess, so this is a time-boxed design pass that produces the DOCUMENT the real
+tasks are carved from. Write no kit code. Measure first, decide second, propose third.
+
+### Acceptance
+- [ ] `plans/self-skills.md` with these headings, in order: `## The tension` · `## Measurements` · `## Budget` · `## Eviction` · `## Gap-finder` · `## The writer` · `## Names and homes` · `## Proposed contract` · `## Proposed carve`
+- [ ] Measurements are REAL numbers from this machine: `bash ops/polaris slim` (report only — never `--apply`) pasted in full; the byte size of each shipped SKILL.md frontmatter (`kit/.claude/skills/*/SKILL.md`, lines between the `---` fences); the per-context cost of one more skill at that size, in tokens (÷4) and multiplied by a 6–8-context conductor run
+- [ ] Budget: a hard cap in BYTES of frontmatter per repo that POLARIS-written skills may add (derive it from the numbers — say why), and what happens at the cap (refuse to write, or evict)
+- [ ] Eviction: a rule stated as data a command can evaluate — what "unused" means (which board or `pack` signal records a skill being read; `ops/board/EVENTS.ndjson` is the only telemetry that exists; say what would have to be added), the window, and the reversible move (archive under `.polaris/`, never delete — `slim --apply` is the precedent)
+- [ ] Gap-finder: how `ops/SURFACES.tsv` and the done tasks' `files_owned` identify "a surface worked on repeatedly with no skill", with the exact threshold; and why NOT to write a skill for a surface worked once
+- [ ] The writer: who writes (EVOLVE between sprints, the Integrator at `done`, or a `polaris skill propose <surface>` command a human runs) and what the skeleton contains (the skill's frontmatter must stay under a stated byte size; the body is where the savings live); name the input `pack` already computes that the skeleton would reuse
+- [ ] Names and homes: `.claude/skills/<name>/SKILL.md` committed in the repo (owner choice — travels with the repo); the reserved names `update` manages and this must never collide with (`polaris`, `polaris-install`, `i-have-adhd` — admin.sh's uninstall list; quote the line); how `update` and `uninstall` treat POLARIS-written skills
+- [ ] Proposed contract: a CONTRACT.md-shaped draft (interface, invariants, executable check, example) the Planner can lift into `ops/contracts/self-skills.md`
+- [ ] Proposed carve: ≤ 5-point leaves with disjoint `files_owned`, pointed; which golden(s) pin the budget; which drill proves the eviction; the api-kit rows each leaf adds
+- [ ] Every open question you could not settle is listed under `## Proposed contract` as `OPEN:` lines with the two options and your recommendation — never silently defaulted
+
+## T-148 — "The board follows you — board_pull fetches origin's board ref under claim-branch, so a second machine's status, next and claim read the truth"
+points 5 · risk normal · landed c225ba4 (2026-09-14) · claimed 2026-09-14
+files touched: kit/ops/lib/builder.sh, kit/ops/lib/core.sh, kit/ops/lib/handover.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/remote.sh
+
+### Why
+plans/v3.md § B4 says cross-device tracking is "mostly configuration": `claim: claim-branch` plus an
+origin remote, because `sync_board()` opens with `has_remote || return 0` and without a remote every
+board mutation is silently machine-local. Reading the code shows the other half is missing: with a
+remote, every mutation PUSHES `refs/heads/polaris/board`, but nothing ever FETCHES it — a second
+machine reads `ops/board/` exactly as it was at its last clone (`board_materialize` only fires when
+the directory is absent). The claim-branch lock still prevents two machines building one task, but
+`status`, `next`, `board-fm` and the dashboard on the second machine show a board that stopped
+moving. `board_pull` is the read side: under `claim-branch` with a remote, fetch the ref (at most
+once a minute), fast-forward the local ref when it is an ancestor of origin's, and re-materialize
+the moved set with the same plumbing `board_materialize` uses — never a branch switch, never the
+primary index. A diverged local ref is reported and left alone; a `local-lock` repo (this one) pays
+nothing at all. Contract first-run.md § 5 pins the algorithm, the throttle, the four call sites and
+the drill.
+
+### Acceptance
+- [ ] `board_pull` in core.sh (≤ 45 lines, the only new top-level fn): gate on `CLAIM_MODE = claim-branch` AND `has_remote`, else rc 0 with no fork; 60 s throttle on `$PRIMARY/.polaris/board-pulled`; `POLARIS_BOARD_PULL=0` skips
+- [ ] remote tip by `ls-remote … | cut -f1`, never FETCH_HEAD; equal ⇒ nothing; ancestor ⇒ delete the local tip's tracked moved-set files, `update-ref`, `read-tree` into a secondary index + `checkout-index -a -f --prefix`, then `board pulled: <n> commit(s) from origin (claim-branch)`; diverged ⇒ the pinned `⚠ board diverged from origin …` note and no write
+- [ ] call sites: first statement of `cmd_status` and `cmd_board_fm` (observe.sh), `cmd_next` (handover.sh), `cmd_claim` (builder.sh); nowhere else — not the guard path, not doctor
+- [ ] `sync_board` byte-identical; `startup-budget` green; `board-fm-shape` green
+- [ ] `drill_remote` (remote.sh) gains the clone-and-pull step per § 5: claim in a second clone ⇒ `status` in the first shows active/ + the stamp file; `POLARIS_BOARD_PULL=0` keeps a later change stale; a diverged local ref ⇒ the note, files untouched; the fixture is restored to `local-lock` and the clone removed afterwards
+- [ ] `bash kit/ops/polaris doctor --selftest --only remote,syncrace` green in the worktree (foreground, explicit 600000 ms timeout — the spine alone is ~144 s) and the whole `test:` green at the wave gate via `bg run test`
