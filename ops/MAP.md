@@ -184,3 +184,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - "bootstrap.py arm_machine also lands ~/.claude/output-styles/polaris.md and ~/.claude/skills/i-have-adhd/ (arm_file, write-iff-different; never outputStyle in the machine settings); install.sh flips i-have-adhd's disable-model-invocation to false when the target's CONVENTIONS says adhd: on; golden machine-armed"  (T-143, 2026-09-14)
 
 - "core.sh board_pull: under claim: claim-branch, status/board-fm/next/claim first fetch refs/heads/polaris/board from origin (≤1 fetch/60 s, POLARIS_BOARD_PULL=0 skips), fast-forward the local ref and re-materialize the moved set; diverged ⇒ a warning, no write; local-lock pays nothing; remote drill proves it"  (T-148, 2026-09-14)
+
+- "kit/ops/lib/surfaces.sh (NEW, loader slot between workspace and builder): the scaffold engine — surfaces_runner (pytest · jest · vitest · go, grep-only), surfaces_pairs (name-based pairing, ambiguity/breadth/ancestor filters), surfaces_proposal (RUNNER/ROW/SKIP as data); entry gains surfaces [--scaffold [--apply]] and interview usage + dispatch"  (T-140, 2026-09-14)
