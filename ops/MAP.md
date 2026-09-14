@@ -180,3 +180,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - "roles/CLAUDE.md/output-style carry the one-copy lane rule (CONDUCTOR 2.5 = run triage) and the named anti-pattern; TASK.md gains surface:; ops/RULES.tsv guards ops/SURFACES.tsv (16 rules)"  (T-139, 2026-09-14)
 
 - "selftest gains the surfaces drill (label surfaces: gate · exemption · selection · stamp scope · health · drift) and five fast-tier sections (surfaces-tsv/match/select/item, stamp-scope)"  (T-138, 2026-09-14)
+
+- "bootstrap.py arm_machine also lands ~/.claude/output-styles/polaris.md and ~/.claude/skills/i-have-adhd/ (arm_file, write-iff-different; never outputStyle in the machine settings); install.sh flips i-have-adhd's disable-model-invocation to false when the target's CONVENTIONS says adhd: on; golden machine-armed"  (T-143, 2026-09-14)
