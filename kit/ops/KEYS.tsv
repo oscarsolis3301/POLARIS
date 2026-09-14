@@ -35,6 +35,7 @@ run_fix_waves	5.18.0	2	the Check phase retries a red suite at most twice before 
 qa_scout	5.18.0	auto	the runtime QA scout spawns only when uat: is empty AND the run touched a runnable: path
 runnable	5.18.0	<globs or omit>	this repo declares no runnable surface, so qa_scout: auto resolves to off
 test_fast	5.18.0	<cmd or omit>	Builders pay the whole test: suite per handoff — set this before it nears the tool timeout
+test_select	6.4.0	<cmd or omit>	every change runs the whole test: suite — set a template whose {tests} becomes the matched rows' tests globs, then map surfaces (surface: on tasks) to run only what a change can break
 stale_hours	5.0.0	4	sweep warns on active locks older than 4 hours
 uat	5.0.0	<cmd or omit>	no end-to-end command runs on the integrate branch; only test/lint/typecheck/build gate it
 notify	5.0.0	<cmd or omit>	board events and gates reach nothing outside the terminal you happen to be watching

@@ -1,0 +1,10 @@
+# POLARIS SURFACES — which tests cover which source paths, as data. TAB-separated:
+#   surface<TAB>tests<TAB>cmd<TAB>note
+#   surface  glob of source paths, files_owned semantics: exact path · dir/ prefix · glob
+#   tests    glob of the test paths covering that surface — a changed surface must change these too
+#   cmd      the COMPLETE shell command that exercises just this surface (repo root), or `-` =
+#            derive from ops/CONVENTIONS.md test_select: ({tests} becomes this row's tests glob)
+#   note     plain English: what this surface is [the task that mapped it]
+# Read at verify/handoff/audit/land (the stale-tests gate) and by qa / land --express (which tests a
+# change can break). Written ONLY by `polaris done`, from a task's `surface:` list — never by hand: a
+# row you could delete when it blocked you would guard nothing. Health: ops/polaris surfaces
