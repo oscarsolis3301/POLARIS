@@ -85,3 +85,4 @@ suite at step 3 but never writes `.polaris/suite-stamp`; only `cmd_qa` does. So 
 - Self-landing (`landing: self`) runs NO suite by design; nothing changes there — `finish` remains
   that path's one full run, now sharded (ops/CONVENTIONS.md `test:`), and the in-process tier
   (ops/contracts/fast-tier.md) is the per-change gate.
+- v2.1 2026-09-14 (plan spend-less): `.polaris/suite-stamp` gains a third field `full|scoped` and `suite_stamp_carry` a `<scope>` argument — ops/contracts/test-surfaces.md § 6 (D5). A 2-field stamp reads `full`.

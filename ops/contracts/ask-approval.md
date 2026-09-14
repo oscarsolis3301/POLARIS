@@ -162,3 +162,4 @@ approved:
 
 ## Changelog
 - v1 2026-07-28: created for T-047..T-050 (POLARIS 5.24.0), from the ARC field report.
+- v1.1 2026-09-14 (plan spend-less): `polaris approve` also records a yes against an ops/SURFACES.tsv row (the stale-tests gate exemption); its no-op precondition widens to "no ask rule AND no SURFACES row" — ops/contracts/test-surfaces.md § 5.
