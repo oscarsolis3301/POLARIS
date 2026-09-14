@@ -484,3 +484,4 @@
 {"ts":1789410505,"ev":"promote","id":"T-137","who":"Owner@DESKTOP","note":"deps done: T-134","pts":3}
 {"ts":1789410507,"ev":"promote","id":"T-136","who":"Owner@DESKTOP","note":"deps done: T-134","pts":5}
 {"ts":1789410508,"ev":"promote","id":"T-135","who":"Owner@DESKTOP","note":"deps done: T-134","pts":5}
+{"ts":1789410778,"ev":"claim","id":"T-135","who":"Owner@DESKTOP","note":"","pts":5}
