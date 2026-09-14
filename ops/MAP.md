@@ -165,3 +165,5 @@ not installed code — they are written normally, by the board scripts and by th
 - "ownership.sh gains check_freshness (the stale-tests gate over ops/SURFACES.tsv), reached through check_rules at verify/handoff/audit/land, never from the write guard; approve also clears a SURFACES row; pack prints the SURFACES section"  (T-135, 2026-09-14)
 
 - "integrate.sh: land --express selects test: commands exactly as qa does; suite_stamp_carry <sha> <scope> writes the 3-field stamp and allows ops/SURFACES.tsv since-tested; done applies a task's surface: items as rows (docs(surfaces): or riding docs(map):)"  (T-137, 2026-09-14)
+
+- "observe.sh: qa selects test: commands from ops/SURFACES.tsv when test_select: is set (stamp v3 records full|scoped, finish says what was proven); cmd_surfaces + surfaces_health (self-covering rows refused, 0/>200-match globs flagged) wired into drift; triage routes several small tasks to solo by context cost"  (T-136, 2026-09-14)
