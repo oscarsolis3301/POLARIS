@@ -200,3 +200,31 @@ WHOLE wave's union up front from the names pinned in the contracts; everyone els
 - **W3** T-128 (release): VERSION + CHANGELOG only; api-kit untouched.
 - Diff the golden against live output (`bash ops/polaris find --api 'kit/*' | grep -v i-have-adhd`),
   never a commit range; an unexpected hunk is a STOP, not a refresh (Learned log).
+
+## 9. Cross-wave surface registry, sprint 15 (2026-09-14, plan sprint-c, 6.5.0) — ONE owner per wave
+Same rule as § 5/§ 7/§ 8: `ops/tests/api-kit.expected` records every fn at any depth under `kit/`, every
+markdown heading (levels 1-4, fenced included) under `kit/`, every KEYS.tsv row. One owner per wave
+writes the WHOLE wave's union up front from the names pinned in the contracts; everyone else is
+surface-frozen. Sprint-14 corollary (CONVENTIONS § Planner calibration, 2026-09-14): a cross-lane
+owner's `verify:` asserts each pinned sibling row is PRESENT (`grep -q`) and diffs with exactly those
+rows excluded from BOTH sides — never a strict diff of the whole golden; the strict diff runs at the
+wave gate (`check`) once every lane has landed, and in CI. No new KEYS.tsv row this sprint.
+
+- **W1 owner T-155** (666 → 684, +18 rows): its own `kit/ops/lib/skills.sh	fn	<14 names, self-skills.md § 2>`;
+  T-152's `kit/ops/lib/observe.sh	fn	cruft_clear` · `…	feat_tip_landed`; T-153's
+  `kit/ops/lib/integrate.sh	fn	seal_burndown_row` · `kit/ops/lib/knowledge.sh	fn	cmd_learned`.
+  Surface-frozen in W1: T-150 (`plans/` is outside the index), T-151 (admin.sh + remote.sh: NO new fn,
+  inline), T-152 (only the two), T-153 (only the two), T-154 (handover.sh EXACTLY eight; board.sh no new
+  fn). No new heading under `kit/` in W1.
+- **W2 owner T-158** (684 → 693, +9 rows): T-157's `kit/ops/lib/integrate.sh	fn	amend_verify` · `…	cmd_amend`;
+  its own `kit/ops/templates/SKILL.md	heading	<the seven self-skills.md § 5 heading texts>` (`<glob> — what
+  POLARIS already knows` · `What it is` · `Public surface` · `What keeps going wrong` · `Files that move
+  together` · `Tests that cover it` · `Last worked`). Surface-frozen in W2: T-156 (builder.sh · admin.sh ·
+  observe.sh: NO new fn), T-157 (only the two; fast.sh sections are not fns), T-158's other files
+  (EVOLVE.md · CONDUCTOR.md · INTEGRATOR.md · INIT.md · PLANNER.md · PROTOCOL.md · MANUAL.md ·
+  `kit/.claude/skills/polaris/SKILL.md`): NO new `#` line — list items and paragraphs only.
+- **W3 owner T-159** (693 → 694, +1 row): `kit/ops/lib/selftest/policy.sh	fn	drill_skills`. spine.sh's
+  `SELFTEST_LABELS` gains `skills` (data, not an index row).
+- **W4:** T-160 (VERSION + CHANGELOG at the repo root) changes no indexed surface; `cli-help.expected`
+  regenerates at the dogfood (it runs the installed CLI).
+Diff the golden against live output (`POLARIS_ROOT="$PWD" python kit/ops/index.py find --api 'kit/*' | grep -v i-have-adhd` from a worktree), never a commit range; an unexpected hunk is a STOP, not a refresh.

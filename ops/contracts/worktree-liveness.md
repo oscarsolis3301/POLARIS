@@ -326,3 +326,56 @@ v1.2 skip ⇒ `HANDOVER SELFLAND FAIL`; restore own-last ⇒ green.
 - v1.1 2026-09-01: beat writers redirect stderr FIRST (`: 2>/dev/null > "$file" || true`) — bash applies redirections left to right, so the v1 order printed `No such file or directory` on every Bash call from a worktree whose worktrees dir was missing (T-093 lane, live); T-093 shipped the fix, T-092 told, T-101's preamble must use it.
 - v1.3 2026-09-02: Guard 2 is superseded — the `self_land` seal fan-out runs `done` for its OWN task too, LAST rather than skipped (T-118). v1.2's skip contradicted drill `handover`'s `landing: self must carry the task to done/` assertion and stranded every self-landed task in `review/`; Guard 1 in `wt_remove` (T-114), which refuses LEFT rc 1 when the target holds `$SELF` or `$PWD` and runs before beat age, is what makes own-`done` safe. The worktree is LEFT, the branch kept, and `sweep --fix` reaps it once idle. The v1.2 "stays in review/" note is withdrawn; the two non-fixes T-115 named (tolerate a vanished `$SELF`, re-beat through the tail) stay forbidden.
 - v1.2 2026-09-02: never remove the ground you are standing on — `wt_remove` refuses (LEFT rc 1) when the target holds `$SELF` or `$PWD`, before any beat check (T-114), and the `self_land` seal fan-out skips its own task id (T-115). v1 assumed the handoff beat kept the own worktree LIVE through the landing tail; T-104's tail outran `wt_live_minutes` and the fan-out deleted the running script, stranding six landed tasks in `review/`. Also records that an EMPTY beat file is correct (the zero-fork hooks touch mtime only; `beat_age`'s mtime fallback is the designed path).
+
+## v2 — cruft has three classes, and `qa` clears the clearable one before `drift` (2026-09-14, plan sprint-c, 6.5.0 — T-152)
+
+**Why.** A self-landing lane leaves its own `feat/<ID>` behind BY DESIGN (v1.2: never remove the
+ground you are standing on). `drift` then reports `CRUFT`, `qa` runs `drift --strict` AFTER the
+suite, goes red, writes no suite stamp — and the following `finish` re-runs the whole ~12-minute
+suite for a housekeeping nit `sweep --fix` clears in a second. Observed twice on 2026-09-14; both
+runs paid the suite twice for exactly this. Structural, so the fix is in the commands, not the lanes.
+
+### Interface — two fns in `kit/ops/lib/observe.sh` (T-152; api-kit rows in key-registry.md § 9)
+- `feat_tip_landed <ID>` — rc 0 iff `refs/heads/feat/<ID>` exists AND its tip is PROVEN landed: tip ==
+  the `Landed-from:` trailer of the done task's `landed:` sha (squash landings, the common case), or
+  the tip is an ancestor of `<base>` (hand merges). Prints nothing. Anything else rc 1.
+- `cruft_clear` — for every `done/` task with a local `feat/<ID>`: not proven → skip (drift reports it) ·
+  worktree registered and `beat_live` → skip (a lane is still standing there) · else, worktree
+  registered → `wt_remove <ID> sweep` (rc 0 removed and rc 2 archived both continue — the tip is proven
+  landed, so the branch loses nothing the archive does not hold; rc 1 LEFT → skip) · then
+  `git branch -D feat/<ID>` and ONE note `   cleared: feat/<ID> (landed <sha7>)`. rc 0 always; prints
+  nothing when nothing was cleared.
+
+### `drift` check 3 becomes three-way (observe.sh, inline)
+| class | test | drift |
+|---|---|---|
+| waiting | proven AND its worktree is live | SILENT — not cruft yet; `sweep` still lists the LIVE worktree |
+| clearable | proven, not live | finding `CRUFT: feat/<ID> still exists though <ID> is done — bash ops/polaris qa or sweep --fix clears it` |
+| diverged | not proven | finding `CRUFT diverged: feat/<ID> carries commits not in <base> — inspect: git log <base>..feat/<ID> (never auto-deleted)` |
+
+### `qa` (observe.sh, inline)
+Immediately BEFORE `( cmd_drift --strict )`: `cruft_clear`, then `say "cruft — cleared <n> branch(es)"`
+only when n > 0. This is `qa`'s only mutation besides the stamp, and it is exactly the subset of
+`sweep --fix` that is provably lossless. `finish` inherits it through `cmd_qa`.
+
+### `sweep` (observe.sh, inline)
+After the worktree pass: every clearable branch is reported
+`⚠ CRUFT: feat/<ID> — task done, tip proven landed, no live worktree — sweep --fix clears it`;
+`--fix` calls `cruft_clear` once. The worktree pass's own branch deletion (v1) now runs through
+`feat_tip_landed` first: an unproven tip is LEFT with `⚠ feat/<ID> kept — tip not proven landed`.
+
+### Executable check — `drill_qa` + `drill_drift` (policy.sh, T-152; no new fn, labels unchanged)
+Fixture: a done task whose `feat/` tip equals the landed commit's `Landed-from` (clearable) · one whose
+tip carries an extra commit (diverged) · one clearable with a registered worktree and a fresh beat
+(waiting). `drift`: exactly two findings (clearable + diverged), the waiting one silent. `qa`: the
+clearable branch is gone afterwards, the diverged one stays, and `drift --strict` inside `qa` still
+reds on the diverged one (so `qa` is red for the RIGHT reason — assert on the branch list, never on
+qa's rc alone: the T-131 lesson). `sweep --fix` on the diverged one: kept. Asserts rc + refs.
+
+### Invariants (v2)
+- A branch is deleted only with proof (Landed-from equality or ancestry) — never on "task is done" alone.
+- A live worktree is never removed by `qa`, `sweep` or `drift` (v1.2 stands).
+- `drift` is read-only as before; `qa`'s clear is the only new mutation and it is lossless by construction.
+
+### Changelog
+- v2 2026-09-14: `feat_tip_landed` · `cruft_clear`; three cruft classes in `drift`; `qa` clears before `drift`; `sweep` reuses it (T-152, plan sprint-c).

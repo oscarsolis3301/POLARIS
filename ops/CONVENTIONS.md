@@ -113,7 +113,8 @@ kit to everyone who installed before the `kit/` split existed.
 ## Write routing — one fact, one home (a fact in two files means one is drifting)
 | Fact | Only writer | Only home |
 |---|---|---|
-| burndown row + Learned log | Integrator | ops/SPRINT.md |
+| burndown row | `seal` (from 6.5.0 — the Integrator by hand while the installed CLI is older) | ops/SPRINT.md |
+| Learned bullet | any lane, via `polaris learned -m` (from 6.5.0); EVOLVE prunes to ≤5 | ops/SPRINT.md |
 | MAP content | Integrator (via task map_delta) | ops/MAP.md |
 | conventions values + Planner calibration notes | EVOLVE (human-approved) | this file, § Planner calibration (ops/roles/ is a RULES-guarded installed copy here) |
 | RULES lines | human (EVOLVE proposes) | ops/RULES.tsv |

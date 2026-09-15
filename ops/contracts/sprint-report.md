@@ -79,3 +79,58 @@ commit exists with the pinned subject + clean tree; mixed-dirt → no commit + h
 - v1 2026-07-20: created for T-023 (seal hook), consumed by T-025, T-026
 - v1.1 2026-07-20 (QA fix wave, T-027): report stays board-read-only and never commits — UNCHANGED. Added: after writing a file, if it differs from HEAD (`git diff --quiet -- <file>`), report prints next steps naming both remedies verbatim — commit as `docs(sprint-<n>): report refresh`, or discard with `git checkout -- <file>`. Rationale: a post-`done` re-render adds done-dates the sealed render lacked; the silently dirty file makes the NEXT land/seal die "working tree not clean" with no visible cause.
 - v1.2 2026-07-20 (patch 5.14.1, T-029): ID-resolution semantics UNCHANGED; made binding: Rule 2 resolves `sprint/<n>` / `sprint/<n-1>` from the resolver's own `<n>` argument regardless of caller state (bash expands every word of a `local` line BEFORE assigning — split the declaration). Executable check extended: the drill proves Rule-2-ONLY attribution — `report --all` on a sealed sprint whose merge body carries no `[ID]` bullets still attributes the task under its sprint heading, never `(unsealed)`.
+
+## v3 — `seal` writes the burndown row; `polaris learned` writes the Learned bullet (2026-09-14, plan sprint-c, 6.5.0 — T-153 code · T-155 entry · T-158 prose)
+
+**Why.** `ops/SPRINT.md`'s burndown tables for sprints 12, 13 and 14 are empty and the Learned log has
+no bullet newer than sprint 11 W4, while CONVENTIONS write-routing still names the Integrator as
+the only writer — whose pen went silent when integration became a command (`landing: self`,
+`land --express`, `next`). EVOLVE's "repeated Learned themes" input is dry. Decision: the seal
+writes the row it already has the numbers for, and any lane records a lesson with one command; the
+per-sprint report (`docs/sprints/`) stays the narrative of record, SPRINT.md carries the numbers.
+
+### `seal_burndown_row <n> <date> <ids>` (integrate.sh, T-153; called by `cmd_seal` in direct mode right
+after the merge, and by `seal_sync` in pr mode after the `[<ID>]` verification)
+- `done_pts` = Σ `points` of the wave's task IDs (the `[<ID>]` suffixes of the sealed subjects; the
+  files still sit in `review/` at seal time — read them there, `done/` as fallback).
+- `remaining` = Σ `points` over `backlog/` ∪ `ready/` ∪ `active/` ∪ `review/` EXCLUDING the wave's IDs
+  (files without a numeric `points:` count 0; `IDEAS.md` has no frontmatter and is skipped).
+- Appends `| <date> | <done_pts> | <remaining> |` as the LAST row of the CURRENT sprint's `## Burndown`
+  table — the first `## Burndown` after the TOP `# SPRINT` header, after its `|---|---|---|` line and
+  any existing rows. No such table in the top section ⇒ create it at the END of the top section
+  (before the next `# SPRINT ` line, else at EOF) as `\n## Burndown\n| date | done pts | remaining |\n|---|---|---|\n` + the row.
+- Then `board_commit "chore(board): burndown <date>"` + `sync_board` (SPRINT.md is in the moved set; the
+  secondary index makes this safe from the `<base>` checkout seal is on). Best-effort: a failure here
+  is a `⚠` note, never a failed seal.
+- `seal` then prints ONE nudge: `   learned anything? bash ops/polaris learned -m "…" — ≤3 per wave; EVOLVE reads them`.
+
+### `cmd_learned` (knowledge.sh, T-153)
+```
+polaris learned -m "<bullet>"     # append ONE bullet to ops/SPRINT.md § Learned, from any lane, any branch
+```
+Appends `- <YYYY-MM-DD> · <bullet>` as the LAST bullet of the `## Learned` section (created at EOF when
+absent), `evt learned "" "<first 60 chars>"`, `board_commit "chore(board): learned"`, `sync_board`.
+Refuses an empty `-m` (`die "learned needs -m \"<one lesson>\""`), a bullet over 400 chars
+(`die "learned: keep it to one lesson (≤ 400 chars) — the detail belongs in the task's Notes"`), and a
+TAB. Prints `✅ learned: <bullet>`. Dispatch (T-155, verbatim, under `report)`): `learned)    shift; cmd_learned "$@";;`.
+Usage entry (T-155, verbatim, under the `report` entry):
+```
+  learned -m "<bullet>"          append ONE lesson to ops/SPRINT.md § Learned (any lane, any branch;
+                                 board commit) — the Planner reads it first, EVOLVE prunes it to ≤5
+```
+
+### Executable check — `drill_express` (history.sh, T-153; no new fn)
+After the express land's seal: `ops/SPRINT.md` holds a `## Burndown` table whose last row is
+`| <today> | <pts> | <remaining> |` with the fixture's numbers, and `git log -1 --format=%s refs/heads/polaris/board`
+reads `chore(board): done <ID>` (the burndown commit precedes done's). The `learned` half lives in
+`drill_grant` (board.sh, T-157 — it needs T-155's dispatch line, which T-153's worktree lacks): `learned -m "x"` from
+inside a `feat/*` worktree: the bullet is the section's last line, the event exists, the board
+commit's subject is pinned. Asserts bytes + rc.
+
+### Prose (T-158) + this repo's config (Planner, on `<base>`, now)
+INTEGRATOR.md § 6: "seal already wrote the burndown row; a lesson is `bash ops/polaris learned -m "…"`
+(≤3 per wave) — never a hand edit of SPRINT.md". CONVENTIONS write-routing row: burndown row → `seal` ·
+Learned bullet → `polaris learned` (any lane) · EVOLVE prunes. INIT.md's skeleton row: the same.
+
+### Changelog
+- v3 2026-09-14: `seal_burndown_row` · `cmd_learned` · `learned` usage/dispatch (T-153 · T-155 · T-158, plan sprint-c).

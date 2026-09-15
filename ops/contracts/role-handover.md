@@ -340,3 +340,53 @@ next: finish
 ## Changelog
 - v1 2026-09-01: created for T-096, T-097, T-098, T-100, T-101, T-103, T-104, T-107, T-109, T-110, T-111 (plan: cant-eat-itself, 6.2.0)
 - v1.1 2026-09-02: pinned what T-109 SHIPPED where v1 contradicted itself — human-gated `review/` routes to row 5 `wait` (row 6's approval note is unreachable; the drill line saying `finish` is void), `--brief` drops its pointer line at `role: none` (T-112), and the settings-entry assertions must match the JSON-escaped quote (T-110). No claimed task's interface changes.
+
+## v2 — `next_promote` honours `drain: plan`, and `promote` becomes a real command (2026-09-14, plan sprint-c, 6.5.0 — T-154 code · T-155 entry · T-158 prose)
+
+Two findings from sprint 14 (IDEAS.md, conductor): (1) CONDUCTOR.md step 7 names NO command for the
+dependency-chain promote pass and `next` advertises `promote`, which was not a command — a whole
+planner context was spent moving three files by hand for what `next --do` does in one commit;
+(2) `next_promote` filters nothing on `plan:` while PLANNER.md step 13 says the drain promotes only
+this plan's tasks — harmless with one plan on the board, silent adoption of foreign work with two.
+
+### `next_promote` plan gate (handover.sh, T-154; the module stays at EXACTLY eight fns — inline)
+P (this run's plan) := the session's `<next_dir>/plan` when the file exists; else the single distinct
+non-empty `plan:` value carried by the tasks in `ready/` ∪ `active/` ∪ `review/`; else none.
+Under `drain: plan` (the `cfg drain` read `next_claimable` already makes) and P known, a backlog
+candidate whose `plan:` is SET and ≠ P is held:
+```
+   held: <ID> — plan <slug> is not this run's (<P>) — drain: plan
+```
+(the `NX_HELD` accounting, reported like the overlap hold; never a silent drop). A candidate with NO
+`plan:` is never foreign — the same rule `next_claimable` applies to `ready/`. `drain: queue` and
+`drain: backlog` filter nothing. P unknown (no run in flight, no session plan) filters nothing, so a
+repo that never uses plan slugs is byte-identical to v1 — and so is `ops/tests/handover-route`
+(its fixture tasks carry no `plan:`).
+
+### `promote` — the alias (entry, T-155)
+Dispatch line (verbatim, directly under `next)`): `promote) shift; cmd_next --do "$@";;` — the verb `next`
+prints on line 1 is now literally runnable. Usage entry (verbatim, directly under the `next` entry):
+```
+  promote                        = next --do: promote every backlog/ task that now clears the ready
+                                 gate, ONE board commit, then the fresh route (line 1 is still a verb)
+```
+The verb set, the `next` notes and the Stop hook are UNCHANGED; `handover-route.expected` stays
+byte-identical. Not read-only: `readonly-allow.sh` does not learn it (the kit's blanket
+`Bash(bash ops/polaris:*)` rule already covers it where the kit's settings are installed).
+
+### Prose (T-158)
+CONDUCTOR.md step 7's first sentence becomes: "**Promotion is one command: `bash ops/polaris next --do`**
+(or `promote`) — run it after every wave lands; it holds every `backlog/` task to the full ready gate
+under the board lock, promotes this plan's dependents in ONE `chore(board): promote <IDs>` commit and
+prints `held:` lines for what it refused. Then, if it promoted anything of THIS plan, loop to step 4."
+PLANNER.md step 13's drain sentence gains "(`next --do` enforces this under `drain: plan`)".
+INTEGRATOR.md § 5 is already right and stays.
+
+### Executable check — `drill_handover` (board.sh, T-154; no new fn)
+A fixture board under `drain: plan` with a ready task `plan: alpha`, and two dep-satisfied backlog tasks —
+one `plan: alpha`, one `plan: beta` — plus one with no `plan:`: `next --do` promotes alpha's and the
+unplanned one, prints the pinned `held:` line for beta's, ONE board commit; under `drain: queue` all
+three promote. Asserts the board (`ls ready/`), the event count and rc — never message text alone.
+
+### Changelog
+- v2 2026-09-14: plan gate in `next_promote` (drain: plan), `promote` alias, CONDUCTOR step 7 names the command (T-154 · T-155 · T-158, plan sprint-c).

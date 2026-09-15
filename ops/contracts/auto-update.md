@@ -152,3 +152,69 @@ $ bash ops/polaris update --all
 
 ## Changelog
 - v1 2026-09-08: created for T-124, T-125, T-126 (plan feel-fast)
+
+## v2 — the walker runs THIS kit in every repo, and prunes what is gone (2026-09-14, plan sprint-c, 6.5.0 — T-151)
+
+**Why v1's walker was self-defeating.** `cmd_update_all` invoked each registered repo's OWN
+`ops/polaris update --auto --say`. `--auto` exists only from 6.3.0, so every install older than that
+answers `⛔ update: unknown flag --auto (only --repo-only)` and stays put — measured 2026-09-14 on
+both of the owner's real projects (The Director 6.2.2, pip 5.24.0). The further behind an install is,
+the less able it is to accept the update. Second-order: a dirty tree on a pre-6.3.0 kit also refused,
+because the app-only-dirt tolerance landed in 6.3.0 too — pip hit both at once. A walker whose
+mechanism lives in the target is a walker that cannot reach anything that needs it.
+
+### Interface
+```
+polaris update --all [--repo-only] [--major]      # the registry walk; --major also applies MAJOR bumps
+polaris update --auto [--say] [--repo-only] [--major]
+```
+- `--major` combines ONLY with `--all` or `--auto`; anywhere else `die "update: --major belongs to --all or --auto"`.
+  `--all` combines with `--repo-only` and `--major` (v1's die text becomes `update: --all combines with --repo-only and --major only`).
+- The SessionStart hook never passes `--major`: a MAJOR bump still asks at session start, verbatim as v1.
+
+### `cmd_update_all` (admin.sh, inline — NO new top-level fn)
+Per registry entry, filename order, rc 0 always, never stops on one repo's failure:
+1. path gone → the entry file is REMOVED and the line reads `<p>: gone — registry entry removed`
+   (v1's "never deletes an entry" is reversed for GONE paths only: such an entry can never be updated
+   and only adds a failure line to every future walk; a recreated repo re-registers itself at its next
+   install or update).
+2. self-hosting (`<p>/kit/ops/pack.py`) → `<p>: self-hosting — skipped`, unchanged.
+3. otherwise **THIS kit's CLI runs in the target's checkout**: `(cd "$p" && bash "$SELF" update --auto --say [--repo-only] [--major])`
+   — `$SELF` is the re-exec'd temp copy (its `lib/` beside it), so the target's own `ops/polaris` is
+   NEVER invoked and its version is irrelevant. The target's `ops/VERSION` (channel + tarball),
+   `ops/CONVENTIONS.md` (`auto_update:`), board, locks and `.polaris/bg` are read AS DATA by the
+   current algorithm; the apply step downloads the target's own `tarball:` and runs the tarball's
+   `install.sh` against `$PRIMARY` = the target, exactly as the explicit path does. The per-line
+   prefixing (`<p>: <line>`, `<p>: up to date`) is unchanged.
+`POLARIS_UPDATE_REEXEC=1` is already exported by the re-exec, so the child never re-execs again.
+
+### `cmd_update_auto` step 4 (admin.sh, inline)
+`--major` absent → v1's pinned MAJOR line, rc 0, unchanged. `--major` present → the MAJOR gap falls
+through to steps 5–7 and applies under the same quiet-board and dirt rules; the ✅ line is v1's,
+unchanged (the human typed `--major`, so they know; the BREAKING banner lands in `.polaris/update.log`).
+
+### Executable check — `drill_autoupdate` (remote.sh, T-151; no new fn)
+- (6) as v1, except the gone entry's line reads `<p>: gone — registry entry removed` and the assertion
+  flips: the entry file must be ABSENT after the walk.
+- (6b) a registered fixture whose COMMITTED `ops/polaris` is a stub that exits 1 on any invocation
+  (`printf '#!/bin/sh\necho "⛔ update: unknown flag --auto" >&2; exit 1\n'`) → `--all --repo-only`
+  updates it: `ops/VERSION` reads 0.0.2 and `ops/polaris` is the real entry again (the stub was never run).
+- (6c) channel at 1.0.0 → `--all` prints the v1 MAJOR line under the path prefix and leaves 0.0.1;
+  `--all --major` applies (ops/VERSION reads the tarball's version, the ✅ line under the prefix).
+- Hermetic teardown unchanged (HEAD + tree byte-identical to entry).
+
+### Prose (T-158) · usage (T-155)
+PROTOCOL.md's `version / update` row: `update --all` "walks every repo on this machine with THIS kit's
+code — an install too old to know `--auto` is updated all the same; `--major` also applies major bumps".
+The entry's usage line becomes `update [--auto|--all [--major]] [--repo-only]`; its `--all` sentence
+gains `— runs THIS kit's updater in each, so a 5.x install is reached too; --major applies MAJOR bumps as well`.
+`ops/tests/cli-help.expected` regenerates at the dogfood (it runs the installed CLI).
+
+### Invariants (v2)
+- The walker never runs a target's CLI. Everything it needs from the target is data.
+- `--auto` without `--major` never applies a MAJOR; the hook never passes `--major`.
+- A gone path is the ONLY registry entry the walk removes.
+- Every v1 invariant stands.
+
+### Changelog
+- v2 2026-09-14: the walk runs the current kit in each target (reaches pre-6.3.0 installs), `--major`, gone entries pruned; drill 6b/6c (T-151, plan sprint-c).

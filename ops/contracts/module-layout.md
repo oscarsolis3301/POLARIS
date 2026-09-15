@@ -279,3 +279,26 @@ Census this sprint: +3 fns in the new module · +1 in observe.sh (`surfaces_appl
 past the per-module 1,200-line guideline (2,355 lines at sprint 14); putting the engine in its own
 module is the first step back, not a new exception — the next observe.sh feature should ask the same
 question.
+
+## v7 — lib/skills.sh joins the census (2026-09-14, plan sprint-c, 6.5.0)
+New module `kit/ops/lib/skills.sh` (T-155, ≤ 500 lines, EXACTLY fourteen top-level fns): `cmd_skill` ·
+`skill_consts` · `skill_bytes` · `skill_paths` · `skill_tier` · `skill_hits` · `skill_list` · `skill_gaps` ·
+`skill_budget` · `skill_propose` · `skill_promote` · `skill_demote` · `skill_prune` · `skill_restore` —
+semantics in `ops/contracts/self-skills.md`, which is the authority on their behavior; THIS contract
+stays the authority on where code lives and the loader's shape. The five constants are set by
+`skill_consts` (builtins, idempotent) — never as top-level assignments (v1 invariant).
+
+**The loader, v7:** the FULL-load `_mods` list gains `skills` immediately after `handover`
+(`… admin bg awake handover skills selftest/spine …`). The `_match|_rules|_guard` path stays EXACTLY
+`core ownership`. Both lists stay LITERAL, never a glob. The loader line and the module land in the SAME
+task (T-155) — a loader naming a module that does not exist kills every CLI call.
+
+Census this sprint (key-registry.md § 9 carries the owner table): +14 in the new module · +2 in
+observe.sh (`feat_tip_landed` · `cruft_clear`, T-152) · +1 in integrate.sh (`seal_burndown_row`, T-153)
+· +2 in integrate.sh (`cmd_amend` · `amend_verify`, T-157) · +1 in knowledge.sh (`cmd_learned`, T-153) ·
++1 in selftest/policy.sh (`drill_skills`, T-159). handover.sh stays at EXACTLY eight (T-154 is inline);
+admin.sh gains none (T-151 and T-156 are inline). Entry `kit/ops/polaris` < 500 lines stands (386
+today; T-155 adds ≈ 40 usage/dispatch lines).
+
+### Changelog
+- v7 2026-09-14: skills.sh (14 fns, ≤ 500 lines) joins the census; loader `+skills` after `handover`; the sprint's whole fn census (T-155, plan sprint-c).
