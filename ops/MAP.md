@@ -194,3 +194,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - "roles: INIT's interview is ONE AskUserQuestion generated from KEYS.tsv's ask column (2a renamed, 2c loses the claim question, the skeleton gains adhd:, step 3 runs interview --set then surfaces --scaffold --apply); PLANNER 5b scaffolds at the plan gate; the install skill acts on 'surfaces: none mapped' and 'preferences never set here'; PROTOCOL's tool row names surfaces --scaffold"  (T-145, 2026-09-14)
 
 - "fast tier gains surfaces-runner · surfaces-pairs · surfaces-proposal · interview-pending; the surfaces drill gains steps 8–10 (NORUNNER on the bare fixture · scaffold --apply end to end + feat/* refusal · doctor's pending-preferences line before and after interview --set)"  (T-144, 2026-09-14)
+
+- "update --all runs THIS kit's `update --auto --say` inside each registered checkout (never the target's own ops/polaris — a pre-6.3.0 install answered `unknown flag --auto` and stayed put), accepts --major to apply MAJOR bumps, and removes registry entries whose path is gone; auto-update.md v2"  (T-151, 2026-09-14)
