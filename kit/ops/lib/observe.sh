@@ -726,6 +726,25 @@ cmd_doctor() {
       note "⚠ keep-awake is DISABLED (ops/polaris awake enable)"
     fi
   fi
+  # THE SKILLS SHELF (ops/contracts/self-skills.md § 7). Both lines are the module's OWN verdicts,
+  # never a second opinion computed here: `skill_budget` is rc 1 exactly when the tier-1 shelf is
+  # over 1,600 B, and `skill_prune` is rc 1 exactly when a demotion or an archive is due. Their
+  # stdout is captured, not printed — doctor says the one useful sentence, `ops/polaris skill` says
+  # the rest. Silent otherwise, and a repo that never ran `skill propose` has no POLARIS-written
+  # skills at all, so it never hears a word and doctor's goldens stay byte-identical. `command -v`
+  # because an older installed lib/ predates skills.sh and a health check must never die of a
+  # module it was shipped without.
+  if command -v skill_budget >/dev/null 2>&1; then
+    local skb skp skn
+    if ! skb="$(skill_budget 2>/dev/null)"; then
+      skb="$(printf '%s\n' "$skb" | grep '^⛔' || true)"
+      [ -z "$skb" ] || note "$skb"
+    fi
+    if ! skp="$(skill_prune 2>/dev/null)"; then
+      skn="$(printf '%s\n' "$skp" | grep -cE '^(demote|archive) ' || true)"
+      note "⚠ $skn skill(s) due for eviction — ops/polaris skill prune"
+    fi
+  fi
   say "doctor: OK"
   # --fast (ops/contracts/fast-tier.md): the in-process tier — selftest_fast in lib/selftest/fast.sh,
   # read as $1 exactly like --selftest below. It combines with NOTHING: an extra arg is a die, not a

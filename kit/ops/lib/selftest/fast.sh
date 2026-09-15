@@ -599,6 +599,28 @@ EOF
     ft_assert 'set: a live line keeps its trailing comment' test "$ft_out" = "voice: technical   # c${ft_nl}"
     ft_section interview-pending ) || ft_red=1
 
+  # ---- amend (ops/contracts/grant.md v2): amend_verify is the PURE list surgery behind cmd_amend.
+  # The command's refusals — feat/*, a bare suite — are drilled against the real entry point; what
+  # belongs here is the awk: replace keeps the order and the item's indentation, `-` drops, `add`
+  # appends, and an out-of-range line (or a file with no verify: at all) returns rc 1 having written
+  # nothing. Its own fixture, so a mutation bug cannot reach the other sections' files.
+  ( FT_SEC=amend
+    ft_av="$FT_TMP/T-AV.md"
+    printf '%s\n' '---' 'id: T-AV' 'points: 1' 'verify:' '  - test -f one' '  - test -f two' '  - test -f three' '---' '## Notes' > "$ft_av"
+    ft_assert 'replace line 2'                   amend_verify "$ft_av" 2 'test -f TWO'
+    ft_assert 'order kept: old-1 / new / old-3'  test "$(fm_list verify "$ft_av" | tr '\n' '|')" = 'test -f one|test -f TWO|test -f three|'
+    ft_assert 'drop line 1'                      amend_verify "$ft_av" 1 -
+    ft_assert 'two lines left, order kept'       test "$(fm_list verify "$ft_av" | tr '\n' '|')" = 'test -f TWO|test -f three|'
+    ft_assert 'add appends'                      amend_verify "$ft_av" add 'test -f four'
+    ft_assert 'appended last'                    test "$(fm_list verify "$ft_av" | tr '\n' '|')" = 'test -f TWO|test -f three|test -f four|'
+    ft_assert 'the item indentation survives'    grep -qx '  - test -f four' "$ft_av"
+    ft_assert 'every other frontmatter byte untouched' test "$(fm_get points "$ft_av")" = '1'
+    ft_assert 'out of range → rc 1'              ! amend_verify "$ft_av" 9 'test -f nine'
+    ft_assert 'out of range wrote nothing'       test "$(fm_list verify "$ft_av" | tr '\n' '|')" = 'test -f TWO|test -f three|test -f four|'
+    ft_assert 'no verify: field → rc 1'          ! amend_verify "$ft_tf" 1 'test -f x'
+    ft_assert 'no verify: field wrote nothing'   test "$(fm_list files_owned "$ft_tf" | tr '\n' ' ')" = 'a.sh b.sh '
+    ft_section amend ) || ft_red=1
+
   # ---- verdict
   while IFS= read -r ft_k; do ft_n=$((ft_n + ft_k)); done < "$FT_TMP/n"
   ft_t1="$(date +%s)"

@@ -36,6 +36,135 @@ cmd_run_verify() { # Integrator: re-run a task's verify commands in CWD (e.g. on
   run_verify_cmds "$tf"
 }
 
+amend_verify() { # amend_verify <taskfile> <n|add> <newline|-> — the PURE verify: list surgery behind
+  # cmd_amend, and the only writer that touches an EXISTING front-matter item (fm_append_item only
+  # appends). Block-list shape — the "  - <cmd>" lines the TASK template and the Planner emit — with
+  # the item's own indentation kept and every other byte of the file untouched, because the express
+  # drill diffs task files. <n> is 1-based: `add` appends through fm_append_item (which keeps
+  # whatever shape the list already has), `-` as <newline> drops the line, anything else replaces it
+  # verbatim. rc 1 and the file byte-identical when <n> is out of range, or verify: is absent or not
+  # a block list — no board side-effects at all, which is what lets the fast tier prove it on a
+  # fixture file. ENVIRON, not -v: -v backslash-processes its value and a verify command is full of
+  # backslashes. POSIX awk, bash 3.2, no awk functions (`find --api` indexes a nested
+  # `function x() {` as a symbol of the file).
+  local tf="$1" n="$2" new="$3" tmp="$1.tmp.$$"
+  if [ "$n" = add ]; then fm_append_item verify "$new" "$tf" || return 1; return 0; fi
+  POLARIS_AMEND_NEW="$new" awk -v n="$n" '
+    BEGIN { new = ENVIRON["POLARIS_AMEND_NEW"] }
+    /^---[\r]?$/ { fs++; print; next }
+    fs==1 && !on && !done && index($0, "verify:")==1 {
+      t=substr($0, 8)                                   # length("verify")+2 — fm_list stripping, exactly
+      sub(/^[ \t]*/,"",t); sub(/[ \t]#.*$/,"",t); sub(/[ \t\r]*$/,"",t)
+      print
+      if (t == "") on=1                                 # the block list opens on the next lines
+      next
+    }
+    on && /^[ \t]*-[ \t]/ {
+      i++
+      if (i != n) { print; next }
+      done=1
+      if (new == "-") next                              # drop: the line simply does not come out
+      ind=$0; sub(/-.*$/,"",ind); print ind "- " new    # replace, the item indentation kept
+      next
+    }
+    on && /^[A-Za-z_]/ { on=0 }
+    { print }
+    END { if (!done) exit 3 }
+  ' "$tf" > "$tmp" || { rm -f "$tmp"; return 1; }
+  mv "$tmp" "$tf"
+}
+
+cmd_amend() { # amend <ID> --verify <n> -m "why" -- <cmd…> — the SANCTIONED verify: amendment
+  # (ops/contracts/grant.md v2), and grant's sibling: grant widens a claimed task's OWNERSHIP, amend
+  # corrects its ACCEPTANCE LIST. Four times across two sprints (T-122, T-125, T-136, T-139) a
+  # cross-lane golden owner was handed a verify line unsatisfiable BY CONSTRUCTION — its branch is
+  # based on <base>, so a row its contract REQUIRES it to write can only read as a diff hunk until
+  # the sibling lands — and each one cost a round trip to a human or a conductor hand-editing a
+  # board file. A calibration note fixes the NEXT wave's carves and can do nothing for work already
+  # planned; a command can.
+  # It lives in the INTEGRATOR's module because the two refusals are the point, not guard rails:
+  #   - any feat/* branch refuses, exactly as approve does and for the same reason. A Builder
+  #     EXECUTING a recorded decision is legitimate; a Builder CHOOSING one is not, and that
+  #     distinction has to be structural rather than conventional. It is also what keeps an
+  #     amendment legible AS an amendment — who decided, and why — instead of reading like a lane
+  #     quietly lowering its own bar.
+  #   - a bare full-suite command refuses, through run_verify_cmds' own predicate (_norm_cmd against
+  #     CONVENTIONS test:/build:). An amendment that could install one would be a hole in a gate
+  #     that already exists.
+  # Every refusal mutates NOTHING — no partial write, no commit (grant's rule) — and a success is
+  # ONE board commit. --verify is the only field in v2; the flag is there so a later one can join
+  # without a new command.
+  local id="${1:-}" n="" msg="" newcmd="" drop=0 add=0 tok="" old="" len nc st sb br tf
+  local u='usage: polaris amend <ID> --verify <n> -m "why" -- <cmd…>  |  amend <ID> --verify <n> --drop -m "why"  |  amend <ID> --verify --add -m "why" -- <cmd…>'
+  [ -n "$id" ] || die "$u"
+  shift
+  while [ $# -gt 0 ]; do case "$1" in
+    --verify) case "${2:-}" in ''|-*) ;; *) n="$2"; shift;; esac; shift;;   # --verify --add carries no <n>
+    --drop)   drop=1; shift;;
+    --add)    add=1; shift;;
+    -m)       msg="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
+    --)       shift; newcmd="$*"; break;;
+    *)        die "unknown flag $1 — $u";;
+  esac; done
+  # FIRST, before anything reads the board: the containment IS the command. A Builder standing in
+  # its own worktree must hit this and nothing else, whatever else is wrong with the invocation.
+  br="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  case "$br" in feat/*)
+    die "amend refused on $br — a Builder never rewrites its own gate; run it from the primary checkout";;
+  esac
+  [ -n "$msg" ] || die "amend needs -m \"why\" — the reason the acceptance list changed goes on the task's record ($u)"
+  if [ "$drop" -eq 1 ] && [ "$add" -eq 1 ]; then die "amend: --drop and --add are opposites — pick one ($u)"; fi
+  if [ "$add" -eq 1 ]; then
+    [ -z "$n" ]      || die "amend --add appends; it takes no line number ($u)"
+    [ -n "$newcmd" ] || die "amend --add needs the command after -- ($u)"
+    n=add; tok='+'
+  elif [ "$drop" -eq 1 ]; then
+    [ -n "$n" ]      || die "amend --drop needs the line: --verify <n> --drop ($u)"
+    newcmd='-'; tok="$n"
+  else
+    [ -n "$n" ]      || die "$u"
+    [ -n "$newcmd" ] || die "amend replaces verify line $n with the command after -- ($u)"
+    tok="$n"
+  fi
+  case "$n" in add) ;; ''|*[!0-9]*) die "amend: <n> is the 1-based verify: line, got '$n' ($u)";; esac
+  tf="$(task_file "$id" active)" || tf="$(task_file "$id" review)" \
+    || die "$id is not in active/ or review/ (state: $(task_col "$id" || echo unknown)) — amend corrects a CLAIMED task's acceptance list; anything else is a Planner edit"
+  len="$(fm_list verify "$tf" | awk 'END{print NR+0}')"
+  if [ "$n" != add ]; then
+    { [ "$n" -ge 1 ] && [ "$n" -le "$len" ]; } || die "amend: verify has $len line(s), no line $n"
+  fi
+  # run_verify_cmds' predicate, reused rather than restated: verify: runs 2-3x per task ON TOP of
+  # the wave gate, so the suite belongs in exactly one of those places and it is not this one.
+  if [ "$newcmd" != '-' ]; then
+    nc="$(_norm_cmd "$newcmd")"
+    st="$(_norm_cmd "$(cfg test "")")"
+    sb="$(_norm_cmd "$(cfg build "")")"
+    if { [ -n "$st" ] && [ "$nc" = "$st" ]; } || { [ -n "$sb" ] && [ "$nc" = "$sb" ]; }; then
+      die "amend refused: that is the wave gate, never a verify: line — \"$newcmd\" is CONVENTIONS test:/build:, which the wave already pays once and verify:/handoff/run-verify would pay three times over. Nothing written."
+    fi
+  fi
+  [ "$n" = add ] || old="$(fm_list verify "$tf" | sed -n "${n}p")"
+  mutex_on
+  amend_verify "$tf" "$n" "$newcmd" \
+    || die "amend refused: $id has no verify: block list (\"  - <cmd>\" lines) to amend — nothing written"
+  if [ "$n" = add ]; then
+    printf -- '- amend: verify[%s] "%s" — %s\n' "$tok" "$newcmd" "$msg" >> "$tf"
+  elif [ "$newcmd" = '-' ]; then
+    printf -- '- amend: verify[%s] "%s" → dropped — %s\n' "$tok" "$old" "$msg" >> "$tf"
+  else
+    printf -- '- amend: verify[%s] "%s" → "%s" — %s\n' "$tok" "$old" "$newcmd" "$msg" >> "$tf"
+  fi
+  evt amend "$id" "verify[$tok]"
+  board_commit "chore(board): amend $id verify"
+  sync_board
+  mutex_off; trap - EXIT
+  if [ "$n" = add ]; then        say "amended: $id verify[+] \"$newcmd\" (appended)"
+  elif [ "$newcmd" = '-' ]; then say "amended: $id verify[$tok] dropped — was \"$old\""
+  else                           say "amended: $id verify[$tok] → \"$newcmd\" (was \"$old\")"
+  fi
+  note "the why is on the task's record, so this reads as an amendment and not as a lane lowering its own bar · re-prove: polaris verify $id"
+}
+
 landed_sha() { # landed_sha <ID> [ref] — SHA of the squash commit in <ref> (default $BASE) whose
   # subject ENDS with [<ID>] (what `land` writes). --fixed-strings so the grep is literal; the
   # suffix check below is what keeps [T-1] from ever matching [T-10]. rc 1 = no landed commit.

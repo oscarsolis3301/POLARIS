@@ -935,6 +935,15 @@ EOF
 # ~28,568 B (~7,100 tokens) belonged to families POLARIS never names once — claude-flow's 98 agent
 # definitions, its 88 slash commands, and the agentdb/sparc/v3-*/github-*/flow-nexus skill sets.
 # A conductor run spawns 6-8 contexts, so that was 43k-57k tokens per run of pure passenger weight.
+# Re-measured on the same machine 2026-09-14: 223 / 29,124 B / 7,281 tok. Both figures stay, both
+# dated — the tax is a moving number and an undated one reads as a fact (self-skills.md § 0 OPEN-7).
+#
+# The counter has ONE exception, and it is the reason POLARIS can write skills for a repo at all:
+# a definition whose frontmatter carries `disable-model-invocation: true` is never offered to the
+# model, never reaches a system prompt, and so counts 0 B below. That is what `ops/polaris skill`
+# builds on — every skill it writes is born with `disable-model-invocation: true` and costs this
+# repo nothing until a human promotes it onto a 1,600 B shelf. slim_scan and skills.sh::skill_bytes
+# implement that rule with the same awk so the two numbers can never disagree.
 #
 # Note what this command does NOT do: it never guesses at value. It reports bytes, names the
 # owner of every byte, and moves nothing unless asked. `--apply` MOVES into an archive tree and
@@ -981,13 +990,21 @@ slim_scan() { # emit one TAB line per definition: bytes<TAB>keep|drop<TAB>name<T
              if (rel ~ /^skills\//) { name=rel; sub(/^skills\//,"",name); sub(/\/.*$/,"",name) }
              else { name=rel; sub(/^.*\//,"",name); sub(/\.md$/,"",name) }
              skip = (rel ~ /^\.polaris-archived\//)    # already archived — not injected any more
-             b=0; fm=0; p=0; done_fm=0 }
+             b=0; fm=0; p=0; done_fm=0; hidden=0 }
     # Only name: and description: reach a system prompt; the body loads on demand and costs nothing
     # until invoked. Continuation lines of a folded description count — a 6-line YAML description
     # is 6 lines of every prompt — which is why this tracks a `p` flag instead of matching 2 lines.
     !done_fm {
       if (FNR==1 && $0 ~ /^---/) { fm=1; next }
       if (fm && $0 ~ /^---/)     { done_fm=1; next }
+      # ONE clause, and it carries the whole tier-0 idea (ops/contracts/self-skills.md, 6.5.0): a
+      # definition the model cannot invoke contributes NOTHING to a system prompt, so it costs 0 B
+      # here. `disable-model-invocation: true` is therefore the cheapest shelf space there is — it
+      # is how a skill can be born, live and be read by name without ever taxing a session. Same
+      # rule, same awk, as skills.sh::skill_bytes: ONE counter, two callers, and `skill budget` and
+      # `slim` can never disagree about the same file (self-skills.md Invariant 2 — the fast tier
+      # proves it on shared fixtures). Change this clause, change that one.
+      if (fm && $0 ~ /^disable-model-invocation:[ \t]*true[ \t\r]*$/) { hidden=1 }
       if (fm && $0 ~ /^(name|description):/) { p=1; b += length($0)+1; next }
       if (fm && p && $0 ~ /^[A-Za-z_-]+:/)   { p=0 }
       if (fm && p)                           { b += length($0)+1 }
@@ -1018,7 +1035,7 @@ slim_scan() { # emit one TAB line per definition: bytes<TAB>keep|drop<TAB>name<T
       mach = (rel ~ /^agents\// || rel ~ /^commands\// \
               || lname ~ /^(agentdb|reasoningbank|sparc|swarm|v3|flow-nexus|github)-/ \
               || lname=="hooks-automation" || lname=="stream-chain" || lname=="verification-quality")
-      printf "%d\t%s\t%s\t%s\n", b, (keep ? "keep" : (mach ? "drop" : "other")), name, rel
+      printf "%d\t%s\t%s\t%s\n", (hidden ? 0 : b), (keep ? "keep" : (mach ? "drop" : "other")), name, rel
       rel=""
     }
   ' "$tmp" "$@"
@@ -1145,6 +1162,25 @@ cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and re
     note "                              github.com/ayghri/i-have-adhd; reinstall it standalone with"
     note "                              claude plugin install if you want to keep using it)"
     note ".claude/output-styles/       (polaris.md only — any other style you have is yours and stays)"
+    # WHAT UNINSTALL LEAVES BEHIND (ops/contracts/self-skills.md § 0 OPEN-8 and § 8). A skill
+    # carrying `metadata.polaris` is not a kit file: `polaris skill propose` wrote it FROM this
+    # repo's own history — what keeps going wrong on a surface, its public API, the tests that
+    # cover it — so removing POLARIS must not take the repo's knowledge of itself with it. Named
+    # here so a human who disagrees can delete one by hand. Identity is the `metadata.polaris`
+    # key, never a name prefix, which is why this asks skill_paths rather than matching names.
+    local usk usn=0 usl=""
+    if command -v skill_paths >/dev/null 2>&1; then
+      for usk in "$PRIMARY"/.claude/skills/*/; do
+        [ -d "$usk" ] || continue
+        usk="${usk%/}"; usk="${usk##*/}"
+        skill_paths "$usk" >/dev/null 2>&1 || continue
+        usn=$((usn + 1)); usl="${usl:+$usl, }$usk"
+      done
+    fi
+    if [ "$usn" -gt 0 ]; then
+      note "$usn skill(s) POLARIS wrote stay — they are this repo's knowledge; rm .claude/skills/<name> by hand"
+      note "                              $usl"
+    fi
     note "the write-guard hook entry   (.claude/settings.json — your other hooks are kept)"
     note "the managed POLARIS block    (CLAUDE.md — your own content is kept)"
     note "POLARIS lines in .gitignore / .gitattributes · .polaris/ · the lock dir"
