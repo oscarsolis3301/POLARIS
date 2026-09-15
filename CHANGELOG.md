@@ -4,6 +4,210 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.5.0 — 2026-09-15
+
+**BREAKING for anyone who set `model_strong`/`model_mid`/`model_cheap`: Fable and Haiku are now
+forbidden outright, and POLARIS names no model at all.**
+
+One day of ordinary work took a separate weekly model limit to 87%. `model_strong: fable` plus
+`route` returning `strong` for every planner, integrator and evolve role — and for every task at 5
+points or non-normal risk — sent a dozen subagents to the most expensive model available, several
+over 300k tokens each, on work nobody asked to run there. Nothing in the system noticed, because
+nothing in the system was counting.
+
+- **`core.sh model_denied`** refuses `fable` and `haiku` at the only two places a model name can
+  reach a spawn: the `model_*` config values and a task's literal `model:` frontmatter. It is a **kit
+  constant** — no key reads it, so no repo can widen, weaken or disable it, and updating the kit on
+  any machine carries the ban. A refused name is never printed; `route`'s line 1 is unchanged, so
+  every caller still branches on the bare tier word, and the spawn simply inherits the session's
+  model. That is the contract's existing "unset" path, not a new one.
+- **`kit/ops/hooks/model-guard.sh`** stops a session that is *already* running a forbidden model:
+  a machine-wide PreToolUse hook that refuses every tool call with one line until you switch. It
+  **fails open** on any doubt — no transcript, unreadable, no model recorded, malformed JSON all
+  allow — because a guard that failed closed would brick every session on the machine. Armed by
+  `arm_machine()`, so it covers projects that have never had POLARIS installed.
+- **`polaris heal`** runs automatically on every install and every update: it comments out any
+  forbidden `model_*` a stale config still carries, and appends the efficiency rules to the repo's
+  own `CLAUDE.md` once. Append-only and marker-guarded — it never edits your prose, never deletes,
+  and never rewrites a legitimate choice like `model_mid: opus`.
+- **The 🚩 handover, and commands that actually run.** Long, mechanical, judgement-free steps are
+  handed to the human instead of costing a context — a release once burned two hours on ten
+  commands. The block must run first try in *their* shell: one command per line, never `&&`
+  (PowerShell has no chain operators), no bash-only syntax, no placeholders. Four places where
+  POLARIS itself handed out chained commands are fixed.
+- **The mission, in `PROTOCOL.md` § TOKEN DISCIPLINE**, carried by every role and subagent: spend is
+  the owner's money and the supply is fixed; one context beats three; run the smallest check that
+  proves the change. A budgeted stop now hands the rest over rather than just stopping, and reads
+  its caps from the repo's config instead of the defaults in the role file — a run stopped at 90
+  minutes against a real ceiling of 360 for exactly that reason.
+
+---
+
+**What POLARIS learns about your repo used to die with the session that learned it — and the kit
+that could have carried it never reached the repos furthest behind.**
+
+Every sprint on this board re-derives the same facts: which golden couples every lane that touches
+it, what keeps going wrong in `observe.sh`, why three role files co-change as a trio. The board holds
+that knowledge — the best lesson on it is nineteen lines long — and a builder used to receive exactly
+one of those lines, as a grep hit. 6.5.0 gives POLARIS a way to write that knowledge down **as a
+skill of its own**, and a way to stop paying for it: every skill it writes is born hidden, at zero
+prompt bytes, and only a human puts one on the shelf that rides every session. The other half of the
+release is reach. `update --all` was built to bring every install on a machine current and could not,
+because it asked each repo's *own* updater to do the work — and a 5.24.0 install has no `--auto` to
+answer with. It now runs *this* kit's updater inside each repo, so the further behind an install is,
+the more this release matters to it. Around those two: the suite stops re-running for a housekeeping
+nit, the burndown writes itself, an unsatisfiable `verify:` line is one command instead of a round
+trip, and `promote` is a real command. **BREAKING: none.** Every skill is born hidden, the walker
+changes nothing a repo did not already ask for, and no gate moved.
+
+| | before | after |
+|---|---|---|
+| what POLARIS knows about a surface the board keeps returning to | re-derived every session from grep lines; a 19-line lesson reached a builder as one line | `skill gaps` names the surface, `skill propose <glob> --write` writes the skill; `pack` names it before the first edit and prints whole trap bullets |
+| what a skill costs | its `name:` + `description:` ride every session and every subagent in the repo — 827 B for `polaris` alone, ~206 tokens per context, forever | born hidden (`disable-model-invocation: true` = 0 B); a shelf of 1,600 B in all and 320 B per skill, filled only by a human's `skill promote` |
+| "change the search bar and POLARIS already knows about it" | a skill has no `paths:` — it cannot load itself | the twin: a `.claude/rules/<name>.md` with `paths:`, proven to load the moment a matching file is read — three headless sessions, before a line of skill code existed |
+| a skill nobody uses | stays, forever | `skill prune` reads `EVENTS.ndjson`: no hit in 40 done tasks ⇒ demote, none in 80 ⇒ archive; `--apply` moves, never deletes; `restore` brings it back byte-identical |
+| `update --all` on a 6.2.2 or 5.24.0 install | `⛔ update: unknown flag --auto` — the further behind, the less able to accept | this kit's updater runs inside each repo; `--major` applies MAJOR bumps too; registry entries whose path is gone are pruned |
+| a self-landing lane's own `feat/<ID>`, left behind by design | `drift` called it cruft after the suite, `qa` went red, no stamp — `finish` paid the ~12-minute suite again | three classes: *waiting* (live worktree, silent) · *clearable* (proven landed, cleared before `drift` looks) · *diverged* (reported, never auto-deleted) |
+| the burndown table and the Learned log | blank since sprint 12; no lesson newer than sprint 11 | `seal` writes the wave's row; `polaris learned -m` writes the bullet, from any lane and any branch |
+| an unsatisfiable `verify:` line on a claimed task | a human hand-edits a board file — four times in two sprints | `polaris amend <ID> --verify <n> -m "why" -- <cmd…>` (or `--drop`, `--add`): one board commit, refusals that mutate nothing |
+| `next --do` with two plans on the board | promoted the foreign plan's tasks, silently | `held: <ID> — plan <slug> is not this run's` under `drain: plan`; `promote` is a command the prose can name |
+| `qa --force --full` | `--full` silently dropped | every flag arrives |
+
+- **Skills POLARIS writes for itself — `polaris skill`.** `skill gaps` reads the last 80 done tasks
+  and names the surfaces the board keeps returning to with no skill — at least five tasks, kickbacks
+  weighted in, a directory folding its files so `kit/ops/roles/` is one candidate and not six.
+  `skill propose <glob>` prints a deterministic SKELETON from the same producers `pack` already uses
+  — the board, the brain, the index, the SURFACES rows — and `--write` creates
+  `.claude/skills/<name>/SKILL.md` on `<base>` only, never overwriting, refusing reserved names,
+  committing nothing. The template (`kit/ops/templates/SKILL.md`) is the skeleton's static half:
+  seven headings the generator and the humans read alike. The one thing no generator can write is
+  the `description:` trigger sentence, so it is left as `TODO(<glob>)`, and a `TODO(` trigger blocks
+  promotion until a person or EVOLVE writes it. `list` · `budget` · `promote` · `demote` ·
+  `prune [--apply]` · `restore` round it out, and every writer refuses on a `feat/*` branch: a skill
+  is repo knowledge, not a task's diff.
+- **Born hidden, and a shelf with a byte budget.** The T-146 spike measured the two facts that make
+  any of this affordable: a definition whose frontmatter carries `disable-model-invocation: true` is
+  never offered to the model and never reaches a system prompt — 0 bytes — and a repo skill loads only
+  in that repo. So every skill POLARIS writes is born with that flag. Promotion flips it, and
+  promotion is budgeted: 320 B per skill's frontmatter and 1,600 B for the whole shelf (≈400 tokens
+  per context, ≈3,200 per 8-context run at the very most), refused with the shelf listed when it
+  would overflow. `slim` and `skill budget` count with the same awk, so the machine's tax and the
+  shelf can never disagree — and `slim` now counts a hidden definition as 0 too. The tax itself, both
+  figures dated because an undated one reads as a fact: **251 definition files / 34,119 B (~8,500
+  tokens) per context on 2026-07-26; 223 / 29,124 B / 7,281 tokens on 2026-09-14.** A conductor run
+  spawns 6–8 contexts, and `slim --apply` has still never been run on that machine.
+- **Who promotes — deliberately asymmetric.** EVOLVE may write ONE skill per run and PROPOSE its
+  promotion, as a numbered proposal carrying the `hits/W` evidence line; a human runs
+  `skill promote`. No agent runs it on its own initiative under any autonomy setting, because
+  promotion spends every future session's budget in that repo and EVOLVE never self-escalates.
+  `skill demote` is the free direction — reversible, cannot break a session — so it MAY sit in
+  EVOLVE's auto-reversible allowlist. A reader who files that asymmetry as a bug has read it
+  correctly: deliberate, owner's call, 2026-09-14.
+- **The twin — probed before it was built.** The owner's original ask was literal: change the
+  universal search bar, and what POLARIS knows about it is already in context, at zero standing cost
+  in every session that never touches it. Skills cannot do that. Claude Code's `.claude/rules/<name>.md`
+  files with a `paths:` frontmatter are documented to load only when a matching file is read —
+  documented, never observed. So the sprint's first task was a probe: a throwaway repo built and
+  committed before the first session started, three headless sessions, the answers recorded from
+  what they echoed and nothing else (`probe: rules-paths-fires-on-read: yes`, Claude Code 2.1.251).
+  A `paths:` rule is absent at session start, injected the moment a matching file is Read, present in
+  an Edit session because Edit reads first — and NOT injected by a Read of a non-matching path, nor by
+  a Write that creates a new file. So `propose --write` writes the twin beside every skill,
+  `prune --apply` and `restore` move it with the skill, and `skill list` prints `twin yes`. The one
+  caveat the trigger sentence must not promise past: a lane that only *creates* files under a surface
+  never sees the twin — `pack`'s SKILLS section covers that lane.
+- **Delivered, measured, evicted.** `claim` emits one `skill-hit` event per POLARIS-written skill
+  whose paths overlap the task's `files_owned` — the only skills telemetry, and the one the eviction
+  rule needs. `pack` gains a SKILLS section (`read: .claude/skills/<name>/SKILL.md · tier · hits ·
+  lines`), omitted entirely when nothing overlaps, so a builder is told which skill to read before its
+  first edit. Its KNOWN TRAPS producer prints WHOLE bullets now — up to 8 bullets or 40 lines per
+  file, a bullet that would cross the cap skipped rather than cut, because a truncated lesson is the
+  bug this fixes. `uninstall`'s preview names the skills that stay (they are the repo's knowledge,
+  not the kit's); `doctor` says when the shelf is over budget or a skill is due for eviction.
+  `prune`'s verdicts are data over `EVENTS.ndjson`, and the window is 40 done events, never calendar
+  — done events track work, calendar tracks nothing — so a skill is never judged before 40 have
+  passed since it was written. `--apply` archives under `.polaris/skills-archived/` and never deletes;
+  `restore` brings one back from the archive, or from git history.
+- **`update --all` finally reaches every install.** The walker delegated to each registered repo's
+  own `ops/polaris update --auto`, and `--auto` only exists from 6.3.0: measured on both of the
+  owner's real projects (The Director on 6.2.2, pip on 5.24.0), every older repo answered
+  `⛔ update: unknown flag --auto` and stayed put — self-defeating by construction. The walk now runs
+  THIS kit's updater from inside each target checkout: the target's version is irrelevant, its
+  VERSION channel, CONVENTIONS, board and locks are read as data, and the apply step installs the
+  target's own tarball exactly as the explicit path does. A MAJOR gap still asks, verbatim;
+  `update --all --major` is the human's recorded yes to apply those too. Registry entries whose path
+  no longer exists are removed instead of failing on every walk (the machine registry held six after
+  sprint 14, three of them deleted scratch repos). And a thing worth knowing about how this kit
+  ships: the version bump alone reaches nobody. `channel:` and `tarball:` both serve this repo's
+  *installed* `ops/`, not `kit/ops/` — so the commit that lands the dogfooded kit is the one that
+  actually ships a release; everything before it only makes the artifact exist.
+- **The suite stops re-running for a housekeeping nit — cruft gets three classes.** A self-landing
+  lane leaves its own `feat/<ID>` behind on purpose (never remove the ground you are standing on).
+  `drift` called it cruft; `qa` ran `drift --strict` after the suite, went red, wrote no stamp; and
+  the `finish` that followed re-ran the whole ~12-minute suite for a nit `sweep --fix` clears in a
+  second. Observed twice on 2026-09-14. A branch is cruft now only with PROOF that its tip landed —
+  byte equality with the squash commit's `Landed-from:` trailer, or base ancestry; never inferred
+  from the task sitting in `done/`. A proven branch whose worktree still has a live beat is a lane
+  stepping out, and `drift` says nothing; a proven idle one is cleared by `qa` before `drift` ever
+  looks, and by `sweep --fix`; an unproven one is reported as `CRUFT diverged` and never
+  auto-deleted — the case that would be catastrophic to get wrong, asserted in both drills. One
+  implementation of "safe to delete" serves all three commands, and `drift` reads the branches with
+  one `for-each-ref` instead of a fork per done task — about 150 forks per run on this board.
+- **The burndown writes itself.** The tables for sprints 12, 13 and 14 were blank and the Learned
+  log had nothing newer than sprint 11, because the write-routing table named the Integrator as the
+  only writer — a pen that went silent the day integration became a command. `seal` now appends
+  `| <date> | <done pts> | <remaining> |` to the current sprint's `## Burndown` (creating the table
+  when absent; a failure is a ⚠, never a failed seal), and `polaris learned -m "<bullet>"` appends
+  one dated lesson to `## Learned` from any lane, any branch, in one board commit. The per-sprint
+  report in `docs/sprints/` stays the narrative of record; SPRINT.md carries the numbers and the
+  lessons; the Planner reads Learned first and EVOLVE prunes it.
+- **`polaris amend <ID> --verify` — grant's sibling for the acceptance list.** `grant` widens a
+  claimed task's `files_owned`; nothing corrected its `verify:`. A cross-lane golden owner was handed
+  a verify line unsatisfiable by construction — T-122, T-125, T-136, T-139 — and every occurrence
+  cost a round trip to a human or a conductor hand-editing a board file. A calibration note fixes
+  future carves and cannot reach work already on the board; a command can.
+  `amend <ID> --verify <n> -m "why" -- <cmd…>` replaces one line, `--verify <n> --drop` drops it,
+  `--verify --add -- <cmd…>` appends — a claimed task only, a reason on the record, one
+  `chore(board): amend <ID> verify` commit. Two guards keep it honest: it refuses on any `feat/*`
+  branch (a builder never rewrites its own gate) and it refuses a bare full-suite command; every
+  refusal leaves the file byte-identical.
+- **`next --do` keeps its hands off foreign plans, and `promote` is a command.** `drain: plan`
+  exists so one "go" authorizes the plan the human approved, not the whole board — the build scan
+  honoured it, the promote pass did not, and the first board with two plans on it would have
+  silently adopted foreign work. `next --do` now knows the run's plan (the session's handover plan
+  file, else the single slug the in-flight tasks carry) and holds a backlog candidate whose `plan:`
+  is set and different, saying so — `held: <ID> — plan <slug> is not this run's (<P>) — drain: plan`
+  — never a silent drop. A candidate with no `plan:` is never foreign, so riders still flow. And
+  `polaris promote` is `next --do`, runnable: CONDUCTOR step 7 names it, after a conductor spent a
+  whole planner context in sprint 14 moving files by hand because the prose named no command. The
+  entry's `qa` dispatch forwards every flag; `qa --force --full` used to drop `--full` on the floor.
+- **The roles learn the new lines from the contracts, verbatim.** EVOLVE: one skill per run,
+  promotion proposed and never applied, `demote` in the inert allowlist, the asymmetry stated.
+  INTEGRATOR: `amend` for an unsatisfiable line, `learned` instead of a hand edit. CONDUCTOR:
+  `next --do`. PROTOCOL's tool table and MANUAL's by-hand recipes carry `skill`, `amend`, `learned`,
+  `promote` and `update --major`; TOKEN DISCIPLINE gains one bullet — a skill `pack` names is read
+  before the first edit. `kit/CLAUDE.md` is untouched: it is paid 6–8 times a run.
+- **Proof.** A new labeled drill, `skills`, walks one skill from gap to archive and back on a hermetic
+  board — `gaps` · `propose --write` with the twin asserted from the probe line · `promote` refused
+  on a `TODO(` trigger and past the shelf, then passing · `claim`'s single skill-hit · 41 synthetic
+  done events ⇒ demote, 81 ⇒ archive · `restore` byte-identical — asserting rc and bytes at every
+  step, never message text; the labeled suite reaches 37 drills. The existing drills grew where the
+  code did: `autoupdate` proves a stubbed 5.x entry is updated by `--all --repo-only` and a MAJOR gap
+  held, then applied with `--major`; `drift` and `qa` carry all three cruft classes; `express`
+  asserts the burndown row; `handover` the plan hold; `grant` the six `amend` cases and `learned`.
+  The fast tier grows to **259 checks across 23 sections** (`amend` and `skills` are new), and two
+  goldens pin the constants and the promise: `skill-budget` (the shelf arithmetic, the per-skill cap,
+  the over-budget rc 1 and its demotion candidate) and `skill-install` (a skill POLARIS did not write
+  survives `install.sh` and `uninstall` byte-identical). Both were proven red once, by sabotage,
+  before their green was believed.
+
+**If you are already installed, you need do nothing** — the session-start hook updates a quiet
+board on its own, and a repo further back than 6.3.0 is reached the moment any 6.5.0 repo on the
+machine runs `bash ops/polaris update --all` (`--major` for a major gap). Nothing rides your prompt
+until you promote something: run `bash ops/polaris skill gaps` to see which surfaces have earned a
+skill, and `bash ops/polaris skill propose <glob>` to read what POLARIS would write before it writes
+anything.
+
 ## 6.4.0 — 2026-09-14
 
 **A one-line change paid for the whole test suite, and a kit that got faster every week arrived
