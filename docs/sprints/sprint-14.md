@@ -292,7 +292,7 @@ first-run.md § 2 (install.sh) and § 3 (arming + the golden) pin every path and
 - [ ] CI's own `--claude-skill` job (`.github/workflows/ci.yml`, human-owned — read, never edit) still passes by inspection: its asserts are about the skill and the permissions, both untouched
 
 ## T-144 — "Prove the activation — fast-tier sections for the engine and the interview, and the surfaces drill scaffolds, applies and asks"
-points 5 · risk normal · landed 51ee8ba (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed 51ee8ba (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/selftest/fast.sh, kit/ops/lib/selftest/policy.sh
 
 ### Why
@@ -315,7 +315,7 @@ owner is T-145 and you add no api-kit row.
 - [ ] `bash kit/ops/polaris doctor --selftest --only surfaces,qa,finish` green in the worktree (explicit 600000 ms timeout); the sharded `test:` green at the wave gate via `bg run test`; re-measure the surfaces drill's cost and record it in Notes for EVOLVE (CONVENTIONS' `test:` comment budgets ~44 s per drill)
 
 ## T-145 — "Teach the roles — INIT asks its questions in one call, the Planner scaffolds at the plan gate, the install skill knows both lines"
-points 5 · risk normal · landed 71ac854 (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed 71ac854 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/.claude/skills/polaris-install/SKILL.md, kit/ops/PROTOCOL.md, kit/ops/roles/INIT.md, kit/ops/roles/PLANNER.md, ops/tests/api-kit.expected
 
 ### Why
@@ -367,6 +367,32 @@ tasks are carved from. Write no kit code. Measure first, decide second, propose 
 - [ ] Proposed contract: a CONTRACT.md-shaped draft (interface, invariants, executable check, example) the Planner can lift into `ops/contracts/self-skills.md`
 - [ ] Proposed carve: ≤ 5-point leaves with disjoint `files_owned`, pointed; which golden(s) pin the budget; which drill proves the eviction; the api-kit rows each leaf adds
 - [ ] Every open question you could not settle is listed under `## Proposed contract` as `OPEN:` lines with the two options and your recommendation — never silently defaulted
+
+## T-147 — "Release 6.4.0 — spend less, stay current, everywhere: the kit that maps its own tests, asks its three questions, and follows you"
+points 2 · risk normal · landed bd9c17a (2026-09-14) · claimed 2026-09-14
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+Sprint A gave `qa` and `land --express` a test map to select from; Sprint B gave every repo a way to
+get one without a human writing rows, an interview that asks the three questions a repo cannot
+answer for itself, a machine that carries the voice, and a board that follows you across computers.
+None of it reaches anyone until it is released — and `update --auto` only ever delivers a PUBLISHED
+minor. Four places at once: `kit/ops/VERSION`, the CHANGELOG, the git tag, the GitHub release with
+`polaris-v5.zip`. Sprint 13's lesson is on the board: 6.2.0, 6.2.1 and 6.3.0 were all tagged and
+never shipped because a sharded green is not a CI green — the serial suite shares one fixture across
+every drill and reds on what the shards never see. So this task bumps and documents, and it does not
+hand off until the SERIAL suite is green in its own worktree, with nobody else editing `kit/`. The
+CHANGELOG entry is written for the humans who will read it after `update --auto` prints one line:
+what got faster, what now asks, what changed on the machine, in the house voice of the 6.3.x entries
+— and a `BREAKING: none` line, because nothing in 6.4.0 changes a repo's behavior until it opts in
+(`test_select:` unset stays byte-identical; the interview only asks; the style lands unselected).
+
+### Acceptance
+- [ ] `kit/ops/VERSION` reads `version: 6.4.0`; every other line untouched
+- [ ] CHANGELOG has `## 6.4.0 — <today>` above 6.3.1, covering Sprint A (SURFACES.tsv, the stale-tests gate, change-scoped `qa`/express, the stamp scope, triage pricing contexts, the one-copy lane rule) and Sprint B (`surfaces --scaffold [--apply]`, the interview, `adhd:`, the machine-armed style + skill, `board_pull`), a before/after table in the 6.3.0 style, and `BREAKING: none`; the 6.3.1 and 6.3.0 entries unchanged
+- [ ] the SERIAL suite green in your worktree: `bash ops/polaris bg run serial -- bash kit/ops/polaris doctor --selftest` then chunked `bash ops/polaris bg wait serial --max 300` until it returns a verdict (expect 900–1000 s; three or four waits); paste the `selftest passed` line and `git rev-parse HEAD` into Notes — the serial run is the CI tier, and it must be green BEFORE the tag exists
+- [ ] no other lane is active while the serial suite runs (this task depends on every other one, so `bash ops/polaris status` shows nothing in active/ besides you — check before starting; editing `kit/ops/lib/*.sh` mid-run fabricates a spurious failure)
+- [ ] `bash kit/ops/polaris check` green (every golden, against your worktree) and `doctor --fast` green
 
 ## T-148 — "The board follows you — board_pull fetches origin's board ref under claim-branch, so a second machine's status, next and claim read the truth"
 points 5 · risk normal · landed c225ba4 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14

@@ -4,6 +4,128 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.4.0 — 2026-09-14
+
+**A one-line change paid for the whole test suite, and a kit that got faster every week arrived
+nowhere.**
+
+Both halves of that sentence are the same complaint, and 6.4.0 answers them together. The suite was
+never slow because the tests were slow — it was slow because nothing knew which tests a change could
+possibly break, so every change ran all of them. And the fix for that, like every fix before it,
+would have sat in this repo: three installed repos measured last sprint were on 6.0.0, 5.23.0, and
+no version at all. So this release does three things, in order. It gives POLARIS a place to record
+**which tests cover which source paths** — one TAB-separated file, `ops/SURFACES.tsv`, read both by
+the thing that runs tests and by the gate that notices when a feature moved and its tests did not.
+It then teaches POLARIS to **fill that file in by itself**, from a repo's own layout, because a
+feature nobody switches on makes nobody faster. And it closes the gaps that kept the kit from
+reaching you at all: the questions an installer could never answer for you now get asked, the voice
+is armed on the machine instead of one repo at a time, and a board finally follows you between
+computers. **BREAKING: none.** Every new gate is silent until a repo opts in — `test_select:` unset
+plus an empty map is byte-identical to 6.3, the interview only asks, and the ADHD skill lands
+switched off.
+
+| | before | after |
+|---|---|---|
+| a one-line change, in a repo with a map | the whole `test:` suite, every time — 729s sharded, 805s serial here | only the rows the changed paths map to; `qa` and `land --express` read the same map, so they cannot disagree |
+| a feature changed, its tests untouched | nothing noticed, ever | `verify` · `handoff` · `audit` · `land` refuse, naming the row and the tests to move |
+| a repo that has never mapped anything | mapping meant a human writing rows by hand, so nobody did | `surfaces --scaffold` reads the stack's own layout and proposes them; `--apply` writes the unambiguous ones |
+| the suite stamp | said "green at `<sha>`" and nothing about what was proven | a third field — `full` or `scoped` — and `finish` says out loud which one it accepted |
+| four one-point tasks | `triage` said `full`: seven cold starts before any work began | it prices CONTEXTS, not tasks, and hands small-and-few to one solo context |
+| "which lane should I run?" | CONDUCTOR.md restated `triage`'s six conditions in prose — and the prose had drifted | one copy of the answer: run `triage`, branch on line 1 |
+| installing POLARIS | it asked nothing — voice guessed, `/i-have-adhd` a secret in PROTOCOL § VOICE | `polaris interview` — the three questions a repo cannot answer for itself, in ONE round |
+| a second computer, or any repo where the installer never ran | no output style and no ADHD skill on the machine — no voice, no confetti | `install` and `update` both land them in `~/.claude` |
+| the board, on your other machine | every mutation pushed, none ever fetched — `status` and `next` read a board frozen at its last clone | `board_pull` fetches and fast-forwards under `claim: claim-branch` |
+
+- **`ops/SURFACES.tsv` — which tests cover which source paths, as data.** One row per pair:
+  `surface<TAB>tests<TAB>cmd<TAB>note`, `files_owned` glob semantics, modeled on `RULES.tsv` and
+  guarded the same way. Two readers share it, because they need the same fact: the gate that asks
+  *did the tests move?* and the selector that asks *what can this change break?* Rows are written by
+  `polaris done`, from a `surface:` list the Planner sets at the plan gate — never by a Builder, and
+  never by hand. That is deliberate. A row buys the savings and arms the gate against whoever wrote
+  it, so the rational move for the person being gated is to write none; the incentive is removed
+  rather than policed, and the file is `path`-guarded so "the row blocked me" is not a fix.
+- **Change-scoped testing, off by default.** Set `test_select:` in `ops/CONVENTIONS.md` to a template
+  — `{tests}` becomes the matched rows' tests globs — and `qa` and `land --express` run only the
+  commands the changed paths map to. Any changed path without a row falls back to the whole suite;
+  `--full` always runs `test:` verbatim. Only `test:` is ever narrowed: a partial typecheck is a lie,
+  and a partial build breaks `generated:`. **Unset, none of this exists** — which is exactly what
+  lets `update` ship it to every installed repo and change nothing in any of them.
+- **The stale-tests gate.** `check_freshness` runs beside `check_rules`, so `verify`, `handoff`,
+  `audit` and `land` all get it with no new call sites — and the write-time guard never does, because
+  it sees one path at a time and could only ever deny the first edit of every task. A changed mapped
+  surface with real added lines, and nothing changed under its tests, is refused by name. Docs-only
+  and comment-only diffs do not count. A genuine exception is a human's recorded
+  `polaris approve <ID> <surface> -m "why"` — the same path that lifts an `ask` rule. **No row, no
+  gate:** an unmapped path stays silent, because a gate whose cheapest satisfying move is a lie
+  (`src/x.py → tests/`) is worse than no gate at all.
+- **`polaris surfaces` — and why a health check is not optional here.** This feature fails *unsafe*: a
+  wrong tests glob skips real coverage while printing green. So the command refuses a row whose tests
+  glob covers its own surface, flags a glob matching 0 or more than 200 tracked files, `drift` carries
+  those findings, and every `surface:` item on a ready task is checked at the plan gate instead of at
+  `done`. The backstop that makes scoping acceptable at all is unchanged and now pinned in the
+  contract: **nothing that publishes reads the stamp.** `pack.py --dogfood` and CI both run the full
+  serial suite, on three operating systems, before any artifact exists.
+- **`surfaces --scaffold [--apply]` — POLARIS maps the repo itself.** The machinery above would have
+  reached every installed repo and made none of them faster, because somebody still had to write the
+  rows. So the scaffold reads the repo's manifests and tracked files, names the runner it can *prove*
+  takes path arguments (pytest · jest · vitest · go), and pairs test paths to source paths only where
+  the stack's own convention makes the pairing unambiguous: `tests/api/` ↔ exactly one `api/` dir,
+  `tests/test_util.py` ↔ exactly one `util.py`, `src/foo/__tests__/` ↔ `src/foo/`, a directory with
+  `*_test.go`. Two candidates is a SKIP that says so. A surface over 200 paths is a SKIP. In doubt it
+  over-selects. Plain `--scaffold` prints the proposal — the runner, the rows, and every pairing it
+  refused, with the reason — and writes nothing; `--apply` writes the unambiguous rows tagged
+  `[scaffold]`, sets `test_select:` only where the repo has never set it, and commits nothing: it
+  tells you to review. A generator that guesses to look useful is worse than one that emits three
+  honest rows and admits the rest.
+- **`polaris interview` — the three questions a repo cannot derive.** How you want to be talked to
+  (`voice:`), whether replies should be shaped for ADHD (`adhd:`, new), and one computer or several
+  (`claim:`). The questions come from a new fifth column in `ops/KEYS.tsv`, so they cannot drift from
+  the keys they set. Plain `interview` prints what is still unanswered for the model to ask in ONE
+  round; `--set key=value` validates each pair against that row's options and writes live lines into
+  CONVENTIONS, replacing a commented stub in place; `--pending` is the one-line probe that `doctor`
+  and an explicit `update` print. INIT asks them on a fresh install, and an interactive `update` or
+  `doctor` mentions any preference never set here. **`update --auto` stays exactly one line and never
+  asks** — it runs at every session start, and a session-start prompt is not a feature.
+- **The confetti gap, closed.** `arm_machine` taught a machine how to *install* POLARIS but never how
+  to *talk*: the output style and the vendored `/i-have-adhd` skill were copied per repo, so a second
+  computer — or any repo where the installer never ran — had no voice and no 🎉. Both now land in
+  `~/.claude` on install, write-if-different, and every `update` re-caches them, so updating one repo
+  arms the whole machine. Two things deliberately do not change: the machine settings' `outputStyle`
+  is never written (a machine-wide style would restyle every non-POLARIS repo — selection stays per
+  repo or per session), and the machine copy of the ADHD skill keeps `disable-model-invocation: true`.
+  The opt-in is a *repo* preference, `adhd:`, asked once — and `install.sh` now honours that line
+  after it copies the skill, instead of silently re-arming the opt-out on every update.
+- **`triage` prices contexts, not tasks.** It used to send any wave of more than one task to `full` —
+  but the cost driver was never the task count, it was the cold starts: roughly 7,300 tokens each,
+  seven of them paid before a four-task full wave does any work at all. Up to four tasks, each ≤3
+  points and ≤6 points in all, at normal risk, now go to one solo context that works them one at a
+  time, and the note states the arithmetic. Separately, the `express:` default read `on` here and
+  `auto` everywhere else in the kit; it reads `auto`.
+- **One copy of the lane answer.** `polaris triage` computes it, and CONDUCTOR.md step 2.5 used to
+  restate all six conditions in prose — which had drifted (the prose said two points, the code said
+  three). A model re-derives, disagrees with the CLI, finds itself holding a judgment call, and asks
+  you. The second copy is deleted, and the anti-pattern is named in `CLAUDE.md`, the output style and
+  PLANNER 0b: *never offer a menu of execution strategies.* How many builders, one chat or several,
+  board or no board, which lane — those are `triage`'s answer, never a question.
+- **`board_pull` — the board follows you.** Under `claim: claim-branch` with an origin remote, every
+  board mutation pushed `refs/heads/polaris/board` and nothing ever fetched it, so a second machine's
+  `status`, `next`, `board-fm` and dashboard read a board that had stopped moving. The read side now
+  exists: fetch at most once a minute, fast-forward the local ref only when it is an ancestor of
+  origin's, and re-materialize the moved set with the same plumbing `board_materialize` already uses.
+  Never a branch switch, never the primary index. A diverged local ref is reported and left alone; a
+  `local-lock` repo pays nothing at all.
+- **Proof.** A new labeled drill, `surfaces`, drives the map, the gate, selection, the health
+  refusals, the scaffold and the interview end to end; the labeled suite reaches 37 drills. The fast
+  tier — the seconds-long one you run on every change — nearly doubles: **217 checks across 21
+  sections in ~11s**, up from 89 across 12, with nine new sections covering the map, the row grammar,
+  the stamp scope, runner detection, the pairing engine, the proposal and the interview. Two new
+  contracts land with the release, `test-surfaces.md` and `first-run.md`, and `ask-approval.md`
+  widens to cover a SURFACES row.
+
+**If you are already installed, you need do nothing.** 6.3.0's session-start hook updates a quiet
+board on its own. To get *faster* rather than merely current, run `bash ops/polaris surfaces --scaffold`
+once and read what POLARIS proposes for your repo — it writes nothing until you add `--apply`.
+
 ## 6.3.1 — 2026-09-08
 
 **The first published 6.3 kit.** 6.3.0 was tagged, but it never published — the release run's smoke
