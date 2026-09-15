@@ -361,6 +361,8 @@ kit/ops/lib/handover.sh	fn	next_dir
 kit/ops/lib/handover.sh	fn	next_landable
 kit/ops/lib/handover.sh	fn	next_promote
 kit/ops/lib/handover.sh	fn	next_route
+kit/ops/lib/integrate.sh	fn	amend_verify
+kit/ops/lib/integrate.sh	fn	cmd_amend
 kit/ops/lib/integrate.sh	fn	cmd_audit
 kit/ops/lib/integrate.sh	fn	cmd_done
 kit/ops/lib/integrate.sh	fn	cmd_history
@@ -678,6 +680,13 @@ kit/ops/templates/CONTRACT.md	heading	Purpose
 kit/ops/templates/CONTRACT.md	heading	Shared types / schema
 kit/ops/templates/ROADMAP.md	heading	Outcomes (top to bottom = priority)
 kit/ops/templates/ROADMAP.md	heading	ROADMAP
+kit/ops/templates/SKILL.md	heading	<glob> — what POLARIS already knows
+kit/ops/templates/SKILL.md	heading	Files that move together
+kit/ops/templates/SKILL.md	heading	Last worked
+kit/ops/templates/SKILL.md	heading	Public surface
+kit/ops/templates/SKILL.md	heading	Tests that cover it
+kit/ops/templates/SKILL.md	heading	What it is
+kit/ops/templates/SKILL.md	heading	What keeps going wrong
 kit/ops/templates/TASK.md	heading	Acceptance criteria (binary — each becomes a test; put the runnable ones in verify:)
 kit/ops/templates/TASK.md	heading	Notes
 kit/ops/templates/TASK.md	heading	Why

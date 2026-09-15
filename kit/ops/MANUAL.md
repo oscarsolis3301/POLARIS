@@ -41,6 +41,8 @@ The first commit is parentless (orphan); every later mutation appends exactly on
 unchanged (`chore(board): claim <ID>`, etc.). Contention — another session advanced the ref between
 your `rev-parse` and `update-ref` → re-read the tip and retry, bounded.
 
+**Learned (any lane) — the smallest board mutation there is.** What `ops/polaris learned -m "<bullet>"` does by hand, from any branch including a `feat/*` worktree: append `- <YYYY-MM-DD> · <bullet>` as the LAST bullet of `ops/SPRINT.md`'s `Learned` section (create the section at EOF when it is absent), append `{"ts":<epoch>,"ev":"learned","id":"","who":"<you@host>","note":"<first 60 chars>"}` to `ops/board/EVENTS.ndjson`, then ONE `board_commit` over both with the subject `chore(board): learned`, then `sync_board`. Refuse an empty bullet, one over 400 chars (the detail belongs in the task's Notes) or one containing a TAB. The burndown row is `seal`'s to write, never yours.
+
 ### Push the board — `sync_board` (NEVER `<base>`)
 ```bash
 git push origin refs/heads/polaris/board:refs/heads/polaris/board
@@ -113,6 +115,23 @@ Then ONE `board_commit` (polaris/board — never `<base>`), subject `chore(board
 2. append `- grant: <path> — <why>` to the task's Notes;
 3. append the telemetry line: `{"ts":<epoch>,"ev":"grant","id":"<ID>","who":"<you@host>","note":"<path>"}`.
 RULES.tsv still binds inside granted paths: granting a danger zone does NOT make it writable — rules are checked independently of ownership at write time, verify, and audit.
+
+**Amend (Integrator) — the same surgery on the `verify:` list.** What `ops/polaris amend` does by hand; `grant` widens what a claimed task may TOUCH, `amend` corrects what it must PROVE:
+```bash
+polaris amend <ID> --verify <n> -m "why" -- <command…>      # replace verify: line n (1-based)
+polaris amend <ID> --verify <n> --drop -m "why"             # remove verify: line n
+polaris amend <ID> --verify --add -m "why" -- <command…>    # append one line
+```
+Preconditions — ALL must hold, else STOP and change NOTHING (a refusal never half-writes):
+- `<ID>` is in `ops/board/active/` or `ops/board/review/` — a task nobody has claimed is a Planner edit;
+- a non-empty reason (`-m "why"`);
+- you are NOT on any `feat/*` branch — a Builder never rewrites its own gate; run it from the primary checkout;
+- `<n>` is within `1..len` of the task's `verify:` list;
+- the new command is not the full suite — a line equal to `ops/CONVENTIONS.md`'s `test:` or `build:` is refused, because that is the WAVE gate and never a per-task `verify:` line.
+Then ONE `board_commit` (polaris/board — never `<base>`), subject `chore(board): amend <ID> verify`, over `ops/board/<col>/<ID>.md` + `ops/board/EVENTS.ndjson`, containing all three edits, then `sync_board`:
+1. edit the `verify:` list in place, keeping the order of every other line (replace / delete / append);
+2. append to the task's Notes: `- amend: verify[<n>] "<old>" → "<new>" — <why>` (`--drop` → `"<old>" → dropped`; `--add` → `verify[+] "<new>"`);
+3. append the telemetry line: `{"ts":<epoch>,"ev":"amend","id":"<ID>","who":"<you@host>","note":"verify[<n>]"}`.
 
 ## Integrate (Integrator) — audit → land-per-task → suite → seal
 List `ops/board/review/`, topologically sort by `depends_on` — that is the merge order. On `integrate/<date>` (never on `<base>`), per task in order: audit it (same ownership + RULES proof as above, run against `feat/<ID>` — before ANY merge; a violation kicks the task back, never merges it), then squash-land it (see Land below). Batch mode: run the full suite ONCE after all lands are in. Paranoid mode (suite <2 min): run the full suite after EVERY land.
