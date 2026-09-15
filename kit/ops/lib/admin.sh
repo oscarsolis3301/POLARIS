@@ -366,21 +366,24 @@ AUTOMODE
   fi
 }
 
-cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] · update --all [--repo-only]
+cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--major] · update --all [--repo-only] [--major]
   # The explicit form reuses install.sh's live-board path: kit code is refreshed; board, RULES,
   # CONVENTIONS, MAP and SPRINT are never touched. `--auto` is the SessionStart path (6.3.0,
   # ops/contracts/auto-update.md): applies a minor/patch update by itself when the board is quiet,
-  # stays silent otherwise, never parks. `--all` walks the machine registry and runs `--auto` in
-  # every installed repo. `update` = fetch a newer KIT from the channel.  `upgrade` = migrate an
-  # OLD BOARD to v5. One letter apart and unrelated; update runs upgrade at the end, never the reverse.
-  local auto=0 say_=0 all=0 repo_only=0 a
+  # stays silent otherwise, never parks. `--all` walks the machine registry and runs THIS kit's
+  # `--auto` inside every installed repo (6.5.0, auto-update.md v2). `--major` is the human's
+  # recorded yes to a MAJOR bump — it rides `--all` or `--auto` only, and the SessionStart hook never
+  # passes it. `update` = fetch a newer KIT from the channel.  `upgrade` = migrate an OLD BOARD to
+  # v5. One letter apart and unrelated; update runs upgrade at the end, never the reverse.
+  local auto=0 say_=0 all=0 repo_only=0 major=0 a
   for a in "$@"; do
     case "$a" in
       --auto)      auto=1;;
       --say)       say_=1;;
       --all)       all=1;;
       --repo-only) repo_only=1;;
-      *) die "update: unknown flag ${a} (only --auto, --say, --all, --repo-only)";;
+      --major)     major=1;;
+      *) die "update: unknown flag ${a} (only --auto, --say, --all, --repo-only, --major)";;
     esac
   done
 
@@ -416,15 +419,16 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] · 
   fi
 
   if [ "$all" = 1 ]; then
-    [ "$auto" = 0 ] && [ "$say_" = 0 ] || die "update: --all combines with --repo-only only"
-    cmd_update_all "$repo_only"
+    [ "$auto" = 0 ] && [ "$say_" = 0 ] || die "update: --all combines with --repo-only and --major only"
+    cmd_update_all "$repo_only" "$major"
     return 0
   fi
   if [ "$auto" = 1 ]; then
-    cmd_update_auto "$say_" "$repo_only"
+    cmd_update_auto "$say_" "$repo_only" "$major"
     return 0
   fi
   [ "$say_" = 0 ] || die "update: --say belongs to --auto (update --auto --say)"
+  [ "$major" = 0 ] || die "update: --major belongs to --all or --auto"
 
   [ -f "$VER" ] || die "ops/VERSION missing — this kit predates versioning; reinstall from a fresh zip"
   command -v curl >/dev/null 2>&1 || die "update needs curl on PATH"
@@ -596,11 +600,11 @@ update_dirt_overlaps_kit() { # stdin = `git status --porcelain`; rc 0 = some dir
   return 1
 }
 
-cmd_update_auto() { # cmd_update_auto <say> <repo_only> — the SessionStart path, auto-update.md § algorithm.
+cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionStart path, auto-update.md § algorithm.
   # Every early exit is a silent rc 0 (a busy board is normal; nothing to say); <say>=1 turns each
   # into one `skipped: <reason>` line, which `--all` reads. Never parks, never asks, never exits
   # non-zero, never prints more than one line: a hook must never fail the session or flood it.
-  local say_="${1:-0}" repo_only="${2:-0}" cur latest mode log rc new
+  local say_="${1:-0}" repo_only="${2:-0}" major="${3:-0}" cur latest mode log rc new
   # 1. self-hosting — this repo never self-updates (cmd_update exits before the re-exec; kept here
   #    so the function stands alone for anyone who calls it directly)
   if [ -f "$PRIMARY/kit/ops/pack.py" ]; then
@@ -622,8 +626,11 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> — the SessionStart pat
   if [ -z "$latest" ] || ! semver_gt "$latest" "$cur"; then
     [ "$say_" = 1 ] && printf 'skipped: up to date (%s)\n' "$cur"; return 0
   fi
-  # 4. a MAJOR bump asks; it never applies itself
-  if [ "${latest%%.*}" -gt "${cur%%.*}" ] 2>/dev/null; then
+  # 4. a MAJOR bump asks; it never applies itself — unless the human typed `--major` (6.5.0,
+  #    auto-update.md v2). That flag IS the recorded yes, so the gap falls through to the same
+  #    quiet-board and dirt rules below and the ✅ line stays the usual one; the BREAKING banner the
+  #    explicit path prints lands in .polaris/update.log. The SessionStart hook never passes it.
+  if [ "$major" != 1 ] && [ "${latest%%.*}" -gt "${cur%%.*}" ] 2>/dev/null; then
     printf '⬆ POLARIS %s is a MAJOR update (you have %s) — it will not apply itself; when you want it: bash ops/polaris update\n' "$latest" "$cur"
     return 0
   fi
@@ -656,26 +663,34 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> — the SessionStart pat
   return 0
 }
 
-cmd_update_all() { # cmd_update_all <repo_only> — walk the machine registry; every quiet installed repo updates.
+cmd_update_all() { # cmd_update_all <repo_only> [major] — walk the machine registry; every quiet installed repo updates.
   # Registry root = awake_home (lib/awake.sh); one line per `repos/*` entry, in filename order.
-  # Never deletes an entry, never stops on one repo's failure, rc 0 always. Each repo runs ITS OWN
-  # `ops/polaris update --auto --say` from its own directory — its kit, its board, its rules — and
-  # this only prefixes what it said. (A repo still on a kit older than 6.3.0 answers "unknown flag"
-  # here: one explicit `update` in it, and every later walk reaches it.)
-  local repo_only="${1:-0}" home f p out line printed
+  # Never stops on one repo's failure, rc 0 always. THIS kit's CLI runs inside each target's checkout
+  # (6.5.0, auto-update.md v2): `$SELF` is the re-exec'd temp copy with its lib/ beside it, so the
+  # target's own entry is never invoked and its version is irrelevant. v1 delegated to the target's
+  # `--auto` — a flag that exists only from 6.3.0 — so every install old enough to NEED the update
+  # answered "unknown flag" and stayed put (measured 2026-09-14: The Director 6.2.2, pip 5.24.0);
+  # the further behind a repo was, the less able it was to accept the fix. The child resolves
+  # PRIMARY from its cwd, so the target's ops/VERSION (channel + tarball), CONVENTIONS
+  # (auto_update:), board, locks and .polaris/bg are read as DATA, and the apply step installs the
+  # target's OWN tarball against it, exactly as the explicit path does. POLARIS_UPDATE_REEXEC=1 rode
+  # the exec into this process and is set again on the child, so nothing below re-execs. A gone
+  # path is the ONE entry the walk removes: it can never be updated and would only add a failure
+  # line to every future walk (a recreated repo re-registers at its next install or update).
+  local repo_only="${1:-0}" major="${2:-0}" home f p flags out line printed
   home="$(awake_home)"
   [ "$home" != "-" ] || die "no machine registry yet — open one POLARIS repo in Claude Code first, or: ops/polaris awake install"
+  flags="--auto --say"
+  [ "$repo_only" = 1 ] && flags="$flags --repo-only"
+  [ "$major" = 1 ] && flags="$flags --major"
   for f in "$home"/repos/*; do
     [ -f "$f" ] || continue
     p="$(head -1 "$f" 2>/dev/null | tr -d '\r')"
     [ -n "$p" ] || continue
-    if [ ! -d "$p" ]; then printf '%s: gone (registry entry left for you to remove)\n' "$p"; continue; fi
+    if [ ! -d "$p" ]; then rm -f "$f"; printf '%s: gone — registry entry removed\n' "$p"; continue; fi
     if [ -f "$p/kit/ops/pack.py" ]; then printf '%s: self-hosting — skipped\n' "$p"; continue; fi
-    if [ "$repo_only" = 1 ]; then
-      out="$( (cd "$p" && bash "$p/ops/polaris" update --auto --say --repo-only) 2>&1 || true)"
-    else
-      out="$( (cd "$p" && bash "$p/ops/polaris" update --auto --say) 2>&1 || true)"
-    fi
+    # shellcheck disable=SC2086
+    out="$( (cd "$p" && POLARIS_UPDATE_REEXEC=1 bash "$SELF" update $flags) 2>&1 || true)"
     printed=0
     while IFS= read -r line; do
       [ -n "$line" ] || continue

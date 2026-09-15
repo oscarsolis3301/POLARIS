@@ -531,10 +531,41 @@ drill_autoupdate() {
     [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au6.out" "$T/au6.err"; echo "AUTOUPDATE (6) APPLY FAIL (the walk must update this fixture to 0.0.2)"; exit 1; }
     grep -qxF "$au_mp: ✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting" "$T/au6.out" \
       || { cat "$T/au6.out"; echo "AUTOUPDATE (6) PREFIX FAIL (the fixture's line must carry its path prefix)"; exit 1; }
-    grep -qxF "$T/au-gone: gone (registry entry left for you to remove)" "$T/au6.out" || { cat "$T/au6.out"; echo "AUTOUPDATE (6) GONE FAIL"; exit 1; }
+    grep -qxF "$T/au-gone: gone — registry entry removed" "$T/au6.out" || { cat "$T/au6.out"; echo "AUTOUPDATE (6) GONE FAIL (a gone path says so and is pruned)"; exit 1; }
     grep -qxF "$T/au-self: self-hosting — skipped" "$T/au6.out" || { cat "$T/au6.out"; echo "AUTOUPDATE (6) SELF-HOSTING FAIL"; exit 1; }
     [ "$(wc -l < "$T/au6.out" | tr -d ' ')" = "3" ] || { cat "$T/au6.out"; echo "AUTOUPDATE (6) LINE COUNT FAIL (one line per registry entry)"; exit 1; }
-    [ -f "$au_home/repos/2-gone" ] || { echo "AUTOUPDATE (6) DELETE FAIL (--all never removes a registry entry)"; exit 1; }
+    [ ! -f "$au_home/repos/2-gone" ] || { echo "AUTOUPDATE (6) PRUNE FAIL (a gone path's registry entry must be removed — it would fail every future walk)"; exit 1; }
+    [ -f "$au_home/repos/1-fixture" ] && [ -f "$au_home/repos/3-self" ] || { ls "$au_home/repos"; echo "AUTOUPDATE (6) PRUNE SCOPE FAIL (only the gone entry leaves the registry)"; exit 1; }
+    # (6b) a target too old to know --auto (auto-update.md v2): its COMMITTED ops/polaris is a stub that
+    # fails on ANY invocation — the way a 5.24.0 install answered v1's walk. The walk runs THIS kit's
+    # copy inside the target and never the target's own entry, so it updates all the same: VERSION
+    # reads 0.0.2 and ops/polaris is the real entry again. Committed on top of au_base on purpose —
+    # an uncommitted stub is kit dirt, which --auto skips on, a different assertion (2b).
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache .polaris/update.log
+    printf '#!/bin/sh\necho "⛔ update: unknown flag --auto" >&2; exit 1\n' > ops/polaris
+    git add -- ops/polaris 2>/dev/null; git commit -qm 'autoupdate fixture: an entry that cannot answer --auto'
+    [ "$(git status --porcelain)" = "" ] || { git status --porcelain; echo "AUTOUPDATE (6b) FIXTURE FAIL (the stub must be committed, not dirt)"; exit 1; }
+    POLARIS_AWAKE_HOME="$au_home" "$SELF" update --all --repo-only > "$T/au6b.out" 2> "$T/au6b.err" || { cat "$T/au6b.out" "$T/au6b.err"; echo "AUTOUPDATE (6b) RC FAIL (--all exits 0 always)"; exit 1; }
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au6b.out" "$T/au6b.err"; echo "AUTOUPDATE (6b) APPLY FAIL (a target whose own CLI cannot answer --auto must still reach 0.0.2 — the walk runs THIS kit's copy, never the target's)"; exit 1; }
+    [ "$(head -1 ops/polaris | tr -d '\r')" = "#!/usr/bin/env bash" ] || { head -2 ops/polaris; echo "AUTOUPDATE (6b) ENTRY FAIL (ops/polaris must be the real entry again, not the stub)"; exit 1; }
+    grep -q 'unknown flag --auto' "$T/au6b.out" "$T/au6b.err" && { cat "$T/au6b.out" "$T/au6b.err"; echo "AUTOUPDATE (6b) STUB RAN FAIL (the target's own ops/polaris must never be invoked)"; exit 1; }
+    grep -qxF "$au_mp: ✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting" "$T/au6b.out" \
+      || { cat "$T/au6b.out"; echo "AUTOUPDATE (6b) PREFIX FAIL (the fixture's ✅ line under its path prefix)"; exit 1; }
+    # (6c) a MAJOR on the channel: --all asks (the v1 line under the prefix) and leaves 0.0.1;
+    # --all --major is the human's recorded yes and applies (the tarball's version, the ✅ line).
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache .polaris/update.log
+    printf 'version: 1.0.0\n' > "$T/chan/VERSION"
+    POLARIS_AWAKE_HOME="$au_home" "$SELF" update --all --repo-only > "$T/au6c.out" 2> "$T/au6c.err" || { cat "$T/au6c.out" "$T/au6c.err"; echo "AUTOUPDATE (6c) RC FAIL (a MAJOR under --all must still exit 0)"; exit 1; }
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.1" ] || { cat "$T/au6c.out" "$T/au6c.err"; echo "AUTOUPDATE (6c) APPLY FAIL (--all without --major must never apply a MAJOR)"; exit 1; }
+    grep -qxF "$au_mp: ⬆ POLARIS 1.0.0 is a MAJOR update (you have 0.0.1) — it will not apply itself; when you want it: bash ops/polaris update" "$T/au6c.out" \
+      || { cat "$T/au6c.out"; echo "AUTOUPDATE (6c) ASK FAIL (the pinned MAJOR line under the path prefix)"; exit 1; }
+    rm -f .polaris/update-cache
+    POLARIS_AWAKE_HOME="$au_home" "$SELF" update --all --repo-only --major > "$T/au6c2.out" 2> "$T/au6c2.err" || { cat "$T/au6c2.out" "$T/au6c2.err"; echo "AUTOUPDATE (6c) MAJOR RC FAIL (--all --major exits 0 always)"; exit 1; }
+    printf 'version: 0.0.2\n' > "$T/chan/VERSION"
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au6c2.out" "$T/au6c2.err"; echo "AUTOUPDATE (6c) MAJOR APPLY FAIL (--all --major must apply the MAJOR: ops/VERSION reads the tarball's 0.0.2)"; exit 1; }
+    grep -qxF "$au_mp: ✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting" "$T/au6c2.out" \
+      || { cat "$T/au6c2.out"; echo "AUTOUPDATE (6c) MAJOR SAY FAIL (the usual ✅ line under the prefix — the human typed --major, so it is not a surprise)"; exit 1; }
+    [ -z "$(git stash list)" ] || { echo "AUTOUPDATE (6c) STASH FAIL (--all --major never parks)"; exit 1; }
     # hermetic teardown: the installed tree and the pin commit reset away, the three files as found,
     # the fixture's temp state gone, and the tree byte-identical to the way we found it.
     git reset -q --hard "$au_pre"

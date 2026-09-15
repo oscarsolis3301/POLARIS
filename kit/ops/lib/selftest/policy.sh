@@ -298,6 +298,59 @@ drill_drift() {
     ( "$SELF" drift --strict >/dev/null 2>&1 ) && { echo "DRIFT STRICT FAIL (should rc 1)"; exit 1; }
     rm ops/board/ready/T-3.md ops/board/ready/T-2.md; sed -i.bak '/DO_NOT_SHIP/d' ops/RULES.tsv && rm -f ops/RULES.tsv.bak
     git add -A; git commit -qm cleanup || true   # T-033: --only drift has no rules-drill RULES.tsv change to commit
+    # --- v6.5 (ops/contracts/worktree-liveness.md § v2): cruft has THREE classes, and only one of
+    # them is a finding a human should act on. A self-landing lane leaves its OWN branch behind by
+    # design, so "the branch exists" alone reddened `qa` on every wave — after the suite had already
+    # run, which withheld the stamp and made the next `finish` pay the whole suite again. Fixture,
+    # all three, built with plumbing so the working tree never moves (the landed commits carry main's
+    # own tree, so `git status` stays clean through the update-refs):
+    #   T-CC clearable — tip == the landed commit's Landed-from trailer, nobody standing in it
+    #   T-CD diverged  — landed once, then one more commit on top: unmerged work, NEVER auto-deleted
+    #   T-CW waiting   — clearable, but its worktree is registered with a FRESH beat: a lane mid-step
+    # T-CW also proves the OTHER proof source: no `landed:` key, so feat_tip_landed falls back to
+    # landed_sha and finds the [T-CW] squash on main itself.
+    dctree="$(git rev-parse 'main^{tree}')"
+    dcc="$(git commit-tree "$dctree" -p main -m 'feat: T-CC work')"
+    git branch -f feat/T-CC "$dcc" >/dev/null 2>&1
+    dccl="$(printf 'feat(src): cruft drill [T-CC]\n\nLanded-from: %s\n' "$dcc" | git commit-tree "$dctree" -p main)"
+    git update-ref refs/heads/main "$dccl"
+    printf -- '---\nid: T-CC\npoints: 1\nstatus: done\nlanded: %s\n---\n' "$dccl" > ops/board/done/T-CC.md
+    dcd="$(git commit-tree "$dctree" -p main -m 'feat: T-CD work')"
+    dcdl="$(printf 'feat(src): cruft drill [T-CD]\n\nLanded-from: %s\n' "$dcd" | git commit-tree "$dctree" -p main)"
+    git update-ref refs/heads/main "$dcdl"
+    git branch -f feat/T-CD "$(git commit-tree "$dctree" -p "$dcd" -m 'feat: T-CD unlanded extra')" >/dev/null 2>&1
+    printf -- '---\nid: T-CD\npoints: 1\nstatus: done\nlanded: %s\n---\n' "$dcdl" > ops/board/done/T-CD.md
+    dcw="$(git commit-tree "$dctree" -p main -m 'feat: T-CW work')"
+    git branch -f feat/T-CW "$dcw" >/dev/null 2>&1
+    dcwl="$(printf 'feat(src): cruft drill [T-CW]\n\nLanded-from: %s\n' "$dcw" | git commit-tree "$dctree" -p main)"
+    git update-ref refs/heads/main "$dcwl"
+    printf -- '---\nid: T-CW\npoints: 1\nstatus: done\n---\n' > ops/board/done/T-CW.md
+    git worktree add .polaris/wt/T-CW feat/T-CW >/dev/null 2>&1 || { echo "CRUFT FIXTURE FAIL (worktree add)"; exit 1; }
+    date +%s > "$(git rev-parse --git-common-dir)/worktrees/T-CW/polaris-beat"
+    "$SELF" drift > "$T/cruft.out" 2>&1 || { cat "$T/cruft.out"; echo "CRUFT DRIFT RC FAIL (drift reports, it never exits non-zero without --strict)"; exit 1; }
+    grep -q 'CRUFT: feat/T-CC still exists though T-CC is done — bash ops/polaris qa or sweep --fix clears it' "$T/cruft.out" \
+      || { cat "$T/cruft.out"; echo "CRUFT CLEARABLE FAIL (a proven, idle branch is the one finding worth printing)"; exit 1; }
+    grep -q 'CRUFT diverged: feat/T-CD carries commits not in main — inspect: git log main..feat/T-CD (never auto-deleted)' "$T/cruft.out" \
+      || { cat "$T/cruft.out"; echo "CRUFT DIVERGED FAIL (an unproven tip is a DIFFERENT finding and must name the inspection)"; exit 1; }
+    grep -q 'T-CW' "$T/cruft.out" && { cat "$T/cruft.out"; echo "CRUFT WAITING FAIL (a lane still standing in its worktree is not cruft yet — silence)"; exit 1; }
+    [ "$(grep -c '^⚠' "$T/cruft.out")" = "2" ] || { cat "$T/cruft.out"; echo "CRUFT COUNT FAIL (exactly two findings: clearable + diverged)"; exit 1; }
+    # sweep reports the clearable one and the LIVE worktree, and never confuses the two
+    "$SELF" sweep > "$T/cruftsw.out" 2>&1 || { cat "$T/cruftsw.out"; echo "CRUFT SWEEP RC FAIL"; exit 1; }
+    grep -q '⚠ CRUFT: feat/T-CC — task done, tip proven landed, no live worktree — sweep --fix clears it' "$T/cruftsw.out" \
+      || { cat "$T/cruftsw.out"; echo "CRUFT SWEEP LINE FAIL"; exit 1; }
+    grep -q 'CRUFT: feat/T-CW' "$T/cruftsw.out" && { cat "$T/cruftsw.out"; echo "CRUFT SWEEP LIVE FAIL (a live lane's branch is never cruft)"; exit 1; }
+    grep -q 'LIVE worktree: .polaris/wt/T-CW' "$T/cruftsw.out" || { cat "$T/cruftsw.out"; echo "CRUFT SWEEP LIVE LINE FAIL (sweep still lists the live worktree)"; exit 1; }
+    [ -n "$(git branch --list feat/T-CC)" ] || { echo "CRUFT SWEEP REPORT-ONLY FAIL (a bare sweep deletes nothing)"; exit 1; }
+    # the lane walks away (the contract's fake-idle form) — now BOTH proven branches clear and the
+    # diverged one survives, which is the whole safety property in one assertion
+    echo 1 2>/dev/null > "$(git rev-parse --git-common-dir)/worktrees/T-CW/polaris-beat" || true
+    "$SELF" sweep --fix > "$T/cruftfix.out" 2>&1 || { cat "$T/cruftfix.out"; echo "CRUFT SWEEP FIX RC FAIL"; exit 1; }
+    [ -z "$(git branch --list feat/T-CC)" ] || { cat "$T/cruftfix.out"; echo "CRUFT FIX CLEARABLE FAIL (a proven branch must go)"; exit 1; }
+    [ -z "$(git branch --list feat/T-CW)" ] || { cat "$T/cruftfix.out"; echo "CRUFT FIX IDLE FAIL (once the beat goes quiet the waiting branch clears too)"; exit 1; }
+    [ -d .polaris/wt/T-CW ] && { cat "$T/cruftfix.out"; echo "CRUFT FIX WORKTREE FAIL (the idle worktree goes with it)"; exit 1; }
+    [ -n "$(git branch --list feat/T-CD)" ] || { cat "$T/cruftfix.out"; echo "CRUFT FIX DIVERGED FAIL (an unproven tip must NEVER be auto-deleted — this is the property the whole gate exists for)"; exit 1; }
+    git branch -D feat/T-CD >/dev/null 2>&1 || true
+    rm -f ops/board/done/T-CC.md ops/board/done/T-CD.md ops/board/done/T-CW.md
     "$SELF" drift >/dev/null || { echo "DRIFT CLEAN FAIL"; exit 1; }
 }
 drill_hardening() {
@@ -376,6 +429,48 @@ drill_qa() {
     printf 'test: true\n' > ops/CONVENTIONS.md
     "$SELF" qa > "$T/qa.out" || { cat "$T/qa.out"; echo "QA GREEN FAIL (healthy repo must rc 0)"; exit 1; }
     grep -q 'test — green' "$T/qa.out" || { echo "QA LINE FAIL (per-check line missing)"; exit 1; }
+    # --- v6.5 (ops/contracts/worktree-liveness.md § v2): qa CLEARS the provably-landed leftovers
+    # BEFORE drift looks at them, so a self-landing lane's own branch never reds a run that has just
+    # paid for a green suite — the exact 12-minute re-run this fixture exists to prevent. Same three
+    # classes as drill_drift on qa's own ids (built with plumbing; the landed commits carry main's
+    # tree, so the working tree never moves). Every assertion is on the BRANCH LIST, never on qa's
+    # rc alone (T-131): "qa went red" says nothing about WHICH finding reddened it.
+    qctree="$(git rev-parse 'main^{tree}')"
+    qcc="$(git commit-tree "$qctree" -p main -m 'feat: T-QC work')"
+    git branch -f feat/T-QC "$qcc" >/dev/null 2>&1
+    qccl="$(printf 'feat(src): qa cruft drill [T-QC]\n\nLanded-from: %s\n' "$qcc" | git commit-tree "$qctree" -p main)"
+    git update-ref refs/heads/main "$qccl"
+    printf -- '---\nid: T-QC\npoints: 1\nstatus: done\nlanded: %s\n---\n' "$qccl" > ops/board/done/T-QC.md
+    qcd="$(git commit-tree "$qctree" -p main -m 'feat: T-QD work')"
+    qcdl="$(printf 'feat(src): qa cruft drill [T-QD]\n\nLanded-from: %s\n' "$qcd" | git commit-tree "$qctree" -p main)"
+    git update-ref refs/heads/main "$qcdl"
+    git branch -f feat/T-QD "$(git commit-tree "$qctree" -p "$qcd" -m 'feat: T-QD unlanded extra')" >/dev/null 2>&1
+    printf -- '---\nid: T-QD\npoints: 1\nstatus: done\nlanded: %s\n---\n' "$qcdl" > ops/board/done/T-QD.md
+    qcw="$(git commit-tree "$qctree" -p main -m 'feat: T-QW work')"
+    git branch -f feat/T-QW "$qcw" >/dev/null 2>&1
+    qcwl="$(printf 'feat(src): qa cruft drill [T-QW]\n\nLanded-from: %s\n' "$qcw" | git commit-tree "$qctree" -p main)"
+    git update-ref refs/heads/main "$qcwl"
+    printf -- '---\nid: T-QW\npoints: 1\nstatus: done\nlanded: %s\n---\n' "$qcwl" > ops/board/done/T-QW.md
+    git worktree add .polaris/wt/T-QW feat/T-QW >/dev/null 2>&1 || { echo "QA CRUFT FIXTURE FAIL (worktree add)"; exit 1; }
+    date +%s > "$(git rev-parse --git-common-dir)/worktrees/T-QW/polaris-beat"
+    "$SELF" qa > "$T/qacruft.out" 2>&1 && { cat "$T/qacruft.out"; echo "QA CRUFT RC FAIL (a diverged branch must still red qa)"; exit 1; }
+    [ -z "$(git branch --list feat/T-QC)" ] || { cat "$T/qacruft.out"; echo "QA CRUFT CLEAR FAIL (a provably landed branch is CLEARED by qa, not reported at it)"; exit 1; }
+    [ -n "$(git branch --list feat/T-QD)" ] || { cat "$T/qacruft.out"; echo "QA CRUFT DIVERGED FAIL (an unproven tip must NEVER be deleted)"; exit 1; }
+    [ -n "$(git branch --list feat/T-QW)" ] || { cat "$T/qacruft.out"; echo "QA CRUFT LIVE FAIL (a lane still in its worktree keeps its branch)"; exit 1; }
+    [ -d .polaris/wt/T-QW ] || { cat "$T/qacruft.out"; echo "QA CRUFT WORKTREE FAIL (qa must never remove a live worktree)"; exit 1; }
+    grep -q 'cruft — cleared 1 branch(es)' "$T/qacruft.out" || { cat "$T/qacruft.out"; echo "QA CRUFT SAY FAIL (the count line prints only for what was actually cleared)"; exit 1; }
+    grep -q 'CRUFT diverged: feat/T-QD' "$T/qacruft.out" || { cat "$T/qacruft.out"; echo "QA CRUFT REASON FAIL (qa must be red for the DIVERGED branch — assert the reason, never the rc)"; exit 1; }
+    grep -q 'CRUFT: feat/T-QC' "$T/qacruft.out" && { cat "$T/qacruft.out"; echo "QA CRUFT STALE FINDING FAIL (a branch qa just cleared must not still be a finding)"; exit 1; }
+    # sweep --fix shares the one implementation of "safe to delete", so it keeps the diverged one too
+    "$SELF" sweep --fix > "$T/qasweep.out" 2>&1 || { cat "$T/qasweep.out"; echo "QA SWEEP RC FAIL"; exit 1; }
+    [ -n "$(git branch --list feat/T-QD)" ] || { cat "$T/qasweep.out"; echo "QA SWEEP DIVERGED FAIL (sweep --fix must keep an unproven tip too)"; exit 1; }
+    [ -n "$(git branch --list feat/T-QW)" ] || { cat "$T/qasweep.out"; echo "QA SWEEP LIVE FAIL (sweep --fix leaves a live lane alone)"; exit 1; }
+    echo 1 2>/dev/null > "$(git rev-parse --git-common-dir)/worktrees/T-QW/polaris-beat" || true
+    "$SELF" sweep --fix > "$T/qasweep2.out" 2>&1 || { cat "$T/qasweep2.out"; echo "QA SWEEP IDLE RC FAIL"; exit 1; }
+    [ -z "$(git branch --list feat/T-QW)" ] || { cat "$T/qasweep2.out"; echo "QA SWEEP IDLE FAIL (once the lane walks away its proven branch clears)"; exit 1; }
+    git branch -D feat/T-QD >/dev/null 2>&1 || true
+    rm -f ops/board/done/T-QC.md ops/board/done/T-QD.md ops/board/done/T-QW.md
+    "$SELF" qa > "$T/qaclean.out" 2>&1 || { cat "$T/qaclean.out"; echo "QA CRUFT HERMETIC FAIL (the fixture must leave qa green again)"; exit 1; }
     printf 'test: false\n' > ops/CONVENTIONS.md
     "$SELF" qa >/dev/null 2>&1 && { echo "QA RED FAIL (red suite must rc 1)"; exit 1; }
     rm -f ops/CONVENTIONS.md

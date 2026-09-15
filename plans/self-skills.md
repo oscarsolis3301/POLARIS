@@ -106,8 +106,87 @@ CONTEXT TAX — bytes every session AND every subagent pays before any work
   span 12 days ≈ 2 sprints (sprint/11 08-23 · /12 09-02 · /13 09-08 · /14 09-14).
 - `ops/SURFACES.tsv`: 0 rows here (D2 ships it empty) and 0 done tasks carry `surface:` yet — the
   gap-finder's primary signal today is `files_owned`; rows become the better unit as they arrive.
-- `probe:` lines (SK-0 appends three here: hidden-tier list check · rules `paths:` fires on Read ·
-  nested-dir prefix) — pending.
+- `probe:` lines — SK-0 (T-150) ran 2026-09-14 on this machine: Claude Code 2.1.251, Windows 11, each
+  session a headless `claude -p` launched from a Bash tool call INSIDE a running session with
+  `CLAUDECODE` unset (`env -u CLAUDECODE timeout 60 claude -p …`), cwd = the throwaway repo. The repo
+  was built EXACTLY as the contract § "The probe" describes and `git init` + committed BEFORE the first
+  session started: `.claude/rules/sk0-paths.md` (`---` / `paths:` / `  - "src/probe/**"` / `---` /
+  `SK0-PATHS-FIRED`) · `.claude/rules/sk0-always.md` (`SK0-ALWAYS-FIRED`, no frontmatter) ·
+  `src/probe/hello.txt` (`hello`). Nothing under `~/.claude/` mentions `SK0-`; there is no
+  `~/.claude/rules/`. The five answers, values taken ONLY from what the sessions echoed:
+
+probe: rules-always-fires: yes
+probe: rules-paths-fires-on-read: yes
+probe: rules-paths-fires-on-edit: yes
+probe: hidden-skill-absent: yes
+probe: nested-dir-prefix: kit:
+
+**SK-1 ⇒ TWIN (OPEN-1 answered yes):** a `.claude/rules/<name>.md` with `paths:` fires on this harness
+exactly as documented — absent at session start (A), injected the moment a matching file is Read (B),
+present in an Edit session because Edit always Reads first (C′), NOT injected by a Read of a
+non-matching path (D) and NOT by a Write that creates a new file under the path (E) — so
+`skill propose --write` writes the twin beside every skill (contract § 6), `prune --apply` / `restore`
+move it with the skill, and `skill list` prints `twin yes`; a builder who only CREATES files in a
+surface never sees the twin, and that is the one caveat the trigger sentence should not promise past.
+
+How each line was derived: `rules-always-fires` — A echoed `SK0-ALWAYS-FIRED` without reading anything
+(the trailing `SK0-` in A is the prompt's own "starts with SK0-" fragment echoed back, not a rule).
+`rules-paths-fires-on-read` — B echoed `SK0-PATHS-FIRED` after `Read src/probe/hello.txt`, and A did
+NOT (so `paths:` rules are not loaded unconditionally on 2.1.251). `rules-paths-fires-on-edit` — the
+VERBATIM C (`--max-turns 3`) performed the edit (`hello.txt` gained the line `probe`) but spent its
+three turns on Read → Edit and died with `Error: Reached max turns (3)` before replying, so it is
+recorded as-is below; C′ is the same prompt, tools and repo (`hello.txt` restored to `hello`) with
+`--max-turns 6` and echoed `SK0-PATHS-FIRED` — the value is `yes` on that evidence, and honesty
+requires saying it is the Read inside the edit that fires it (E: a Write alone does not).
+`hidden-skill-absent` and `nested-dir-prefix` — observed a third time from this builder's own injected
+skills list: `polaris`, `polaris-install`, `kit:polaris`, `kit:polaris-install` present,
+`i-have-adhd` (`disable-model-invocation: true`) absent; no session needed.
+
+Raw replies, verbatim stdout (stderr in every session was only the same two
+`Permission allow rule (…settings.json) … has a wildcard` warnings, unrelated to rules):
+
+````
+A  (control, no read)  claude -p '…' --max-turns 1 --output-format text                rc 0 · 9 s
+SK0-ALWAYS-FIRED
+SK0-
+
+B  (Read src/probe/hello.txt)  --max-turns 3 --output-format text --allowedTools Read  rc 0 · 16 s
+SK0-ALWAYS-FIRED
+SK0-PATHS-FIRED
+
+C  (Edit, VERBATIM flags)  --max-turns 3 --output-format text --allowedTools Read,Edit  rc 1 · 23 s
+   (the edit landed: src/probe/hello.txt = "hello\nprobe\n"; no reply — the session ran out of turns)
+Error: Reached max turns (3)
+
+C′ (Edit, same prompt/tools/repo, hello.txt restored, --max-turns 6)                   rc 0 · 19 s
+Appended. SK0- tokens in my context:
+
+```
+SK0-ALWAYS-FIRED
+SK0-PATHS-FIRED
+```
+
+`SK0-ALWAYS-FIRED` came from `.claude/rules/sk0-always.md` (loaded at session start); `SK0-PATHS-FIRED` came from `.claude/rules/sk0-paths.md`, which was injected after I read `src/probe/hello.txt`.
+````
+
+Controls run to pin the mechanism — a second throwaway repo holding the same three files plus
+`src/other/note.txt` (`other`), committed before its first session; same flags as B unless noted:
+
+````
+A′ (B's exact flags, prompt "Do not read any file…" — no read)                         rc 0 · 9 s
+SK0-ALWAYS-FIRED
+SK0-ALWAYS
+SK0-
+
+D  (Read src/other/note.txt — a NON-matching path)                                     rc 0 · 18 s
+SK0-ALWAYS-FIRED
+
+E  (Write src/probe/new.txt — a NEW file under the matching path, no Read; --allowedTools Write --max-turns 4)  rc 0 · 15 s
+SK0-ALWAYS-FIRED
+````
+
+A′ and D show the flags and an unrelated Read do not load the `paths:` rule; E shows creation does
+not either; only B/C′ — a Read of a path the glob matches — carry `SK0-PATHS-FIRED`.
 
 ## Budget
 Break-even, per context: a tier-1 skill of f bytes costs f/4 tokens; it saves S tokens in the fraction p
