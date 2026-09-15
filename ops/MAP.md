@@ -200,3 +200,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - "seal (direct after the merge · pr at --sync) appends `| <date> | <done pts> | <remaining> |` to the current sprint's  (T-153, 2026-09-14)
 
 - "next_promote (handover.sh) holds a backlog candidate whose plan: is set and differs from the run's plan under drain: plan (`held: <ID> — plan <slug> is not this run's (<P>) — drain: plan`); the run's plan = the session's handover plan file, else the one slug carried by ready ∪ active ∪ review; role-handover.md v2"  (T-154, 2026-09-14)
+
+- "observe.sh: feat_tip_landed (a feat/<ID> tip proven landed — Landed-from equality or base ancestry) + cruft_clear (removes idle proven branches, worktree through wt_remove); drift's cruft check has three classes (waiting = silent · clearable = finding · diverged = finding, never auto-deleted); qa runs cruft_clear before drift --strict; sweep reports clearable cruft and --fix clears it; worktree-liveness.md v2"  (T-152, 2026-09-14)
