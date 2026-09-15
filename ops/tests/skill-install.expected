@@ -1,0 +1,18 @@
+install rc=0
+install wrote polaris
+install wrote i-have-adhd
+know-x byte-identical after install
+plain-y byte-identical after install
+--- the uninstall preview names what stays (identity: metadata.polaris — plain-y is not POLARIS-written, and stays anyway)
+preview rc=1
+1
+1 skill(s) POLARIS wrote stay — they are this repo's knowledge; rm .claude/skills/<name> by hand
+named: know-x
+preview removed nothing
+uninstall rc=0
+uninstall removed polaris
+uninstall removed i-have-adhd
+uninstall removed ops/
+know-x dir present
+know-x byte-identical after uninstall
+plain-y byte-identical after uninstall

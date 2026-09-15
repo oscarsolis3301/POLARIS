@@ -153,7 +153,7 @@ ahead of the functions T-157 and T-153 land, and `update`'s usage line shows `--
 - [ ] `polaris verify` green
 
 ## T-156 — "Wire the skills in — claim records a skill-hit, pack prints the SKILLS section and whole trap bullets, slim counts a hidden skill as 0 bytes, doctor and uninstall say what the shelf holds"
-points 3 · risk normal · landed 3abc3c4 (2026-09-14) · claimed 2026-09-14
+points 3 · risk normal · landed 3abc3c4 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/admin.sh, kit/ops/lib/builder.sh, kit/ops/lib/observe.sh
 
 ### Why
@@ -178,7 +178,7 @@ are the repo's knowledge; `doctor` prints the shelf's one-line warnings.
 - [ ] `polaris verify` green
 
 ## T-157 — "polaris amend <ID> --verify — grant's sibling for the acceptance list: replace, drop or add one verify line of a claimed task from the primary, never from a builder, never a bare suite"
-points 3 · risk normal · landed e6f8d29 (2026-09-14) · claimed 2026-09-14
+points 3 · risk normal · landed e6f8d29 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/integrate.sh, kit/ops/lib/selftest/board.sh, kit/ops/lib/selftest/fast.sh
 
 ### Why
@@ -201,7 +201,7 @@ refuses a bare full-suite command (`verify`'s own predicate).
 - [ ] `polaris verify` green
 
 ## T-158 — "Teach the roles — the SKILL.md template, EVOLVE proposes a skill and never promotes one, CONDUCTOR step 7 names next --do, INTEGRATOR lands with amend and learned, PROTOCOL and MANUAL carry the new commands"
-points 2 · risk normal · landed 64b2bbe (2026-09-14) · claimed 2026-09-14
+points 2 · risk normal · landed 64b2bbe (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/.claude/skills/polaris/SKILL.md, kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/EVOLVE.md, kit/ops/roles/INIT.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/templates/SKILL.md, ops/tests/api-kit.expected
 
 ### Why
@@ -226,4 +226,27 @@ T-157's two functions are the sibling rows you write from the contract.
 - [ ] `kit/.claude/skills/polaris/SKILL.md` body line 3 lists `skill` among the commands; its `description:` byte-identical (827 B)
 - [ ] NO new `#` line in any role file, PROTOCOL, MANUAL or the polaris SKILL.md (list items and paragraphs only); `plain-voice` golden byte-identical
 - [ ] `ops/tests/api-kit.expected` = the W2 union (key-registry.md § 9): T-157's two integrate.sh rows + your seven template rows, in `find --api` order, 693 lines
+- [ ] `polaris verify` green
+
+## T-159 — "Prove the skills — the skills drill (gaps · propose · promote · hit · prune · restore end to end), the fast-tier section, and the two goldens that pin the budget and the foreign-skill survival"
+points 3 · risk normal · landed 485058d (2026-09-15) · claimed 2026-09-14
+files touched: kit/ops/lib/selftest/fast.sh, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/spine.sh, ops/tests/api-kit.expected, ops/tests/skill-budget.cmd, ops/tests/skill-budget.expected, ops/tests/skill-install.cmd, ops/tests/skill-install.expected
+
+### Why
+A budget nobody measures is a wish, and an eviction nobody has watched run is a promise. This task
+is the proof for the whole skills seam, in the three tiers the kit already has: a drill that walks
+one skill from gap to archive and back on a hermetic board, asserting rc and bytes at every step; a
+fast-tier section that proves the byte counter in milliseconds — including that `skill_bytes` and
+`slim_scan` agree on the same three fixtures, so the shelf and the machine tax can never disagree;
+and two goldens that pin the constants and the refusals forever at the cost of a subprocess, plus
+the promise `update`/`uninstall` make to a skill they did not write. You are the W3 api-kit owner;
+your single row is `drill_skills`.
+
+### Acceptance
+- [ ] `drill_skills` (policy.sh, gated after `drill_qa` in spine.sh, label `skills` appended to `SELFTEST_LABELS`): self-skills § 9's sequence — the hermetic board, `gaps` lists only `src/search/`, `propose --write` (file, TODO, seven headings, flag true; the twin asserted EITHER way from the `probe:` line), promote refuses TODO and passes after the description is rewritten, a third promote past 1600 refuses, `claim` writes ONE skill-hit line, 41 synthetic done events ⇒ prune says demote (rc 1) and `--apply` flips, 81 ⇒ archive moves the dir and `git ls-files` drops it, `restore` ⇒ byte-identical. rc + bytes, never message text
+- [ ] `selftest_fast` section `skills`: `skill_consts` values · `skill_bytes` on the three fixture frontmatters (0 / ≤ 320 / 827) · `slim_scan` over a fixture `CLAUDE_CONFIG_DIR` holding the same three files reports the same numbers · `skill_paths` parses flow and block lists
+- [ ] `ops/tests/skill-budget.{cmd,expected}` hermetic per § 9; `ops/tests/skill-install.{cmd,expected}` per § 8/§ 9; no path, timestamp, user or version in either `.expected`; both LF (`.gitattributes` pins `ops/tests/*` already)
+- [ ] both goldens proven RED once (sabotage the fixture skill's byte count / delete know-x mid-run, watch the red, restore) — read the sabotage diff before believing the green (calibration 2026-08-04); paste the two red lines into Notes
+- [ ] the drill green in your worktree: `bash ops/polaris bg run t159 -- bash kit/ops/polaris doctor --selftest --only skills` + chunked `bg wait t159 --max 300`; paste the `selftest passed` line into Notes
+- [ ] `ops/tests/api-kit.expected` = 694 lines (your one row added in order)
 - [ ] `polaris verify` green

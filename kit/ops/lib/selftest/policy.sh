@@ -475,6 +475,158 @@ drill_qa() {
     "$SELF" qa >/dev/null 2>&1 && { echo "QA RED FAIL (red suite must rc 1)"; exit 1; }
     rm -f ops/CONVENTIONS.md
 }
+drill_skills() {
+    # ---- T-159 skills drill (ops/contracts/self-skills.md § 9) — one skill walked from gap to
+    # archive and back, on its OWN throwaway board under $T (the triage-lane pattern): the spine's
+    # board keeps its done history and EVENTS.ndjson is append-only, so 81 synthetic done events
+    # written there would shadow every later drill's telemetry. Every assertion is an rc or the
+    # bytes of a file — a snapshot + cmp, a grep over the frontmatter, `git ls-files`, the EVENTS
+    # line, the one output shape § 3 pins for `gaps` — never a printed message (the sprint-11
+    # lesson). The REFUSALS are asserted as hard as the path: a promoted skill spends every future
+    # session's budget in the repo and the owner kept that decision (§ 0 OPEN-3/4), so a `promote`
+    # that lets a TODO or a shelf crossing through, or a writer that lands on a task branch, is the
+    # dangerous failure here — not a crash. Two behaviours are pinned from the RUNNING code, not
+    # the contract's arithmetic: the fold (six done tasks on src/search/ + one on src/other/ →
+    # ONE candidate: src/other/ is below the threshold and folds into src/, which yields to the
+    # kept directory under it) and the eviction window (after the demote at 41 done events the
+    # skill is `keep` — its one hit is still inside 2W, which is all history until 80 done events
+    # exist — and only once 80 done events post-date the hit does `archive` come due). The fixture
+    # sets core.autocrlf false: the git-history restore is a `git checkout`, and a Windows box with
+    # autocrlf on hands the twin back CRLF — git's checkout-time conversion, never the kit's bytes.
+    # The twin is asserted EITHER way from the probe T-150 recorded (plans/self-skills.md; absent
+    # in an installed repo → the shipped answer, yes). HERMETIC: the whole fixture dies at the end.
+    sk_probe="$PRIMARY/plans/self-skills.md"
+    sk_twin=yes
+    [ ! -f "$sk_probe" ] || sk_twin="$(sed -n 's/^probe: rules-paths-fires-on-read:[ \t]*//p' "$sk_probe" | head -1 | tr -d ' \r')"
+    case "$sk_twin" in yes|no) ;; *) echo "SKILLS PROBE FAIL (plans/self-skills.md must record 'probe: rules-paths-fires-on-read: yes|no' — read '$sk_twin')"; exit 1;; esac
+    rm -rf "$T/skills"; mkdir -p "$T/skills"
+    ( set -e
+      git init -q -b main "$T/skills/repo" 2>/dev/null || { git init -q "$T/skills/repo"; git -C "$T/skills/repo" symbolic-ref HEAD refs/heads/main; }
+      cd "$T/skills/repo"
+      git config user.email t@t; git config user.name t; git config core.autocrlf false
+      mkdir -p src; echo x > src/a.txt; git add -A; git commit -qm init
+      "$SELF" init-board >/dev/null; git add -A; git commit -qm board
+      # (1) the history `gaps` reads — done EVENTS lines, then the done/ task files they name: six own src/search/, one owns src/other/
+      sk_now="$(date +%s)"
+      for sk_i in 1 2 3 4 5 6; do
+        printf -- '---\nid: T-S%s\ntitle: search task %s\ntype: feature\npoints: 1\nstatus: done\nfiles_owned:\n  - src/search/\nverify: []\n---\n' "$sk_i" "$sk_i" > "ops/board/done/T-S$sk_i.md"
+        printf '{"ts":%s,"ev":"done","id":"T-S%s","who":"drill","note":""}\n' "$((sk_now - 100 + sk_i))" "$sk_i" >> ops/board/EVENTS.ndjson
+      done
+      printf -- '---\nid: T-O1\ntitle: other task\ntype: feature\npoints: 1\nstatus: done\nfiles_owned:\n  - src/other/\nverify: []\n---\n' > ops/board/done/T-O1.md
+      printf '{"ts":%s,"ev":"done","id":"T-O1","who":"drill","note":""}\n' "$((sk_now - 90))" >> ops/board/EVENTS.ndjson
+      "$SELF" skill gaps > "$T/skills/gaps.out" 2>&1 || { cat "$T/skills/gaps.out"; echo "SKILLS GAPS RC FAIL (gaps is rc 0 always)"; exit 1; }
+      [ "$(grep -c . "$T/skills/gaps.out")" = 1 ] || { cat "$T/skills/gaps.out"; echo "SKILLS GAPS FOLD FAIL (exactly ONE candidate: src/other/ is below 5 and folds into src/, which yields to src/search/)"; exit 1; }
+      grep -qx 'src/search/  6/80 tasks · 0 kickbacks · skill: none' "$T/skills/gaps.out" || { cat "$T/skills/gaps.out"; echo "SKILLS GAPS LINE FAIL (the § 3 candidate line: surface · n/2W tasks · kickbacks · skill: none)"; exit 1; }
+      # (2) propose --write: the file, born hidden, the description TODO, the seven headings, the twin per the probe; a second --write is refused
+      "$SELF" skill propose src/search/ --write > "$T/skills/prop.out" 2>&1 || { cat "$T/skills/prop.out"; echo "SKILLS PROPOSE FAIL (six of the last 80 done tasks own src/search/ — over the threshold)"; exit 1; }
+      sk_f=.claude/skills/search/SKILL.md
+      [ -f "$sk_f" ] || { echo "SKILLS PROPOSE FILE FAIL (--write must create .claude/skills/search/SKILL.md)"; exit 1; }
+      grep -q '^description: TODO(src/search/)' "$sk_f" || { echo "SKILLS PROPOSE TODO FAIL (the description is never generated)"; exit 1; }
+      grep -qx 'disable-model-invocation: true' "$sk_f" || { echo "SKILLS PROPOSE HIDDEN FAIL (born hidden: the flag line reads true)"; exit 1; }
+      grep -q 'polaris: { paths: \[src/search/\], since: [0-9-]*, tier: 0, evidence: "6/80 tasks · 0 kickbacks" }' "$sk_f" || { echo "SKILLS PROPOSE META FAIL (metadata.polaris: paths, since, tier 0, evidence)"; exit 1; }
+      for sk_h in '# src/search/ — what POLARIS already knows' '## What it is' '## Public surface' '## What keeps going wrong' '## Files that move together' '## Tests that cover it' '## Last worked'; do
+        grep -qxF -- "$sk_h" "$sk_f" || { echo "SKILLS PROPOSE HEADING FAIL (missing: $sk_h)"; exit 1; }
+      done
+      [ "$(grep -c '^#' "$sk_f")" = 7 ] || { echo "SKILLS PROPOSE HEADING COUNT FAIL (exactly the seven heading lines)"; exit 1; }
+      [ "$(grep -c . "$sk_f")" -le 200 ] || { echo "SKILLS PROPOSE LENGTH FAIL (body ≤ 200 lines)"; exit 1; }
+      if [ "$sk_twin" = yes ]; then
+        [ -f .claude/rules/search.md ] || { echo "SKILLS TWIN FAIL (the probe says yes — propose --write also writes .claude/rules/search.md)"; exit 1; }
+        grep -qx '  - "src/search/"' .claude/rules/search.md || { echo "SKILLS TWIN PATHS FAIL (the twin carries the skill's globs under paths:)"; exit 1; }
+      else
+        [ ! -e .claude/rules/search.md ] || { echo "SKILLS TWIN FAIL (the probe says no — no twin anywhere)"; exit 1; }
+      fi
+      cp "$sk_f" "$T/skills/snap-todo"
+      "$SELF" skill propose src/search/ --write >/dev/null 2>&1 && { echo "SKILLS PROPOSE OVERWRITE FAIL (an existing dir is never overwritten, rc 1)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-todo" || { echo "SKILLS PROPOSE OVERWRITE BYTES FAIL (a refusal writes nothing)"; exit 1; }
+      # (3) promote: the TODO refused and nothing written · a written description passes: flag false, tier 1 · a shelf crossing refused and nothing written
+      "$SELF" skill promote search >/dev/null 2>&1 && { echo "SKILLS PROMOTE TODO FAIL (a TODO( description is refused, rc 1)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-todo" || { echo "SKILLS PROMOTE TODO BYTES FAIL (a refusal writes nothing)"; exit 1; }
+      sed 's|^description: TODO(src/search/).*$|description: TRIGGER when a task owns a path under src/search/; DO NOT TRIGGER for anything else.|' "$sk_f" > "$sk_f.tmp" && mv "$sk_f.tmp" "$sk_f"
+      "$SELF" skill promote search >/dev/null 2>&1 || { echo "SKILLS PROMOTE PASS FAIL (a written description under the cap and the shelf promotes, rc 0)"; exit 1; }
+      grep -qx 'disable-model-invocation: false' "$sk_f" || { echo "SKILLS PROMOTE FLAG FAIL (the flag line STAYS and reads false)"; exit 1; }
+      [ "$(grep -c '^disable-model-invocation:' "$sk_f")" = 1 ] || { echo "SKILLS PROMOTE FLAG COUNT FAIL (exactly one flag line)"; exit 1; }
+      grep -q 'tier: 1, evidence' "$sk_f" || { echo "SKILLS PROMOTE TIER FAIL (metadata.polaris.tier mirrors the flag: 1, in place)"; exit 1; }
+      git add -A; git commit -qm 'chore(skills): search'   # the human's review commit — tracked, so archive has an index entry to drop
+      [ -z "$(git status --porcelain)" ] || { git status --porcelain; echo "SKILLS COMMIT FAIL (propose and promote commit nothing and leave nothing else dirty)"; exit 1; }
+      # fx-shelf lifts the shelf to 1569 B — a hand-written tier-1 skill (identity is the metadata.polaris key; the
+      # per-skill cap binds only promote); fx-third is hidden with a written 214-B description, so from here on
+      # the ONLY thing that can refuse it is the shelf — and, once fx-shelf is gone, the branch.
+      sk_big=""; sk_i=0; while [ "$sk_i" -lt 145 ]; do sk_big="${sk_big}abcdefghij"; sk_i=$((sk_i+1)); done
+      sk_mid=""; sk_i=0; while [ "$sk_i" -lt 20 ]; do sk_mid="${sk_mid}abcdefghij"; sk_i=$((sk_i+1)); done
+      mkdir -p .claude/skills/fx-shelf .claude/skills/fx-third
+      printf -- '---\nname: fx-shelf\ndescription: %s\ndisable-model-invocation: false\nmetadata:\n  polaris: { paths: [docs/], since: 2026-09-14, tier: 1, evidence: "fixture" }\n---\n# fx-shelf\n' "$sk_big" > .claude/skills/fx-shelf/SKILL.md
+      printf -- '---\nname: fx-third\ndescription: %s\ndisable-model-invocation: true\nmetadata:\n  polaris: { paths: [lib/], since: 2026-09-14, tier: 0, evidence: "fixture" }\n---\n# fx-third\n' "$sk_mid" > .claude/skills/fx-third/SKILL.md
+      cp .claude/skills/fx-third/SKILL.md "$T/skills/snap-third"
+      "$SELF" skill budget >/dev/null 2>&1 || { echo "SKILLS BUDGET UNDER FAIL (1569 B is under the shelf — rc 0)"; exit 1; }
+      "$SELF" skill promote fx-third >/dev/null 2>&1 && { echo "SKILLS PROMOTE SHELF FAIL (1569 + 214 B crosses 1600 — refused, rc 1)"; exit 1; }
+      cmp -s .claude/skills/fx-third/SKILL.md "$T/skills/snap-third" || { echo "SKILLS PROMOTE SHELF BYTES FAIL (a refusal writes nothing)"; exit 1; }
+      rm -rf .claude/skills/fx-shelf
+      # (4) claim of a task owning src/search/x writes ONE skill-hit line: search's paths overlap, fx-third's lib/ does not
+      printf -- '---\nid: T-SK\ntitle: search work\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/search/x\nverify: []\n---\n' > ops/board/ready/T-SK.md
+      "$SELF" claim T-SK >/dev/null 2>&1 || { echo "SKILLS CLAIM FAIL"; exit 1; }
+      [ "$(grep -c '"ev":"skill-hit"' ops/board/EVENTS.ndjson)" = 1 ] || { grep 'skill-hit' ops/board/EVENTS.ndjson; echo "SKILLS HIT COUNT FAIL (exactly ONE skill-hit — the one skill whose paths overlap files_owned)"; exit 1; }
+      grep -q '"ev":"skill-hit","id":"search","who":"[^"]*","note":"T-SK"}$' ops/board/EVENTS.ndjson || { grep 'skill-hit' ops/board/EVENTS.ndjson; echo "SKILLS HIT LINE FAIL (the line names the skill and the task)"; exit 1; }
+      # (5) every writer refuses on feat/* and writes nothing — run from inside the claimed worktree, where PRIMARY still anchors to the base checkout
+      cp "$sk_f" "$T/skills/snap-feat"
+      ( cd .polaris/wt/T-SK
+        "$SELF" skill propose src/search/ --name search2 --write >/dev/null 2>&1 && { echo "SKILLS FEAT PROPOSE FAIL (propose --write refuses on feat/*)"; exit 1; }
+        "$SELF" skill promote fx-third >/dev/null 2>&1 && { echo "SKILLS FEAT PROMOTE FAIL (a promotion valid on every other count still refuses on feat/*)"; exit 1; }
+        "$SELF" skill demote search >/dev/null 2>&1 && { echo "SKILLS FEAT DEMOTE FAIL (demote refuses on feat/*)"; exit 1; }
+        "$SELF" skill prune --apply >/dev/null 2>&1 && { echo "SKILLS FEAT PRUNE FAIL (prune --apply refuses on feat/*)"; exit 1; }
+        "$SELF" skill restore fx-shelf >/dev/null 2>&1 && { echo "SKILLS FEAT RESTORE FAIL (restore refuses on feat/*)"; exit 1; }
+        true ) || exit 1   # a subshell's rc is its LAST command's — a refusal list ends rc 1, which is the point, so the subshell ends here
+      [ ! -e .claude/skills/search2 ] || { echo "SKILLS FEAT PROPOSE BYTES FAIL (a refusal writes nothing)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-feat" || { echo "SKILLS FEAT DEMOTE BYTES FAIL (search unchanged by a refused demote)"; exit 1; }
+      cmp -s .claude/skills/fx-third/SKILL.md "$T/skills/snap-third" || { echo "SKILLS FEAT PROMOTE BYTES FAIL (fx-third unchanged by a refused promote)"; exit 1; }
+      rm -rf .claude/skills/fx-third   # one skill from here on, so every prune verdict is search's
+      # (6) prune — young: 7 < 40 done since since: → judged nothing, rc 0 · 41 done events post-dating the hit → demote due
+      #     (rc 1), nothing written without --apply, --apply flips the flag · still keep at 41: the hit is inside 2W, which is
+      #     all history until 80 done events exist · 81 → archive due: the dir AND the twin move, git ls-files drops both
+      "$SELF" skill prune >/dev/null 2>&1 || { echo "SKILLS PRUNE YOUNG FAIL (fewer than W done events since since: — never judged, rc 0)"; exit 1; }
+      sk_hit="$(sed -n 's/^{"ts":\([0-9]*\),"ev":"skill-hit".*/\1/p' ops/board/EVENTS.ndjson | head -1)"
+      [ -n "$sk_hit" ] || { echo "SKILLS HIT TS FAIL (the skill-hit line carries a ts)"; exit 1; }
+      sk_i=1; while [ "$sk_i" -le 41 ]; do printf '{"ts":%s,"ev":"done","id":"T-D%s","who":"drill","note":""}\n' "$((sk_hit + 10 + sk_i))" "$sk_i" >> ops/board/EVENTS.ndjson; sk_i=$((sk_i+1)); done
+      "$SELF" skill prune >/dev/null 2>&1 && { echo "SKILLS PRUNE DEMOTE RC FAIL (tier 1 with 0 hits in the last 40 done → demote due, rc 1)"; exit 1; }
+      grep -qx 'disable-model-invocation: false' "$sk_f" || { echo "SKILLS PRUNE DRY FAIL (a verdict without --apply writes nothing)"; exit 1; }
+      "$SELF" skill prune --apply >/dev/null 2>&1 && { echo "SKILLS PRUNE APPLY RC FAIL (--apply keeps rc 1 when a verdict was due)"; exit 1; }
+      grep -qx 'disable-model-invocation: true' "$sk_f" || { echo "SKILLS PRUNE APPLY FAIL (--apply demotes: the flag reads true again)"; exit 1; }
+      grep -q 'tier: 0, evidence' "$sk_f" || { echo "SKILLS PRUNE TIER FAIL (tier: mirrors the flag: 0)"; exit 1; }
+      "$SELF" skill prune >/dev/null 2>&1 || { echo "SKILLS PRUNE KEEP FAIL (at 41 the one hit is still inside 2W — keep, rc 0)"; exit 1; }
+      sk_i=42; while [ "$sk_i" -le 81 ]; do printf '{"ts":%s,"ev":"done","id":"T-D%s","who":"drill","note":""}\n' "$((sk_hit + 10 + sk_i))" "$sk_i" >> ops/board/EVENTS.ndjson; sk_i=$((sk_i+1)); done
+      "$SELF" skill prune >/dev/null 2>&1 && { echo "SKILLS PRUNE ARCHIVE RC FAIL (tier 0 with 0 hits in the last 80 done → archive due, rc 1)"; exit 1; }
+      [ -f "$sk_f" ] || { echo "SKILLS PRUNE ARCHIVE DRY FAIL (a verdict without --apply moves nothing)"; exit 1; }
+      cp "$sk_f" "$T/skills/snap-arc"; [ "$sk_twin" != yes ] || cp .claude/rules/search.md "$T/skills/snap-rule"
+      "$SELF" skill prune --apply >/dev/null 2>&1 && { echo "SKILLS PRUNE ARCHIVE APPLY RC FAIL (--apply keeps rc 1 when a verdict was due)"; exit 1; }
+      [ ! -e .claude/skills/search ] || { echo "SKILLS ARCHIVE MOVE FAIL (the dir leaves .claude/skills/)"; exit 1; }
+      cmp -s .polaris/skills-archived/search/SKILL.md "$T/skills/snap-arc" || { echo "SKILLS ARCHIVE BYTES FAIL (archive is a MOVE: the same bytes under .polaris/skills-archived/search/)"; exit 1; }
+      [ -f .polaris/skills-archived/RESTORE.md ] || { echo "SKILLS ARCHIVE RESTORE-MD FAIL (a RESTORE.md sits beside the archive)"; exit 1; }
+      [ -z "$(git ls-files .claude/skills/search)" ] || { echo "SKILLS ARCHIVE INDEX FAIL (git ls-files no longer lists the skill)"; exit 1; }
+      if [ "$sk_twin" = yes ]; then
+        [ ! -e .claude/rules/search.md ] || { echo "SKILLS ARCHIVE TWIN FAIL (the twin moves with the skill)"; exit 1; }
+        cmp -s .polaris/skills-archived/search.rule.md "$T/skills/snap-rule" || { echo "SKILLS ARCHIVE TWIN BYTES FAIL (the twin is moved, not rewritten)"; exit 1; }
+        [ -z "$(git ls-files .claude/rules/search.md)" ] || { echo "SKILLS ARCHIVE TWIN INDEX FAIL (git ls-files no longer lists the twin)"; exit 1; }
+      fi
+      # (7) restore — from the archive: byte-identical, tracked again, the twin back, the archive dir gone · a present dir is
+      #     refused, nothing written · the second machine: archive gone and the deletion committed → from git history, byte-identical
+      "$SELF" skill restore search >/dev/null 2>&1 || { echo "SKILLS RESTORE FAIL (the archive dir is present — restore from it, rc 0)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-arc" || { echo "SKILLS RESTORE BYTES FAIL (restore from the archive is byte-identical)"; exit 1; }
+      [ -n "$(git ls-files .claude/skills/search)" ] || { echo "SKILLS RESTORE INDEX FAIL (restore re-adds the skill to the index)"; exit 1; }
+      [ ! -e .polaris/skills-archived/search ] || { echo "SKILLS RESTORE ARCHIVE FAIL (the archive dir moves back, it is not copied)"; exit 1; }
+      if [ "$sk_twin" = yes ]; then
+        cmp -s .claude/rules/search.md "$T/skills/snap-rule" || { echo "SKILLS RESTORE TWIN FAIL (the twin comes back byte-identical)"; exit 1; }
+        [ ! -e .polaris/skills-archived/search.rule.md ] || { echo "SKILLS RESTORE TWIN ARCHIVE FAIL (the twin leaves the archive)"; exit 1; }
+      fi
+      "$SELF" skill restore search >/dev/null 2>&1 && { echo "SKILLS RESTORE EXISTS FAIL (a present dir is refused, rc 1)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-arc" || { echo "SKILLS RESTORE EXISTS BYTES FAIL (a refusal writes nothing)"; exit 1; }
+      git rm -r -q --cached .claude/skills/search; [ "$sk_twin" != yes ] || git rm -q --cached .claude/rules/search.md
+      rm -rf .claude/skills/search .claude/rules/search.md .polaris/skills-archived
+      git commit -qm 'chore(skills): archive search — 0 hits in 80 done'
+      "$SELF" skill restore search >/dev/null 2>&1 || { echo "SKILLS RESTORE GIT FAIL (no archive: the commit that deleted the skill still has its parent, rc 0)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-arc" || { echo "SKILLS RESTORE GIT BYTES FAIL (restored from git history, then re-hidden: the same bytes)"; exit 1; }
+      [ "$sk_twin" != yes ] || cmp -s .claude/rules/search.md "$T/skills/snap-rule" || { echo "SKILLS RESTORE GIT TWIN FAIL (the twin comes back from git history too)"; exit 1; }
+    ) || exit 1
+    rm -rf "$T/skills"
+}
 drill_finish() {
     # --- v5.22: finish — the run-over gate (ops/contracts/run-finish.md). Proves: listed in help ·
     # a pending item is NAMED, rc 1, and does NOT stamp or fire (a pending run must never claim it
