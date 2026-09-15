@@ -212,7 +212,8 @@ drill_handover() {
     # the spine's own repo, judging rc and FILE STATE — never the presence of a message.
     # Contract v1.1 governs two of them: human-gated review work routes to `wait` (row 6's approval
     # note is unreachable dead source and gets no case), and `--brief` is asserted only under a live
-    # lock, where the role is real and the pointer line is not in question.
+    # lock, where the role is real and the pointer line is not in question. Contract v2 adds (8b):
+    # the promote pass honours `drain: plan`, and says out loud what it refused.
     # NO helper functions here: `find --api` extracts nested fns too, and this drill ships exactly
     # one name. The hook reaches the router through POLARIS_HANDOVER_CLI rather than a forwarder
     # planted at ops/polaris, because `finish` below gates on a clean `git status` and ops/ is
@@ -319,6 +320,44 @@ drill_handover() {
     "$SELF" next --do > "$T/ho6.out" 2>&1 || { cat "$T/ho6.out"; echo "HANDOVER HELD RC FAIL"; exit 1; }
     grep -q "held: T-HO3 — overlaps T-HO2 on 'src/ho2.txt'" "$T/ho6.out" || { cat "$T/ho6.out"; echo "HANDOVER HELD NOTE FAIL (the hold must name the task, the collider and the pattern)"; exit 1; }
     [ -f ops/board/backlog/T-HO3.md ] || { echo "HANDOVER HELD BOARD FAIL (a held candidate must stay in backlog/)"; exit 1; }
+    # (8b) contract v2: `drain: plan` authorises ONE plan per run, so the promote pass must refuse a
+    #      candidate carrying a different slug — and SAY SO. One "go" is the human approving the plan
+    #      in front of them, not the whole board, and a board holding two plans is where a silent
+    #      adoption becomes a whole sprint of foreign work. P comes from the session `plan` file (the
+    #      shape `claim` stamps) with a ready task carrying the same slug beside it. Judged from the
+    #      BOARD — `ls ready/`, the promote event count, the commit count, rc — with one exception:
+    #      the held line itself, which IS the feature. A candidate that vanishes from both the
+    #      eligible and the held list reads as a bug in the ready gate, so the reason is the product.
+    #      Then the same board under `drain: queue` promotes the very task just refused, which is
+    #      what proves the hold was the knob and not an accident of the gate.
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/ho-conv2.bak"; else rm -f "$T/ho-conv2.bak"; fi
+    if [ -f "$ho_dir/plan" ]; then cp "$ho_dir/plan" "$T/ho-plan.bak"; else rm -f "$T/ho-plan.bak"; fi
+    { printf 'drain: plan\n'; cat "$T/ho-conv2.bak" 2>/dev/null || true; } > ops/CONVENTIONS.md
+    printf 'alpha\n' > "$ho_dir/plan"
+    ho_ev0="$(grep -c '"ev":"promote"' ops/board/EVENTS.ndjson || true)"
+    ho_cm0="$(git rev-list --count refs/heads/polaris/board)"
+    printf -- '---\nid: T-HOA\ntitle: alpha in flight\ntype: feature\nscope: src\npoints: 1\nwsjf: 9\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\nplan: alpha\ncontract: ops/contracts/ho.md\nfiles_owned:\n  - src/hoa.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-HOA.md
+    printf -- '---\nid: T-HOB\ntitle: alpha dependent\ntype: feature\nscope: src\npoints: 1\nwsjf: 9\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\nplan: alpha\ncontract: ops/contracts/ho.md\ndepends_on: [T-HO1]\nfiles_owned:\n  - src/hob.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HOB.md
+    printf -- '---\nid: T-HOC\ntitle: beta dependent\ntype: feature\nscope: src\npoints: 1\nwsjf: 8\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\nplan: beta\ncontract: ops/contracts/ho.md\ndepends_on: [T-HO1]\nfiles_owned:\n  - src/hoc.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HOC.md
+    printf -- '---\nid: T-HOD\ntitle: unplanned rider\ntype: feature\nscope: src\npoints: 1\nwsjf: 7\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\nplan:\ncontract: ops/contracts/ho.md\ndepends_on: [T-HO1]\nfiles_owned:\n  - src/hod.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HOD.md
+    "$SELF" next --do > "$T/ho12.out" 2>&1 || { cat "$T/ho12.out"; echo "HANDOVER PLAN RC FAIL (a plan-filtered promote is still rc 0)"; exit 1; }
+    [ "$(ls ops/board/ready | grep -c '^T-HO[BCD]\.md$')" = "2" ] || { ls ops/board/ready; cat "$T/ho12.out"; echo "HANDOVER PLAN READY FAIL (only this run's plan and the unplanned rider may reach ready/)"; exit 1; }
+    [ -f ops/board/ready/T-HOB.md ] || { cat "$T/ho12.out"; echo "HANDOVER PLAN OWN FAIL (this run's own plan must still promote)"; exit 1; }
+    [ -f ops/board/ready/T-HOD.md ] || { cat "$T/ho12.out"; echo "HANDOVER PLAN RIDER FAIL (a candidate with no plan: is never foreign — riders must still flow)"; exit 1; }
+    [ -f ops/board/backlog/T-HOC.md ] || { cat "$T/ho12.out"; echo "HANDOVER PLAN FOREIGN FAIL (a foreign plan's task must stay in backlog/)"; exit 1; }
+    grep -q "held: T-HOC — plan beta is not this run's (alpha) — drain: plan" "$T/ho12.out" || { cat "$T/ho12.out"; echo "HANDOVER PLAN HELD FAIL (the hold must name the task, its plan and this run's — a silent drop is the bug)"; exit 1; }
+    [ "$(grep -c '"ev":"promote"' ops/board/EVENTS.ndjson)" = "$(( ho_ev0 + 2 ))" ] || { echo "HANDOVER PLAN EVENT FAIL (exactly the two promotes belong on the record)"; exit 1; }
+    [ "$(git rev-list --count refs/heads/polaris/board)" = "$(( ho_cm0 + 1 ))" ] || { echo "HANDOVER PLAN COMMIT FAIL (a promote pass is ONE board commit, however many tasks move)"; exit 1; }
+    git log -1 --format=%s refs/heads/polaris/board | grep -qx 'chore(board): promote T-HOB T-HOD' || { git log -1 --format=%s refs/heads/polaris/board; echo "HANDOVER PLAN SUBJECT FAIL (the one commit names exactly what moved, wsjf order)"; exit 1; }
+    { printf 'drain: queue\n'; cat "$T/ho-conv2.bak" 2>/dev/null || true; } > ops/CONVENTIONS.md
+    "$SELF" next --do > "$T/ho13.out" 2>&1 || { cat "$T/ho13.out"; echo "HANDOVER QUEUE RC FAIL"; exit 1; }
+    [ "$(ls ops/board/ready | grep -c '^T-HO[BCD]\.md$')" = "3" ] || { ls ops/board/ready; cat "$T/ho13.out"; echo "HANDOVER QUEUE FAIL (drain: queue filters no plan at all — the hold was the knob)"; exit 1; }
+    [ "$(grep -c '"ev":"promote"' ops/board/EVENTS.ndjson)" = "$(( ho_ev0 + 3 ))" ] || { echo "HANDOVER QUEUE EVENT FAIL (the task held a moment ago must now be on the record)"; exit 1; }
+    grep -q "is not this run's" "$T/ho13.out" && { cat "$T/ho13.out"; echo "HANDOVER QUEUE HELD FAIL (drain: queue must hold nothing on plan)"; exit 1; }
+    rm -f ops/board/ready/T-HOA.md ops/board/ready/T-HOB.md ops/board/ready/T-HOC.md ops/board/ready/T-HOD.md
+    if [ -f "$T/ho-conv2.bak" ]; then cp "$T/ho-conv2.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    if [ -f "$T/ho-plan.bak" ]; then cp "$T/ho-plan.bak" "$ho_dir/plan"; else rm -f "$ho_dir/plan"; fi
+    rm -f "$T/ho-conv2.bak" "$T/ho-plan.bak"
     # (9) ONE EVENT, ONE HOP — by string equality, so a second stop on the same completion allows.
     printf '%s done T-HO1\n' "$(date +%s)" > "$ho_dir/last-event"
     rm -f "$ho_dir/hopped-event"

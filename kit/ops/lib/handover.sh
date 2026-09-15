@@ -86,7 +86,10 @@ next_promote() { # next_promote [--do] — row 4's scan, and `--do`'s worker. Ev
   # (pat_overlap — claim's loop, builder.sh) INCLUDING tasks accepted earlier in this pass. Scan
   # fills NX_ELIGIBLE and writes nothing; `--do` re-checks INSIDE the mutex, moves each passer
   # (mv + set_fm + evt promote), lands ONE board_commit + sync_board, and returns NX_PROMOTED.
+  # v2: under `drain: plan` a candidate carrying a DIFFERENT plan slug than this run's is HELD by
+  # name, never adopted — one "go" authorises one plan, and the refusal is reported, not silent.
   local mode="${1:-}" f id w cands="" acc="" pts v d ok g gid cpat apat over deps others
+  local drain myplan="" pl pdir
   NX_ELIGIBLE=""; NX_PROMOTED=""; NX_HELD=""
   for f in "$BOARD/backlog/"*.md; do [ -e "$f" ] || break
     [ "$(sed -n 1p "$f" | tr -d '\r')" = "---" ] || continue
@@ -96,6 +99,18 @@ next_promote() { # next_promote [--do] — row 4's scan, and `--do`'s worker. Ev
   done
   [ -n "$cands" ] || return 1
   [ "$mode" = "--do" ] && mutex_on
+  # P, this run's plan (contract v2): the session's `plan` file, stamped at its first claim; else the
+  # single distinct slug the in-flight tasks carry; else none. `drain: plan` AND P known is the only
+  # state that filters, so a repo that never uses plan slugs — and a board between two runs — promotes
+  # exactly as v1 did. The two reads are next_claimable's, so "foreign" means one thing in both passes.
+  drain="$(cfg drain plan)"; pdir="$(next_dir)"
+  [ -f "$pdir/plan" ] && myplan="$(tr -d ' \r\n' < "$pdir/plan")"
+  if [ -z "$myplan" ] && [ "$drain" = plan ]; then
+    for g in "$BOARD/ready/"*.md "$BOARD/active/"*.md "$BOARD/review/"*.md; do [ -e "$g" ] || continue
+      pl="$(fm_get plan "$g" 2>/dev/null || true)"; [ -z "$pl" ] && continue
+      case "$myplan" in '') myplan="$pl";; "$pl") ;; *) myplan=""; break;; esac  # two slugs in flight ⇒ none
+    done
+  fi
   while IFS= read -r id; do
     [ -n "$id" ] || continue
     f="$BOARD/backlog/$id.md"; [ -f "$f" ] || continue
@@ -111,8 +126,14 @@ next_promote() { # next_promote [--do] — row 4's scan, and `--do`'s worker. Ev
 $(dep_ids "$f")
 EOF_DEP
     [ "$ok" -eq 1 ] || continue
+    # the plan gate, ahead of the disjointness loop: a candidate with NO plan: is never foreign (the
+    # rule next_claimable applies to ready/, so riders still flow), and a foreign one is held WITH ITS
+    # REASON — a silent drop lands in neither the eligible nor the held list and reads as a bug (T-130).
+    over=""; pl="$(fm_get plan "$f" 2>/dev/null || true)"
+    if [ "$drain" = plan ] && [ -n "$myplan" ] && [ -n "$pl" ] && [ "$pl" != "$myplan" ]; then
+      over="held: $id — plan $pl is not this run's ($myplan) — drain: plan"
+    fi
     others="$(for g in "$BOARD/active/"*.md "$BOARD/ready/"*.md; do [ -e "$g" ] && printf '%s\n' "$g"; done; printf '%s' "$acc")"
-    over=""
     while IFS= read -r cpat; do [ -z "$cpat" ] && continue
       if [ -z "$over" ] && rules_gate "$cpat" "$id" && [ "$RULES_GATE" = "ask" ]; then
         over="held: $id — ask scope $RULES_GATE_SCOPE needs a human's yes"
