@@ -1,3 +1,44 @@
+# SPRINT 15 — Every remaining item (6.5.0)          capacity: 34   dates: 2026-09-14–
+
+The last sprint of the owner's program (plans/v3.md § SPRINT C + plans/self-skills.md, decided
+2026-09-14): everything still open ships, ordered by value, and 6.5.0 closes it in all four places at
+once. Three bodies of work, independent of each other, under plan `sprint-c` — 11 tasks / 34 pts /
+4 waves. (1) THE WALKER — the highest-value item, found after the plan file was written: `update --all`
+cannot reach an install older than 6.3.0 because it delegates to the target's own CLI, which does not
+know `--auto` (measured on both of the owner's real projects); T-151 makes the walk run THIS kit's
+updater inside each checkout, adds `--major` for the major bumps that still ask, and prunes gone
+registry entries. (2) THE FOUR APPROVED FIXES: T-152 cruft gets three classes and `qa` clears the
+provably-landed branches before `drift` (the suite paid twice, twice in one day) · T-153 `seal` writes
+the burndown row and `polaris learned -m` writes the Learned bullet (both silent since sprint 11) ·
+T-154 `next --do` holds foreign plans under `drain: plan` · T-157 `polaris amend <ID> --verify`,
+grant's sibling for the acceptance list (four unsatisfiable-by-construction lines, four round trips) ·
+plus the one-word `qa` dispatch fix, the `promote` alias and CONDUCTOR step 7 naming `next --do`,
+carried by T-155 and T-158. (3) B3 SKILLS POLARIS WRITES FOR ITSELF, the owner's two calls recorded:
+T-150 PROBES the path-triggered rules twin first (three headless `claude -p` sessions in a throwaway
+repo — a subagent can launch a top-level session, so no human at a keyboard is needed) and SK-1..SK-4
+build either way; EVOLVE proposes promotion, a human approves it, `demote` may sit in the inert
+allowlist — the asymmetry is deliberate and written down. T-155 the module + the entry (W1 api-kit
+owner) → T-156 the wiring ∥ T-157 amend ∥ T-158 the prose + template (W2 owner) → T-159 the proof
+(W3 owner) → T-160 Release 6.5.0, last. Contracts on base before any claim: NEW self-skills.md;
+auto-update v2 · role-handover v2 · grant v2 · worktree-liveness v2 · sprint-report v3 ·
+module-layout v7 · key-registry § 9 (the owner table: 666 → 684 → 693 → 694). Pre-mortem applied:
+(1) api-kit ONE owner per wave writing the union from pinned names, sibling rows asserted present and
+excluded from both sides of the diff — never a strict diff on a cross-lane owner; (2) never a bare
+suite in `verify:` — greps, `.cmd`-body diffs under 10 s, `doctor --fast`; drills as acceptance boxes
+via `bg run`; the 47-s handover-route body and the 13-s `next` are acceptance checks, not verify lines;
+(3) a loader line and its module land in ONE task (T-155) — a loader naming a missing module kills
+every CLI call; (4) the `learned` drill assertions ride T-157 (board.sh, W2) because they need T-155's
+dispatch — never a drill that calls a command its own worktree cannot dispatch; (5) the installed CLI
+is 6.4.0 all sprint: no `surface:` items (a mapped observe.sh would refuse T-156 at verify), and the
+burndown rows for THIS sprint are written by hand at the close — the last time; (6) rc + bytes, never
+printed text (T-089); the probe records `unknown` rather than a guess. Not in this sprint: mapping
+this repo's own SURFACES rows (IDEAS.md — a quiet moment, not the last sprint), the KEYS.tsv row order
+and the same-surface `.spec`/`.test` fold (IDEAS.md), explicit-invocation skill telemetry (OPEN-2).
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 14 — Spend less, stay current (6.4.0)          capacity: 66   dates: 2026-09-14–
 
 Five complaints, each traced to code (plans/v3.md, approved 2026-09-14): it asks which lane to run
