@@ -501,7 +501,12 @@ done
 # into INIT in the same session.
 note "target: $TARGET"
 if [ "$UPGRADE" = 1 ]; then
-  note "live board: finish with  cd \"$TARGET\" && bash ops/polaris upgrade  (never re-run INIT)"
+  # ONE command per line, never `&&`: this line is pasted by a HUMAN, and on Windows their terminal
+  # is PowerShell, which has no pipeline chain operators (5.1 dies with a parser error). The universal
+  # subset runs identically in PowerShell, cmd, bash and zsh. See the 🚩 rule in the output style.
+  note "live board: finish it with these two lines (never re-run INIT):"
+  note "  cd $TARGET"
+  note "  bash ops/polaris upgrade"
 fi
 # A kit folder sitting INSIDE the target is normally a leftover unzip — say so. But in the POLARIS
 # kit repo itself, `kit/` is the product's source tree and the target is the repo that self-hosts it:

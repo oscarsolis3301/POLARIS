@@ -407,7 +407,8 @@ EOF
         found=1; printf '⚠ REMOTE stray: feat/%s — task done, branch fully merged, still on origin\n' "$rid"
         [ "$fix" = "--fix" ] && { git -C "$PRIMARY" push -q origin ":refs/heads/feat/$rid" && note "deleted"; }
       else
-        found=1; printf '⚠ REMOTE diverged: feat/%s — task done but the remote tip is NOT in %s. Inspect: git fetch origin feat/%s && git log %s..FETCH_HEAD (never auto-deleted)\n' \
+        # Two lines, never `&&` — a human pastes this, and PowerShell has no chain operators.
+        found=1; printf '⚠ REMOTE diverged: feat/%s — task done but the remote tip is NOT in %s (never auto-deleted). Inspect:\n     git fetch origin feat/%s\n     git log %s..FETCH_HEAD\n' \
           "$rid" "$BASE" "$rid" "$BASE"
       fi
     done <<EOF
@@ -431,7 +432,8 @@ EOF
         found=1; printf '⚠ REMOTE stray: %s — wave merged into %s, branch still on origin\n' "$rid" "$BASE"
         [ "$fix" = "--fix" ] && { git -C "$PRIMARY" push -q origin ":refs/heads/$rid" && note "deleted"; }
       else
-        found=1; printf '⚠ REMOTE diverged: %s — tip is NOT in %s. Inspect: git fetch origin %s && git log %s..FETCH_HEAD (never auto-deleted)\n' \
+        # Two lines, never `&&` — a human pastes this, and PowerShell has no chain operators.
+        found=1; printf '⚠ REMOTE diverged: %s — tip is NOT in %s (never auto-deleted). Inspect:\n     git fetch origin %s\n     git log %s..FETCH_HEAD\n' \
           "$rid" "$BASE" "$rid" "$BASE"
       fi
     done <<EOF

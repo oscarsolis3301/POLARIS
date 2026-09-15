@@ -335,7 +335,10 @@ EOF
          && git -C "$PRIMARY" merge-base --is-ancestor "$rsha" "$BASE" 2>/dev/null; then
         git -C "$PRIMARY" push -q origin ":refs/heads/feat/$id" 2>/dev/null && remote_note=" (local+remote)" || true
       else
-        note "⚠ origin/feat/$id tip is not in $BASE — left in place; inspect: git fetch origin feat/$id && git log $BASE..FETCH_HEAD"
+        # Two lines, never `&&` — a human pastes this, and PowerShell has no chain operators.
+        note "⚠ origin/feat/$id tip is not in $BASE — left in place. Inspect with these two lines:"
+        note "  git fetch origin feat/$id"
+        note "  git log $BASE..FETCH_HEAD"
       fi
     fi
   fi

@@ -180,6 +180,19 @@ second planner can file a task between your board read and your claim, and the c
 disjointness gate is the backstop that blocks the loser rather than letting two chats edit one file.
 
 ## TOKEN DISCIPLINE — this is how we stay cheap and fast
+
+> **THE MISSION, and it outranks thoroughness.** Every token is the owner's money and the supply is
+> fixed. Finish the task, prove it, spend as little as possible. Prefer ONE context over three —
+> twenty-five subagents in a day is a failure, not diligence. Run the smallest check that proves the
+> change; never the full suite for a small diff. A step that is long, mechanical and needs no
+> judgement is handed to the human with 🚩, not given to an agent. Ask early rather than burning
+> tokens guessing. **The measure of a good run is the result divided by what it cost.**
+>
+> This is not an aspiration. On 2026-09-15 a single day's work took a weekly model limit to 87% and
+> the main limit to 53%, on one project, in one chat — because routing sent a dozen agents to the
+> most expensive model available and nobody checked. Fable and Haiku are now forbidden outright
+> (`core.sh model_denied`); the habits below are the other half of the same lesson.
+
 - **`pack` first, everything else second.** Working a task? `ops/polaris pack <ID>` returns its
   contract, house style, owned-directory map, public API surface and gotchas in ONE call. Reading
   those seven things by hand costs 6-15 round trips and lands you in the same place. The brain and
