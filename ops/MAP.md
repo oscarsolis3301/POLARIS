@@ -196,3 +196,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - "fast tier gains surfaces-runner · surfaces-pairs · surfaces-proposal · interview-pending; the surfaces drill gains steps 8–10 (NORUNNER on the bare fixture · scaffold --apply end to end + feat/* refusal · doctor's pending-preferences line before and after interview --set)"  (T-144, 2026-09-14)
 
 - "update --all runs THIS kit's `update --auto --say` inside each registered checkout (never the target's own ops/polaris — a pre-6.3.0 install answered `unknown flag --auto` and stayed put), accepts --major to apply MAJOR bumps, and removes registry entries whose path is gone; auto-update.md v2"  (T-151, 2026-09-14)
+
+- "seal (direct after the merge · pr at --sync) appends `| <date> | <done pts> | <remaining> |` to the current sprint's  (T-153, 2026-09-14)
