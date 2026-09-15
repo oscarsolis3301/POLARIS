@@ -560,3 +560,6 @@
 {"ts":1789448274,"ev":"handoff","id":"T-155","who":"Owner@DESKTOP","note":""}
 {"ts":1789448277,"ev":"all-review","id":"T-155","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1789448572,"ev":"done","id":"T-155","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1789448837,"ev":"promote","id":"T-158","who":"Owner@DESKTOP","note":"deps done: T-155","pts":2}
+{"ts":1789448843,"ev":"promote","id":"T-156","who":"Owner@DESKTOP","note":"deps done: T-155, T-151, T-152","pts":3}
+{"ts":1789448850,"ev":"promote","id":"T-157","who":"Owner@DESKTOP","note":"deps done: T-155, T-153, T-154","pts":3}
