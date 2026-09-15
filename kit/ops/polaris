@@ -227,6 +227,12 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  unlocks (from ops/KEYS.tsv). Uncomment a line to enable that
                                  feature; adopt itself never edits a value, never uncomments, and
                                  never changes behavior. Idempotent — a second run appends nothing
+  heal                           repair the configuration token efficiency depends on: comment out
+                                 any FORBIDDEN model_* value (Fable/Haiku are refused in kit code
+                                 regardless) and append the marked efficiency section to this repo's
+                                 own CLAUDE.md, once. install and update run it for you, so every
+                                 machine self-repairs. Append-only, marker-guarded, idempotent — it
+                                 never edits your prose, never deletes, never rewrites a human choice
   interview [--pending | --set <key>=<value> …]
                                  the preferences a repo cannot derive — how to be talked to
                                  (voice), ADHD-shaped replies (adhd), one computer or several
@@ -403,6 +409,7 @@ case "${1:-}" in
   fleet)      shift; cmd_fleet "$@";;
   upgrade)    cmd_upgrade;;
   adopt)      cmd_adopt;;
+  heal)       cmd_heal;;
   interview)  shift; cmd_interview "$@";;
   slim)       shift 2>/dev/null || true; cmd_slim "${1:-}";;
   skill)      shift; cmd_skill "$@";;

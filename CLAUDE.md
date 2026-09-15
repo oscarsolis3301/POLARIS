@@ -123,3 +123,18 @@ Changed the repo? `bash ops/polaris finish` is your LAST command; exit 0 license
 nothing else does. Shape: `.claude/output-styles/polaris.md`.
 **A subagent never ends a run** — no `finish`, no `notify-gate done`, no H1. Your close is your report.
 <!-- POLARIS:END -->
+
+<!-- POLARIS:EFFICIENCY -->
+## Token efficiency — the first property
+
+Every token is the owner's money and the supply is fixed. Finish the task, prove it, spend as
+little as possible.
+
+- **Prefer ONE context over three.** Twenty-five subagents in a day is a failure, not diligence.
+- **Run the smallest check that proves the change** — never a full suite for a small diff.
+- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.
+- **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:
+  one command per line, never `&&` (PowerShell has no chain operators), no placeholders.
+- **Ask early** rather than burning tokens guessing.
+
+Added by `polaris heal`. Edit freely — it is appended once and never rewritten.

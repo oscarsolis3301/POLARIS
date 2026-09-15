@@ -493,6 +493,12 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
 
   rm -f "$PRIMARY/.polaris/update-cache"   # force a fresh check on the next command
   POLARIS_FROM_UPDATE=1 cmd_upgrade
+  # Self-repair on EVERY update, including --auto and --all (owner, 2026-09-15). This is what makes
+  # "update POLARIS anywhere and the machine gets more efficient" true rather than aspirational: a
+  # repo whose CONVENTIONS still names a forbidden model has it commented out here, and every repo
+  # gains the efficiency section once. Append-only, marker-guarded, idempotent — and it never fails
+  # an update: heal returns 0 on every path, because a config nicety must not break a version bump.
+  cmd_heal || true
   say "updated $cur → $(ver version)"
   # An update that only says "5.21 → 5.22" tells nobody what they got, so nobody notices when a
   # piece of it silently did not land — which is exactly how a repo ended up on 5.22.0 with a
@@ -744,6 +750,73 @@ cmd_adopt() {
   else
     say "adopted $added stub(s) — uncomment in ops/CONVENTIONS.md to enable; nothing changed behavior"
   fi
+}
+
+# ------------------------------------------------------------------ heal (6.5.0)
+# `heal` is what makes a repo CORRECT without anyone remembering to make it correct. install.sh and
+# cmd_update both call it, so every install and every update on every machine self-repairs the
+# configuration that efficiency depends on — the owner's ask on 2026-09-15, after one day's routing
+# took a weekly model limit to 87%.
+#
+# The line it must not cross: it only ever touches what POLARIS owns, plus ONE clearly-marked,
+# APPEND-ONLY section of the repo's own CLAUDE.md (the owner's explicit extension). It never edits a
+# human's prose, never deletes, and never rewrites a value a human chose — except a forbidden model,
+# which is not a choice any repo is allowed to make.
+#
+# Idempotent by construction: every write is guarded by a test for what it would write. Running it
+# twice changes nothing the second time, which is the only reason it is safe on an auto path.
+HEAL_MARK='<!-- POLARIS:EFFICIENCY -->'
+
+heal_models() { # neutralise any forbidden model_* value in CONVENTIONS. rc 0 always.
+  # Kit code already REFUSES these at runtime (core.sh model_denied), so this is not what enforces
+  # the ban — it is what stops a stale config silently disagreeing with the tool for months.
+  local k v n=0
+  [ -f "$CONV" ] || return 0
+  for k in model_strong model_mid model_cheap; do
+    v="$(cfg "$k" "")"
+    model_denied "$v" || continue
+    # Comment the line out rather than deleting it: the reversal stays legible, and a human can see
+    # exactly what was there. sed in place via temp + mv — never a truncated CONVENTIONS.md.
+    sed "s|^${k}:|# ${k}:|" "$CONV" > "$CONV.heal-tmp" 2>/dev/null \
+      && mv "$CONV.heal-tmp" "$CONV" 2>/dev/null || { rm -f "$CONV.heal-tmp" 2>/dev/null; continue; }
+    note "healed: ${k}: ${v} — forbidden, commented out (POLARIS names no model; spawns inherit the session)"
+    n=$((n + 1))
+  done
+  return 0
+}
+
+heal_claudemd() { # append the marked efficiency section to the repo's OWN CLAUDE.md, once.
+  # APPEND-ONLY and marker-guarded. If the marker is present we do nothing at all — we do not
+  # rewrite it, because a human may have edited the text and their copy is not ours to overwrite.
+  local f="$PRIMARY/CLAUDE.md"
+  [ -f "$f" ] || return 0
+  grep -qF "$HEAL_MARK" "$f" 2>/dev/null && return 0
+  {
+    printf '\n%s\n' "$HEAL_MARK"
+    printf '%s\n' '## Token efficiency — the first property'
+    printf '%s\n' ''
+    printf '%s\n' 'Every token is the owner'"'"'s money and the supply is fixed. Finish the task, prove it, spend as'
+    printf '%s\n' 'little as possible.'
+    printf '%s\n' ''
+    printf '%s\n' '- **Prefer ONE context over three.** Twenty-five subagents in a day is a failure, not diligence.'
+    printf '%s\n' '- **Run the smallest check that proves the change** — never a full suite for a small diff.'
+    printf '%s\n' '- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.'
+    printf '%s\n' '- **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:'
+    printf '%s\n' '  one command per line, never `&&` (PowerShell has no chain operators), no placeholders.'
+    printf '%s\n' '- **Ask early** rather than burning tokens guessing.'
+    printf '%s\n' ''
+    printf '%s\n' 'Added by `polaris heal`. Edit freely — it is appended once and never rewritten.'
+  } >> "$f" 2>/dev/null || return 0
+  note "healed: CLAUDE.md — appended the efficiency section (once; your prose untouched)"
+  return 0
+}
+
+cmd_heal() { # heal — repair the configuration efficiency depends on. Safe to run any time.
+  [ -f "$CONV" ] || { note "heal: no ops/CONVENTIONS.md — INIT has never run here; nothing to heal"; return 0; }
+  heal_models
+  heal_claudemd
+  say "heal: configuration checked"
+  return 0
 }
 
 # ------------------------------------------------------------------ interview (6.4.0)

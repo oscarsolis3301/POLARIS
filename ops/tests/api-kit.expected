@@ -3,6 +3,7 @@ kit/.claude/output-styles/polaris.md	heading	Output discipline — under both vo
 kit/.claude/output-styles/polaris.md	heading	The endings that are not exit 0
 kit/.claude/output-styles/polaris.md	heading	Voice
 kit/.claude/output-styles/polaris.md	heading	What a close reads like
+kit/.claude/output-styles/polaris.md	heading	🚩 Handing a step to the human
 kit/.claude/skills/polaris-install/SKILL.md	heading	After the install — DO NOT STOP HERE
 kit/.claude/skills/polaris-install/SKILL.md	heading	Do not
 kit/.claude/skills/polaris-install/SKILL.md	heading	First: what are they actually asking for?
@@ -142,6 +143,7 @@ kit/ops/bootstrap.py	fn	find_bash
 kit/ops/bootstrap.py	fn	git_toplevel
 kit/ops/bootstrap.py	fn	main
 kit/ops/bootstrap.py	fn	merge_awake_hooks
+kit/ops/bootstrap.py	fn	merge_model_guard
 kit/ops/bootstrap.py	fn	merge_permissions
 kit/ops/bootstrap.py	fn	out
 kit/ops/bootstrap.py	fn	perm_snippet
@@ -202,6 +204,7 @@ kit/ops/hooks/handover-hook.sh	fn	hh_question
 kit/ops/hooks/handover-hook.sh	fn	hh_state
 kit/ops/hooks/handover-hook.sh	fn	hh_stop
 kit/ops/hooks/handover-hook.sh	fn	hh_subagent
+kit/ops/hooks/model-guard.sh	fn	mg_denied
 kit/ops/hooks/ownership-guard.sh	fn	cleanup
 kit/ops/hooks/ownership-guard.sh	fn	jstr
 kit/ops/hooks/ownership-guard.sh	fn	lc
@@ -260,6 +263,7 @@ kit/ops/install.sh	fn	say
 kit/ops/lib/admin.sh	fn	board_quiescent
 kit/ops/lib/admin.sh	fn	claude_home
 kit/ops/lib/admin.sh	fn	cmd_adopt
+kit/ops/lib/admin.sh	fn	cmd_heal
 kit/ops/lib/admin.sh	fn	cmd_init_board
 kit/ops/lib/admin.sh	fn	cmd_interview
 kit/ops/lib/admin.sh	fn	cmd_slim
@@ -269,6 +273,8 @@ kit/ops/lib/admin.sh	fn	cmd_update_all
 kit/ops/lib/admin.sh	fn	cmd_update_auto
 kit/ops/lib/admin.sh	fn	cmd_upgrade
 kit/ops/lib/admin.sh	fn	cmd_version
+kit/ops/lib/admin.sh	fn	heal_claudemd
+kit/ops/lib/admin.sh	fn	heal_models
 kit/ops/lib/admin.sh	fn	interview_pending
 kit/ops/lib/admin.sh	fn	interview_set
 kit/ops/lib/admin.sh	fn	kit_zip_version
@@ -328,6 +334,7 @@ kit/ops/lib/core.sh	fn	jesc
 kit/ops/lib/core.sh	fn	lock_age
 kit/ops/lib/core.sh	fn	lock_drop
 kit/ops/lib/core.sh	fn	lock_take
+kit/ops/lib/core.sh	fn	model_denied
 kit/ops/lib/core.sh	fn	model_for_tier
 kit/ops/lib/core.sh	fn	mutex_off
 kit/ops/lib/core.sh	fn	mutex_on
