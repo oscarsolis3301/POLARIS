@@ -43,7 +43,7 @@ ft_section() { # ft_section <name> — close the section: hand this subshell's a
 selftest_fast() { # the run — rc 0 all green / rc 1 any red; last line on green:
   # `✅ fast tier passed — <n> checks in <s>s`. Sources NOTHING. Each section is one subshell that
   # sets FT_SEC first, overrides whatever globals it needs, asserts, and ends with ft_section.
-  local ft_t0 ft_t1 ft_red=0 ft_n=0 ft_k ft_tf ft_conv ft_rules ft_nl ft_cr ft_tab ft_surf ft_sel ft_sc ft_iv
+  local ft_t0 ft_t1 ft_red=0 ft_n=0 ft_k ft_tf ft_conv ft_rules ft_nl ft_cr ft_tab ft_surf ft_sel ft_sc ft_iv ft_ska ft_skb ft_skc
   ft_nl=$'\n'; ft_cr=$'\r'; ft_tab="$POLARIS_TAB"
   ft_t0="$(date +%s)"
   FT_TMP="$(mktemp -d)"
@@ -620,6 +620,92 @@ EOF
     ft_assert 'no verify: field → rc 1'          ! amend_verify "$ft_tf" 1 'test -f x'
     ft_assert 'no verify: field wrote nothing'   test "$(fm_list files_owned "$ft_tf" | tr '\n' ' ')" = 'a.sh b.sh '
     ft_section amend ) || ft_red=1
+
+  # ---- skills (self-skills.md § 9) — the shelf's byte rule, its twin, and the data rule under
+  # eviction. skill_bytes and admin.sh::slim_scan carry the SAME awk (one counter, two callers —
+  # Invariant 2): both run over the SAME three fixture files here and the tier asserts they agree
+  # number for number, so `skill budget` and `slim` can never disagree about a file. Fixtures by
+  # builtins: a hidden skill (flag true — 0 B whatever its description says), a small visible one
+  # (300 B: 15 for `name: fx-small`, 285 for the description line, +1 per line) and a big one whose
+  # description FOLDS onto a second line (827 B: 13 + 714 + 100 — a folded line is a prompt line
+  # and it counts). Pinned from the running awk; the arithmetic only names the parts. slim_scan
+  # reads $(claude_home)/skills/**, so CLAUDE_CONFIG_DIR points at a fixture home and the corpus
+  # paths at the tier's own files (OPS and PRIMARY at nothing, CONV at the cfg fixture: slim_scan's
+  # corpus is awk's NR==FNR first file, and an EMPTY corpus would swallow the first definition —
+  # unreachable in a repo, where CLAUDE.md and the roles always exist) — the owner's ~/.claude is
+  # never opened. skill_paths and
+  # skill_tier read $PRIMARY/.claude/skills/<name>/SKILL.md: PRIMARY is the other fixture root,
+  # holding the flow form, the block form, a flow list under a block polaris, a hand-written skill
+  # with no flag line (visible) and a foreign skill with no metadata.polaris — rc 1 and nothing,
+  # the identity test every subcommand hides behind. skill_hits over a fixture EVENTS: the window
+  # is the ts of the n-th most recent done line, INCLUSIVE — a hit in that same second counts.
+  ft_ska=""; ft_k=0; while [ "$ft_k" -lt 27 ]; do ft_ska="${ft_ska}abcdefghij"; ft_k=$((ft_k+1)); done; ft_ska="${ft_ska}k"           # 271
+  ft_skb=""; ft_k=0; while [ "$ft_k" -lt 70 ]; do ft_skb="${ft_skb}abcdefghij"; ft_k=$((ft_k+1)); done                             # 700
+  ft_skc=""; ft_k=0; while [ "$ft_k" -lt 9 ];  do ft_skc="${ft_skc}abcdefghij"; ft_k=$((ft_k+1)); done; ft_skc="${ft_skc}abcdefg"     # 97
+  mkdir -p "$FT_TMP/ch/skills/fx-hidden" "$FT_TMP/ch/skills/fx-small" "$FT_TMP/ch/skills/fx-big" \
+    "$FT_TMP/sk/.claude/skills/fx-flow" "$FT_TMP/sk/.claude/skills/fx-block" "$FT_TMP/sk/.claude/skills/fx-bflow" \
+    "$FT_TMP/sk/.claude/skills/fx-noflag" "$FT_TMP/sk/.claude/skills/fx-foreign"
+  printf '%s\n' '---' 'name: fx-hidden' "description: TODO(src/x) — $ft_ska" 'disable-model-invocation: true' 'metadata:' \
+    '  polaris: { paths: [src/x], since: 2026-09-14, tier: 0, evidence: "fixture" }' '---' '# fx-hidden' > "$FT_TMP/ch/skills/fx-hidden/SKILL.md"
+  printf '%s\n' '---' 'name: fx-small' "description: $ft_ska" 'disable-model-invocation: false' 'metadata:' \
+    '  polaris: { paths: [src/y], since: 2026-09-14, tier: 1, evidence: "fixture" }' '---' '# fx-small' > "$FT_TMP/ch/skills/fx-small/SKILL.md"
+  printf '%s\n' '---' 'name: fx-big' "description: $ft_skb" "  $ft_skc" 'disable-model-invocation: false' 'metadata:' \
+    '  polaris: { paths: [src/z], since: 2026-09-14, tier: 1, evidence: "fixture" }' '---' '# fx-big' > "$FT_TMP/ch/skills/fx-big/SKILL.md"
+  printf '%s\n' '---' 'name: fx-flow' 'description: flow' 'disable-model-invocation: true' 'metadata:' \
+    '  polaris: { paths: [src/a/, "lib/*.py"], since: 2026-09-14, tier: 0, evidence: "x" }' '---' > "$FT_TMP/sk/.claude/skills/fx-flow/SKILL.md"
+  printf '%s\n' '---' 'name: fx-block' 'description: block' 'disable-model-invocation: false' 'metadata:' '  polaris:' '    paths:' \
+    '      - "src/b/"' "      - 'docs/'" '    since: 2026-09-14' '    tier: 1' 'other: x' '---' > "$FT_TMP/sk/.claude/skills/fx-block/SKILL.md"
+  printf '%s\n' '---' 'name: fx-bflow' 'description: a flow list under a block polaris' 'metadata:' '  polaris:' '    paths: [x/, y/]' '    tier: 0' '---' > "$FT_TMP/sk/.claude/skills/fx-bflow/SKILL.md"
+  printf '%s\n' '---' 'name: fx-noflag' 'description: written by hand, no flag line' 'metadata:' '  polaris: { paths: [src/n/] }' '---' > "$FT_TMP/sk/.claude/skills/fx-noflag/SKILL.md"
+  printf '%s\n' '---' 'name: fx-foreign' 'description: a skill the human wrote' 'metadata:' '  author: someone' '---' > "$FT_TMP/sk/.claude/skills/fx-foreign/SKILL.md"
+  printf '%s\n' '{"ts":100,"ev":"done","id":"T-1","who":"w","note":""}' \
+    '{"ts":200,"ev":"skill-hit","id":"fx-flow","who":"w","note":"T-2"}' \
+    '{"ts":300,"ev":"done","id":"T-2","who":"w","note":""}' \
+    '{"ts":300,"ev":"skill-hit","id":"fx-flow","who":"w","note":"T-3"}' \
+    '{"ts":400,"ev":"done","id":"T-3","who":"w","note":""}' \
+    '{"ts":500,"ev":"skill-hit","id":"fx-block","who":"w","note":"T-4"}' > "$FT_TMP/ev.ndjson"
+  ( FT_SEC=skills; CLAUDE_CONFIG_DIR="$FT_TMP/ch"; OPS="$FT_TMP/no-ops"; PRIMARY="$FT_TMP/sk"; CONV="$ft_conv"; EVENTS="$FT_TMP/ev.ndjson"
+    skill_consts
+    ft_assert 'SKILL_FM_MAX=320'      test "$SKILL_FM_MAX" = 320
+    ft_assert 'SKILLS_SHELF_MAX=1600' test "$SKILLS_SHELF_MAX" = 1600
+    ft_assert 'SKILLS_WINDOW=40'      test "$SKILLS_WINDOW" = 40
+    ft_assert 'SKILLS_GAP_MIN=5'      test "$SKILLS_GAP_MIN" = 5
+    ft_assert 'SKILLS_T0_WARN=24'     test "$SKILLS_T0_WARN" = 24
+    ft_assert 'hidden: flag true → 0 B whatever the description says' test "$(skill_bytes "$FT_TMP/ch/skills/fx-hidden/SKILL.md")" = 0
+    ft_assert 'small: 300 B — the name line and the description line, +1 each' test "$(skill_bytes "$FT_TMP/ch/skills/fx-small/SKILL.md")" = 300
+    ft_assert 'small sits under the per-skill cap'   test "$(skill_bytes "$FT_TMP/ch/skills/fx-small/SKILL.md")" -le "$SKILL_FM_MAX"
+    ft_assert 'big: 827 B — the folded second line counts' test "$(skill_bytes "$FT_TMP/ch/skills/fx-big/SKILL.md")" = 827
+    ft_assert 'missing file → 0, rc 0'               test "$(skill_bytes "$FT_TMP/no-such-file")" = 0
+    ft_out="$(slim_scan)" || ft_out=""
+    ft_k=0; ft_h=x; ft_s=x; ft_b=x
+    while IFS="$ft_tab" read -r ft_by ft_cl ft_nm ft_rel; do
+      [ -n "$ft_nm" ] || continue; ft_k=$((ft_k+1))
+      case "$ft_nm" in fx-hidden) ft_h="$ft_by";; fx-small) ft_s="$ft_by";; fx-big) ft_b="$ft_by";; esac
+    done <<EOF
+$ft_out
+EOF
+    ft_assert 'slim_scan: exactly the three fixture definitions' test "$ft_k" = 3
+    ft_assert 'slim_scan agrees: hidden 0 B (the one clause)'  test "$ft_h" = 0
+    ft_assert 'slim_scan agrees: small 300 B'                  test "$ft_s" = 300
+    ft_assert 'slim_scan agrees: big 827 B'                    test "$ft_b" = 827
+    ft_assert 'paths: flow list, quotes stripped'        test "$(skill_paths fx-flow | tr '\n' ' ')" = 'src/a/ lib/*.py '
+    ft_assert 'paths: block list, both quote styles'     test "$(skill_paths fx-block | tr '\n' ' ')" = 'src/b/ docs/ '
+    ft_assert 'paths: a flow list under a block polaris' test "$(skill_paths fx-bflow | tr '\n' ' ')" = 'x/ y/ '
+    ft_assert 'paths: a POLARIS-written skill → rc 0'    skill_paths fx-flow
+    ft_assert 'paths: no metadata.polaris → rc 1'        ! skill_paths fx-foreign
+    ft_assert 'paths: no metadata.polaris → nothing'     test -z "$(skill_paths fx-foreign)"
+    ft_assert 'paths: no such skill → rc 1'              ! skill_paths fx-none
+    ft_assert 'tier: flag true → 0'                      test "$(skill_tier fx-flow)" = 0
+    ft_assert 'tier: flag false → 1'                     test "$(skill_tier fx-block)" = 1
+    ft_assert 'tier: no flag line → 1 (a hand-written skill is visible)' test "$(skill_tier fx-noflag)" = 1
+    ft_assert 'hits: fewer done lines than the window → all history'      test "$(skill_hits fx-flow 40)" = '2 T-3'
+    ft_assert 'hits: window 2 → the cut is the 2nd most recent done, INCLUSIVE' test "$(skill_hits fx-flow 2)" = '1 T-3'
+    ft_assert 'hits: window 1 → nothing after the last done'              test "$(skill_hits fx-flow 1)" = '0 -'
+    ft_assert 'hits: another skill counts its own lines only'             test "$(skill_hits fx-block 1)" = '1 T-4'
+    ft_assert 'hits: a skill with no lines → 0 -'                         test "$(skill_hits fx-none 40)" = '0 -'
+    EVENTS="$FT_TMP/no-such-file"
+    ft_assert 'hits: no EVENTS file → 0 -, rc 0'                          test "$(skill_hits fx-flow 40)" = '0 -'
+    ft_section skills ) || ft_red=1
 
   # ---- verdict
   while IFS= read -r ft_k; do ft_n=$((ft_n + ft_k)); done < "$FT_TMP/n"

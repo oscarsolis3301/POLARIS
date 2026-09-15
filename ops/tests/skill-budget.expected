@@ -1,0 +1,57 @@
+--- budget: the constants line, then the shelf line (Σ tier-1 = small + big); rc 0 under 1600
+SKILL_FM_MAX=320 SKILLS_SHELF_MAX=1600 SKILLS_WINDOW=40 SKILLS_GAP_MIN=5 SKILLS_T0_WARN=24
+shelf: 1127 B of 1600 (2 tier-1 skill(s)) · tier 0: 1 (0 B injected)
+rc=0
+--- list: one line per POLARIS-written skill in name order, then ONE summary line
+fx-big  tier 1 · 827 B · 0/40 hits · last - · paths src/fx-big/ · twin -
+fx-hidden  tier 0 · 0 B · 0/40 hits · last - · paths src/fx-hidden/ · twin -
+fx-small  tier 1 · 300 B · 0/40 hits · last - · paths src/fx-small/ · twin -
+3 skill(s) · shelf 1127/1600 B · tier 0: 1
+rc=0
+--- propose --write refuses a reserved name FIRST, before the threshold or the branch (nothing written)
+⛔ polaris is reserved — polaris, polaris-install, i-have-adhd and polaris-* are managed by update
+rc=1
+⛔ polaris-x is reserved — polaris, polaris-install, i-have-adhd and polaris-* are managed by update
+rc=1
+fx-big
+fx-hidden
+fx-small
+--- promote refuses a TODO description (nothing written)
+⛔ description still TODO(src/x) — write the trigger sentence first (≤ 290 chars)
+rc=1
+fx-hidden unchanged
+--- promote refuses a description over the per-skill cap: 400 B > 320 (nothing written)
+⛔ fx-fat frontmatter is 400 B — the per-skill cap is 320
+rc=1
+fx-fat unchanged
+--- promote refuses a shelf crossing: 1327 + 300 > 1600, and names what to demote (nothing written)
+⛔ shelf would be 1627 B — over 1600; demote one first:
+fx-big  tier 1 · 827 B · 0/40 hits · last - · paths src/fx-big/ · twin -
+fx-fat  tier 0 · 0 B · 0/40 hits · last - · paths src/fx-fat/ · twin -
+fx-hidden  tier 0 · 0 B · 0/40 hits · last - · paths src/fx-hidden/ · twin -
+fx-ready  tier 0 · 0 B · 0/40 hits · last - · paths src/fx-ready/ · twin -
+fx-small  tier 1 · 300 B · 0/40 hits · last - · paths src/fx-small/ · twin -
+fx-wide  tier 1 · 200 B · 0/40 hits · last - · paths src/fx-wide/ · twin -
+6 skill(s) · shelf 1327/1600 B · tier 0: 3
+rc=1
+fx-ready unchanged
+--- budget over 1600: rc 1 and the demotion candidate (fewest hits, then the most bytes)
+SKILL_FM_MAX=320 SKILLS_SHELF_MAX=1600 SKILLS_WINDOW=40 SKILLS_GAP_MIN=5 SKILLS_T0_WARN=24
+shelf: 1627 B of 1600 (4 tier-1 skill(s)) · tier 0: 3 (0 B injected)
+⛔ shelf over budget by 27 B — demote one: ops/polaris skill demote fx-big
+rc=1
+--- demote is the free reverse: the shelf is under again, and a second demote is a no-op
+✅ demoted fx-big — 0 B injected; /fx-big still loads it
+   review, then commit .claude/skills/fx-big/SKILL.md — nothing was committed for you
+rc=0
+SKILL_FM_MAX=320 SKILLS_SHELF_MAX=1600 SKILLS_WINDOW=40 SKILLS_GAP_MIN=5 SKILLS_T0_WARN=24
+shelf: 800 B of 1600 (3 tier-1 skill(s)) · tier 0: 4 (0 B injected)
+rc=0
+fx-big is already tier 0
+rc=0
+--- the same candidate promotes once the shelf has room: flag false, tier 1, on the shelf
+✅ promoted fx-ready — 300 B now rides every session in this repo (shelf 1100/1600)
+   review, then commit .claude/skills/fx-ready/SKILL.md — nothing was committed for you
+rc=0
+1
+1
