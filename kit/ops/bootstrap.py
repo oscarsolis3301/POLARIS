@@ -314,6 +314,49 @@ def merge_awake_hooks(archive, bash_path):
         out(f"   {line}")
 
 
+def merge_model_guard(archive, bash_path, register=True):
+    """Land model-guard.sh under ~/.claude/polaris/ and register it as a machine-wide PreToolUse hook.
+
+    Owner decision 2026-09-15, absolute: Fable and Haiku are forbidden in every project. core.sh's
+    model_denied stops POLARIS ever NAMING them; this stops a session that is already RUNNING one
+    from spending anything — it refuses every tool call with a reason until the human switches.
+
+    Machine-level for the same reason keep-awake is: the hooks live in ~/.claude/settings.json and no
+    repo setting can gate them. That is also the only way this reaches projects which have never had
+    POLARIS installed, which is where most of the Fable spend actually happened.
+
+    The SCRIPT is copied even when register=False, so `--no-permissions` still leaves a machine one
+    command away from armed rather than empty-handed.
+
+    Fails OPEN with one ⚠ line, exactly like keep-awake: an install that died over a machine-level
+    extra is worse than the extra being missing, and the kit-code ban applies either way.
+    """
+    dest_dir = os.path.join(os.path.expanduser("~"), ".claude", "polaris")
+    hook = os.path.join(dest_dir, "model-guard.sh")
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+        with zipfile.ZipFile(archive) as z:
+            with open(hook, "wb") as fh:
+                fh.write(z.read(f"{PREFIX}ops/hooks/model-guard.sh"))
+        os.chmod(hook, 0o755)
+        if not register:
+            out(f"   model-guard copied (not registered): {hook}")
+            return
+        if not bash_path:
+            raise OSError("no working bash on this machine")
+        done = subprocess.run([bash_path, hook.replace("\\", "/"), "install"],
+                              capture_output=True, text=True, timeout=60)
+        if done.returncode != 0:
+            raise OSError(f"model-guard.sh install exited {done.returncode}")
+    except (KeyError, OSError, ValueError, subprocess.SubprocessError) as exc:
+        print(f"⚠ Fable/Haiku session guard not armed ({exc}) — arm it later: "
+              f"bash ~/.claude/polaris/model-guard.sh install")
+        return
+    out(f"✅ model guard armed:     {hook}")
+    for line in done.stdout.splitlines():
+        out(f"   {line}")
+
+
 def arm_file(z, member, dest):
     """Copy ONE archive member into ~/.claude, and only when the bytes differ. True if it wrote.
 
@@ -448,10 +491,19 @@ def arm_machine(archive, permissions=True):
     # forever — the same mistake the cmp guard above exists to undo.
     if permissions:
         merge_awake_hooks(archive, find_bash())
+        merge_model_guard(archive, find_bash())
         if merge_permissions(os.path.join(os.path.expanduser("~"), ".claude", "settings.json")):
             changed = True
     else:
         out("   --no-permissions: ~/.claude/settings.json not touched (keep-awake included).")
+        # The Fable/Haiku ban is the owner's absolute rule, but --no-permissions is a documented
+        # promise about THIS file that CI asserts, and quietly breaking it would be its own mistake.
+        # So: copy the script, skip the registration, and say plainly what is and is not in force.
+        # The kit-code half (core.sh model_denied) is unaffected — POLARIS still never NAMES either
+        # model here; only the guard against a session already running one is missing.
+        merge_model_guard(archive, find_bash(), register=False)
+        out("   ⚠ Fable/Haiku SESSION guard not armed (it would write settings.json). One command:")
+        out("     bash ~/.claude/polaris/model-guard.sh install")
         perm_snippet()
 
     out()

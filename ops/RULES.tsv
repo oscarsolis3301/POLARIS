@@ -60,3 +60,12 @@ ops/KEYS.tsv	path	-	installed copy — edit kit/ops/KEYS.tsv
 # `surfaces --scaffold --apply` is the SECOND sanctioned writer (on <base> only, rows tagged [scaffold], unambiguous pairings only).
 # The guard is unchanged: the file is still never hand-edited, and the rule count stays 16.
 ops/SURFACES.tsv	path	-	rows are written only by polaris done (a task's surface: list) or surfaces --scaffold --apply — edit the task, never this file
+# Model ban added 2026-09-15 (assistant, under invariant 11, on the owner's explicit and repeated instruction).
+# WHY: `model_strong: fable` sent ~12 subagents to Fable in ONE day — several over 300k tokens — because `route`
+# returns `strong` for every PLANNER/INIT/INTEGRATOR/EVOLVE/CONDUCTOR role and every task at 5pts or risk!=normal.
+# Fable bills a SEPARATE, much smaller weekly limit and hit 87% on work nobody asked to run there. Haiku was already
+# refused for this repo (owner, 2026-08-02) and never enforced. Both are now refused in KIT CODE (core.sh model_denied),
+# which no repo can disable; this rule is the second layer, so a re-add is denied at write time with a reason a human
+# reads rather than silently ignored at runtime. Anchored at ^ so it matches an ACTIVE key only — the commented-out
+# history in CONVENTIONS.md (which names both models on purpose, so the reversal stays legible) is untouched.
+ops/CONVENTIONS.md	content	^model_(strong|mid|cheap):.*([Ff]able|[Hh]aiku|FABLE|HAIKU)	Fable and Haiku are forbidden (owner 2026-09-15) — POLARIS names no model; every spawn inherits the session. Kit code refuses them anyway: core.sh model_denied

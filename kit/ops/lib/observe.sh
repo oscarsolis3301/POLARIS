@@ -1951,7 +1951,7 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
   # only no-args and an unknown ID are errors. Read-only by contract: touches no lock, writes no
   # board file, fires no hook.
   local id="" role="" pts="" rsk="" pts_set="" rsk_set=""
-  local tier="" mdl="" ov="" f="" rnote=""
+  local tier="" mdl="" ov="" f="" rnote="" rdeny="" rraw=""
   local u="usage: polaris route <ID> | --role <ROLE> | --points <N> [--risk <R>]"
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -1988,8 +1988,26 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
     die "$u"
   fi
   printf '%s\n' "$tier"
-  [ -n "$mdl" ] || mdl="$(model_for_tier "$tier")"
+  # FORBIDDEN models are NEVER named (core.sh model_denied — owner, 2026-09-15: Fable and Haiku, in
+  # any repo, on any machine). Two sources, both refused here: a task's literal `model:` is checked
+  # directly, and a CONVENTIONS model_* value was already refused inside model_for_tier, which hands
+  # the name back via MODEL_DENIED. Either way the `model:` note is WITHHELD — which is not a new
+  # code path: the contract's existing rule is absent ⇒ the caller omits the spawn's model param and
+  # the platform default runs. Line 1 is untouched, so every caller still branches on the bare tier.
+  if model_denied "$mdl"; then rdeny="$mdl"; mdl=""; fi
+  if [ -z "$mdl" ]; then
+    mdl="$(model_for_tier "$tier")"
+    # Nothing came back — either the knob is unset (ordinary) or it named a forbidden model and
+    # model_for_tier withheld it. Those must read differently to a human, so re-read the raw key to
+    # tell them apart. model_for_tier's MODEL_DENIED cannot be used here: it runs in a command
+    # substitution, so the assignment happens in a SUBSHELL and never reaches this scope.
+    if [ -z "$mdl" ]; then
+      rraw="$(cfg "model_$tier" "")"
+      model_denied "$rraw" && rdeny="$rraw"
+    fi
+  fi
   [ -n "$mdl" ] && note "model: $mdl"
+  [ -n "$rdeny" ] && note "model REFUSED: '$rdeny' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's"
   [ -n "$rnote" ] && note "$rnote"
   return 0
 }
