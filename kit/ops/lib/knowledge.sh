@@ -237,6 +237,52 @@ seal_report_commit() { # seal_report_commit <n> <date> — render the sprint rep
   git diff --cached --quiet -- "$out" || git commit -q -m "docs(sprint-$n): report" -- "$out"
 }
 
+cmd_learned() { # learned -m "<bullet>" — sprint-report.md v3 (T-153): ONE lesson onto ops/SPRINT.md
+  # § Learned, from any lane, on any branch, from any cwd inside the repo. The Learned log stopped
+  # at sprint 11 for the same reason the burndown did: its only writer was the Integrator, and a
+  # hand edit of a board file is the one thing a lane standing in a feat/* worktree never does.
+  # This is the pen: `- <YYYY-MM-DD> · <bullet>` appended as the section's LAST bullet (the
+  # section created at EOF when the file has none), one telemetry line, one board commit
+  # (`chore(board): learned`), one sync. Refuses an empty -m, more than one lesson's worth (400
+  # chars — the detail belongs in the task's Notes) and a TAB or newline (the file's tables and the
+  # index read those as structure). $OPS, $EVENTS and board_commit are all PRIMARY-anchored, so a
+  # builder in .polaris/wt/<ID> writes the very file the seal writes — nothing to merge, ever.
+  local bullet="" line sf tmp nl='
+'
+  [ "${1:-}" = "-m" ] && bullet="${2:-}"
+  [ -n "$bullet" ] || die "learned needs -m \"<one lesson>\""
+  [ "${#bullet}" -le 400 ] || die "learned: keep it to one lesson (≤ 400 chars) — the detail belongs in the task's Notes"
+  case "$bullet" in *"$POLARIS_TAB"*|*"$nl"*) die "learned: one line, no TAB — the detail belongs in the task's Notes";; esac
+  line="- $(date +%F) · $bullet"
+  sf="$OPS/SPRINT.md"
+  mutex_on
+  [ -f "$sf" ] || : > "$sf"
+  tmp="$(mktemp)"
+  # One awk pass, plain rules (no awk functions — `find --api` would index `function x() {` as a
+  # nested fn): the section runs from '## Learned' to the next heading or EOF. Blank lines inside
+  # it are held and re-emitted after the bullet, so the bullet lands right under the last one and
+  # the blank line that preceded the next heading stays where it was. ENVIRON, not -v: -v
+  # backslash-processes its value, and a lesson may well contain one.
+  POLARIS_LEARNED="$line" awk '
+      BEGIN { line = ENVIRON["POLARIS_LEARNED"] }
+      /^#+[ \t]/ { if (insec) { print line; done = 1; insec = 0 }
+                   while (pend) { print ""; pend-- }; print
+                   if (!done && /^## Learned/) insec = 1
+                   next }
+      !insec { print; next }
+      /^[ \t\r]*$/ { pend++; next }
+      { while (pend) { print ""; pend-- }; print; next }
+      END { if (insec) print line; else if (!done) print "\n## Learned\n" line
+            while (pend) { print ""; pend-- } }
+    ' "$sf" > "$tmp" || { rm -f "$tmp"; die "learned: could not rewrite ops/SPRINT.md — nothing written"; }
+  cat "$tmp" > "$sf"; rm -f "$tmp"
+  evt learned "" "${bullet:0:60}"
+  board_commit "chore(board): learned"
+  sync_board
+  mutex_off; trap - EXIT
+  say "learned: $bullet"
+}
+
 # ------------------------------------------- brain — generated knowledge base (T-030)
 # ops/contracts/brain.md: .polaris/brain/ (gitignored, any-model-readable) kills cold-start
 # re-derivation — a cold agent finds any fact in ≤4 file-opens from INDEX.md. Generation READS

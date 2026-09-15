@@ -101,10 +101,52 @@ drill_express() {
     set_fm status review ops/board/review/T-EX.md
     sed -i.bak 's|^test: .*$|test: true|' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
     git add -A; git commit -qm 'express drill: suite green'
+    # T-153 (ops/contracts/sprint-report.md v3): the express seal writes the wave's burndown row.
+    # The oracle for `remaining` is the board's other columns summed INDEPENDENTLY (sed over the
+    # frontmatter, not fm_get) BEFORE three known fixtures go on: backlog 3 pts and ready 2 pts
+    # must count, a task whose points: is not a number counts 0, and the wave's own T-EX (1 pt)
+    # is excluded — so the expected row is a hard number the implementation has to hit, not a
+    # copy of its own arithmetic. Bytes + rc, never printed text (T-089).
+    exrem=0
+    for exf in ops/board/backlog/*.md ops/board/ready/*.md ops/board/active/*.md ops/board/review/*.md; do
+      [ -f "$exf" ] || continue
+      case "$exf" in */T-EX.md|*/IDEAS.md) continue;; esac
+      expts="$(sed -n 's/^points:[[:space:]]*//p' "$exf" | head -1 | tr -d ' \r')"
+      case "$expts" in ''|*[!0-9]*) expts=0;; esac
+      exrem=$((exrem + expts))
+    done
+    exrem=$((exrem + 5))
+    printf -- '---\nid: T-EXB\ntitle: burndown backlog\npoints: 3\nstatus: backlog\nfiles_owned:\n  - src/exb.txt\n---\n' > ops/board/backlog/T-EXB.md
+    printf -- '---\nid: T-EXR\ntitle: burndown ready\npoints: 2\nwsjf: 1\nstatus: ready\nfiles_owned:\n  - src/exr.txt\n---\n' > ops/board/ready/T-EXR.md
+    printf -- '---\nid: T-EXN\ntitle: burndown unpointed\npoints: n/a\nstatus: backlog\nfiles_owned:\n  - src/exn.txt\n---\n' > ops/board/backlog/T-EXN.md
     # happy path: one pass → done/ with landed: stamp, sprint tag moved to the new seal,
     # integrate/<today> deleted (reused from the red run above), tree clean, qa named at the end
     extagpre="$(git rev-parse refs/tags/sprint/2)"
     "$SELF" land --express T-EX > "$T/ex8.out" 2>&1 || { cat "$T/ex8.out"; echo "EXPRESS HAPPY FAIL"; exit 1; }
+    # T-153: the fixture's SPRINT.md was the bare header, so this is the create-when-absent path —
+    # a blank line, then ONE ## Burndown table (header, |---|, rows) at the end of the top section,
+    # its LAST row exactly the wave's: today · 1 pt (T-EX) · the oracle. The row must be on the
+    # board ref too, under a `chore(board): burndown <date>` commit that PRECEDES done's — the
+    # ref's last subject stays `chore(board): done <ID>`, as every drill that pins it expects.
+    exrow="| $exd | 1 | $exrem |"
+    [ "$(sed -n '2p;3p' ops/SPRINT.md | tr -d '\r' | tr '\n' '|')" = "|## Burndown|" ] \
+      || { cat ops/SPRINT.md; echo "EXPRESS BURNDOWN CREATE FAIL (no table in the top section → a blank line + ## Burndown at its end)"; exit 1; }
+    awk -v want="$exrow" '
+      /^## Burndown/ { n++; h = 1; next }
+      h == 1 { h = 2; if ($0 != "| date | done pts | remaining |") bad = 1; next }
+      h == 2 { h = 3; if ($0 != "|---|---|---|") bad = 1; next }
+      h == 3 && /^\|/ { last = $0; rows++; next }
+      h == 3 { if ($0 !~ /^[ \t\r]*$/) bad = 1 }
+      END { if (n != 1 || bad || rows < 1 || last != want) exit 1 }' ops/SPRINT.md \
+      || { cat ops/SPRINT.md; echo "EXPRESS BURNDOWN ROW FAIL (want ONE table whose last row is '$exrow')"; exit 1; }
+    git log --format=%s refs/heads/polaris/board | grep -qx "chore(board): burndown $exd" \
+      || { echo "EXPRESS BURNDOWN COMMIT FAIL (want chore(board): burndown <date> on the board ref)"; exit 1; }
+    [ "$(git log -1 --format=%s refs/heads/polaris/board)" = "chore(board): done T-EX" ] \
+      || { echo "EXPRESS BURNDOWN ORDER FAIL (the burndown commit precedes done's — the ref's last subject must still be chore(board): done T-EX)"; exit 1; }
+    [ "$(git show refs/heads/polaris/board:ops/SPRINT.md | tail -1 | tr -d '\r')" = "$exrow" ] \
+      || { echo "EXPRESS BURNDOWN REF FAIL (the row must reach the board ref's ops/SPRINT.md, not only the disk)"; exit 1; }
+    grep -q 'learned anything?' "$T/ex8.out" || { echo "EXPRESS LEARNED NUDGE FAIL (seal must print the one learned nudge)"; exit 1; }
+    rm -f ops/board/backlog/T-EXB.md ops/board/backlog/T-EXN.md ops/board/ready/T-EXR.md   # the three oracle fixtures: gone before anything downstream can claim or count them
     # T-038: land --express shares cmd_land's squash path — the same chatter must stay silenced here
     grep -qi 'Squash commit' "$T/ex8.out" && { echo "LAND NOISE FAIL (express: git 'Squash commit' line leaked)"; exit 1; }
     grep -qi 'stopped before committing' "$T/ex8.out" && { echo "LAND NOISE FAIL (express: git 'stopped before committing' line leaked)"; exit 1; }
@@ -470,7 +512,12 @@ drill_wtreap() {
     wr_arc=''; for wr_d in .polaris/wt-archive/T-WR2-*/; do [ -d "$wr_d" ] && wr_arc="$wr_d"; done
     [ -n "$wr_arc" ] || { echo "WTREAP SWEEP FIX ARCHIVE FAIL (the dirty one is archived, never removed)"; exit 1; }
     [ "$(cat "$wr_arc/dirt.txt" 2>/dev/null)" = uncommitted ] || { echo "WTREAP SWEEP FIX BYTES FAIL"; exit 1; }
-    [ -n "$(git branch --list feat/T-WR2)" ] || { echo "WTREAP SWEEP FIX ARCHIVE BRANCH FAIL (an ARCHIVED worktree keeps its branch — those commits are still recoverable)"; exit 1; }
+    # T-152 (worktree-liveness.md § v2): the v1 cell here read "an ARCHIVED worktree keeps its branch".
+    # v2 supersedes exactly that cell — T-WR2 landed for real (squash + Landed-from trailer + landed:
+    # stamp), so feat_tip_landed PROVES its tip and the branch goes even though the worktree was
+    # archived: the commits are in main under the squash sha, the archive holds the uncommitted
+    # bytes. An UNPROVEN tip still stays — T-152's own cruft drills pin that half.
+    [ -z "$(git branch --list feat/T-WR2)" ] || { cat "$T/wr/7.out"; echo "WTREAP SWEEP FIX ARCHIVE BRANCH FAIL (a PROVEN tip goes even when the worktree was archived — the commits are in main under the squash sha, and the archive holds the uncommitted bytes)"; exit 1; }
     [ -n "$(git branch --list feat/T-WR4)" ] || { echo "WTREAP SWEEP FIX ACTIVE BRANCH FAIL (an active task's branch survives its worktree)"; exit 1; }
     # (6) the v1.1 correction, which is a SILENCE and can only be tested as one: the beat writers put
     #     2>/dev/null BEFORE the > (bash applies redirections left to right), so a hook payload whose
