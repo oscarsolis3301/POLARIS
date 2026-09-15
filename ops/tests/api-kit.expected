@@ -374,6 +374,7 @@ kit/ops/lib/integrate.sh	fn	cmd_task_commit_msg
 kit/ops/lib/integrate.sh	fn	in_primary
 kit/ops/lib/integrate.sh	fn	land_slow_suite_hint
 kit/ops/lib/integrate.sh	fn	landed_sha
+kit/ops/lib/integrate.sh	fn	seal_burndown_row
 kit/ops/lib/integrate.sh	fn	seal_sync
 kit/ops/lib/integrate.sh	fn	suite_stamp_carry
 kit/ops/lib/integrate.sh	fn	tag_push_recovery_note
@@ -389,6 +390,7 @@ kit/ops/lib/knowledge.sh	fn	brain_learned
 kit/ops/lib/knowledge.sh	fn	brain_prefs
 kit/ops/lib/knowledge.sh	fn	brain_refresh_if_present
 kit/ops/lib/knowledge.sh	fn	cmd_brain
+kit/ops/lib/knowledge.sh	fn	cmd_learned
 kit/ops/lib/knowledge.sh	fn	cmd_report
 kit/ops/lib/knowledge.sh	fn	event_ts
 kit/ops/lib/knowledge.sh	fn	render_sprint
@@ -425,8 +427,10 @@ kit/ops/lib/observe.sh	fn	cmd_surfaces
 kit/ops/lib/observe.sh	fn	cmd_sweep
 kit/ops/lib/observe.sh	fn	cmd_triage
 kit/ops/lib/observe.sh	fn	cmd_why
+kit/ops/lib/observe.sh	fn	cruft_clear
 kit/ops/lib/observe.sh	fn	dep_ids
 kit/ops/lib/observe.sh	fn	dep_reaches
+kit/ops/lib/observe.sh	fn	feat_tip_landed
 kit/ops/lib/observe.sh	fn	fin_caveat
 kit/ops/lib/observe.sh	fn	fin_count
 kit/ops/lib/observe.sh	fn	fin_ids
@@ -508,6 +512,20 @@ kit/ops/lib/selftest/spine.sh	fn	drill_on
 kit/ops/lib/selftest/spine.sh	fn	ensure_origin
 kit/ops/lib/selftest/spine.sh	fn	ngwait
 kit/ops/lib/selftest/spine.sh	fn	selftest
+kit/ops/lib/skills.sh	fn	cmd_skill
+kit/ops/lib/skills.sh	fn	skill_budget
+kit/ops/lib/skills.sh	fn	skill_bytes
+kit/ops/lib/skills.sh	fn	skill_consts
+kit/ops/lib/skills.sh	fn	skill_demote
+kit/ops/lib/skills.sh	fn	skill_gaps
+kit/ops/lib/skills.sh	fn	skill_hits
+kit/ops/lib/skills.sh	fn	skill_list
+kit/ops/lib/skills.sh	fn	skill_paths
+kit/ops/lib/skills.sh	fn	skill_promote
+kit/ops/lib/skills.sh	fn	skill_propose
+kit/ops/lib/skills.sh	fn	skill_prune
+kit/ops/lib/skills.sh	fn	skill_restore
+kit/ops/lib/skills.sh	fn	skill_tier
 kit/ops/lib/surfaces.sh	fn	surfaces_pairs
 kit/ops/lib/surfaces.sh	fn	surfaces_proposal
 kit/ops/lib/surfaces.sh	fn	surfaces_runner

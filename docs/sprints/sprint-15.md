@@ -1,7 +1,7 @@
 # Sprint 15 — Every remaining item (6.5.0) (2026-09-14–)
 
 ## T-150 — "PROBE — does a .claude/rules file with paths: actually fire when a matching file is read? Three headless sessions in a throwaway repo, the answer recorded before any skill code exists"
-points 1 · risk normal · landed fa7ce00 (2026-09-14) · claimed 2026-09-14
+points 1 · risk normal · landed fa7ce00 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: plans/self-skills.md
 
 ### Why
@@ -24,7 +24,7 @@ a guess is the only failure.
 - [ ] `polaris verify` green
 
 ## T-151 — "update --all reaches every install — the walker runs THIS kit's updater in each repo instead of the repo's own (a 5.24.0 install has no --auto to answer with), --major applies major bumps on request, gone registry entries are pruned"
-points 5 · risk normal · landed bc8e58b (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed bc8e58b (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/admin.sh, kit/ops/lib/selftest/remote.sh
 
 ### Why
@@ -54,7 +54,7 @@ deleted scratch repos).
 - [ ] `polaris verify` green
 
 ## T-152 — "Stop the suite re-running for a housekeeping nit — cruft gets three classes, qa clears the provably-landed branches before drift, and a lane still standing in its own worktree is not cruft yet"
-points 3 · risk normal · landed 2ce2632 (2026-09-14) · claimed 2026-09-14
+points 3 · risk normal · landed 2ce2632 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/observe.sh, kit/ops/lib/selftest/policy.sh
 
 ### Why
@@ -79,7 +79,7 @@ implementation of "safe to delete".
 - [ ] `polaris verify` green
 
 ## T-153 — "The burndown writes itself — seal appends the wave's row to ops/SPRINT.md and any lane records a lesson with polaris learned -m"
-points 5 · risk normal · landed eb4b6c9 (2026-09-14) · claimed 2026-09-14
+points 5 · risk normal · landed eb4b6c9 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/integrate.sh, kit/ops/lib/knowledge.sh, kit/ops/lib/selftest/history.sh
 
 ### Why
@@ -102,7 +102,7 @@ numbers and the lessons.
 - [ ] `polaris verify` green
 
 ## T-154 — "next --do keeps its hands off foreign plans — the promote pass holds a backlog task whose plan: is not this run's under drain: plan, and says so"
-points 2 · risk normal · landed dc675b2 (2026-09-14) · claimed 2026-09-14
+points 2 · risk normal · landed dc675b2 (2026-09-14) · claimed 2026-09-14 → done 2026-09-14
 files touched: kit/ops/lib/handover.sh, kit/ops/lib/selftest/board.sh
 
 ### Why
@@ -122,4 +122,32 @@ never foreign, so riders still flow.
 - [ ] `drill_handover` (board.sh): the contract's fixture — under `drain: plan`: ready `plan: alpha`, backlog dep-satisfied `alpha` + `beta` + unplanned → `--do` promotes two, holds beta's with the pinned line, ONE board commit; under `drain: queue` all three promote; asserts `ls ready/`, the promote event count and rc
 - [ ] `bash ops/tests/handover-route.cmd | diff - ops/tests/handover-route.expected` is empty (run once from your worktree root — ~47 s, so it is an acceptance check, not a verify line)
 - [ ] the drill green in your worktree: `bash ops/polaris bg run t154 -- bash kit/ops/polaris doctor --selftest --only handover` + chunked `bg wait t154 --max 300`; paste the `selftest passed` line into Notes
+- [ ] `polaris verify` green
+
+## T-155 — "The skills module — lib/skills.sh (list · gaps · budget · propose · promote · demote · prune · restore) and the entry that dispatches it, plus the sprint's one-line entry fixes: qa forwards every flag, promote/amend/learned get their lines, update learns --major"
+points 5 · risk normal · landed 5994d44 (2026-09-14) · claimed 2026-09-14
+files touched: kit/ops/lib/skills.sh, kit/ops/polaris, ops/tests/api-kit.expected
+
+### Why
+A surface the agents rediscover every session — the api-kit golden, the role files, observe.sh —
+deserves a skill: what keeps going wrong there, its public surface, the tests that cover it,
+delivered whole instead of one grep line at a time. The cost side is the whole design problem: a
+model-invocable skill's frontmatter rides every session's prompt in the repo. The T-146 spike found
+the two facts that make it safe — a `disable-model-invocation: true` skill costs ZERO prompt bytes,
+and a repo skill loads only in that repo — so every skill is born hidden and a small, budgeted shelf
+is promoted by a human on evidence. This task is the module: a deterministic skeleton over the board,
+the brain and the index (the same producers `pack` uses), a byte budget, an eviction rule over
+`EVENTS.ndjson`, and the archive/restore pair that never deletes. It also owns the entry file this
+wave, so it writes every one-line entry change the sprint needs from the contracts' pinned text:
+the `qa` dispatch forwards `"$@"` (today `qa --force --full` silently drops `--full`), `promote`
+becomes a runnable alias of `next --do`, `amend` and `learned` get their usage and dispatch lines
+ahead of the functions T-157 and T-153 land, and `update`'s usage line shows `--major`.
+
+### Acceptance
+- [ ] `kit/ops/lib/skills.sh`: EXACTLY the 14 fns of self-skills.md § 2, ≤ 500 lines, bash 3.2 (no mapfile, no assoc arrays, no `case` inside `$(...)`), header comment only at top level; `skill_consts` sets the five constants; the writers refuse on any `feat/*` branch and commit nothing; reserved and shadowed names refused BEFORE the threshold and branch checks (the order § 5 pins)
+- [ ] the twin (§ 6) written by `propose --write` and moved by `prune --apply`/`restore` IFF `plans/self-skills.md` reads `probe: rules-paths-fires-on-read: yes`; otherwise no twin anywhere and `list` prints `twin -`
+- [ ] output shapes of `list` · `gaps` · `budget` · `promote` · `demote` · `prune` · `restore` · `propose` byte-exact to § 3–5 (the W3 goldens will diff them)
+- [ ] entry: loader `+skills` after `handover`; usage + dispatch for `skill`, `amend`, `learned`, `promote` verbatim from self-skills § 1, grant.md v2, sprint-report.md v3, role-handover.md v2; `qa)` forwards `"$@"`; the `update` usage line reads `update [--auto|--all [--major]] [--repo-only]` and its `--all` sentence carries auto-update.md v2's addition; entry < 500 lines
+- [ ] `ops/tests/api-kit.expected` = the W1 union (key-registry.md § 9): your 14 rows + T-152's two + T-153's two, in `find --api` order, 684 lines — written from the PINNED names, never from a sibling's diff
+- [ ] `bash kit/ops/polaris doctor --fast` green
 - [ ] `polaris verify` green
