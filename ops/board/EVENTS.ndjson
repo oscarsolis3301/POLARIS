@@ -563,3 +563,4 @@
 {"ts":1789448837,"ev":"promote","id":"T-158","who":"Owner@DESKTOP","note":"deps done: T-155","pts":2}
 {"ts":1789448843,"ev":"promote","id":"T-156","who":"Owner@DESKTOP","note":"deps done: T-155, T-151, T-152","pts":3}
 {"ts":1789448850,"ev":"promote","id":"T-157","who":"Owner@DESKTOP","note":"deps done: T-155, T-153, T-154","pts":3}
+{"ts":1789449467,"ev":"claim","id":"T-156","who":"Owner@DESKTOP","note":"","pts":3}
