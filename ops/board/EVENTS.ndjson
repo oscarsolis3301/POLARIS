@@ -573,3 +573,4 @@
 {"ts":1789451668,"ev":"done","id":"T-156","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1789451841,"ev":"done","id":"T-158","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1789452008,"ev":"done","id":"T-157","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1789452292,"ev":"promote","id":"T-159","who":"Owner@DESKTOP","note":"deps done: T-156, T-157, T-152, T-158","pts":3}
