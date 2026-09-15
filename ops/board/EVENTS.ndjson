@@ -536,3 +536,5 @@
 {"ts":1789429595,"ev":"done","id":"T-144","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1789429683,"ev":"promote","id":"T-147","who":"Owner@DESKTOP","note":"deps done: T-143, T-144, T-145, T-146, T-148","pts":2}
 {"ts":1789429856,"ev":"claim","id":"T-147","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1789431688,"ev":"handoff","id":"T-147","who":"Owner@DESKTOP","note":""}
+{"ts":1789431689,"ev":"all-review","id":"T-147","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
