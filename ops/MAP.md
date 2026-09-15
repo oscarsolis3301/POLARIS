@@ -198,3 +198,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - "update --all runs THIS kit's `update --auto --say` inside each registered checkout (never the target's own ops/polaris — a pre-6.3.0 install answered `unknown flag --auto` and stayed put), accepts --major to apply MAJOR bumps, and removes registry entries whose path is gone; auto-update.md v2"  (T-151, 2026-09-14)
 
 - "seal (direct after the merge · pr at --sync) appends `| <date> | <done pts> | <remaining> |` to the current sprint's  (T-153, 2026-09-14)
+
+- "next_promote (handover.sh) holds a backlog candidate whose plan: is set and differs from the run's plan under drain: plan (`held: <ID> — plan <slug> is not this run's (<P>) — drain: plan`); the run's plan = the session's handover plan file, else the one slug carried by ready ∪ active ∪ review; role-handover.md v2"  (T-154, 2026-09-14)
