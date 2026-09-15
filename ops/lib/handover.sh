@@ -283,6 +283,7 @@ cmd_next() { # next [--do|--brief] — dispatch. Bare: the route, read-only. --d
   # board lock, then the FRESH route on line 1 (a verb under every flag, so a caller never parses),
   # the promote notes (`promoted:` · `held:` · `nothing to promote`), and `drift` as the audit any
   # board mutation earns — findings printed, rc still 0. --brief: the anchor. Bad flag = the ONLY rc 1.
+  board_pull   # T-148: a route is only as fresh as the board — fetch origin's first under claim-branch (first-run.md § 5)
   local promoted held
   case "${1:-}" in
     '')      next_route;;

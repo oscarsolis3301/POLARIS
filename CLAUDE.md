@@ -1,4 +1,4 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.3.1] -->
+<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.4.0] -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 Model-agnostic operating system for running N coding agents in parallel on this repo with zero merge
@@ -78,9 +78,10 @@ need one section or none.
 ## INVARIANTS — NEVER violate
 1. **Ownership.** A Builder creates/edits ONLY paths in its task's `files_owned`. `context_files`
    and `ops/MAP.md` are read-only. Need anything else → STOP, hand back. `polaris verify` MUST pass
-   before handoff: it proves the diff ⊆ owned AND that no `ops/RULES.tsv` rule is violated. Rules
-   bind inside `files_owned` too, and outside Builder sessions. A guard rejection means hand back or
-   ask the human — never work around it.
+   before handoff: it proves the diff ⊆ owned AND that no `ops/RULES.tsv` rule is violated AND that
+   every mapped surface it changed moved its tests too (`ops/SURFACES.tsv`). Rules bind inside
+   `files_owned` too, and outside Builder sessions. A guard rejection means hand back or ask the
+   human — never work around it.
 2. **Ready gate.** A task enters `ready/` only if: ≤5 points, every `depends_on` is in `done/`, its
    contract exists, and its `files_owned` overlaps NOTHING in `ready/` or `active/`.
 3. **Contract before code.** Contract missing or ambiguous → `blocked/` with a note. NEVER invent an
@@ -112,6 +113,7 @@ Deleting any file · adding a dependency · changing DB schema or migrations · 
 `files_owned` · touching auth/payments/prod config not explicitly owned · any force-push · merging
 any `risk: high` task · converting a `RULES.tsv` rule between `path` and `ask`.
 **Not on it:** git/workspace mechanics are never ask material after plan approval — the CLI prints the next step; follow it.
+**Never offer a menu of execution strategies.** How many builders, one chat or several, board or no board, which lane — these are `triage`'s answer, never a question. The interview (0b) is about the PRODUCT. The moment a question is about how POLARIS itself will run, the CLI already answered it and you are asking anyway.
 Taken lock · busy lane · dirty tree → `ops/PROTOCOL.md` § N CHATS, ONE REPO. Real asks stay: spec ambiguity, `risk: high`, `ask` scopes.
 
 ## PROGRESS FORMAT

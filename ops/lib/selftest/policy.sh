@@ -78,6 +78,215 @@ drill_rules() {
     # ---- end T-050 ask/approve drills ----
     git add -A; git commit -qm 'rules drill cleanup' >/dev/null 2>&1 || true
 }
+drill_surfaces() {
+    # ---- T-138 surfaces drill (ops/contracts/test-surfaces.md § 10) — the end-to-end proof, in the
+    # throwaway repo, that ops/SURFACES.tsv stays honest along the whole path: the row a task's
+    # surface: item becomes when `done` lands it (the ONE writer), the stale-tests gate refusing a
+    # source-only change and passing once its tests move, the comment-only exemption, a human's
+    # `approve` as the one recorded exception (and its refusal on feat/*), `qa` running only the
+    # mapped command and stamping `scoped`, the whole suite on an unmapped change, `--full`, a `-`
+    # template row through test_select:, and the health check refusing a self-covering row through
+    # `drift --strict`. Every assertion reads rc, file state or qa's OWN report line — never qa's
+    # exit code (T-131: qa also runs drift + doctor, which can red for reasons that have nothing to
+    # do with the line under test) and never a printed refusal alone (T-089: the board is shown NOT
+    # to have moved). The fixtures carry NO risk: key on purpose — self_land fails closed on an
+    # unclassified task — so handoff is the classic one and the landing is driven here step by step,
+    # exactly as the spine's own T-W wave. HERMETIC: the sealed wave stays (like the spine's own);
+    # the probe commits, ops/SURFACES.tsv (header-only again), the CONVENTIONS keys, both tasks,
+    # both branches, both worktrees and every stamp are gone before this returns.
+    sf0="$(git rev-parse main)"
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/sf-conv.bak"; else rm -f "$T/sf-conv.bak"; fi
+    rm -f "$T/sf.ran" .polaris/suite-stamp
+    # (1) init-board seeded the header and nothing has written a row: `surfaces` says so, rc 0
+    [ -f ops/SURFACES.tsv ] || { echo "SURFACES SEED FAIL (init-board must seed ops/SURFACES.tsv)"; exit 1; }
+    head -1 ops/SURFACES.tsv | grep -q '^# POLARIS SURFACES' || { echo "SURFACES HEADER FAIL (line 1 must start '# POLARIS SURFACES')"; exit 1; }
+    "$SELF" surfaces > "$T/sf1.out" 2>&1 || { cat "$T/sf1.out"; echo "SURFACES EMPTY RC FAIL (a header-only file must rc 0)"; exit 1; }
+    grep -q 'no surfaces yet' "$T/sf1.out" || { cat "$T/sf1.out"; echo "SURFACES EMPTY MSG FAIL (no rows must say so)"; exit 1; }
+    # (2) the ONE channel into the file: a task's surface: item, written by done at the end of the
+    #     real path — claim → build (source AND tests) → verify → handoff → land → seal → done.
+    #     The row's cmd appends MAPPED to a witness file: (6) below reads it to prove what ran.
+    printf -- '---\nid: T-SF\ntitle: the sf surface\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/sf/\n  - tests/sf/\nsurface:\n  - src/sf/ tests: tests/sf/ cmd: sh -c "echo MAPPED >> %s/sf.ran" note: the sf surface\nverify: []\n---\n## Why\nsurfaces drill.\n' "$T" > ops/board/ready/T-SF.md
+    "$SELF" claim T-SF >/dev/null || { echo "SURFACES CLAIM FAIL"; exit 1; }
+    ( cd .polaris/wt/T-SF && mkdir -p src/sf tests/sf && echo a > src/sf/a.txt && echo t > tests/sf/a_test.txt \
+      && git add -A && git commit -qm 'sf: source and tests' \
+      && "$SELF" verify T-SF >/dev/null 2>&1 && "$SELF" handoff T-SF >/dev/null 2>&1 ) \
+      || { echo "SURFACES HANDOFF FAIL (a change to a surface WITH its tests must pass every gate)"; exit 1; }
+    git checkout -q integrate/2026-01-01
+    git merge -q --ff-only main || { echo "SURFACES FF FAIL (integrate must catch up to base)"; exit 1; }
+    "$SELF" land T-SF >/dev/null 2>&1 || { echo "SURFACES LAND FAIL"; exit 1; }
+    "$SELF" seal 2026-01-01 >/dev/null 2>&1 || { echo "SURFACES SEAL FAIL"; exit 1; }
+    echo 1 2>/dev/null > "$(git rev-parse --git-common-dir)/worktrees/T-SF/polaris-beat" || true   # the lane walked away — see the spine's T-1 done
+    "$SELF" done T-SF > "$T/sfdone.out" 2>&1 || { cat "$T/sfdone.out"; echo "SURFACES DONE FAIL"; exit 1; }
+    grep -q '1 surface row(s) written' "$T/sfdone.out" || { cat "$T/sfdone.out"; echo "SURFACES DONE LINE FAIL (done must report the row it wrote)"; exit 1; }
+    sfrow="$(grep -v '^[[:space:]]*#' ops/SURFACES.tsv | grep -v '^[[:space:]]*$' || true)"
+    [ "$sfrow" = "$(printf 'src/sf/\ttests/sf/\tsh -c "echo MAPPED >> %s/sf.ran"\tthe sf surface [T-SF]' "$T")" ] \
+      || { printf '%s\n' "$sfrow"; echo "SURFACES ROW FAIL (exactly ONE row — surface, tests, cmd, note [ID] — from the item, by done)"; exit 1; }
+    git log -1 --format=%s main | grep -q '^docs(surfaces): T-SF' || { git log -3 --format=%s main; echo "SURFACES COMMIT FAIL (rows alone land as ONE docs(surfaces): <ID> commit on base)"; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { git status --porcelain; echo "SURFACES DONE DIRTY FAIL (done commits the row, never leaves it in the tree)"; exit 1; }
+    sfdone="$(git rev-parse main)"
+    # (3) the stale-tests gate: a second task owning both dirs changes the source alone — verify
+    #     refuses on stderr naming path + surface, handoff refuses and the task STAYS in active/;
+    #     a change under tests/sf/ too — verify passes and says how many rows it checked.
+    #     (4) a comment-only added line under the surface is not a surface change.
+    printf -- '---\nid: T-SF2\ntitle: sf refactor\ntype: feature\nscope: src\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/sf/\n  - tests/sf/\napproved:\nverify: []\n---\n## Notes\n' > ops/board/ready/T-SF2.md
+    "$SELF" claim T-SF2 >/dev/null || { echo "SURFACES CLAIM2 FAIL"; exit 1; }
+    ( cd .polaris/wt/T-SF2 && echo refactor >> src/sf/a.txt && git commit -qam 'sf: source only'
+      "$SELF" verify T-SF2 > "$T/sfv1.out" 2>"$T/sfv1.err" && { cat "$T/sfv1.out"; echo "SURFACES STALE FAIL (a mapped surface changed and its tests did not — verify must rc 1)"; exit 1; }
+      grep -q "SURFACES stale: src/sf/a.txt changed under 'src/sf/'" "$T/sfv1.err" || { cat "$T/sfv1.err"; echo "SURFACES STALE MSG FAIL (the deny names the path and the surface, on stderr)"; exit 1; }
+      "$SELF" handoff T-SF2 >/dev/null 2>&1 && { echo "SURFACES HANDOFF GATE FAIL (handoff must refuse the same diff)"; exit 1; }
+      [ -f "$T/repo/ops/board/active/T-SF2.md" ] || { echo "SURFACES HANDOFF MOVED FAIL (a refused handoff must leave the task in active/)"; exit 1; }
+      echo more >> tests/sf/a_test.txt && git commit -qam 'sf: tests too'
+      "$SELF" verify T-SF2 > "$T/sfv2.out" 2>&1 || { cat "$T/sfv2.out"; echo "SURFACES FRESH FAIL (the tests moved too — verify must rc 0)"; exit 1; }
+      grep -q 'surfaces clean: 1 row(s) checked' "$T/sfv2.out" || { cat "$T/sfv2.out"; echo "SURFACES CLEAN LINE FAIL (a clean pass with rows present says how many it checked)"; exit 1; }
+      git reset -q --hard HEAD~2 && printf '# a comment, nothing more\n' >> src/sf/a.txt && git commit -qam 'sf: comment only'
+      "$SELF" verify T-SF2 >/dev/null 2>&1 || { echo "SURFACES COMMENT FAIL (a comment-only added line gates nothing)"; exit 1; }
+      git reset -q --hard HEAD~1 && echo refactor >> src/sf/a.txt && git commit -qam 'sf: source only again'
+      "$SELF" verify T-SF2 >/dev/null 2>&1 && { echo "SURFACES STALE AGAIN FAIL (no approval yet — verify must still refuse)"; exit 1; }
+      true ) || exit 1
+    # (5) the ONE exemption is a human's recorded decision, from the primary: no ask rule covers
+    #     src/sf/ — the ROW alone gates it, and the row alone must let approve record the exception;
+    #     the same approve on feat/* still refuses (a Builder never clears its own gate).
+    "$SELF" approve T-SF2 src/sf/ -m drill > "$T/sfap.out" 2>&1 || { cat "$T/sfap.out"; echo "SURFACES APPROVE FAIL (a SURFACES row gates the scope — approve must record the exception)"; exit 1; }
+    ( cd .polaris/wt/T-SF2
+      "$SELF" verify T-SF2 > "$T/sfv3.out" 2>&1 || { cat "$T/sfv3.out"; echo "SURFACES EXEMPT FAIL (the recorded approval must clear the gate)"; exit 1; }
+      grep -q 'SURFACES exception used' "$T/sfv3.out" || { cat "$T/sfv3.out"; echo "SURFACES EXEMPT LINE FAIL (a pass BECAUSE of an approval must say so)"; exit 1; }
+      "$SELF" approve T-SF2 src/sf/ -m self-approval >/dev/null 2>&1 && { echo "SURFACES SELF-APPROVE FAIL (approve on feat/* must still refuse)"; exit 1; }
+      true ) || exit 1
+    "$SELF" release T-SF2 --to ready -m drill >/dev/null 2>&1 || { echo "SURFACES RELEASE FAIL"; exit 1; }
+    rm -f ops/board/ready/T-SF2.md
+    git branch -q -D feat/T-SF2 2>/dev/null || true
+    # (6) selection — with test_select: set, qa runs ONLY the mapped row's command and says so in
+    #     its own report line, and the stamp records what was proven. sf.ran is the witness: MAPPED
+    #     comes from the row's cmd, FULL from test:, TPL from the test_select: template. The keys
+    #     are committed FIRST, so the change set of every probe below holds only the probe's path.
+    printf 'test: sh -c "echo FULL >> %s/sf.ran"\ntest_select: sh -c "echo TPL {tests} >> %s/sf.ran"\n' "$T" "$T" >> ops/CONVENTIONS.md
+    git add -A; git commit -qm 'surfaces drill: selection on'
+    sfc1="$(git rev-parse main)"
+    echo more >> src/sf/a.txt; git commit -qam 'surfaces drill: a mapped change'
+    sfc2="$(git rev-parse main)"
+    printf '%s %s full\n' "$sfc1" "$(date +%s)" > .polaris/suite-stamp      # an ancestor stamp: the change set is HEAD~1..HEAD
+    : > "$T/sf.ran"
+    "$SELF" qa > "$T/sfqa1.out" 2>&1 || true          # rc is not under test — the suite report is (T-131)
+    grep -q 'test — green (scoped: 1 command(s))' "$T/sfqa1.out" || { cat "$T/sfqa1.out"; echo "SURFACES SCOPED FAIL (a fully mapped change runs only its row's command)"; exit 1; }
+    grep -q MAPPED "$T/sf.ran" || { echo "SURFACES SCOPED RAN FAIL (the row's cmd must actually run)"; exit 1; }
+    grep -q FULL "$T/sf.ran" && { echo "SURFACES SCOPED FULL FAIL (test: must NOT run on a fully mapped change)"; exit 1; }
+    [ -f .polaris/suite-stamp ] || { cat "$T/sfqa1.out"; echo "SURFACES STAMP MISSING FAIL (a green scoped qa stamps HEAD — the report above says why it did not)"; exit 1; }
+    read -r sfsha sfep sfsc < .polaris/suite-stamp
+    [ "$sfsha" = "$sfc2" ] && [ "$sfsc" = scoped ] || { cat "$T/sfqa1.out"; cat .polaris/suite-stamp; echo "SURFACES STAMP SCOPED FAIL (want '<HEAD> <epoch> scoped')"; exit 1; }
+    echo more >> src/a.txt; git commit -qam 'surfaces drill: an unmapped change'
+    sfc3="$(git rev-parse main)"
+    "$SELF" qa > "$T/sfqa2.out" 2>&1 || true
+    grep -q 'running the whole suite' "$T/sfqa2.out" || { cat "$T/sfqa2.out"; echo "SURFACES UNMAPPED FAIL (one unmapped path ⇒ the whole suite, and qa says so)"; exit 1; }
+    grep -q FULL "$T/sf.ran" || { cat "$T/sfqa2.out"; echo "SURFACES UNMAPPED RAN FAIL (test: must run verbatim)"; exit 1; }
+    read -r sfsha sfep sfsc < .polaris/suite-stamp
+    [ "$sfsha" = "$sfc3" ] && [ "$sfsc" = full ] || { cat "$T/sfqa2.out"; cat .polaris/suite-stamp; echo "SURFACES STAMP FULL FAIL (want '<HEAD> <epoch> full')"; exit 1; }
+    echo more >> src/sf/a.txt; git commit -qam 'surfaces drill: a second mapped change'
+    sfc4="$(git rev-parse main)"
+    sffull="$(grep -c FULL "$T/sf.ran" || true)"
+    "$SELF" qa --full > "$T/sfqa3.out" 2>&1 || true
+    [ "$(grep -c FULL "$T/sf.ran" || true)" -gt "$sffull" ] || { cat "$T/sfqa3.out"; echo "SURFACES --FULL FAIL (qa --full runs test: verbatim even on a mapped change)"; exit 1; }
+    grep -q 'test — green (scoped' "$T/sfqa3.out" && { cat "$T/sfqa3.out"; echo "SURFACES --FULL SELECTED FAIL (--full never selects)"; exit 1; }
+    read -r sfsha sfep sfsc < .polaris/suite-stamp
+    [ "$sfsha" = "$sfc4" ] && [ "$sfsc" = full ] || { cat "$T/sfqa3.out"; cat .polaris/suite-stamp; echo "SURFACES --FULL STAMP FAIL (want '<HEAD> <epoch> full')"; exit 1; }
+    "$SELF" qa > "$T/sfqa4.out" 2>&1 || true
+    grep -q 'skipped, proven full' "$T/sfqa4.out" || { cat "$T/sfqa4.out"; echo "SURFACES SKIP FAIL (a stamp naming HEAD skips the suite and says what was proven)"; exit 1; }
+    printf 'src/tpl/\ttests/tpl/\t-\ta template row [drill]\n' >> ops/SURFACES.tsv     # by hand: this is the fixture, not a lane
+    mkdir -p src/tpl && echo t > src/tpl/x.txt && git add -A && git commit -qm 'surfaces drill: a - row and its change'
+    "$SELF" qa > "$T/sfqa5.out" 2>&1 || true
+    grep -q 'TPL tests/tpl/' "$T/sf.ran" || { cat "$T/sfqa5.out"; echo "SURFACES TEMPLATE FAIL (a - row runs test_select: with {tests} = its tests glob)"; exit 1; }
+    grep -q 'test — green (scoped: 1 command(s))' "$T/sfqa5.out" || { cat "$T/sfqa5.out"; echo "SURFACES TEMPLATE LINE FAIL (the template is one selected command)"; exit 1; }
+    # (7) health — a tests glob covering its own surface is the one row shape the map cannot
+    #     survive (D6): `surfaces` refuses it, drift carries it as a finding, --strict goes red;
+    #     the row gone, drift is clean again.
+    printf 'src/bad/\tsrc/bad/\t-\ta self-covering row [drill]\n' >> ops/SURFACES.tsv
+    "$SELF" surfaces > "$T/sfs.out" 2>&1 && { cat "$T/sfs.out"; echo "SURFACES HEALTH RC FAIL (a tests glob covering its own surface must rc 1)"; exit 1; }
+    tail -1 "$T/sfs.out" | grep -q '^⛔' || { cat "$T/sfs.out"; echo "SURFACES HEALTH TAIL FAIL (the last line is the ⛔ verdict)"; exit 1; }
+    "$SELF" drift > "$T/sfd1.out" 2>&1 || true
+    grep -q 'SURFACES: row' "$T/sfd1.out" || { cat "$T/sfd1.out"; echo "SURFACES DRIFT FAIL (the ⛔ row must be a drift finding)"; exit 1; }
+    ( "$SELF" drift --strict >/dev/null 2>&1 ) && { echo "SURFACES DRIFT STRICT FAIL (a self-covering row must make --strict rc 1)"; exit 1; }
+    sed -i.bak '/a self-covering row \[drill\]/d' ops/SURFACES.tsv && rm -f ops/SURFACES.tsv.bak
+    "$SELF" drift > "$T/sfd2.out" 2>&1 || { cat "$T/sfd2.out"; echo "SURFACES DRIFT CLEAN RC FAIL (row removed ⇒ drift rc 0)"; exit 1; }
+    grep -q 'drift: board clean' "$T/sfd2.out" || { cat "$T/sfd2.out"; echo "SURFACES DRIFT CLEAN FAIL (row removed ⇒ drift clean)"; exit 1; }
+    # hermetic, phase 1: the sealed wave stays, like the spine's own; the probe commits go (reset to
+    # the post-done base), ops/SURFACES.tsv is header-only again (as found, from the pre-drill
+    # commit), the CONVENTIONS keys are gone. Steps 8–10 build on THIS base on purpose: the
+    # activation needs a map with no rows and a layout the engine has never seen.
+    git reset -q --hard "$sfdone"
+    git show "$sf0:ops/SURFACES.tsv" > ops/SURFACES.tsv
+    if [ -f "$T/sf-conv.bak" ]; then cp "$T/sf-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    git add -A; git commit -qm 'surfaces drill cleanup' >/dev/null 2>&1 || true
+    sfclean="$(git rev-parse main)"
+    cp ops/SURFACES.tsv "$T/sfmap0"
+    # (8) the activation (test-surfaces.md v2 § 14 · § 17): --scaffold on a repo with no manifest
+    #     says NORUNNER, rc 0, and the map is still the seeded header, byte for byte — the scaffold
+    #     never guesses a runner, and proposing writes nothing.
+    "$SELF" surfaces --scaffold > "$T/sfsc1.out" 2>&1 || { cat "$T/sfsc1.out"; echo "SURFACES NORUNNER RC FAIL (no runner is an answer, rc 0)"; exit 1; }
+    grep -q 'no test runner this kit can scope' "$T/sfsc1.out" || { cat "$T/sfsc1.out"; echo "SURFACES NORUNNER FAIL (no manifest ⇒ the NORUNNER line, never a guessed runner)"; exit 1; }
+    cmp -s "$T/sfmap0" ops/SURFACES.tsv || { echo "SURFACES NORUNNER WROTE FAIL (--scaffold writes nothing: the map must still be the seeded header)"; exit 1; }
+    # (9) the repo gains a pytest layout — pytest.ini · src/sf2/a.py · tests/sf2/test_a.py — plus
+    #     lib/sf/b.txt, a SECOND source dir named sf: the restored base still holds T-SF's src/sf/
+    #     and tests/sf/, which the engine pairs on its own (measured: two rows), so the twin makes
+    #     that pairing AMBIGUOUS and the engine must say so and write exactly the sf2 row (D6: the
+    #     refusal is the assertion). ops/KEYS.tsv from the kit and a CONVENTIONS holding only
+    #     voice: + test: make doctor print BOTH activation lines first — the surfaces nudge (a
+    #     runner it can scope, a map with no rows) and first-run's preferences line, which names
+    #     the pending keys in the REAL registry's order (claim sits above voice and adhd there).
+    #     Then --scaffold --apply: one [scaffold] row, test_select: set, the map healthy; a rerun
+    #     proposes nothing and writes nothing; from a feat/* worktree it refuses on stderr and
+    #     writes nothing. doctor's rc is never under test — it also checks CLAUDE.md, hooks and the
+    #     brain (T-131); every assertion is rc + file state + the line itself.
+    mkdir -p src/sf2 tests/sf2 lib/sf
+    printf 'A = 1\n' > src/sf2/a.py; printf 'def test_a():\n    pass\n' > tests/sf2/test_a.py; printf '[pytest]\n' > pytest.ini; echo b > lib/sf/b.txt
+    git add -A; git commit -qm 'surfaces drill: a pytest layout'
+    cp "$OPS_DIR/KEYS.tsv" ops/KEYS.tsv
+    printf 'voice: standard\ntest: true\n' > ops/CONVENTIONS.md
+    "$SELF" doctor > "$T/sfdoc1.out" 2>&1 || true
+    grep -q 'surfaces: none mapped' "$T/sfdoc1.out" || { cat "$T/sfdoc1.out"; echo "SURFACES NUDGE FAIL (a scopeable runner + an empty map ⇒ doctor says surfaces: none mapped)"; exit 1; }
+    grep -q 'preferences never set here: claim · adhd — one round of questions: ops/polaris interview' "$T/sfdoc1.out" || { cat "$T/sfdoc1.out"; echo "SURFACES PREFS FAIL (voice: set, claim and adhd not ⇒ doctor's preferences line names claim · adhd, registry order)"; exit 1; }
+    "$SELF" surfaces --scaffold --apply > "$T/sfsc2.out" 2>&1 || { cat "$T/sfsc2.out"; echo "SURFACES APPLY RC FAIL"; exit 1; }
+    grep -q 'skipped: tests/sf/ — ambiguous: sf matches 2 dirs (lib/sf src/sf)' "$T/sfsc2.out" || { cat "$T/sfsc2.out"; echo "SURFACES APPLY AMBIGUOUS FAIL (two sf dirs ⇒ tests/sf/ is skipped aloud, never guessed)"; exit 1; }
+    grep -q '1 row(s) written to ops/SURFACES.tsv · test_select: set' "$T/sfsc2.out" || { cat "$T/sfsc2.out"; echo "SURFACES APPLY LINE FAIL (exactly one row written and test_select: set)"; exit 1; }
+    sfrow="$(grep -v '^[[:space:]]*#' ops/SURFACES.tsv | grep -v '^[[:space:]]*$' || true)"
+    [ "$sfrow" = "$(printf 'src/sf2/\ttests/sf2/\tpytest tests/sf2/\tsf2 tests [scaffold]')" ] \
+      || { printf '%s\n' "$sfrow"; echo "SURFACES APPLY ROW FAIL (exactly ONE non-comment row — the sf2 pairing, ending [scaffold])"; exit 1; }
+    grep -q '^test_select: pytest {tests}' ops/CONVENTIONS.md || { cat ops/CONVENTIONS.md; echo "SURFACES APPLY SELECT FAIL (test_select: pytest {tests} must now be live in CONVENTIONS)"; exit 1; }
+    "$SELF" surfaces > "$T/sfsc3.out" 2>&1 || { cat "$T/sfsc3.out"; echo "SURFACES APPLY HEALTH FAIL (the written row must pass the health check: surfaces rc 0)"; exit 1; }
+    cp ops/SURFACES.tsv "$T/sfmap1"; cp ops/CONVENTIONS.md "$T/sfconv1"
+    "$SELF" surfaces --scaffold --apply > "$T/sfsc4.out" 2>&1 || { cat "$T/sfsc4.out"; echo "SURFACES REAPPLY RC FAIL"; exit 1; }
+    grep -q 'nothing to propose' "$T/sfsc4.out" || { cat "$T/sfsc4.out"; echo "SURFACES REAPPLY FAIL (a second run proposes nothing: the row is already mapped)"; exit 1; }
+    cmp -s "$T/sfmap1" ops/SURFACES.tsv && cmp -s "$T/sfconv1" ops/CONVENTIONS.md \
+      || { echo "SURFACES REAPPLY WROTE FAIL (a second run writes nothing: both files byte-identical)"; exit 1; }
+    git worktree add -q "$T/sf3wt" -b feat/T-SF3 >/dev/null 2>&1 || { echo "SURFACES WORKTREE FAIL"; exit 1; }
+    ( cd "$T/sf3wt" && "$SELF" surfaces --scaffold --apply > "$T/sfsc5.out" 2> "$T/sfsc5.err" ) \
+      && { cat "$T/sfsc5.out"; echo "SURFACES FEAT RC FAIL (--apply from a feat/* worktree must rc 1)"; exit 1; }
+    grep -q 'surfaces --scaffold --apply runs on main only' "$T/sfsc5.err" || { cat "$T/sfsc5.err"; echo "SURFACES FEAT MSG FAIL (the refusal, on stderr, naming the base)"; exit 1; }
+    cmp -s "$T/sfmap1" ops/SURFACES.tsv && cmp -s "$T/sfconv1" ops/CONVENTIONS.md \
+      || { echo "SURFACES FEAT WROTE FAIL (a refused --apply writes nothing)"; exit 1; }
+    git worktree remove --force "$T/sf3wt" >/dev/null 2>&1; git branch -qD feat/T-SF3 >/dev/null 2>&1 || true
+    # (10) the interview answers the two pending preferences on the base (first-run.md § 2): both
+    #      land as live lines in CONVENTIONS, and doctor's preferences line is gone — the surfaces
+    #      nudge too, now that a row exists.
+    "$SELF" interview --set adhd=off --set claim=local-lock > "$T/sfiv.out" 2>&1 || { cat "$T/sfiv.out"; echo "SURFACES INTERVIEW RC FAIL"; exit 1; }
+    grep -q '^adhd: off' ops/CONVENTIONS.md && grep -q '^claim: local-lock' ops/CONVENTIONS.md \
+      || { cat ops/CONVENTIONS.md; echo "SURFACES INTERVIEW WRITE FAIL (both answers must be live lines in CONVENTIONS)"; exit 1; }
+    "$SELF" doctor > "$T/sfdoc2.out" 2>&1 || true
+    grep -q 'preferences never set here' "$T/sfdoc2.out" && { cat "$T/sfdoc2.out"; echo "SURFACES PREFS GONE FAIL (every preference answered ⇒ no preferences line)"; exit 1; }
+    grep -q 'surfaces: none mapped' "$T/sfdoc2.out" && { cat "$T/sfdoc2.out"; echo "SURFACES NUDGE GONE FAIL (a mapped row ⇒ no nudge)"; exit 1; }
+    # hermetic, phase 2: steps 8–10 go the same way — reset to the restored base (the layout
+    # commit, the scaffold row and the CONVENTIONS keys with it), the copied registry and the probe
+    # worktree + branch gone; then the whole-drill checks prove nothing survived from any step.
+    git reset -q --hard "$sfclean"
+    rm -f ops/KEYS.tsv
+    [ -f "$T/sf-conv.bak" ] || rm -f ops/CONVENTIONS.md
+    rm -f ops/board/done/T-SF.md .polaris/suite-stamp .polaris/last-suite-seconds "$T/sf.ran" "$T/sf-conv.bak"
+    [ -z "$(git status --porcelain)" ] || { git status --porcelain; echo "SURFACES HERMETIC FAIL (the drill must leave the tree clean)"; exit 1; }
+    grep -v '^[[:space:]]*#' ops/SURFACES.tsv | grep -q '[^[:space:]]' && { echo "SURFACES HERMETIC ROWS FAIL (ops/SURFACES.tsv must be header-only again)"; exit 1; }
+    git rev-parse -q --verify refs/heads/feat/T-SF >/dev/null 2>&1 && { echo "SURFACES HERMETIC BRANCH FAIL (feat/T-SF must be gone)"; exit 1; }
+    git rev-parse -q --verify refs/heads/feat/T-SF2 >/dev/null 2>&1 && { echo "SURFACES HERMETIC BRANCH2 FAIL (feat/T-SF2 must be gone)"; exit 1; }
+    git rev-parse -q --verify refs/heads/feat/T-SF3 >/dev/null 2>&1 && { echo "SURFACES HERMETIC BRANCH3 FAIL (feat/T-SF3 must be gone)"; exit 1; }
+    [ -d .polaris/wt/T-SF ] || [ -d .polaris/wt/T-SF2 ] || [ -d "$T/sf3wt" ] && { echo "SURFACES HERMETIC WORKTREE FAIL (every probe worktree must be gone)"; exit 1; }
+    true
+}
 drill_drift() {
     # --- v5: drift — seeded overlap must be found; --strict must go red, then green
     # Self-provision T-2: the rules drill (T-046) now removes its own T-2, and --only drift skips

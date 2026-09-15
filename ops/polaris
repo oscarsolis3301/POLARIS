@@ -141,11 +141,12 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)
   triage                         which LANE this board's work belongs in — line 1 is one word:
-                                 solo (one context, zero subagents; 1 task ≤3pts, risk normal,
-                                 express on, publish direct) · express (one task, one builder,
-                                 one integrator) · full (everything else). Reasons follow on
-                                 stderr-style note lines. Decide with this, never by re-reading
-                                 the board and weighing the six conditions by hand.
+                                 solo (one context, zero subagents; 1 task ≤3pts — or up to 4
+                                 tasks, ≤3pts each and ≤6pts in all, worked one at a time — risk
+                                 normal, express on, publish direct) · express (one task, one
+                                 builder, one integrator) · full (everything else). Reasons follow
+                                 on note lines. Decide with this, never by re-reading the board
+                                 and weighing the conditions by hand.
   route [<ID> | --role <R> | --points <N> [--risk <R>]]
                                  which MODEL TIER runs a piece of work — line 1 is always one
                                  word: strong | mid | cheap (a task's model: frontmatter
@@ -159,13 +160,28 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  --do performs a promote under the board lock · --brief re-anchors a chat
   drift [--strict]               mechanical board-hygiene audit (overlap · ready gate · cruft · stale refs)
   rules                          list + health-check ops/RULES.tsv (repo policy as data)
-  qa [--force]                   is everything okay, in ONE shot: test/lint/typecheck/build/uat
+  surfaces [--scaffold [--apply]]
+                                 list + health-check ops/SURFACES.tsv (which tests cover which
+                                 source paths, as data): refuses a row whose tests glob covers its
+                                 own surface, flags a glob matching 0 or >200 tracked files. Rows
+                                 are written ONLY by `done` from a task's surface: list, or by
+                                 --scaffold --apply — never by hand (RULES-guarded); drift carries
+                                 the ⛔ findings. --scaffold PROPOSES rows from the stack's own
+                                 layout (pytest · jest · vitest · go): only pairings the layout
+                                 makes unambiguous, over-selecting in doubt, the ambiguous ones
+                                 listed as skipped; writes nothing. --apply writes those rows
+                                 (tagged [scaffold]) and sets test_select: when it is unset — on
+                                 <base> only; nothing is committed for you
+  qa [--force] [--full]          is everything okay, in ONE shot: test/lint/typecheck/build/uat
                                  from CONVENTIONS + drift --strict + doctor env check. Runs every
                                  check even after a red; rc 1 if anything was red.
                                  SKIPS the suite when HEAD is unchanged since the last green run
                                  and the tree is clean (.polaris/suite-stamp) — drift and doctor
                                  still run every time. --force always re-runs the suite.
-                                 `finish` runs this for you at the close.
+                                 With test_select: set, test: runs ONLY the SURFACES.tsv commands
+                                 the changed paths map to (every changed path needs a row, else
+                                 the whole suite runs); the stamp records full|scoped.
+                                 --full runs test: verbatim. `finish` runs this for you at the close.
   bg run <name> [--force] [-- <cmd…>]
                                  detach a suite past the harness's 600s tool cap and keep working:
                                  a bare CONVENTIONS suite key (test test_fast lint typecheck build
@@ -200,6 +216,16 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  unlocks (from ops/KEYS.tsv). Uncomment a line to enable that
                                  feature; adopt itself never edits a value, never uncomments, and
                                  never changes behavior. Idempotent — a second run appends nothing
+  interview [--pending | --set <key>=<value> …]
+                                 the preferences a repo cannot derive — how to be talked to
+                                 (voice), ADHD-shaped replies (adhd), one computer or several
+                                 (claim) — generated from ops/KEYS.tsv's ask column. Plain =
+                                 print what is still unanswered as QUESTION/OPTION lines (ask
+                                 them in ONE round); --set writes the answers into
+                                 ops/CONVENTIONS.md (a stub is replaced in place) and applies
+                                 them (adhd: on lets /i-have-adhd fire on its own); --pending =
+                                 rc 1 + one line when anything is unanswered. Never runs from
+                                 update --auto
   slim [--apply | --restore]     the per-context TOKEN TAX, measured: every skill/agent/command
                                  definition under ~/.claude injects its name+description into the
                                  system prompt of every session AND every subagent it spawns,
@@ -235,7 +261,7 @@ esac
 # (ops/contracts/module-layout.md v2 — both lists stay LITERAL, never a glob.)
 case "${1:-}" in
   _match|_rules|_guard) _mods="core ownership" ;;
-  *)             _mods="core ownership workspace builder integrate knowledge search observe admin bg awake handover
+  *)             _mods="core ownership workspace surfaces builder integrate knowledge search observe admin bg awake handover
                         selftest/spine selftest/board selftest/history selftest/report
                         selftest/brain selftest/policy selftest/remote selftest/fast" ;;
 esac
@@ -276,6 +302,7 @@ WHO=""                                                     # filled on demand by
 EVENTS="$BOARD/EVENTS.ndjson"
 
 RULES="$OPS/RULES.tsv"
+SURFACES="$OPS/SURFACES.tsv"
 MUTEX="$LOCKS/.board-mutex"
 FAIL_LOCK_ID=""
 PUB="direct"
@@ -332,6 +359,7 @@ case "${1:-}" in
   route)      shift; cmd_route "$@";;   # no update_check_maybe: read-only oracle, called before EVERY spawn — keep it quiet + pure
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
   rules)      cmd_rules;;
+  surfaces)   shift 2>/dev/null || true; cmd_surfaces "$@";;   # no update_check_maybe: read-only, drift calls it
   qa)         shift 2>/dev/null || true; cmd_qa "${1:-}";;
   bg)         shift; case "${1:-}" in run) awake_ensure || true;; esac; cmd_bg "$@";;   # no update_check_maybe:
               # run/status/tail/wait ride hot agent loops — keep them quiet + pure. Only `run` ensures the
@@ -346,6 +374,7 @@ case "${1:-}" in
   fleet)      shift; cmd_fleet "$@";;
   upgrade)    cmd_upgrade;;
   adopt)      cmd_adopt;;
+  interview)  shift; cmd_interview "$@";;
   slim)       shift 2>/dev/null || true; cmd_slim "${1:-}";;
   version)    update_check_maybe force || true; cmd_version;;
   update)     shift; cmd_update "$@";;

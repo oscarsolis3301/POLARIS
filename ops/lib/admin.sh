@@ -28,8 +28,13 @@ cmd_init_board() {
 #.env	path	-	secrets never enter the repo
 #migrations/	path	-	schema changes are a human decision (stop-and-ask)
 #src/	content	console\.log\(	no stray console.log in src — use the logger
+#ops/SURFACES.tsv	path	-	rows come from a task's surface: list via polaris done — edit the task, never this file
 RUL
   fi
+  # ops/SURFACES.tsv (ops/contracts/test-surfaces.md): the header only, and only when absent —
+  # rows arrive from a task's surface: list when `done` lands it. The RULES line above stays
+  # commented on purpose: armed in every drill fixture, check_rules would scan (and talk) in every drill.
+  surfaces_seed
   grep -q 'EVENTS\.ndjson merge=union' "$PRIMARY/.gitattributes" 2>/dev/null \
     || echo 'ops/board/EVENTS.ndjson merge=union' >> "$PRIMARY/.gitattributes"
   say "board ready at ops/board/ · worktrees in .polaris/wt/ (gitignored) · locks in $LOCKS"
@@ -219,6 +224,31 @@ refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with wh
     [ -f "$s" ] && { cp "$s" "$dest/SKILL.md" 2>/dev/null; break; }
   done
 
+  # The output style and the vendored ADHD skill live on the MACHINE too (ops/contracts/first-run.md
+  # § 3): a fresh install arms them beside the installer skill (bootstrap.py arm_machine), and before
+  # 6.4.0 nothing else ever did — so on a box that only ever ran `update`, the style and the skill
+  # existed only inside repos where the installer had run: no style, no 🎉. Same "update the repo,
+  # update the machine" reasoning as the cached kit above; same two-path source order (kit/ first,
+  # root fallback); SILENT and fail-open. Two things this never does, pinned: the machine copy of
+  # i-have-adhd keeps `disable-model-invocation: true` — the opt-in is a REPO preference (`adhd:` in
+  # ops/CONVENTIONS.md, applied by `polaris interview`), never a machine one — and `outputStyle` in
+  # ~/.claude/settings.json is never written, because a machine-wide style would restyle every
+  # non-POLARIS repo on the box; selection stays per repo.
+  for s in "$kitsrc/kit/.claude/output-styles/polaris.md" "$kitsrc/.claude/output-styles/polaris.md"; do
+    [ -f "$s" ] || continue
+    mkdir -p "$HOME/.claude/output-styles" 2>/dev/null && cp "$s" "$HOME/.claude/output-styles/polaris.md" 2>/dev/null || true
+    break
+  done
+  for s in "$kitsrc/kit/.claude/skills/i-have-adhd" "$kitsrc/.claude/skills/i-have-adhd"; do
+    [ -f "$s/SKILL.md" ] || continue
+    if mkdir -p "$HOME/.claude/skills/i-have-adhd" 2>/dev/null; then
+      for a in SKILL.md LICENSE SOURCE.md; do
+        [ -f "$s/$a" ] && cp "$s/$a" "$HOME/.claude/skills/i-have-adhd/$a" 2>/dev/null || true
+      done
+    fi
+    break
+  done
+
   # The keep-awake hook and its presser ride the same tarball, and the MACHINE is where they live:
   # one keep-awake owner per box, hooked into ~/.claude/settings.json (ops/contracts/keep-awake.md).
   # `update` has to arm them too, or a box armed before 6.2.0 never gets them — the same "update the
@@ -399,7 +429,7 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] · 
   [ -f "$VER" ] || die "ops/VERSION missing — this kit predates versioning; reinstall from a fresh zip"
   command -v curl >/dev/null 2>&1 || die "update needs curl on PATH"
   command -v tar  >/dev/null 2>&1 || die "update needs tar on PATH"
-  local tarball repo cur sha T K
+  local tarball repo cur sha T K pending
   local parked=0
   tarball="$(ver tarball || true)"; [ -n "$tarball" ] || die "no tarball: in ops/VERSION"
   repo="$(ver repo || true)"; cur="$(ver version)"
@@ -477,6 +507,16 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] · 
      && ! grep -Eq '^(autonomy|plan_gate|builder_questions|evolve_apply):' "$CONV" 2>/dev/null; then
     note "BREAKING (6.0): agents in this repo now run hands-free BY DEFAULT — plan_gate=auto · builder_questions=default-safe · evolve_apply=auto-reversible."
     note "One line reverts it: add 'autonomy: standard' to ops/CONVENTIONS.md. Hard gates (risk: high approval, STOP-AND-ASK, RULES.tsv) are unchanged."
+  fi
+  # The preferences a repo cannot derive — how to be talked to, ADHD-shaped replies, one computer
+  # or several (ops/contracts/first-run.md § 2). The owner's ask, verbatim: "when updating, if these
+  # or any preferences have not been set yet, then prompt". This is the EXPLICIT path, and it is the
+  # only update path that ever says so: `update --auto` runs at session start on a quiet board and
+  # stays exactly one pinned line — a question there would interrupt every session in every repo
+  # on the machine. The line is rendered from interview_pending's output, the same way doctor
+  # renders it, so the two can never drift; the registry it reads is the one install.sh just wrote.
+  if [ -f "$CONV" ] && pending="$(interview_pending)"; then
+    note "preferences never set here: $pending — one round of questions: ops/polaris interview"
   fi
   note "review the diff, then commit ops/ — nothing was committed for you"
   # Reprinted LAST for the same reason the INIT epilogue below is: the park happened ~40 lines of
@@ -661,12 +701,15 @@ EOF
 # one adopt run silences both commands forever without changing any behavior.
 
 cmd_adopt() {
-  local keys="$OPS/KEYS.tsv" marker cr added=0 total=0 key since def cost
+  local keys="$OPS/KEYS.tsv" marker cr added=0 total=0 key since def cost ask
   [ -f "$keys" ] || die "no ops/KEYS.tsv here — this install predates the key registry; it ships with:  ops/polaris update"
   [ -f "$CONV" ] || die "no ops/CONVENTIONS.md — INIT has never run here, and adopt never creates it; read ops/roles/INIT.md first"
   marker='# --- known keys not set here (polaris adopt; uncomment a line to enable it) ---'
   cr="$(printf '\r')"
-  while IFS="$POLARIS_TAB" read -r key since def cost; do
+  # Five variables, not four: column 5 (`ask`, 6.4.0) is the interview's question for the three
+  # keys that carry one, and a stub must never carry it — read into `ask` and left there, so the
+  # stub line below stays byte-identical to 6.0's (ops/tests/adopt-stub pins it).
+  while IFS="$POLARIS_TAB" read -r key since def cost ask; do
     case "$key" in ''|'#'*) continue;; esac
     total=$((total + 1))
     cost="${cost%$cr}"
@@ -686,6 +729,185 @@ cmd_adopt() {
   else
     say "adopted $added stub(s) — uncomment in ops/CONVENTIONS.md to enable; nothing changed behavior"
   fi
+}
+
+# ------------------------------------------------------------------ interview (6.4.0)
+# The first-run interview, as DATA (ops/contracts/first-run.md § 2). Installing POLARIS used to ask
+# nothing: `voice:` was guessed by INIT, `claim:` defaulted, and the vendored /i-have-adhd skill
+# stayed a secret unless someone read PROTOCOL § VOICE. The questions live in ops/KEYS.tsv's fifth
+# column, `ask`, on exactly the rows a repo cannot derive — so they can never drift from the keys
+# they set, and there are never more of them than the registry carries (three in 6.4.0; the model
+# asks them in ONE round, never more than four). `interview` prints what is still unanswered as
+# QUESTION/OPTION lines; `--set` validates every answer against the row's options before writing
+# any of them; `--pending` is the one-line probe doctor and the explicit `update` epilogue print.
+# A stub (`# key:`) counts as answered — "known and deliberately unset", the same test doctor's
+# drift line uses — so one `adopt` run silences the interview on purpose. An unanswered question
+# leaves its key UNSET: unset has a documented effective default, and a recorded guess is worse
+# than no value. NEVER reached from `update --auto`, which stays exactly one pinned line.
+
+interview_pending() { # stdout: the unanswered interview keys, ` · `-joined in KEYS.tsv order · rc 0 = some · rc 1 = none, silent
+  # Pure — one awk over the two files, no fork beyond it. Doctor's presence test, byte for byte: a
+  # live `^key:` line or a `^#[[:space:]]*key:` stub is answered. No registry ⇒ nothing is ever
+  # pending; no CONVENTIONS ⇒ the same here (cmd_interview is what dies — the interview writes into
+  # it). The first file is matched by NAME, never by `FNR==NR`: an empty CONVENTIONS.md would
+  # otherwise hand its turn to the registry's first row.
+  local keys="$OPS/KEYS.tsv"
+  [ -f "$keys" ] && [ -f "$CONV" ] || return 1
+  awk -F'\t' '
+    FILENAME == ARGV[1] {
+      l = $0; sub(/\r$/, "", l)
+      if (l ~ /^#/) sub(/^#[ \t]*/, "", l)
+      if (match(l, /^[^: \t]+:/)) seen[substr(l, 1, RLENGTH - 1)] = 1
+      next
+    }
+    { sub(/\r$/, "") }
+    $1 == "" || $1 ~ /^#/ || $5 == "" { next }
+    !($1 in seen) { out = (out == "" ? $1 : out " · " $1) }
+    END { if (out == "") exit 1; print out }
+  ' "$CONV" "$keys"
+}
+
+interview_set() { # interview_set <key> <value> — write ONE key into ops/CONVENTIONS.md (temp file + mv, LF kept, never sed -i)
+  # Three write modes, decided before a byte moves (the whole file is buffered): a live `^key:` line
+  # keeps its place and its trailing `  # …` comment, only the value changes · a `# key:` stub is
+  # replaced IN PLACE by a live line carrying the registry's absent-cost as its comment · neither ⇒
+  # that same line is appended at the END, after one blank line (which also terminates an
+  # unterminated last line, as adopt's marker does). First match wins on both counts, as cfg reads.
+  local key="$1" val="$2" keys="$OPS/KEYS.tsv" tmp="$CONV.polaris-tmp"
+  awk -F'\t' -v k="$key" -v v="$val" '
+    FILENAME == ARGV[1] { sub(/\r$/, ""); if ($1 == k && cost == "") cost = $4; next }
+    {
+      n++; line[n] = $0; l = $0; sub(/\r$/, "", l)
+      if (!live && index(l, k ":") == 1) live = n
+      else if (!stub && l ~ /^#/) { s = l; sub(/^#[ \t]*/, "", s); if (index(s, k ":") == 1) stub = n }
+    }
+    END {
+      fresh = k ": " v "   # " cost
+      if (live) {
+        rest = substr(line[live], length(k) + 2)
+        tail = ""; if (match(rest, /[ \t]+#.*$/)) tail = substr(rest, RSTART)
+        line[live] = k ": " v tail
+      } else if (stub) line[stub] = fresh
+      for (i = 1; i <= n; i++) print line[i]
+      if (!live && !stub) { print ""; print fresh }
+    }
+  ' "$keys" "$CONV" > "$tmp" || { rm -f "$tmp"; return 1; }
+  mv -f "$tmp" "$CONV"
+}
+
+cmd_interview() { # interview [--pending | --set <key>=<value> …]
+  local keys="$OPS/KEYS.tsv" u='usage: polaris interview [--pending | --set <key>=<value> …]'
+  local mode=plain pairs="" p key val opts o item vals ok pending x n sets setlist claimval adhdval br skill nl='
+'
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --pending) [ "$mode" = plain ] || die "$u"; mode=pending; shift;;
+      --set)     [ "$mode" != pending ] || die "$u"
+                 [ $# -ge 2 ] || die "--set needs <key>=<value> — $u"
+                 case "$2" in *=*) ;; *) die "--set needs <key>=<value>, not '$2' — $u";; esac
+                 mode=set; pairs="$pairs$2$nl"; shift 2;;
+      *)         die "unknown flag $1 — $u";;
+    esac
+  done
+  [ -f "$CONV" ] || die "no ops/CONVENTIONS.md — INIT has never run here; the interview writes into it (ops/roles/INIT.md)"
+
+  if [ "$mode" = pending ]; then
+    # the probe doctor and update print — rc 1 + the one line when anything is unanswered, else silent
+    if pending="$(interview_pending)"; then
+      note "preferences never set here: $pending — one round of questions: ops/polaris interview"
+      return 1
+    fi
+    return 0
+  fi
+
+  if [ "$mode" = plain ]; then
+    # the questions as DATA, in KEYS.tsv order — the model turns them into ONE AskUserQuestion:
+    #   QUESTION<TAB><key><TAB><question>
+    #   OPTION<TAB><key><TAB><value><TAB><label>[<TAB>default]      (`default` marks the first option)
+    pending="$(interview_pending)" || { say "every preference is set — nothing to ask"; return 0; }
+    awk -F'\t' -v pend="$pending" '
+      BEGIN { m = split(pend, arr, " · "); for (i = 1; i <= m; i++) want[arr[i]] = 1 }
+      { sub(/\r$/, "") }
+      $1 == "" || $1 ~ /^#/ || $5 == "" || !($1 in want) { next }
+      {
+        m = split($5, part, "|")
+        printf "QUESTION\t%s\t%s\n", $1, part[1]
+        for (i = 2; i <= m; i++) {
+          eq = index(part[i], "=")
+          printf "OPTION\t%s\t%s\t%s%s\n", $1, substr(part[i], eq + 1), substr(part[i], 1, eq - 1), (i == 2 ? "\tdefault" : "")
+        }
+      }
+    ' "$keys"
+    # the tail names every pending key with its default filled in, so the answer is one paste away
+    x="$(awk -F'\t' -v pend="$pending" '
+      BEGIN { m = split(pend, arr, " · "); for (i = 1; i <= m; i++) want[arr[i]] = 1 }
+      { sub(/\r$/, "") }
+      $1 == "" || $1 ~ /^#/ || $5 == "" || !($1 in want) { next }
+      { split($5, part, "|"); d = part[2]; sub(/^[^=]*=/, "", d); n++; s = s " --set " $1 "=" d }
+      END { print n s }
+    ' "$keys")"
+    n="${x%% *}"; sets="${x#* }"
+    note "$n preference(s) never set here — ask them in ONE round (never more than 4 questions), then: ops/polaris interview $sets"
+    return 0
+  fi
+
+  # --set: ALL-OR-NOTHING — every pair is validated against the registry before any write, then the
+  # two preconditions in order (a feat/* branch, then a claim-branch answer with no origin to share
+  # the board through), and only then the writes. A valid answer is one of the row's option VALUES.
+  [ -f "$keys" ] || die "no ops/KEYS.tsv here — this install predates the key registry; it ships with:  ops/polaris update"
+  claimval=""; adhdval=""; setlist=""
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    key="${p%%=*}"; val="${p#*=}"
+    opts="$(awk -F'\t' -v k="$key" '{ sub(/\r$/, "") } $1 == k && $5 != "" { print $5; exit }' "$keys")"
+    if [ -z "$opts" ]; then
+      x="$(awk -F'\t' '{ sub(/\r$/, "") } $1 != "" && $1 !~ /^#/ && $5 != "" { s = (s == "" ? $1 : s " · " $1) } END { print s }' "$keys")"
+      die "interview: '$key' is not an interview key ($x)"
+    fi
+    o="${opts#*|}"; vals=""; ok=0
+    while [ -n "$o" ]; do
+      case "$o" in *\|*) item="${o%%|*}"; o="${o#*|}";; *) item="$o"; o="";; esac
+      item="${item#*=}"
+      vals="${vals:+$vals | }$item"
+      [ "$val" = "$item" ] && ok=1
+    done
+    [ "$ok" = 1 ] || die "interview: $key takes $vals, not '$val'"
+    case "$key" in claim) claimval="$val";; adhd) adhdval="$val";; esac
+    setlist="${setlist:+$setlist · }$key: $val"
+  done <<EOF
+$pairs
+EOF
+  [ -n "$setlist" ] || die "$u"
+  br="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  case "$br" in feat/*) die "interview --set runs on $BASE only";; esac
+  if [ "$claimval" = claim-branch ] && ! has_remote; then
+    die "claim-branch needs an origin remote — git remote add origin <url> first; nothing written"
+  fi
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    interview_set "${p%%=*}" "${p#*=}" || die "could not write $CONV — nothing else was changed"
+  done <<EOF
+$pairs
+EOF
+  # The one answer with a side effect: `adhd: on` lets the vendored skill fire on its own by flipping
+  # the opt-in flag in the REPO's copy — never the kit's (ops/tests/adhd-skill-installed pins that
+  # one at `true`). install.sh re-applies the flip on every update from the CONVENTIONS line, so the
+  # answer outlives the copy. Temp file + mv, as install.sh does it; a missing copy is a note, not a
+  # failure — the preference is recorded, and the next update installs the file it applies to.
+  if [ -n "$adhdval" ]; then
+    skill="$PRIMARY/.claude/skills/i-have-adhd/SKILL.md"
+    if [ ! -f "$skill" ]; then
+      note "⚠ .claude/skills/i-have-adhd/SKILL.md is not installed here — run: bash ops/polaris update"
+    elif [ "$adhdval" = on ]; then
+      sed 's/^disable-model-invocation: true$/disable-model-invocation: false/' "$skill" > "$skill.polaris-tmp" \
+        && mv -f "$skill.polaris-tmp" "$skill" || rm -f "$skill.polaris-tmp"
+    else
+      sed 's/^disable-model-invocation: false$/disable-model-invocation: true/' "$skill" > "$skill.polaris-tmp" \
+        && mv -f "$skill.polaris-tmp" "$skill" || rm -f "$skill.polaris-tmp"
+    fi
+  fi
+  say "set $setlist"
+  note "review, then commit ops/CONVENTIONS.md — nothing was committed for you"
 }
 
 # ------------------------------------------------------------------ slim (5.21.0)

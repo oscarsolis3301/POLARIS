@@ -1,5 +1,5 @@
 # POLARIS lib/ownership.sh — files_owned matching + RULES policy enforcement sourced by ops/polaris
-# (the lib loader): owned_match/check_ownership, the verify: runner, map_delta hint, the RULES scanners, and the guard entrypoints (_match/_rules).
+# (the lib loader): owned_match/check_ownership, the verify: runner, map_delta hint, the RULES scanners, the stale-tests gate (check_freshness), and the guard entrypoints (_match/_rules).
 
 # ------------------------------------------------------------------ ownership
 match_one() { # match_one <changed-path> <pattern> — THE matcher: exact | dir/ prefix | glob.
@@ -209,37 +209,134 @@ $(rules_lines)
 EOF
   return 0
 }
-check_rules() { # check_rules <ref> [<ID>] — every changed path + its ADDED lines vs RULES
+check_rules() { # check_rules <ref> [<ID>] — every changed path + its ADDED lines vs RULES, then the
+  # stale-tests gate (check_freshness): the ONE place both run, so verify · handoff · audit · land
+  # get the gate with no new call site — and the write-time guard never does (D4, test-surfaces.md).
   # HEAD resolves in the caller's worktree; named refs in the shared repo (as check_ownership).
   # <ID> is the claimed task, forwarded to `ask` rules so an approval recorded on it can clear one.
   # Omitted → `-` → no approvals apply and every `ask` rule denies.
-  [ -f "$RULES" ] || return 0
-  rules_lines | grep -q . || return 0
-  local ref="$1" id="${2:--}" f bad=0 tmp list ln; tmp="$(mktemp)"
-  POLARIS_ASK_CLEARED=""
+  local ref="$1" id="${2:--}" f bad=0 stale=0 tmp list ln
   gdiff() { if [ "$ref" = "HEAD" ]; then git "$@"; else git -C "$PRIMARY" "$@"; fi; }
-  list="$(gdiff diff --name-only "$BASE...$ref" 2>/dev/null)"
+  # No RULES.tsv, or no rule in it, SKIPS the RULES pass — a skip, not a return, so the freshness
+  # pass below still runs. No rule and no surface row ⇒ both passes print nothing, exactly as before.
+  if [ -f "$RULES" ] && rules_lines | grep -q .; then
+    tmp="$(mktemp)"
+    POLARIS_ASK_CLEARED=""
+    list="$(gdiff diff --name-only "$BASE...$ref" 2>/dev/null)"
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      rule_scan_path "$f" "$id" || bad=1
+      gdiff diff -U0 "$BASE...$ref" -- "$f" 2>/dev/null \
+        | grep '^+' | grep -v '^+++' | cut -c2- > "$tmp" || : > "$tmp"
+      rule_scan_content_file "$f" "$tmp" || bad=1
+    done <<EOF
+$list
+EOF
+    rm -f "$tmp"
+    # A check that passes BECAUSE of an approval must say which one. Silence would hide the exception
+    # at exactly the moment a human is meant to see it — this line rides the handoff report to the
+    # Integrator, who is the human gate for anything an `ask` rule was guarding.
+    while IFS= read -r ln; do
+      [ -n "$ln" ] && note "⚠ RULES exception used — $ln"
+    done <<EOF
+$POLARIS_ASK_CLEARED
+EOF
+    if [ "$bad" -eq 0 ]; then say "rules clean: $(rules_lines | grep -c .) rule(s) checked"
+    else printf '⛔ RULES violation — see lines above. These block even inside files_owned.\n' >&2; fi
+  fi
+  # Two flags on purpose: the RULES trailer above names a RULES failure and nothing else, and a
+  # stale-tests failure carries its own trailer — a reader must never hunt for a rule that isn't there.
+  check_freshness "$ref" "$id" || stale=1
+  [ "$bad" -eq 0 ] && [ "$stale" -eq 0 ] && return 0
+  return 1
+}
+check_freshness() { # check_freshness <ref> [<ID>] — the stale-tests gate over ops/SURFACES.tsv
+  # (ops/contracts/test-surfaces.md § 5): rc 0 clean · rc 1 a mapped surface changed and its tests
+  # did not. Until now nothing in POLARIS noticed a feature move while its tests stayed put — every
+  # gate stayed green. Per row, over the branch's changed paths: T = paths under `tests` (any change
+  # counts), S = paths under `surface` and not under `tests` carrying at least one ADDED line that is
+  # neither blank nor a `#`/`//` comment. Violation ⇔ S non-empty AND T empty — so a docs-only or
+  # comment-only diff gates nothing, the task that IS the test task passes by construction, a path no
+  # row maps is silent (D3: never a gate whose cheapest satisfying move is a lie), and a pure
+  # refactor is a violation by design. Inert without the file, or without a row in it.
+  # The ONE exemption is a human's recorded decision — the same `approved:` entries that clear `ask`
+  # rules: every path in S covered ⇒ the row passes and each clearance is announced, riding the
+  # handoff report exactly as `RULES exception used` does. No ID, or `-` ⇒ no approval applies.
+  # Reached ONLY through check_rules (verify · handoff · audit · land), never from the write-time
+  # guard: that sees one path at a time and could only ever deny the first edit of every task (D4).
+  # Matching is by ARGS (match_one), never a printf-into-owned_match pipe: startup-budget counts them.
+  [ -f "${SURFACES:-}" ] || return 0
+  surfaces_lines | grep -q . || return 0
+  local ref="$1" id="${2:--}" rows list f surface tests rcmd rnote hit hunk added="" nl='
+'
+  local k=0 bad=0 first="" s n t ok exc ln
+  rows="$(surfaces_lines)"
+  # HEAD resolves in the caller's worktree; a named ref in the shared repo (as check_ownership).
+  if [ "$ref" = "HEAD" ]; then list="$(git diff --name-only "$BASE...$ref" 2>/dev/null || true)"
+  else list="$(git -C "$PRIMARY" diff --name-only "$BASE...$ref" 2>/dev/null || true)"; fi
+  # 1. which changed paths carry a REAL change: under some row's surface (and not its tests), with an
+  #    added line that is neither blank nor a comment. One diff per such path however many rows
+  #    cover it; a path no row maps is never diffed at all.
   while IFS= read -r f; do
     [ -z "$f" ] && continue
-    rule_scan_path "$f" "$id" || bad=1
-    gdiff diff -U0 "$BASE...$ref" -- "$f" 2>/dev/null \
-      | grep '^+' | grep -v '^+++' | cut -c2- > "$tmp" || : > "$tmp"
-    rule_scan_content_file "$f" "$tmp" || bad=1
+    hit=""
+    while IFS="$POLARIS_TAB" read -r surface tests rcmd rnote; do
+      [ -n "$surface" ] && [ -n "$tests" ] || continue
+      if match_one "$f" "$surface" && ! match_one "$f" "$tests"; then hit=1; break; fi
+    done <<EOF
+$rows
+EOF
+    [ -n "$hit" ] || continue
+    if [ "$ref" = "HEAD" ]; then hunk="$(git diff -U0 "$BASE...$ref" -- "$f" 2>/dev/null || true)"
+    else hunk="$(git -C "$PRIMARY" diff -U0 "$BASE...$ref" -- "$f" 2>/dev/null || true)"; fi
+    printf '%s\n' "$hunk" | grep '^+' | grep -v '^+++' | cut -c2- \
+      | grep -v -e '^[[:space:]]*$' -e '^[[:space:]]*#' -e '^[[:space:]]*//' | grep -q . && added="$added$f$nl"
   done <<EOF
 $list
 EOF
-  rm -f "$tmp"
-  # A check that passes BECAUSE of an approval must say which one. Silence would hide the exception
-  # at exactly the moment a human is meant to see it — this line rides the handoff report to the
-  # Integrator, who is the human gate for anything an `ask` rule was guarding.
-  while IFS= read -r ln; do
-    [ -n "$ln" ] && note "⚠ RULES exception used — $ln"
-  done <<EOF
-$POLARIS_ASK_CLEARED
+  # 2. the verdict, row by row
+  while IFS="$POLARIS_TAB" read -r surface tests rcmd rnote; do
+    [ -n "$surface" ] && [ -n "$tests" ] || continue     # a short row gates nothing (`surfaces` flags it)
+    k=$((k+1)); s=""; n=0; t=""
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      if match_one "$f" "$tests"; then t=1
+      elif match_one "$f" "$surface"; then
+        case "$nl$added$nl" in *"$nl$f$nl"*) n=$((n+1)); s="$s$f$nl";; esac
+      fi
+    done <<EOF
+$list
 EOF
-  [ "$bad" -eq 0 ] && { rules_lines | grep -q . && say "rules clean: $(rules_lines | grep -c .) rule(s) checked"; return 0; }
-  printf '⛔ RULES violation — see lines above. These block even inside files_owned.\n' >&2
-  return 1
+    [ -n "$s" ] && [ -z "$t" ] || continue
+    # the exemption: a recorded approval covers EVERY path in S — announced per path, as check_rules does
+    ok=1; exc=""
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      if ask_approval_covers "$f" "$id"; then exc="$exc$f — stale-tests gate on '$surface' cleared by approved: $POLARIS_ASK_APPROVAL$nl"
+      else ok=""; fi
+    done <<EOF
+$s
+EOF
+    if [ -n "$ok" ]; then
+      while IFS= read -r ln; do
+        [ -n "$ln" ] && note "⚠ SURFACES exception used — $ln"
+      done <<EOF
+$exc
+EOF
+      continue
+    fi
+    bad=1; [ -n "$first" ] || first="$surface"
+    f="${s%%$nl*}"; [ "$n" -gt 1 ] && f="$f (+$((n-1)) more)"
+    printf "⛔ SURFACES stale: %s changed under '%s' but nothing under '%s' did — %s\n" "$f" "$surface" "$tests" "${rnote:-row $k}" >&2
+  done <<EOF
+$rows
+EOF
+  if [ "$bad" -ne 0 ]; then
+    [ "$id" != "-" ] || id='<ID>'
+    printf '⛔ SURFACES violation — a mapped surface changed and its tests did not (ops/SURFACES.tsv). Update the tests, or a human records the exception: polaris approve %s %s -m "why"\n' "$id" "$first" >&2
+    return 1
+  fi
+  say "surfaces clean: $k row(s) checked"
 }
 
 cmd_match() { # _match <repo-relative-path> <ID> — internal: hook guard + tooling share

@@ -96,17 +96,33 @@ call per spawn; routing never blocks work.
    > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    It grooms the board, runs `drift`, returns the plan. If it returns a question instead: ask the
    human, spawn a fresh planner with the brief + the answer appended.
-2.5 **Express triage — a single small change skips the full pipeline.** After the planner's report,
-   take the express path ONLY when ALL SIX hold: the plan created exactly ONE task · ≤2 points ·
-   `risk: normal` · nothing on the STOP-AND-ASK list touched · `express:` ≠ off · `publish:` = direct.
-   Any one of the six failing → run the standard full loop (steps 3–8) silently; never announce the
-   path not taken. On the express path: at the plan gate (step 3 — which still runs per `plan_gate`;
-   express changes the build/integrate shape, not the gate) disclose with the verbatim line
-   `small change — taking the express lane`, then spawn ONE builder subagent → ONE integrator subagent
-   whose kickoff names `land --express <ID>` in place of the batch land recipe → and YOU still run
-   `bash ops/polaris finish` yourself as the finish line. Skip the QA scout AND EVOLVE — ≤1 task carries
-   no signal (the EVOLVE skip rule already exists). Both subagents still carry the two standing kickoff
-   lines (brain-first + long-commands).
+2.5 **Lane — one command, then branch on its first line.** After the planner's report run
+   `bash ops/polaris triage`. Line 1 is the lane. The conditions live in that command and nowhere
+   else — it reads points, risk, `express:`, `publish:` and the RULES-guarded paths off the board —
+   so this file restates none of them, you re-weigh none of them, and you never put the choice to
+   the human: a menu of lanes is exactly the anti-pattern CLAUDE.md § STOP AND ASK names. Never
+   announce the path not taken.
+   - `solo` → spawn ONE subagent (routed per the preamble rule) and nothing else — no builder, no
+     integrator. It works the task(s) `triage` handed it one at a time and stops after its last
+     land; YOU run `bash ops/polaris finish` as the finish line. Skip the QA scout AND EVOLVE — a
+     lane this small carries no signal (the EVOLVE skip rule already exists).
+     > You are SOLO, conductor-entered. Read ops/roles/SOLO.md and execute it. Run
+     > `bash ops/polaris triage` first and work every task it hands you ONE AT A TIME — claim →
+     > build → land → `bash ops/polaris next` → the next claim. Stop after your last land: do NOT
+     > run `finish`. Return: IDs landed · one-line summary each · test results.
+     > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
+     > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
+     > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
+     > you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout.
+     > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+   - `express` → at the plan gate (step 3 — which still runs per `plan_gate`; express changes the
+     build/integrate shape, not the gate) disclose with the verbatim line
+     `small change — taking the express lane`, then spawn ONE builder subagent → ONE integrator
+     subagent whose kickoff names `land --express <ID>` in place of the batch land recipe → and YOU
+     still run `bash ops/polaris finish` yourself as the finish line. Skip the QA scout AND EVOLVE —
+     a single task carries no signal (the EVOLVE skip rule already exists). Both subagents still
+     carry the two standing kickoff lines (brain-first + long-commands).
+   - `full` → steps 3–8, silently.
 3. **Plan gate — the one human gate.** Present the plan in `voice:`: what gets built, in how many
    parallel lanes, what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
    `drain: queue` (the default) and other tasks already sitting in `ready/`, disclose that too —

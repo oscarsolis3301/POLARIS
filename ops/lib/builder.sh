@@ -2,6 +2,7 @@
 # verify/handoff/release, the grant files_owned amendment, and resume.
 
 cmd_claim() {
+  board_pull   # T-148: before the wsjf pick — a task claimed on another machine has already left ready/ (first-run.md § 5)
   local id="${1:-}" f
   local explicit=1; [ -z "$id" ] && explicit=0
   # Candidate list: an explicit ID is the only candidate; auto-pick is EVERY ready task, sorted
@@ -523,11 +524,13 @@ EOF
 }
 
 cmd_approve() { # approve <ID> <scope> -m "why" — the sibling of grant (ops/contracts/ask-approval.md).
-  # Records a HUMAN's yes to an `ask` rule on ONE task's approved: list. It records a decision, it
-  # never infers one: no ask rule gating <scope> → refuse and SAY so (approving something ungated is
-  # a no-op, never a silent write) · any feat/* branch → refuse (a Builder approving itself must be
-  # mechanically impossible, not merely discouraged) · every refusal mutates NOTHING. The approval is
-  # per-task and per-scope and expires with the task; `path` and `content` rules consult it never.
+  # Records a HUMAN's yes on ONE task's approved: list — to an `ask` rule, or to an ops/SURFACES.tsv
+  # row (the stale-tests gate's exemption, ops/contracts/test-surfaces.md § 5). It records a decision,
+  # it never infers one: nothing gating <scope> — no ask rule, no row → refuse and SAY so (approving
+  # something ungated is a no-op, never a silent write) · any feat/* branch → refuse (a Builder
+  # approving itself must be mechanically impossible, not merely discouraged) · every refusal mutates
+  # NOTHING. The approval is per-task and per-scope and expires with the task; `path` and `content`
+  # rules consult it never.
   local id="${1:-}" scope="${2:-}" msg=""
   local u='usage: polaris approve <ID> <scope> -m "why"'
   [ -n "$id" ] && [ -n "$scope" ] || die "$u"
@@ -547,8 +550,8 @@ cmd_approve() { # approve <ID> <scope> -m "why" — the sibling of grant (ops/co
   # any board column, deliberately wider than grant's active/-only: the ask belongs at the PLAN
   # gate, so the approval usually lands while the task still sits in backlog/ or ready/.
   local tf; tf="$(task_file "$id")" || die "$id is not on the board — check: ops/polaris board-fm"
-  ask_rule_matches "$scope" \
-    || die "approve refused: no ask-kind rule in ops/RULES.tsv gates '$scope' — approving something ungated is a no-op, nothing written"
+  ask_rule_matches "$scope" || surface_rows_for "$scope" | grep -q . \
+    || die "approve refused: nothing gates '$scope' — no ask-kind rule in ops/RULES.tsv and no ops/SURFACES.tsv row — approving something ungated is a no-op, nothing written"
   who
   local entry; entry="$scope — $WHO, $(date +%F): $msg"
   mutex_on
@@ -560,7 +563,7 @@ cmd_approve() { # approve <ID> <scope> -m "why" — the sibling of grant (ops/co
   sync_board
   mutex_off; trap - EXIT
   say "approved: $scope → $id approved: (a recorded human decision — per-task, per-scope, expires with the task)"
-  note "verify/handoff will name this approval when it clears the rule, so the Integrator sees the exception"
+  note "verify/handoff will name this approval when it clears the rule or the stale-tests gate, so the Integrator sees the exception"
 }
 
 # ------------------------------------------------------------------ pack (5.21.0)
@@ -675,6 +678,51 @@ EOF
     pack_section "KNOWN TRAPS IN THESE FILES"
     { pack_brain_grep learned.md "$pat"; pack_brain_grep gotchas.md "$pat"; } | grep . \
       || printf '(none recorded for these paths)\n'
+  fi
+
+  # 7c. SURFACES (ops/contracts/test-surfaces.md § 5): the tests the stale-tests gate will expect to
+  # move when this task changes a mapped surface — one line per ops/SURFACES.tsv row that overlaps an
+  # owned pattern — then the rows `done` will write from the task's own surface: items. OMITTED
+  # entirely when neither exists, so a pack that never had the section (pack-visual's golden, every
+  # repo without rows) stays byte-identical. Overlap is pat_overlap, both directions: a row nested
+  # under an owned directory trips the gate exactly as a row covering the owned file does, and the
+  # Builder must hear of both before the first edit, not at verify. Inline on purpose (no new fn).
+  local srows srow sl="" sitems sout ssurf stests scmd snote nl='
+'
+  srows="$(surfaces_lines)"
+  if [ -n "$srows" ]; then
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      while IFS= read -r srow; do
+        [ -n "$srow" ] || continue
+        pat_overlap "$p" "${srow%%$POLARIS_TAB*}" || continue
+        case "$nl$sl$nl" in *"$nl$srow$nl"*) ;; *) sl="$sl$srow$nl";; esac   # once per row, however many owned patterns hit it
+      done <<EOF_ROWS
+$srows
+EOF_ROWS
+    done <<EOF_OWN
+$owned
+EOF_OWN
+  fi
+  sitems="$(fm_list surface "$f" 2>/dev/null | grep . || true)"
+  if [ -n "$sl" ] || [ -n "$sitems" ]; then
+    pack_section "SURFACES — change these, change their tests (ops/SURFACES.tsv)"
+    while IFS="$POLARIS_TAB" read -r ssurf stests scmd snote; do
+      [ -n "$ssurf" ] || continue
+      printf '%s → %s  (%s)  — %s\n' "$ssurf" "$stests" "${scmd:--}" "$snote"
+    done <<EOF_SL
+$sl
+EOF_SL
+    if [ -n "$sitems" ]; then
+      printf 'rows done will write for this task:\n'
+      while IFS= read -r srow; do
+        [ -n "$srow" ] || continue
+        if sout="$(surface_row_from_item "$srow" "$id" "$title")"; then printf '%s\n' "$sout"
+        else printf '⚠ malformed: %s\n' "$sout"; fi
+      done <<EOF_ITEMS
+$sitems
+EOF_ITEMS
+    fi
   fi
 
   # 7b. SEE YOUR WORK (ops/contracts/visual-check.md § cmd_pack): the capture step, driven by real

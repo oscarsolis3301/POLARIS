@@ -43,8 +43,8 @@ ft_section() { # ft_section <name> — close the section: hand this subshell's a
 selftest_fast() { # the run — rc 0 all green / rc 1 any red; last line on green:
   # `✅ fast tier passed — <n> checks in <s>s`. Sources NOTHING. Each section is one subshell that
   # sets FT_SEC first, overrides whatever globals it needs, asserts, and ends with ft_section.
-  local ft_t0 ft_t1 ft_red=0 ft_n=0 ft_k ft_tf ft_conv ft_rules ft_nl ft_cr
-  ft_nl=$'\n'; ft_cr=$'\r'
+  local ft_t0 ft_t1 ft_red=0 ft_n=0 ft_k ft_tf ft_conv ft_rules ft_nl ft_cr ft_tab ft_surf ft_sel ft_sc ft_iv
+  ft_nl=$'\n'; ft_cr=$'\r'; ft_tab="$POLARIS_TAB"
   ft_t0="$(date +%s)"
   FT_TMP="$(mktemp -d)"
   trap 'rm -rf "$FT_TMP"' EXIT
@@ -265,6 +265,339 @@ EOF
     ft_assert 'app dirt only, two lines → rc 1'          ! update_dirt_overlaps_kit <<< "?? src/x.py${ft_nl} M README.md"
     ft_assert 'empty status → rc 1'                      ! update_dirt_overlaps_kit <<< ''
     ft_section dirt ) || ft_red=1
+
+
+  # ---- surfaces-tsv (test-surfaces.md § 1, § 4) — surfaces_lines over a temp ops/SURFACES.tsv:
+  # comments, blank lines and CRs go, rows survive in file order, an absent file is zero rows at
+  # rc 0, and the memo holds until _SURFACES_CACHED is reset. The memo is primed by an ft_assert
+  # call in the section shell ITSELF — a $(...) primes only its own subshell, which exits with the
+  # cache (T-134's lesson) — so the read that follows, through $(...), inherits the primed state.
+  # surfaces_seed writes the header iff the path is absent and never rewrites what exists.
+  ft_surf="$FT_TMP/SURFACES.tsv"
+  printf '%s\n' '# POLARIS SURFACES — a header line' '' '   ' > "$ft_surf"
+  printf 'src/api/\ttests/api/\t-\tthe HTTP API [T-9]\r\n' >> "$ft_surf"
+  printf '   # an indented comment\n' >> "$ft_surf"
+  printf 'kit/ops/lib/integrate.sh\tkit/ops/lib/selftest/history.sh\tbash kit/ops/polaris doctor --selftest --only express,tcm\tthe integrator lane [T-140]\n' >> "$ft_surf"
+  printf 'src/*.py\ttests/unit/\t-\tevery python file [T-1]\n' >> "$ft_surf"
+  ( FT_SEC=surfaces-tsv; SURFACES="$ft_surf"; _SURFACES_CACHED=""; _SURFACES_CACHE=""
+    ft_out="$(surfaces_lines)" || ft_out=""
+    ft_k=0; while IFS= read -r ft_line; do ft_k=$((ft_k+1)); done <<EOF
+$ft_out
+EOF
+    ft_assert 'exactly the three rows survive'   test "$ft_k" = 3
+    ft_assert 'comments dropped'                 test "${ft_out#*#}" = "$ft_out"
+    ft_assert 'CR dropped'                       test "${ft_out#*$ft_cr}" = "$ft_out"
+    ft_assert 'file order kept: row 1 first'     test "${ft_out%%$ft_nl*}" = "src/api/${ft_tab}tests/api/${ft_tab}-${ft_tab}the HTTP API [T-9]"
+    ft_assert 'a complete cmd column survives'   test "${ft_out#*"--only express,tcm${ft_tab}the integrator lane [T-140]"}" != "$ft_out"
+    ft_assert 'primes the memo, rc 0'            surfaces_lines
+    printf 'src/db/\ttests/db/\t-\ta late row [T-2]\n' >> "$ft_surf"
+    ft_assert 'memoized: an append after priming is not seen' test "$(surfaces_lines)" = "$ft_out"
+    _SURFACES_CACHED=""
+    ft_assert 'reset re-reads: the late row appears'          test "$(surfaces_lines)" = "${ft_out}${ft_nl}src/db/${ft_tab}tests/db/${ft_tab}-${ft_tab}a late row [T-2]"
+    SURFACES="$FT_TMP/no-such-file"; _SURFACES_CACHED=""
+    ft_assert 'absent file → rc 0'               surfaces_lines
+    ft_assert 'absent file → nothing'            test -z "$(surfaces_lines)"
+    ft_assert 'seed writes where absent'         surfaces_seed "$FT_TMP/seed.tsv"
+    IFS= read -r ft_line < "$FT_TMP/seed.tsv" || ft_line=""
+    ft_assert 'seeded line 1 is the # POLARIS SURFACES header' test "${ft_line#"# POLARIS SURFACES"}" != "$ft_line"
+    printf 'keep me\n' > "$FT_TMP/keep.tsv"
+    surfaces_seed "$FT_TMP/keep.tsv"
+    IFS= read -r ft_line < "$FT_TMP/keep.tsv" || ft_line=""
+    ft_assert 'seed never rewrites an existing file' test "$ft_line" = 'keep me'
+    SURFACES="$FT_TMP/seed.tsv"; _SURFACES_CACHED=""
+    ft_assert 'a seeded file is zero rows'       test -z "$(surfaces_lines)"
+    ft_section surfaces-tsv ) || ft_red=1
+
+  # ---- surfaces-match — surface_row_matches (column 1 as a files_owned pattern: exact · dir/
+  # prefix · glob, by expansion + match_one, no pipe) and surface_rows_for (every covering row,
+  # whole line, file order; rc 1 and nothing printed when none). The tsv fixture above now carries
+  # four rows — src/api/util.py is covered by the dir/ row AND the src/*.py glob row, in that order.
+  ( FT_SEC=surfaces-match; SURFACES="$ft_surf"; _SURFACES_CACHED=""; _SURFACES_CACHE=""
+    ft_assert 'exact surface'                    surface_row_matches src/a.py "src/a.py${ft_tab}tests/${ft_tab}-${ft_tab}n"
+    ft_assert 'dir/ prefix'                      surface_row_matches src/api/x/y.py "src/api/${ft_tab}tests/api/${ft_tab}-${ft_tab}n"
+    ft_assert 'glob * crosses /'                 surface_row_matches src/api/x/util_a.py "src/*/util_*.py${ft_tab}tests/${ft_tab}-${ft_tab}n"
+    ft_assert 'glob non-match rc 1'              ! surface_row_matches src/api/x/other.py "src/*/util_*.py${ft_tab}tests/${ft_tab}-${ft_tab}n"
+    ft_assert 'dir/ does not match a sibling'    ! surface_row_matches src/apix/y.py "src/api/${ft_tab}tests/${ft_tab}-${ft_tab}n"
+    ft_assert 'empty row rc 1'                   ! surface_row_matches src/a.py ''
+    ft_assert 'a one-column row still matches'   surface_row_matches src/a.py src/a.py
+    ft_out="$(surface_rows_for src/api/util.py)" || ft_out=""
+    ft_k=0; while IFS= read -r ft_line; do ft_k=$((ft_k+1)); done <<EOF
+$ft_out
+EOF
+    ft_assert 'rows_for: both covering rows'     test "$ft_k" = 2
+    ft_assert 'rows_for: file order, dir/ row first (whole line)' test "${ft_out%%$ft_nl*}" = "src/api/${ft_tab}tests/api/${ft_tab}-${ft_tab}the HTTP API [T-9]"
+    ft_assert 'rows_for: the glob row second (whole line)'        test "${ft_out#*$ft_nl}" = "src/*.py${ft_tab}tests/unit/${ft_tab}-${ft_tab}every python file [T-1]"
+    ft_assert 'rows_for: rc 0 when one row covers'  surface_rows_for kit/ops/lib/integrate.sh
+    ft_assert 'rows_for: none → rc 1'            ! surface_rows_for docs/x.md
+    ft_assert 'rows_for: none → prints nothing'  test -z "$(surface_rows_for docs/x.md)"
+    ft_section surfaces-match ) || ft_red=1
+
+  # ---- surfaces-select (test-surfaces.md § 4, § 6) — surface_select_cmd <paths-file>: the commands
+  # to run INSTEAD of test:, or ONE reason (test_select unset · no rows · no changed paths ·
+  # unmapped: <p> (+n more)). Complete cmds deduped in first-appearance order, then ONE template
+  # line with every {tests} = the space-joined distinct tests globs of the matched - rows; a
+  # template with no {tests} runs verbatim, once. ALL-OR-NOTHING: one unmapped path is the reason.
+  ft_sel="$FT_TMP/SELECT.tsv"
+  printf 'src/api/\ttests/api/\t-\tapi [T-9]\n' > "$ft_sel"
+  printf 'src/db/\ttests/db/\t-\tdb [T-8]\n' >> "$ft_sel"
+  printf 'kit/ops/lib/integrate.sh\tkit/ops/lib/selftest/history.sh\tbash kit/ops/polaris doctor --selftest --only express,tcm\tlane [T-140]\n' >> "$ft_sel"
+  printf 'kit/ops/lib/core.sh\tkit/ops/lib/selftest/fast.sh\tbash kit/ops/polaris doctor --selftest --only express,tcm\tsame cmd [T-141]\n' >> "$ft_sel"
+  printf 'kit/ops/lib/builder.sh\tkit/ops/lib/selftest/board.sh\tbash kit/ops/polaris doctor --fast\tanother cmd [T-142]\n' >> "$ft_sel"
+  printf 'test_select: bash kit/ops/polaris doctor --selftest --only {tests}\n' > "$FT_TMP/CONV-select.md"
+  printf 'test_select: a {tests} b {tests}\n' > "$FT_TMP/CONV-twice.md"
+  printf 'test_select: run-everything\n' > "$FT_TMP/CONV-verbatim.md"
+  printf 'src/api/x.py\n' > "$FT_TMP/p-api"
+  printf 'src/api/x.py\nsrc/db/y.py\nsrc/api/z.py\n' > "$FT_TMP/p-two"
+  printf 'kit/ops/lib/integrate.sh\nkit/ops/lib/core.sh\nkit/ops/lib/builder.sh\nsrc/api/x.py\n' > "$FT_TMP/p-cmds"
+  printf 'docs/x.md\n' > "$FT_TMP/p-unmapped"
+  printf 'src/api/x.py\ndocs/x.md\nREADME.md\n' > "$FT_TMP/p-mixed"
+  : > "$FT_TMP/p-empty"
+  ( FT_SEC=surfaces-select; SURFACES="$ft_sel"; CONV="$ft_conv"; _SURFACES_CACHED=""; _SURFACES_CACHE=""
+    ft_assert 'test_select unset → rc 1'         ! surface_select_cmd "$FT_TMP/p-api"
+    ft_assert 'test_select unset → the reason'   test "$(surface_select_cmd "$FT_TMP/p-api")" = 'test_select unset'
+    CONV="$FT_TMP/CONV-select.md"; SURFACES="$FT_TMP/no-such-file"; _SURFACES_CACHED=""
+    ft_assert 'no rows → the reason'             test "$(surface_select_cmd "$FT_TMP/p-api")" = 'no rows'
+    SURFACES="$ft_sel"; _SURFACES_CACHED=""
+    ft_assert 'no changed paths → the reason'    test "$(surface_select_cmd "$FT_TMP/p-empty")" = 'no changed paths'
+    ft_assert 'unmapped path → rc 1'             ! surface_select_cmd "$FT_TMP/p-unmapped"
+    ft_assert 'unmapped: names the path'         test "$(surface_select_cmd "$FT_TMP/p-unmapped")" = 'unmapped: docs/x.md'
+    ft_assert 'all-or-nothing: one mapped, two unmapped → (+1 more)' test "$(surface_select_cmd "$FT_TMP/p-mixed")" = 'unmapped: docs/x.md (+1 more)'
+    ft_assert 'one - row → the template with {tests} = its glob' test "$(surface_select_cmd "$FT_TMP/p-api")" = 'bash kit/ops/polaris doctor --selftest --only tests/api/'
+    ft_assert 'two - rows → distinct globs, space-joined, first-appearance order' test "$(surface_select_cmd "$FT_TMP/p-two")" = 'bash kit/ops/polaris doctor --selftest --only tests/api/ tests/db/'
+    ft_assert 'complete cmds deduped + ordered, the template LAST' test "$(surface_select_cmd "$FT_TMP/p-cmds")" = "bash kit/ops/polaris doctor --selftest --only express,tcm${ft_nl}bash kit/ops/polaris doctor --fast${ft_nl}bash kit/ops/polaris doctor --selftest --only tests/api/"
+    CONV="$FT_TMP/CONV-twice.md"
+    ft_assert 'every {tests} is replaced'        test "$(surface_select_cmd "$FT_TMP/p-api")" = 'a tests/api/ b tests/api/'
+    CONV="$FT_TMP/CONV-verbatim.md"
+    ft_assert 'no {tests} in the template → verbatim, once' test "$(surface_select_cmd "$FT_TMP/p-two")" = 'run-everything'
+    ft_section surfaces-select ) || ft_red=1
+
+  # ---- surfaces-item (test-surfaces.md § 3) — surface_row_from_item <item> <ID> <title>: the
+  # grammar → ONE TSV row, or rc 1 + ONE reason line. Keywords in the order tests, cmd, note; tests:
+  # required and one token; cmd: everything up to note: (trimmed, empty → -); note: the rest,
+  # absent → the title with surrounding double quotes stripped; the note carries [ID].
+  ( FT_SEC=surfaces-item
+    ft_assert 'surface + tests + note'           test "$(surface_row_from_item 'src/api/ tests: tests/api/ note: the HTTP API' T-9 'x')" = "src/api/${ft_tab}tests/api/${ft_tab}-${ft_tab}the HTTP API [T-9]"
+    ft_assert 'cmd + note, the cmd kept whole'   test "$(surface_row_from_item 'kit/ops/lib/integrate.sh tests: kit/ops/lib/selftest/history.sh cmd: bash kit/ops/polaris doctor --selftest --only express,tcm note: the integrator lane' T-140 'x')" = "kit/ops/lib/integrate.sh${ft_tab}kit/ops/lib/selftest/history.sh${ft_tab}bash kit/ops/polaris doctor --selftest --only express,tcm${ft_tab}the integrator lane [T-140]"
+    ft_assert 'no note → the title'              test "$(surface_row_from_item 'src/ tests: t/' T-1 'Plain title')" = "src/${ft_tab}t/${ft_tab}-${ft_tab}Plain title [T-1]"
+    ft_assert 'title quotes stripped'            test "$(surface_row_from_item 'src/ tests: t/' T-1 '"Quoted title"')" = "src/${ft_tab}t/${ft_tab}-${ft_tab}Quoted title [T-1]"
+    ft_assert 'cmd without note → the title'     test "$(surface_row_from_item 'src/ tests: t/ cmd: make test' T-1 'T')" = "src/${ft_tab}t/${ft_tab}make test${ft_tab}T [T-1]"
+    ft_assert 'empty cmd: → -'                   test "$(surface_row_from_item 'src/ tests: t/ cmd: note: n' T-1 'T')" = "src/${ft_tab}t/${ft_tab}-${ft_tab}n [T-1]"
+    ft_assert 'cmd and note padding trimmed'     test "$(surface_row_from_item 'src/ tests: t/ cmd:    make test    note:   n  ' T-1 'T')" = "src/${ft_tab}t/${ft_tab}make test${ft_tab}n [T-1]"
+    ft_assert 'missing tests: → rc 1'            ! surface_row_from_item 'src/ note: n' T-1 'T'
+    ft_assert "missing tests: → needs 'tests: <glob>'" test "$(surface_row_from_item 'src/ note: n' T-1 'T')" = "needs 'tests: <glob>'"
+    ft_assert 'tests: with no glob → rc 1'       ! surface_row_from_item 'src/ tests:' T-1 'T'
+    ft_assert 'empty item → empty surface'       test "$(surface_row_from_item '' T-1 'T')" = 'empty surface'
+    ft_assert 'a TAB → a TAB in the item'        test "$(surface_row_from_item "src/${ft_tab}tests: t/" T-1 'T')" = 'a TAB in the item'
+    ft_assert 'two surface tokens → not one token' test "$(surface_row_from_item 'src/a src/b tests: t/' T-1 'T')" = 'surface or tests glob is not one token'
+    ft_assert 'two tests tokens → not one token'   test "$(surface_row_from_item 'src/ tests: t/ u/' T-1 'T')" = 'surface or tests glob is not one token'
+    ft_section surfaces-item ) || ft_red=1
+
+  # ---- stamp-scope (test-surfaces.md § 6, stamp v3) — suite_stamp_scope [<file>]: field 3 of
+  # `<sha> <epoch> <scope>`; a 2-field pre-6.4 stamp reads full (every pre-6.4 writer ran
+  # everything); a CR is not part of the word; missing or empty → nothing, rc 1. The default path
+  # is $PRIMARY/.polaris/suite-stamp — the quiescent fixture's bgrc/.polaris/ already exists, so
+  # that case borrows it (no extra mkdir fork; board_quiescent never reads a stamp).
+  printf 'abc1234 1790000000 scoped\n'   > "$FT_TMP/st-scoped"
+  printf 'abc1234 1790000000 full\n'     > "$FT_TMP/st-full"
+  printf 'abc1234 1790000000\n'          > "$FT_TMP/st-two"
+  printf 'abc1234 1790000000 scoped\r\n' > "$FT_TMP/st-cr"
+  : > "$FT_TMP/st-empty"
+  printf 'def5678 1790000001 scoped\n'   > "$FT_TMP/q/bgrc/.polaris/suite-stamp"
+  ( FT_SEC=stamp-scope
+    ft_assert 'scoped'                           test "$(suite_stamp_scope "$FT_TMP/st-scoped")" = scoped
+    ft_assert 'full'                             test "$(suite_stamp_scope "$FT_TMP/st-full")" = full
+    ft_assert '2-field (pre-6.4) → full'         test "$(suite_stamp_scope "$FT_TMP/st-two")" = full
+    ft_assert 'CR-terminated scoped → scoped'    test "$(suite_stamp_scope "$FT_TMP/st-cr")" = scoped
+    ft_assert 'missing file → rc 1'              ! suite_stamp_scope "$FT_TMP/no-such-file"
+    ft_assert 'missing file → nothing'           test -z "$(suite_stamp_scope "$FT_TMP/no-such-file")"
+    ft_assert 'empty file → rc 1'                ! suite_stamp_scope "$FT_TMP/st-empty"
+    PRIMARY="$FT_TMP/q/bgrc"
+    ft_assert 'default path = $PRIMARY/.polaris/suite-stamp' test "$(suite_stamp_scope)" = scoped
+    ft_section stamp-scope ) || ft_red=1
+
+  # ---- fixtures for the activation (test-surfaces.md v2 § 13 · first-run.md § 2): PRIMARY dirs
+  # holding only the manifests surfaces_runner greps, hand-written tracked LISTS — one per layout
+  # the pairing rules must pair, refuse or fold — two registries (five columns and four) and the
+  # CONVENTIONS shapes the interview reads. Every path in a list is a fixture, never a file on disk.
+  ft_sc="$FT_TMP/sc"; ft_iv="$FT_TMP/iv"
+  mkdir -p "$ft_sc/node" "$ft_sc/py" "$ft_iv/ops5" "$ft_iv/ops4"
+  printf '%s\n' pyproject.toml src/api/x.py src/db/y.py src/util.py src/common/a.py lib/common/b.py \
+    tests/api/test_x.py tests/db/test_y.py tests/test_util.py tests/common/test_a.py README.md > "$ft_sc/ls-py"
+  printf '%s\n' pytest.ini src/api/x.py src/api/tests/test_x.py tests/api/test_y.py > "$ft_sc/ls-pkg"
+  printf '%s\n' package.json src/foo/a.ts src/foo/__tests__/a.test.ts src/bar/b.ts src/bar/b.test.ts > "$ft_sc/ls-js"
+  printf '%s\n' package.json src/foo/a.ts tests/foo/z.test.ts src/qa/q.spec.ts node_modules/m/m.test.js \
+    a/b/c/deep/d.ts tests/deep/e.test.ts > "$ft_sc/ls-js2"
+  printf '%s\n' go.mod internal/foo/x.go internal/foo/x_test.go cmd/app/main.go main_test.go > "$ft_sc/ls-go"
+  printf '%s\n' Makefile bin/tool.sh > "$ft_sc/ls-mk"
+  printf '%s\n' Cargo.toml package.json src/x.js > "$ft_sc/ls-node"
+  printf '%s\n' package.json pytest.ini go.mod > "$ft_sc/ls-all"
+  printf '%s\n' pkg/conftest.py > "$ft_sc/ls-conftest"
+  printf '%s\n' tests/x_test.py > "$ft_sc/ls-xtest"
+  printf '%s\n' pkg/tests/test_x.py > "$ft_sc/ls-nested"
+  printf '%s\n' pyproject.toml > "$ft_sc/ls-pyproject"
+  printf '%s\n' setup.cfg > "$ft_sc/ls-setupcfg"
+  : > "$ft_sc/ls-empty"
+  printf '%s\n' package.json src/a.js src/a.test.js > "$ft_sc/ls-big"     # + 250 generated files under src/gen/
+  ft_k=1; while [ "$ft_k" -le 250 ]; do printf 'src/gen/g%s.js\n' "$ft_k" >> "$ft_sc/ls-big"; ft_k=$((ft_k+1)); done
+  printf '# a map header\nsrc/api/\ttests/api/\tpytest tests/api/\tapi tests [scaffold]\r\n\nsrc/db/\ttests/other/\t-\tx\n' > "$ft_sc/map-one"
+  printf 'src/api/\ttests/api/\t-\ta\nsrc/common/a.py\ttests/common/test_a.py\t-\tb\nsrc/db/\ttests/db/\t-\tc\nsrc/util.py\ttests/test_util.py\t-\td\n' > "$ft_sc/map-all"
+  printf '# registry\n\n' > "$ft_iv/ops5/KEYS.tsv"
+  printf 'voice\t5.2.0\tstandard\thow agents talk\tHow should I talk to you?|Plain=standard|Terse=technical\n' >> "$ft_iv/ops5/KEYS.tsv"
+  printf 'adhd\t6.4.0\toff\treplies not shaped\tWant ADHD?|Not needed=off|Yes, always=on\r\n' >> "$ft_iv/ops5/KEYS.tsv"
+  printf 'plan_gate\t5.0.0\tauto\tno question here\n' >> "$ft_iv/ops5/KEYS.tsv"
+  printf 'claim\t5.0.0\tlocal-lock\tlocks stay local\tOne or several?|One computer=local-lock|Several=claim-branch\n' >> "$ft_iv/ops5/KEYS.tsv"
+  printf 'voice\t5.2.0\tstandard\thow agents talk\nclaim\t5.0.0\tlocal-lock\tlocks stay local\n' > "$ft_iv/ops4/KEYS.tsv"
+  printf 'voice: standard   # c\n' > "$ft_iv/c-live"
+  printf 'voice: technical\n# claim: local-lock   # locks stay local (since 5.0.0)\n' > "$ft_iv/c-stub"
+  printf 'voice: standard\nadhd: on\nclaim: local-lock\n' > "$ft_iv/c-all"
+  : > "$ft_iv/c-empty"
+  printf 'adhd is great\n  claim: x\n#voice: y\n' > "$ft_iv/c-body"
+  printf 'claim: local-lock\r\nvoice: standard\r\n' > "$ft_iv/c-cr"
+
+  # ---- surfaces-runner (test-surfaces.md v2 § 13) — surfaces_runner <ls-file>: ONE
+  # `<runner><TAB><template>` line rc 0, or nothing rc 1. Detection order node → pytest → go over
+  # the list + the manifests it names under PRIMARY (a fixture dir here; package.json is rewritten
+  # between asserts because the fn greps the file). What it REFUSES is the point: mocha, cargo,
+  # make, an unknown npm script — each filters by name or cannot be proven to take a path — is
+  # rc 1 and silence, never a guess (D6: a guessed template skips coverage while reporting green).
+  ( FT_SEC=surfaces-runner; PRIMARY="$ft_sc/node"
+    printf '{"scripts":{"test":"vitest --run"}}\n' > "$ft_sc/node/package.json"
+    ft_assert 'a vitest test script → vitest'   test "$(surfaces_runner "$ft_sc/ls-node")" = "vitest${ft_tab}npx vitest run {tests}"
+    printf '{"scripts":{"test":"jest --ci"}}\n' > "$ft_sc/node/package.json"
+    ft_assert 'a jest test script → jest'       test "$(surfaces_runner "$ft_sc/ls-node")" = "jest${ft_tab}npx jest {tests}"
+    printf '{"scripts":{"test":"mocha"}}\n' > "$ft_sc/node/package.json"
+    ft_out="$(surfaces_runner "$ft_sc/ls-node")" && ft_rc=0 || ft_rc=1     # one call, two facts: the fn is ~10 greps
+    ft_assert 'mocha → rc 1'                    test "$ft_rc" = 1
+    ft_assert 'mocha → nothing'                 test -z "$ft_out"
+    ft_assert 'an unknown script falls through to the next stack' test "$(surfaces_runner "$ft_sc/ls-all")" = "pytest${ft_tab}pytest {tests}"
+    printf '{"scripts":{"test":"mocha"},"jest":{}}\n' > "$ft_sc/node/package.json"
+    ft_assert 'unknown script, a jest key → jest'     test "$(surfaces_runner "$ft_sc/ls-node")" = "jest${ft_tab}npx jest {tests}"
+    printf '{"scripts":{"test":"mocha"},"vitest":{}}\n' > "$ft_sc/node/package.json"
+    ft_assert 'unknown script, a vitest key → vitest' test "$(surfaces_runner "$ft_sc/ls-node")" = "vitest${ft_tab}npx vitest run {tests}"
+    printf '{"scripts":{"test":"jest"}}\n' > "$ft_sc/node/package.json"
+    ft_assert 'order: node before pytest before go'   test "$(surfaces_runner "$ft_sc/ls-all")" = "jest${ft_tab}npx jest {tests}"
+    ft_assert 'go.mod → go, the WHOLE suite as the template' test "$(surfaces_runner "$ft_sc/ls-go")" = "go${ft_tab}go test ./..."
+    ft_assert 'a conftest.py anywhere → pytest' surfaces_runner "$ft_sc/ls-conftest"
+    ft_assert 'a nested pkg/tests/test_x.py → pytest' surfaces_runner "$ft_sc/ls-nested"
+    ft_assert 'tests/x_test.py is not a pytest tell'  ! surfaces_runner "$ft_sc/ls-xtest"
+    PRIMARY="$ft_sc/py"
+    printf '[tool.black]\n' > "$ft_sc/py/pyproject.toml"
+    ft_assert 'pyproject.toml without [tool.pytest → rc 1' ! surfaces_runner "$ft_sc/ls-pyproject"
+    printf '[tool.pytest.ini_options]\n' > "$ft_sc/py/pyproject.toml"     # the with-case is the proposal section's RUNNER line
+    printf '[tool:pytest]\n' > "$ft_sc/py/setup.cfg"
+    ft_assert 'setup.cfg with [tool:pytest] → pytest'      surfaces_runner "$ft_sc/ls-setupcfg"
+    ft_section surfaces-runner ) || ft_red=1
+
+  # ---- surfaces-pairs (§ 13 pairing rules + the shared filters) — surfaces_pairs <runner> <ls-file>:
+  # candidate rows sorted by surface, then the SKIP decisions, rc 0 always. Pinned from the ENGINE's
+  # measured output, never the contract's worked arithmetic (T-140): a test file under
+  # <dir>/__tests__/ is rule (a)'s pairing, so the jest layout folds nothing; and the ANCESTOR fold
+  # is refused when the ancestor's cmd would not run the candidate's tests dir — folding
+  # src/api/ ↔ src/api/tests/ under src/api/ ↔ tests/api/ is D6's exact failure, so both rows stay.
+  ( FT_SEC=surfaces-pairs
+    ft_out="$(surfaces_pairs pytest "$ft_sc/ls-py")" || ft_out=""
+    ft_k=0; while IFS= read -r ft_line; do ft_k=$((ft_k+1)); done <<EOF
+$ft_out
+EOF
+    ft_assert 'pytest: four rows + two skips'   test "$ft_k" = 6
+    ft_assert 'pytest (a): tests/api/ ↔ the ONE src/api/, sorted first' test "${ft_out%%$ft_nl*}" = "src/api/${ft_tab}tests/api/${ft_tab}pytest tests/api/${ft_tab}api tests"
+    ft_assert 'pytest (b): tests/test_util.py ↔ the ONE util.py'      test "${ft_out#*"src/util.py${ft_tab}tests/test_util.py${ft_tab}pytest tests/test_util.py${ft_tab}util"}" != "$ft_out"
+    ft_assert 'pytest (b) under an ambiguous dir stands on its own'  test "${ft_out#*"src/common/a.py${ft_tab}tests/common/test_a.py${ft_tab}pytest tests/common/test_a.py${ft_tab}a"}" != "$ft_out"
+    ft_assert 'AMBIGUITY: two common dirs → no row; the skip names both, sorted' test "${ft_out#*"SKIP${ft_tab}tests/common/${ft_tab}ambiguous: common matches 2 dirs (lib/common src/common)"}" != "$ft_out"
+    ft_assert 'AMBIGUITY: nothing pairs tests/common/' test "${ft_out#*"${ft_tab}tests/common/${ft_tab}pytest"}" = "$ft_out"
+    ft_assert 'ANCESTOR: the per-file pairings under emitted dirs fold into ONE skip line' test "${ft_out##*$ft_nl}" = "SKIP${ft_tab}2 narrower pairing(s)${ft_tab}covered by an emitted ancestor row"
+    ft_out="$(surfaces_pairs pytest "$ft_sc/ls-pkg")" || ft_out=""
+    ft_assert 'pytest (c): in-package src/api/tests/ ↔ src/api/'      test "${ft_out#*"src/api/${ft_tab}src/api/tests/${ft_tab}pytest src/api/tests/${ft_tab}api tests"}" != "$ft_out"
+    ft_assert 'D6: src/api/ ↔ tests/api/ does NOT fold the in-package row its cmd never runs' test "${ft_out%%$ft_nl*}" = "src/api/${ft_tab}tests/api/${ft_tab}pytest tests/api/${ft_tab}api tests"
+    ft_assert 'D6: no narrower skip for the refused fold'  test "${ft_out#*narrower}" = "$ft_out"
+    ft_assert 'AMBIGUITY 0: a test file with no source twin → matches 0 dirs' test "${ft_out##*$ft_nl}" = "SKIP${ft_tab}tests/api/test_y.py${ft_tab}ambiguous: y matches 0 dirs"
+    ft_out="$(surfaces_pairs jest "$ft_sc/ls-js")" || ft_out=""
+    ft_assert 'jest (a): <dir>/__tests__/ ↔ its parent, never a co-located row' test "${ft_out##*$ft_nl}" = "src/foo/${ft_tab}src/foo/__tests__/${ft_tab}npx jest src/foo/__tests__${ft_tab}foo tests"
+    ft_assert 'jest (c): co-located *.test.* under src/bar/'   test "${ft_out%%$ft_nl*}" = "src/bar/${ft_tab}src/bar/*.test.*${ft_tab}npx jest src/bar${ft_tab}bar co-located tests"
+    ft_assert 'jest: the § 17 case-2 layout folds NOTHING (measured)' test "${ft_out#*SKIP}" = "$ft_out"
+    ft_out="$(surfaces_pairs vitest "$ft_sc/ls-js2")" || ft_out=""
+    ft_assert 'vitest (b): tests/foo/ ↔ the ONE src/foo/, the run form' test "${ft_out%%$ft_nl*}" = "src/foo/${ft_tab}tests/foo/${ft_tab}npx vitest run tests/foo${ft_tab}foo tests"
+    ft_assert 'vitest (c): *.spec.* gets its own glob'    test "${ft_out#*"src/qa/${ft_tab}src/qa/*.spec.*${ft_tab}npx vitest run src/qa${ft_tab}qa co-located tests"}" != "$ft_out"
+    ft_assert 'node_modules/ is never a source dir'       test "${ft_out#*node_modules}" = "$ft_out"
+    ft_assert 'a 4-component dir is never a source dir'   test "${ft_out##*$ft_nl}" = "SKIP${ft_tab}tests/deep/${ft_tab}ambiguous: deep matches 0 dirs"
+    ft_assert 'go: one row per dir holding *_test.go, a COMPLETE cmd; the root is never a surface' test "$(surfaces_pairs go "$ft_sc/ls-go")" = "internal/foo/${ft_tab}internal/foo/*_test.go${ft_tab}go test ./internal/foo/...${ft_tab}foo package tests"
+    ft_assert 'BREADTH: a surface over 200 paths → no row, and said' test "$(surfaces_pairs vitest "$ft_sc/ls-big")" = "SKIP${ft_tab}src/${ft_tab}surface matches 252 paths (>200)"
+    ft_out="$(surfaces_pairs cargo "$ft_sc/ls-py")" && ft_rc=0 || ft_rc=1
+    ft_assert 'an unknown runner → nothing'     test -z "$ft_out"
+    ft_assert 'an unknown runner → rc 0'        test "$ft_rc" = 0
+    ft_section surfaces-pairs ) || ft_red=1
+
+  # ---- surfaces-proposal (§ 13) — surfaces_proposal <ls-file> [<map-file>]: the whole decision as
+  # DATA, rc 0 always. NORUNNER as the ONLY line, naming the manifests it saw; else RUNNER first,
+  # the ROW survivors, then the SKIPs — a pair already in the map (`already mapped`) ahead of the
+  # engine's own, which is why an idempotent re-run counts 6 skips, not 4 (T-142's measured golden).
+  ( FT_SEC=surfaces-proposal; PRIMARY="$ft_sc/py"
+    ft_out="$(surfaces_proposal "$ft_sc/ls-mk")" && ft_rc=0 || ft_rc=1
+    ft_assert 'no runner → rc 0'                test "$ft_rc" = 0
+    ft_assert 'no runner → the ONE NORUNNER line, seen: Makefile' test "$ft_out" = "NORUNNER${ft_tab}no test runner this kit can scope (pytest · jest · vitest · go) — seen: Makefile"
+    ft_assert 'no runner, an empty list → seen: no manifest'     test "$(surfaces_proposal "$ft_sc/ls-empty")" = "NORUNNER${ft_tab}no test runner this kit can scope (pytest · jest · vitest · go) — seen: no manifest"
+    printf '{"scripts":{"test":"mocha"}}\n' > "$ft_sc/node/package.json"; PRIMARY="$ft_sc/node"
+    ft_assert 'no runner, mocha + Cargo.toml → both manifests named, kit order' test "$(surfaces_proposal "$ft_sc/ls-node")" = "NORUNNER${ft_tab}no test runner this kit can scope (pytest · jest · vitest · go) — seen: package.json Cargo.toml"
+    PRIMARY="$ft_sc/py"
+    ft_out="$(surfaces_proposal "$ft_sc/ls-py")" || ft_out=""
+    ft_assert 'RUNNER first'                    test "${ft_out%%$ft_nl*}" = "RUNNER${ft_tab}pytest${ft_tab}pytest {tests}"
+    ft_assert 'every survivor is a ROW line, sorted' test "${ft_out#*"${ft_nl}ROW${ft_tab}src/api/${ft_tab}tests/api/${ft_tab}pytest tests/api/${ft_tab}api tests${ft_nl}ROW${ft_tab}src/common/a.py"}" != "$ft_out"
+    ft_assert 'the engine skips come last'      test "${ft_out##*$ft_nl}" = "SKIP${ft_tab}2 narrower pairing(s)${ft_tab}covered by an emitted ancestor row"
+    ft_assert 'deterministic: the same input twice is the same bytes' test "$(surfaces_proposal "$ft_sc/ls-py")" = "$ft_out"
+    ft_assert 'an absent map file is no map'    test "$(surfaces_proposal "$ft_sc/ls-py" "$ft_sc/no-such-map")" = "$ft_out"
+    ft_out="$(surfaces_proposal "$ft_sc/ls-py" "$ft_sc/map-one")" || ft_out=""
+    ft_assert 'a mapped (surface, tests) pair is never a ROW (comment, CR and blank lines ignored)' test "${ft_out#*"ROW${ft_tab}src/api/"}" = "$ft_out"
+    ft_assert 'already mapped to <tests>, ahead of the engine skips' test "${ft_out#*"${ft_nl}SKIP${ft_tab}src/api/${ft_tab}already mapped to tests/api/${ft_nl}SKIP${ft_tab}tests/common/"}" != "$ft_out"
+    ft_assert 'the same surface mapped to OTHER tests masks nothing' test "${ft_out#*"ROW${ft_tab}src/db/${ft_tab}tests/db/"}" != "$ft_out"
+    ft_out="$(surfaces_proposal "$ft_sc/ls-py" "$ft_sc/map-all")" || ft_out=""
+    ft_assert 'idempotent re-run: no ROW at all' test "${ft_out#*ROW}" = "$ft_out"
+    ft_k=0; while IFS= read -r ft_line; do case "$ft_line" in "SKIP$ft_tab"*) ft_k=$((ft_k+1));; esac; done <<EOF
+$ft_out
+EOF
+    ft_assert 'idempotent re-run: 6 skips (4 mapped + 2 engine), never 4' test "$ft_k" = 6
+    ft_section surfaces-proposal ) || ft_red=1
+
+  # ---- interview-pending (first-run.md § 2) — interview_pending over fixture registries, OPS and
+  # CONV overridden: an `ask` row (column 5) is pending unless CONV answers it with a live `^key:`
+  # line or a `# key:` stub; KEYS.tsv order, ` · `-joined; rc 1 and silence when nothing is. Then
+  # interview_set's three write modes, proven on the file (read whole by a builtin, no fork).
+  ( FT_SEC=interview-pending; OPS="$ft_iv/ops5"; CONV="$ft_iv/c-live"
+    ft_assert 'voice live → adhd · claim pending' test "$(interview_pending)" = 'adhd · claim'
+    ft_assert 'pending → rc 0'                  interview_pending
+    CONV="$ft_iv/c-stub"
+    ft_assert 'a # claim: stub counts as answered' test "$(interview_pending)" = 'adhd'
+    CONV="$ft_iv/c-all"
+    ft_out="$(interview_pending)" && ft_rc=0 || ft_rc=1
+    ft_assert 'all answered → rc 1'             test "$ft_rc" = 1
+    ft_assert 'all answered → nothing'          test -z "$ft_out"
+    CONV="$ft_iv/c-empty"
+    ft_assert 'an empty CONVENTIONS → every ask row, registry order, plain rows never' test "$(interview_pending)" = 'voice · adhd · claim'
+    CONV="$ft_iv/c-body"
+    ft_assert 'a body mention and an indented key answer nothing; a #key: stub does' test "$(interview_pending)" = 'adhd · claim'
+    CONV="$ft_iv/c-cr"
+    ft_assert 'CRLF lines answer; the order stays the registry order' test "$(interview_pending)" = 'adhd'
+    OPS="$ft_iv/ops4"; CONV="$ft_iv/c-empty"
+    ft_assert 'a 4-column registry asks nothing → rc 1' ! interview_pending
+    OPS="$ft_iv/none"
+    ft_assert 'no KEYS.tsv → rc 1'              ! interview_pending
+    OPS="$ft_iv/ops5"; CONV="$ft_iv/no-such"
+    ft_assert 'no CONVENTIONS → rc 1 (interview itself is what dies)' ! interview_pending
+    printf 'voice: technical\n# claim: local-lock   # locks stay local (since 5.0.0)\n' > "$ft_iv/c-set"; CONV="$ft_iv/c-set"
+    ft_assert 'set: an absent key → rc 0'       interview_set adhd on
+    IFS= read -r -d '' ft_out < "$CONV" || true
+    ft_assert 'set: appended at the END after one blank line, the absent-cost as its comment' test "$ft_out" = "voice: technical${ft_nl}# claim: local-lock   # locks stay local (since 5.0.0)${ft_nl}${ft_nl}adhd: on   # replies not shaped${ft_nl}"
+    interview_set claim claim-branch
+    IFS= read -r -d '' ft_out < "$CONV" || true
+    ft_assert 'set: a stub is replaced IN PLACE by the live line' test "$ft_out" = "voice: technical${ft_nl}claim: claim-branch   # locks stay local${ft_nl}${ft_nl}adhd: on   # replies not shaped${ft_nl}"
+    interview_set voice standard
+    IFS= read -r -d '' ft_out < "$CONV" || true
+    ft_assert 'set: a live value changes in place' test "${ft_out%%$ft_nl*}" = 'voice: standard'
+    ft_assert 'set: every key answered → nothing pending' ! interview_pending
+    printf 'voice: standard   # c\n' > "$ft_iv/c-set2"; CONV="$ft_iv/c-set2"
+    interview_set voice technical
+    IFS= read -r -d '' ft_out < "$CONV" || true
+    ft_assert 'set: a live line keeps its trailing comment' test "$ft_out" = "voice: technical   # c${ft_nl}"
+    ft_section interview-pending ) || ft_red=1
 
   # ---- verdict
   while IFS= read -r ft_k; do ft_n=$((ft_n + ft_k)); done < "$FT_TMP/n"

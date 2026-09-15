@@ -43,6 +43,11 @@ pays for, and every one of these rules is strictly less output:
 6. **Give time in real units** — "about 15 minutes", never "some work" or "almost there".
 7. **State trouble flat — what broke, the fix.** Tangents → one line in `ops/board/backlog/IDEAS.md`.
 
+**Never offer a menu of execution strategies.** How many builders, one chat or several, board or no
+board, which lane — these are `triage`'s answer, never a question. The interview (0b) is about the
+PRODUCT. The moment a question is about how POLARIS itself will run, the CLI already answered it and
+you are asking anyway.
+
 Exceptions, and they are narrow: they explicitly asked for the explanation · a STOP-AND-ASK
 confirmation (never compress a destructive-action check) · a genuine ambiguity that needs a
 question · a debugging spiral where the reasoning IS the answer.
