@@ -582,3 +582,4 @@
 {"ts":1789493875,"ev":"claim","id":"T-160","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1789507480,"ev":"release","id":"T-160","who":"Owner@DESKTOP","note":"→ ready: lane killed: it was routed to Fable, which is now forbidden. VERSION bump + CHANGELOG are committed on feat/T-160; re-claim to finish, on an inherited model"}
 {"ts":1789527876,"ev":"claim","id":"T-160","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1789527887,"ev":"blocked","id":"T-160","who":"Owner@DESKTOP","note":"→ blocked: SHIPPED, nothing left to build: 6.5.0 was cut by hand in the 2026-09-15 model-ban session (v6.5.0 published, dogfooded at 0aebfa1, all three installs verified on 6.5.0). Parked here only because the CLI has no retire verb for work completed outside a lane."}
