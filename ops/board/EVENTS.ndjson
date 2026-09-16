@@ -581,3 +581,4 @@
 {"ts":1789493272,"ev":"promote","id":"T-160","who":"Owner@DESKTOP","note":"deps done: T-150, T-151, T-152, T-153, T-154, T-155, T-156, T-157, T-158, T-159","pts":2}
 {"ts":1789493875,"ev":"claim","id":"T-160","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1789507480,"ev":"release","id":"T-160","who":"Owner@DESKTOP","note":"→ ready: lane killed: it was routed to Fable, which is now forbidden. VERSION bump + CHANGELOG are committed on feat/T-160; re-claim to finish, on an inherited model"}
+{"ts":1789527876,"ev":"claim","id":"T-160","who":"Owner@DESKTOP","note":"","pts":2}
