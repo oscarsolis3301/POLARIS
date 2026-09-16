@@ -501,7 +501,12 @@ done
 # into INIT in the same session.
 note "target: $TARGET"
 if [ "$UPGRADE" = 1 ]; then
-  note "live board: finish with  cd \"$TARGET\" && bash ops/polaris upgrade  (never re-run INIT)"
+  # ONE command per line, never `&&`: this line is pasted by a HUMAN, and on Windows their terminal
+  # is PowerShell, which has no pipeline chain operators (5.1 dies with a parser error). The universal
+  # subset runs identically in PowerShell, cmd, bash and zsh. See the 🚩 rule in the output style.
+  note "live board: finish it with these two lines (never re-run INIT):"
+  note "  cd $TARGET"
+  note "  bash ops/polaris upgrade"
 fi
 # A kit folder sitting INSIDE the target is normally a leftover unzip — say so. But in the POLARIS
 # kit repo itself, `kit/` is the product's source tree and the target is the repo that self-hosts it:
@@ -516,6 +521,16 @@ case "$KIT" in
     fi;;
 esac
 note "Claude Code will ask to trust the project hook on first use — that is the write-guard (read ops/hooks/ownership-guard.sh first)."
+
+# Self-repair on install too, not just on update (owner, 2026-09-15). On a FRESH repo there is no
+# CONVENTIONS.md yet, so heal no-ops and INIT writes a correct one moments later; the case this
+# catches is an install OVER a live board carrying a stale config — a forbidden model_* value, or a
+# CLAUDE.md that never got the efficiency section. Output goes through `note`, so `--quiet` swallows
+# it and the installer's line budget (CI tripwire, max 2 lines above the epilogue) is unaffected.
+# `|| true`: a config nicety must never be the thing that fails an install.
+if [ -f "$TARGET/ops/CONVENTIONS.md" ]; then
+  ( cd "$TARGET" && bash ops/polaris heal 2>/dev/null ) | while IFS= read -r _hl; do note "$_hl"; done || true
+fi
 
 # The marker line stdout always gets, quiet or not. Its trailing token is the routing
 # contract: `fresh` → the caller runs INIT · `live-board` → the caller runs `polaris

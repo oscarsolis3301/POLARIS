@@ -75,14 +75,39 @@ tier_for() { # tier_for <points> <risk> — echo exactly ONE tier word (ops/cont
   else printf 'mid'; fi
   return 0
 }
+model_denied() { # model_denied <name> — rc 0 when <name> is a FORBIDDEN model.
+  # OWNER DECISION 2026-09-15, absolute: POLARIS never selects Fable or Haiku, in any repo, on any
+  # machine. Fable bills against a SEPARATE and much smaller weekly limit — one day of routing
+  # `strong` to it took that limit to 87% on work the owner never asked to run there. Haiku was
+  # already refused for this repo's bash/board work (owner, 2026-08-02) and was simply never enforced.
+  # This list is a KIT CONSTANT on purpose: no CONVENTIONS key reads it, so no repo can widen, weaken
+  # or switch it off, and updating the kit on ANY machine carries the ban with it. That is the whole
+  # point — a knob would have drifted back exactly like the prose that caused this.
+  # Substring, with the realistic capitalisations spelled out rather than lowercasing: matching costs
+  # ZERO forks and core.sh rides the write-guard's hot path. Catches claude-fable-5, claude-fable-5-1,
+  # claude-haiku-4-5-20251001 and whatever either family is named next.
+  case "${1:-}" in
+    '') return 1;;
+    *fable*|*Fable*|*FABLE*|*haiku*|*Haiku*|*HAIKU*) return 0;;
+  esac
+  return 1
+}
 model_for_tier() { # model_for_tier <tier> — the matching CONVENTIONS knob's value (model_strong: /
   # model_mid: / model_cheap:), or nothing when unset. cfg already strips the knobs' trailing `#`
   # owner comments. Unknown tier → nothing: an unset mapping must change NOTHING downstream.
+  # A FORBIDDEN value (model_denied) is NEVER returned: MODEL_DENIED carries the refused name so
+  # cmd_route can say why, and the empty result is not a new code path — the contract already defines
+  # absent → the caller omits the spawn's model param and the platform default runs. So a repo still
+  # naming fable/haiku degrades to exactly "unset", loudly, instead of spending the owner's quota.
+  local m=""
+  MODEL_DENIED=""
   case "${1:-}" in
-    strong) cfg model_strong "";;
-    mid)    cfg model_mid "";;
-    cheap)  cfg model_cheap "";;
+    strong) m="$(cfg model_strong "")";;
+    mid)    m="$(cfg model_mid "")";;
+    cheap)  m="$(cfg model_cheap "")";;
   esac
+  if model_denied "$m"; then MODEL_DENIED="$m"; return 0; fi
+  printf '%s' "$m"
   return 0
 }
 

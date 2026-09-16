@@ -298,6 +298,59 @@ drill_drift() {
     ( "$SELF" drift --strict >/dev/null 2>&1 ) && { echo "DRIFT STRICT FAIL (should rc 1)"; exit 1; }
     rm ops/board/ready/T-3.md ops/board/ready/T-2.md; sed -i.bak '/DO_NOT_SHIP/d' ops/RULES.tsv && rm -f ops/RULES.tsv.bak
     git add -A; git commit -qm cleanup || true   # T-033: --only drift has no rules-drill RULES.tsv change to commit
+    # --- v6.5 (ops/contracts/worktree-liveness.md § v2): cruft has THREE classes, and only one of
+    # them is a finding a human should act on. A self-landing lane leaves its OWN branch behind by
+    # design, so "the branch exists" alone reddened `qa` on every wave — after the suite had already
+    # run, which withheld the stamp and made the next `finish` pay the whole suite again. Fixture,
+    # all three, built with plumbing so the working tree never moves (the landed commits carry main's
+    # own tree, so `git status` stays clean through the update-refs):
+    #   T-CC clearable — tip == the landed commit's Landed-from trailer, nobody standing in it
+    #   T-CD diverged  — landed once, then one more commit on top: unmerged work, NEVER auto-deleted
+    #   T-CW waiting   — clearable, but its worktree is registered with a FRESH beat: a lane mid-step
+    # T-CW also proves the OTHER proof source: no `landed:` key, so feat_tip_landed falls back to
+    # landed_sha and finds the [T-CW] squash on main itself.
+    dctree="$(git rev-parse 'main^{tree}')"
+    dcc="$(git commit-tree "$dctree" -p main -m 'feat: T-CC work')"
+    git branch -f feat/T-CC "$dcc" >/dev/null 2>&1
+    dccl="$(printf 'feat(src): cruft drill [T-CC]\n\nLanded-from: %s\n' "$dcc" | git commit-tree "$dctree" -p main)"
+    git update-ref refs/heads/main "$dccl"
+    printf -- '---\nid: T-CC\npoints: 1\nstatus: done\nlanded: %s\n---\n' "$dccl" > ops/board/done/T-CC.md
+    dcd="$(git commit-tree "$dctree" -p main -m 'feat: T-CD work')"
+    dcdl="$(printf 'feat(src): cruft drill [T-CD]\n\nLanded-from: %s\n' "$dcd" | git commit-tree "$dctree" -p main)"
+    git update-ref refs/heads/main "$dcdl"
+    git branch -f feat/T-CD "$(git commit-tree "$dctree" -p "$dcd" -m 'feat: T-CD unlanded extra')" >/dev/null 2>&1
+    printf -- '---\nid: T-CD\npoints: 1\nstatus: done\nlanded: %s\n---\n' "$dcdl" > ops/board/done/T-CD.md
+    dcw="$(git commit-tree "$dctree" -p main -m 'feat: T-CW work')"
+    git branch -f feat/T-CW "$dcw" >/dev/null 2>&1
+    dcwl="$(printf 'feat(src): cruft drill [T-CW]\n\nLanded-from: %s\n' "$dcw" | git commit-tree "$dctree" -p main)"
+    git update-ref refs/heads/main "$dcwl"
+    printf -- '---\nid: T-CW\npoints: 1\nstatus: done\n---\n' > ops/board/done/T-CW.md
+    git worktree add .polaris/wt/T-CW feat/T-CW >/dev/null 2>&1 || { echo "CRUFT FIXTURE FAIL (worktree add)"; exit 1; }
+    date +%s > "$(git rev-parse --git-common-dir)/worktrees/T-CW/polaris-beat"
+    "$SELF" drift > "$T/cruft.out" 2>&1 || { cat "$T/cruft.out"; echo "CRUFT DRIFT RC FAIL (drift reports, it never exits non-zero without --strict)"; exit 1; }
+    grep -q 'CRUFT: feat/T-CC still exists though T-CC is done — bash ops/polaris qa or sweep --fix clears it' "$T/cruft.out" \
+      || { cat "$T/cruft.out"; echo "CRUFT CLEARABLE FAIL (a proven, idle branch is the one finding worth printing)"; exit 1; }
+    grep -q 'CRUFT diverged: feat/T-CD carries commits not in main — inspect: git log main..feat/T-CD (never auto-deleted)' "$T/cruft.out" \
+      || { cat "$T/cruft.out"; echo "CRUFT DIVERGED FAIL (an unproven tip is a DIFFERENT finding and must name the inspection)"; exit 1; }
+    grep -q 'T-CW' "$T/cruft.out" && { cat "$T/cruft.out"; echo "CRUFT WAITING FAIL (a lane still standing in its worktree is not cruft yet — silence)"; exit 1; }
+    [ "$(grep -c '^⚠' "$T/cruft.out")" = "2" ] || { cat "$T/cruft.out"; echo "CRUFT COUNT FAIL (exactly two findings: clearable + diverged)"; exit 1; }
+    # sweep reports the clearable one and the LIVE worktree, and never confuses the two
+    "$SELF" sweep > "$T/cruftsw.out" 2>&1 || { cat "$T/cruftsw.out"; echo "CRUFT SWEEP RC FAIL"; exit 1; }
+    grep -q '⚠ CRUFT: feat/T-CC — task done, tip proven landed, no live worktree — sweep --fix clears it' "$T/cruftsw.out" \
+      || { cat "$T/cruftsw.out"; echo "CRUFT SWEEP LINE FAIL"; exit 1; }
+    grep -q 'CRUFT: feat/T-CW' "$T/cruftsw.out" && { cat "$T/cruftsw.out"; echo "CRUFT SWEEP LIVE FAIL (a live lane's branch is never cruft)"; exit 1; }
+    grep -q 'LIVE worktree: .polaris/wt/T-CW' "$T/cruftsw.out" || { cat "$T/cruftsw.out"; echo "CRUFT SWEEP LIVE LINE FAIL (sweep still lists the live worktree)"; exit 1; }
+    [ -n "$(git branch --list feat/T-CC)" ] || { echo "CRUFT SWEEP REPORT-ONLY FAIL (a bare sweep deletes nothing)"; exit 1; }
+    # the lane walks away (the contract's fake-idle form) — now BOTH proven branches clear and the
+    # diverged one survives, which is the whole safety property in one assertion
+    echo 1 2>/dev/null > "$(git rev-parse --git-common-dir)/worktrees/T-CW/polaris-beat" || true
+    "$SELF" sweep --fix > "$T/cruftfix.out" 2>&1 || { cat "$T/cruftfix.out"; echo "CRUFT SWEEP FIX RC FAIL"; exit 1; }
+    [ -z "$(git branch --list feat/T-CC)" ] || { cat "$T/cruftfix.out"; echo "CRUFT FIX CLEARABLE FAIL (a proven branch must go)"; exit 1; }
+    [ -z "$(git branch --list feat/T-CW)" ] || { cat "$T/cruftfix.out"; echo "CRUFT FIX IDLE FAIL (once the beat goes quiet the waiting branch clears too)"; exit 1; }
+    [ -d .polaris/wt/T-CW ] && { cat "$T/cruftfix.out"; echo "CRUFT FIX WORKTREE FAIL (the idle worktree goes with it)"; exit 1; }
+    [ -n "$(git branch --list feat/T-CD)" ] || { cat "$T/cruftfix.out"; echo "CRUFT FIX DIVERGED FAIL (an unproven tip must NEVER be auto-deleted — this is the property the whole gate exists for)"; exit 1; }
+    git branch -D feat/T-CD >/dev/null 2>&1 || true
+    rm -f ops/board/done/T-CC.md ops/board/done/T-CD.md ops/board/done/T-CW.md
     "$SELF" drift >/dev/null || { echo "DRIFT CLEAN FAIL"; exit 1; }
 }
 drill_hardening() {
@@ -376,9 +429,203 @@ drill_qa() {
     printf 'test: true\n' > ops/CONVENTIONS.md
     "$SELF" qa > "$T/qa.out" || { cat "$T/qa.out"; echo "QA GREEN FAIL (healthy repo must rc 0)"; exit 1; }
     grep -q 'test — green' "$T/qa.out" || { echo "QA LINE FAIL (per-check line missing)"; exit 1; }
+    # --- v6.5 (ops/contracts/worktree-liveness.md § v2): qa CLEARS the provably-landed leftovers
+    # BEFORE drift looks at them, so a self-landing lane's own branch never reds a run that has just
+    # paid for a green suite — the exact 12-minute re-run this fixture exists to prevent. Same three
+    # classes as drill_drift on qa's own ids (built with plumbing; the landed commits carry main's
+    # tree, so the working tree never moves). Every assertion is on the BRANCH LIST, never on qa's
+    # rc alone (T-131): "qa went red" says nothing about WHICH finding reddened it.
+    qctree="$(git rev-parse 'main^{tree}')"
+    qcc="$(git commit-tree "$qctree" -p main -m 'feat: T-QC work')"
+    git branch -f feat/T-QC "$qcc" >/dev/null 2>&1
+    qccl="$(printf 'feat(src): qa cruft drill [T-QC]\n\nLanded-from: %s\n' "$qcc" | git commit-tree "$qctree" -p main)"
+    git update-ref refs/heads/main "$qccl"
+    printf -- '---\nid: T-QC\npoints: 1\nstatus: done\nlanded: %s\n---\n' "$qccl" > ops/board/done/T-QC.md
+    qcd="$(git commit-tree "$qctree" -p main -m 'feat: T-QD work')"
+    qcdl="$(printf 'feat(src): qa cruft drill [T-QD]\n\nLanded-from: %s\n' "$qcd" | git commit-tree "$qctree" -p main)"
+    git update-ref refs/heads/main "$qcdl"
+    git branch -f feat/T-QD "$(git commit-tree "$qctree" -p "$qcd" -m 'feat: T-QD unlanded extra')" >/dev/null 2>&1
+    printf -- '---\nid: T-QD\npoints: 1\nstatus: done\nlanded: %s\n---\n' "$qcdl" > ops/board/done/T-QD.md
+    qcw="$(git commit-tree "$qctree" -p main -m 'feat: T-QW work')"
+    git branch -f feat/T-QW "$qcw" >/dev/null 2>&1
+    qcwl="$(printf 'feat(src): qa cruft drill [T-QW]\n\nLanded-from: %s\n' "$qcw" | git commit-tree "$qctree" -p main)"
+    git update-ref refs/heads/main "$qcwl"
+    printf -- '---\nid: T-QW\npoints: 1\nstatus: done\nlanded: %s\n---\n' "$qcwl" > ops/board/done/T-QW.md
+    git worktree add .polaris/wt/T-QW feat/T-QW >/dev/null 2>&1 || { echo "QA CRUFT FIXTURE FAIL (worktree add)"; exit 1; }
+    date +%s > "$(git rev-parse --git-common-dir)/worktrees/T-QW/polaris-beat"
+    "$SELF" qa > "$T/qacruft.out" 2>&1 && { cat "$T/qacruft.out"; echo "QA CRUFT RC FAIL (a diverged branch must still red qa)"; exit 1; }
+    [ -z "$(git branch --list feat/T-QC)" ] || { cat "$T/qacruft.out"; echo "QA CRUFT CLEAR FAIL (a provably landed branch is CLEARED by qa, not reported at it)"; exit 1; }
+    [ -n "$(git branch --list feat/T-QD)" ] || { cat "$T/qacruft.out"; echo "QA CRUFT DIVERGED FAIL (an unproven tip must NEVER be deleted)"; exit 1; }
+    [ -n "$(git branch --list feat/T-QW)" ] || { cat "$T/qacruft.out"; echo "QA CRUFT LIVE FAIL (a lane still in its worktree keeps its branch)"; exit 1; }
+    [ -d .polaris/wt/T-QW ] || { cat "$T/qacruft.out"; echo "QA CRUFT WORKTREE FAIL (qa must never remove a live worktree)"; exit 1; }
+    grep -q 'cruft — cleared 1 branch(es)' "$T/qacruft.out" || { cat "$T/qacruft.out"; echo "QA CRUFT SAY FAIL (the count line prints only for what was actually cleared)"; exit 1; }
+    grep -q 'CRUFT diverged: feat/T-QD' "$T/qacruft.out" || { cat "$T/qacruft.out"; echo "QA CRUFT REASON FAIL (qa must be red for the DIVERGED branch — assert the reason, never the rc)"; exit 1; }
+    grep -q 'CRUFT: feat/T-QC' "$T/qacruft.out" && { cat "$T/qacruft.out"; echo "QA CRUFT STALE FINDING FAIL (a branch qa just cleared must not still be a finding)"; exit 1; }
+    # sweep --fix shares the one implementation of "safe to delete", so it keeps the diverged one too
+    "$SELF" sweep --fix > "$T/qasweep.out" 2>&1 || { cat "$T/qasweep.out"; echo "QA SWEEP RC FAIL"; exit 1; }
+    [ -n "$(git branch --list feat/T-QD)" ] || { cat "$T/qasweep.out"; echo "QA SWEEP DIVERGED FAIL (sweep --fix must keep an unproven tip too)"; exit 1; }
+    [ -n "$(git branch --list feat/T-QW)" ] || { cat "$T/qasweep.out"; echo "QA SWEEP LIVE FAIL (sweep --fix leaves a live lane alone)"; exit 1; }
+    echo 1 2>/dev/null > "$(git rev-parse --git-common-dir)/worktrees/T-QW/polaris-beat" || true
+    "$SELF" sweep --fix > "$T/qasweep2.out" 2>&1 || { cat "$T/qasweep2.out"; echo "QA SWEEP IDLE RC FAIL"; exit 1; }
+    [ -z "$(git branch --list feat/T-QW)" ] || { cat "$T/qasweep2.out"; echo "QA SWEEP IDLE FAIL (once the lane walks away its proven branch clears)"; exit 1; }
+    git branch -D feat/T-QD >/dev/null 2>&1 || true
+    rm -f ops/board/done/T-QC.md ops/board/done/T-QD.md ops/board/done/T-QW.md
+    "$SELF" qa > "$T/qaclean.out" 2>&1 || { cat "$T/qaclean.out"; echo "QA CRUFT HERMETIC FAIL (the fixture must leave qa green again)"; exit 1; }
     printf 'test: false\n' > ops/CONVENTIONS.md
     "$SELF" qa >/dev/null 2>&1 && { echo "QA RED FAIL (red suite must rc 1)"; exit 1; }
     rm -f ops/CONVENTIONS.md
+}
+drill_skills() {
+    # ---- T-159 skills drill (ops/contracts/self-skills.md § 9) — one skill walked from gap to
+    # archive and back, on its OWN throwaway board under $T (the triage-lane pattern): the spine's
+    # board keeps its done history and EVENTS.ndjson is append-only, so 81 synthetic done events
+    # written there would shadow every later drill's telemetry. Every assertion is an rc or the
+    # bytes of a file — a snapshot + cmp, a grep over the frontmatter, `git ls-files`, the EVENTS
+    # line, the one output shape § 3 pins for `gaps` — never a printed message (the sprint-11
+    # lesson). The REFUSALS are asserted as hard as the path: a promoted skill spends every future
+    # session's budget in the repo and the owner kept that decision (§ 0 OPEN-3/4), so a `promote`
+    # that lets a TODO or a shelf crossing through, or a writer that lands on a task branch, is the
+    # dangerous failure here — not a crash. Two behaviours are pinned from the RUNNING code, not
+    # the contract's arithmetic: the fold (six done tasks on src/search/ + one on src/other/ →
+    # ONE candidate: src/other/ is below the threshold and folds into src/, which yields to the
+    # kept directory under it) and the eviction window (after the demote at 41 done events the
+    # skill is `keep` — its one hit is still inside 2W, which is all history until 80 done events
+    # exist — and only once 80 done events post-date the hit does `archive` come due). The fixture
+    # sets core.autocrlf false: the git-history restore is a `git checkout`, and a Windows box with
+    # autocrlf on hands the twin back CRLF — git's checkout-time conversion, never the kit's bytes.
+    # The twin is asserted EITHER way from the probe T-150 recorded (plans/self-skills.md; absent
+    # in an installed repo → the shipped answer, yes). HERMETIC: the whole fixture dies at the end.
+    sk_probe="$PRIMARY/plans/self-skills.md"
+    sk_twin=yes
+    [ ! -f "$sk_probe" ] || sk_twin="$(sed -n 's/^probe: rules-paths-fires-on-read:[ \t]*//p' "$sk_probe" | head -1 | tr -d ' \r')"
+    case "$sk_twin" in yes|no) ;; *) echo "SKILLS PROBE FAIL (plans/self-skills.md must record 'probe: rules-paths-fires-on-read: yes|no' — read '$sk_twin')"; exit 1;; esac
+    rm -rf "$T/skills"; mkdir -p "$T/skills"
+    ( set -e
+      git init -q -b main "$T/skills/repo" 2>/dev/null || { git init -q "$T/skills/repo"; git -C "$T/skills/repo" symbolic-ref HEAD refs/heads/main; }
+      cd "$T/skills/repo"
+      git config user.email t@t; git config user.name t; git config core.autocrlf false
+      mkdir -p src; echo x > src/a.txt; git add -A; git commit -qm init
+      "$SELF" init-board >/dev/null; git add -A; git commit -qm board
+      # (1) the history `gaps` reads — done EVENTS lines, then the done/ task files they name: six own src/search/, one owns src/other/
+      sk_now="$(date +%s)"
+      for sk_i in 1 2 3 4 5 6; do
+        printf -- '---\nid: T-S%s\ntitle: search task %s\ntype: feature\npoints: 1\nstatus: done\nfiles_owned:\n  - src/search/\nverify: []\n---\n' "$sk_i" "$sk_i" > "ops/board/done/T-S$sk_i.md"
+        printf '{"ts":%s,"ev":"done","id":"T-S%s","who":"drill","note":""}\n' "$((sk_now - 100 + sk_i))" "$sk_i" >> ops/board/EVENTS.ndjson
+      done
+      printf -- '---\nid: T-O1\ntitle: other task\ntype: feature\npoints: 1\nstatus: done\nfiles_owned:\n  - src/other/\nverify: []\n---\n' > ops/board/done/T-O1.md
+      printf '{"ts":%s,"ev":"done","id":"T-O1","who":"drill","note":""}\n' "$((sk_now - 90))" >> ops/board/EVENTS.ndjson
+      "$SELF" skill gaps > "$T/skills/gaps.out" 2>&1 || { cat "$T/skills/gaps.out"; echo "SKILLS GAPS RC FAIL (gaps is rc 0 always)"; exit 1; }
+      [ "$(grep -c . "$T/skills/gaps.out")" = 1 ] || { cat "$T/skills/gaps.out"; echo "SKILLS GAPS FOLD FAIL (exactly ONE candidate: src/other/ is below 5 and folds into src/, which yields to src/search/)"; exit 1; }
+      grep -qx 'src/search/  6/80 tasks · 0 kickbacks · skill: none' "$T/skills/gaps.out" || { cat "$T/skills/gaps.out"; echo "SKILLS GAPS LINE FAIL (the § 3 candidate line: surface · n/2W tasks · kickbacks · skill: none)"; exit 1; }
+      # (2) propose --write: the file, born hidden, the description TODO, the seven headings, the twin per the probe; a second --write is refused
+      "$SELF" skill propose src/search/ --write > "$T/skills/prop.out" 2>&1 || { cat "$T/skills/prop.out"; echo "SKILLS PROPOSE FAIL (six of the last 80 done tasks own src/search/ — over the threshold)"; exit 1; }
+      sk_f=.claude/skills/search/SKILL.md
+      [ -f "$sk_f" ] || { echo "SKILLS PROPOSE FILE FAIL (--write must create .claude/skills/search/SKILL.md)"; exit 1; }
+      grep -q '^description: TODO(src/search/)' "$sk_f" || { echo "SKILLS PROPOSE TODO FAIL (the description is never generated)"; exit 1; }
+      grep -qx 'disable-model-invocation: true' "$sk_f" || { echo "SKILLS PROPOSE HIDDEN FAIL (born hidden: the flag line reads true)"; exit 1; }
+      grep -q 'polaris: { paths: \[src/search/\], since: [0-9-]*, tier: 0, evidence: "6/80 tasks · 0 kickbacks" }' "$sk_f" || { echo "SKILLS PROPOSE META FAIL (metadata.polaris: paths, since, tier 0, evidence)"; exit 1; }
+      for sk_h in '# src/search/ — what POLARIS already knows' '## What it is' '## Public surface' '## What keeps going wrong' '## Files that move together' '## Tests that cover it' '## Last worked'; do
+        grep -qxF -- "$sk_h" "$sk_f" || { echo "SKILLS PROPOSE HEADING FAIL (missing: $sk_h)"; exit 1; }
+      done
+      [ "$(grep -c '^#' "$sk_f")" = 7 ] || { echo "SKILLS PROPOSE HEADING COUNT FAIL (exactly the seven heading lines)"; exit 1; }
+      [ "$(grep -c . "$sk_f")" -le 200 ] || { echo "SKILLS PROPOSE LENGTH FAIL (body ≤ 200 lines)"; exit 1; }
+      if [ "$sk_twin" = yes ]; then
+        [ -f .claude/rules/search.md ] || { echo "SKILLS TWIN FAIL (the probe says yes — propose --write also writes .claude/rules/search.md)"; exit 1; }
+        grep -qx '  - "src/search/"' .claude/rules/search.md || { echo "SKILLS TWIN PATHS FAIL (the twin carries the skill's globs under paths:)"; exit 1; }
+      else
+        [ ! -e .claude/rules/search.md ] || { echo "SKILLS TWIN FAIL (the probe says no — no twin anywhere)"; exit 1; }
+      fi
+      cp "$sk_f" "$T/skills/snap-todo"
+      "$SELF" skill propose src/search/ --write >/dev/null 2>&1 && { echo "SKILLS PROPOSE OVERWRITE FAIL (an existing dir is never overwritten, rc 1)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-todo" || { echo "SKILLS PROPOSE OVERWRITE BYTES FAIL (a refusal writes nothing)"; exit 1; }
+      # (3) promote: the TODO refused and nothing written · a written description passes: flag false, tier 1 · a shelf crossing refused and nothing written
+      "$SELF" skill promote search >/dev/null 2>&1 && { echo "SKILLS PROMOTE TODO FAIL (a TODO( description is refused, rc 1)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-todo" || { echo "SKILLS PROMOTE TODO BYTES FAIL (a refusal writes nothing)"; exit 1; }
+      sed 's|^description: TODO(src/search/).*$|description: TRIGGER when a task owns a path under src/search/; DO NOT TRIGGER for anything else.|' "$sk_f" > "$sk_f.tmp" && mv "$sk_f.tmp" "$sk_f"
+      "$SELF" skill promote search >/dev/null 2>&1 || { echo "SKILLS PROMOTE PASS FAIL (a written description under the cap and the shelf promotes, rc 0)"; exit 1; }
+      grep -qx 'disable-model-invocation: false' "$sk_f" || { echo "SKILLS PROMOTE FLAG FAIL (the flag line STAYS and reads false)"; exit 1; }
+      [ "$(grep -c '^disable-model-invocation:' "$sk_f")" = 1 ] || { echo "SKILLS PROMOTE FLAG COUNT FAIL (exactly one flag line)"; exit 1; }
+      grep -q 'tier: 1, evidence' "$sk_f" || { echo "SKILLS PROMOTE TIER FAIL (metadata.polaris.tier mirrors the flag: 1, in place)"; exit 1; }
+      git add -A; git commit -qm 'chore(skills): search'   # the human's review commit — tracked, so archive has an index entry to drop
+      [ -z "$(git status --porcelain)" ] || { git status --porcelain; echo "SKILLS COMMIT FAIL (propose and promote commit nothing and leave nothing else dirty)"; exit 1; }
+      # fx-shelf lifts the shelf to 1569 B — a hand-written tier-1 skill (identity is the metadata.polaris key; the
+      # per-skill cap binds only promote); fx-third is hidden with a written 214-B description, so from here on
+      # the ONLY thing that can refuse it is the shelf — and, once fx-shelf is gone, the branch.
+      sk_big=""; sk_i=0; while [ "$sk_i" -lt 145 ]; do sk_big="${sk_big}abcdefghij"; sk_i=$((sk_i+1)); done
+      sk_mid=""; sk_i=0; while [ "$sk_i" -lt 20 ]; do sk_mid="${sk_mid}abcdefghij"; sk_i=$((sk_i+1)); done
+      mkdir -p .claude/skills/fx-shelf .claude/skills/fx-third
+      printf -- '---\nname: fx-shelf\ndescription: %s\ndisable-model-invocation: false\nmetadata:\n  polaris: { paths: [docs/], since: 2026-09-14, tier: 1, evidence: "fixture" }\n---\n# fx-shelf\n' "$sk_big" > .claude/skills/fx-shelf/SKILL.md
+      printf -- '---\nname: fx-third\ndescription: %s\ndisable-model-invocation: true\nmetadata:\n  polaris: { paths: [lib/], since: 2026-09-14, tier: 0, evidence: "fixture" }\n---\n# fx-third\n' "$sk_mid" > .claude/skills/fx-third/SKILL.md
+      cp .claude/skills/fx-third/SKILL.md "$T/skills/snap-third"
+      "$SELF" skill budget >/dev/null 2>&1 || { echo "SKILLS BUDGET UNDER FAIL (1569 B is under the shelf — rc 0)"; exit 1; }
+      "$SELF" skill promote fx-third >/dev/null 2>&1 && { echo "SKILLS PROMOTE SHELF FAIL (1569 + 214 B crosses 1600 — refused, rc 1)"; exit 1; }
+      cmp -s .claude/skills/fx-third/SKILL.md "$T/skills/snap-third" || { echo "SKILLS PROMOTE SHELF BYTES FAIL (a refusal writes nothing)"; exit 1; }
+      rm -rf .claude/skills/fx-shelf
+      # (4) claim of a task owning src/search/x writes ONE skill-hit line: search's paths overlap, fx-third's lib/ does not
+      printf -- '---\nid: T-SK\ntitle: search work\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/search/x\nverify: []\n---\n' > ops/board/ready/T-SK.md
+      "$SELF" claim T-SK >/dev/null 2>&1 || { echo "SKILLS CLAIM FAIL"; exit 1; }
+      [ "$(grep -c '"ev":"skill-hit"' ops/board/EVENTS.ndjson)" = 1 ] || { grep 'skill-hit' ops/board/EVENTS.ndjson; echo "SKILLS HIT COUNT FAIL (exactly ONE skill-hit — the one skill whose paths overlap files_owned)"; exit 1; }
+      grep -q '"ev":"skill-hit","id":"search","who":"[^"]*","note":"T-SK"}$' ops/board/EVENTS.ndjson || { grep 'skill-hit' ops/board/EVENTS.ndjson; echo "SKILLS HIT LINE FAIL (the line names the skill and the task)"; exit 1; }
+      # (5) every writer refuses on feat/* and writes nothing — run from inside the claimed worktree, where PRIMARY still anchors to the base checkout
+      cp "$sk_f" "$T/skills/snap-feat"
+      ( cd .polaris/wt/T-SK
+        "$SELF" skill propose src/search/ --name search2 --write >/dev/null 2>&1 && { echo "SKILLS FEAT PROPOSE FAIL (propose --write refuses on feat/*)"; exit 1; }
+        "$SELF" skill promote fx-third >/dev/null 2>&1 && { echo "SKILLS FEAT PROMOTE FAIL (a promotion valid on every other count still refuses on feat/*)"; exit 1; }
+        "$SELF" skill demote search >/dev/null 2>&1 && { echo "SKILLS FEAT DEMOTE FAIL (demote refuses on feat/*)"; exit 1; }
+        "$SELF" skill prune --apply >/dev/null 2>&1 && { echo "SKILLS FEAT PRUNE FAIL (prune --apply refuses on feat/*)"; exit 1; }
+        "$SELF" skill restore fx-shelf >/dev/null 2>&1 && { echo "SKILLS FEAT RESTORE FAIL (restore refuses on feat/*)"; exit 1; }
+        true ) || exit 1   # a subshell's rc is its LAST command's — a refusal list ends rc 1, which is the point, so the subshell ends here
+      [ ! -e .claude/skills/search2 ] || { echo "SKILLS FEAT PROPOSE BYTES FAIL (a refusal writes nothing)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-feat" || { echo "SKILLS FEAT DEMOTE BYTES FAIL (search unchanged by a refused demote)"; exit 1; }
+      cmp -s .claude/skills/fx-third/SKILL.md "$T/skills/snap-third" || { echo "SKILLS FEAT PROMOTE BYTES FAIL (fx-third unchanged by a refused promote)"; exit 1; }
+      rm -rf .claude/skills/fx-third   # one skill from here on, so every prune verdict is search's
+      # (6) prune — young: 7 < 40 done since since: → judged nothing, rc 0 · 41 done events post-dating the hit → demote due
+      #     (rc 1), nothing written without --apply, --apply flips the flag · still keep at 41: the hit is inside 2W, which is
+      #     all history until 80 done events exist · 81 → archive due: the dir AND the twin move, git ls-files drops both
+      "$SELF" skill prune >/dev/null 2>&1 || { echo "SKILLS PRUNE YOUNG FAIL (fewer than W done events since since: — never judged, rc 0)"; exit 1; }
+      sk_hit="$(sed -n 's/^{"ts":\([0-9]*\),"ev":"skill-hit".*/\1/p' ops/board/EVENTS.ndjson | head -1)"
+      [ -n "$sk_hit" ] || { echo "SKILLS HIT TS FAIL (the skill-hit line carries a ts)"; exit 1; }
+      sk_i=1; while [ "$sk_i" -le 41 ]; do printf '{"ts":%s,"ev":"done","id":"T-D%s","who":"drill","note":""}\n' "$((sk_hit + 10 + sk_i))" "$sk_i" >> ops/board/EVENTS.ndjson; sk_i=$((sk_i+1)); done
+      "$SELF" skill prune >/dev/null 2>&1 && { echo "SKILLS PRUNE DEMOTE RC FAIL (tier 1 with 0 hits in the last 40 done → demote due, rc 1)"; exit 1; }
+      grep -qx 'disable-model-invocation: false' "$sk_f" || { echo "SKILLS PRUNE DRY FAIL (a verdict without --apply writes nothing)"; exit 1; }
+      "$SELF" skill prune --apply >/dev/null 2>&1 && { echo "SKILLS PRUNE APPLY RC FAIL (--apply keeps rc 1 when a verdict was due)"; exit 1; }
+      grep -qx 'disable-model-invocation: true' "$sk_f" || { echo "SKILLS PRUNE APPLY FAIL (--apply demotes: the flag reads true again)"; exit 1; }
+      grep -q 'tier: 0, evidence' "$sk_f" || { echo "SKILLS PRUNE TIER FAIL (tier: mirrors the flag: 0)"; exit 1; }
+      "$SELF" skill prune >/dev/null 2>&1 || { echo "SKILLS PRUNE KEEP FAIL (at 41 the one hit is still inside 2W — keep, rc 0)"; exit 1; }
+      sk_i=42; while [ "$sk_i" -le 81 ]; do printf '{"ts":%s,"ev":"done","id":"T-D%s","who":"drill","note":""}\n' "$((sk_hit + 10 + sk_i))" "$sk_i" >> ops/board/EVENTS.ndjson; sk_i=$((sk_i+1)); done
+      "$SELF" skill prune >/dev/null 2>&1 && { echo "SKILLS PRUNE ARCHIVE RC FAIL (tier 0 with 0 hits in the last 80 done → archive due, rc 1)"; exit 1; }
+      [ -f "$sk_f" ] || { echo "SKILLS PRUNE ARCHIVE DRY FAIL (a verdict without --apply moves nothing)"; exit 1; }
+      cp "$sk_f" "$T/skills/snap-arc"; [ "$sk_twin" != yes ] || cp .claude/rules/search.md "$T/skills/snap-rule"
+      "$SELF" skill prune --apply >/dev/null 2>&1 && { echo "SKILLS PRUNE ARCHIVE APPLY RC FAIL (--apply keeps rc 1 when a verdict was due)"; exit 1; }
+      [ ! -e .claude/skills/search ] || { echo "SKILLS ARCHIVE MOVE FAIL (the dir leaves .claude/skills/)"; exit 1; }
+      cmp -s .polaris/skills-archived/search/SKILL.md "$T/skills/snap-arc" || { echo "SKILLS ARCHIVE BYTES FAIL (archive is a MOVE: the same bytes under .polaris/skills-archived/search/)"; exit 1; }
+      [ -f .polaris/skills-archived/RESTORE.md ] || { echo "SKILLS ARCHIVE RESTORE-MD FAIL (a RESTORE.md sits beside the archive)"; exit 1; }
+      [ -z "$(git ls-files .claude/skills/search)" ] || { echo "SKILLS ARCHIVE INDEX FAIL (git ls-files no longer lists the skill)"; exit 1; }
+      if [ "$sk_twin" = yes ]; then
+        [ ! -e .claude/rules/search.md ] || { echo "SKILLS ARCHIVE TWIN FAIL (the twin moves with the skill)"; exit 1; }
+        cmp -s .polaris/skills-archived/search.rule.md "$T/skills/snap-rule" || { echo "SKILLS ARCHIVE TWIN BYTES FAIL (the twin is moved, not rewritten)"; exit 1; }
+        [ -z "$(git ls-files .claude/rules/search.md)" ] || { echo "SKILLS ARCHIVE TWIN INDEX FAIL (git ls-files no longer lists the twin)"; exit 1; }
+      fi
+      # (7) restore — from the archive: byte-identical, tracked again, the twin back, the archive dir gone · a present dir is
+      #     refused, nothing written · the second machine: archive gone and the deletion committed → from git history, byte-identical
+      "$SELF" skill restore search >/dev/null 2>&1 || { echo "SKILLS RESTORE FAIL (the archive dir is present — restore from it, rc 0)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-arc" || { echo "SKILLS RESTORE BYTES FAIL (restore from the archive is byte-identical)"; exit 1; }
+      [ -n "$(git ls-files .claude/skills/search)" ] || { echo "SKILLS RESTORE INDEX FAIL (restore re-adds the skill to the index)"; exit 1; }
+      [ ! -e .polaris/skills-archived/search ] || { echo "SKILLS RESTORE ARCHIVE FAIL (the archive dir moves back, it is not copied)"; exit 1; }
+      if [ "$sk_twin" = yes ]; then
+        cmp -s .claude/rules/search.md "$T/skills/snap-rule" || { echo "SKILLS RESTORE TWIN FAIL (the twin comes back byte-identical)"; exit 1; }
+        [ ! -e .polaris/skills-archived/search.rule.md ] || { echo "SKILLS RESTORE TWIN ARCHIVE FAIL (the twin leaves the archive)"; exit 1; }
+      fi
+      "$SELF" skill restore search >/dev/null 2>&1 && { echo "SKILLS RESTORE EXISTS FAIL (a present dir is refused, rc 1)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-arc" || { echo "SKILLS RESTORE EXISTS BYTES FAIL (a refusal writes nothing)"; exit 1; }
+      git rm -r -q --cached .claude/skills/search; [ "$sk_twin" != yes ] || git rm -q --cached .claude/rules/search.md
+      rm -rf .claude/skills/search .claude/rules/search.md .polaris/skills-archived
+      git commit -qm 'chore(skills): archive search — 0 hits in 80 done'
+      "$SELF" skill restore search >/dev/null 2>&1 || { echo "SKILLS RESTORE GIT FAIL (no archive: the commit that deleted the skill still has its parent, rc 0)"; exit 1; }
+      cmp -s "$sk_f" "$T/skills/snap-arc" || { echo "SKILLS RESTORE GIT BYTES FAIL (restored from git history, then re-hidden: the same bytes)"; exit 1; }
+      [ "$sk_twin" != yes ] || cmp -s .claude/rules/search.md "$T/skills/snap-rule" || { echo "SKILLS RESTORE GIT TWIN FAIL (the twin comes back from git history too)"; exit 1; }
+    ) || exit 1
+    rm -rf "$T/skills"
 }
 drill_finish() {
     # --- v5.22: finish — the run-over gate (ops/contracts/run-finish.md). Proves: listed in help ·

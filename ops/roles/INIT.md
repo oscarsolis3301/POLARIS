@@ -212,7 +212,8 @@ code style: <pointers, or "match surrounding code">
 ## Write routing — one fact, one home (a fact in two files means one is drifting)
 | Fact | Only writer | Only home |
 |---|---|---|
-| burndown row + Learned log | Integrator | ops/SPRINT.md |
+| burndown row | `polaris seal`, automatically | ops/SPRINT.md |
+| Learned bullet | `polaris learned` — any lane, any branch (EVOLVE prunes to ≤5) | ops/SPRINT.md |
 | MAP content | Integrator (via task map_delta) | ops/MAP.md |
 | conventions values + Planner calibration notes | EVOLVE (human-approved) | this file · ops/roles/PLANNER.md |
 | RULES lines | human (EVOLVE proposes) | ops/RULES.tsv |

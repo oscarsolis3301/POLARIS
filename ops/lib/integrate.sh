@@ -36,6 +36,135 @@ cmd_run_verify() { # Integrator: re-run a task's verify commands in CWD (e.g. on
   run_verify_cmds "$tf"
 }
 
+amend_verify() { # amend_verify <taskfile> <n|add> <newline|-> — the PURE verify: list surgery behind
+  # cmd_amend, and the only writer that touches an EXISTING front-matter item (fm_append_item only
+  # appends). Block-list shape — the "  - <cmd>" lines the TASK template and the Planner emit — with
+  # the item's own indentation kept and every other byte of the file untouched, because the express
+  # drill diffs task files. <n> is 1-based: `add` appends through fm_append_item (which keeps
+  # whatever shape the list already has), `-` as <newline> drops the line, anything else replaces it
+  # verbatim. rc 1 and the file byte-identical when <n> is out of range, or verify: is absent or not
+  # a block list — no board side-effects at all, which is what lets the fast tier prove it on a
+  # fixture file. ENVIRON, not -v: -v backslash-processes its value and a verify command is full of
+  # backslashes. POSIX awk, bash 3.2, no awk functions (`find --api` indexes a nested
+  # `function x() {` as a symbol of the file).
+  local tf="$1" n="$2" new="$3" tmp="$1.tmp.$$"
+  if [ "$n" = add ]; then fm_append_item verify "$new" "$tf" || return 1; return 0; fi
+  POLARIS_AMEND_NEW="$new" awk -v n="$n" '
+    BEGIN { new = ENVIRON["POLARIS_AMEND_NEW"] }
+    /^---[\r]?$/ { fs++; print; next }
+    fs==1 && !on && !done && index($0, "verify:")==1 {
+      t=substr($0, 8)                                   # length("verify")+2 — fm_list stripping, exactly
+      sub(/^[ \t]*/,"",t); sub(/[ \t]#.*$/,"",t); sub(/[ \t\r]*$/,"",t)
+      print
+      if (t == "") on=1                                 # the block list opens on the next lines
+      next
+    }
+    on && /^[ \t]*-[ \t]/ {
+      i++
+      if (i != n) { print; next }
+      done=1
+      if (new == "-") next                              # drop: the line simply does not come out
+      ind=$0; sub(/-.*$/,"",ind); print ind "- " new    # replace, the item indentation kept
+      next
+    }
+    on && /^[A-Za-z_]/ { on=0 }
+    { print }
+    END { if (!done) exit 3 }
+  ' "$tf" > "$tmp" || { rm -f "$tmp"; return 1; }
+  mv "$tmp" "$tf"
+}
+
+cmd_amend() { # amend <ID> --verify <n> -m "why" -- <cmd…> — the SANCTIONED verify: amendment
+  # (ops/contracts/grant.md v2), and grant's sibling: grant widens a claimed task's OWNERSHIP, amend
+  # corrects its ACCEPTANCE LIST. Four times across two sprints (T-122, T-125, T-136, T-139) a
+  # cross-lane golden owner was handed a verify line unsatisfiable BY CONSTRUCTION — its branch is
+  # based on <base>, so a row its contract REQUIRES it to write can only read as a diff hunk until
+  # the sibling lands — and each one cost a round trip to a human or a conductor hand-editing a
+  # board file. A calibration note fixes the NEXT wave's carves and can do nothing for work already
+  # planned; a command can.
+  # It lives in the INTEGRATOR's module because the two refusals are the point, not guard rails:
+  #   - any feat/* branch refuses, exactly as approve does and for the same reason. A Builder
+  #     EXECUTING a recorded decision is legitimate; a Builder CHOOSING one is not, and that
+  #     distinction has to be structural rather than conventional. It is also what keeps an
+  #     amendment legible AS an amendment — who decided, and why — instead of reading like a lane
+  #     quietly lowering its own bar.
+  #   - a bare full-suite command refuses, through run_verify_cmds' own predicate (_norm_cmd against
+  #     CONVENTIONS test:/build:). An amendment that could install one would be a hole in a gate
+  #     that already exists.
+  # Every refusal mutates NOTHING — no partial write, no commit (grant's rule) — and a success is
+  # ONE board commit. --verify is the only field in v2; the flag is there so a later one can join
+  # without a new command.
+  local id="${1:-}" n="" msg="" newcmd="" drop=0 add=0 tok="" old="" len nc st sb br tf
+  local u='usage: polaris amend <ID> --verify <n> -m "why" -- <cmd…>  |  amend <ID> --verify <n> --drop -m "why"  |  amend <ID> --verify --add -m "why" -- <cmd…>'
+  [ -n "$id" ] || die "$u"
+  shift
+  while [ $# -gt 0 ]; do case "$1" in
+    --verify) case "${2:-}" in ''|-*) ;; *) n="$2"; shift;; esac; shift;;   # --verify --add carries no <n>
+    --drop)   drop=1; shift;;
+    --add)    add=1; shift;;
+    -m)       msg="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
+    --)       shift; newcmd="$*"; break;;
+    *)        die "unknown flag $1 — $u";;
+  esac; done
+  # FIRST, before anything reads the board: the containment IS the command. A Builder standing in
+  # its own worktree must hit this and nothing else, whatever else is wrong with the invocation.
+  br="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  case "$br" in feat/*)
+    die "amend refused on $br — a Builder never rewrites its own gate; run it from the primary checkout";;
+  esac
+  [ -n "$msg" ] || die "amend needs -m \"why\" — the reason the acceptance list changed goes on the task's record ($u)"
+  if [ "$drop" -eq 1 ] && [ "$add" -eq 1 ]; then die "amend: --drop and --add are opposites — pick one ($u)"; fi
+  if [ "$add" -eq 1 ]; then
+    [ -z "$n" ]      || die "amend --add appends; it takes no line number ($u)"
+    [ -n "$newcmd" ] || die "amend --add needs the command after -- ($u)"
+    n=add; tok='+'
+  elif [ "$drop" -eq 1 ]; then
+    [ -n "$n" ]      || die "amend --drop needs the line: --verify <n> --drop ($u)"
+    newcmd='-'; tok="$n"
+  else
+    [ -n "$n" ]      || die "$u"
+    [ -n "$newcmd" ] || die "amend replaces verify line $n with the command after -- ($u)"
+    tok="$n"
+  fi
+  case "$n" in add) ;; ''|*[!0-9]*) die "amend: <n> is the 1-based verify: line, got '$n' ($u)";; esac
+  tf="$(task_file "$id" active)" || tf="$(task_file "$id" review)" \
+    || die "$id is not in active/ or review/ (state: $(task_col "$id" || echo unknown)) — amend corrects a CLAIMED task's acceptance list; anything else is a Planner edit"
+  len="$(fm_list verify "$tf" | awk 'END{print NR+0}')"
+  if [ "$n" != add ]; then
+    { [ "$n" -ge 1 ] && [ "$n" -le "$len" ]; } || die "amend: verify has $len line(s), no line $n"
+  fi
+  # run_verify_cmds' predicate, reused rather than restated: verify: runs 2-3x per task ON TOP of
+  # the wave gate, so the suite belongs in exactly one of those places and it is not this one.
+  if [ "$newcmd" != '-' ]; then
+    nc="$(_norm_cmd "$newcmd")"
+    st="$(_norm_cmd "$(cfg test "")")"
+    sb="$(_norm_cmd "$(cfg build "")")"
+    if { [ -n "$st" ] && [ "$nc" = "$st" ]; } || { [ -n "$sb" ] && [ "$nc" = "$sb" ]; }; then
+      die "amend refused: that is the wave gate, never a verify: line — \"$newcmd\" is CONVENTIONS test:/build:, which the wave already pays once and verify:/handoff/run-verify would pay three times over. Nothing written."
+    fi
+  fi
+  [ "$n" = add ] || old="$(fm_list verify "$tf" | sed -n "${n}p")"
+  mutex_on
+  amend_verify "$tf" "$n" "$newcmd" \
+    || die "amend refused: $id has no verify: block list (\"  - <cmd>\" lines) to amend — nothing written"
+  if [ "$n" = add ]; then
+    printf -- '- amend: verify[%s] "%s" — %s\n' "$tok" "$newcmd" "$msg" >> "$tf"
+  elif [ "$newcmd" = '-' ]; then
+    printf -- '- amend: verify[%s] "%s" → dropped — %s\n' "$tok" "$old" "$msg" >> "$tf"
+  else
+    printf -- '- amend: verify[%s] "%s" → "%s" — %s\n' "$tok" "$old" "$newcmd" "$msg" >> "$tf"
+  fi
+  evt amend "$id" "verify[$tok]"
+  board_commit "chore(board): amend $id verify"
+  sync_board
+  mutex_off; trap - EXIT
+  if [ "$n" = add ]; then        say "amended: $id verify[+] \"$newcmd\" (appended)"
+  elif [ "$newcmd" = '-' ]; then say "amended: $id verify[$tok] dropped — was \"$old\""
+  else                           say "amended: $id verify[$tok] → \"$newcmd\" (was \"$old\")"
+  fi
+  note "the why is on the task's record, so this reads as an amendment and not as a lane lowering its own bar · re-prove: polaris verify $id"
+}
+
 landed_sha() { # landed_sha <ID> [ref] — SHA of the squash commit in <ref> (default $BASE) whose
   # subject ENDS with [<ID>] (what `land` writes). --fixed-strings so the grep is literal; the
   # suffix check below is what keeps [T-1] from ever matching [T-10]. rc 1 = no landed commit.
@@ -206,7 +335,10 @@ EOF
          && git -C "$PRIMARY" merge-base --is-ancestor "$rsha" "$BASE" 2>/dev/null; then
         git -C "$PRIMARY" push -q origin ":refs/heads/feat/$id" 2>/dev/null && remote_note=" (local+remote)" || true
       else
-        note "⚠ origin/feat/$id tip is not in $BASE — left in place; inspect: git fetch origin feat/$id && git log $BASE..FETCH_HEAD"
+        # Two lines, never `&&` — a human pastes this, and PowerShell has no chain operators.
+        note "⚠ origin/feat/$id tip is not in $BASE — left in place. Inspect with these two lines:"
+        note "  git fetch origin feat/$id"
+        note "  git log $BASE..FETCH_HEAD"
       fi
     fi
   fi
@@ -587,6 +719,86 @@ tag_push_recovery_note() { # tag_push_recovery_note <n> — convergent recovery 
   note "   git push --force-with-lease=refs/tags/sprint/$n:\$(git ls-remote origin refs/tags/sprint/$n | cut -f1) origin refs/tags/sprint/$n"
 }
 
+seal_burndown_row() { # seal_burndown_row <n> <date> <ids> — sprint-report.md v3 (T-153): the wave's
+  # burndown row, written by the seal that already holds its numbers. Three sprints of empty tables
+  # were the tell: the Integrator was the only writer of ops/SPRINT.md, and that pen went silent the
+  # day integration became a command nobody sits behind. The seal is the one step every lane passes
+  # through, so the row lives here. <ids> = the wave's task IDs (the [<ID>] suffixes of the sealed
+  # subjects), whitespace-separated; at seal time their files still sit in review/ (done/ is the
+  # fallback for a re-seal). done_pts = Σ their points. remaining = Σ points over backlog ∪ ready ∪
+  # active ∪ review MINUS the wave (no numeric points: ⇒ 0; IDEAS.md has no frontmatter and is
+  # skipped). The row goes in as the LAST row of the TOP sprint's ## Burndown table, the table
+  # created at the end of the top section when the Planner wrote none, then ONE board commit
+  # (`chore(board): burndown <date>`) + sync — BEFORE done's commit, so the drills that pin the
+  # board ref's last subject as `chore(board): done <ID>` stay true. Best-effort end to end: every
+  # failure is a ⚠ note and rc 0 — a seal never fails on its own bookkeeping. Counts are the half a
+  # command CAN write honestly; the closing nudge is for the half it cannot: the lesson.
+  local n="$1" date="$2" ids id tf f b col wave="" rest="" wave_ids="" done_pts remaining row sf tmp ok=1
+  ids=" $(printf '%s' "${3:-}" | tr '\n\t' '  ') "
+  for id in $ids; do
+    tf="$(task_file "$id" review)" || tf="$(task_file "$id" done)" || continue
+    wave="$wave$(fm_get points "$tf")
+"
+    wave_ids="$wave_ids${wave_ids:+ }$id"
+  done
+  for col in backlog ready active review; do
+    for f in "$BOARD/$col/"*.md; do
+      [ -f "$f" ] || continue
+      b="${f##*/}"; b="${b%.md}"
+      [ "$b" = IDEAS ] && continue
+      case "$ids" in *" $b "*) continue;; esac
+      rest="$rest$(fm_get points "$f")
+"
+    done
+  done
+  done_pts="$(printf '%s' "$wave" | awk '{ s += $1 + 0 } END { printf "%s", s + 0 }')"
+  remaining="$(printf '%s' "$rest" | awk '{ s += $1 + 0 } END { printf "%s", s + 0 }')"
+  row="| $date | $done_pts | $remaining |"
+  # The rewrite, one awk pass: the top section runs from the first '# SPRINT ' header to the next.
+  # Its first ## Burndown opens a table = the contiguous '|' lines under it; the row is appended
+  # after the last of them. No table ⇒ created where the section ends (before the next header,
+  # else at EOF) as a blank line + heading + header row + separator + the row. Blank lines inside
+  # the top section are held (pend) and re-emitted AFTER whatever the boundary inserts, so the
+  # new table sits between the section's text and the blank line that already preceded the next
+  # header — the shape the hand-written sprints have. Every other byte passes through untouched.
+  # (Plain rules, no awk functions: `find --api` would index `function x() {` as a nested fn.)
+  sf="$OPS/SPRINT.md"; tmp="$(mktemp)"
+  mutex_on
+  if [ -f "$sf" ] && POLARIS_ROW="$row" awk '
+      BEGIN { row = ENVIRON["POLARIS_ROW"]; body = "| date | done pts | remaining |\n|---|---|---|\n" row; tbl = "\n## Burndown\n" body }
+      /^# SPRINT / { if (top && !done) { out = (intab && rows) ? row : (intab ? body : tbl); print out; done = 1 }
+                     intab = 0; top = (seen ? 0 : 1); seen = 1; while (pend) { print ""; pend-- }; print; next }
+      !top { print; next }
+      !done && !intab && /^## Burndown/ { while (pend) { print ""; pend-- }; print; intab = 1; rows = 0; next }
+      intab && /^\|/ { while (pend) { print ""; pend-- }; print; rows++; next }
+      /^[ \t\r]*$/ { if (intab && rows) { print row; done = 1; intab = 0 }; pend++; next }
+      { if (intab) { out = rows ? row : body; print out; done = 1; intab = 0 }; while (pend) { print ""; pend-- }; print; next }
+      END { if (!done) { out = (intab && rows) ? row : (intab ? body : tbl); print out }; while (pend) { print ""; pend-- } }
+    ' "$sf" > "$tmp"; then
+    cat "$tmp" > "$sf"
+    # commit + sync in subshells: both `die` on a stuck ref or a rejected push, and a die in the
+    # seal's own shell would fail the seal. A subshell inherits no EXIT trap, so nothing here can
+    # release the lease or the mutex the seal is holding (the T-058 trap is int_on/mutex_on INSIDE
+    # a subshell, never a plain command in one).
+    if ( board_commit "chore(board): burndown $date" ); then
+      ( sync_board ) || note "⚠ board push failed — the next board mutation carries the burndown row with it"
+    else
+      ok=0
+    fi
+  else
+    ok=0
+  fi
+  rm -f "$tmp"
+  mutex_off
+  if [ "$ok" -eq 1 ]; then
+    say "burndown: $date · sprint $n · $done_pts pts landed (${wave_ids:-no task IDs}) · $remaining pts still on the board — ops/SPRINT.md"
+  else
+    note "⚠ burndown row not recorded — add it by hand to ops/SPRINT.md § Burndown (sprint $n): $row"
+  fi
+  note 'learned anything? bash ops/polaris learned -m "…" — ≤3 per wave; EVOLVE reads them'
+  return 0
+}
+
 cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wave: ONE --no-ff merge
   # of integrate/<date> into $BASE, tagged sprint/<n>. Message = sprint header + a bullet per landed
   # commit — the changelog entry `history` shows forever. sprint/<n> always marks the sprint's
@@ -690,6 +902,11 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
     int_off
     die "merge conflict sealing integrate/$date into $BASE — resolve by hand; seal never auto-resolves"
   fi
+  # T-153 (sprint-report.md v3): the wave's burndown row, right after the merge — the sealed
+  # subjects name the wave and the board holds the rest, so the numbers need no one to remember
+  # them. $subjects was captured before the report commit, so the [<ID>] suffixes are the tasks
+  # and nothing else. Best-effort inside: a ⚠ at worst, never a failed seal.
+  seal_burndown_row "$n" "$date" "$(printf '%s\n' "$subjects" | sed -n 's/.*\[\([^][]*\)\]$/\1/p' | tr '\n' ' ')"
   # the merge is behind us and the pushes below are the network-slow stretch — re-stamp so the
   # lease reads fresh across them (worktree-liveness.md § steals)
   [ -n "${INT_HELD:-}" ] && date +%s > "$LOCKS/.int-lease/epoch" 2>/dev/null || true
@@ -787,6 +1004,9 @@ seal_sync() { # seal --sync <date> — pr mode only: finish the wave AFTER the h
 $(git log --no-merges --format=%s "$mb..integrate/$date" | grep -v '^chore(board):' || true)
 EOF
   [ -z "$missing" ] || { int_off; die "not in $BASE:$missing — the PR is unmerged, or was squash-merged (per-task commits must survive; merge with the MERGE COMMIT strategy). $BASE is already fast-forwarded to the PR merge; the sprint/$n tag, integrate/$date and the board are untouched"; }
+  # T-153 (sprint-report.md v3): every task of the wave is proven in $BASE — the pr-mode moment
+  # that matches direct mode's "right after the merge". Same row, same board commit, best-effort.
+  seal_burndown_row "$n" "$date" "$ids"
   # 3. tag on the new $BASE HEAD — clean-history v2: create, or move an ancestor tag (CAS push)
   local oldtag old7 new7
   oldtag="$(git rev-parse -q --verify "refs/tags/sprint/$n" || true)"

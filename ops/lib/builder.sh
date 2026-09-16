@@ -124,6 +124,37 @@ EOF
   set_fm branch "feat/$id" "$BOARD/active/$id.md"
   set_fm status active "$BOARD/active/$id.md"
   evt claim "$id" "" "$pts"
+  # SKILL DELIVERY telemetry (ops/contracts/self-skills.md § 4) — the ONLY thing the skills seam
+  # records anywhere. One `skill-hit` per POLARIS-written skill whose `metadata.polaris.paths`
+  # overlap what this task owns: eviction (`skill prune`) is a data rule over exactly these lines,
+  # so a skill nothing is ever delivered for is a skill that stops costing prompt bytes. Emitted
+  # INSIDE the mutex and BEFORE board_commit, so the events ride the SAME board commit as the claim
+  # — a second commit would race every other lane's board write for nothing. `command -v` guards it
+  # because an older installed lib/ predates skills.sh, and a missing module must never cost a claim.
+  if command -v skill_paths >/dev/null 2>&1; then
+    local sk_own sk_name sk_globs sk_glob sk_p sk_hit
+    sk_own="$(fm_list files_owned "$BOARD/active/$id.md" 2>/dev/null | grep . || true)"
+    for sk_name in "$PRIMARY"/.claude/skills/*/; do
+      [ -d "$sk_name" ] || continue
+      sk_name="${sk_name%/}"; sk_name="${sk_name##*/}"
+      sk_globs="$(skill_paths "$sk_name" 2>/dev/null || true)"   # rc 1 = not POLARIS-written = invisible
+      [ -n "$sk_globs" ] || continue
+      sk_hit=""
+      while IFS= read -r sk_glob; do
+        [ -n "$sk_glob" ] || continue
+        while IFS= read -r sk_p; do
+          [ -n "$sk_p" ] || continue
+          if pat_overlap "$sk_p" "$sk_glob"; then sk_hit=1; break; fi   # both directions, the claim gate's matcher
+        done <<EOF_SKOWN
+$sk_own
+EOF_SKOWN
+        [ -z "$sk_hit" ] || break
+      done <<EOF_SKGLOB
+$sk_globs
+EOF_SKGLOB
+      if [ -n "$sk_hit" ]; then evt skill-hit "$sk_name" "$id"; fi
+    done
+  fi
   board_commit "chore(board): claim $id"
   sync_board
   mutex_off; FAIL_LOCK_ID=""; trap - EXIT
@@ -582,12 +613,45 @@ cmd_approve() { # approve <ID> <scope> -m "why" — the sibling of grant (ops/co
 
 pack_section() { printf '\n=== %s ===\n' "$1"; }
 
-pack_brain_grep() { # pack_brain_grep <file> <pattern> — brain lines mentioning an owned path.
+pack_brain_grep() { # pack_brain_grep <file> <pattern> — WHOLE brain bullets mentioning an owned path.
   # The brain already distills gotchas and co-change; the only new thing here is RELEVANCE — a
-  # Builder needs the two lines about ITS files, not all 60.
+  # Builder needs the two lessons about ITS files, not all 60.
+  #
+  # WHOLE, not the matching line (T-156). The brain's lessons are `- ` bullets with two-space
+  # continuation lines, and the best one on this board is NINETEEN lines long — a line-grep handed
+  # the Builder ONE of them. That is the learning loop leaking at its last inch: POLARIS records
+  # what a sprint cost and then delivers a fragment, and a fragment of a lesson is worse than none
+  # because it reads like the whole lesson. A bullet is emitted when ANY of its lines matches.
+  # Caps per file: 8 bullets, 40 lines. A bullet that would cross the line cap is SKIPPED rather
+  # than cut (a truncated lesson is the bug this fixes) — unless nothing has printed yet, where a
+  # single over-long bullet is cut, because printing nothing at all would be worse.
   local bf="$PRIMARY/.polaris/brain/$1" pat="$2"
   [ -f "$bf" ] && [ -n "$pat" ] || return 0
-  grep -E "$pat" "$bf" 2>/dev/null | head -8 || true
+  # The pattern travels in the ENVIRONMENT, never `awk -v`: awk processes escape sequences in a -v
+  # value, so the `\.` this pattern is built from (cmd_pack escapes every owned path) arrives as a
+  # bare `.` — matching ANY character — with a warning on stderr. ENVIRON is byte-exact.
+  POLARIS_BPAT="$pat" awk '
+    function flush(   i) {
+      if (n && hit && nb < 8 && (np + n <= 40 || np == 0)) {
+        for (i = 1; i <= n && np < 40; i++) { print buf[i]; np++ }
+        nb++
+      }
+      n = 0; hit = 0
+    }
+    BEGIN { pat = ENVIRON["POLARIS_BPAT"] }
+    /^- / {                      # a new bullet: close the previous one, open this one
+      flush(); buf[++n] = $0; if ($0 ~ pat) hit = 1
+      next
+    }
+    /^[ \t]/ {                   # an indented continuation line belongs to the open bullet
+      if (n) { buf[++n] = $0; if ($0 ~ pat) hit = 1 }
+      next
+    }
+    {                            # a heading, a blank line, prose: closes the bullet, prints nothing
+      flush()
+    }
+    END { flush() }
+  ' "$bf" 2>/dev/null || true
 }
 
 cmd_pack() { # pack <ID> — the whole context for one task, in ONE call. Read-only.
@@ -678,6 +742,47 @@ EOF
     pack_section "KNOWN TRAPS IN THESE FILES"
     { pack_brain_grep learned.md "$pat"; pack_brain_grep gotchas.md "$pat"; } | grep . \
       || printf '(none recorded for these paths)\n'
+  fi
+
+  # 7b-skills. SKILLS (ops/contracts/self-skills.md § 7): what POLARIS already wrote about these
+  # exact paths, pinned by name, so the Builder reads it BEFORE its first edit instead of learning
+  # the surface a second time. The .claude/rules/ twin fires only when a session READS a matching
+  # file (T-150 measured it), so a lane that only CREATES files there never sees the skill at all —
+  # this section is how that lane hears about it. OMITTED ENTIRELY when nothing overlaps, which is
+  # what keeps pack-visual's golden (and every repo with no skills) byte-identical. Inline on
+  # purpose: this seam is surface-frozen (no new fn). `command -v`: an old installed lib/ has none.
+  if command -v skill_paths >/dev/null 2>&1; then
+    skill_consts
+    local pk_name pk_globs pk_glob pk_hit pk_hits pk_out="" pk_nl='
+'
+    for pk_name in "$PRIMARY"/.claude/skills/*/; do
+      [ -d "$pk_name" ] || continue
+      pk_name="${pk_name%/}"; pk_name="${pk_name##*/}"
+      pk_globs="$(skill_paths "$pk_name" 2>/dev/null || true)"   # rc 1 = not POLARIS-written = invisible here
+      [ -n "$pk_globs" ] || continue
+      pk_hit=""
+      while IFS= read -r pk_glob; do
+        [ -n "$pk_glob" ] || continue
+        while IFS= read -r p; do
+          [ -n "$p" ] || continue
+          if pat_overlap "$p" "$pk_glob"; then pk_hit=1; break; fi
+        done <<EOF_PKOWN
+$owned
+EOF_PKOWN
+        [ -z "$pk_hit" ] || break
+      done <<EOF_PKGLOB
+$pk_globs
+EOF_PKGLOB
+      [ -n "$pk_hit" ] || continue
+      pk_hits="$(skill_hits "$pk_name" "$SKILLS_WINDOW")"
+      pk_out="$pk_out$(printf 'read: .claude/skills/%s/SKILL.md · tier %s · %s/%s hits · %s lines' \
+        "$pk_name" "$(skill_tier "$pk_name")" "${pk_hits%% *}" "$SKILLS_WINDOW" \
+        "$(awk 'END{print NR}' "$PRIMARY/.claude/skills/$pk_name/SKILL.md")")$pk_nl"
+    done
+    if [ -n "$pk_out" ]; then
+      pack_section "SKILLS — what POLARIS already knows about these paths"
+      printf '%s' "$pk_out"
+    fi
   fi
 
   # 7c. SURFACES (ops/contracts/test-surfaces.md § 5): the tests the stale-tests gate will expect to

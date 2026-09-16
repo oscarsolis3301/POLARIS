@@ -366,21 +366,24 @@ AUTOMODE
   fi
 }
 
-cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] · update --all [--repo-only]
+cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--major] · update --all [--repo-only] [--major]
   # The explicit form reuses install.sh's live-board path: kit code is refreshed; board, RULES,
   # CONVENTIONS, MAP and SPRINT are never touched. `--auto` is the SessionStart path (6.3.0,
   # ops/contracts/auto-update.md): applies a minor/patch update by itself when the board is quiet,
-  # stays silent otherwise, never parks. `--all` walks the machine registry and runs `--auto` in
-  # every installed repo. `update` = fetch a newer KIT from the channel.  `upgrade` = migrate an
-  # OLD BOARD to v5. One letter apart and unrelated; update runs upgrade at the end, never the reverse.
-  local auto=0 say_=0 all=0 repo_only=0 a
+  # stays silent otherwise, never parks. `--all` walks the machine registry and runs THIS kit's
+  # `--auto` inside every installed repo (6.5.0, auto-update.md v2). `--major` is the human's
+  # recorded yes to a MAJOR bump — it rides `--all` or `--auto` only, and the SessionStart hook never
+  # passes it. `update` = fetch a newer KIT from the channel.  `upgrade` = migrate an OLD BOARD to
+  # v5. One letter apart and unrelated; update runs upgrade at the end, never the reverse.
+  local auto=0 say_=0 all=0 repo_only=0 major=0 a
   for a in "$@"; do
     case "$a" in
       --auto)      auto=1;;
       --say)       say_=1;;
       --all)       all=1;;
       --repo-only) repo_only=1;;
-      *) die "update: unknown flag ${a} (only --auto, --say, --all, --repo-only)";;
+      --major)     major=1;;
+      *) die "update: unknown flag ${a} (only --auto, --say, --all, --repo-only, --major)";;
     esac
   done
 
@@ -416,15 +419,16 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] · 
   fi
 
   if [ "$all" = 1 ]; then
-    [ "$auto" = 0 ] && [ "$say_" = 0 ] || die "update: --all combines with --repo-only only"
-    cmd_update_all "$repo_only"
+    [ "$auto" = 0 ] && [ "$say_" = 0 ] || die "update: --all combines with --repo-only and --major only"
+    cmd_update_all "$repo_only" "$major"
     return 0
   fi
   if [ "$auto" = 1 ]; then
-    cmd_update_auto "$say_" "$repo_only"
+    cmd_update_auto "$say_" "$repo_only" "$major"
     return 0
   fi
   [ "$say_" = 0 ] || die "update: --say belongs to --auto (update --auto --say)"
+  [ "$major" = 0 ] || die "update: --major belongs to --all or --auto"
 
   [ -f "$VER" ] || die "ops/VERSION missing — this kit predates versioning; reinstall from a fresh zip"
   command -v curl >/dev/null 2>&1 || die "update needs curl on PATH"
@@ -489,6 +493,12 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] · 
 
   rm -f "$PRIMARY/.polaris/update-cache"   # force a fresh check on the next command
   POLARIS_FROM_UPDATE=1 cmd_upgrade
+  # Self-repair on EVERY update, including --auto and --all (owner, 2026-09-15). This is what makes
+  # "update POLARIS anywhere and the machine gets more efficient" true rather than aspirational: a
+  # repo whose CONVENTIONS still names a forbidden model has it commented out here, and every repo
+  # gains the efficiency section once. Append-only, marker-guarded, idempotent — and it never fails
+  # an update: heal returns 0 on every path, because a config nicety must not break a version bump.
+  cmd_heal || true
   say "updated $cur → $(ver version)"
   # An update that only says "5.21 → 5.22" tells nobody what they got, so nobody notices when a
   # piece of it silently did not land — which is exactly how a repo ended up on 5.22.0 with a
@@ -596,11 +606,11 @@ update_dirt_overlaps_kit() { # stdin = `git status --porcelain`; rc 0 = some dir
   return 1
 }
 
-cmd_update_auto() { # cmd_update_auto <say> <repo_only> — the SessionStart path, auto-update.md § algorithm.
+cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionStart path, auto-update.md § algorithm.
   # Every early exit is a silent rc 0 (a busy board is normal; nothing to say); <say>=1 turns each
   # into one `skipped: <reason>` line, which `--all` reads. Never parks, never asks, never exits
   # non-zero, never prints more than one line: a hook must never fail the session or flood it.
-  local say_="${1:-0}" repo_only="${2:-0}" cur latest mode log rc new
+  local say_="${1:-0}" repo_only="${2:-0}" major="${3:-0}" cur latest mode log rc new
   # 1. self-hosting — this repo never self-updates (cmd_update exits before the re-exec; kept here
   #    so the function stands alone for anyone who calls it directly)
   if [ -f "$PRIMARY/kit/ops/pack.py" ]; then
@@ -622,8 +632,11 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> — the SessionStart pat
   if [ -z "$latest" ] || ! semver_gt "$latest" "$cur"; then
     [ "$say_" = 1 ] && printf 'skipped: up to date (%s)\n' "$cur"; return 0
   fi
-  # 4. a MAJOR bump asks; it never applies itself
-  if [ "${latest%%.*}" -gt "${cur%%.*}" ] 2>/dev/null; then
+  # 4. a MAJOR bump asks; it never applies itself — unless the human typed `--major` (6.5.0,
+  #    auto-update.md v2). That flag IS the recorded yes, so the gap falls through to the same
+  #    quiet-board and dirt rules below and the ✅ line stays the usual one; the BREAKING banner the
+  #    explicit path prints lands in .polaris/update.log. The SessionStart hook never passes it.
+  if [ "$major" != 1 ] && [ "${latest%%.*}" -gt "${cur%%.*}" ] 2>/dev/null; then
     printf '⬆ POLARIS %s is a MAJOR update (you have %s) — it will not apply itself; when you want it: bash ops/polaris update\n' "$latest" "$cur"
     return 0
   fi
@@ -656,26 +669,34 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> — the SessionStart pat
   return 0
 }
 
-cmd_update_all() { # cmd_update_all <repo_only> — walk the machine registry; every quiet installed repo updates.
+cmd_update_all() { # cmd_update_all <repo_only> [major] — walk the machine registry; every quiet installed repo updates.
   # Registry root = awake_home (lib/awake.sh); one line per `repos/*` entry, in filename order.
-  # Never deletes an entry, never stops on one repo's failure, rc 0 always. Each repo runs ITS OWN
-  # `ops/polaris update --auto --say` from its own directory — its kit, its board, its rules — and
-  # this only prefixes what it said. (A repo still on a kit older than 6.3.0 answers "unknown flag"
-  # here: one explicit `update` in it, and every later walk reaches it.)
-  local repo_only="${1:-0}" home f p out line printed
+  # Never stops on one repo's failure, rc 0 always. THIS kit's CLI runs inside each target's checkout
+  # (6.5.0, auto-update.md v2): `$SELF` is the re-exec'd temp copy with its lib/ beside it, so the
+  # target's own entry is never invoked and its version is irrelevant. v1 delegated to the target's
+  # `--auto` — a flag that exists only from 6.3.0 — so every install old enough to NEED the update
+  # answered "unknown flag" and stayed put (measured 2026-09-14: The Director 6.2.2, pip 5.24.0);
+  # the further behind a repo was, the less able it was to accept the fix. The child resolves
+  # PRIMARY from its cwd, so the target's ops/VERSION (channel + tarball), CONVENTIONS
+  # (auto_update:), board, locks and .polaris/bg are read as DATA, and the apply step installs the
+  # target's OWN tarball against it, exactly as the explicit path does. POLARIS_UPDATE_REEXEC=1 rode
+  # the exec into this process and is set again on the child, so nothing below re-execs. A gone
+  # path is the ONE entry the walk removes: it can never be updated and would only add a failure
+  # line to every future walk (a recreated repo re-registers at its next install or update).
+  local repo_only="${1:-0}" major="${2:-0}" home f p flags out line printed
   home="$(awake_home)"
   [ "$home" != "-" ] || die "no machine registry yet — open one POLARIS repo in Claude Code first, or: ops/polaris awake install"
+  flags="--auto --say"
+  [ "$repo_only" = 1 ] && flags="$flags --repo-only"
+  [ "$major" = 1 ] && flags="$flags --major"
   for f in "$home"/repos/*; do
     [ -f "$f" ] || continue
     p="$(head -1 "$f" 2>/dev/null | tr -d '\r')"
     [ -n "$p" ] || continue
-    if [ ! -d "$p" ]; then printf '%s: gone (registry entry left for you to remove)\n' "$p"; continue; fi
+    if [ ! -d "$p" ]; then rm -f "$f"; printf '%s: gone — registry entry removed\n' "$p"; continue; fi
     if [ -f "$p/kit/ops/pack.py" ]; then printf '%s: self-hosting — skipped\n' "$p"; continue; fi
-    if [ "$repo_only" = 1 ]; then
-      out="$( (cd "$p" && bash "$p/ops/polaris" update --auto --say --repo-only) 2>&1 || true)"
-    else
-      out="$( (cd "$p" && bash "$p/ops/polaris" update --auto --say) 2>&1 || true)"
-    fi
+    # shellcheck disable=SC2086
+    out="$( (cd "$p" && POLARIS_UPDATE_REEXEC=1 bash "$SELF" update $flags) 2>&1 || true)"
     printed=0
     while IFS= read -r line; do
       [ -n "$line" ] || continue
@@ -729,6 +750,73 @@ cmd_adopt() {
   else
     say "adopted $added stub(s) — uncomment in ops/CONVENTIONS.md to enable; nothing changed behavior"
   fi
+}
+
+# ------------------------------------------------------------------ heal (6.5.0)
+# `heal` is what makes a repo CORRECT without anyone remembering to make it correct. install.sh and
+# cmd_update both call it, so every install and every update on every machine self-repairs the
+# configuration that efficiency depends on — the owner's ask on 2026-09-15, after one day's routing
+# took a weekly model limit to 87%.
+#
+# The line it must not cross: it only ever touches what POLARIS owns, plus ONE clearly-marked,
+# APPEND-ONLY section of the repo's own CLAUDE.md (the owner's explicit extension). It never edits a
+# human's prose, never deletes, and never rewrites a value a human chose — except a forbidden model,
+# which is not a choice any repo is allowed to make.
+#
+# Idempotent by construction: every write is guarded by a test for what it would write. Running it
+# twice changes nothing the second time, which is the only reason it is safe on an auto path.
+HEAL_MARK='<!-- POLARIS:EFFICIENCY -->'
+
+heal_models() { # neutralise any forbidden model_* value in CONVENTIONS. rc 0 always.
+  # Kit code already REFUSES these at runtime (core.sh model_denied), so this is not what enforces
+  # the ban — it is what stops a stale config silently disagreeing with the tool for months.
+  local k v n=0
+  [ -f "$CONV" ] || return 0
+  for k in model_strong model_mid model_cheap; do
+    v="$(cfg "$k" "")"
+    model_denied "$v" || continue
+    # Comment the line out rather than deleting it: the reversal stays legible, and a human can see
+    # exactly what was there. sed in place via temp + mv — never a truncated CONVENTIONS.md.
+    sed "s|^${k}:|# ${k}:|" "$CONV" > "$CONV.heal-tmp" 2>/dev/null \
+      && mv "$CONV.heal-tmp" "$CONV" 2>/dev/null || { rm -f "$CONV.heal-tmp" 2>/dev/null; continue; }
+    note "healed: ${k}: ${v} — forbidden, commented out (POLARIS names no model; spawns inherit the session)"
+    n=$((n + 1))
+  done
+  return 0
+}
+
+heal_claudemd() { # append the marked efficiency section to the repo's OWN CLAUDE.md, once.
+  # APPEND-ONLY and marker-guarded. If the marker is present we do nothing at all — we do not
+  # rewrite it, because a human may have edited the text and their copy is not ours to overwrite.
+  local f="$PRIMARY/CLAUDE.md"
+  [ -f "$f" ] || return 0
+  grep -qF "$HEAL_MARK" "$f" 2>/dev/null && return 0
+  {
+    printf '\n%s\n' "$HEAL_MARK"
+    printf '%s\n' '## Token efficiency — the first property'
+    printf '%s\n' ''
+    printf '%s\n' 'Every token is the owner'"'"'s money and the supply is fixed. Finish the task, prove it, spend as'
+    printf '%s\n' 'little as possible.'
+    printf '%s\n' ''
+    printf '%s\n' '- **Prefer ONE context over three.** Twenty-five subagents in a day is a failure, not diligence.'
+    printf '%s\n' '- **Run the smallest check that proves the change** — never a full suite for a small diff.'
+    printf '%s\n' '- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.'
+    printf '%s\n' '- **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:'
+    printf '%s\n' '  one command per line, never `&&` (PowerShell has no chain operators), no placeholders.'
+    printf '%s\n' '- **Ask early** rather than burning tokens guessing.'
+    printf '%s\n' ''
+    printf '%s\n' 'Added by `polaris heal`. Edit freely — it is appended once and never rewritten.'
+  } >> "$f" 2>/dev/null || return 0
+  note "healed: CLAUDE.md — appended the efficiency section (once; your prose untouched)"
+  return 0
+}
+
+cmd_heal() { # heal — repair the configuration efficiency depends on. Safe to run any time.
+  [ -f "$CONV" ] || { note "heal: no ops/CONVENTIONS.md — INIT has never run here; nothing to heal"; return 0; }
+  heal_models
+  heal_claudemd
+  say "heal: configuration checked"
+  return 0
 }
 
 # ------------------------------------------------------------------ interview (6.4.0)
@@ -920,6 +1008,15 @@ EOF
 # ~28,568 B (~7,100 tokens) belonged to families POLARIS never names once — claude-flow's 98 agent
 # definitions, its 88 slash commands, and the agentdb/sparc/v3-*/github-*/flow-nexus skill sets.
 # A conductor run spawns 6-8 contexts, so that was 43k-57k tokens per run of pure passenger weight.
+# Re-measured on the same machine 2026-09-14: 223 / 29,124 B / 7,281 tok. Both figures stay, both
+# dated — the tax is a moving number and an undated one reads as a fact (self-skills.md § 0 OPEN-7).
+#
+# The counter has ONE exception, and it is the reason POLARIS can write skills for a repo at all:
+# a definition whose frontmatter carries `disable-model-invocation: true` is never offered to the
+# model, never reaches a system prompt, and so counts 0 B below. That is what `ops/polaris skill`
+# builds on — every skill it writes is born with `disable-model-invocation: true` and costs this
+# repo nothing until a human promotes it onto a 1,600 B shelf. slim_scan and skills.sh::skill_bytes
+# implement that rule with the same awk so the two numbers can never disagree.
 #
 # Note what this command does NOT do: it never guesses at value. It reports bytes, names the
 # owner of every byte, and moves nothing unless asked. `--apply` MOVES into an archive tree and
@@ -966,13 +1063,21 @@ slim_scan() { # emit one TAB line per definition: bytes<TAB>keep|drop<TAB>name<T
              if (rel ~ /^skills\//) { name=rel; sub(/^skills\//,"",name); sub(/\/.*$/,"",name) }
              else { name=rel; sub(/^.*\//,"",name); sub(/\.md$/,"",name) }
              skip = (rel ~ /^\.polaris-archived\//)    # already archived — not injected any more
-             b=0; fm=0; p=0; done_fm=0 }
+             b=0; fm=0; p=0; done_fm=0; hidden=0 }
     # Only name: and description: reach a system prompt; the body loads on demand and costs nothing
     # until invoked. Continuation lines of a folded description count — a 6-line YAML description
     # is 6 lines of every prompt — which is why this tracks a `p` flag instead of matching 2 lines.
     !done_fm {
       if (FNR==1 && $0 ~ /^---/) { fm=1; next }
       if (fm && $0 ~ /^---/)     { done_fm=1; next }
+      # ONE clause, and it carries the whole tier-0 idea (ops/contracts/self-skills.md, 6.5.0): a
+      # definition the model cannot invoke contributes NOTHING to a system prompt, so it costs 0 B
+      # here. `disable-model-invocation: true` is therefore the cheapest shelf space there is — it
+      # is how a skill can be born, live and be read by name without ever taxing a session. Same
+      # rule, same awk, as skills.sh::skill_bytes: ONE counter, two callers, and `skill budget` and
+      # `slim` can never disagree about the same file (self-skills.md Invariant 2 — the fast tier
+      # proves it on shared fixtures). Change this clause, change that one.
+      if (fm && $0 ~ /^disable-model-invocation:[ \t]*true[ \t\r]*$/) { hidden=1 }
       if (fm && $0 ~ /^(name|description):/) { p=1; b += length($0)+1; next }
       if (fm && p && $0 ~ /^[A-Za-z_-]+:/)   { p=0 }
       if (fm && p)                           { b += length($0)+1 }
@@ -1003,7 +1108,7 @@ slim_scan() { # emit one TAB line per definition: bytes<TAB>keep|drop<TAB>name<T
       mach = (rel ~ /^agents\// || rel ~ /^commands\// \
               || lname ~ /^(agentdb|reasoningbank|sparc|swarm|v3|flow-nexus|github)-/ \
               || lname=="hooks-automation" || lname=="stream-chain" || lname=="verification-quality")
-      printf "%d\t%s\t%s\t%s\n", b, (keep ? "keep" : (mach ? "drop" : "other")), name, rel
+      printf "%d\t%s\t%s\t%s\n", (hidden ? 0 : b), (keep ? "keep" : (mach ? "drop" : "other")), name, rel
       rel=""
     }
   ' "$tmp" "$@"
@@ -1130,6 +1235,25 @@ cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and re
     note "                              github.com/ayghri/i-have-adhd; reinstall it standalone with"
     note "                              claude plugin install if you want to keep using it)"
     note ".claude/output-styles/       (polaris.md only — any other style you have is yours and stays)"
+    # WHAT UNINSTALL LEAVES BEHIND (ops/contracts/self-skills.md § 0 OPEN-8 and § 8). A skill
+    # carrying `metadata.polaris` is not a kit file: `polaris skill propose` wrote it FROM this
+    # repo's own history — what keeps going wrong on a surface, its public API, the tests that
+    # cover it — so removing POLARIS must not take the repo's knowledge of itself with it. Named
+    # here so a human who disagrees can delete one by hand. Identity is the `metadata.polaris`
+    # key, never a name prefix, which is why this asks skill_paths rather than matching names.
+    local usk usn=0 usl=""
+    if command -v skill_paths >/dev/null 2>&1; then
+      for usk in "$PRIMARY"/.claude/skills/*/; do
+        [ -d "$usk" ] || continue
+        usk="${usk%/}"; usk="${usk##*/}"
+        skill_paths "$usk" >/dev/null 2>&1 || continue
+        usn=$((usn + 1)); usl="${usl:+$usl, }$usk"
+      done
+    fi
+    if [ "$usn" -gt 0 ]; then
+      note "$usn skill(s) POLARIS wrote stay — they are this repo's knowledge; rm .claude/skills/<name> by hand"
+      note "                              $usl"
+    fi
     note "the write-guard hook entry   (.claude/settings.json — your other hooks are kept)"
     note "the managed POLARIS block    (CLAUDE.md — your own content is kept)"
     note "POLARIS lines in .gitignore / .gitattributes · .polaris/ · the lock dir"

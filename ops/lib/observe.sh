@@ -156,6 +156,64 @@ cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatte
   done
 }
 
+feat_tip_landed() { # feat_tip_landed <ID> — rc 0 iff a local feat/<ID> exists AND its tip is PROVEN
+  # landed (ops/contracts/worktree-liveness.md § v2). Two proofs, in the order they actually happen:
+  # TIP EQUALITY with the `Landed-from:` trailer of the task's landed squash commit — what `land`
+  # writes, and the only proof that works for a squash, which is never an ancestor of $BASE — then
+  # plain ancestry, the legacy proof for hand merges. Anything else is rc 1: a tip that moved past
+  # the landing carries commits nobody has merged, and "the task is in done/" is evidence about the
+  # TASK, never about the branch. That distinction is the whole gate — getting it wrong in the
+  # permissive direction deletes work. Prints nothing; sets $FEAT_LANDED_SHA to the commit that
+  # proved it (the rules_gate/$RULES_GATE shape) for callers that name the sha in a note.
+  local id="$1" tip lsha lf
+  FEAT_LANDED_SHA=""
+  tip="$(git -C "$PRIMARY" rev-parse -q --verify "refs/heads/feat/$id" 2>/dev/null || true)"
+  [ -n "$tip" ] || return 1
+  lsha="$(fm_get landed "$BOARD/done/$id.md" 2>/dev/null || true)"
+  [ -n "$lsha" ] || lsha="$(landed_sha "$id" 2>/dev/null || true)"
+  if [ -n "$lsha" ]; then
+    lf="$(git -C "$PRIMARY" log -1 --format=%B "$lsha" 2>/dev/null | sed -n 's/^Landed-from: *//p' | head -1 | tr -d ' \r' || true)"
+    if [ -n "$lf" ] && [ "$lf" = "$tip" ]; then FEAT_LANDED_SHA="$lsha"; return 0; fi
+  fi
+  if git -C "$PRIMARY" merge-base --is-ancestor "$tip" "$BASE" 2>/dev/null; then
+    FEAT_LANDED_SHA="$tip"; return 0
+  fi
+  return 1
+}
+
+cruft_clear() { # cruft_clear — delete every local feat/<ID> whose task is done AND whose tip
+  # feat_tip_landed can PROVE landed, unless a lane is still standing in its worktree. Under
+  # `landing: self` a lane leaves its own branch behind BY DESIGN (v1.2: never remove the ground you
+  # are standing on), so that branch is not a finding, it is a lane mid-step — and reporting it as
+  # cruft is what reddened `qa` after the suite, withheld the stamp, and made the next `finish`
+  # re-run ~12 minutes of tests for a nit clearable in a second. So: the beat decides who is still
+  # there, feat_tip_landed decides what is safe to delete, and this is the ONE mutation `qa` makes
+  # besides the stamp — lossless by construction, because a branch only goes when its commits are
+  # already in $BASE under another sha. Everything it skips, `drift` still reports.
+  # rc 0 always; silent when nothing was cleared. Sets $CRUFT_CLEARED to the count.
+  local f id rc refs
+  CRUFT_CLEARED=0
+  # ONE ref read for the whole pass. The per-task `show-ref` this replaces was a fork per done task
+  # to discover, on almost every board, that there is nothing to do at all.
+  refs="$(git -C "$PRIMARY" for-each-ref --format='%(refname:short)' 'refs/heads/feat/*' 2>/dev/null || true)"
+  [ -n "$refs" ] || return 0
+  refs=" $(printf '%s' "$refs" | tr '\n' ' ') "
+  for f in "$BOARD/done/"*.md; do [ -e "$f" ] || break
+    id="$(basename "$f" .md)"
+    case "$refs" in *" feat/$id "*) : ;; *) continue ;; esac
+    feat_tip_landed "$id" || continue
+    if [ -d "$GCD/worktrees/$id" ]; then
+      if beat_live "$id"; then continue; fi            # a lane is still standing in it — not cruft yet
+      rc=0; wt_remove "$id" sweep || rc=$?
+      if [ "$rc" -eq 1 ]; then continue; fi            # LEFT — the branch it holds stays with it
+    fi
+    git -C "$PRIMARY" branch -D "feat/$id" >/dev/null 2>&1 || continue
+    CRUFT_CLEARED=$((CRUFT_CLEARED+1))
+    note "cleared: feat/$id (landed ${FEAT_LANDED_SHA:0:7})"
+  done
+  return 0
+}
+
 cmd_sweep() { # report orphans + stale locks + idle worktrees + >24h bg jobs/archives + remote
   # strays; --fix removes true orphans, reaps idle worktrees through wt_remove, rotates
   # finished/crashed stale jobs, prunes day-old runtime archives, and deletes merged strays
@@ -236,12 +294,37 @@ cmd_sweep() { # report orphans + stale locks + idle worktrees + >24h bg jobs/arc
       # the board already calls done — an active or review branch is live work whatever state its
       # worktree is in, and an archived one still has its commits to recover.
       if [ "$wrc" -eq 0 ] && [ -f "$BOARD/done/$wid.md" ]; then
-        git -C "$PRIMARY" branch -D "feat/$wid" >/dev/null 2>&1 && note "branch feat/$wid deleted" || true
+        # ...and only with PROOF its tip is already in $BASE (worktree-liveness.md § v2): "done" is
+        # a fact about the TASK, and a branch can still carry commits nobody ever merged.
+        if feat_tip_landed "$wid"; then
+          git -C "$PRIMARY" branch -D "feat/$wid" >/dev/null 2>&1 && note "branch feat/$wid deleted" || true
+        else
+          printf '⚠ feat/%s kept — tip not proven landed\n' "$wid"
+        fi
       fi
     fi
   done <<EOF
 $(git -C "$PRIMARY" worktree list --porcelain 2>/dev/null)
 EOF
+  # CRUFT BRANCHES (ops/contracts/worktree-liveness.md § v2). The pass above reaps WORKTREES; this
+  # one reaps the branches a self-landing lane leaves behind once it has stepped out of its own
+  # worktree — and only those whose tip feat_tip_landed can prove is already in $BASE. A diverged
+  # tip is `drift`'s to report and nobody's to delete. `--fix` calls the same cruft_clear `qa`
+  # calls, so there is exactly ONE implementation of "safe to delete" in the kit.
+  local crefs cf cfid
+  crefs="$(git -C "$PRIMARY" for-each-ref --format='%(refname:short)' 'refs/heads/feat/*' 2>/dev/null || true)"
+  if [ -n "$crefs" ]; then
+    crefs=" $(printf '%s' "$crefs" | tr '\n' ' ') "
+    for cf in "$BOARD/done/"*.md; do [ -e "$cf" ] || break
+      cfid="$(basename "$cf" .md)"
+      case "$crefs" in *" feat/$cfid "*) : ;; *) continue ;; esac
+      feat_tip_landed "$cfid" || continue
+      if [ -d "$GCD/worktrees/$cfid" ] && beat_live "$cfid"; then continue; fi
+      found=1
+      printf '⚠ CRUFT: feat/%s — task done, tip proven landed, no live worktree — sweep --fix clears it\n' "$cfid"
+    done
+  fi
+  [ "$fix" = "--fix" ] && cruft_clear
   # background jobs (ops/contracts/bg-jobs.md): a non-.prev job dir whose start is >24h old is
   # leftover runtime state. Always reported; --fix rotates it to <name>.prev (archive, never
   # delete) — but NEVER a still-running job: rotating a live job's dir out from under its runner
@@ -324,7 +407,8 @@ EOF
         found=1; printf '⚠ REMOTE stray: feat/%s — task done, branch fully merged, still on origin\n' "$rid"
         [ "$fix" = "--fix" ] && { git -C "$PRIMARY" push -q origin ":refs/heads/feat/$rid" && note "deleted"; }
       else
-        found=1; printf '⚠ REMOTE diverged: feat/%s — task done but the remote tip is NOT in %s. Inspect: git fetch origin feat/%s && git log %s..FETCH_HEAD (never auto-deleted)\n' \
+        # Two lines, never `&&` — a human pastes this, and PowerShell has no chain operators.
+        found=1; printf '⚠ REMOTE diverged: feat/%s — task done but the remote tip is NOT in %s (never auto-deleted). Inspect:\n     git fetch origin feat/%s\n     git log %s..FETCH_HEAD\n' \
           "$rid" "$BASE" "$rid" "$BASE"
       fi
     done <<EOF
@@ -348,7 +432,8 @@ EOF
         found=1; printf '⚠ REMOTE stray: %s — wave merged into %s, branch still on origin\n' "$rid" "$BASE"
         [ "$fix" = "--fix" ] && { git -C "$PRIMARY" push -q origin ":refs/heads/$rid" && note "deleted"; }
       else
-        found=1; printf '⚠ REMOTE diverged: %s — tip is NOT in %s. Inspect: git fetch origin %s && git log %s..FETCH_HEAD (never auto-deleted)\n' \
+        # Two lines, never `&&` — a human pastes this, and PowerShell has no chain operators.
+        found=1; printf '⚠ REMOTE diverged: %s — tip is NOT in %s (never auto-deleted). Inspect:\n     git fetch origin %s\n     git log %s..FETCH_HEAD\n' \
           "$rid" "$BASE" "$rid" "$BASE"
       fi
     done <<EOF
@@ -643,6 +728,25 @@ cmd_doctor() {
       note "⚠ keep-awake is DISABLED (ops/polaris awake enable)"
     fi
   fi
+  # THE SKILLS SHELF (ops/contracts/self-skills.md § 7). Both lines are the module's OWN verdicts,
+  # never a second opinion computed here: `skill_budget` is rc 1 exactly when the tier-1 shelf is
+  # over 1,600 B, and `skill_prune` is rc 1 exactly when a demotion or an archive is due. Their
+  # stdout is captured, not printed — doctor says the one useful sentence, `ops/polaris skill` says
+  # the rest. Silent otherwise, and a repo that never ran `skill propose` has no POLARIS-written
+  # skills at all, so it never hears a word and doctor's goldens stay byte-identical. `command -v`
+  # because an older installed lib/ predates skills.sh and a health check must never die of a
+  # module it was shipped without.
+  if command -v skill_budget >/dev/null 2>&1; then
+    local skb skp skn
+    if ! skb="$(skill_budget 2>/dev/null)"; then
+      skb="$(printf '%s\n' "$skb" | grep '^⛔' || true)"
+      [ -z "$skb" ] || note "$skb"
+    fi
+    if ! skp="$(skill_prune 2>/dev/null)"; then
+      skn="$(printf '%s\n' "$skp" | grep -cE '^(demote|archive) ' || true)"
+      note "⚠ $skn skill(s) due for eviction — ops/polaris skill prune"
+    fi
+  fi
   say "doctor: OK"
   # --fast (ops/contracts/fast-tier.md): the in-process tier — selftest_fast in lib/selftest/fast.sh,
   # read as $1 exactly like --selftest below. It combines with NOTHING: an extra arg is a die, not a
@@ -821,12 +925,28 @@ EOF
 $(fm_list surface "$f")
 EOF
   done
-  # 3) cruft: done tasks whose feat branch survived
-  for f in "$BOARD/done/"*.md; do [ -e "$f" ] || break
-    id="$(basename "$f" .md)"
-    git -C "$PRIMARY" show-ref --verify -q "refs/heads/feat/$id" \
-      && finding "CRUFT: feat/$id still exists though $id is done — git branch -D feat/$id"
-  done
+  # 3) cruft: a done task's feat branch survived — THREE classes, not one (ops/contracts/
+  # worktree-liveness.md § v2). Under `landing: self` a lane leaves its OWN branch behind by design
+  # (v1.2: never remove the ground you are standing on), so the flat "the branch exists" finding
+  # fired on every self-landed wave — after `qa` had already paid the suite, which withheld the
+  # stamp and made the next `finish` pay it all over again for a nit clearable in a second. A
+  # branch is a finding only once nobody is standing in its worktree, and DELETABLE only with proof
+  # its tip is already in $BASE. ONE ref read, not a fork per done task.
+  local crefs; crefs="$(git -C "$PRIMARY" for-each-ref --format='%(refname:short)' 'refs/heads/feat/*' 2>/dev/null || true)"
+  if [ -n "$crefs" ]; then
+    crefs=" $(printf '%s' "$crefs" | tr '\n' ' ') "
+    for f in "$BOARD/done/"*.md; do [ -e "$f" ] || break
+      id="$(basename "$f" .md)"
+      case "$crefs" in *" feat/$id "*) : ;; *) continue ;; esac
+      if ! feat_tip_landed "$id"; then
+        finding "CRUFT diverged: feat/$id carries commits not in $BASE — inspect: git log $BASE..feat/$id (never auto-deleted)"
+      elif [ -d "$GCD/worktrees/$id" ] && beat_live "$id"; then
+        : # waiting — the lane that landed it is still inside its own worktree; `sweep` lists the LIVE worktree and drift says nothing
+      else
+        finding "CRUFT: feat/$id still exists though $id is done — bash ops/polaris qa or sweep --fix clears it"
+      fi
+    done
+  fi
   # 4) stale forward refs: TODO(T-…) pointing at tasks already done
   local refs; refs="$(grep -RIn 'TODO([A-Za-z][A-Za-z0-9._-]*-[0-9A-Za-z]' "$BOARD" "$OPS/contracts" "$OPS/SPRINT.md" "$OPS/MAP.md" 2>/dev/null || true)"
   while IFS= read -r v; do [ -z "$v" ] && continue
@@ -1833,7 +1953,7 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
   # only no-args and an unknown ID are errors. Read-only by contract: touches no lock, writes no
   # board file, fires no hook.
   local id="" role="" pts="" rsk="" pts_set="" rsk_set=""
-  local tier="" mdl="" ov="" f="" rnote=""
+  local tier="" mdl="" ov="" f="" rnote="" rdeny="" rraw=""
   local u="usage: polaris route <ID> | --role <ROLE> | --points <N> [--risk <R>]"
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -1870,8 +1990,26 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
     die "$u"
   fi
   printf '%s\n' "$tier"
-  [ -n "$mdl" ] || mdl="$(model_for_tier "$tier")"
+  # FORBIDDEN models are NEVER named (core.sh model_denied — owner, 2026-09-15: Fable and Haiku, in
+  # any repo, on any machine). Two sources, both refused here: a task's literal `model:` is checked
+  # directly, and a CONVENTIONS model_* value was already refused inside model_for_tier, which hands
+  # the name back via MODEL_DENIED. Either way the `model:` note is WITHHELD — which is not a new
+  # code path: the contract's existing rule is absent ⇒ the caller omits the spawn's model param and
+  # the platform default runs. Line 1 is untouched, so every caller still branches on the bare tier.
+  if model_denied "$mdl"; then rdeny="$mdl"; mdl=""; fi
+  if [ -z "$mdl" ]; then
+    mdl="$(model_for_tier "$tier")"
+    # Nothing came back — either the knob is unset (ordinary) or it named a forbidden model and
+    # model_for_tier withheld it. Those must read differently to a human, so re-read the raw key to
+    # tell them apart. model_for_tier's MODEL_DENIED cannot be used here: it runs in a command
+    # substitution, so the assignment happens in a SUBSHELL and never reaches this scope.
+    if [ -z "$mdl" ]; then
+      rraw="$(cfg "model_$tier" "")"
+      model_denied "$rraw" && rdeny="$rraw"
+    fi
+  fi
   [ -n "$mdl" ] && note "model: $mdl"
+  [ -n "$rdeny" ] && note "model REFUSED: '$rdeny' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's"
   [ -n "$rnote" ] && note "$rnote"
   return 0
 }
@@ -1998,6 +2136,15 @@ EOF
     fi
   fi
   [ "$ran" -eq 0 ] && [ "$skip" -eq 0 ] && [ "$carry" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
+  # CRUFT (ops/contracts/worktree-liveness.md § v2): clear the provably-landed leftovers BEFORE
+  # drift looks at them. This is qa's only mutation besides the stamp, and it is exactly the subset
+  # of `sweep --fix` that is lossless by construction — a branch goes only when its commits are
+  # already in $BASE under another sha, and never while a lane is still standing in its worktree.
+  # The ORDER is the whole point: reported instead of cleared, it reds a run that has just paid for
+  # a green suite, withholds the stamp, and hands the next `finish` the full ~12 minutes again for
+  # a nit. `finish` inherits this through cmd_qa.
+  cruft_clear
+  [ "${CRUFT_CLEARED:-0}" -gt 0 ] && say "cruft — cleared $CRUFT_CLEARED branch(es)"
   # drift --strict exits the script on findings, so both sub-checks run in subshells.
   if ( cmd_drift --strict ) >"$out" 2>&1; then
     say "drift — board clean"

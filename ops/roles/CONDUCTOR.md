@@ -57,6 +57,21 @@ start to continue` · then run `bash ops/polaris finish`. A budgeted stop is the
 as a normal ending, never as an apology. (`finish` exiting 0 at a cap means the board really is
 clear — then celebrate.)
 
+**Hand the remainder over, do not just stop.** A budgeted stop that leaves the human to work out what
+is left has spent the budget and delivered nothing at the end of it. So the close carries a 🚩 block
+(output style § Handing a step to the human): what landed, and ONE paste-ready block — one command per
+line, never `&&` — that picks the rest up. **Read the caps from `ops/CONVENTIONS.md`, never from the
+defaults in this file's table**: on 2026-09-15 a run stopped at 90 minutes against a repo whose actual
+ceiling was 360, because the conductor quoted the built-in default instead of reading the config, and
+the owner had to type `start` for nothing.
+
+**Tokens are the cap this protocol cannot enforce, so you are the one enforcing them.** `run_max_*`
+bound tasks, minutes and agents — all measurable from the shell — but token spend is invisible to
+every command here. That is precisely why § TOKEN DISCIPLINE's mission is on you at every spawn: one
+context over three, the smallest check that proves the change, and a 🚩 handover for anything long,
+mechanical and judgement-free. A run that stays inside every numeric cap and still burns a weekly
+limit has failed, and no gate will have told you.
+
 **Context compacted mid-run?** The board is the run's memory, not your context — and
 the anchor hook already re-read the board for you the moment the compaction finished, so continue
 from its `next:` line: `build <ID>` → spawn that lane · `integrate` → spawn the integrator ·
@@ -253,9 +268,13 @@ call per spawn; routing never blocks work.
    the failures as bug task(s), then build → integrate → re-run `qa`. Cap: **`run_fix_waves`, default 2**;
    still red after that → park the offenders in `blocked/` and tell the human plainly what is red
    and why you stopped.
-7. **Waves.** Integration promoted backlog tasks whose dependencies just landed? If they belong to
-   THIS plan, loop to step 4 automatically — dependency chains are why the human shouldn't have to
-   say "continue". Then the queue. **`drain: plan` is what INIT seeds** (`ops/CONVENTIONS.md`; the
+7. **Waves. Promotion is one command: `bash ops/polaris next --do`** (or `promote`) — run it after
+   every wave lands; it holds every `backlog/` task to the full ready gate under the board lock,
+   promotes this plan's dependents in ONE `chore(board): promote <IDs>` commit and prints `held:`
+   lines for what it refused. Then, if it promoted anything of THIS plan, loop to step 4
+   automatically — dependency chains are why the human shouldn't have to say "continue". Never
+   move a task between board folders by hand; that is the whole reason this command exists.
+   Then the queue. **`drain: plan` is what INIT seeds** (`ops/CONVENTIONS.md`; the
    CLI's own fallback for an unset key is `queue`, and `finish` reads the same key): the run
    stops after this plan's own tasks, and anything else queued waits for the next `start` — one "go"
    authorizes the plan the human just approved, not the whole board. Say so in one line at close:

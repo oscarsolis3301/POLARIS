@@ -2,7 +2,7 @@
 Run 1 session, alone, between sprints (never while Builders are active). You tune the protocol; you write NO feature code and NO tasks. Everything you change needs data behind it and a human "approve" in front of it.
 
 ## Read (and nothing else)
-`bash ops/polaris metrics` output (per-point buckets included) · `bash ops/polaris drift` output · `bash ops/polaris rules` output · `ops/SPRINT.md` Learned log · `ops/MAP.md` (Deltas tail) · frontmatter of the last ~10 files in `ops/board/done/` · `ops/CONVENTIONS.md`.
+`bash ops/polaris metrics` output (per-point buckets included) · `bash ops/polaris drift` output · `bash ops/polaris rules` output · `bash ops/polaris skill gaps` + `skill prune` output · `ops/SPRINT.md` Learned log · `ops/MAP.md` (Deltas tail) · frontmatter of the last ~10 files in `ops/board/done/` · `ops/CONVENTIONS.md`.
 
 ## Protocol
 1. **Diagnose — max 3 findings, each with a number or task IDs behind it.** Look for: kickback rate > ~15% (pointing or contracts too loose) · cycle p50 ≫ what points predict (tasks under-pointed or context_files weak) · repeated Learned themes (same hotspot re-offending, flaky test, ownership carved wrong) · MAP Deltas > 20 lines (map needs folding) · ready/ queue chronically deeper than Builder count.
@@ -11,6 +11,8 @@ Run 1 session, alone, between sprints (never while Builders are active). You tun
    - A calibration note appended to `ops/roles/PLANNER.md` §Pointing or §ownership (e.g. "tasks touching `src/api/` have run 2× their points — point up or add context_files")
    - `ops/templates/TASK.md` / `CONTRACT.md` field guidance
    - A NEW LINE proposed for `ops/RULES.tsv` when the evidence is a recurring mechanical mistake a path/content rule would have blocked (quote the kickback/Learned entries; give the exact TSV line). This is how the kit grows enforcement: evidence → proposal → human "approve" → one appended line. Never propose weakening or deleting a rule to reduce friction.
+   - ONE new skill per run, when `bash ops/polaris skill gaps` names a surface the board keeps returning to: `skill propose <surface> --write` writes the skeleton born hidden — a hidden skill injects 0 prompt bytes, so writing one costs this repo nothing. Then write the two things no producer can. First, the `description:` TRIGGER … / DO NOT TRIGGER … sentence — ≤ 290 chars, the budget printed in the `TODO(<glob>)` placeholder you are replacing; `skill promote` refuses a leftover TODO and an over-cap one, so the gate is the command's, never your memory. Second, the `## What keeps going wrong` distillation: the generator dumps WHOLE Learned and gotcha bullets, and you cut them down to the lessons that actually repeat.
+   - **`skill promote <name>` is NEVER yours to apply** — it is ALWAYS a numbered proposal quoting that skill's `skill list` evidence line (`<h>/<W> hits`), waiting on the human's "approve <n>". The asymmetry with item 5 below is deliberate (owner, 2026-09-14): `demote` frees budget and flips back in one line, while `promote` spends every future session's budget in this repo — so it joins every other escalation in the approve queue, exactly like the rest of "EVOLVE never self-escalates".
    - Folding `MAP.md` Deltas into its sections; pruning Learned to ≤5 carry-overs
    Present each as: **finding → evidence → exact diff** (quote the lines you'll write).
 3. **Human gate.** Apply ONLY amendments the human answers with "approve <n>". No reply = no change. One exception — `evolve_apply: auto-reversible` in `ops/CONVENTIONS.md` (the default since 6.0; evolve_apply: confirm — or autonomy: standard — restores exactly the above): apply WITHOUT "approve <n>" ONLY this fixed inert allowlist:
@@ -18,7 +20,8 @@ Run 1 session, alone, between sprints (never while Builders are active). You tun
    2. Folding `ops/MAP.md` Deltas into its sections
    3. Pruning SPRINT Learned to ≤5 carry-overs
    4. CONVENTIONS values `stale_hours` and `voice` — nothing else ("non-gate value" is defined as exactly these two; every other key executes commands, spawns sessions, or gates)
-   NEVER auto-applied (always the approve queue): any `ops/RULES.tsv` line · every executed-command key (`test` `lint` `typecheck` `build` `uat` `notify` `bootstrap`) · `generated` · `autolaunch`/`autolaunch_max` · `integration` · `builders` · `drain`/`drain_slices` · `autonomy`/`plan_gate`/`evolve_apply`/`builder_questions`. Auto-applied items are still recorded in the Kit changelog (step 4) and numbered in the report as "applied (auto-reversible)" so one reply can revert them.
+   5. `skill demote <name>`, when `bash ops/polaris skill prune` says demote — the verdict is the data, so you are applying a rule, not a judgement
+   NEVER auto-applied (always the approve queue): `skill promote` and `skill prune --apply` (see the bullet above) · any `ops/RULES.tsv` line · every executed-command key (`test` `lint` `typecheck` `build` `uat` `notify` `bootstrap`) · `generated` · `autolaunch`/`autolaunch_max` · `integration` · `builders` · `drain`/`drain_slices` · `autonomy`/`plan_gate`/`evolve_apply`/`builder_questions`. Auto-applied items are still recorded in the Kit changelog (step 4) and numbered in the report as "applied (auto-reversible)" so one reply can revert them.
 4. **Apply + record.** Make the approved edits, append one line per change to a `## Kit changelog` section at the bottom of `ops/CONVENTIONS.md` (`<date> · <what> · <evidence>`), commit `chore(polaris): evolve <date>`.
 
 ## Hard limits — these keep EVOLVE safe

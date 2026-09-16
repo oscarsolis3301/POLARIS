@@ -111,6 +111,78 @@ drill_grant() {
     [ -d .polaris/wt/T-H ] || { echo "WT RESUME DIR FAIL (recreated worktree missing)"; exit 1; }
     "$SELF" release T-H --to ready -m drill >/dev/null
     # ---- end T-059 claim hardening ----
+    # ================== T-157 amend drills (ops/contracts/grant.md v2) ==================
+    # grant's sibling: grant widens a claimed task's OWNERSHIP, amend corrects its ACCEPTANCE LIST.
+    # The two refusals are the product, not the guard rails — a Builder must not be able to relax its
+    # own gate (approve's rule, mechanical not advisory), and an amendment must not be able to
+    # install the wave suite that run_verify_cmds already refuses. Both mutate NOTHING.
+    "$SELF" help | grep -q '^  amend ' || { echo "USAGE FAIL: amend missing from help"; exit 1; }
+    printf -- '---\nid: T-AM\ntitle: amend me\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: active\nfiles_owned:\n  - src/am.txt\nverify:\n  - test -f one\n  - test -f two\n  - test -f three\n---\n## Notes\n' > ops/board/active/T-AM.md
+    ampre="$(git rev-parse refs/heads/polaris/board)"; amsum="$(git hash-object ops/board/active/T-AM.md)"
+    # (1) feat/* — the containment. T-G is claimed, so .polaris/wt/T-G is a real feat/* worktree.
+    ( cd .polaris/wt/T-G && "$SELF" amend T-AM --verify 1 -m why -- true ) > "$T/am1.out" 2>&1 \
+      && { echo "AMEND FEAT FAIL (a feat/* branch must refuse — a Builder never rewrites its own gate)"; exit 1; }
+    grep -q 'a Builder never rewrites its own gate' "$T/am1.out" || { cat "$T/am1.out"; echo "AMEND FEAT MSG FAIL (the contract pins this refusal text verbatim)"; exit 1; }
+    # (2) out of range, naming the length so the caller can see what it may pick
+    "$SELF" amend T-AM --verify 9 -m why -- true > "$T/am2.out" 2>&1 \
+      && { echo "AMEND RANGE FAIL (a line past the end must refuse)"; exit 1; }
+    grep -q 'verify has 3 line(s), no line 9' "$T/am2.out" || { cat "$T/am2.out"; echo "AMEND RANGE MSG FAIL (the refusal must name the length and the line asked for)"; exit 1; }
+    # (3) a bare full-suite command — run_verify_cmds' own predicate, reused. Prepended so cfg's
+    #     first-match-wins picks it whatever the fixture's CONVENTIONS already says.
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/am-conv.bak"; else rm -f "$T/am-conv.bak"; fi
+    { printf 'test: bash ops/tests/all.sh\n'; cat "$T/am-conv.bak" 2>/dev/null || true; } > ops/CONVENTIONS.md
+    "$SELF" amend T-AM --verify 1 -m why -- bash ops/tests/all.sh > "$T/am3.out" 2>&1 \
+      && { echo "AMEND SUITE FAIL (a bare full-suite command must refuse — an amendment that could install one is a hole in a gate that already exists)"; exit 1; }
+    grep -q 'that is the wave gate, never a verify: line' "$T/am3.out" || { cat "$T/am3.out"; echo "AMEND SUITE MSG FAIL"; exit 1; }
+    if [ -f "$T/am-conv.bak" ]; then cp "$T/am-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    rm -f "$T/am-conv.bak"
+    [ "$(git rev-parse refs/heads/polaris/board)" = "$ampre" ] || { echo "AMEND REFUSE COMMIT FAIL (a refusal must not commit)"; exit 1; }
+    [ "$(git hash-object ops/board/active/T-AM.md)" = "$amsum" ] || { echo "AMEND REFUSE MUTATE FAIL (a refusal must leave the task byte-identical)"; exit 1; }
+    # (4) replace line 2: old-1 / new / old-3, the Notes line, the event, ONE board commit
+    amn="$(git rev-list --count refs/heads/polaris/board)"
+    "$SELF" amend T-AM --verify 2 -m "the sibling lands first" -- test -f TWO >/dev/null \
+      || { echo "AMEND REPLACE FAIL (the sanctioned edit must succeed from the primary)"; exit 1; }
+    [ "$(fm_list verify ops/board/active/T-AM.md | tr '\n' '|')" = "test -f one|test -f TWO|test -f three|" ] \
+      || { fm_list verify ops/board/active/T-AM.md; echo "AMEND REPLACE LIST FAIL (order kept: old-1 / new / old-3)"; exit 1; }
+    grep -q '^- amend: verify\[2\] "test -f two" → "test -f TWO" — the sibling lands first$' ops/board/active/T-AM.md \
+      || { echo "AMEND NOTE FAIL (the Notes line is what tells an amendment apart from a lane lowering its own bar)"; exit 1; }
+    grep -q '"ev":"amend","id":"T-AM".*"note":"verify\[2\]"' ops/board/EVENTS.ndjson || { echo "AMEND EVENT FAIL"; exit 1; }
+    git log -1 --format=%s refs/heads/polaris/board | grep -qx 'chore(board): amend T-AM verify' || { echo "AMEND COMMIT FAIL (contract subject)"; exit 1; }
+    [ "$(git rev-list --count refs/heads/polaris/board)" = "$(( amn + 1 ))" ] || { echo "AMEND COMMIT COUNT FAIL (ONE board commit)"; exit 1; }
+    # (5) --drop leaves two lines · (6) --add appends one
+    "$SELF" amend T-AM --verify 1 --drop -m "unsatisfiable until the sibling lands" >/dev/null || { echo "AMEND DROP FAIL"; exit 1; }
+    [ "$(fm_list verify ops/board/active/T-AM.md | tr '\n' '|')" = "test -f TWO|test -f three|" ] \
+      || { fm_list verify ops/board/active/T-AM.md; echo "AMEND DROP LIST FAIL (two lines, order kept)"; exit 1; }
+    grep -q '^- amend: verify\[1\] "test -f one" → dropped — unsatisfiable until the sibling lands$' ops/board/active/T-AM.md || { echo "AMEND DROP NOTE FAIL"; exit 1; }
+    "$SELF" amend T-AM --verify --add -m "the narrow check it actually needs" -- test -f four >/dev/null || { echo "AMEND ADD FAIL"; exit 1; }
+    [ "$(fm_list verify ops/board/active/T-AM.md | tr '\n' '|')" = "test -f TWO|test -f three|test -f four|" ] \
+      || { fm_list verify ops/board/active/T-AM.md; echo "AMEND ADD LIST FAIL (appended last, order kept)"; exit 1; }
+    grep -q '^- amend: verify\[+\] "test -f four" — the narrow check it actually needs$' ops/board/active/T-AM.md || { echo "AMEND ADD NOTE FAIL"; exit 1; }
+    grep -qx '  - test -f four' ops/board/active/T-AM.md || { echo "AMEND INDENT FAIL (the block list's own indentation must survive)"; exit 1; }
+    rm -f ops/board/active/T-AM.md      # gone from disk before anything downstream can claim or count it; the next board commit drops it from the ref
+    # ================== T-153/T-155 learned drills (ops/contracts/sprint-report.md v3) ==========
+    # The Learned log died at sprint 11 because its only writer was the Integrator, and a lane
+    # standing in a feat/* worktree never hand-edits a board file. `learned` is the pen — from any
+    # lane, any branch. These assertions live HERE and not in T-153's own drill for one mechanical
+    # reason: a drill cannot call a command its own worktree cannot dispatch, and the dispatch line
+    # landed with T-155.
+    "$SELF" help | grep -q '^  learned ' || { echo "USAGE FAIL: learned missing from help"; exit 1; }
+    if [ -f ops/SPRINT.md ]; then cp ops/SPRINT.md "$T/ln-sprint.bak"; else rm -f "$T/ln-sprint.bak"; fi
+    printf '%s\n' '# SPRINT 1 — learned drill  capacity: 5' '' '## Learned' '- 2026-01-01 · the first lesson' '' '## Burndown' '| date | done pts | remaining |' > ops/SPRINT.md
+    lnn="$(git rev-list --count refs/heads/polaris/board)"
+    ( cd .polaris/wt/T-G && "$SELF" learned -m "a lane can write the Learned log" >/dev/null ) \
+      || { echo "LEARNED FAIL (it must work from inside a feat/* worktree — that is the whole point of the command)"; exit 1; }
+    [ "$(sed -n '/^## Learned/,/^## Burndown/p' ops/SPRINT.md | sed -n '3p' | tr -d '\r')" = "- $(date +%F) · a lane can write the Learned log" ] \
+      || { sed -n '/^## Learned/,/^## Burndown/p' ops/SPRINT.md; echo "LEARNED BULLET FAIL (the bullet is the section's LAST bullet — under the existing one, above the next heading)"; exit 1; }
+    [ "$(grep -c '^## ' ops/SPRINT.md)" = "2" ] || { cat ops/SPRINT.md; echo "LEARNED SECTION FAIL (the existing section is used, never a second one)"; exit 1; }
+    [ "$(tail -1 ops/SPRINT.md | tr -d '\r')" = "| date | done pts | remaining |" ] || { cat ops/SPRINT.md; echo "LEARNED TAIL FAIL (everything after the section must stay where it was)"; exit 1; }
+    grep -q '"ev":"learned","id":"".*"note":"a lane can write the Learned log"' ops/board/EVENTS.ndjson || { echo "LEARNED EVENT FAIL"; exit 1; }
+    git log -1 --format=%s refs/heads/polaris/board | grep -qx 'chore(board): learned' || { echo "LEARNED COMMIT FAIL (the contract pins this board-commit subject)"; exit 1; }
+    [ "$(git rev-list --count refs/heads/polaris/board)" = "$(( lnn + 1 ))" ] || { echo "LEARNED COMMIT COUNT FAIL (ONE board commit)"; exit 1; }
+    "$SELF" learned >/dev/null 2>&1 && { echo "LEARNED -M FAIL (an empty -m must refuse — a lesson nobody wrote is not a lesson)"; exit 1; }
+    if [ -f "$T/ln-sprint.bak" ]; then cp "$T/ln-sprint.bak" ops/SPRINT.md; else rm -f ops/SPRINT.md; fi
+    rm -f "$T/ln-sprint.bak"
+    # ================== end T-157 amend + learned drills ==================
     "$SELF" release T-G --to ready -m drill >/dev/null
     rm -f ops/board/ready/T-G.md ops/board/ready/T-H.md
     # ================== end T-005 grant drills ==================
@@ -212,7 +284,8 @@ drill_handover() {
     # the spine's own repo, judging rc and FILE STATE — never the presence of a message.
     # Contract v1.1 governs two of them: human-gated review work routes to `wait` (row 6's approval
     # note is unreachable dead source and gets no case), and `--brief` is asserted only under a live
-    # lock, where the role is real and the pointer line is not in question.
+    # lock, where the role is real and the pointer line is not in question. Contract v2 adds (8b):
+    # the promote pass honours `drain: plan`, and says out loud what it refused.
     # NO helper functions here: `find --api` extracts nested fns too, and this drill ships exactly
     # one name. The hook reaches the router through POLARIS_HANDOVER_CLI rather than a forwarder
     # planted at ops/polaris, because `finish` below gates on a clean `git status` and ops/ is
@@ -319,6 +392,44 @@ drill_handover() {
     "$SELF" next --do > "$T/ho6.out" 2>&1 || { cat "$T/ho6.out"; echo "HANDOVER HELD RC FAIL"; exit 1; }
     grep -q "held: T-HO3 — overlaps T-HO2 on 'src/ho2.txt'" "$T/ho6.out" || { cat "$T/ho6.out"; echo "HANDOVER HELD NOTE FAIL (the hold must name the task, the collider and the pattern)"; exit 1; }
     [ -f ops/board/backlog/T-HO3.md ] || { echo "HANDOVER HELD BOARD FAIL (a held candidate must stay in backlog/)"; exit 1; }
+    # (8b) contract v2: `drain: plan` authorises ONE plan per run, so the promote pass must refuse a
+    #      candidate carrying a different slug — and SAY SO. One "go" is the human approving the plan
+    #      in front of them, not the whole board, and a board holding two plans is where a silent
+    #      adoption becomes a whole sprint of foreign work. P comes from the session `plan` file (the
+    #      shape `claim` stamps) with a ready task carrying the same slug beside it. Judged from the
+    #      BOARD — `ls ready/`, the promote event count, the commit count, rc — with one exception:
+    #      the held line itself, which IS the feature. A candidate that vanishes from both the
+    #      eligible and the held list reads as a bug in the ready gate, so the reason is the product.
+    #      Then the same board under `drain: queue` promotes the very task just refused, which is
+    #      what proves the hold was the knob and not an accident of the gate.
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/ho-conv2.bak"; else rm -f "$T/ho-conv2.bak"; fi
+    if [ -f "$ho_dir/plan" ]; then cp "$ho_dir/plan" "$T/ho-plan.bak"; else rm -f "$T/ho-plan.bak"; fi
+    { printf 'drain: plan\n'; cat "$T/ho-conv2.bak" 2>/dev/null || true; } > ops/CONVENTIONS.md
+    printf 'alpha\n' > "$ho_dir/plan"
+    ho_ev0="$(grep -c '"ev":"promote"' ops/board/EVENTS.ndjson || true)"
+    ho_cm0="$(git rev-list --count refs/heads/polaris/board)"
+    printf -- '---\nid: T-HOA\ntitle: alpha in flight\ntype: feature\nscope: src\npoints: 1\nwsjf: 9\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\nplan: alpha\ncontract: ops/contracts/ho.md\nfiles_owned:\n  - src/hoa.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-HOA.md
+    printf -- '---\nid: T-HOB\ntitle: alpha dependent\ntype: feature\nscope: src\npoints: 1\nwsjf: 9\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\nplan: alpha\ncontract: ops/contracts/ho.md\ndepends_on: [T-HO1]\nfiles_owned:\n  - src/hob.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HOB.md
+    printf -- '---\nid: T-HOC\ntitle: beta dependent\ntype: feature\nscope: src\npoints: 1\nwsjf: 8\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\nplan: beta\ncontract: ops/contracts/ho.md\ndepends_on: [T-HO1]\nfiles_owned:\n  - src/hoc.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HOC.md
+    printf -- '---\nid: T-HOD\ntitle: unplanned rider\ntype: feature\nscope: src\npoints: 1\nwsjf: 7\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\nplan:\ncontract: ops/contracts/ho.md\ndepends_on: [T-HO1]\nfiles_owned:\n  - src/hod.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HOD.md
+    "$SELF" next --do > "$T/ho12.out" 2>&1 || { cat "$T/ho12.out"; echo "HANDOVER PLAN RC FAIL (a plan-filtered promote is still rc 0)"; exit 1; }
+    [ "$(ls ops/board/ready | grep -c '^T-HO[BCD]\.md$')" = "2" ] || { ls ops/board/ready; cat "$T/ho12.out"; echo "HANDOVER PLAN READY FAIL (only this run's plan and the unplanned rider may reach ready/)"; exit 1; }
+    [ -f ops/board/ready/T-HOB.md ] || { cat "$T/ho12.out"; echo "HANDOVER PLAN OWN FAIL (this run's own plan must still promote)"; exit 1; }
+    [ -f ops/board/ready/T-HOD.md ] || { cat "$T/ho12.out"; echo "HANDOVER PLAN RIDER FAIL (a candidate with no plan: is never foreign — riders must still flow)"; exit 1; }
+    [ -f ops/board/backlog/T-HOC.md ] || { cat "$T/ho12.out"; echo "HANDOVER PLAN FOREIGN FAIL (a foreign plan's task must stay in backlog/)"; exit 1; }
+    grep -q "held: T-HOC — plan beta is not this run's (alpha) — drain: plan" "$T/ho12.out" || { cat "$T/ho12.out"; echo "HANDOVER PLAN HELD FAIL (the hold must name the task, its plan and this run's — a silent drop is the bug)"; exit 1; }
+    [ "$(grep -c '"ev":"promote"' ops/board/EVENTS.ndjson)" = "$(( ho_ev0 + 2 ))" ] || { echo "HANDOVER PLAN EVENT FAIL (exactly the two promotes belong on the record)"; exit 1; }
+    [ "$(git rev-list --count refs/heads/polaris/board)" = "$(( ho_cm0 + 1 ))" ] || { echo "HANDOVER PLAN COMMIT FAIL (a promote pass is ONE board commit, however many tasks move)"; exit 1; }
+    git log -1 --format=%s refs/heads/polaris/board | grep -qx 'chore(board): promote T-HOB T-HOD' || { git log -1 --format=%s refs/heads/polaris/board; echo "HANDOVER PLAN SUBJECT FAIL (the one commit names exactly what moved, wsjf order)"; exit 1; }
+    { printf 'drain: queue\n'; cat "$T/ho-conv2.bak" 2>/dev/null || true; } > ops/CONVENTIONS.md
+    "$SELF" next --do > "$T/ho13.out" 2>&1 || { cat "$T/ho13.out"; echo "HANDOVER QUEUE RC FAIL"; exit 1; }
+    [ "$(ls ops/board/ready | grep -c '^T-HO[BCD]\.md$')" = "3" ] || { ls ops/board/ready; cat "$T/ho13.out"; echo "HANDOVER QUEUE FAIL (drain: queue filters no plan at all — the hold was the knob)"; exit 1; }
+    [ "$(grep -c '"ev":"promote"' ops/board/EVENTS.ndjson)" = "$(( ho_ev0 + 3 ))" ] || { echo "HANDOVER QUEUE EVENT FAIL (the task held a moment ago must now be on the record)"; exit 1; }
+    grep -q "is not this run's" "$T/ho13.out" && { cat "$T/ho13.out"; echo "HANDOVER QUEUE HELD FAIL (drain: queue must hold nothing on plan)"; exit 1; }
+    rm -f ops/board/ready/T-HOA.md ops/board/ready/T-HOB.md ops/board/ready/T-HOC.md ops/board/ready/T-HOD.md
+    if [ -f "$T/ho-conv2.bak" ]; then cp "$T/ho-conv2.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    if [ -f "$T/ho-plan.bak" ]; then cp "$T/ho-plan.bak" "$ho_dir/plan"; else rm -f "$ho_dir/plan"; fi
+    rm -f "$T/ho-conv2.bak" "$T/ho-plan.bak"
     # (9) ONE EVENT, ONE HOP — by string equality, so a second stop on the same completion allows.
     printf '%s done T-HO1\n' "$(date +%s)" > "$ho_dir/last-event"
     rm -f "$ho_dir/hopped-event"

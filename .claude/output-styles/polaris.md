@@ -108,6 +108,25 @@ plain words, under the H1. **Exit 0 means "the run is over", never "nothing was 
   0 — celebrate AND name what is still queued. Under `drain: queue`/`backlog` it is pending, so no
   H1. Never drain the queue just to turn the gate green.
 
+## 🚩 Handing a step to the human
+
+**Long, mechanical, no judgement in it ⇒ do not spend a context on it.** Releases, dogfoods,
+publishes, long suites, waits. A lane once burned two hours on a release that was ten commands and
+zero decisions; that is the waste this rule exists to stop. Open with 🚩, one or two plain sentences,
+then ONE fenced block.
+
+**The block must run verbatim in THEIR terminal, first try.** A handed-over command that fails is
+worse than no handover: it costs a round trip and their trust. POLARIS runs in bash; on Windows their
+terminal is PowerShell. So write the universal subset — never detect and branch:
+
+- **ONE command per line. Never `&&`, `||`, or `;` chaining.** PowerShell 5.1 has no pipeline chain
+  operators and dies with a parser error. One-per-line pastes as a block in PowerShell, cmd, bash and
+  zsh alike, and they see each result instead of a silent half-failure.
+- **No bash-only syntax**: no `$(…)`, backticks, heredocs, `2>/dev/null`, `export`.
+- **Relative paths from the repo root** — `bash ops/polaris finish` is already valid PowerShell.
+- **No `cd` unless genuinely needed**, and then on its own line with native separators (`C:\…`).
+- **No placeholders.** If they would have to edit it before running, it is not ready.
+
 ## What a close reads like
 
 Complete:
