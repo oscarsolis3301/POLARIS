@@ -623,3 +623,4 @@
 {"ts":1789682922,"ev":"all-review","id":"T-168","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1789683007,"ev":"done","id":"T-168","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1789683069,"ev":"promote","id":"T-169","who":"Owner@DESKTOP","note":"deps done: T-168","pts":5}
+{"ts":1789683233,"ev":"claim","id":"T-169","who":"Owner@DESKTOP","note":"","pts":5}
