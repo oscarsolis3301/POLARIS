@@ -214,3 +214,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - "selftest gains the skills drill (label skills: gaps · propose · twin-or-not per the probe · promote refusals and pass · claim's skill-hit · prune demote/archive · restore byte-identical) and the fast-tier section skills (constants · skill_bytes vs slim_scan on the same fixtures · skill_paths); goldens skill-budget (hermetic: constants, shelf, reserved-name and TODO refusals) + skill-install (a foreign skill survives install.sh and uninstall byte-identical); labels 37"  (T-159, 2026-09-15)
 
 - kit/ops/templates/DESIGN.md — the design bar template INIT copies once to ops/DESIGN.md (never install.sh, never KIT_CODE)  (T-161, 2026-09-17)
+
+- kit/ops/lib/visual.sh — the visual module (SEE YOUR WORK, the capture gate, and from later waves the shots tree and the gallery); loaded between surfaces and builder, never on the write-guard fast path  (T-166, 2026-09-17)
