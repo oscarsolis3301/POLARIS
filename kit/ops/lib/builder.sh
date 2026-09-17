@@ -219,18 +219,42 @@ cmd_verify() {
   visual_gate "$id" warn 2 ""
 }
 
-cmd_handoff() {
-  local id="${1:-}"; [ -n "$id" ] || id="$(current_task_id)" || die "not on a feat/<ID> branch — pass the ID"
+cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
+  # The FIRST non-flag argument is the ID and both flags take a value, in any order, before or after
+  # it (ops/contracts/visual-check.md § v2.7). Until 6.6.0 this line was `local id="${1:-}"` with no
+  # parsing at all, so `handoff --saw "…"` read as a task literally named `--saw`. Ten call sites
+  # across the kit — every selftest drill, every printed ship recipe — pass the ID positionally and
+  # keep working byte-identically, which is exactly what the pack-visual golden pins.
+  # `--saw` is the caption that goes beside the pictures; the gate checks it for EMPTINESS and
+  # nothing else. `--no-before` says there was nothing to photograph yet (a brand-new screen), drops
+  # the requirement from two captures to one, and its reason is recorded in the caption so a missing
+  # before-shot is visible rather than silent.
+  local id="" saw="" nobefore="" need=2
+  local uho='usage: polaris handoff [ID] [--saw "<what the after shot shows>"] [--no-before "<why there was nothing to photograph>"]'
+  while [ $# -gt 0 ]; do case "$1" in
+    --saw)       saw="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
+    --no-before) nobefore="${2:-}"; [ $# -ge 2 ] && shift 2 || shift
+                 [ -n "$nobefore" ] || die "--no-before needs the reason — it is what the caption shows in place of the before-shot. $uho"
+                 need=1;;
+    -*)          die "unknown flag $1 — $uho";;
+    *)           [ -n "$id" ] || id="$1"; shift;;
+  esac; done
+  [ -n "$id" ] || id="$(current_task_id)" || die "not on a feat/<ID> branch — pass the ID"
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
   beat_touch "$id"                 # worktree-liveness: the handoff beats, so done sees a LIVE own lane
   git diff --quiet && git diff --cached --quiet || die "uncommitted changes — commit on feat/$id first"
   check_ownership "$tf" "feat/$id"
   check_rules "feat/$id" "$id"     # ID threaded: an `ask` rule cleared by <ID>'s approved: list
   run_verify_cmds "$tf"
-  # capture-exists gate (ops/contracts/visual-check.md § cmd_handoff) — body in lib/visual.sh: a
-  # diff that touches a visual: path ships with a capture or not at all, and it dies HERE, before
-  # any board write, so the task stays in active/. cmd_verify runs the same body in warn mode.
-  visual_gate "$id" die 1 ""
+  # capture gate (ops/contracts/visual-check.md § v2.6) — body in lib/visual.sh: a diff that touches
+  # a visual: path ships with its pictures and a word about them, or not at all, and it dies HERE,
+  # before any board write, so the task stays in active/. cmd_verify runs the same body in warn mode.
+  visual_gate "$id" die "$need" "$saw"
+  # The gate passed, so the captures are real: file any that landed outside this task's shot folder,
+  # then write the caption that goes beside them. Both still before the board write, so a refusal
+  # above leaves nothing behind, and both no-ops in a repo that sets no visual: key.
+  visual_file_strays "$id"
+  visual_caption "$id" "$saw" "$nobefore"
   map_delta_hint "$tf" "feat/$id"
   # publish: pr — feat branches never leave the machine; seal pushes ONE integrate branch instead
   # (ops/contracts/publish-modes.md). Everything else stays byte-identical to direct mode.

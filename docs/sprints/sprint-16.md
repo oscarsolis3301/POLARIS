@@ -212,7 +212,7 @@ CLI call in the repo.
 - [ ] `ops/tests/api-kit.expected` gains exactly two `kit/ops/lib/visual.sh fn` rows and loses nothing: the moved blocks were inline, so `builder.sh`'s own fn census is unchanged.
 
 ## T-167 — "A folder a human can read — screen: becomes a safe slug, every task gets a shotdir, and pack tells you to photograph the screen BEFORE you touch it"
-points 5 · risk normal · landed ac9221c (2026-09-17) · claimed 2026-09-17
+points 5 · risk normal · landed ac9221c (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
 files touched: kit/ops/lib/visual.sh, ops/tests/api-kit.expected, ops/tests/pack-visual.cmd, ops/tests/pack-visual.expected
 
 ### Why
@@ -252,8 +252,48 @@ Then the `pack` section grows the lines § 8 pins, in that order, and `visual_ga
 - [ ] `visual:` unset still prints ONE line and nothing else changes anywhere. Absent-by-default is what lets this ship to every repo.
 - [ ] `ops/tests/pack-visual.*` re-pinned for the new section: asserts 1–3 change; asserts 4–6 still describe the ONE-capture gate and must still pass, because the gate does not change in this task.
 
+## T-168 — "Before AND after, and say what you saw — handoff learns --saw and --no-before, counts two captures, files the strays and writes the caption"
+points 5 · risk normal · landed f0dbf8e (2026-09-17) · claimed 2026-09-17
+files touched: kit/ops/lib/builder.sh, kit/ops/lib/visual.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/pack-visual.cmd, ops/tests/pack-visual.expected
+
+### Why
+This is the task that turns "somebody looked at it" from a claim into a record. Three changes, and one
+of them is a trap worth reading twice.
+
+**1. The gate counts TWO captures.** Before and after are both required. But POLARIS ships no capture
+tool — `shot:` is the repo's own command and may be positional with no output flag — so POLARIS can
+NEVER require a capture to be NAMED anything. A gate that demanded `*-after-*.png` would make every
+visual task in every 6.2.0–6.5.0 repo permanently un-handoffable, with no escape. So the gate counts
+non-empty captures newer than the branch base and nothing else. `-before-` / `-after-` stay a
+documented naming convention used to pair them for display; they are never tested.
+
+**2. `handoff` grows flags — and today it has NONE.** `kit/ops/lib/builder.sh:242` is
+`local id="${1:-}"`, so `handoff --saw "…"` is currently read as a task ID literally named `--saw`.
+A real argument loop goes in, and **ten call sites across five files pass the ID positionally and
+must keep working byte-identically.**
+
+**3. `--saw` is validated as NON-EMPTY, and nothing else.** No length floor, no `PASS`/`WEAK`/`FAIL`
+vocabulary check. A validator cannot tell whether anyone looked, and a refusal a builder satisfies by
+padding is a compliance ritual that costs tokens and proves nothing. What the text is FOR is the
+caption a human reads next to the picture — so the bar verdict is asked for in `pack`, in
+`ops/DESIGN.md` and in the role prose, and never enforced by code.
+
+`ops/contracts/visual-check.md` § v2 sections 6 and 7 pin every refusal sentence verbatim and the
+caption file's exact shape.
+
+### Acceptance
+- [ ] `cmd_handoff` accepts `handoff [ID] [--saw "<text>"] [--no-before "<why>"]`: both flags take a value, they may appear in any order before or after the ID, and the first non-flag argument is the ID.
+- [ ] Every existing positional call site still works unchanged — `handoff`, `handoff <ID>`, and the `bg run ship-<ID> -- bash ops/polaris handoff` recipes.
+- [ ] `visual_gate` refuses when the usable-capture count is below `need`, using the two pinned sentences (the `need=2` wording and the `need=1` wording under `--no-before`), and refuses in `die` mode when `saw` is empty using the third.
+- [ ] `cmd_verify` still only WARNS, with `⚠ ` in place of `⛔ handoff refused: `, always at `need=2`, and never looks at `saw`.
+- [ ] Nothing anywhere tests a capture's FILENAME — no `-after-` match, no `-before-` match, no name-shaped glob beyond `<ID>-*.png`.
+- [ ] `visual_file_strays <ID>` runs after the gate passes and before the board write, moving every `<ID>-*.png` found outside the shotdir into it. It never deletes and never overwrites: a name collision keeps the existing file and leaves the stray alone.
+- [ ] `visual_caption <ID> <saw> <no-before-reason>` writes `<shotdir>/<ID>.md` in the exact shape § 6 pins — title, the `--saw` text verbatim, then `screen:` / `before:` / `after:` / `date:` — and a skipped before-shot records its reason there, so it is visible rather than silent.
+- [ ] `ops/tests/pack-visual.*` re-pinned: five of six asserts change, and **assert 6 flips rc 0 to 1** because a single capture is no longer enough. Extend the fixture to cover the two-capture pass, the `--saw` refusal and the `--no-before` escape rather than deleting the asserts that changed.
+- [ ] The `handoff` usage line in `kit/ops/polaris` shows the new signature and still matches `^  handoff ` so `cli-help-parity` keeps counting it.
+
 ## T-171 — "Every existing repo gets the bar — heal copies ops/DESIGN.md in when it is missing, and doctor says when nobody has filled it in"
-points 3 · risk normal · landed fd36cce (2026-09-17) · claimed 2026-09-17
+points 3 · risk normal · landed fd36cce (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
 files touched: kit/ops/lib/admin.sh, kit/ops/lib/observe.sh, ops/tests/heal-design.cmd, ops/tests/heal-design.expected
 
 ### Why
@@ -313,7 +353,7 @@ red and restore it green before handoff — a golden nobody has seen fail assert
 - [ ] One assertion in the new golden sabotaged red and restored green, first-hand, before handoff.
 
 ## T-172 — "The golden that still expects a banned model — re-pin route-tier so the refusal IS the expected answer, and prove a legal model still gets through"
-points 1 · risk normal · landed 9496c3e (2026-09-17) · claimed 2026-09-17
+points 1 · risk normal · landed 9496c3e (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
 files touched: ops/tests/route-tier.cmd, ops/tests/route-tier.expected
 
 ### Why
