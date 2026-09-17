@@ -1,3 +1,32 @@
+# SPRINT 16 — The gallery and the bar (6.6.0)          capacity: 36   dates: 2026-09-17–
+
+POLARIS already refuses a visual handoff without a screenshot, but the captures land flat under a
+task ID in a gitignored folder with no index — so the owner can never browse them or show them to
+anyone — and the kit has no design standard at all, so a long "Apple-esque, no AI slop, legible in
+3 seconds" brief gets pasted into every visual task. This sprint gives shots a human-named folder
+tree plus a generated INDEX.md and a committed curated gallery, makes before-and-after captures
+mandatory, turns the `saw:` line into recorded data that becomes the gallery caption, and gives the
+bar a home in `ops/DESIGN.md`. Owner decisions locked at the plan gate: local shots PLUS a committed
+gallery · the Planner names the folder via a new `screen:` field · before AND after both required ·
+the bar enforced by a self-critique recorded at handoff.
+
+Plan `gallery-and-bar` — 10 tasks / 36 pts / 6 waves, contracts `visual-check.md` § v2 (a breaking
+change to a shipped interface) and `module-layout.md` § v8. W1 is five fully disjoint lanes: the
+interface (`gallery:` key, `screen:` field, the DESIGN template), the RULES rider, and three prose
+lanes. W2–W5 are a CHAIN through the one new module `kit/ops/lib/visual.sh` — the move out of
+builder.sh, then the shotdir, then the gate, then the index and the gallery — and W6 is the golden
+that walks the whole thing. The chain is deliberate: every code task touches `visual.sh`, so
+parallelism there would be a merge conflict wearing a costume.
+
+Three carve constraints came out of the evidence, not the plan: the gate counts captures and NEVER
+inspects filenames (POLARIS ships no capture tool, so a filename rule would brick every 6.2–6.5
+repo); `cmd_done` must NOT take the integration lease (the self-land tail calls it as a subprocess,
+so `int_on` there deadlocks the default path); and exactly ONE task per wave owns
+`ops/tests/api-kit.expected`, every row in it its own, so no lane ever carries an unsatisfiable
+cross-lane diff.
+
+## Burndown
+
 # SPRINT 15 — Every remaining item (6.5.0)          capacity: 34   dates: 2026-09-14–
 
 The last sprint of the owner's program (plans/v3.md § SPRINT C + plans/self-skills.md, decided
