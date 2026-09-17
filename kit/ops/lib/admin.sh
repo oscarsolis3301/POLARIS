@@ -815,6 +815,24 @@ cmd_heal() { # heal — repair the configuration efficiency depends on. Safe to 
   [ -f "$CONV" ] || { note "heal: no ops/CONVENTIONS.md — INIT has never run here; nothing to heal"; return 0; }
   heal_models
   heal_claudemd
+  # THE DESIGN BAR (ops/contracts/visual-check.md § v3.15). `ops/DESIGN.md` is written by INIT and by
+  # NOTHING else, and INIT runs once — when a repo first adopts POLARIS. So every repo that adopted it
+  # before 6.6.0 updates, receives `ops/templates/DESIGN.md`, and never gets the file five role
+  # documents point at as "the bar this screen must clear". `heal` is the one mechanism that reaches
+  # every installed repo without rewriting anything a human owns, so the copy belongs here.
+  # INLINE, no new top-level fn: `ops/tests/api-kit.expected` is a derived golden owned by another
+  # lane this sprint, and a new `fn` row would couple two lanes through a golden neither can fix.
+  # IF AND ONLY IF ABSENT. `ops/DESIGN.md` is owner-editable state exactly like `ops/CONVENTIONS.md`,
+  # and clobbering someone's own design bar on an update is the worst thing this file could do —
+  # which is precisely why `install.sh` deliberately never copies it on `$KIT_CODE`. A pre-6.6 kit
+  # that has not updated yet carries no template: say nothing. A failed copy: say nothing, rc still
+  # 0 — a config nicety must never be the thing that fails an install or an update. ONE `note` on the
+  # run that creates it and silence forever after; `say` here would be a new stdout line on an
+  # install path and would eat the quiet-line budget the CI tripwire counts.
+  if [ -f "$OPS/templates/DESIGN.md" ] && [ ! -f "$OPS/DESIGN.md" ]; then
+    cp "$OPS/templates/DESIGN.md" "$OPS/DESIGN.md" 2>/dev/null \
+      && note "healed: ops/DESIGN.md — the design bar every screen is judged against, installed from the template; fill in its '## THIS PRODUCT' section with one sentence on the look and feel you want, in your own words"
+  fi
   say "heal: configuration checked"
   return 0
 }
