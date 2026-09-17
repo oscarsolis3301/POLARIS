@@ -216,3 +216,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - kit/ops/templates/DESIGN.md — the design bar template INIT copies once to ops/DESIGN.md (never install.sh, never KIT_CODE)  (T-161, 2026-09-17)
 
 - kit/ops/lib/visual.sh — the visual module (SEE YOUR WORK, the capture gate, and from later waves the shots tree and the gallery); loaded between surfaces and builder, never on the write-guard fast path  (T-166, 2026-09-17)
+
+- polaris shots — rebuilds .polaris/shots/INDEX.md and says where the gallery is; done publishes one curated image + caption per screen into gallery: on the base commit it already makes  (T-169, 2026-09-17)
