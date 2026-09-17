@@ -302,3 +302,52 @@ today; T-155 adds ≈ 40 usage/dispatch lines).
 
 ### Changelog
 - v7 2026-09-14: skills.sh (14 fns, ≤ 500 lines) joins the census; loader `+skills` after `handover`; the sprint's whole fn census (T-155, plan sprint-c).
+
+## v8 — lib/visual.sh joins the census (2026-09-17, plan gallery-and-bar, 6.6.0)
+New module `kit/ops/lib/visual.sh` (450 lines or fewer, EXACTLY ten top-level fns): `visual_pack` ·
+`visual_gate` · `visual_slug` · `visual_shotdir` · `visual_shots_for` · `visual_file_strays` ·
+`visual_caption` · `visual_index` · `visual_publish` · `cmd_shots` — semantics in
+`ops/contracts/visual-check.md` § v2, which is the authority on their behavior; THIS contract stays
+the authority on where code lives and the loader's shape.
+
+**Why a module at all.** `kit/ops/lib/builder.sh` is 921 lines and `observe.sh` is 2,620; the
+standing rule is that new code goes in a new module rather than growing a long file (v6's note:
+"putting the engine in its own module is the first step back, not a new exception"). The three
+EXISTING visual blocks move here so there is one home for the subject:
+
+| moved from | what |
+|---|---|
+| `builder.sh:833-879` (inline in `cmd_pack`) | the SEE YOUR WORK section, becoming `visual_pack <ID> <owned>` |
+| `builder.sh:216-239` (inline in `cmd_verify`) | the warn twin, becoming `visual_gate <ID> warn 2 ""` |
+| `builder.sh:250-277` (inline in `cmd_handoff`) | the capture gate, becoming `visual_gate <ID> die <need> <saw>` |
+
+All three were INLINE, so `builder.sh`'s own fn census is UNCHANGED by the move — the only
+api-kit delta is the ten new rows under `kit/ops/lib/visual.sh`.
+
+**The loader, v8:** the FULL-load `_mods` list gains `visual`, inserted between `surfaces` and
+`builder`:
+`core ownership workspace surfaces visual builder integrate knowledge search observe admin bg awake handover skills`.
+The `_match|_rules|_guard` path stays EXACTLY `core ownership` — the write-guard never touches any of
+this, and its latency budget (v2's whole point, a correctness fix after the guard failed OPEN) must
+not pay for it. Both lists stay LITERAL, never a glob. **The loader line and the module file land in
+the SAME task** (T-166) — a loader naming a module that does not exist kills every CLI call.
+
+**Fn placement for the rest of the sprint, so no task invents a home:** `cmd_done`'s gallery hook is
+ONE call to `visual_publish` plus the path-list extension, inline in `integrate.sh` — integrate.sh
+gains NO fn. `cmd_shots` lives in visual.sh, and `kit/ops/polaris` gains only its dispatch arm and
+its usage line. No task adds a fn to `observe.sh`, `core.sh` or `ownership.sh`; the helpers this
+work needs (`fm_get`, `cfg`, `owned_match`, `pat_overlap`, `pack_section`) already exist and are
+reused as-is. Cross-module calls at runtime are free — every module is sourced before dispatch.
+
+Census this sprint: +10 in the new module · 0 everywhere else. Entry `kit/ops/polaris` < 500 lines
+stands (423 today; T-166 adds 1 loader word, T-169 adds about 2 dispatch/usage lines).
+
+House rules this module inherits (v1 § Invariants, unchanged): top-level function definitions only,
+no nested helpers (the symbol index records them), no top-level variable assignments, nothing
+executes at source time, bash 3.2 only — no `mapfile`, no associative arrays, no `case` inside
+`$(…)`, split `local` declarations, and `find` rather than a `**` glob.
+
+### Changelog
+- v8 2026-09-17: visual.sh (10 fns, 450 lines or fewer) joins the census; loader gains `visual`
+  between `surfaces` and `builder`; the three inline visual blocks move out of builder.sh
+  (T-166..T-169, plan gallery-and-bar).
