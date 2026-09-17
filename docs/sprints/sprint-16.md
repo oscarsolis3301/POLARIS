@@ -253,7 +253,7 @@ Then the `pack` section grows the lines § 8 pins, in that order, and `visual_ga
 - [ ] `ops/tests/pack-visual.*` re-pinned for the new section: asserts 1–3 change; asserts 4–6 still describe the ONE-capture gate and must still pass, because the gate does not change in this task.
 
 ## T-168 — "Before AND after, and say what you saw — handoff learns --saw and --no-before, counts two captures, files the strays and writes the caption"
-points 5 · risk normal · landed f0dbf8e (2026-09-17) · claimed 2026-09-17
+points 5 · risk normal · landed f0dbf8e (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/visual.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/pack-visual.cmd, ops/tests/pack-visual.expected
 
 ### Why
@@ -291,6 +291,42 @@ caption file's exact shape.
 - [ ] `visual_caption <ID> <saw> <no-before-reason>` writes `<shotdir>/<ID>.md` in the exact shape § 6 pins — title, the `--saw` text verbatim, then `screen:` / `before:` / `after:` / `date:` — and a skipped before-shot records its reason there, so it is visible rather than silent.
 - [ ] `ops/tests/pack-visual.*` re-pinned: five of six asserts change, and **assert 6 flips rc 0 to 1** because a single capture is no longer enough. Extend the fixture to cover the two-capture pass, the `--saw` refusal and the `--no-before` escape rather than deleting the asserts that changed.
 - [ ] The `handoff` usage line in `kit/ops/polaris` shows the new signature and still matches `^  handoff ` so `cli-help-parity` keeps counting it.
+
+## T-169 — "One file the owner opens — polaris shots writes the index, and done publishes the curated gallery on the commit it already makes"
+points 5 · risk normal · landed a0a8dc5 (2026-09-17) · claimed 2026-09-17
+files touched: kit/ops/lib/integrate.sh, kit/ops/lib/visual.sh, kit/ops/polaris, ops/tests/api-kit.expected
+
+### Why
+Everything so far files pictures neatly where nobody looks. This task is the payoff: one Markdown
+file the owner opens in VS Code's preview and sees, grouped by screen, the before, the after and a
+sentence saying what changed and whether it cleared the bar — plus a committed, curated copy they can
+show someone who does not have the repo.
+
+**The concurrency story here matters more than the copying**, and the obvious implementation is
+wrong. `cmd_done` does NOT hold the integration lease — only `land`, `land --express` and `seal` call
+`int_on` — and adding `int_on` there would DEADLOCK the default `landing: self` path: the self-land
+tail invokes `done` as a SUBPROCESS (`builder.sh:422,426`), a different `$$`, so the re-entrancy
+check fails, it blocks for `integration_wait_minutes` and returns rc 3. Do not add it.
+
+What to do instead is all pinned in `ops/contracts/visual-check.md` § v2 § 11: run inside the
+`mutex_on` window `cmd_done` ALREADY holds · write through a temp name in the same directory and
+`mv` it into place · ride the EXISTING pathspec-limited commit and its five-attempt retry by adding
+paths to its path list, never a second commit · and gate the whole block on `cfg gallery` being
+non-empty, so a repo that never opted in runs nothing new and `cmd_done`'s "must be on base" die is
+not newly reachable.
+
+`polaris shots` is deliberately ONE bare arm with no subcommands: `index` is what the bare command
+does, `open` is useless to an agent, and publishing already happens at `done`.
+
+### Acceptance
+- [ ] `visual_index` regenerates `.polaris/shots/INDEX.md` in the exact shape § 9 pins: a `##` per screen with its slug read back as words, a `###` per task newest-first, the caption text, and a two-column before/after Markdown table whose image links are RELATIVE to `.polaris/shots/` so the preview renders them.
+- [ ] A screen folder with no caption file is still listed, with `(no caption recorded)`. No captures at all gives the two header lines and `_(nothing captured yet)_`.
+- [ ] `cmd_shots` regenerates the index and then prints the screen and capture counts, the index path, and either the `gallery:` directory or one line saying the key is unset. No `index`, `open` or `publish` verb exists.
+- [ ] `visual_publish <ID>` copies, per screen, the NEWEST capture and its caption into `<gallery>/<parent>/<name>.png` and `.md`, replacing in place so git weight stays bounded, and regenerates `<gallery>/INDEX.md`.
+- [ ] `cmd_done` calls it inside its existing `mutex_on` window, gated on `cfg gallery` being non-empty, with NO new `int_on` anywhere — the `int_on` count in `integrate.sh` is unchanged from base.
+- [ ] The gallery paths ride the EXISTING commit: subject stays `docs(map): …` when a `map_delta` landed, else `docs(surfaces): …` when surface rows landed, else becomes `docs(screens): <ID> <screen>`; whichever applied, all their paths are in that one commit's pathspec and its retry loop.
+- [ ] Every write into the gallery goes through a temp name in the SAME directory followed by `mv`.
+- [ ] `kit/ops/polaris` gains the `shots` dispatch arm and one usage line reading `  shots ` so `cli-help-parity` keeps matching, and the entry script stays under 500 lines.
 
 ## T-171 — "Every existing repo gets the bar — heal copies ops/DESIGN.md in when it is missing, and doctor says when nobody has filled it in"
 points 3 · risk normal · landed fd36cce (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
