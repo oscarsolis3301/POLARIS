@@ -178,14 +178,14 @@ call per spawn; routing never blocks work.
    > You are a BUILDER, conductor-entered. Read ops/roles/BUILDER.md and execute it. Claim <ID> and
    > complete it end to end. A spec ambiguity → return the question as your result instead of asking
    > the human. Ship per BUILDER.md step 5: `bash ops/polaris bg run ship-<ID> -- bash ops/polaris
-   > handoff`, then `bash ops/polaris bg wait ship-<ID> --max 300` repeated until the rc is not 2 —
-   > under `landing: self` (the default) that handoff lands your task through the integration lease
-   > and, last lane out, seals the wave. Stop after the collect; return: ID · branch · one-line
-   > summary · test results · landed / queued / in review.
+   > handoff --saw "<the after shot vs the bar>"`, then `bash ops/polaris bg wait ship-<ID> --max
+   > 300` repeated until the rc is not 2 — under `landing: self` (the default) that handoff lands
+   > your task through the integration lease and, last lane out, seals the wave. Stop after the
+   > collect; return: ID · branch · one-line summary · test results · landed / queued / in review.
    > FIRST run `bash ops/polaris pack <ID>` — that output IS your context: the task, its contract,
    > the house style to match, what you own, the API surface not to break, and your verify: list.
    > Anything it does not answer: `bash ops/polaris find <symbol>`, one hop, before any Grep.
-   > Touching a visual: path? run the shot: line pack printed, READ the png, and put a saw: line in your report — handoff refuses without the capture.
+   > Touching a visual: path? run the shot: line pack printed BEFORE you edit and again after, READ both against ops/DESIGN.md — the bar — and carry --saw "<the after shot vs that bar — PASS / WEAK / FAIL>" inline on the ship line (--no-before "<why>" for a brand-new screen); handoff refuses without two fresh captures, or without --saw.
    > you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout.
    > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    Say once where to watch (`bash ops/polaris dash` · 127.0.0.1:7373). As each lane reports, relay
@@ -204,7 +204,8 @@ call per spawn; routing never blocks work.
      human plainly what's parked and why, keep the other lanes going.
    - Builder dies without reporting → a lane gone silent past `stale_hours` is a DEAD lane, not a
      slow one. **A lane that stopped on a capture refusal is not dead** — it needs the shot: line run,
-     not a respawn. First try to resume the same agent — its context is intact, so a nudge usually revives
+     not a respawn; refused for a missing `--saw`, it needs the sentence written, not a respawn
+     either. First try to resume the same agent — its context is intact, so a nudge usually revives
      it right where it left off. No response → re-anchor from `bash ops/polaris status` +
      `git status` in its worktree to see how far it got, then release the task back to `ready/` and
      respawn one fresh builder per the retry path above.

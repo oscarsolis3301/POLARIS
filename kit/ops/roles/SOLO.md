@@ -76,14 +76,16 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    outright when `.polaris/suite-stamp` already names HEAD (an express land writes that stamp since
    6.3.0). Reaching for `test:` per change is how a one-line edit came to pay the whole suite twice.
    (Working on POLARIS itself? Its own seconds-long check is `bash ops/polaris doctor --fast`.)
-   Touching a `visual:` path? Run the `shot:` line `pack` printed, READ the png, carry a `saw:` line
-   into your close — `handoff` refuses without the capture.
+   Touching a `visual:` path? Run the `shot:` line `pack` printed BEFORE you edit and again after,
+   READ both against `ops/DESIGN.md` — the bar this screen must clear — and close with
+   `--saw "<the after shot vs that bar — PASS / WEAK / FAIL>"` (`--no-before "<why>"` for a
+   brand-new screen); `handoff` refuses without two fresh captures, or without `--saw`.
 5. **Handoff — and, by default, the landing.** Under `landing: self` (since 6.1.0 unset composes to
    `self`) `bash ops/polaris handoff` continues into the land in this same session: it takes the
    integration lease (wait-your-turn behind every other session), squashes `feat/<ID>` onto the
    wave, and — you being the only lane — seals the wave and finishes the task. That tail can wait
    on a busy lease, so detach it and collect the rc in chunks:
-   `bash ops/polaris bg run ship-<ID> -- bash ops/polaris handoff`, then
+   `bash ops/polaris bg run ship-<ID> -- bash ops/polaris handoff --saw "<the after shot vs the bar>"`, then
    `bash ops/polaris bg wait ship-<ID> --max 300` repeated until the rc is not 2 (0 green · 1 red ·
    2 still running · 3 unknown) — never a foreground wait that can cross the 600s cap, never a
    background notification. A `queued:` line (rc 3) means the lane stayed busy: report queued and
@@ -141,7 +143,8 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
 ## What you must NOT skip
 Every gate the long path runs, you run: `verify` (ownership + RULES + SURFACES freshness) · the task's `verify:` list ·
 the full suite once — at `land --express`, or at `finish` after a step-5 self-land ·
-the capture, when `pack` printed one · `finish`.
+both captures and the `--saw` line measuring them against `ops/DESIGN.md`, when `pack` printed a
+capture section · `finish`.
 SOLO collapses SESSIONS, never CHECKS — the same
 principle `ops/contracts/express-lane.md` is built on. If you find yourself skipping a gate to make
 the change fit the lane, the lane is wrong.
