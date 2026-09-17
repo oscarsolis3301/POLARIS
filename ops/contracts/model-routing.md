@@ -101,3 +101,28 @@ tier is mid → pane tokens contain `--model opus`.
 
 ## Changelog
 - v1 2026-08-03: created for T-065, T-066, T-068, T-069, T-071 (plan: routing-and-bg)
+
+## v2 — the Fable/Haiku ban supersedes this file's worked example (2026-09-17, T-172)
+
+OWNER DECISION 2026-09-15, absolute and already enforced in kit code: POLARIS never selects Fable or
+Haiku, in any repo, on any machine. `model_denied` (`kit/ops/lib/core.sh:78`) is a KIT CONSTANT — no
+CONVENTIONS key reads it, so no repo can widen, weaken or switch it off — and `route` now answers a
+forbidden value with
+`   model REFUSED: '<name>' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's`
+instead of a `   model:` line, while `fleet` injects no `--model` token at all.
+
+This file is append-only, so its v1 body stands as written. Where it disagrees with this section,
+**this section wins**:
+
+- **§ Line 45-46** ("THIS repo pins strong=fable · mid=opus · cheap=sonnet", owner decision
+  2026-08-02) — the 2026-08-02 decision is SUPERSEDED for `fable`. The knob may still be set to it;
+  the tool refuses it and names no model.
+- **§ Example, line 98-99** (`route T-070` → `strong` + `   model: fable`; `fleet` carrying
+  `--model fable`) — both outputs are stale. Read them as the refusal line and `token: none`.
+
+**The tier table itself is unchanged.** `strong`/`mid`/`cheap` are still derived exactly as v1 says;
+the ban applies to the NAME a tier resolves to, never to the tier. A repo whose `model_strong:` is a
+legal name still gets its `   model:` line and its `--model` token.
+
+`ops/tests/route-tier.expected` is the executable authority on all of this and pins both directions
+(T-172). Never re-pin it back to a `   model: fable` line.
