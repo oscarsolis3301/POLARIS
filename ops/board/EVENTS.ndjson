@@ -619,3 +619,5 @@
 {"ts":1789681188,"ev":"promote","id":"T-168","who":"Owner@DESKTOP","note":"deps done: T-167","pts":5}
 {"ts":1789681338,"ev":"claim","id":"T-168","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1789681870,"ev":"amend","id":"T-168","who":"Owner@DESKTOP","note":"verify[12]"}
+{"ts":1789682922,"ev":"handoff","id":"T-168","who":"Owner@DESKTOP","note":""}
+{"ts":1789682922,"ev":"all-review","id":"T-168","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
