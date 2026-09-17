@@ -551,3 +551,4 @@ exercises but a Builder cannot.
   `checkoutguard`/`readyoverlap`/`selfland` ever go red, read the failing rc assertion before the
   words — a printed refusal proves nothing; and a red in one of these drills most likely means the
   drill caught shipped code regressing, so report the assertion, never weaken it.
+- 2026-09-17 · GOLDENS RUN NOWHERE AUTOMATIC: ci.yml runs doctor --selftest, never polaris check, and check is not in the fast tier — only a wave-gate qa or a hand-run check ever executes the 29 pairs, so a stale pin sits red for days (the 2026-09-15 model ban left two: rules-health/T-162, route-tier/T-172). IDEA: check --changed, or run a task's touched goldens at handoff.
