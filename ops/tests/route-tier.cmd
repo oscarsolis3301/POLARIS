@@ -72,5 +72,19 @@ R T-404
 echo '== fleet carries the ready queue max tier =='
 # The dry-run line names the resolved claude path, which is machine-specific — so lift the token
 # only. `none` when no token was injected keeps a silent regression from reading as a pass.
-( cd "$FIX/repo" && PATH="$FIX/bin:$PATH" bash "$KIT" fleet 2 --dry-run 2>&1 ) \
-  | awk '/\[dry-run\]/ { if (match($0, / --model [^ ]+/)) print "token:" substr($0, RSTART, RLENGTH); else print "token: none"; found=1 } END { if (!found) print "token: NO DRY-RUN LINE" }'
+# ONE helper, run TWICE, because `token:` only means anything as a PAIR. The fixture's ready max is
+# always `strong` (T-1 is 5 points), so model_strong is the knob that moves — and it is `fable`
+# here, banned outright since 2026-09-15, so this first run proves the refusal reaches the pane
+# launcher: a forbidden name injects NOTHING.
+FLEET() { ( cd "$FIX/repo" && PATH="$FIX/bin:$PATH" bash "$KIT" fleet 2 --dry-run 2>&1 ) \
+  | awk '/\[dry-run\]/ { if (match($0, / --model [^ ]+/)) print "token:" substr($0, RSTART, RLENGTH); else print "token: none"; found=1 } END { if (!found) print "token: NO DRY-RUN LINE" }'; }
+FLEET
+
+echo '== fleet with a LEGAL strong: the token still goes in =='
+# Same queue, same command, one knob repointed at a name that is NOT banned. Without this second
+# run `token:` would only ever exercise the refusal path, and a regression that killed injection
+# outright — for every repo, legal names included — would read here as a pass.
+grep -v '^model_strong:' "$FIX/repo/ops/CONVENTIONS.md" > "$FIX/conv.tmp"
+printf 'model_strong: some-model-9\n' >> "$FIX/conv.tmp"
+mv "$FIX/conv.tmp" "$FIX/repo/ops/CONVENTIONS.md"
+FLEET

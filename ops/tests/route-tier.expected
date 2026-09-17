@@ -9,7 +9,7 @@ rc 0
 == knobs SET: the tier_for table, board-free ==
 route --points 5 --risk normal
 strong
-   model: fable
+   model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
 rc 0
 route --points 3 --risk normal
 mid
@@ -21,7 +21,7 @@ cheap
 rc 0
 route --points 2 --risk high
 strong
-   model: fable
+   model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
 rc 0
 route --points x --risk normal
 mid
@@ -30,7 +30,7 @@ rc 0
 == roles ==
 route --role PLANNER
 strong
-   model: fable
+   model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
 rc 0
 route --role SOLO
 mid
@@ -49,7 +49,7 @@ rc 0
 == by ID: derived · tier-word override · literal name ==
 route T-1
 strong
-   model: fable
+   model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
 rc 0
 route T-2
 cheap
@@ -67,4 +67,6 @@ route T-404
 ⛔ route: no task T-404 on the board — check: ops/polaris board-fm
 rc 1
 == fleet carries the ready queue max tier ==
-token: --model fable
+token: none
+== fleet with a LEGAL strong: the token still goes in ==
+token: --model some-model-9
