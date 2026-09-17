@@ -26,6 +26,9 @@ so `int_on` there deadlocks the default path); and exactly ONE task per wave own
 cross-lane diff.
 
 ## Burndown
+| date | done pts | remaining |
+|---|---|---|
+| 2026-09-17 | 13 | 23 |
 
 # SPRINT 15 — Every remaining item (6.5.0)          capacity: 34   dates: 2026-09-14–
 
