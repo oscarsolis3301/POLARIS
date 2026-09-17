@@ -609,3 +609,4 @@
 {"ts":1789680335,"ev":"claim","id":"T-171","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1789680391,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"GOLDENS RUN NOWHERE AUTOMATIC: ci.yml runs doctor --selftest"}
 {"ts":1789680594,"ev":"claim","id":"T-172","who":"Owner@DESKTOP","note":"","pts":1}
+{"ts":1789680852,"ev":"handoff","id":"T-171","who":"Owner@DESKTOP","note":""}
