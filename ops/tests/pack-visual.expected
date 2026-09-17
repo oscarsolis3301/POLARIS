@@ -1,17 +1,30 @@
 == 1. a task that touches a visual: path sees the whole section, on ITS port ==
 visual: web/* · this task touches it: yes
+screen: Homepage / Universal Search Bar
+shotdir: .polaris/shots/homepage/universal-search-bar
 serve: dev 4007
-shot: snap T-207 4007
+shot BEFORE you edit: snap T-207 4007
+shot AFTER you edit: snap T-207 4007
+name them: T-207-before-<what>.png and T-207-after-<what>.png, in the shotdir above
 port: 4007
-proof: .polaris/shots/T-207-*.png — then READ it and write one "saw: <what it shows>" line in your handoff
+proof: TWO non-empty captures for T-207, both newer than your branch base — READ both, then:
+       bash ops/polaris handoff --saw "<what the after shot shows, and how it measures against ops/DESIGN.md — PASS / WEAK / FAIL>"
+nothing existed to photograph (a brand-new screen)? bash ops/polaris handoff --no-before "<why>" --saw "…"
 read: ops/VISUAL.md
 == 2. a task that does not touch it still sees the section — with touches it: no ==
 visual: web/* · this task touches it: no
+screen: (unset — no name for this surface; shots land in misc/)
+shotdir: .polaris/shots/misc
 serve: dev 4000
-shot: snap T-300 4000
+shot BEFORE you edit: snap T-300 4000
+shot AFTER you edit: snap T-300 4000
+name them: T-300-before-<what>.png and T-300-after-<what>.png, in the shotdir above
 port: 4000
-proof: .polaris/shots/T-300-*.png — then READ it and write one "saw: <what it shows>" line in your handoff
+proof: TWO non-empty captures for T-300, both newer than your branch base — READ both, then:
+       bash ops/polaris handoff --saw "<what the after shot shows, and how it measures against ops/DESIGN.md — PASS / WEAK / FAIL>"
+nothing existed to photograph (a brand-new screen)? bash ops/polaris handoff --no-before "<why>" --saw "…"
 read: ops/VISUAL.md
+read: ops/DESIGN.md — the bar this screen must clear
 == 3. visual: unset ⇒ ONE line, and nothing else changes anywhere ==
 (visual: unset — no capture step; ops/VISUAL.md explains how to add one)
 == 4. a committed visual change with NO capture is refused, rc 1, task stays in active/ ==
