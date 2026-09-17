@@ -293,7 +293,7 @@ caption file's exact shape.
 - [ ] The `handoff` usage line in `kit/ops/polaris` shows the new signature and still matches `^  handoff ` so `cli-help-parity` keeps counting it.
 
 ## T-169 — "One file the owner opens — polaris shots writes the index, and done publishes the curated gallery on the commit it already makes"
-points 5 · risk normal · landed a0a8dc5 (2026-09-17) · claimed 2026-09-17
+points 5 · risk normal · landed a0a8dc5 (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
 files touched: kit/ops/lib/integrate.sh, kit/ops/lib/visual.sh, kit/ops/polaris, ops/tests/api-kit.expected
 
 ### Why
@@ -327,6 +327,41 @@ does, `open` is useless to an agent, and publishing already happens at `done`.
 - [ ] The gallery paths ride the EXISTING commit: subject stays `docs(map): …` when a `map_delta` landed, else `docs(surfaces): …` when surface rows landed, else becomes `docs(screens): <ID> <screen>`; whichever applied, all their paths are in that one commit's pathspec and its retry loop.
 - [ ] Every write into the gallery goes through a temp name in the SAME directory followed by `mv`.
 - [ ] `kit/ops/polaris` gains the `shots` dispatch arm and one usage line reading `  shots ` so `cli-help-parity` keeps matching, and the entry script stays under 500 lines.
+
+## T-170 — "The golden that walks it — shots-gallery proves the slug, the three-place search, before-and-after, the escape hatch, the index and the published gallery, hermetically"
+points 5 · risk normal · landed 6a33746 (2026-09-17) · claimed 2026-09-17
+files touched: ops/tests/shots-gallery.cmd, ops/tests/shots-gallery.expected
+
+### Why
+Four waves of code have shipped a feature that THIS repo never runs: POLARIS sets no `visual:` key,
+so every line of it is code only other people's repos execute, and the first they would hear of a
+regression is a broken page. `ops/tests/pack-visual.*` already proves the section and the gate; this
+golden proves everything the last three waves added, end to end, in a throwaway repo — and once
+written it costs a subprocess forever instead of a subagent.
+
+Follow the `pack-visual` fixture pattern exactly: ONE repo under `mktemp -d`, carrying its own
+CONVENTIONS, its own board and its own tasks, with the CLI run from INSIDE it so POLARIS anchors to
+the fixture as PRIMARY. Nothing may read the live board, config, registry or shots directory — the
+golden must be byte-identical on a second run from any board state. `POLARIS_AWAKE_HOME` points at
+the fixture so no daemon touches the real machine, and `landing: integrator` is load-bearing: under
+the default `landing: self` a passing handoff would go on to take the integration lease and land, and
+you would be testing the integrator instead of the thing you wrote.
+
+`ops/contracts/visual-check.md` § v2 § 13 lists what to assert.
+
+### Acceptance
+- [ ] A `screen:` on a task produces the slugged shotdir, and `pack` prints it.
+- [ ] `screen:` unset files under `misc/` and `pack` says so.
+- [ ] A traversal-shaped `screen:` (`../../etc`) does not escape `.polaris/shots/` — it falls back to `misc/`.
+- [ ] ONE fresh capture is REFUSED with the two-capture sentence, rc 1, and the task stays in `active/`.
+- [ ] TWO fresh captures plus `--saw "…"` pass, rc 0, task in `review/`.
+- [ ] Two captures with NO `--saw` are refused with the pinned sentence, rc 1.
+- [ ] `--no-before "<why>"` with one capture plus `--saw` passes, and the reason appears in the caption file.
+- [ ] A FLAT `.polaris/shots/<ID>-*.png` — what a pre-6.6 `shot:` line writes — counts toward the gate, and after the handoff it has been FILED into the shotdir. This is the backward-compatibility assertion and it is the most important one in the file.
+- [ ] `.polaris/shots/INDEX.md` contents are pinned: the screen heading, the task heading, the caption text, and the before/after table.
+- [ ] `polaris shots` output is pinned.
+- [ ] After `done`, `docs/screens/` holds the curated image and caption, `docs/screens/INDEX.md` exists, and the base branch carries a `docs(screens):` commit.
+- [ ] Every path the golden prints is repo-relative. The one machine-specific byte any of this could emit is the `mktemp` path — carry `pack-visual`'s `N()` normaliser so a future absolute path cannot quietly make this golden machine-bound.
 
 ## T-171 — "Every existing repo gets the bar — heal copies ops/DESIGN.md in when it is missing, and doctor says when nobody has filled it in"
 points 3 · risk normal · landed fd36cce (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
