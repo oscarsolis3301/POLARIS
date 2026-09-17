@@ -41,6 +41,7 @@ kit/ops/KEYS.tsv	key	drain
 kit/ops/KEYS.tsv	key	drain_slices
 kit/ops/KEYS.tsv	key	evolve_apply
 kit/ops/KEYS.tsv	key	express
+kit/ops/KEYS.tsv	key	gallery
 kit/ops/KEYS.tsv	key	generated
 kit/ops/KEYS.tsv	key	handover
 kit/ops/KEYS.tsv	key	integration
@@ -686,6 +687,16 @@ kit/ops/templates/CONTRACT.md	heading	Interface
 kit/ops/templates/CONTRACT.md	heading	Invariants
 kit/ops/templates/CONTRACT.md	heading	Purpose
 kit/ops/templates/CONTRACT.md	heading	Shared types / schema
+kit/ops/templates/DESIGN.md	heading	Density without clutter
+kit/ops/templates/DESIGN.md	heading	Icons must be self-evident
+kit/ops/templates/DESIGN.md	heading	Legible to a non-technician
+kit/ops/templates/DESIGN.md	heading	Progressive disclosure
+kit/ops/templates/DESIGN.md	heading	THE BAR — what a screen must clear
+kit/ops/templates/DESIGN.md	heading	THIS PRODUCT
+kit/ops/templates/DESIGN.md	heading	The 3-second rule
+kit/ops/templates/DESIGN.md	heading	The verdict
+kit/ops/templates/DESIGN.md	heading	What AI slop looks like
+kit/ops/templates/DESIGN.md	heading	Where to go deeper
 kit/ops/templates/ROADMAP.md	heading	Outcomes (top to bottom = priority)
 kit/ops/templates/ROADMAP.md	heading	ROADMAP
 kit/ops/templates/SKILL.md	heading	<glob> — what POLARIS already knows

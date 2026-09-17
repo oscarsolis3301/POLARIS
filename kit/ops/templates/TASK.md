@@ -3,6 +3,8 @@ id: XXX-000
 title:
 type: feature            # feature | bug | chore | spike
 scope:                   # optional; conventional-commit scope for type(scope): title — Planner sets it
+screen:                  # optional; the human name of the surface this task changes, e.g.
+                         # Homepage / Universal Search Bar — becomes the shot folder
 epic:                    # optional grouping; epics are never claimed, only leaves
 # plan:                  # optional; conductor-run slug for backlog drain, e.g. hands-free-core —
                           # Planner sets it on every task of a run; see contract hands-free-knobs
