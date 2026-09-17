@@ -32,6 +32,7 @@ cross-lane diff.
 | 2026-09-17 | 3 | 23 |
 | 2026-09-17 | 9 | 15 |
 | 2026-09-17 | 5 | 10 |
+| 2026-09-17 | 5 | 5 |
 
 # SPRINT 15 — Every remaining item (6.5.0)          capacity: 34   dates: 2026-09-14–
 
