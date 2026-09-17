@@ -293,7 +293,7 @@ esac
 # (ops/contracts/module-layout.md v2 — both lists stay LITERAL, never a glob.)
 case "${1:-}" in
   _match|_rules|_guard) _mods="core ownership" ;;
-  *)             _mods="core ownership workspace surfaces builder integrate knowledge search observe admin bg awake handover skills
+  *)             _mods="core ownership workspace surfaces visual builder integrate knowledge search observe admin bg awake handover skills
                         selftest/spine selftest/board selftest/history selftest/report
                         selftest/brain selftest/policy selftest/remote selftest/fast" ;;
 esac

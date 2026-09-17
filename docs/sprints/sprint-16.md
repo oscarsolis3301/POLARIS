@@ -1,7 +1,7 @@
 # Sprint 16 — The gallery and the bar (6.6.0) (2026-09-17–)
 
 ## T-161 — "The interface first — the gallery: key, the screen: field, and ops/DESIGN.md as a shippable template"
-points 3 · risk normal · landed 68dc065 (2026-09-17) · claimed 2026-09-17
+points 3 · risk normal · landed 68dc065 (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
 files touched: kit/ops/KEYS.tsv, kit/ops/templates/DESIGN.md, kit/ops/templates/TASK.md, ops/tests/api-kit.expected
 
 ### Why
@@ -35,7 +35,7 @@ into `ops/tests/api-kit.expected`, which you also own and must re-pin.
 - [ ] `ops/tests/api-kit.expected` re-pinned: ten new `kit/ops/templates/DESIGN.md heading` rows plus one `kit/ops/KEYS.tsv key gallery` row, and NOTHING else moved.
 
 ## T-162 — "The rule that was claimed but never written — ops/VISUAL.md gets its path guard, ops/DESIGN.md deliberately gets none, and the red rules-health golden goes green"
-points 1 · risk normal · landed a799ba5 (2026-09-17) · claimed 2026-09-17
+points 1 · risk normal · landed a799ba5 (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
 files touched: ops/RULES.tsv, ops/tests/rules-health.expected
 
 ### Why
@@ -68,7 +68,7 @@ comment above it, exactly as every other block in the file does.
 - [ ] `ops/tests/rules-health.expected` reads `✅ 18 rule(s), all healthy` — 16 shipped rules, plus the model-ban content rule that was never pinned, plus yours.
 
 ## T-163 — "The three roles that take the picture — BUILDER, SOLO and CONDUCTOR learn before-and-after, the bar, and a --saw that rides the detached ship line"
-points 3 · risk normal · landed 950ca80 (2026-09-17) · claimed 2026-09-17
+points 3 · risk normal · landed 950ca80 (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
 files touched: kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/SOLO.md
 
 ### Why
@@ -98,7 +98,7 @@ facts folded in — do not restructure them.
 - [ ] Nothing in any of the three grows a paragraph about the gallery mechanics. A builder needs to know what to run and what will refuse it; where the pictures end up is `ops/VISUAL.md`'s job.
 
 ## T-164 — "The three roles that set it up — the Planner names the screen, INIT installs the bar and asks the one design question, the Integrator opens the pair, and the fleet kickoff says so"
-points 3 · risk normal · landed dbb4320 (2026-09-17) · claimed 2026-09-17
+points 3 · risk normal · landed dbb4320 (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
 files touched: kit/ops/lib/observe.sh, kit/ops/roles/INIT.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md
 
 ### Why
@@ -137,7 +137,7 @@ instead of a conductor's template, so it carries the same sentence in one clause
 - [ ] The `^#` heading line set of all three role files is byte-identical to base, and `observe.sh` gains NO new function.
 
 ## T-165 — "The two documents and the one attribute — VISUAL.md describes the new deal, MANUAL.md's hand-rolled handoff keeps up, and gallery PNGs stop being text"
-points 3 · risk normal · landed fd4c563 (2026-09-17) · claimed 2026-09-17
+points 3 · risk normal · landed fd4c563 (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
 files touched: kit/ops/MANUAL.md, kit/ops/VISUAL.md, kit/ops/install.sh
 
 ### Why
@@ -169,3 +169,44 @@ counts the lines a quiet install prints and a new `say` would trip that tripwire
 - [ ] `kit/ops/install.sh` appends `docs/screens/**/*.png -text` to the target's `.gitattributes`, guarded by its own `grep -q` the way the `commit-msg` line is (pre-6.6 installs already carry the older block, so a new line inside it would never reach them).
 - [ ] The installer prints NO new output line for it — the `say` count is unchanged from base.
 - [ ] Neither markdown file gains or loses a `^#` line.
+
+## T-166 — "One home for the visual code — lib/visual.sh, the loader that names it, and the three inline blocks moved out of builder.sh with zero behavior change"
+points 3 · risk normal · landed c048e25 (2026-09-17) · claimed 2026-09-17
+files touched: kit/ops/lib/builder.sh, kit/ops/lib/visual.sh, kit/ops/polaris, ops/tests/api-kit.expected
+
+### Why
+Everything left in this sprint adds code to one subject, and that subject currently lives as three
+INLINE blocks inside `kit/ops/lib/builder.sh`, which is already 921 lines. The standing rule is that
+new code goes in a new module rather than growing a long file. So before any new behavior is written,
+the existing behavior moves to `kit/ops/lib/visual.sh` and gets one home.
+
+**This task changes nothing a user can see.** It is a relocation, and the proof is that
+`ops/tests/pack-visual.*` — the golden that pins the whole visual feature's output, including the
+handoff refusal, byte for byte — stays untouched and green. If you find yourself wanting to edit that
+golden, you have changed behavior and the move is wrong.
+
+The three blocks and their new homes are pinned in `ops/contracts/module-layout.md` § v8:
+
+| moved from | becomes |
+|---|---|
+| `builder.sh:833-879`, inline in `cmd_pack` | `visual_pack <ID> <owned>` |
+| `builder.sh:216-239`, inline in `cmd_verify` | `visual_gate <ID> warn 2 ""` |
+| `builder.sh:250-277`, inline in `cmd_handoff` | `visual_gate <ID> die 1 ""` |
+
+Two functions, not three: the verify twin and the handoff gate are the same test with two different
+endings, so they become one body whose `mode` argument decides both the git anchor and whether it
+warns or dies. That is the shape every later wave builds on, and unifying them now is the last moment
+it is free.
+
+One thing is not negotiable: **the loader line naming `visual` and the file `kit/ops/lib/visual.sh`
+must land in the same commit.** A loader that names a module which does not exist kills every single
+CLI call in the repo.
+
+### Acceptance
+- [ ] `kit/ops/lib/visual.sh` exists with EXACTLY two top-level functions, `visual_pack` and `visual_gate`, a one-or-two line header comment, and nothing that executes at source time.
+- [ ] `visual_pack <ID> <owned>` takes the owned-pattern list as its SECOND ARGUMENT. It must NOT reach into `cmd_pack`'s locals through bash dynamic scoping the way the inline block does today.
+- [ ] `visual_gate <ID> <mode> <need> <saw>` carries both endings: `mode=warn` reads the worktree's `$BASE...HEAD` diff and prints the `⚠ ` sentence, `mode=die` reads `git -C "$PRIMARY" … $BASE...feat/<ID>` and dies with `⛔ handoff refused: `. `need` and `saw` are accepted now and used from T-168; today `need` is 1 and `saw` is ignored, so the shipped behavior is v1's.
+- [ ] `cmd_pack`, `cmd_verify` and `cmd_handoff` each call the new function at EXACTLY the point their inline block sat, with no other change to `builder.sh`.
+- [ ] The loader's FULL list reads `core ownership workspace surfaces visual builder integrate knowledge search observe admin bg awake handover skills`, and the `_match|_rules|_guard` list still reads EXACTLY `core ownership`.
+- [ ] `ops/tests/pack-visual.expected` and `.cmd` are byte-identical to base and the golden passes — this is the proof the move changed nothing.
+- [ ] `ops/tests/api-kit.expected` gains exactly two `kit/ops/lib/visual.sh fn` rows and loses nothing: the moved blocks were inline, so `builder.sh`'s own fn census is unchanged.
