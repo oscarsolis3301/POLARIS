@@ -187,6 +187,11 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  listed as skipped; writes nothing. --apply writes those rows
                                  (tagged [scaffold]) and sets test_select: when it is unset — on
                                  <base> only; nothing is committed for you
+  shots                          rebuild .polaris/shots/INDEX.md — every screenshot this repo has
+                                 taken, grouped by screen, newest first, before beside after with
+                                 the caption underneath. Open it in VS Code's Markdown preview.
+                                 Then says where the committed gallery: copy lives, or that the
+                                 key is unset. No subcommands: `done` publishes the gallery itself
   qa [--force] [--full]          is everything okay, in ONE shot: test/lint/typecheck/build/uat
                                  from CONVENTIONS + drift --strict + doctor env check. Runs every
                                  check even after a red; rc 1 if anything was red.
@@ -398,6 +403,7 @@ case "${1:-}" in
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
   rules)      cmd_rules;;
   surfaces)   shift 2>/dev/null || true; cmd_surfaces "$@";;   # no update_check_maybe: read-only, drift calls it
+  shots)      cmd_shots;;   # no update_check_maybe: rewrites a generated index and commits nothing
   qa)         shift 2>/dev/null || true; cmd_qa "$@";;   # every flag forwarded: `qa --force --full` used to drop --full
   bg)         shift; case "${1:-}" in run) awake_ensure || true;; esac; cmd_bg "$@";;   # no update_check_maybe:
               # run/status/tail/wait ride hot agent loops — keep them quiet + pure. Only `run` ensures the

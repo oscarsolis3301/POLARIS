@@ -194,6 +194,11 @@ cmd_done() { # Integrator only, after the task is landed (squash) or merged (leg
   fi
   local deltas; deltas="$(fm_list map_delta "$tf" 2>/dev/null || true)"   # BEFORE the mv — path vanishes after
   local pts; pts="$(fm_get points "$tf")"
+  # T-169 (ops/contracts/visual-check.md § v2.11): the screen this task changed, read BEFORE the mv
+  # for the same reason map_delta is, and the gallery: key that decides whether ANY of it runs. Unset
+  # — the house default — and nothing below changes for this repo.
+  local gscreen; gscreen="$(fm_get screen "$tf" 2>/dev/null || true)"
+  local gal; gal="$(cfg gallery "")"
   # T-137 (ops/contracts/test-surfaces.md § 9): `done` is the ONE writer of ops/SURFACES.tsv, and
   # the task's `surface:` items are the ONE channel into it. Parsed HERE, BEFORE the mv — the
   # review/ path vanishes after it, exactly as map_delta's does. Writing the map from the
@@ -237,14 +242,21 @@ EOF
   # A non-empty map_delta lands as ONE separate docs(map) commit on $BASE (quiet-board contract) —
   # the only base commit any board mutation makes. Require the checkout BEFORE mutating anything,
   # so a wrong branch aborts clean; empty delta commits nothing on $BASE. Surface rows ride the
-  # SAME commit and so need the same checkout — the die names whichever of the two you carry.
-  if [ -n "$deltas" ] || [ -n "$rows" ]; then
+  # SAME commit and so need the same checkout — the die names whichever of the two you carry, and
+  # since 6.6.0 the gallery rides it too. That last one is why the whole block is gated on gallery:
+  # being non-empty: a repo that never opted in can still never reach this die.
+  if [ -n "$deltas" ] || [ -n "$rows" ] || [ -n "$gal" ]; then
     local br; br="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
     if [ "$br" != "$BASE" ]; then
       # no rows ⇒ the 6.3 line, byte for byte; rows ⇒ the die names them, because "map_delta"
       # alone would send the human looking for a map entry the task does not have.
-      [ -n "$rows" ] || die "done: $id carries a map_delta — it lands as a docs(map) commit on $BASE; check out $BASE in the primary first (currently on ${br:-?})"
-      local carries="surface rows"; [ -z "$deltas" ] || carries="a map_delta + surface rows"
+      if [ -z "$rows" ] && [ -z "$gal" ]; then
+        die "done: $id carries a map_delta — it lands as a docs(map) commit on $BASE; check out $BASE in the primary first (currently on ${br:-?})"
+      fi
+      local carries=""
+      [ -z "$deltas" ] || carries="a map_delta"
+      if [ -n "$rows" ]; then if [ -n "$carries" ]; then carries="$carries + surface rows"; else carries="surface rows"; fi; fi
+      if [ -n "$gal" ]; then if [ -n "$carries" ]; then carries="$carries + screens"; else carries="screens"; fi; fi
       die "done: $id carries $carries — they land as ONE docs commit on $BASE; check out $BASE in the primary first (currently on ${br:-?})"
     fi
   fi
@@ -278,16 +290,31 @@ $rows
 EOF
     _SURFACES_CACHED=""            # a batch close calls done per task — the next dup test re-reads
   fi
-  # ONE base commit for both (quiet-board contract). The pathspec goes through the positional
+  # T-169 (visual-check.md § v2.11): the curated gallery is published HERE — inside the mutex this
+  # function ALREADY holds, and behind no integration lease. cmd_done does not hold that lease (only
+  # land, land --express and seal ever take it), and taking it here would DEADLOCK the default
+  # `landing: self` path: the self-land tail runs `done` as a SUBPROCESS with a different $$, so the
+  # re-entrancy check fails, it waits out integration_wait_minutes and returns rc 3. The mutex this
+  # block runs under is the serialisation it needs, and visual_publish writes through a temp name in
+  # the same directory so a half-copied PNG is never stageable. Its paths ride the commit below.
+  local gapplied=0
+  if [ -n "$gal" ]; then
+    if visual_publish "$id"; then gapplied=1; fi
+  fi
+  # ONE base commit for all of them (quiet-board contract). The pathspec goes through the positional
   # params so a path with a space still arrives as one argument; cmd_done is finished with "$@"
   # by here — $1 became $id at the top.
-  if [ "$applied" -eq 1 ] || [ "$sapplied" -eq 1 ]; then   # stays on $BASE — pathspec-limited commit, index.lock retry
+  if [ "$applied" -eq 1 ] || [ "$sapplied" -eq 1 ] || [ "$gapplied" -eq 1 ]; then   # stays on $BASE — pathspec-limited commit, index.lock retry
     local mi mok=0 msubj mkind="docs(map)"
     if [ "$applied" -eq 1 ]; then
       msubj="docs(map): $id $first"; set -- "$OPS/MAP.md"
       if [ "$sapplied" -eq 1 ]; then set -- "$@" "$SURFACES"; fi
-    else
+      if [ "$gapplied" -eq 1 ]; then set -- "$@" "$PRIMARY/$gal"; fi
+    elif [ "$sapplied" -eq 1 ]; then
       mkind="docs(surfaces)"; msubj="docs(surfaces): $id $sfirst"; set -- "$SURFACES"
+      if [ "$gapplied" -eq 1 ]; then set -- "$@" "$PRIMARY/$gal"; fi
+    else
+      mkind="docs(screens)"; msubj="docs(screens): $id ${gscreen:-misc}"; set -- "$PRIMARY/$gal"
     fi
     for mi in 1 2 3 4 5; do
       if git -C "$PRIMARY" add -- "$@" 2>/dev/null \
