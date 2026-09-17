@@ -27,6 +27,15 @@ ops/VERSION	path	-	installed copy — it records which release we run; edit kit/
 ops/PROTOCOL.md	path	-	installed copy — edit kit/ops/PROTOCOL.md
 ops/MANUAL.md	path	-	installed copy — edit kit/ops/MANUAL.md
 ops/PROMPTS.md	path	-	installed copy — edit kit/ops/PROMPTS.md
+# ops/VISUAL.md added 2026-09-17 (assistant, under invariant 11 — task T-162, plan `gallery-and-bar`,
+# 6.6.0). Its own contract already claimed this row existed: ops/contracts/visual-check.md:61 says the
+# file is installed "RULES-guarded there like every installed `ops/*.md`" — and it never was. It ships
+# via install.sh's KIT_CODE manifest exactly like PROTOCOL/MANUAL/PROMPTS above, so a hand-edit here is
+# silently lost at the next dogfood, and until then the board runs a document that exists nowhere in kit/.
+# ops/DESIGN.md gets NO row, and that asymmetry is a DECISION, not an oversight: it sits right beside
+# this file and looks exactly like it, but it is repo state the owner is meant to edit — like
+# ops/CONVENTIONS.md, which is likewise unlisted. Do not "fix" the pair by adding one.
+ops/VISUAL.md	path	-	installed copy — edit kit/ops/VISUAL.md
 ops/roles/	path	-	installed copy — edit kit/ops/roles/
 ops/hooks/	path	-	installed copy — edit kit/ops/hooks/
 ops/templates/	path	-	installed copy — edit kit/ops/templates/
@@ -58,7 +67,9 @@ ops/KEYS.tsv	path	-	installed copy — edit kit/ops/KEYS.tsv
 # row is fixed on the TASK (its surface: items), never here.
 # Message widened 2026-09-14 (assistant, under invariant 11 — Sprint B plan `spend-less`, ops/contracts/test-surfaces.md v2 § 16):
 # `surfaces --scaffold --apply` is the SECOND sanctioned writer (on <base> only, rows tagged [scaffold], unambiguous pairings only).
-# The guard is unchanged: the file is still never hand-edited, and the rule count stays 16.
+# The guard is unchanged: the file is still never hand-edited, and this widening added no rule. Count
+# corrected 2026-09-17 (T-162): it read "stays 16" long after the 2026-09-15 model ban made it 17, and
+# the ops/VISUAL.md row above makes it 18 — ops/tests/rules-health.expected pins the same number.
 ops/SURFACES.tsv	path	-	rows are written only by polaris done (a task's surface: list) or surfaces --scaffold --apply — edit the task, never this file
 # Model ban added 2026-09-15 (assistant, under invariant 11, on the owner's explicit and repeated instruction).
 # WHY: `model_strong: fable` sent ~12 subagents to Fable in ONE day — several over 300k tokens — because `route`
