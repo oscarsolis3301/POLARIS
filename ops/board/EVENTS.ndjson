@@ -584,3 +584,4 @@
 {"ts":1789527876,"ev":"claim","id":"T-160","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1789527887,"ev":"blocked","id":"T-160","who":"Owner@DESKTOP","note":"→ blocked: SHIPPED, nothing left to build: 6.5.0 was cut by hand in the 2026-09-15 model-ban session (v6.5.0 published, dogfooded at 0aebfa1, all three installs verified on 6.5.0). Parked here only because the CLI has no retire verb for work completed outside a lane."}
 {"ts":1789678561,"ev":"claim","id":"T-162","who":"Owner@DESKTOP","note":"","pts":1}
+{"ts":1789678569,"ev":"claim","id":"T-161","who":"Owner@DESKTOP","note":"","pts":3}
