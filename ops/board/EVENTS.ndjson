@@ -606,3 +606,4 @@
 {"ts":1789679980,"ev":"done","id":"T-166","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1789680152,"ev":"promote","id":"T-167","who":"Owner@DESKTOP","note":"deps done: T-166","pts":5}
 {"ts":1789680287,"ev":"claim","id":"T-167","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1789680335,"ev":"claim","id":"T-171","who":"Owner@DESKTOP","note":"","pts":3}
