@@ -420,3 +420,104 @@ flips rc 0 to 1 (one capture is no longer enough). Keep its hermetic fixture sha
   before AND after (count-and-freshness, never filenames), `--saw` as recorded data,
   `ops/DESIGN.md`, and `polaris shots`. Supersedes v1's one-capture gate and its "no new fn
   anywhere" invariant (T-161..T-170, plan `gallery-and-bar`, 6.6.0).
+
+## v3 — `heal` installs the bar; `doctor` says when it is unfilled (2026-09-17, plan `gallery-and-bar`, 6.6.0)
+
+v2 § 12 said "**INIT copies it; `install.sh` never does**" and stopped there. That is true and it is
+also the whole bug: `ops/DESIGN.md` is written by INIT (`kit/ops/roles/INIT.md:119`) and by NOTHING
+else — `grep -c DESIGN kit/ops/lib/admin.sh` is 0, so `heal`, `adopt` and `update` never create it
+either. Every repo that adopted POLARIS before 6.6.0 — which is EVERY existing repo, this kit
+included — updates to 6.6.0, receives `ops/templates/DESIGN.md` (templates/ IS copied recursively on
+both install paths) and never gets `ops/DESIGN.md`. Meanwhile five landed prose references point at
+it as the bar a screen must clear (`roles/BUILDER.md:55` · `roles/SOLO.md:80,146` ·
+`roles/PLANNER.md:41` · `roles/INTEGRATOR.md:17` · `roles/CONDUCTOR.md:188`), and `pack`'s
+`read: ops/DESIGN.md` line prints "only when `ops/DESIGN.md` exists" (§ 8). So in exactly the repos
+the owner cares about, the release's headline feature no-ops silently. Task: T-171. Where v3 and v2
+disagree, **v3 wins**; everything v2 says that v3 does not mention is unchanged.
+
+### 15. `cmd_heal` gains a THIRD repair — the design bar
+`polaris heal`'s stated job since 6.5.0 is that every install and every update repairs itself, and
+`install.sh:541` + `cmd_update` already call it. It is therefore the one mechanism that reaches
+every installed repo without rewriting anything a human owns.
+
+- **Placement: INLINE in `cmd_heal` (`kit/ops/lib/admin.sh`), after `heal_claudemd` and before the
+  closing `say`. NO new top-level function, at any depth.** Not style — `ops/tests/api-kit.expected`
+  is owned by the T-166..T-170 chain this sprint, and a new fn row would couple two lanes through a
+  golden neither can reconcile alone (SPRINT.md Learned: the derived-surface-golden rule). The
+  precedent is v7 of `module-layout.md`: "admin.sh gains none (T-151 and T-156 are inline)".
+- **Semantics, byte-identical to INIT's step 3 and to `heal_claudemd`'s posture:** copy
+  `$OPS/templates/DESIGN.md` to `$OPS/DESIGN.md` **if and only if** the destination does not exist.
+  Never overwrite, never merge, never rewrite. `ops/DESIGN.md` is owner-editable state exactly like
+  `ops/CONVENTIONS.md`.
+- **Guards, in order:** `cmd_heal` already returns early when `$CONV` is absent, so a repo where
+  INIT never ran is untouched and INIT still does the copy (with the interview answer). Then: the
+  template must exist (a pre-6.6 kit that has not updated yet has no `templates/DESIGN.md` — say
+  nothing), and the destination must not exist.
+- **Output:** exactly ONE `note` on the run that creates the file, and **silence on every run
+  afterwards.** `note` and nothing louder: `install.sh` pipes heal's whole output through its own
+  quiet-gated `note`, which is what keeps the RULES-guarded CI tripwire (max 2 lines above the
+  epilogue, `.github/workflows/ci.yml:330`) unaffected. A `say` here would be a new stdout line on
+  an install path and is forbidden.
+- **Failure is never fatal.** A failed copy is silent; heal still returns 0. A config nicety must
+  never be the thing that fails an install or an update.
+
+### 16. `## THIS PRODUCT` stays unfilled — and `doctor` is what says so
+`heal` cannot interview, so the section it installs is the template's unfilled slot. Surfacing that
+costs ONE line in `cmd_doctor` (`kit/ops/lib/observe.sh`), inline, beside the `interview_pending`
+line it is modelled on. **No new CONVENTIONS key** — the existing `visual:` key already answers
+"does this repo have screens", and inventing a second knob for the same question is the drift v2 § 2
+was written to avoid.
+
+- **Fires only when all three hold:** `ops/DESIGN.md` exists · it still carries the sentinel · the
+  repo has `visual:` set. A repo with no `visual:` paths has no screen to hold to a bar and must
+  stay silent — v2 § 14's "Absent-by-default, still", and the same anti-warning-storm discipline as
+  the config-drift and surfaces-activation lines directly above it in `cmd_doctor`.
+- **The sentinel, pinned:** the literal `_(unfilled` at the start of the first line under
+  `## THIS PRODUCT` in `kit/ops/templates/DESIGN.md`. Filling the section means replacing that
+  block, so its absence IS the filled state. The template keeps that string; a task that changes it
+  changes this contract in the same commit.
+- **NEVER name a kit version in the line** — doctor output is goldened, and a version reds it every
+  release (the `keys-drift` lesson, `cmd_doctor`'s own comment).
+- The line is a `note`, one sentence, and names the remedy in the owner's terms ("one sentence on
+  the look and feel you want, in your own words") — never a file-format instruction.
+
+### 17. Executable check — golden `heal-design` (T-171; hermetic, the `keys-drift` fixture pattern)
+`ops/tests/heal-design.cmd` + `.expected`. ONE throwaway repo under `mktemp -d` carrying its own
+`ops/CONVENTIONS.md` and its own tiny `ops/templates/DESIGN.md` (FAKE content with the real
+sentinel — never the kit's real template, which grows and would red this file on correct work), with
+the CLI run from INSIDE it so `PRIMARY`/`OPS` anchor to the fixture. Reuse ONE fixture across every
+state (the 5.21.0 lesson: ~0.7s of CLI startup per call is real money). It asserts BOTH directions
+and the nudge:
+1. **Creates when absent** — no `ops/DESIGN.md`, `heal` → the file exists, is byte-identical to the
+   fixture template (`cmp`), and the one `healed: ops/DESIGN.md` note was printed.
+2. **Does not clobber when present** — replace `## THIS PRODUCT` with owner content, `heal` again →
+   the file is byte-identical to the owner's version and heal says NOTHING about `ops/DESIGN.md`.
+3. **Silent second run** — the create note appears exactly once across the two runs.
+4. **INIT never ran** — remove `ops/CONVENTIONS.md`, `heal` → no `ops/DESIGN.md` is created.
+5. **The nudge** — with `visual:` set and the sentinel present, `doctor` prints the line; after the
+   owner fills the section it is silent; with `visual:` unset it is silent either way.
+Doctor's output is filtered to the one line under test with `sed -n`, exactly as `keys-drift` does —
+everything else a fixture repo makes doctor say is noise this golden must not own.
+
+**A new golden passes VACUOUSLY inside a Builder worktree** (`cmd_check` is `$PRIMARY`-anchored, so
+it prints `no goldens matched`) — SPRINT.md Learned. T-171's `verify:` therefore runs the pair BY
+HAND (`bash ops/tests/heal-design.cmd | diff -q - ops/tests/heal-design.expected`), never
+`polaris check --only heal-design`.
+
+### 18. Invariants (v3)
+- `ops/DESIGN.md` still gets NO `ops/RULES.tsv` row (v2 § 12's asymmetry, and the comment at
+  `ops/RULES.tsv:35` explaining it, are unchanged) — it is meant to be edited in the repo.
+- `install.sh` still never copies it. `heal` does, and `install.sh` reaches `heal`.
+- INIT's step 3 is UNCHANGED and stays the path that also fills `## THIS PRODUCT` from the
+  interview: on a fresh install `ops/CONVENTIONS.md` does not exist yet, so heal no-ops and INIT
+  does the copy moments later. The two never race and never double-write.
+- T-171 adds NO top-level function to `kit/`, so `ops/tests/api-kit.expected` does not move.
+- T-171 touches neither `kit/ops/polaris` nor `ops/tests/cli-help.expected`: the entry script is
+  owned by the T-166 chain. `help`'s `heal` paragraph therefore still names only two repairs after
+  T-171 lands — a KNOWN, recorded gap for the next task that legitimately owns the entry script.
+
+### Changelog
+- v3 2026-09-17: `heal` installs `ops/DESIGN.md` when absent (inline in `cmd_heal`, never
+  overwriting); `doctor` names an unfilled `## THIS PRODUCT` when `visual:` is set; golden
+  `heal-design`; the `api-kit`/entry-script ownership constraints that shape all three (T-171,
+  plan `gallery-and-bar`).
