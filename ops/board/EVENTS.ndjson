@@ -613,3 +613,4 @@
 {"ts":1789680883,"ev":"handoff","id":"T-172","who":"Owner@DESKTOP","note":""}
 {"ts":1789681018,"ev":"handoff","id":"T-167","who":"Owner@DESKTOP","note":""}
 {"ts":1789681019,"ev":"all-review","id":"T-167","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
+{"ts":1789681101,"ev":"done","id":"T-171","who":"Owner@DESKTOP","note":"","pts":3}
