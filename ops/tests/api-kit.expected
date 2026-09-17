@@ -542,6 +542,9 @@ kit/ops/lib/surfaces.sh	fn	surfaces_proposal
 kit/ops/lib/surfaces.sh	fn	surfaces_runner
 kit/ops/lib/visual.sh	fn	visual_gate
 kit/ops/lib/visual.sh	fn	visual_pack
+kit/ops/lib/visual.sh	fn	visual_shotdir
+kit/ops/lib/visual.sh	fn	visual_shots_for
+kit/ops/lib/visual.sh	fn	visual_slug
 kit/ops/lib/workspace.sh	fn	beat_age
 kit/ops/lib/workspace.sh	fn	beat_live
 kit/ops/lib/workspace.sh	fn	beat_touch

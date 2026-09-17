@@ -1,18 +1,118 @@
-# lib/visual.sh — SEEING YOUR WORK: the pack section that names the capture step, and the
-# capture gate both cmd_verify and cmd_handoff run (ops/contracts/visual-check.md).
+# lib/visual.sh — SEEING YOUR WORK: the path rules that give every task a shot folder a human can
+# read, the pack section that names the capture step, and the capture gate both cmd_verify and
+# cmd_handoff run (ops/contracts/visual-check.md § v2; where the code lives: module-layout.md § v8).
+
+visual_slug() { # visual_slug <text> — a SAFE relative shot folder, or EMPTY when the text cannot be
+  # made safe (ops/contracts/visual-check.md § v2.3). This is the ONLY place in POLARIS where a human
+  # string becomes a filesystem path, so it refuses the way `id_ok` refuses (lib/workspace.sh):
+  # a return, never a die — the caller's answer to "unsafe" is misc/, not a dead session.
+  # The refusals are tested against the RAW text, BEFORE the transform, because the transform itself
+  # LAUNDERS an attack: `../../etc/passwd` loses its dots to the character filter and would come back
+  # out as the perfectly innocent `etc/passwd`. `*..*` is deliberately broader than "a `..` segment" —
+  # over-refusing costs a folder named misc/, under-refusing costs a write outside the repo.
+  # bash 3.2: lowercase is `tr`, never `${x,,}`.
+  local raw="${1:-}"
+  local t
+  local s
+  t="$(printf '%s' "$raw" | sed -e 's#^[[:space:]]*##' -e 's#[[:space:]]*$##')"
+  case "$t" in
+    ''|/*|*..*|*\\*|[A-Za-z]:*) return 0 ;;
+  esac
+  # spaces and underscores become `-`, everything outside [a-z0-9/-] is dropped, runs of separators
+  # collapse (`- / -` collapses to ONE slash, which is what makes `Homepage / Universal Search Bar`
+  # come out as `homepage/universal-search-bar`), and the edges are stripped so no segment starts or
+  # ends with a separator.
+  s="$(printf '%s' "$t" | tr 'A-Z' 'a-z' \
+     | sed -e 's#[[:space:]_]#-#g' -e 's#[^a-z0-9/-]##g' \
+           -e 's#-*/-*#/#g' -e 's#//*#/#g' -e 's#--*#-#g' \
+           -e 's#^[-/]*##' -e 's#[-/]*$##')"
+  [ -n "$s" ] || return 0
+  case "$s" in */*/*) return 0 ;; esac    # deeper than two segments — that is a tree, not a screen
+  printf '%s\n' "$s"
+}
+
+visual_shotdir() { # visual_shotdir <ID> — the task's capture directory: always printed (absolute),
+  # always created (ops/contracts/visual-check.md § v2.3). The folder is named after the SCREEN, out
+  # of the task's `screen:` field, because `.polaris/shots/T-042-home.png` is keyed by an ID that
+  # means nothing to a human and browses to nothing. `screen:` unset, unreadable, or slugging to
+  # empty falls back to `.polaris/shots/misc` — every task ALWAYS has somewhere to put its pictures.
+  local id="${1:-}"
+  local tf
+  local slug
+  local dir
+  tf=""
+  slug=""
+  if [ -n "$id" ]; then tf="$(task_file "$id" 2>/dev/null || true)"; fi
+  if [ -n "$tf" ] && [ -r "$tf" ]; then slug="$(visual_slug "$(fm_get screen "$tf" 2>/dev/null || true)")"; fi
+  if [ -n "$slug" ]; then dir="$PRIMARY/.polaris/shots/$slug"; else dir="$PRIMARY/.polaris/shots/misc"; fi
+  mkdir -p "$dir" 2>/dev/null || true
+  printf '%s\n' "$dir"
+}
+
+visual_shots_for() { # visual_shots_for <ID> <since-epoch> — this task's USABLE captures, one absolute
+  # path per line, oldest first (ops/contracts/visual-check.md § v2.5). Usable = non-empty (`-s`: a
+  # blank image is a failure, v1 doctrine) AND mtime at or after <since>.
+  # THREE locations, in this pinned order: the task's shotdir · misc/ · flat `.polaris/shots/`. None
+  # of them is belt-and-braces. The stray sweep only files captures at handoff, so looking in the
+  # shotdir alone would make a mid-flight `verify` warn on every visual task; a `screen:` added AFTER
+  # a capture was taken would orphan that capture; and every pre-6.6 repo's `shot:` line still writes
+  # flat, which POLARIS can never require it to stop doing — it ships no capture tool.
+  # De-duplicated by basename, first location wins. bash 3.2 has no globstar: `find`, never `**`.
+  local id="${1:-}"
+  local since="${2:-0}"
+  local root
+  local dir
+  local f
+  local b
+  local mt
+  local seen
+  local rows
+  [ -n "$id" ] || return 0
+  case "$since" in ''|*[!0-9]*) since=0 ;; esac
+  root="$PRIMARY/.polaris/shots"
+  seen=""
+  rows=""
+  for dir in "$(visual_shotdir "$id")" "$root/misc" "$root"; do
+    [ -d "$dir" ] || continue
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      [ -s "$f" ] || continue
+      mt="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0)"
+      case "$mt" in ''|*[!0-9]*) mt=0 ;; esac
+      [ "$mt" -ge "$since" ] || continue
+      b="${f##*/}"
+      case "$seen" in *"|$b|"*) continue ;; esac
+      seen="$seen|$b|"
+      rows="$rows$mt $f
+"
+    done <<EOF_SHOTS
+$(find "$dir" -maxdepth 1 -type f -name "$id-*.png" 2>/dev/null)
+EOF_SHOTS
+  done
+  [ -n "$rows" ] || return 0
+  # the mtime leads each row precisely so the sort is numeric on ONE field and the path — spaces and
+  # all — is simply everything after the first space.
+  printf '%s' "$rows" | sort -s -k1,1n | cut -d' ' -f2-
+}
 
 visual_pack() { # visual_pack <ID> <owned> — pack's SEE YOUR WORK section, the owned patterns as ARG 2.
-  # (ops/contracts/visual-check.md § cmd_pack): the capture step, driven by real
-  # cfg reads of visual:/shot:/serve:/port_base: so each repo plugs in its own tool. Absent by
+  # (ops/contracts/visual-check.md § v2.8, which supersedes v1's § cmd_pack): the capture step, driven
+  # by real cfg reads of visual:/shot:/serve:/port_base: so each repo plugs in its own tool. Absent by
   # default — no visual: ⇒ one line and nothing else changes. `touches it` = any files_owned
   # pattern vs any visual: glob, both directions (pat_overlap, the claim gate's matcher); the globs
   # are read through a here-doc, never a bare $vis, which the shell would expand against the cwd.
   # Per-task port = port_base + (numeric tail of the ID mod 100): T-207 ⇒ +7, no digits ⇒
   # port_base, no port_base ⇒ {PORT} stays literal.
+  # v2 adds the screen, its folder, and the SAME shot: line printed twice. The before-capture is the
+  # point, not a formality: it makes the agent LOOK at the screen it is about to overhaul, and it is
+  # the half a stakeholder actually reacts to. The shotdir is PRINTED as information and never
+  # substituted into `shot:` — a repo whose capture tool takes an output path can write straight into
+  # it, and every repo that cannot has its strays filed at handoff. One mechanism, one thing to test.
   local id="${1:-}"
   local owned="${2:-}"
   pack_section "SEE YOUR WORK — capture before handoff (ops/VISUAL.md)"
   local vis vshot vserve vbase vport vnum vhit
+  local vtf vscreen vshotdir
   local p d
   vis="$(cfg visual "")"
   if [ -z "$vis" ]; then
@@ -37,6 +137,19 @@ EOF_OWN
       vport="$vbase"; if [ -n "$vnum" ]; then vport=$(( vbase + 10#$vnum % 100 )); fi;;
     esac
     printf 'visual: %s · this task touches it: %s\n' "$vis" "$vhit"
+    vtf=""
+    vscreen=""
+    if [ -n "$id" ]; then vtf="$(task_file "$id" 2>/dev/null || true)"; fi
+    if [ -n "$vtf" ] && [ -r "$vtf" ]; then vscreen="$(fm_get screen "$vtf" 2>/dev/null || true)"; fi
+    # An unset screen: is said out loud rather than silently defaulted, so a Planner notices that this
+    # surface has no name and that a stakeholder is being handed a folder called misc/.
+    if [ -n "$vscreen" ]; then
+      printf 'screen: %s\n' "$vscreen"
+    else
+      printf 'screen: (unset — no name for this surface; shots land in misc/)\n'
+    fi
+    vshotdir="$(visual_shotdir "$id")"
+    printf 'shotdir: %s\n' "${vshotdir#$PRIMARY/}"
     if [ -n "$vserve" ]; then
       if [ -n "$vport" ]; then vserve="${vserve//\{PORT\}/$vport}"; fi
       printf 'serve: %s\n' "$vserve"
@@ -44,36 +157,42 @@ EOF_OWN
     if [ -n "$vshot" ]; then
       vshot="${vshot//\{ID\}/$id}"
       if [ -n "$vport" ]; then vshot="${vshot//\{PORT\}/$vport}"; fi
-      printf 'shot: %s\n' "$vshot"
+      printf 'shot BEFORE you edit: %s\n' "$vshot"
+      printf 'shot AFTER you edit: %s\n' "$vshot"
+      printf 'name them: %s-before-<what>.png and %s-after-<what>.png, in the shotdir above\n' "$id" "$id"
     else
       printf 'shot: (unset — set shot: in ops/CONVENTIONS.md; ops/VISUAL.md)\n'
     fi
     if [ -n "$vport" ]; then printf 'port: %s\n' "$vport"; else printf 'port: (port_base unset — {PORT} stays literal)\n'; fi
-    printf 'proof: .polaris/shots/%s-*.png — then READ it and write one "saw: <what it shows>" line in your handoff\n' "$id"
+    printf 'proof: TWO non-empty captures for %s, both newer than your branch base — READ both, then:\n' "$id"
+    printf '       bash ops/polaris handoff --saw "<what the after shot shows, and how it measures against ops/DESIGN.md — PASS / WEAK / FAIL>"\n'
+    printf 'nothing existed to photograph (a brand-new screen)? bash ops/polaris handoff --no-before "<why>" --saw "…"\n'
     printf 'read: ops/VISUAL.md\n'
+    if [ -f "$OPS/DESIGN.md" ]; then printf 'read: ops/DESIGN.md — the bar this screen must clear\n'; fi
   fi
 }
 
 visual_gate() { # visual_gate <ID> <mode> <need> <saw> — the capture gate, ONE body, both callers.
   # capture-exists gate (ops/contracts/visual-check.md § cmd_handoff): a diff that touches a visual:
   # path ships with a capture or not at all. Fires only when BOTH visual: and shot: are set (absent by
-  # default) AND the branch's diff has a path matching a visual: glob; then ONE non-empty
-  # .polaris/shots/<ID>-*.png in the PRIMARY must be newer than the branch base (the merge-base
-  # commit's time), else the handoff dies HERE — before any board write, so the task stays in
-  # active/. Existence and freshness only: LOOKING at it is prose (the saw: line, the Integrator
-  # opening the png).
+  # default) AND the branch's diff has a path matching a visual: glob; then a non-empty capture for
+  # <ID> must be newer than the branch base (the merge-base commit's time), else the handoff dies
+  # HERE — before any board write, so the task stays in active/. Existence and freshness only:
+  # LOOKING at it is prose (the saw: line, the Integrator opening the png).
+  # WHERE it looks is visual_shots_for's three-location search, so a capture already filed under its
+  # screen folder counts exactly as much as one still lying flat.
   # `mode` alone decides the git anchor AND the ending, and they are the ONLY differences: `die`
   # (cmd_handoff) reads the PRIMARY's $BASE...feat/<ID> and refuses; `warn` (cmd_verify) reads the
   # worktree's $BASE...HEAD and prints the SAME sentence behind `⚠ ` instead of
   # `⛔ handoff refused: ` — mid-flight it only warns, because a Builder may verify before the shot
-  # is taken. `need` and `saw` are accepted here and used from T-168; today `need` is 1 and `saw` is
-  # ignored, so the shipped behaviour is v1's.
+  # is taken. `need` and `saw` are accepted here and used from T-168; today ONE capture is enough and
+  # `saw` is ignored, so the shipped behaviour is v1's.
   local id="${1:-}"
   local mode="${2:-die}"
   local need="${3:-1}"
   local saw="${4:-}"
   local vdir vhead
-  local vis shot vf vhit vbase vshot vmt vok vmsg
+  local vis shot vf vhit vbase vok vmsg
   if [ "$mode" = die ]; then vdir="$PRIMARY"; vhead="feat/$id"; else vdir="."; vhead=HEAD; fi
   vis="$(cfg visual "")"; shot="$(cfg shot "")"
   if [ -n "$vis" ] && [ -n "$shot" ]; then
@@ -87,11 +206,7 @@ EOF
     if [ "$vhit" -eq 1 ]; then
       vbase="$(git -C "$vdir" log -1 --format=%ct "$(git -C "$vdir" merge-base "$BASE" "$vhead")" 2>/dev/null || echo 0)"
       vok=0
-      for vshot in "$PRIMARY/.polaris/shots/$id-"*.png; do
-        [ -s "$vshot" ] || continue
-        vmt="$(stat -c %Y "$vshot" 2>/dev/null || stat -f %m "$vshot" 2>/dev/null || echo 0)"
-        if [ "${vmt:-0}" -ge "${vbase:-0}" ]; then vok=1; break; fi
-      done
+      if [ -n "$(visual_shots_for "$id" "${vbase:-0}")" ]; then vok=1; fi
       if [ "$vok" -ne 1 ]; then
         vmsg="$id changed a visual: path but .polaris/shots/$id-*.png has no capture newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off"
         if [ "$mode" = die ]; then die "handoff refused: $vmsg"; else note "⚠ $vmsg"; fi

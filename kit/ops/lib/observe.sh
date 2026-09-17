@@ -519,6 +519,20 @@ cmd_doctor() {
     local ipend
     ipend="$(interview_pending)" && note "preferences never set here: $ipend — one round of questions: ops/polaris interview"
   fi
+  # THE BAR, STILL BLANK (ops/contracts/visual-check.md § v3.16). `heal` installs `ops/DESIGN.md`
+  # into every repo, but `heal` cannot interview — so the one section that names THIS product is
+  # still the template's empty slot, and this line is the only thing that ever says so.
+  # ALL THREE, or silence: the file is here · the sentinel is still in it · the repo has a `visual:`
+  # surface at all. A repo with no screens has no screen to hold to a bar and must never be nagged
+  # about one — absent-by-default, and the same anti-warning-storm discipline as the config-drift and
+  # surfaces-activation lines above. NO new CONVENTIONS key: `visual:` already answers "does this
+  # repo have screens", and a second knob for the same question is exactly the drift to avoid.
+  # NEVER name a kit version in the line — doctor's output is goldened, and a version reds it every
+  # release. The remedy is in the owner's terms, never a file-format instruction.
+  if [ -f "$OPS/DESIGN.md" ] && [ -n "$(cfg visual "")" ] \
+     && grep -qF '_(unfilled' "$OPS/DESIGN.md" 2>/dev/null; then
+    note "ops/DESIGN.md is installed but nobody has said what THIS product should look like — write one sentence there, in your own words, on the look and feel you want; every screen gets held to it"
+  fi
   # v6.0 autonomy knobs (ops/contracts/hands-free-knobs.md § v2). The 5.13 knobs shipped OFF and
   # stayed off in exactly the repos that never learned they existed, so 6.0 INVERTS the fallbacks
   # here, in kit code — the one mechanism `update` already refreshes in every installed repo — and

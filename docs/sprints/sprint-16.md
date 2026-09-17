@@ -171,7 +171,7 @@ counts the lines a quiet install prints and a new `say` would trip that tripwire
 - [ ] Neither markdown file gains or loses a `^#` line.
 
 ## T-166 — "One home for the visual code — lib/visual.sh, the loader that names it, and the three inline blocks moved out of builder.sh with zero behavior change"
-points 3 · risk normal · landed c048e25 (2026-09-17) · claimed 2026-09-17
+points 3 · risk normal · landed c048e25 (2026-09-17) · claimed 2026-09-17 → done 2026-09-17
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/visual.sh, kit/ops/polaris, ops/tests/api-kit.expected
 
 ### Why
@@ -210,3 +210,156 @@ CLI call in the repo.
 - [ ] The loader's FULL list reads `core ownership workspace surfaces visual builder integrate knowledge search observe admin bg awake handover skills`, and the `_match|_rules|_guard` list still reads EXACTLY `core ownership`.
 - [ ] `ops/tests/pack-visual.expected` and `.cmd` are byte-identical to base and the golden passes — this is the proof the move changed nothing.
 - [ ] `ops/tests/api-kit.expected` gains exactly two `kit/ops/lib/visual.sh fn` rows and loses nothing: the moved blocks were inline, so `builder.sh`'s own fn census is unchanged.
+
+## T-167 — "A folder a human can read — screen: becomes a safe slug, every task gets a shotdir, and pack tells you to photograph the screen BEFORE you touch it"
+points 5 · risk normal · landed ac9221c (2026-09-17) · claimed 2026-09-17
+files touched: kit/ops/lib/visual.sh, ops/tests/api-kit.expected, ops/tests/pack-visual.cmd, ops/tests/pack-visual.expected
+
+### Why
+Today every capture lands flat as `.polaris/shots/T-042-home.png` — keyed by a task ID that means
+nothing to a human, in a gitignored folder with no index. Nobody can browse them and nobody can show
+them to anyone. This task gives them a place: a folder named after the SCREEN, using the `screen:`
+field T-161 added, and it teaches `pack` to ask for the before-shot as well as the after-shot.
+
+**The before-capture is the point, not a formality.** It forces the agent to look at the screen it is
+about to overhaul before touching it — which is the "know what you are changing" half of the ask —
+and it is the half a stakeholder actually reacts to.
+
+Three functions carry it, all pinned in `ops/contracts/visual-check.md` § v2 sections 3, 5 and 8:
+
+- `visual_slug <text>` turns `Homepage / Universal Search Bar` into `homepage/universal-search-bar`,
+  or into NOTHING if the text cannot be made safe. This is the only place in POLARIS where a human
+  string becomes a filesystem path, so it refuses `..`, absolute paths, drive letters, backslashes
+  and anything deeper than two segments. Read `id_ok` in `kit/ops/lib/workspace.sh` for the shape:
+  refuse loudly, return rather than die.
+- `visual_shotdir <ID>` resolves and creates the directory, falling back to `misc/` whenever
+  `screen:` is unset or unusable.
+- `visual_shots_for <ID> <since>` finds this task's usable captures in THREE places, in order: the
+  shotdir, `misc/`, then flat `.polaris/shots/`. All three, because the stray sweep only runs at
+  handoff (so `verify` would otherwise warn on every visual task) and because a `screen:` added after
+  a shot was taken would orphan the earlier capture. Use `find` — bash 3.2 has no `globstar`.
+
+Then the `pack` section grows the lines § 8 pins, in that order, and `visual_gate` starts asking
+`visual_shots_for` instead of globbing.
+
+### Acceptance
+- [ ] `visual_slug` implements § 3 exactly: lowercase with `tr` (bash 3.2 has no `${x,,}`), spaces and underscores to `-`, drop everything outside `[a-z0-9/-]`, collapse repeats, strip edges, and return EMPTY for `..`, a leading `/`, a drive letter, a backslash, or more than two segments.
+- [ ] `visual_shotdir <ID>` prints a repo-relative-able absolute path and creates it, using `fm_get screen` on the task file, falling back to `.polaris/shots/misc`.
+- [ ] `visual_shots_for <ID> <since>` searches the three locations in the pinned order with `find`, counts a file only when it is non-empty AND its mtime is at or after `since`, de-duplicates by basename, and prints oldest first.
+- [ ] `visual_gate` uses `visual_shots_for` for its freshness test, and its behavior is otherwise unchanged from T-166 — `need` is still 1 and `saw` is still ignored. The two-capture rule is T-168's.
+- [ ] The `pack` SEE YOUR WORK section prints `screen:`, `shotdir:`, the `shot:` line labelled BEFORE and again labelled AFTER, the `name them:` convention line, the two-line `proof:` block, the `--no-before` escape line, and `read: ops/DESIGN.md` when that file exists — in the order § 8 pins, with the v1 lines it keeps unchanged.
+- [ ] `screen:` unset prints `screen: (unset — no name for this surface; shots land in misc/)` so a Planner notices.
+- [ ] `visual:` unset still prints ONE line and nothing else changes anywhere. Absent-by-default is what lets this ship to every repo.
+- [ ] `ops/tests/pack-visual.*` re-pinned for the new section: asserts 1–3 change; asserts 4–6 still describe the ONE-capture gate and must still pass, because the gate does not change in this task.
+
+## T-171 — "Every existing repo gets the bar — heal copies ops/DESIGN.md in when it is missing, and doctor says when nobody has filled it in"
+points 3 · risk normal · landed fd36cce (2026-09-17) · claimed 2026-09-17
+files touched: kit/ops/lib/admin.sh, kit/ops/lib/observe.sh, ops/tests/heal-design.cmd, ops/tests/heal-design.expected
+
+### Why
+`ops/DESIGN.md` is the bar a screen has to clear, and this sprint just landed five role-prose
+references to it (`roles/BUILDER.md:55` · `roles/SOLO.md:80,146` · `roles/PLANNER.md:41` ·
+`roles/INTEGRATOR.md:17` · `roles/CONDUCTOR.md:188`). But the file is written by INIT and by nothing
+else — `kit/ops/roles/INIT.md:119` copies the template in, and `grep -c DESIGN kit/ops/lib/admin.sh`
+is 0, so `heal`, `adopt` and `update` never create it.
+
+INIT runs once, on a brand-new repo. So every repo that adopted POLARIS before 6.6.0 — which is
+every existing repo, this one and the owner's product repo included — will update to 6.6.0, receive
+`ops/templates/DESIGN.md` (templates/ is copied recursively on both install paths), and never get
+`ops/DESIGN.md`. Those five references dangle, `pack`'s `read: ops/DESIGN.md` line stays hidden
+because it only prints when the file exists, and the release's headline feature silently does
+nothing in exactly the repos that were meant to get it.
+
+The fix belongs in `polaris heal`, whose whole job since 6.5.0 is that every install and every
+update repairs itself; `install.sh:541` and `cmd_update` already call it. Make it copy the template
+in when — and only when — `ops/DESIGN.md` is missing, exactly as INIT does, and never touch one that
+already exists: it is owner-editable state like `ops/CONVENTIONS.md`. Then, because `heal` cannot
+run an interview, have `doctor` say in one line when `## THIS PRODUCT` is still the template's
+unfilled slot.
+
+The full spec, every pinned string and the reasoning behind each guard is
+`ops/contracts/visual-check.md` § v3 (sections 15-18). Read that first; this card does not repeat it.
+
+**Three constraints that shape the whole change — none of them optional:**
+
+1. **Add NO top-level function anywhere in `kit/`.** `ops/tests/api-kit.expected` records every
+   public symbol and is owned by the T-166..T-170 chain running in parallel with you. A new `fn`
+   row would couple two lanes through a golden neither can fix alone — the derived-surface-golden
+   trap in `ops/SPRINT.md`'s Learned log, which has cost this board a kickback twice. Both edits go
+   INLINE: the copy inside `cmd_heal`, the nudge inside `cmd_doctor`. Two of your `verify:` lines
+   pin the top-level function counts (admin 25, observe 37) so this cannot slip.
+2. **Do not touch `kit/ops/polaris` or `ops/tests/cli-help.expected`.** The entry script is owned by
+   T-166/T-168/T-169. That means `polaris help`'s `heal` paragraph will still name only two repairs
+   after you land — a known, deliberate gap, recorded in the contract's § 18 for whoever next owns
+   the entry script. Do not "just fix it".
+3. **Never run a bare `polaris heal` in this repo while you build.** This repo has no
+   `ops/DESIGN.md`, so a stray heal would create one — a path outside your `files_owned`, and an
+   ownership failure at `verify`. Everything you prove, you prove inside the golden's throwaway
+   fixture. If one does appear, `rm` it before handing off.
+
+One more trap worth knowing: a brand-new golden passes **vacuously** inside a Builder worktree,
+because `polaris check` is anchored to the primary checkout and prints `no goldens matched`. That is
+why your `verify:` runs the pair by hand with `diff`, and why you should also sabotage one assertion
+red and restore it green before handoff — a golden nobody has seen fail asserts nothing.
+
+### Acceptance
+- [ ] `cmd_heal` copies `$OPS/templates/DESIGN.md` to `$OPS/DESIGN.md` if and only if the
+- [ ] A repo that already has `ops/DESIGN.md` comes out byte-identical — owner content included —
+- [ ] The create path prints exactly one `note` line naming `ops/DESIGN.md` and the remedy; nothing
+- [ ] No `ops/CONVENTIONS.md` (INIT never ran) → heal's existing early return still fires and no
+- [ ] `cmd_doctor` prints one `note` when `ops/DESIGN.md` exists, still carries the `_(unfilled`
+- [ ] New golden pair `ops/tests/heal-design.cmd` + `.expected`, hermetic: one `mktemp -d` fixture
+- [ ] `bash ops/polaris find --api 'kit/*'` is unchanged by this task — run it once against
+- [ ] One assertion in the new golden sabotaged red and restored green, first-hand, before handoff.
+
+## T-172 — "The golden that still expects a banned model — re-pin route-tier so the refusal IS the expected answer, and prove a legal model still gets through"
+points 1 · risk normal · landed 9496c3e (2026-09-17) · claimed 2026-09-17
+files touched: ops/tests/route-tier.cmd, ops/tests/route-tier.expected
+
+### Why
+`bash ops/polaris check` is RED on base, and has been for two days. `ops/tests/route-tier.expected`
+still pins six lines that the CLI no longer prints:
+
+```
+   model: fable                  ->  model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this
+                                     spawn names no model and inherits the session's
+token: --model fable             ->  token: none
+```
+
+This is not a code regression. On 2026-09-15 the owner banned Fable and Haiku outright and
+`model_denied` (`kit/ops/lib/core.sh:78`) made it a kit constant that no repo can switch off. The
+golden's fixture sets `model_strong: fable`, so the refusal firing there is now the CORRECT answer —
+nobody re-pinned the golden to say so.
+
+**Re-pin it to the refusal. Do not route around it** by changing the fixture to an unbanned name:
+after the ban, proving the refusal fires is the golden's most valuable job, and a fixture edited to
+dodge it would assert nothing.
+
+The fixture already carries both cases and you should keep it that way — `model_mid: opus` and
+`model_cheap: sonnet` are legal, so the tier table is still proven end to end by the `mid` and
+`cheap` rows. The one case that IS lost is the `fleet` token: the fixture's ready-queue max is always
+`strong`, so `token:` now only ever proves the refusal path (`none`). Add ONE more assertion at the
+end of the `.cmd` — point `model_strong` at a legal name (the fixture already uses `some-model-9`
+elsewhere) and re-run the same `fleet 2 --dry-run` — so the golden proves both directions:
+a forbidden model injects nothing, a legal one still injects `--model <name>`.
+
+**This is the second casualty of that one session.** `ops/tests/rules-health.expected` was the first,
+and T-162 re-pinned it earlier in this sprint. Both sat red for days for the same reason: the
+goldens are not in the fast tier, and — checked directly — they are not in CI either
+(`.github/workflows/ci.yml` runs `doctor --selftest`, never `polaris check`). The only thing that
+runs them is `polaris check` and the integrator's `qa` wave gate. So the blast radius of this one is
+the wave gate and any `check` run, NOT a red CI badge; fix it anyway, because the wave gate is what
+stops the next task landing.
+
+While you are in here, one stale line to leave ALONE but be aware of:
+`ops/contracts/model-routing.md:45,98` still uses `fable` in its worked example. The contract is
+append-only and a `## v2` note has been appended recording that the ban supersedes it — do not edit
+the body.
+
+### Acceptance
+- [ ] `ops/tests/route-tier.expected` matches current behaviour byte for byte; all four `fable` rows
+- [ ] The `mid` and `cheap` rows still pin `   model: opus` / `   model: sonnet` — the tier table is
+- [ ] The `.cmd` gains ONE extra `fleet --dry-run` case with `model_strong` set to a legal name;
+- [ ] The golden is still hermetic: its own `mktemp -d` fixture, its own CONVENTIONS, nothing read
+- [ ] Regenerate with `polaris check --only route-tier --update` from the PRIMARY checkout, then
+- [ ] Sabotage one of the re-pinned lines red and restore it green, first-hand, before handoff.

@@ -1,7 +1,8 @@
 # The capture step (ops/contracts/visual-check.md) is ABSENT BY DEFAULT and driven entirely by four
-# CONVENTIONS keys, which is the exact shape of behavior that rots invisibly: a repo that sets no
-# `visual:` must see nothing change, a repo that sets it must see the section with ITS OWN port, and
-# `handoff` must refuse a visual change that ships without a fresh capture. None of that is reachable
+# CONVENTIONS keys plus the task's own `screen:`, which is the exact shape of behavior that rots
+# invisibly: a repo that sets no `visual:` must see nothing change, a repo that sets it must see the
+# section with ITS OWN port and ITS OWN shot folder, and `handoff` must refuse a visual change that
+# ships without a fresh capture. None of that is reachable
 # from this repo — the kit sets no `visual:` key — so without a fixture the whole feature is code that
 # only OTHER people's repos ever run, and the first they hear of a regression is a broken page.
 #
@@ -34,7 +35,10 @@ export POLARIS_AWAKE_HOME="$FIX/awake-home"   # never the real ~/.claude/polaris
   printf '# fixture contract\n' > ops/contracts/fix.md
   # T-207 owns a visual path, T-300 does not. `risk: normal` on both: handoff refuses to hand off a
   # task with no risk declared, and the refusal it must print here is the CAPTURE one.
-  printf -- '---\nid: T-207\ntitle: visual task\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - web/a.txt\nverify: []\n---\n' > ops/board/ready/T-207.md
+  # Only T-207 carries `screen:`, and it carries the contract's own example — so assert 1 pins the
+  # whole human-string-to-path rule (spaces, the ` / `, the lowercasing) and assert 2 pins the misc/
+  # fallback a task whose Planner named no screen must still get.
+  printf -- '---\nid: T-207\ntitle: visual task\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nscreen: Homepage / Universal Search Bar\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - web/a.txt\nverify: []\n---\n' > ops/board/ready/T-207.md
   printf -- '---\nid: T-300\ntitle: non-visual task\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/b.txt\nverify: []\n---\n' > ops/board/ready/T-300.md
 ) >/dev/null 2>&1
 R="$FIX/repo"; WT="$R/.polaris/wt/T-207"
@@ -63,6 +67,9 @@ S T-207
 echo '== 2. a task that does not touch it still sees the section — with touches it: no =='
 # Printed, not hidden: knowing the repo HAS a visual surface you did not touch is the useful fact.
 # T-300 also pins the `mod 100`: a naive port_base+tail would say 4300 here, not 4000.
+# ops/DESIGN.md is created HERE, between the two, so one fixture pins BOTH sides of the last line's
+# condition: assert 1 ran without the file and must not name it, assert 2 runs with it and must.
+printf '# THIS PRODUCT\nthe bar\n' > "$R/ops/DESIGN.md"
 S T-300
 
 echo '== 3. visual: unset ⇒ ONE line, and nothing else changes anywhere =='
