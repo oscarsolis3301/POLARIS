@@ -8,3 +8,4 @@
 # Read at verify/handoff/audit/land (the stale-tests gate) and by qa / land --express (which tests a
 # change can break). Written ONLY by `polaris done`, from a task's `surface:` list — never by hand: a
 # row you could delete when it blocked you would guard nothing. Health: ops/polaris surfaces
+kit/ops/lib/visual.sh	ops/tests/shots-gallery.*	bash ops/polaris check --only shots-gallery	the shots tree, the before/after gate, the index and the gallery publish [T-170]
