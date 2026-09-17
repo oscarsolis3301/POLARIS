@@ -37,7 +37,11 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   claim [ID]                     lock + ready→active + worktree  (no ID = top wsjf; skips locked)
   resume [ID]                    re-enter an already-claimed active task (crash/kickback/new session)
   verify [ID]                    diff ⊆ files_owned + run verify: commands (in worktree)
-  handoff [ID]                   verify + push + active→review   (lock stays)
+  handoff [ID] [--saw "<what the after shot shows>"] [--no-before "<why>"]
+                                 verify + push + active→review   (lock stays). A task that changed a
+                                 visual: path needs TWO captures newer than the branch base and one
+                                 --saw line, which becomes the caption filed beside the pictures;
+                                 --no-before says nothing existed to photograph yet and drops it to one
   release <ID> [--to ready|blocked] [-m note]   abort: give the task back cleanly
   park [-m why]                  stash the primary's dirty tree (tracked + untracked) as
                                  polaris/park-<epoch> — a dirty shared checkout is parked, never

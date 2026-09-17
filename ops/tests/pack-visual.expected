@@ -30,20 +30,75 @@ read: ops/DESIGN.md — the bar this screen must clear
 == 4. a committed visual change with NO capture is refused, rc 1, task stays in active/ ==
 ✅ ownership clean: diff ⊆ files_owned
    no verify: commands on task (acceptance is manual)
-⛔ handoff refused: T-207 changed a visual: path but .polaris/shots/T-207-*.png has no capture newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off
+⛔ handoff refused: T-207 changed a visual: path but .polaris/shots/ has fewer than 2 captures for T-207 newer than the branch base — run the shot: line from pack BEFORE and AFTER your edit, LOOK at both, then hand off
 rc 1
 active: T-207.md
 review:
 == 5. an EMPTY png is not a capture — a blank image is a failure (VISUAL.md doctrine) ==
 ✅ ownership clean: diff ⊆ files_owned
    no verify: commands on task (acceptance is manual)
-⛔ handoff refused: T-207 changed a visual: path but .polaris/shots/T-207-*.png has no capture newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off
+⛔ handoff refused: T-207 changed a visual: path but .polaris/shots/ has fewer than 2 captures for T-207 newer than the branch base — run the shot: line from pack BEFORE and AFTER your edit, LOOK at both, then hand off
 rc 1
-== 6. a non-empty capture newer than the branch base passes: rc 0, T-207 in review/ ==
+== 6. ONE capture is no longer enough: rc 1 where 6.5.0 said 0 ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+⛔ handoff refused: T-207 changed a visual: path but .polaris/shots/ has fewer than 2 captures for T-207 newer than the branch base — run the shot: line from pack BEFORE and AFTER your edit, LOOK at both, then hand off
+rc 1
+== 7. mid-flight verify only WARNS — the same sentence, no refusal, rc 0 ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+   ⚠ T-207 changed a visual: path but .polaris/shots/ has fewer than 2 captures for T-207 newer than the branch base — run the shot: line from pack BEFORE and AFTER your edit, LOOK at both, then hand off
+rc 0
+== 8. two captures, and still nobody said what they show: the --saw refusal, rc 1 ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+⛔ handoff refused: T-207 changed a visual: path — say what you saw: bash ops/polaris handoff --saw "<what the after shot shows, and how it measures against ops/DESIGN.md>"
+rc 1
+active: T-207.md
+review:
+== 9. two captures and one --saw line: rc 0, review/, strays filed, caption written ==
 ✅ ownership clean: diff ⊆ files_owned
    no verify: commands on task (acceptance is manual)
 ✅ T-207 → review/. Lock stays until the Integrator lands it. Session may close.
-   1 ready task(s) still queued — the board hands you the next step: bash ops/polaris next
+   2 ready task(s) still queued — the board hands you the next step: bash ops/polaris next
 rc 0
 active:
 review: T-207.md
+# T-207 — visual task
+
+the search bar now spans the header and the old three-field row is gone — PASS against the bar
+
+- screen: Homepage / Universal Search Bar
+- before: T-207-before-search.png
+- after: T-207-after-search.png
+- date: <date>
+== 10. --no-before drops the bar to ONE capture — it never removes it ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+⛔ handoff refused: T-208 changed a visual: path but .polaris/shots/ has no capture for T-208 newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off
+rc 1
+active: T-208.md
+review: T-207.md
+== 11. nothing existed to photograph: one capture passes, and the caption says why ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+✅ T-208 → review/. Lock stays until the Integrator lands it. Session may close.
+   1 ready task(s) still queued — the board hands you the next step: bash ops/polaris next
+rc 0
+active:
+review: T-207.md T-208.md
+# T-208 — second visual task
+
+a brand-new results page, one column and no chrome — PASS
+
+- screen: (unset — filed under misc/)
+- before: (skipped — this page did not exist before the task)
+- after: T-208-page.png
+- date: <date>
+T-208-page.png
+homepage/universal-search-bar/T-207-after-search.png
+homepage/universal-search-bar/T-207-before-search.png
+homepage/universal-search-bar/T-207.md
+misc/T-208-page.png
+misc/T-208.md
+KEPT

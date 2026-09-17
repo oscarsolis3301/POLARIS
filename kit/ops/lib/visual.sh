@@ -173,44 +173,127 @@ EOF_OWN
 }
 
 visual_gate() { # visual_gate <ID> <mode> <need> <saw> — the capture gate, ONE body, both callers.
-  # capture-exists gate (ops/contracts/visual-check.md § cmd_handoff): a diff that touches a visual:
-  # path ships with a capture or not at all. Fires only when BOTH visual: and shot: are set (absent by
-  # default) AND the branch's diff has a path matching a visual: glob; then a non-empty capture for
-  # <ID> must be newer than the branch base (the merge-base commit's time), else the handoff dies
-  # HERE — before any board write, so the task stays in active/. Existence and freshness only:
-  # LOOKING at it is prose (the saw: line, the Integrator opening the png).
+  # A diff that touches a visual: path ships with its pictures or not at all
+  # (ops/contracts/visual-check.md § v2.6). Fires only when BOTH visual: and shot: are set (absent by
+  # default) AND the branch's diff has a path matching a visual: glob; then <need> non-empty captures
+  # for <ID> must be newer than the branch base (the merge-base commit's time), else the handoff dies
+  # HERE — before any board write, so the task stays in active/.
+  # COUNT AND FRESHNESS, never names. POLARIS ships no capture tool: `shot:` is the repo's own command
+  # and may be positional with no output flag, so a gate that insisted on a particular FILENAME would
+  # make every visual task in every 6.2.0-6.5.0 repo permanently un-handoffable, with no escape. The
+  # before/after naming is a convention for pairing pictures in the gallery, and is never tested.
   # WHERE it looks is visual_shots_for's three-location search, so a capture already filed under its
-  # screen folder counts exactly as much as one still lying flat.
+  # screen folder counts exactly as much as one still lying flat from a pre-6.6 shot: line.
   # `mode` alone decides the git anchor AND the ending, and they are the ONLY differences: `die`
   # (cmd_handoff) reads the PRIMARY's $BASE...feat/<ID> and refuses; `warn` (cmd_verify) reads the
-  # worktree's $BASE...HEAD and prints the SAME sentence behind `⚠ ` instead of
-  # `⛔ handoff refused: ` — mid-flight it only warns, because a Builder may verify before the shot
-  # is taken. `need` and `saw` are accepted here and used from T-168; today ONE capture is enough and
-  # `saw` is ignored, so the shipped behaviour is v1's.
+  # worktree's $BASE...HEAD, prints the SAME sentence behind the warning mark instead of
+  # `⛔ handoff refused: `, ignores <saw> entirely and never refuses — mid-flight the shots may not be
+  # taken yet. The two sentences are deliberate near-duplicates and only the handoff one is pinned by
+  # a golden, so a careless edit here changes the half nothing is watching.
+  # <saw> is checked for EMPTINESS and nothing else — no length floor, no vocabulary check. No
+  # validator can tell whether anyone LOOKED, and a refusal a builder satisfies by padding is a
+  # compliance ritual that costs tokens and proves nothing. What the text is FOR is the caption a
+  # human reads beside the picture, so the bar verdict is ASKED for (pack, ops/DESIGN.md, the role
+  # prose) and never enforced by code.
   local id="${1:-}"
   local mode="${2:-die}"
-  local need="${3:-1}"
+  local need="${3:-2}"
   local saw="${4:-}"
   local vdir vhead
-  local vis shot vf vhit vbase vok vmsg
+  local vis shot vf vhit vbase vcount vmsg
   if [ "$mode" = die ]; then vdir="$PRIMARY"; vhead="feat/$id"; else vdir="."; vhead=HEAD; fi
+  case "$need" in ''|*[!0-9]*) need=2 ;; esac
   vis="$(cfg visual "")"; shot="$(cfg shot "")"
   if [ -n "$vis" ] && [ -n "$shot" ]; then
     vhit=0
     while IFS= read -r vf; do
       [ -n "$vf" ] || continue
       if printf '%s\n' "$vis" | tr ' ' '\n' | owned_match "$vf"; then vhit=1; break; fi
-    done <<EOF
+    done <<EOF_VGATE
 $(git -C "$vdir" diff --name-only --no-renames "$BASE...$vhead")
-EOF
+EOF_VGATE
     if [ "$vhit" -eq 1 ]; then
       vbase="$(git -C "$vdir" log -1 --format=%ct "$(git -C "$vdir" merge-base "$BASE" "$vhead")" 2>/dev/null || echo 0)"
-      vok=0
-      if [ -n "$(visual_shots_for "$id" "${vbase:-0}")" ]; then vok=1; fi
-      if [ "$vok" -ne 1 ]; then
-        vmsg="$id changed a visual: path but .polaris/shots/$id-*.png has no capture newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off"
+      vcount="$(visual_shots_for "$id" "${vbase:-0}" | awk 'END{print NR+0}')"
+      case "$vcount" in ''|*[!0-9]*) vcount=0 ;; esac
+      if [ "$vcount" -lt "$need" ]; then
+        if [ "$need" -ge 2 ]; then
+          vmsg="$id changed a visual: path but .polaris/shots/ has fewer than 2 captures for $id newer than the branch base — run the shot: line from pack BEFORE and AFTER your edit, LOOK at both, then hand off"
+        else
+          vmsg="$id changed a visual: path but .polaris/shots/ has no capture for $id newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off"
+        fi
         if [ "$mode" = die ]; then die "handoff refused: $vmsg"; else note "⚠ $vmsg"; fi
+      fi
+      if [ "$mode" = die ] && [ -z "$saw" ]; then
+        die "handoff refused: $id changed a visual: path — say what you saw: bash ops/polaris handoff --saw \"<what the after shot shows, and how it measures against ops/DESIGN.md>\""
       fi
     fi
   fi
+}
+
+visual_file_strays() { # visual_file_strays <ID> — file the strays (ops/contracts/visual-check.md
+  # § v2.6). Every <ID>-*.png lying anywhere under .polaris/shots/ but OUTSIDE this task's shotdir is
+  # moved into it, at handoff, after the gate passes and before the board write. This is the whole
+  # reason a pre-6.6 repo keeps working: its shot: line writes flat, POLARIS can never require it to
+  # stop, so POLARIS tidies up afterwards instead of refusing.
+  # It NEVER deletes and NEVER overwrites — a name collision keeps the existing file and leaves the
+  # stray exactly where it is, because the only thing worse than a scattered capture is a lost one.
+  # Absent-by-default and cheap-by-default: no visual: key, or no shots tree at all, and it returns
+  # before visual_shotdir can mkdir anything, so a repo that never captures grows no folders.
+  local id="${1:-}"
+  local root dir f b
+  [ -n "$id" ] || return 0
+  [ -n "$(cfg visual "")" ] || return 0
+  root="$PRIMARY/.polaris/shots"
+  [ -d "$root" ] || return 0
+  dir="$(visual_shotdir "$id")"
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    [ -f "$f" ] || continue
+    case "$f" in "$dir"/*) continue ;; esac
+    b="${f##*/}"
+    if [ -e "$dir/$b" ]; then continue; fi
+    mv "$f" "$dir/$b" 2>/dev/null || true
+  done <<EOF_STRAYS
+$(find "$root" -type f -name "$id-*.png" 2>/dev/null)
+EOF_STRAYS
+}
+
+visual_caption() { # visual_caption <ID> <saw> <no-before-reason> — the words that go beside the
+  # pictures (ops/contracts/visual-check.md § v2.6), written into the shotdir at handoff and
+  # overwritten on a re-handoff so the file always describes the CURRENT hand-off.
+  # The <saw> text lands VERBATIM. It is the half a gate can never supply: the gate proves the
+  # pictures exist, this records what somebody said is in them, and a human reading those words next
+  # to the image is what actually closes the loop.
+  # A skipped before-shot records its REASON here rather than vanishing, so the gallery shows WHY
+  # there is only one picture instead of quietly showing one.
+  local id="${1:-}"
+  local saw="${2:-}"
+  local why="${3:-}"
+  local dir tf title screen shots first last
+  [ -n "$id" ] || return 0
+  [ -n "$saw" ] || return 0
+  [ -n "$(cfg visual "")" ] || return 0
+  dir="$(visual_shotdir "$id")"
+  [ -d "$dir" ] || return 0
+  tf="$(task_file "$id" 2>/dev/null || true)"
+  title=""
+  screen=""
+  if [ -n "$tf" ] && [ -r "$tf" ]; then
+    title="$(fm_get title "$tf" 2>/dev/null || true)"
+    screen="$(fm_get screen "$tf" 2>/dev/null || true)"
+  fi
+  # oldest first, newest last — visual_shots_for's own order, so which picture is the BEFORE is
+  # decided by the clock and never by a filename. One capture plus a reason reads as a skipped one.
+  shots="$(visual_shots_for "$id" 0)"
+  first="$(printf '%s\n' "$shots" | awk 'NF{print;exit}')"
+  last="$(printf '%s\n' "$shots" | awk 'NF{l=$0} END{print l}')"
+  {
+    printf '# %s — %s\n\n' "$id" "${title:-untitled}"
+    printf '%s\n\n' "$saw"
+    if [ -n "$screen" ]; then printf -- '- screen: %s\n' "$screen"; else printf -- '- screen: (unset — filed under misc/)\n'; fi
+    if [ -n "$why" ]; then printf -- '- before: (skipped — %s)\n' "$why"; else printf -- '- before: %s\n' "${first##*/}"; fi
+    printf -- '- after: %s\n' "${last##*/}"
+    printf -- '- date: %s\n' "$(date +%Y-%m-%d)"
+  } > "$dir/$id.md" 2>/dev/null || true
 }
