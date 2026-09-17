@@ -2537,8 +2537,8 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
   # then read `.polaris/wt/<ID>` unquoted, where `<` is a redirection. Single quotes are safe here.
   # The handoff is a BOUNDARY, not an ending (ops/contracts/role-handover.md): the board itself
   # names the next step, so the pane asks it instead of going quiet with work still queued. The
-  # capture sentence rides along because a fleet pane never sees the conductor's kickoff template.
-  local msg="You are a BUILDER. Claim the top ready task and complete it end to end, then enter its worktree — every command until handoff runs there: EnterWorktree({path: '.polaris/wt/<ID>'}), or run everything via absolute paths under .polaris/wt/<ID>, then bash ops/polaris next and follow it. Touching a visual: path? run the shot: line pack printed, READ the png, and put a saw: line in your report.$loop"
+  # before/after + --saw sentence rides along because a fleet pane never sees the conductor's template.
+  local msg="You are a BUILDER. Claim the top ready task and complete it end to end, then enter its worktree — every command until handoff runs there: EnterWorktree({path: '.polaris/wt/<ID>'}), or run everything via absolute paths under .polaris/wt/<ID>, then bash ops/polaris next and follow it. Touching a visual: path? run the shot: line pack printed BEFORE and AFTER your edit, READ both pngs, and hand off with --saw '<what the after shot shows, and how it measures against ops/DESIGN.md>'.$loop"
   note "kickoff (paste into $n parallel sessions of ANY agent CLI — in Claude Code, \"start\" alone does it):"
   printf '   %s\n' "$msg"
 

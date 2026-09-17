@@ -64,3 +64,4 @@ port_base	6.2.0	<number or omit>	{PORT} in shot:/serve: stays literal — parall
 serve	6.2.0	<cmd or omit>	pack prints no way to start the app for a capture; builders improvise a server
 handover	6.2.0	auto	a session hops into the role polaris next names at each board-proven boundary; off restores one task per session
 auto_update	6.3.0	on	the repo updates itself at session start when the board is quiet; off leaves today's notice only
+gallery	6.6.0	<dir or omit>	captures stay local and vanish on a fresh clone: nothing committed, nothing to show anyone
