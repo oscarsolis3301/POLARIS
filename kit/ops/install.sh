@@ -480,6 +480,15 @@ grep -q '^ops/hooks/commit-msg text eol=lf' "$GA" 2>/dev/null || {
   echo 'ops/hooks/commit-msg text eol=lf' >> "$GA"
   say ".gitattributes: ops/hooks/commit-msg pinned to LF"
 }
+# Own guard again: pre-6.6 installs already carry the two blocks above, so a line added
+# inside either would never reach them. A committed gallery (gallery: in ops/CONVENTIONS.md)
+# puts PNGs in git, and an autocrlf=true checkout mangles a binary without -text. Armed
+# unconditionally: the installer never reads gallery:, and one line in a file nobody reads
+# is cheaper than a corrupted screenshot. Deliberately NO say line — CI counts the lines a
+# quiet install prints, so a new one would trip that tripwire.
+grep -q '^docs/screens/\*\*/\*\.png -text' "$GA" 2>/dev/null || {
+  echo 'docs/screens/**/*.png -text' >> "$GA"
+}
 
 # --- .gitignore -------------------------------------------------------------------
 # polaris-v5/ : a leftover kit folder must never be committable.
