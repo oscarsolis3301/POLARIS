@@ -212,3 +212,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - "integrate.sh: cmd_amend (amend <ID> --verify <n>|--add|--drop -m why — the sanctioned verify: amendment for a CLAIMED task; refuses on feat/*, refuses a bare full-suite command, one chore(board): amend <ID> verify commit) + amend_verify (the pure list surgery, fast-tier section amend); grant.md v2"  (T-157, 2026-09-14)
 
 - "selftest gains the skills drill (label skills: gaps · propose · twin-or-not per the probe · promote refusals and pass · claim's skill-hit · prune demote/archive · restore byte-identical) and the fast-tier section skills (constants · skill_bytes vs slim_scan on the same fixtures · skill_paths); goldens skill-budget (hermetic: constants, shelf, reserved-name and TODO refusals) + skill-install (a foreign skill survives install.sh and uninstall byte-identical); labels 37"  (T-159, 2026-09-15)
+
+- kit/ops/templates/DESIGN.md — the design bar template INIT copies once to ops/DESIGN.md (never install.sh, never KIT_CODE)  (T-161, 2026-09-17)
