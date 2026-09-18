@@ -1,4 +1,4 @@
-# MAP — POLARIS            (updated: 2026-09-14, by EVOLVE)
+# MAP — POLARIS            (updated: 2026-09-17, by EVOLVE)
 
 ## Stack
 Bash (>= 3.2 — macOS default; no mapfile, no assoc arrays) + Python 3 stdlib only.
@@ -10,19 +10,21 @@ The repo is BOTH the product and a user of it. `kit/` is what ships. `ops/` is a
 installation running this repo's board. Never hand-edit `ops/` — see ops/CONVENTIONS.md § THE SPLIT.
 The installed copy also LAGS the source mid-sprint, and the tell that a selftest ran on the right
 driver is the LABEL LIST: `bash kit/ops/polaris doctor --selftest` registers kit-only drill labels
-(kit 35 = installed 35 since the 6.3.1 dogfood — wtreap · awake · handover landed in 6.2.0 and
-autoupdate in 6.3.0; sprint 14 added no drill, T-138's surfaces drill is still in backlog/ — the
-counts converge at every dogfood, diverging again the first sprint that adds a drill), so a green
+(kit 37 = installed 37 at the 6.5.0 dogfood — `surfaces` landed in 6.4.0 and `skills` in 6.5.0;
+sprint 16 added NO drill, because the gallery arrived as a GOLDEN pair (`shots-gallery`) instead —
+the counts converge at every dogfood, diverging again the first sprint that adds a drill), so a green
 from `ops/polaris` can silently prove none of the sprint's new behavior. The counts move every
 sprint: recount `SELFTEST_LABELS` in both `lib/selftest/spine.sh` copies rather than trusting this line.
+Goldens are the OTHER suite and they drift faster: 31 pairs in `ops/tests/`, run by NOTHING automatic
+— not CI, not the fast tier (§ Board mechanics, 6.6).
 
 ## Entry points
 | Path | What it is |
 |---|---|
-| kit/ops/polaris | THE CLI **entry point** — ~370 lines: fast paths (find/show/help), the lib loader (… bg, then awake and handover), resolved globals (`SURFACES="$OPS/SURFACES.tsv"` sits under `RULES=`), dispatch (awake · next · surfaces joined it in 6.2–6.4); the preamble beats the task worktree on every call. Every `cmd_*` body lives in kit/ops/lib/ since 5.16.0. Known: the `qa)` line forwards only its first flag (IDEAS.md, entry-owned). |
-| kit/ops/lib/ | The command bodies — runtime-sourced modules: core (cfg · frontmatter · the RULES cache · the surface-map data plane: surfaces_lines/seed, surface_row_matches/rows_for/row_from_item, surface_change_set/select_cmd, suite_stamp_scope, reading ops/SURFACES.tsv + CONVENTIONS `test_select:`) · ownership (check_rules → check_freshness, the stale-tests gate) · builder · integrate · knowledge · observe · admin · search (the thin `find`/`show` shim over index.py) · workspace (shared-checkout mechanics: id_ok · wt_add · stray_feat_repair · int_on/int_off integration lease, rc 3 queued · park/unpark · beat_touch/beat_age/beat_live, the worktree liveness signal at `$GCD/worktrees/<ID>/polaris-beat` · wt_remove, the ONLY worktree-removal primitive: rc 0 removed / 1 left / 2 archived to .polaris/wt-archive/, never --force) · bg (background jobs: run/status/tail/wait, dir-per-job `.polaris/bg/<name>/`, rc-file-first verdicts, `.prev` rotation, sweep --fix rotates >24h) · awake (keep-awake: status/start/stop/disable/enable/install; awake_ensure fires from claim/status/doctor/handoff/bg run and honours the machine `disabled` flag) · handover (`next`, `next --do`, `next --brief`: resume/integrate/stop/build/promote/wait/finish read off the board; next_promote IS the promote pass — the full ready gate under the board lock, ONE `chore(board): promote <IDs>` commit) + selftest/ drill groups (fast.sh = the in-process tier). Contracts: module-layout · shared-checkout · bg-jobs · worktree-liveness · keep-awake · role-handover · fast-tier · test-surfaces. |
+| kit/ops/polaris | THE CLI **entry point** — 433 lines: fast paths (find/show/help), the lib loader (`core ownership workspace surfaces visual builder integrate knowledge search observe admin bg awake handover skills`), resolved globals (`SURFACES="$OPS/SURFACES.tsv"` sits under `RULES=`), dispatch (awake · next · surfaces joined it in 6.2–6.4; amend · learned · skill · interview · promote in 6.5; shots in 6.6); the preamble beats the task worktree on every call. Every `cmd_*` body lives in kit/ops/lib/ since 5.16.0. The `qa)` first-flag-only bug is FIXED (6.5.0, T-158): every flag is forwarded. |
+| kit/ops/lib/ | The command bodies — runtime-sourced modules: core (cfg · frontmatter · the RULES cache · the surface-map data plane: surfaces_lines/seed, surface_row_matches/rows_for/row_from_item, surface_change_set/select_cmd, suite_stamp_scope, reading ops/SURFACES.tsv + CONVENTIONS `test_select:`) · ownership (check_rules → check_freshness, the stale-tests gate) · builder · integrate · knowledge · observe · admin · search (the thin `find`/`show` shim over index.py) · workspace (shared-checkout mechanics: id_ok · wt_add · stray_feat_repair · int_on/int_off integration lease, rc 3 queued · park/unpark · beat_touch/beat_age/beat_live, the worktree liveness signal at `$GCD/worktrees/<ID>/polaris-beat` · wt_remove, the ONLY worktree-removal primitive: rc 0 removed / 1 left / 2 archived to .polaris/wt-archive/, never --force) · bg (background jobs: run/status/tail/wait, dir-per-job `.polaris/bg/<name>/`, rc-file-first verdicts, `.prev` rotation, sweep --fix rotates >24h) · awake (keep-awake: status/start/stop/disable/enable/install; awake_ensure fires from claim/status/doctor/handoff/bg run and honours the machine `disabled` flag) · handover (`next`, `next --do`, `next --brief`: resume/integrate/stop/build/promote/wait/finish read off the board; next_promote IS the promote pass — the full ready gate under the board lock, ONE `chore(board): promote <IDs>` commit) · surfaces (6.4.0 — the scaffold engine behind `surfaces [--scaffold [--apply]]`: surfaces_runner · surfaces_pairs · surfaces_proposal; the SECOND sanctioned writer of ops/SURFACES.tsv) · skills (6.5.0 — the skills POLARIS writes for itself: cmd_skill · skill_gaps · skill_propose · skill_promote · skill_demote · skill_prune · skill_restore) · visual (6.6.0 — SEE YOUR WORK, the capture gate, the shots tree and the gallery: visual_slug · visual_shotdir · visual_shots_for · visual_pack · visual_gate · visual_file_strays · visual_caption · visual_index · visual_publish · cmd_shots; loaded between surfaces and builder, NEVER on the write-guard fast path) + selftest/ drill groups (fast.sh = the in-process tier). Contracts: module-layout (§ v8 caps visual.sh at 450 lines / 10 fns — it is AT that cap today) · shared-checkout · bg-jobs · worktree-liveness · keep-awake · role-handover · fast-tier · test-surfaces · self-skills · visual-check. |
 | kit/ops/install.sh | Installs the kit into any repo. Two paths: fresh vs live-board (test = target has ops/CONVENTIONS.md). Settings merge: POLARIS-owned hook entries (identified by the `ops/hooks/` script PATH, never basename) are REPLACED with the kit's current fields on re-install; user-added hooks and all other keys keep skip-if-present (key-registry.md § 6). Ships ops/VISUAL.md, chmods awake-hook.sh + handover-hook.sh, and registers the repo in ~/.claude/polaris/awake/repos at install and update time (not only on awake activation). |
-| kit/ops/bootstrap.py | The zipapp entry — packed to the archive ROOT as `__main__.py`, so `python polaris-v5.zip` just works. Also arms the machine: ~/.claude skill + cached kit + permission rules; arm_machine copies awake-hook.sh + awake-press.ps1 to ~/.claude/polaris/ and merges the four machine hooks (merge_awake_hooks); PERMS pre-authorize the harness's own tools (EnterWorktree ExitWorktree Workflow Task Agent TodoWrite SendMessage — golden perm-tools pins the set and the two human gates' absence). |
+| kit/ops/bootstrap.py | The zipapp entry — packed to the archive ROOT as `__main__.py`, so `python polaris-v5.zip` just works. Also arms the machine: ~/.claude skill + cached kit + permission rules; arm_machine copies awake-hook.sh + awake-press.ps1 to ~/.claude/polaris/ and merges the four machine hooks (merge_awake_hooks); PERMS pre-authorize the harness's own tools (EnterWorktree ExitWorktree Workflow Task Agent TodoWrite SendMessage — golden perm-tools pins the set and the two human gates' absence). Since 6.4.0 arm_machine also lands `~/.claude/output-styles/polaris.md` and `~/.claude/skills/i-have-adhd/` (arm_file, write-iff-different — never `outputStyle` in the machine settings), and install.sh flips i-have-adhd's `disable-model-invocation` to false when the target's CONVENTIONS says `adhd: on` (golden machine-armed). |
 | kit/ops/pack.py | Kit-repo tool, never shipped. Builds polaris-v5.zip from `git ls-files` run inside kit/. `--dogfood` installs the published release here. |
 | kit/ops/dashboard.py | `polaris dash` — read-only live board on 127.0.0.1:7373. stdlib http.server. |
 | kit/ops/hooks/ownership-guard.sh | Claude Code PreToolUse guard. Three gates since 6.1.0: RULES (every session) + files_owned (feat/<ID> only) + primary_gate — writes to tracked source in the shared PRIMARY are denied while any task lock exists and HEAD is not feat/*. Fails OPEN by design. Beats the task worktree. |
@@ -40,10 +42,10 @@ sprint: recount `SELFTEST_LABELS` in both `lib/selftest/spine.sh` copies rather 
 |---|---|---|
 | kit/CLAUDE.md | The protocol. Installed as a MARKED, managed block in the target's CLAUDE.md. | Source of truth for the invariants. |
 | kit/ops/roles/ | INIT · PLANNER · SOLO · BUILDER · INTEGRATOR · CONDUCTOR · EVOLVE — one file each, read by the agent playing that role. | BUILDER/SOLO/CONDUCTOR co-change 6-8× (brain learned.md): role prose moves as a trio — one owner per wave. |
-| kit/ops/templates/ | TASK.md, CONTRACT.md — what the Planner instantiates — plus ROADMAP.md, the human-authored standing-goal skeleton. | |
+| kit/ops/templates/ | TASK.md (gains `surface:` in 6.4.0, `screen:` in 6.6.0), CONTRACT.md — what the Planner instantiates — plus ROADMAP.md, the human-authored standing-goal skeleton; SKILL.md (6.5.0, the self-written skill's static half — seven headings) and DESIGN.md (6.6.0, the design bar, copied ONCE to ops/DESIGN.md by INIT and by `heal` — never install.sh, never KIT_CODE). | |
 | kit/ops/PROTOCOL.md | The extended protocol: full command table · LANES · TOKEN DISCIPLINE · § MODEL ROUTING (auto — `polaris route` decides; knobs, override, honest boundary) · § LONG COMMANDS (measured suite tiers vs the 600s tool cap, bg doctrine, subagent turn rule) · § N CHATS, ONE REPO (the second-chat decision table). | |
-| kit/ops/VISUAL.md | The SEEING YOUR WORK doctrine — the capture is the proof. Installed as ops/VISUAL.md (6.2.0). `pack` prints the SEE YOUR WORK section from shot:/visual:/port_base:/serve:, `handoff` refuses a visual change without a fresh .polaris/shots/<ID>-*.png, `audit` lists the captures. | Contract: ops/contracts/visual-check.md. |
-| kit/ops/KEYS.tsv | The CONVENTIONS key registry (key · since · default · absent-cost), shipped via KIT_CODE; doctor's one-line drift report and `polaris adopt` consume it. Rows since 6.1: landing (6.1.0) · wt_live_minutes shot visual port_base serve handover (6.2.0) · auto_update (6.3.0, default on in code) · test_select (6.4.0; unset = byte-identical to 6.3). | Contract: ops/contracts/key-registry.md. |
+| kit/ops/VISUAL.md | The SEEING YOUR WORK doctrine — the capture is the proof. Installed as ops/VISUAL.md (6.2.0), and RULES-guarded as an installed copy since 6.6.0 — `ops/DESIGN.md` deliberately is NOT, because the bar is the repo's own to write. `pack` prints the SEE YOUR WORK section from shot:/visual:/port_base:/serve:, `handoff` refuses a visual change without fresh captures, `audit` lists them. | Contracts: ops/contracts/visual-check.md (§ v2 = the 6.6.0 breaking change) · the bar itself lives in ops/DESIGN.md. |
+| kit/ops/KEYS.tsv | The CONVENTIONS key registry (key · since · default · absent-cost), shipped via KIT_CODE; doctor's one-line drift report and `polaris adopt` consume it. Rows since 6.1: landing (6.1.0) · wt_live_minutes shot visual port_base serve handover (6.2.0) · auto_update (6.3.0, default on in code) · test_select + adhd (6.4.0; test_select unset = byte-identical to 6.3) · gallery (6.6.0, `<dir or omit>`). Column 5 `ask` (6.4.0) carries the first-run interview question (`voice` · `adhd` · `claim` have one); `interview [--pending | --set k=v …]` generates the ≤4 questions from it and writes the answers into CONVENTIONS. | Contract: ops/contracts/key-registry.md. |
 | kit/ops/MANUAL.md | Fallback git recipes for environments that cannot execute the CLI. | Must mirror the CLI's behaviour. |
 | kit/ops/PROMPTS.md | Copy-paste kickoffs for every role. | |
 | kit/ops/VERSION | version + the four URLs (channel/tarball/repo/zip) that installed kits poll. | **Human-only.** A bump is a release act. |
@@ -51,7 +53,7 @@ sprint: recount `SELFTEST_LABELS` in both `lib/selftest/spine.sh` copies rather 
 | kit/ops/selftest-install.sh | Local install drill: fresh · old-client · live-board · zip purity · uninstall. | The `test:` for any install.sh change. Run it with POLARIS_AWAKE_HOME pointed at a scratch dir. |
 | kit/ops/selftest-dashboard.sh | Dashboard smoke drill: start · GET / + /state · kill. | |
 | kit/.claude/ | settings.json (wires the two guards + readonly-allow, the handover hooks, the `startup` update hook; PERMS pre-authorize the harness's own tools) + skills/polaris (project) + skills/polaris-install (user-level, cached to ~/.claude at install). | |
-| .github/workflows/ | OUR CI. ci.yml = 3-OS drills + "one version, everywhere". release.yml = tag → publish the zip. | Danger zone: agents may not edit their own tests. |
+| .github/workflows/ | OUR CI. ci.yml = 3-OS drills + "one version, everywhere". release.yml = tag → publish the zip. **ci.yml runs `doctor --selftest` ONLY** — it never runs `polaris check`, so no golden pair is gated by CI. | Danger zone: agents may not edit their own tests. |
 
 ## How a release reaches a user (know this before touching install/update)
 - **fresh install** → the published `polaris-v5.zip`. Contains only `kit/`'s files, remapped to `polaris-v5/…`.
@@ -115,6 +117,34 @@ sprint: recount `SELFTEST_LABELS` in both `lib/selftest/spine.sh` copies rather 
   2-field stamp reads `full`. `surfaces` + surfaces_health (self-covering rows refused, 0/>200-match
   globs flagged) are wired into `drift`; `triage` prices contexts, routing several small tasks to
   solo by context cost. `test_select:` unset = byte-identical to 6.3, which is why `update` ships it.
+- 6.5 the self-written shelf and the board's two new verbs (self-skills.md · grant.md v2 ·
+  role-handover.md v2): `.claude/skills/<name>/SKILL.md` pairs POLARIS writes for ITSELF — born
+  HIDDEN (`disable-model-invocation: true` injects 0 prompt bytes, so writing one costs nothing),
+  proposed by EVOLVE off `skill gaps`, `skill promote`d ONLY by a human, evicted by `skill prune` on
+  the data; `claim` emits one skill-hit event per skill whose paths overlap `files_owned` (the only
+  skills telemetry) and `pack` prints a SKILLS section. `amend <ID> --verify <n>|--add|--drop -m why`
+  is the sanctioned `verify:` surgery on a CLAIMED task (refuses on `feat/*`, refuses a bare
+  full-suite command, one `chore(board): amend <ID> verify` commit) — `grant` widens `files_owned`
+  and until 6.5 NOTHING widened a `verify:` line. `learned -m` is the one writer of a SPRINT Learned
+  bullet; `seal` appends the burndown row. `next_promote` HOLDS a backlog candidate whose `plan:`
+  differs from the run's under `drain: plan`. `drift`'s cruft check has three classes (waiting =
+  silent · clearable = finding · diverged = finding, never auto-deleted) and `qa` runs `cruft_clear`
+  first. `board_pull` fast-forwards `refs/heads/polaris/board` from origin ahead of
+  status/board-fm/next/claim (≤1 fetch/60 s, `POLARIS_BOARD_PULL=0` skips; diverged ⇒ a warning,
+  never a write). `update --all` runs THIS kit's `update --auto --say` inside every registered
+  checkout and accepts `--major`.
+- 6.6 the gallery and the bar (visual-check.md § v2 · module-layout.md § v8): a task's `screen:`
+  becomes a SAFE slug and a per-task shot folder; `pack` says photograph the screen BEFORE you touch
+  it; `handoff` counts TWO captures — before AND after, `--no-before <reason>` the escape hatch —
+  takes `--saw` as recorded data, files the strays and writes the caption; `polaris shots` rebuilds
+  `.polaris/shots/INDEX.md`, the one file the owner opens; and with CONVENTIONS `gallery: <dir>` set,
+  `done` publishes ONE curated image + caption per screen onto the base commit it already makes.
+  Three constraints the carve obeys and any future change must too: **POLARIS ships no capture
+  tool**, so the gate is COUNT AND FRESHNESS and never inspects filenames (a filename rule would
+  brick every 6.2–6.5 repo); `cmd_done` must NOT take the integration lease (the self-land tail
+  calls it as a subprocess, so `int_on` there deadlocks the default path); and bash 3.2 has no
+  `globstar` and no `${x,,}`. The bar itself lives in `ops/DESIGN.md` so it stops being pasted into
+  every visual task.
 
 ## CLI surface beyond the build loop (claim · build · verify · handoff · pack · find/show · check)
 `triage` (prints your lane) · `route [<ID>|--role R|--points N --risk R]` (mechanical model tier —
@@ -128,14 +158,20 @@ selected exactly as `qa` selects — +seal+run-verify+done in one pass) · `stat
 + `POLARIS_SEVERITY` in the notify env contract · `finish` (pends on running bg jobs) ·
 `bg run/status/tail/wait` (see the lib row above) · `adopt` (appends a commented stub — default +
 rationale — for every KEYS.tsv key missing from CONVENTIONS.md; never edits a value, idempotent;
-drill label `adopt` in remote.sh proves it) · `next [--do|--brief]` (6.2.0) · `awake
-status|start|stop|disable|enable|install` (6.2.0) · `update [--auto|--all]` (6.3.0) · `surfaces`
-(6.4.0) · `qa [--force] [--full]` (6.4.0). Selftest labels now 35: `wtreap` (history.sh) · `awake`
-(policy.sh) · `handover` (board.sh) joined in 6.2.0, `autoupdate` (remote.sh) in 6.3.0; the spine
-exports POLARIS_AWAKE_HOME so no drill touches the owner's awake registry; goldens handover-route
-+ handover-stop pin every `next` verb and hook rung, perm-tools pins the pre-authorized tool set,
-cli-help-parity counts `next` (10), and checkout-guard-denies + ownership-primary pin the two
-guards' refusal wording.
+drill label `adopt` in remote.sh proves it) · `next [--do|--brief]` (6.2.0) · `promote` (literally `next --do`, 6.5.0) · `awake
+status|start|stop|disable|enable|install` (6.2.0) · `update [--auto|--all|--major]` (6.3.0) ·
+`surfaces [--scaffold [--apply]]` (6.4.0) · `qa [--force] [--full]` (6.4.0; every flag forwarded
+since 6.5.0) · `interview [--pending|--set k=v …]` (6.4.0) · `amend <ID> --verify <n>|--add|--drop
+-m why` · `learned -m` · `skill gaps|list|propose|promote|demote|prune|restore` (6.5.0) · `shots`
+(6.6.0). Selftest labels now 37: `wtreap` (history.sh) · `awake` (policy.sh) · `handover` (board.sh)
+joined in 6.2.0, `autoupdate` (remote.sh) in 6.3.0, `surfaces` in 6.4.0 and `skills` in 6.5.0; the
+spine exports POLARIS_AWAKE_HOME so no drill touches the owner's awake registry. The 31 goldens are
+the second suite: handover-route + handover-stop pin every `next` verb and hook rung, perm-tools
+pins the pre-authorized tool set, cli-help-parity counts `next` (10), checkout-guard-denies +
+ownership-primary pin the two guards' refusal wording, skill-budget + skill-install pin the shelf,
+rules-health pins the RULES count and route-tier the model refusal, and shots-gallery walks the
+whole visual path hermetically. Read the § Board mechanics 6.6 note before trusting a green from
+them: nothing runs this suite automatically.
 
 ## Danger zones — agents NEVER edit these (machine-enforced, ops/RULES.tsv)
 | Path | Why |
@@ -158,7 +194,11 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - `kit/ops/polaris` + `kit/ops/lib/*.sh` — the entry is thin since the 5.16.0 split, but each lib
   module is a conflict magnet in its own right; chain tasks touching the SAME module (sprint 10
   chained observe.sh and install.sh serially, 0 kickbacks; sprint 14 put five concerns in observe.sh
-  under ONE task for the same reason).
+  under ONE task for the same reason; sprint 16 chained FIVE tasks through the brand-new
+  `kit/ops/lib/visual.sh` on the same rule — T-166→T-167→T-168→T-169→T-170, 0 kickbacks).
+- `kit/ops/lib/visual.sh` — additionally SIZE-capped: module-layout.md § v8 pins it at 450 lines and
+  ten top-level fns, and it landed at EXACTLY 450/450. Until the cap moves, any change to it is a
+  trade, not an addition — point the task accordingly.
 - `ops/tests/api-kit.expected` — a DERIVED-surface golden: it records every top-level fn AND every
   markdown heading AND every KEYS.tsv row under `kit/`, so it silently couples every task that adds
   one (co-change: observe.sh 8×, the entry 8×, spine.sh 5× — brain learned.md). ONE owner per wave
@@ -175,46 +215,3 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
   tarball/raw-channel paths working regardless, so this is untested-in-the-wild, not unsafe.
 
 ## Deltas
-
-
-- "roles/CLAUDE.md/output-style carry the one-copy lane rule (CONDUCTOR 2.5 = run triage) and the named anti-pattern; TASK.md gains surface:; ops/RULES.tsv guards ops/SURFACES.tsv (16 rules)"  (T-139, 2026-09-14)
-
-- "selftest gains the surfaces drill (label surfaces: gate · exemption · selection · stamp scope · health · drift) and five fast-tier sections (surfaces-tsv/match/select/item, stamp-scope)"  (T-138, 2026-09-14)
-
-- "bootstrap.py arm_machine also lands ~/.claude/output-styles/polaris.md and ~/.claude/skills/i-have-adhd/ (arm_file, write-iff-different; never outputStyle in the machine settings); install.sh flips i-have-adhd's disable-model-invocation to false when the target's CONVENTIONS says adhd: on; golden machine-armed"  (T-143, 2026-09-14)
-
-- "core.sh board_pull: under claim: claim-branch, status/board-fm/next/claim first fetch refs/heads/polaris/board from origin (≤1 fetch/60 s, POLARIS_BOARD_PULL=0 skips), fast-forward the local ref and re-materialize the moved set; diverged ⇒ a warning, no write; local-lock pays nothing; remote drill proves it"  (T-148, 2026-09-14)
-
-- "kit/ops/lib/surfaces.sh (NEW, loader slot between workspace and builder): the scaffold engine — surfaces_runner (pytest · jest · vitest · go, grep-only), surfaces_pairs (name-based pairing, ambiguity/breadth/ancestor filters), surfaces_proposal (RUNNER/ROW/SKIP as data); entry gains surfaces [--scaffold [--apply]] and interview usage + dispatch"  (T-140, 2026-09-14)
-
-- "observe.sh: surfaces --scaffold renders the engine's proposal (runner, rows, skips), --scaffold --apply (surfaces_apply; <base> only) writes the rows tagged [scaffold] and sets test_select: when unset — the second sanctioned writer of ops/SURFACES.tsv; doctor and qa print the one-line activation nudge only when a runner is detectable and the map is empty; doctor prints the interview's pending line; golden surfaces-scaffold"  (T-142, 2026-09-14)
-
-- "KEYS.tsv gains column 5 ask (voice · adhd · claim carry it; adhd is a new 6.4.0 key, default off); admin.sh cmd_interview [--pending | --set k=v …] generates the ≤4 first-run questions from the registry and writes answers into CONVENTIONS (adhd: on flips the repo's i-have-adhd opt-in flag); update's epilogue names unanswered preferences; refresh_machine_kit also re-caches the output style + i-have-adhd into ~/.claude"  (T-141, 2026-09-14)
-
-- "roles: INIT's interview is ONE AskUserQuestion generated from KEYS.tsv's ask column (2a renamed, 2c loses the claim question, the skeleton gains adhd:, step 3 runs interview --set then surfaces --scaffold --apply); PLANNER 5b scaffolds at the plan gate; the install skill acts on 'surfaces: none mapped' and 'preferences never set here'; PROTOCOL's tool row names surfaces --scaffold"  (T-145, 2026-09-14)
-
-- "fast tier gains surfaces-runner · surfaces-pairs · surfaces-proposal · interview-pending; the surfaces drill gains steps 8–10 (NORUNNER on the bare fixture · scaffold --apply end to end + feat/* refusal · doctor's pending-preferences line before and after interview --set)"  (T-144, 2026-09-14)
-
-- "update --all runs THIS kit's `update --auto --say` inside each registered checkout (never the target's own ops/polaris — a pre-6.3.0 install answered `unknown flag --auto` and stayed put), accepts --major to apply MAJOR bumps, and removes registry entries whose path is gone; auto-update.md v2"  (T-151, 2026-09-14)
-
-- "seal (direct after the merge · pr at --sync) appends `| <date> | <done pts> | <remaining> |` to the current sprint's  (T-153, 2026-09-14)
-
-- "next_promote (handover.sh) holds a backlog candidate whose plan: is set and differs from the run's plan under drain: plan (`held: <ID> — plan <slug> is not this run's (<P>) — drain: plan`); the run's plan = the session's handover plan file, else the one slug carried by ready ∪ active ∪ review; role-handover.md v2"  (T-154, 2026-09-14)
-
-- "observe.sh: feat_tip_landed (a feat/<ID> tip proven landed — Landed-from equality or base ancestry) + cruft_clear (removes idle proven branches, worktree through wt_remove); drift's cruft check has three classes (waiting = silent · clearable = finding · diverged = finding, never auto-deleted); qa runs cruft_clear before drift --strict; sweep reports clearable cruft and --fix clears it; worktree-liveness.md v2"  (T-152, 2026-09-14)
-
-- "kit/ops/lib/skills.sh (NEW, loader slot after handover; 14 fns: cmd_skill · skill_consts · skill_bytes · skill_paths · skill_tier · skill_hits · skill_list · skill_gaps · skill_budget · skill_propose · skill_promote · skill_demote · skill_prune · skill_restore) — skills POLARIS writes for itself: born hidden, promoted by a human, evicted by data; entry gains skill/amend/learned/promote dispatch + usage, `qa` forwards every flag, `update` usage shows --major; self-skills.md v1 · module-layout.md v7"  (T-155, 2026-09-14)
-
-- "claim emits one skill-hit event per POLARIS-written skill whose paths overlap files_owned (the only skills telemetry); pack prints SKILLS — what POLARIS already knows about these paths (omitted when none overlap) and KNOWN TRAPS now prints WHOLE bullets (≤8/40 lines); slim_scan counts a disable-model-invocation: true definition as 0 B; uninstall's preview names the skills that stay; doctor prints the shelf's over-budget/eviction lines (command -v-guarded)"  (T-156, 2026-09-14)
-
-- "kit/ops/templates/SKILL.md (NEW — the skeleton's static half, seven headings); EVOLVE may propose ONE skill per run and `skill demote` joins its inert allowlist while `skill promote` never does; CONDUCTOR step 7 names `next --do`; INTEGRATOR § 1/§ 6 name `amend` and `learned`; PROTOCOL THE TOOL gains skill/amend/learned/promote rows and the update --major note; MANUAL gains the amend recipe"  (T-158, 2026-09-14)
-
-- "integrate.sh: cmd_amend (amend <ID> --verify <n>|--add|--drop -m why — the sanctioned verify: amendment for a CLAIMED task; refuses on feat/*, refuses a bare full-suite command, one chore(board): amend <ID> verify commit) + amend_verify (the pure list surgery, fast-tier section amend); grant.md v2"  (T-157, 2026-09-14)
-
-- "selftest gains the skills drill (label skills: gaps · propose · twin-or-not per the probe · promote refusals and pass · claim's skill-hit · prune demote/archive · restore byte-identical) and the fast-tier section skills (constants · skill_bytes vs slim_scan on the same fixtures · skill_paths); goldens skill-budget (hermetic: constants, shelf, reserved-name and TODO refusals) + skill-install (a foreign skill survives install.sh and uninstall byte-identical); labels 37"  (T-159, 2026-09-15)
-
-- kit/ops/templates/DESIGN.md — the design bar template INIT copies once to ops/DESIGN.md (never install.sh, never KIT_CODE)  (T-161, 2026-09-17)
-
-- kit/ops/lib/visual.sh — the visual module (SEE YOUR WORK, the capture gate, and from later waves the shots tree and the gallery); loaded between surfaces and builder, never on the write-guard fast path  (T-166, 2026-09-17)
-
-- polaris shots — rebuilds .polaris/shots/INDEX.md and says where the gallery is; done publishes one curated image + caption per screen into gallery: on the base commit it already makes  (T-169, 2026-09-17)
