@@ -630,24 +630,29 @@ def cmd_find(root, args):
         # so both are excluded on purpose — a lock that reds on unrelated commits gets deleted.
         # Leading-underscore names are dropped as private (py/js/ts/sh convention alike).
         # Goes red exactly when a public symbol is added, removed, renamed, or moved file.
-        pat = q.replace("*", "%") if "*" in q else "%" + q + "%"
-        seen = set()
-        for path, kind, name in cur.execute(
-                "SELECT f.path,s.kind,s.name FROM symbols s JOIN files f ON f.id=s.file_id "
-                "WHERE f.path LIKE ?", (pat,)):
-            if name.startswith("_"):
-                continue
-            key = (path, kind, name)
-            if key in seen:
-                continue
-            seen.add(key)
-            rows.append((0, path, 0, "%s\t%s\t%s" % (path, kind, name)))
-        rows.sort(key=lambda r: r[3])
-        if not rows:
-            return 1
-        for r in rows:                       # NEVER truncated by -n: a partial surface is a lie
-            print(r[3])
-        return 0
+        # Several globs (`--api g1 g2 ...`) share this ONE build(): each glob's block prints in
+        # argument order, sorted and de-duplicated within itself, so the output is byte-identical
+        # to one call per glob, concatenated. `pack` asks for every owned path in one call (T-180).
+        hit = False
+        for q in args:
+            pat = q.replace("*", "%") if "*" in q else "%" + q + "%"
+            seen = set()
+            rows = []
+            for path, kind, name in cur.execute(
+                    "SELECT f.path,s.kind,s.name FROM symbols s JOIN files f ON f.id=s.file_id "
+                    "WHERE f.path LIKE ?", (pat,)):
+                if name.startswith("_"):
+                    continue
+                key = (path, kind, name)
+                if key in seen:
+                    continue
+                seen.add(key)
+                rows.append((0, path, 0, "%s\t%s\t%s" % (path, kind, name)))
+            rows.sort(key=lambda r: r[3])
+            for r in rows:                   # NEVER truncated by -n: a partial surface is a lie
+                print(r[3])
+            hit = hit or bool(rows)
+        return 0 if hit else 1
     if mode == "sym":
         like = "%" + q.lower() + "%"
         for name, kind, line, sig, path, churn, fanin, flags in cur.execute(
@@ -759,7 +764,7 @@ def cmd_stats(root):
 def usage():
     sys.stderr.write(
         "usage: index.py find <symbol>|-f <glob>|-t <text>|--importers <path>|--imports <path>\n"
-        "                       |--api <glob>   [-n N]\n"
+        "                       |--api <glob>...   [-n N]\n"
         "       index.py show <path>#<symbol> | <path>:<line>\n"
         "       index.py stats | refresh | rebuild | selfcheck\n")
     return 2

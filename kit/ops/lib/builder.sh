@@ -18,7 +18,7 @@ cmd_claim() {
     # already coerces a blank/non-numeric wsjf to 0, so the ordering is identical without a sanitiser.
     candidates="$( { for f in "$BOARD/ready/"*.md; do
         [ -e "$f" ] || break
-        printf '%s\t%s\n' "$(fm_get wsjf "$f")" "$(basename "$f" .md)"
+        b="${f##*/}"; printf '%s\t%s\n' "$(fm_get wsjf "$f")" "${b%.md}"
       done; } | sort -rn | cut -f2- )"
     [ -n "$candidates" ] || die "ready/ is empty — nothing to claim"
   fi
@@ -67,7 +67,7 @@ cmd_claim() {
     # every board that already had one. ready/ is the addition, not the new precedence.
     for af in "$BOARD/active/"*.md "$BOARD/ready/"*.md; do
       [ -e "$af" ] || continue          # `continue`, not `break`: an empty column must not stop the other
-      aid="$(basename "$af" .md)"
+      aid="${af##*/}"; aid="${aid%.md}"
       [ "$aid" = "$cand" ] && continue  # the candidate is still in ready/ — it never overlaps itself
       case "$af" in "$BOARD/ready/"*) ov_col=ready;; *) ov_col=active;; esac
       while IFS= read -r cpat; do
@@ -203,7 +203,7 @@ EOF_SKGLOB
   # .claude/worktrees/ — so absolute paths under the worktree are that caller's PRIMARY instruction.
   # Each line stays ON ONE LINE, never hard-wrapped: verify: greps them, here and in the role files.
   note "now enter the worktree — every command until handoff runs there"
-  note "top-level session: EnterWorktree({path: \".polaris/wt/<ID>\"}) · pinned-cwd subagent or any other CLI: run everything via absolute paths under .polaris/wt/<ID> (or cd there — the shell's cwd persists between calls)"
+  note "top-level session: EnterWorktree({path: \".polaris/wt/<ID>\"}) · pinned-cwd subagent or any other CLI: run everything via absolute paths under .polaris/wt/<ID> (or cd there in the SAME call — a subagent's Bash resets its working folder between calls)"
 }
 
 cmd_verify() {
@@ -512,7 +512,7 @@ cmd_grant() { # grant <ID> <path> -m "why" — the SANCTIONED files_owned amendm
   for col in ready active; do
     for f in "$BOARD/$col/"*.md; do
       [ -e "$f" ] || break
-      oid="$(basename "$f" .md)"; [ "$oid" = "$id" ] && continue
+      oid="${f##*/}"; oid="${oid%.md}"; [ "$oid" = "$id" ] && continue
       while IFS= read -r pat; do
         [ -z "$pat" ] && continue
         pat_overlap "$path" "$pat" \
@@ -635,7 +635,7 @@ pack_brain_grep() { # pack_brain_grep <file> <pattern> — WHOLE brain bullets m
 }
 
 cmd_pack() { # pack <ID> — the whole context for one task, in ONE call. Read-only.
-  local id="${1:-}" f owned ctx contract pts risk title dirs d p pat any
+  local id="${1:-}" f owned ctx contract pts risk title dirs d p pat any api g row
   [ -n "$id" ] || id="$(current_task_id 2>/dev/null || true)"
   [ -n "$id" ] || die "usage: polaris pack <ID>   (or run it inside a feat/<ID> worktree)"
   f="$(task_file "$id" 2>/dev/null || true)"
@@ -705,15 +705,28 @@ EOF
   [ -n "$any" ] || printf '(no code-map entry — run: ops/polaris brain)\n'
 
   pack_section "PUBLIC SURFACE — do not break these signatures"
-  any=""
+  # `find --api` is the same index `check --scaffold` locks goldens from, so what prints here is
+  # exactly what a shape regression would flag later. ONE call for every owned path (T-180): one
+  # CLI start, one python, one index refresh — not one chain per path. The loop then re-cuts the
+  # answer per path with the match index.py's LIKE makes (`*` any run, no `*` = substring, `_` any
+  # one character, case-blind), so each path keeps its own 25-row cap, byte for byte as before.
+  any=""; api=""
+  set --
   while IFS= read -r p; do
     [ -n "$p" ] || continue
-    # `find --api` is the same index `check --scaffold` locks goldens from, so what prints here is
-    # exactly what a shape regression would flag later.
-    "$SELF" find --api "$p" 2>/dev/null | head -25 | grep . && any=1
+    set -- "$@" "$p"
   done <<EOF
 $owned
 EOF
+  [ "$#" -gt 0 ] && { api="$("$SELF" find --api "$@" 2>/dev/null)" || true; }
+  for p in "$@"; do
+    [ -n "$api" ] || break
+    g="$p"; case "$g" in *'*'*) ;; *) g="*$g*";; esac; g="${g//_/?}"
+    case "$api" in *"$POLARIS_TAB"*) ;; *) g='*';; esac   # no rows: the engine's own note, per path as before
+    printf '%s\n' "$api" | { shopt -s nocasematch; while IFS= read -r row; do
+        case "${row%%"$POLARIS_TAB"*}" in $g) printf '%s\n' "$row";; esac; done; } \
+      | LC_ALL=C sort -u | head -25 | grep . && any=1
+  done
   [ -n "$any" ] || printf '(nothing indexed for these paths — new files, or run: ops/polaris brain)\n'
 
   # 7. the lessons that already cost someone tokens, filtered to THIS task's files.
