@@ -1,3 +1,27 @@
+# SPRINT 17 — Fast (6.7.0)          capacity: 24   dates: 2026-09-24–
+
+POLARIS makes everything slower when it is switched on, and the audit of 2026-09-24 found where the
+time goes: a model guard that scans the transcript before every tool call on the machine (and lets
+calls through when it times out at fan-out), an edit guard that pays three to five seconds per
+write, a `drift` that spends seven minutes re-reading finished tasks, a `next` that starts a process
+per background folder, and a close that pays for the full suite twice because EVOLVE commits after
+the last green `qa`. This sprint fixes each of those at its root, keeps every existing finding line
+and gate exactly as it is, and puts the model ban behind six independent locks. Plan `v4-fast`
+(plans/v4.md § Sprint 17), contract `ops/contracts/speed.md`, evidence `plans/audit-0924.md`.
+
+11 tasks / 24 pts / 3 waves. W1 is eight fully disjoint lanes (the three hooks, the update hook,
+drift, next, the pack rider and the Laya spike); run at most 4–5 at once, because overlapping
+selftests stretch each run about 5×. W2 is the one-suite-per-close change, chained behind drift
+because both edit observe.sh and it alone owns the two big drill files. W3 re-pins the derived
+goldens, then writes the 6.7.0 version and changelog. Every lane is surface-frozen: no new
+function, heading or settings key anywhere under `kit/`, because under `landing: self` each lane's
+own land runs the golden set and one stray row would unwind it. The installed `ops/` stays at 6.5.0
+until the owner's release checkpoint, so lanes verify with the kit copy and worktree-true goldens.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 16 — The gallery and the bar (6.6.0)          capacity: 36   dates: 2026-09-17–
 
 POLARIS already refuses a visual handoff without a screenshot, but the captures land flat under a
