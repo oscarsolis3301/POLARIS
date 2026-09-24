@@ -1,0 +1,11 @@
+⚠ [1] CRUFT: feat/T-8 still exists though T-8 is done — bash ops/polaris qa or sweep --fix clears it
+⚠ [2] CRUFT diverged: feat/T-9 carries commits not in main — inspect: git log main..feat/T-9 (never auto-deleted)
+   advisory: orphan branch feat/stray — no task in any column (may hold unmerged work; never auto-cleared)
+⚠ [3] DEP MISSING: T-1 depends_on T-404 — no task by that id in any column
+⚠ [4] DEP CYCLE: T-2 sits in a depends_on ring — it can never satisfy the ready gate; break the cycle
+⚠ [5] DEP CYCLE: T-3 sits in a depends_on ring — it can never satisfy the ready gate; break the cycle
+5 finding(s).
+strict-rc=1
+   advisory: orphan branch feat/stray — no task in any column (may hold unmerged work; never auto-cleared)
+✅ drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry · deps)
+strict-rc=0

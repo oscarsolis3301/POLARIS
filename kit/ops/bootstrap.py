@@ -315,7 +315,7 @@ def merge_awake_hooks(archive, bash_path):
 
 
 def merge_model_guard(archive, bash_path, register=True):
-    """Land model-guard.sh under ~/.claude/polaris/ and register it as a machine-wide PreToolUse hook.
+    """Land model-guard.sh under ~/.claude/polaris/, register its five hooks, and set availableModels.
 
     Owner decision 2026-09-15, absolute: Fable and Haiku are forbidden in every project. core.sh's
     model_denied stops POLARIS ever NAMING them; this stops a session that is already RUNNING one
@@ -325,12 +325,53 @@ def merge_model_guard(archive, bash_path, register=True):
     repo setting can gate them. That is also the only way this reaches projects which have never had
     POLARIS installed, which is where most of the Fable spend actually happened.
 
+    ops/contracts/speed.md § 2 puts the ban on six layers so it never rests on one mechanism. Two of
+    them are written here: layer 1, `availableModels` (below — the harness itself then offers no Fable),
+    and the script's own `install`, which registers PreToolUse "*" plus the four v2 events —
+    SessionStart, PreModelSwitch, PostModelSwitch and PostToolUse "Agent" — merged by script identity,
+    so this function and a hand-run `model-guard.sh install` can never disagree about what is armed.
+
     The SCRIPT is copied even when register=False, so `--no-permissions` still leaves a machine one
-    command away from armed rather than empty-handed.
+    command away from armed rather than empty-handed. register=False writes NOTHING to settings.json —
+    not the hooks and not availableModels: that flag is a promise about the file, and CI asserts it.
 
     Fails OPEN with one ⚠ line, exactly like keep-awake: an install that died over a machine-level
     extra is worse than the extra being missing, and the kit-code ban applies either way.
     """
+    if register:
+        # Layer 1 — availableModels, merged on every arm: a MISSING key gets exactly the list below; an
+        # existing LIST keeps every entry of the human's EXCEPT any Fable one (the ban is absolute, so
+        # that is the one value we do override); anything else — a string, a null — is left exactly as
+        # found. Haiku stays listed: the harness runs its own background calls on it, and the per-call
+        # guard refuses it for work. The only place kit code names a model outside a deny list, and it
+        # is the contract's list verbatim. Unreadable settings are never rewritten, same as
+        # merge_permissions; written only when the value changes, so a re-arm touches nothing.
+        settings = os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
+        try:
+            data = {}
+            if os.path.isfile(settings):
+                with open(settings, encoding="utf-8") as fh:
+                    data = json.load(fh)
+            if not isinstance(data, dict):
+                raise ValueError("it is not a JSON object")
+            have = data.get("availableModels")
+            want = have
+            if "availableModels" not in data:
+                want = ["opus", "sonnet", "haiku"]
+            elif isinstance(have, list):
+                want = [m for m in have if "fable" not in str(m).lower()]
+            if want != have:
+                data["availableModels"] = want
+                os.makedirs(os.path.dirname(settings), exist_ok=True)
+                tmp = settings + ".polaris-tmp"
+                with open(tmp, "w", encoding="utf-8") as fh:
+                    fh.write(json.dumps(data, indent=2) + "\n")
+                os.replace(tmp, settings)
+                out(f"✅ availableModels:       {json.dumps(want)} in {settings}")
+        except (OSError, ValueError) as exc:
+            print(f"⚠ availableModels not set in {settings} ({exc}) — Fable is still refused per call; "
+                  f'add "availableModels": ["opus", "sonnet", "haiku"] by hand')
+
     dest_dir = os.path.join(os.path.expanduser("~"), ".claude", "polaris")
     hook = os.path.join(dest_dir, "model-guard.sh")
     try:
@@ -502,7 +543,7 @@ def arm_machine(archive, permissions=True):
         # The kit-code half (core.sh model_denied) is unaffected — POLARIS still never NAMES either
         # model here; only the guard against a session already running one is missing.
         merge_model_guard(archive, find_bash(), register=False)
-        out("   ⚠ Fable/Haiku SESSION guard not armed (it would write settings.json). One command:")
+        out("   ⚠ Fable/Haiku SESSION guard + availableModels not armed (both write settings.json). One command arms the guard:")
         out("     bash ~/.claude/polaris/model-guard.sh install")
         perm_snippet()
 

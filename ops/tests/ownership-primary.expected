@@ -2,3 +2,15 @@ pinned-refusal-lines: 1
 primary-gate-fn: 1
 primary-gate-exit2: 1
 json-deny-in-this-hook: 0
+one-rev-parse: 1
+prefilter-matcher: 1
+fast-exit: 1
+plain: rc=0 git=1 no-cli
+path-rule: rc=0 git=1 _guard secret/k.txt - body=[]
+ask-rule: rc=0 git=1 _guard gated/g.txt - body=[]
+content-rule: rc=0 git=1 _guard src/x.cfg - body=[bad|line]
+content-rule-write: rc=0 git=1 _guard src/x.cfg - body=[fine]
+content-no-pattern: rc=0 git=1 _guard docs/d.md - body=[]
+content-unicode: rc=0 git=3 _guard src/x.cfg - body=[bad]
+feat-branch: rc=0 git=1 _guard src/a.txt T-9 body=[]
+no-matcher: rc=0 git=1 _guard src/a.txt - body=[ok]

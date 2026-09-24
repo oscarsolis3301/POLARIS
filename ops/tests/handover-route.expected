@@ -33,3 +33,10 @@ build T-HR5
 1
 2
 nothing to promote
+build T-HR5
+1
+5
+held: T-HR6 — contract ops/contracts/gone.md missing
+held: T-HR7 — points 8 must be 1-5 — split it
+held: T-HR8 — waits on T-HR5 (ready)
+held: T-HR9 — overlaps T-HR5 on 'src/a.txt'

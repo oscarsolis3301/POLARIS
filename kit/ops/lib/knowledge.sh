@@ -382,20 +382,20 @@ brain_board() { # board.md — live digest (caller caps 80 lines)
   local f id any=0
   for f in "$BOARD/active/"*.md; do
     [ -e "$f" ] || break
-    any=1; id="$(basename "$f" .md)"
+    any=1; id="${f##*/}"; id="${id%.md}"
     printf -- '- %s · %s\n' "$id" "$(fm_get owner "$f")"
   done
   [ "$any" -eq 0 ] && printf -- '- (none)\n'
   printf '\n## ready (top 5 by wsjf: id · title · pts)\n'
   { for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
-      printf '%s\t- %s · %s · %spts\n' "$(fm_get wsjf "$f")" "$(basename "$f" .md)" \
+      id="${f##*/}"; printf '%s\t- %s · %s · %spts\n' "$(fm_get wsjf "$f")" "${id%.md}" \
         "$(fm_get title "$f")" "$(fm_get points "$f")"
     done; } | sort -rn | cut -f2- | head -5 | grep . || printf -- '- (none)\n'
   printf '\n## blocked (id · reason)\n'
   any=0
   for f in "$BOARD/blocked/"*.md; do
     [ -e "$f" ] || break
-    any=1; id="$(basename "$f" .md)"
+    any=1; id="${f##*/}"; id="${id%.md}"
     printf -- '- %s · %s\n' "$id" \
       "$(grep '⛔' "$f" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*-*[[:space:]]*//' | grep . || echo 'no reason recorded — open the task')"
   done
@@ -405,7 +405,7 @@ brain_board() { # board.md — live digest (caller caps 80 lines)
   any=0
   while IFS= read -r f; do
     [ -n "$f" ] && [ -e "$f" ] || continue
-    any=1; id="$(basename "$f" .md)"
+    any=1; id="${f##*/}"; id="${id%.md}"
     lsha="$(fm_get landed "$f" 2>/dev/null || true)"
     if [ -n "$lsha" ]; then
       printf -- '- %s · %s · landed %.7s\n' "$id" "$(fm_get title "$f")" "$lsha"
@@ -424,7 +424,7 @@ brain_contracts() { # contracts.md — per contract: name + its ## Purpose first
   local f name any=0
   for f in "$OPS/contracts/"*.md; do
     [ -e "$f" ] || break
-    any=1; name="$(basename "$f" .md)"
+    any=1; name="${f##*/}"; name="${name%.md}"
     printf '\n## %s (ops/contracts/%s.md)\n' "$name" "$name"
     awk '/^## Purpose/{f=1;next} f&&/^#/{exit} f&&NF==0{if(p)exit;next} f{print;p=1}' "$f" 2>/dev/null || true
   done
@@ -581,11 +581,23 @@ brain_learned() { # learned.md — what this repo's HISTORY says, distilled (cal
   if [ -s "$EVENTS" ]; then
     awk -F'"' '/"ev":"kickback"/ {
         id=""; note=""
-        for (i=1;i<NF;i++) { if ($i ~ /"id":$/) id=$(i+1); if ($i ~ /"note":$/) note=$(i+1) }
+        # With every quote a field separator, a key is its OWN field and its value sits two fields
+        # on: id, then the colon, then T-1. The old test hunted a quote no field can ever hold, so
+        # this section had never listed a single kickback (T-178). First match wins, so a key
+        # spelled inside the text of a note can never overwrite the real one; an escaped quote
+        # in a note splits it too, so the pieces are glued back and unescaped.
+        for (i=1;i<NF-1;i++) {
+          if (id=="" && $i=="id" && $(i+1)==":") id=$(i+2)
+          if (note=="" && $i=="note" && $(i+1)==":") {
+            note=$(i+2); j=i+3
+            while (note ~ /\\$/ && j<=NF) { note=note "\"" $j; j++ }
+            gsub(/\\"/, "\"", note)
+          }
+        }
         n++; printf "- %s — %s\n", id, (note==""?"(no reason recorded)":note)
       }
       END { if (!n) print "None on this board. A kickback here would name the task and the reason." }
-    ' "$EVENTS" 2>/dev/null | head -12
+    ' "$EVENTS" 2>/dev/null | tail -n 12   # the NEWEST twelve: last month's lesson beats last year's
   else
     printf 'No telemetry yet — runs accumulate it.\n'
   fi

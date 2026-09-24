@@ -57,10 +57,26 @@ allow  kill 1234
 allow  kill -9 1234
 allow  taskkill /PID 1234 /F
 allow  Stop-Process -Id 1234
+deny:switch  git fetch; if ($?) { git switch main }
+deny:stash  git fetch; if ($?) {git stash}
+deny:reset  if ($x) { git status } elseif ($y) { git reset --hard }
+deny:checkout  foreach ($b in $list) { git checkout $b }
+deny:rebase  if git rebase main; then echo ok; fi
+deny:kill-broad  Get-Date; if ($?) { Stop-Process -Name node }
+deny:restore  git restore .
+deny:restore  git restore --staged --worktree .
+deny:restore  git restore -s HEAD~1 file.txt
+allow  git branch -d x
+allow  git restore --staged x
+allow  if ($?) {git stash list}
+allow  git commit -m "wip ; git switch main"
+allow  Write-Output 'done; git switch main'
+allow  git stash show -p stash@{0}
 wt:allow  git switch main
 wt:allow  git reset --hard HEAD~1
 wt:allow  git stash pop
 wt:allow  git rebase main
+wt:allow  git restore .
 wt:deny:worktree-remove  git worktree remove .polaris/wt/T-000
 wt:deny:rm-polaris  rm -rf .polaris
 wt:deny:kill-broad  pkill node

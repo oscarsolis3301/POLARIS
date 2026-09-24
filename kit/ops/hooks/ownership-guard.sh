@@ -11,7 +11,14 @@
 # the guard FAILS OPEN (exit 0 + warning) when it cannot parse its input.
 set -u
 
-IN="$(cat)"
+IN="$(cat)"                                    # ONE fork; a `read -d ''` loop reads stdin a byte at a time
+# Every bash scan of the payload below is O(n²) when its key is late or missing: jstr's leading
+# `${s#*"key"}` took 36s on a 150 KB NotebookEdit hunting a file_path it does not have, and 30s on
+# an Edit whose new_string sits behind a 150 KB old_string (T-174, measured under load). The path
+# fields sit in the first few hundred bytes, ahead of any payload, so bash scans only this head.
+# Same answer as scanning IN whenever the value lies inside it (a first occurrence is a first
+# occurrence), and a value cut off by the head fails jstr's closing-quote check → the python path.
+IN_HEAD="${IN:0:4096}"
 
 # --- SPEED: why this file no longer starts python on every write --------------
 # Traced 2026-07-26 with `PS4='+ $EPOCHREALTIME ' bash -x`, sorting the deltas. The hook cost
@@ -25,10 +32,21 @@ IN="$(cat)"
 #      the index (.polaris/index-engine). The probe cost is real and it is paid once, not per write.
 #   2. Do not start python AT ALL unless a CONTENT rule could actually match. path-kind rules and
 #      the ownership gate need only file_path + cwd, which bash parses safely below; the write
-#      PAYLOAD is needed solely to scan added lines against content-rule patterns. This repo's
-#      RULES.tsv is 14 path rules and zero content rules, so the common case now forks no python.
+#      PAYLOAD is needed solely to scan added lines against content-rule patterns.
 # A hook that is slow is not merely annoying: at 2x this cost it exceeded its 10s timeout under
 # parallel builders, got killed, and FAILED OPEN — silently dropping the ownership gate entirely.
+# 2026-09-24 (T-174, ops/contracts/speed.md § 1): it had crept back to 3.2-4.9s. "Could a content
+# rule match" was answered as "does ANY content rule exist", so one rule scoped to one file sent
+# every write through python; and even without python the hook paid three git processes plus the
+# whole `polaris _guard` startup to learn that no rule applies. Now the cheap work comes first:
+#   - ONE git process: `rev-parse --show-toplevel --git-common-dir --abbrev-ref HEAD`.
+#   - An in-hook RULES prefilter: a builtin `while read` over RULES.tsv with the SAME match_one the
+#     CLI uses (sourced from lib/ownership.sh, never copied). The CLI runs only when a rule's scope
+#     matches the path, or on a feat/* branch (the ownership gate is the CLI's alone).
+#   - The payload only when a CONTENT rule's scope matches: jstr decodes it; python only when
+#     jstr cannot (see "the payload" below).
+# Nothing here decides a deny. Every verdict is still `polaris _guard`'s; the prefilter only skips
+# the call when no rule could fire, and anything it cannot be sure of falls back to calling it.
 
 # --- pure-bash JSON string read (same contract as ops/hooks/readonly-allow.sh) --
 # Returns 1 on ANY irregularity so the caller falls back to python rather than guessing. The
@@ -66,28 +84,24 @@ jstr() {
   return 1
 }
 
-# --- does any CONTENT rule exist? decides whether python is needed at all ------
-# Field 2 of RULES.tsv is the kind. No content rule anywhere → the payload cannot matter.
-# Unreadable RULES → assume yes and take the slow, safe path.
-GUARD_TOP0="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-NEED_BODY=1
-if [ -n "$GUARD_TOP0" ] && [ -f "$GUARD_TOP0/ops/RULES.tsv" ]; then
-  awk -F'\t' '!/^#/ && NF>=2 && $2=="content" {found=1; exit} END{exit !found}' \
-      "$GUARD_TOP0/ops/RULES.tsv" 2>/dev/null || NEED_BODY=0
+# --- parse: bash first --------------------------------------------------------
+# file_path + cwd come from jstr. The write PAYLOAD is not read here: only a content rule can use
+# it, and whether one applies depends on the repo-relative path, which is known only after git.
+# Python parses up front in exactly two cases, and each is the old python path, whole:
+#   - bash could not read the path (irregular JSON) — the fall-through below, as before;
+#   - this hook re-ran itself with POLARIS_GUARD_PY=1, because a content rule matched and jstr
+#     could not decode the payload (see "the payload" further down).
+# PAYLOAD=1 means BODY is final: python produced it, or python is absent and it never will.
+FILE=""; CWD=""; BODY=""; PAYLOAD=0
+if [ "${POLARIS_GUARD_PY:-}" != 1 ]; then
+  if jstr file_path "$IN_HEAD"; then FILE="$REPLY"
+  elif jstr notebook_path "$IN_HEAD"; then FILE="$REPLY"; fi
+  jstr cwd "$IN_HEAD" && CWD="$REPLY"
 fi
 
-FILE=""; CWD=""; BODY=""
-if [ "$NEED_BODY" -eq 0 ]; then
-  # Fast path: bash only. If either read is irregular we fall through to python below.
-  if jstr file_path "$IN"; then FILE="$REPLY"
-  elif jstr notebook_path "$IN"; then FILE="$REPLY"; fi
-  jstr cwd "$IN" && CWD="$REPLY"
-  [ -n "$FILE" ] && PARSED_OK=1 || PARSED_OK=0
-else
-  PARSED_OK=0
-fi
-
-if [ "$PARSED_OK" -eq 0 ]; then
+if [ -z "$FILE" ]; then
+PAYLOAD=1
+GUARD_TOP0="$(git rev-parse --show-toplevel 2>/dev/null || true)"   # the interpreter cache's home
 # --- parse stdin JSON: path + cwd + write payload (schema-tolerant) ----------
 # Payload = every string value in tool_input EXCEPT path fields and old_string
 # (old_string is existing file text; scanning it would block edits that REMOVE
@@ -116,9 +130,9 @@ if [ -z "$PY" ]; then
   # ownership gates are the ones that stop a Builder writing outside its lane. Run what we can.
   # (Previously this exited 0 and dropped ALL THREE gates on any python-less machine.)
   if [ -z "$FILE" ]; then
-    jstr file_path "$IN" && FILE="$REPLY"
-    [ -n "$FILE" ] || { jstr notebook_path "$IN" && FILE="$REPLY"; }
-    jstr cwd "$IN" && CWD="$REPLY"
+    jstr file_path "$IN_HEAD" && FILE="$REPLY"
+    [ -n "$FILE" ] || { jstr notebook_path "$IN_HEAD" && FILE="$REPLY"; }
+    jstr cwd "$IN_HEAD" && CWD="$REPLY"
   fi
   if [ -z "$FILE" ]; then
     echo "polaris-guard: no python and the payload did not parse — write-guard skipped (verify/handoff still enforces ownership + rules)" >&2
@@ -160,7 +174,7 @@ fi
 cleanup() { [ -n "$BODY" ] && rm -f "$BODY" 2>/dev/null; }
 trap cleanup EXIT
 [ -n "$FILE" ] || exit 0                       # nothing path-like to police
-[ -n "$CWD" ] || CWD="$(pwd)"
+[ -n "$CWD" ] || CWD="$PWD"                    # what $(pwd) printed, minus the subshell
 
 # --- normalize (best effort for Windows-style paths) -------------------------
 # REPLY-returning, not stdout-returning, and pure bash: `x="$(norm "$x")"` forks a subshell even
@@ -189,13 +203,15 @@ norm "$CWD";  CWD="$REPLY"
 # --- repo + repo-relative path ------------------------------------------------
 # Git on Windows prints toplevel/worktree as `C:/...` while FILE/CWD normalize
 # to `/c/...` — norm() BOTH sides or every in-repo path looks "outside the repo".
-# ONE rev-parse fetches BOTH values it needs; splitting the two lines in bash is free, whereas a
-# second `git rev-parse` would be another fork on every single write. See the SPEED note above:
-# at 2x the budget this hook was killed at its timeout and FAILED OPEN, dropping the gate silently.
-GITINFO="$(git -C "$CWD" rev-parse --show-toplevel --git-common-dir 2>/dev/null)" || exit 0
-TOP="${GITINFO%%$'\n'*}"
-GCD="${GITINFO#*$'\n'}"
-[ "$GCD" = "$TOP" ] && GCD=""                  # one-line output (git too old for --git-common-dir)
+# ONE rev-parse fetches ALL THREE values it needs (toplevel, common dir, branch), one per line, in
+# argument order; splitting them in bash is free, whereas each extra `git rev-parse` is another
+# process on every single write. See the SPEED note above: at 2x the budget this hook was killed at
+# its timeout and FAILED OPEN, dropping the gate silently. A failure (no repo, unborn HEAD) exits 0
+# exactly as the separate branch lookup used to.
+GITINFO="$(git -C "$CWD" rev-parse --show-toplevel --git-common-dir --abbrev-ref HEAD 2>/dev/null)" || exit 0
+TOP="${GITINFO%%$'\n'*}"; GITINFO="${GITINFO#*$'\n'}"
+GCD="${GITINFO%%$'\n'*}"; BR="${GITINFO#*$'\n'}"
+[ "$GCD" = "$BR" ] && GCD=""                   # short output (git too old for --git-common-dir)
 norm "$TOP"; TOP="$REPLY"
 norm "$GCD"; GCD="$REPLY"
 # --git-common-dir prints RELATIVE to $CWD inside the primary (".git", "../.git") and absolute from
@@ -211,7 +227,6 @@ case "$TOP" in
 esac
 [ -n "$WT_ID" ] && : 2>/dev/null > "$PRIMARY/.git/worktrees/$WT_ID/polaris-beat" || true
 [ -n "$PRIMARY" ] && [ -x "$PRIMARY/ops/polaris" ] || PRIMARY=""   # odd layout → resolve it lazily
-BR="$(git -C "$CWD" rev-parse --abbrev-ref HEAD 2>/dev/null)" || exit 0
 case "$FILE" in /*) ABS="$FILE";; *) ABS="$CWD/$FILE";; esac
 # Prefix-match case-INSENSITIVELY (Windows + macOS default are case-insensitive filesystems, and
 # Claude Code may hand us a cwd/path whose segments differ in case from git's toplevel). Compare on
@@ -275,6 +290,75 @@ primary_gate() {
   return 2
 }
 primary_gate || exit 2
+case "$BR" in feat/*) ID="${BR#feat/}";; *) ID="-";; esac
+
+# --- RULES prefilter: could any rule fire on REL? ------------------------------
+# Only a rule whose scope matches REL can deny, so the CLI is asked only then. Same fields, same
+# kinds, same matcher as lib/ownership.sh::rule_scan_path + rule_scan_content_file — match_one is
+# SOURCED from the lib `_guard` itself loads (function definitions only), never copied. Zero
+# processes: one pass of builtin `read` over the file. Each line is read whole, stripped of every
+# CR (rules_lines' `tr -d '\r'`), then split on tabs by word splitting under `set -f` — the same
+# field rules as the CLI's `IFS=<tab> read` (runs of tabs are one separator), with no heredoc.
+#   HIT=1        a path/ask/content rule's scope matches REL → `polaris _guard` answers.
+#   NEED_BODY=1  a content rule WITH a pattern matches → it also needs the payload.
+# Both start at 1, the worst case, which is the old behavior: the CLI decides, payload in hand.
+# They drop only when this hook reads the SAME RULES.tsv the CLI will. The CLI finds it from ITS
+# cwd (this process's) via `git worktree list` → <primary>/ops/RULES.tsv, so: this process sits in
+# the payload's cwd, and PRIMARY's .git IS the common dir. Without the lib's matcher — or with no
+# core.sh beside it — the CLI is always called: a CLI that cannot start denies, and skipping it
+# must never turn that deny into an allow; NEED_BODY then falls back to the old test (any content
+# rule with a pattern, whatever its scope).
+HIT=1; NEED_BODY=1
+if [ -n "$PRIMARY" ] && [ -n "$GCD" ] && [ "$PWD" -ef "$CWD" ] && [ "$PRIMARY/.git" -ef "$GCD" ]; then
+  MATCH=0
+  [ -f "$TOP/ops/lib/core.sh" ] && [ -f "$TOP/ops/lib/ownership.sh" ] \
+    && . "$TOP/ops/lib/ownership.sh" 2>/dev/null && declare -F match_one >/dev/null && MATCH=1
+  RF="$PRIMARY/ops/RULES.tsv"
+  if [ ! -e "$RF" ]; then                      # absent = no rules, exactly as rules_lines reads it
+    HIT=0; NEED_BODY=0
+  elif [ -f "$RF" ] && [ -r "$RF" ]; then
+    HIT=0; NEED_BODY=0; CR=$'\r'; R_IFS="$IFS"; set -f
+    while IFS= read -r R_LINE || [ -n "$R_LINE" ]; do
+      R_LINE="${R_LINE//$CR/}"
+      IFS=$'\t'; set -- $R_LINE; IFS="$R_IFS"
+      R_SCOPE="${1-}"; R_KIND="${2-}"; R_PAT="${3-}"
+      case "$R_SCOPE" in '#'*) continue;; esac                   # rules_lines drops comments
+      case "$R_KIND" in path|ask|content) ;; *) continue;; esac  # the only kinds the CLI reads
+      [ "$MATCH" -eq 0 ] || match_one "$REL" "$R_SCOPE" || continue
+      HIT=1
+      [ "$R_KIND" = content ] && [ -n "$R_PAT" ] && [ "$R_PAT" != "-" ] && NEED_BODY=1
+    done 2>/dev/null < "$RF"
+    set +f
+  fi                                           # anything else (unreadable, not a file): both stay 1
+  [ "$MATCH" -eq 1 ] || HIT=1                  # no matcher → the CLI answers, RULES.tsv or not
+fi
+# THE fast exit: a non-Builder write no rule scopes. A feat/* branch never takes it — the
+# ownership gate is the CLI's alone, whatever the rules say.
+[ "$ID" = "-" ] && [ "$HIT" -eq 0 ] && exit 0
+
+# --- the payload: only for a content rule whose scope matched -------------------
+# Edit.new_string / Write.content, decoded by jstr: the same decoder that read the path, and it
+# returns 1 on anything it cannot decode EXACTLY (\u, \b, \f escapes) instead of guessing. Python
+# is still the answer when jstr is not: a \u escape; MultiEdit / NotebookEdit / an unknown tool,
+# whose payload spans fields jstr does not walk; an input past 4 KB, where jstr's char loop costs
+# more than python's start (measured under load: 4 KB 430ms, 16 KB 5.6s, 64 KB 80s) and its key
+# scan goes quadratic (see IN_HEAD); or no common dir to write the payload file into. Every one of
+# those RE-RUNS this hook with POLARIS_GUARD_PY=1, which is the old python path, whole — never a
+# partial payload. `${#IN}` is a length, not a scan: 0ms at 150 KB.
+if [ "$NEED_BODY" -eq 1 ] && [ "$PAYLOAD" -eq 0 ]; then
+  KEY=""
+  jstr tool_name "$IN_HEAD" && case "$REPLY" in Write) KEY=content;; Edit) KEY=new_string;; esac
+  if [ -n "$KEY" ] && [ "${#IN}" -le 4096 ] && [ -n "$GCD" ] && [ -d "$GCD" ]; then
+    if jstr "$KEY" "$IN"; then
+      PAYLOAD=1
+      if [ -n "$REPLY" ]; then                 # empty payload = nothing to scan, as `-s` reads it
+        BODY="$GCD/polaris-guard-$$.txt"
+        { printf '%s' "$REPLY" > "$BODY"; } 2>/dev/null || { cleanup; BODY=""; PAYLOAD=0; }
+      fi
+    fi
+  fi
+  [ "$PAYLOAD" -eq 1 ] || { export POLARIS_GUARD_PY=1; exec bash "$0" <<<"$IN"; }
+fi
 
 # --- both gates in ONE polaris startup ----------------------------------------
 # RULES (every session, every branch) then OWNERSHIP (only inside a Builder worktree, feat/<ID>).
@@ -282,7 +366,6 @@ primary_gate || exit 2
 # ~3.8s on Windows/Git Bash, so two calls put a Builder's write at ~7.6s against this hook's
 # timeout; at the ceiling the hook is killed and FAILS OPEN, dropping the ownership gate silently.
 # rc: 0 clean · 1 a rule denies · 3 not in files_owned.
-case "$BR" in feat/*) ID="${BR#feat/}";; *) ID="-";; esac
 MSG="$("$TOP/ops/polaris" _guard "$REL" "$ID" "$BODY" 2>&1 >/dev/null)"; RC=$?
 [ "$RC" -eq 0 ] && exit 0
 if [ "$RC" -eq 1 ]; then

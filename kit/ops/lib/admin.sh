@@ -410,12 +410,17 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   # worse, half a command. This was latent from the day `update` was written; it only ever
   # survived because the old and new files happened to line up. It stopped lining up.
   # Every form, `--all` included: the walk may reach this very repo.
+  # The copy is removed when it exits (T-176): a bare `exec` left every one behind — 82 of them,
+  # ~90 MB of %TEMP%, one per session start. The exec'd `bash -c` holds no script file open, runs
+  # the copy as its child, deletes the directory once that child has exited (Windows will not
+  # delete a script bash still holds) and exits with the copy's own rc.
   if [ "${POLARIS_UPDATE_REEXEC:-}" != "1" ]; then
     local tmp; tmp="$(mktemp -d)"
     cp "$SELF" "$tmp/polaris"
     # the copy runs its own lib loader — carry lib/ beside it or it refuses at startup
     cp -R "${SELF%/*}/lib" "$tmp/lib"
-    POLARIS_UPDATE_REEXEC=1 exec bash "$tmp/polaris" update "$@"
+    # shellcheck disable=SC2016
+    POLARIS_UPDATE_REEXEC=1 exec bash -c 'd="$1"; shift; rc=0; bash "$d/polaris" update "$@" || rc=$?; rm -rf "$d"; exit "$rc"' polaris-update "$tmp" "$@"
   fi
 
   if [ "$all" = 1 ]; then

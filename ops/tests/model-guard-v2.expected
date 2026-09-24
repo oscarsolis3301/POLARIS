@@ -1,0 +1,81 @@
+== the common path: a state file, and the transcript is never opened ==
+state says an allowed model (transcript says haiku)        rc 0
+state says fable                                           rc 2
+    stderr: polaris: this session is running 'claude-fable-1', which is FORBIDDEN (owner, 2026-09-15). Fable bills a separate weekly limit and Haiku is too weak for this work — neither may be used in any project. Switch with /model (Opus or Sonnet), then retry. Nothing has been read, written or run.
+== the fallback: five transcript tail shapes, v1 last-model loop vs v2 grep ==
+shape plain-allowed                            v1 allow  v2 allow  same
+shape switched-away-from-haiku                 v1 allow  v2 allow  same
+shape switched-to-fable                        v1 refuse v2 refuse same
+shape 64KB-Workflow-line-model-60KB-back       v1 refuse v2 refuse same
+shape model-only-beyond-the-64KB-tail          v1 allow  v2 allow  same
+== spawns are checked at the door ==
+Agent subagent_type claude-code-guide                      rc 2
+    stderr: polaris: claude-code-guide always runs Haiku, which is FORBIDDEN — use a general-purpose subagent or WebFetch. Nothing was spawned.
+Task subagent_type claude-code-guide                       rc 2
+    stderr: polaris: claude-code-guide always runs Haiku, which is FORBIDDEN — use a general-purpose subagent or WebFetch. Nothing was spawned.
+Agent model haiku                                          rc 2
+    stderr: polaris: a subagent on 'haiku' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned.
+Agent model fable                                          rc 2
+    stderr: polaris: a subagent on 'fable' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned.
+Task model claude-haiku-4-5                                rc 2
+    stderr: polaris: a subagent on 'claude-haiku-4-5' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned.
+Workflow script argument model: "haiku"                    rc 2
+    stderr: polaris: a subagent on 'haiku' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned.
+Workflow "model" key claude-fable-1                        rc 2
+    stderr: polaris: a subagent on 'claude-fable-1' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned.
+Workflow agentType claude-code-guide                       rc 2
+    stderr: polaris: claude-code-guide always runs Haiku, which is FORBIDDEN — use a general-purpose subagent or WebFetch. Nothing was spawned.
+Agent with no model                                        rc 0
+Agent model sonnet                                         rc 0
+Agent whose PROSE names both (not a request)               rc 0
+Workflow on an allowed model                               rc 0
+== a subagent is judged by ITS OWN transcript, never the parent ==
+agent a1 on haiku (parent opus in state + transcript)      rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15). Fable bills a separate weekly limit and Haiku is too weak for this work — neither may be used in any project. Switch with /model (Opus or Sonnet), then retry. Nothing has been read, written or run.
+workflow agent w1 on fable                                 rc 2
+    stderr: polaris: this session is running 'claude-fable-1', which is FORBIDDEN (owner, 2026-09-15). Fable bills a separate weekly limit and Haiku is too weak for this work — neither may be used in any project. Switch with /model (Opus or Sonnet), then retry. Nothing has been read, written or run.
+agent a2 on opus (parent haiku in state + transcript)      rc 0
+the parent itself, same state                              rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15). Fable bills a separate weekly limit and Haiku is too weak for this work — neither may be used in any project. Switch with /model (Opus or Sonnet), then retry. Nothing has been read, written or run.
+agent with no transcript anywhere (fail open)              rc 0
+== the switch: refused before, recorded after ==
+PreModelSwitch to haiku                                    rc 2
+    stderr: polaris: switching to 'claude-haiku-4-5' is FORBIDDEN (owner, 2026-09-15) — stay on Opus or Sonnet.
+PreModelSwitch to fable                                    rc 2
+    stderr: polaris: switching to 'fable' is FORBIDDEN (owner, 2026-09-15) — stay on Opus or Sonnet.
+PreModelSwitch to opus                                     rc 0
+PreModelSwitch to sonnet                                   rc 0
+SessionStart with a model                                  rc 0
+    state sw: claude-opus-5-5
+PostModelSwitch to sonnet                                  rc 0
+    state sw: claude-sonnet-4-6
+SessionStart with no model field                           rc 0
+SessionStart, session_id with /                            rc 0
+PostModelSwitch, session_id with \                         rc 0
+SessionStart, session_id ..                                rc 0
+state files now: par sw 
+anything written outside model-state: 0
+== PostToolUse on Agent: a forbidden resolved model is flagged, never blocked ==
+resolvedModel haiku                                        rc 0
+    stdout: {"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"polaris: that subagent ran on 'claude-haiku-4-5', a FORBIDDEN model — discard its result and re-run it on the session model."}}
+no resolvedModel, last "model" is fable                    rc 0
+    stdout: {"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"polaris: that subagent ran on 'claude-fable-1', a FORBIDDEN model — discard its result and re-run it on the session model."}}
+resolvedModel opus                                         rc 0
+nothing found                                              rc 0
+not an Agent call                                          rc 0
+== every fail-open path still exits 0 ==
+no stdin at all                                            rc 0
+an empty object                                            rc 0
+no session_id, no transcript_path                          rc 0
+transcript does not exist                                  rc 0
+transcript unreadable (a directory)                        rc 0
+transcript with no model line                              rc 0
+an event it was never registered for                       rc 0
+== the install branch: five entries, merged, never clobbering, idempotent ==
+model-guard: 5 of 5 hook entries written to <settings>
+model-guard: 0 of 5 hook entries written to <settings>
+  PreToolUse       model-guard[*] · mine.sh[Bash]
+  PreModelSwitch   model-guard[-]
+  SessionStart     mine-too.sh[-] · model-guard[-]
+  PostModelSwitch  model-guard[-]
+  PostToolUse      model-guard[Agent]
