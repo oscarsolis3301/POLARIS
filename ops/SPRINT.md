@@ -21,6 +21,7 @@ until the owner's release checkpoint, so lanes verify with the kit copy and work
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-09-24 | 20 | 4 |
 
 # SPRINT 16 — The gallery and the bar (6.6.0)          capacity: 36   dates: 2026-09-17–
 
