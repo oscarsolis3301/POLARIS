@@ -9,3 +9,4 @@
 # change can break). Written ONLY by `polaris done`, from a task's `surface:` list — never by hand: a
 # row you could delete when it blocked you would guard nothing. Health: ops/polaris surfaces
 kit/ops/lib/visual.sh	ops/tests/shots-gallery.*	bash ops/polaris check --only shots-gallery	the shots tree, the before/after gate, the index and the gallery publish [T-170]
+kit/ops/hooks/model-guard.sh	ops/tests/model-guard-v2.*	bash ops/polaris check --only model-guard-v2	the per-call model ban and its spawn, switch and caveat layers [T-173]

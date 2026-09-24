@@ -215,3 +215,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
   tarball/raw-channel paths working regardless, so this is untested-in-the-wild, not unsafe.
 
 ## Deltas
+
+- kit/ops/hooks/model-guard.sh v2 — also handles SessionStart, PreModelSwitch, PostModelSwitch and PostToolUse(Agent); the per-call verdict reads ~/.claude/polaris/model-state/<session_id>; bench.sh gains a `guards` mode; new golden ops/tests/model-guard-v2  (T-173, 2026-09-24)
