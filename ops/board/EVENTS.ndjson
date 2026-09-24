@@ -660,3 +660,4 @@
 {"ts":1790293698,"ev":"done","id":"T-180","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1790293714,"ev":"done","id":"T-181","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1790293771,"ev":"done","id":"T-174","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1790293904,"ev":"promote","id":"T-179","who":"Owner@DESKTOP","note":"deps done: T-177","pts":2}
