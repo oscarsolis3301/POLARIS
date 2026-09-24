@@ -78,7 +78,12 @@ Haiku" yet: every Haiku request is unmarked and denied. The D6 carve-out arrives
   `DEP CYCLE: <id> sits in a depends_on ring — it can never satisfy the ready gate; break the cycle` ·
   `CRUFT: feat/<id> still exists though <id> is done — bash ops/polaris qa or sweep --fix clears it` ·
   `CRUFT diverged: feat/<id> carries commits not in <BASE> — inspect: git log <BASE>..feat/<id> (never auto-deleted)`.
-- ONE new line, CRUFT-class: `CRUFT orphan: feat/<name> matches no task in any column — inspect: git log <BASE>..feat/<name> (never auto-deleted)`.
+- ONE new line, ADVISORY — not a finding: `advisory: orphan branch feat/<name> — no task in any column (may hold unmerged work; never auto-cleared)`.
+  `drift` prints it, but never counts it in the finding total, and it never reds `drift --strict`,
+  `qa` or `finish`. Why: an orphan may hold unmerged work, so it can never be auto-cleared. A red
+  class would turn `qa` red in every install that has a legacy stale branch the moment it updates.
+  And it would couple fixture leftovers across drills (drill_drift, drill_qa and drill_handover all
+  red in a serial run).
 - §7 is one awk pass over every column (an inline program inside `cmd_drift`). Cruft, drift-cruft
   and sweep loop over the `feat/*` refs, never over `done/`. No `basename` fork inside any loop.
 - `check` run with `$PWD` under `$PRIMARY/.polaris/wt/<ID>` reads `<wt>/ops/tests` and runs each `.cmd`
@@ -154,3 +159,4 @@ Headings, exactly: `## Verdict` · `## Latency` · `## Probes` · `## Zero-shot 
 
 ## Changelog
 - v1 2026-09-24: created for T-173..T-183 (plan `v4-fast`).
+- v1.1 2026-09-24 (conductor, during T-177): § 3's orphan-branch line changed from a CRUFT-class finding to an advisory, with the exact text above. Nothing else changed.
