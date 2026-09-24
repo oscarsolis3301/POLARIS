@@ -85,6 +85,28 @@ kill 1234
 kill -9 1234
 taskkill /PID 1234 /F
 Stop-Process -Id 1234
+# --- the PowerShell shapes (T-175): the hook is wired to `Bash|PowerShell`, so a block's `{`
+# opens a fresh command exactly as `;` does, `if`/`elseif`/`foreach` are keywords whose `(…)` reads
+# as data, and a `}` glued to the subcommand ends it. A `git restore` that rewrites the working
+# tree wipes every session's uncommitted work, just like `git checkout -- .`.
+git fetch; if ($?) { git switch main }
+git fetch; if ($?) {git stash}
+if ($x) { git status } elseif ($y) { git reset --hard }
+foreach ($b in $list) { git checkout $b }
+if git rebase main; then echo ok; fi
+Get-Date; if ($?) { Stop-Process -Name node }
+git restore .
+git restore --staged --worktree .
+git restore -s HEAD~1 file.txt
+# ...and what they must leave alone: a separator INSIDE quotes is data, `git branch -d` refuses an
+# unmerged or checked-out branch on its own, a --staged-only restore moves no file, and a brace
+# inside an argument (stash@{0}) opens no block.
+git branch -d x
+git restore --staged x
+if ($?) {git stash list}
+git commit -m "wip ; git switch main"
+Write-Output 'done; git switch main'
+git stash show -p stash@{0}
 CASES
 # the SAME mutating forms inside a task worktree are none of this hook's business — switching,
 # resetting and stashing YOUR OWN checkout is the whole point of having one. The destroyers are the
@@ -99,6 +121,7 @@ git switch main
 git reset --hard HEAD~1
 git stash pop
 git rebase main
+git restore .
 git worktree remove .polaris/wt/T-000
 rm -rf .polaris
 pkill node

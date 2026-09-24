@@ -36,7 +36,9 @@
 #   and produces nothing. (`git stash list`/`show` ARE read-only, so they are excluded below.)
 #
 # SPEED
-#   This runs before EVERY Bash call, so it forks NOTHING on the common path — no interpreter, no
+#   This runs before EVERY Bash and PowerShell call (matcher `Bash|PowerShell` — on Windows the
+#   PowerShell tool is the primary shell, and an unwired shell is a hole the size of the guard), so
+#   it forks NOTHING on the common path — no interpreter, no
 #   `ops/polaris` (~2.2s of startup), no git. The gates are ordered by cost: one substring test for
 #   any of the words our classes need at all, a substring test for a `/.polaris/wt/` segment in cwd
 #   (which is by itself proof we are in a task worktree — see wt_path() in ops/lib/core.sh), then
@@ -123,9 +125,14 @@ jstr() {
 # line, or after a separator, carried through `VAR=val`, env/time/nice/nohup/command and the
 # keywords that can precede a command. A token carrying a quote character is opaque — that is what
 # keeps `echo "git switch main"` allowed. `set -f` stops the shell globbing `*.c` against the disk
-# while we split.
+# while we split. PowerShell reads the same way: `{` opens a block exactly as `;` ends a command
+# (`if ($?) { git switch main }`, `… | % {git stash}`), `if`/`elseif`/`foreach` are keywords like
+# `then`/`do` whose `(…)` condition reads as data, and a `}` glued to the subcommand ends the
+# invocation. The entry
+# block has already turned every separator INSIDE quotes into `_`, so none of these ever split a
+# quoted argument.
 mutating_git() {
-  local cmd="$1" tok sub nxt cmdpos=1 wasglob=0 dry
+  local cmd="$1" tok sub nxt cmdpos=1 wasglob=0 dry st wt
   HIT=''
   case "$-" in *f*) wasglob=1;; esac
   set -f
@@ -136,9 +143,9 @@ mutating_git() {
     tok="$1"; shift
     # a quoted stretch is data, not a command line — never read a git out of it
     case "$tok" in *\"*|*\'*) cmdpos=0; continue;; esac
-    # `a;git …`, `&&`, `|`: what follows the LAST separator inside the token is a fresh command
+    # `a;git …`, `&&`, `|`, `{`: what follows the LAST separator inside the token is a fresh command
     case "$tok" in
-      *[\;\|\&]*) cmdpos=1; tok="${tok##*[;|&]}"; [ -n "$tok" ] || continue;;
+      *[\;\|\&\{]*) cmdpos=1; tok="${tok##*[;|&\{]}"; [ -n "$tok" ] || continue;;
     esac
     if [ "$cmdpos" = 1 ]; then
       case "$tok" in
@@ -156,13 +163,28 @@ mutating_git() {
           # command position, which is what makes the second invocation visible at all.
           sub="${1:-}"; nxt=''
           case "$sub" in
-            *[\;\|\&]*) cmdpos=1; sub="${sub%%[;|&]*}";;
+            *[\;\|\&\}]*) cmdpos=1; sub="${sub%%[;|&\}]*}";;
             *) [ $# -gt 0 ] && shift
-               nxt="${1:-}"; nxt="${nxt%%[;|&]*}"      # the subcommand's own first argument
+               nxt="${1:-}"; nxt="${nxt%%[;|&\}]*}"    # the subcommand's own first argument
                cmdpos=0;;
           esac
           case "$sub" in
             switch|checkout|reset|merge|rebase|cherry-pick) HIT="$sub"; return 0;;
+            # restore rewrites the working tree unless it is told to touch the index alone:
+            # --staged/-S WITHOUT --worktree/-W is the one form that leaves every file in place
+            restore)  st=0; wt=0
+                      while [ $# -gt 0 ]; do
+                        case "$1" in
+                          *[\;\|\&]*|--) break;;
+                          --staged)      st=1;;
+                          --worktree)    wt=1;;
+                          --*)           ;;
+                          -*)            case "$1" in *S*) st=1;; esac
+                                         case "$1" in *W*) wt=1;; esac;;
+                        esac
+                        shift
+                      done
+                      [ "$st" = 1 ] && [ "$wt" = 0 ] || { HIT=restore; return 0; };;
             # list/show are the two read-only stash forms — the same two readonly-allow.sh allows
             stash)    case "$nxt" in list|show) ;; *) HIT=stash; return 0;; esac;;
             # `list` is the read-only worktree form and stays silent; the other three END another
@@ -192,10 +214,12 @@ mutating_git() {
                         esac
                         shift
                       done;;
-            branch)   while [ $# -gt 0 ]; do           # -d/-D/-m/-M anywhere in THIS invocation
+            # -D/-m/-M anywhere in THIS invocation. Plain -d is NOT here: git refuses it for an
+            # unmerged branch or one checked out in any worktree, so it never moves a checkout.
+            branch)   while [ $# -gt 0 ]; do
                         case "$1" in
                           *[\;\|\&]*) break;;
-                          -d|-D|-m|-M) HIT=branch; return 0;;
+                          -D|-m|-M)   HIT=branch; return 0;;
                         esac
                         shift
                       done;;
@@ -204,6 +228,7 @@ mutating_git() {
       esac
       case "$tok" in
         env|time|nice|nohup|command|'('|'{'|'!'|then|else|do) continue;;   # still command position
+        if|elseif|foreach) continue;;                                     # PowerShell's, too
         [A-Za-z_]*=*) continue;;                                          # VAR=val prefix
       esac
     fi
@@ -231,7 +256,7 @@ mutating_other() {
     tok="$1"; shift
     case "$tok" in *\"*|*\'*) cmdpos=0; continue;; esac
     case "$tok" in
-      *[\;\|\&]*) cmdpos=1; tok="${tok##*[;|&]}"; [ -n "$tok" ] || continue;;
+      *[\;\|\&\{]*) cmdpos=1; tok="${tok##*[;|&\{]}"; [ -n "$tok" ] || continue;;
     esac
     if [ "$cmdpos" = 1 ]; then
       case "$tok" in
@@ -314,6 +339,7 @@ mutating_other() {
       esac
       case "$tok" in
         env|time|nice|nohup|command|'('|'{'|'!'|then|else|do) continue;;   # still command position
+        if|elseif|foreach) continue;;                                     # PowerShell's, too
         [A-Za-z_]*=*) continue;;                                          # VAR=val prefix
       esac
     fi
@@ -332,8 +358,9 @@ if [ "${1:-}" = "--test" ]; then
   [ "$CMD" = "$ARG" ] && CMD=''            # no `|` in the argument: nothing to judge
 else
   IN="$(cat)"
-  # No tool_name test: the settings.json matcher is `Bash`, and a payload with no
-  # tool_input.command is not a command line whatever tool sent it.
+  # No tool_name test: the settings.json matcher is `Bash|PowerShell`, both tools carry their line
+  # in tool_input.command, and a payload with no tool_input.command is not a command line
+  # whatever tool sent it.
   jstr command "${IN#*\"tool_input\"}" || exit 0
   CMD="$REPLY"
   CWD=''
@@ -361,8 +388,22 @@ while : ; do
       _p="${CWD//\\//}"; _w="${_p##*/.polaris/wt/}"; _w="${_w%%/*}"; : 2>/dev/null > "${_p%%/.polaris/wt/*}/.git/worktrees/$_w/polaris-beat" || true
       case "$CMD" in *worktree*|*rm*|*Remove-Item*|*kill*|*Stop-Process*|*fuser*) ;; *) break;; esac;;
   esac
-  # gate 3: no forks — the two pure-bash parses. Either one sets HIT.
-  mutating_git "$CMD" || mutating_other "$CMD" || break
+  # gate 3: no forks — the two pure-bash parses. Either one sets HIT. A separator INSIDE quotes is
+  # data, never a split: `-m "tidy ; git switch x"` is one argument. So every ; | & { between a
+  # pair of quotes turns into _ first — the quotes themselves stay, so the stretch still reads as
+  # opaque. A \" never closes a stretch; an unclosed quote runs to the end of the line. One
+  # expansion per quote, no per-character loop: this path sees long commit messages.
+  _s="${CMD//\\\"/__}"; _o=''
+  while : ; do
+    _h="${_s%%[\"\']*}"                                 # everything up to the next quote
+    [ "$_h" = "$_s" ] && { _o="$_o$_s"; break; }
+    _q="${_s:${#_h}:1}"; _s="${_s:${#_h}+1}"; _o="$_o$_h$_q"
+    _h="${_s%%"$_q"*}"                                  # the quoted stretch itself
+    _o="$_o${_h//[;|&\{]/_}"
+    [ "$_h" = "$_s" ] && break
+    _o="$_o$_q"; _s="${_s:${#_h}+1}"
+  done
+  mutating_git "$_o" || mutating_other "$_o" || break
   # gate 4: placement. Some classes end another session's work from ANY checkout — there is no
   # cwd where removing a worktree, deleting .polaris or killing by name is the right move — so
   # they skip the probe entirely and cost nothing.
