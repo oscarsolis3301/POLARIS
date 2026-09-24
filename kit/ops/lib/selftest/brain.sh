@@ -50,4 +50,16 @@ drill_brain() {
       && { echo "BRAIN HEAL STAMP FAIL (stamp did not advance past board-changed)"; exit 1; }
     "$SELF" doctor 2>/dev/null | grep -q 'brain is stale' && { echo "BRAIN REFRESH STALE FAIL (a healed brain must not report stale)"; exit 1; }
     "$SELF" brain --refresh >/dev/null || { echo "BRAIN REFRESH FAIL"; exit 1; }
+    # T-178: learned.md's "what came back" section had never listed a kickback — its parser hunted
+    # a quote that no awk field can hold, so the lesson log was empty on every board. Seed ONE
+    # kickback (its note carries an escaped quote, as real notes do), rebuild, and assert its id AND
+    # its note both land. Then put EVENTS back byte-for-byte: metrics and later drills count events.
+    if [ -f ops/board/EVENTS.ndjson ]; then cp ops/board/EVENTS.ndjson "$T/brain-ev.bak"; else rm -f "$T/brain-ev.bak"; fi
+    printf '%s\n' '{"ts":1700000000,"ev":"kickback","id":"T-BK1","who":"drill","note":"verify red: the \"seeded\" golden"}' >> ops/board/EVENTS.ndjson
+    "$SELF" brain >/dev/null || { echo "BRAIN KICKBACK BUILD FAIL"; exit 1; }
+    grep -qF -- '- T-BK1 — verify red: the "seeded" golden' .polaris/brain/learned.md \
+      || { sed -n '/Kickbacks/,$p' .polaris/brain/learned.md; echo "BRAIN KICKBACK FAIL (a seeded kickback's id and note must both reach learned.md)"; exit 1; }
+    if [ -f "$T/brain-ev.bak" ]; then cp "$T/brain-ev.bak" ops/board/EVENTS.ndjson; else rm -f ops/board/EVENTS.ndjson; fi
+    rm -f "$T/brain-ev.bak"
+    "$SELF" brain >/dev/null || { echo "BRAIN KICKBACK RESTORE FAIL"; exit 1; }
 }

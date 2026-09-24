@@ -97,3 +97,13 @@ git log -1 --format=%s refs/heads/polaris/board
 # --- a second `--do` promotes nothing and says so, still rc 0 and still a verb on line 1: the
 #     promoter is idempotent, which is what lets a hopped session run it without checking first. --
 route --do
+# --- the ready gate's FOUR failures, each HELD by name and printed by BARE `next` (T-178). Three of
+#     them used to drop out of the scan in silence, so planned work vanished from both the eligible
+#     and the held list. One task per failure — a named contract that is not on disk · points past 5
+#     · a dependency not done yet (T-HR5 sits in ready/) · files_owned colliding with ready/ T-HR5 —
+#     in wsjf order. Line 1 still decides alone (`build T-HR5`); every held line is a note under it.
+printf -- '---\nid: T-HR6\ntitle: fixture T-HR6\ntype: feature\npoints: 1\nwsjf: 4\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\ncontract: ops/contracts/gone.md\nfiles_owned:\n  - src/c.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HR6.md
+printf -- '---\nid: T-HR7\ntitle: fixture T-HR7\ntype: feature\npoints: 8\nwsjf: 3\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/d.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HR7.md
+printf -- '---\nid: T-HR8\ntitle: fixture T-HR8\ntype: feature\npoints: 1\nwsjf: 2\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\ncontract: ops/contracts/fix.md\ndepends_on: [T-HR5]\nfiles_owned:\n  - src/e.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HR8.md
+mk backlog T-HR9 1 normal src/a.txt
+route
