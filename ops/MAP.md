@@ -219,3 +219,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - kit/ops/hooks/model-guard.sh v2 — also handles SessionStart, PreModelSwitch, PostModelSwitch and PostToolUse(Agent); the per-call verdict reads ~/.claude/polaris/model-state/<session_id>; bench.sh gains a `guards` mode; new golden ops/tests/model-guard-v2  (T-173, 2026-09-24)
 
 - new golden ops/tests/drift-deps — drift's dependency check is one awk pass over every column, its branch checks loop over feat/* refs, and `check` run from .polaris/wt/<ID> tests that worktree  (T-177, 2026-09-24)
+
+- docs/spikes/ — new: laya-s1.md, the Laya host, latency and harness-probe verdict that Sprint 19's router reads  (T-181, 2026-09-24)
