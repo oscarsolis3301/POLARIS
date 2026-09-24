@@ -639,3 +639,4 @@
 {"ts":1790286442,"ev":"claim","id":"T-175","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1790286817,"ev":"grant","id":"T-177","who":"Owner@DESKTOP","note":"kit/ops/lib/selftest/policy.sh"}
 {"ts":1790287239,"ev":"amend","id":"T-177","who":"Owner@DESKTOP","note":"verify[5]"}
+{"ts":1790287269,"ev":"amend","id":"T-177","who":"Owner@DESKTOP","note":"verify[5]"}
