@@ -11,3 +11,4 @@
 kit/ops/lib/visual.sh	ops/tests/shots-gallery.*	bash ops/polaris check --only shots-gallery	the shots tree, the before/after gate, the index and the gallery publish [T-170]
 kit/ops/hooks/model-guard.sh	ops/tests/model-guard-v2.*	bash ops/polaris check --only model-guard-v2	the per-call model ban and its spawn, switch and caveat layers [T-173]
 kit/ops/hooks/checkout-guard.sh	ops/tests/checkout-guard-denies.*	bash ops/polaris check --only checkout-guard-denies	which git and PowerShell lines may not switch the shared checkout [T-175]
+kit/ops/hooks/ownership-guard.sh	ops/tests/ownership-primary.*	bash ops/polaris check --only ownership-primary	the edit guard's fast path and its pinned primary refusal [T-174]
