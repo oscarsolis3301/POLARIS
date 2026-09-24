@@ -12,6 +12,15 @@
 #   file that just changed. stderr goes to <primary>/.polaris/update.log. Exit 0 ALWAYS — a hook
 #   must never fail the session. Lives under ops/hooks/ so install.sh's settings merge adds it and
 #   uninstall's sweep removes it with no special case. `--test` prints the pinned line, runs nothing.
+#
+# THE CHEAP CHECK FIRST (6.6.x, T-176 — plans/audit-0924.md hooks-8)
+#   The CLI starts twice (the update re-exec) just to learn it already asked the channel today:
+#   ~1 s here, 2-3 s in an installed repo, on EVERY new chat. So before it starts, in plain bash
+#   with no child process (`read` builtins, `printf '%(…)T'` for today): the kit's own repo
+#   (kit/ops/pack.py) stops, and so does a cache that was `checked:` today with a `latest:` no
+#   newer than ops/VERSION's `version:` — exactly the cases where `update --auto` would print
+#   nothing. Anything unreadable or odd falls through to the CLI, as before. The check sits BEFORE
+#   the `--test` print, so `--test` proves it: silent when the check stops, `would run` otherwise.
 set -u
 TESTMODE=0
 REPLY=''
@@ -64,12 +73,47 @@ uh_primary() {
 }
 # The whole hook: resolve the primary, refuse nothing, run the engine, let its one line through.
 uh_main() {
-  local in cwd='' p
-  in="$(cat)"
+  local in='' cwd='' p line today='' checked='' latest='' cur='' a b i x y
+  IFS= read -r -d '' in || true                # the whole payload, no `cat` process
   jstr cwd "$in" && cwd="$REPLY"
   uh_primary "$cwd" || exit 0
   p="$REPLY"
   [ -f "$p/ops/polaris" ] || exit 0
+  [ -f "$p/kit/ops/pack.py" ] && exit 0        # self-hosting: this repo never self-updates
+  # Today in LOCAL time, as the cache writes it (`date +%Y-%m-%d`). bash < 4.2 has no %(…)T: one
+  # `date` there is still far cheaper than two CLI starts.
+  printf -v today '%(%Y-%m-%d)T' -1 2>/dev/null || today="$(date +%Y-%m-%d 2>/dev/null)" || today=''
+  if [ -f "$p/.polaris/update-cache" ] && [ -f "$p/ops/VERSION" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      line="${line//[[:space:]]/}"
+      case "$line" in
+        checked:*) [ -n "$checked" ] || checked="${line#checked:}";;
+        latest:*)  [ -n "$latest" ]  || latest="${line#latest:}";;
+      esac
+    done < "$p/.polaris/update-cache"
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in version:*) line="${line#version:}"; line="${line%%#*}"; cur="${line//[[:space:]]/}"; break;; esac
+    done < "$p/ops/VERSION"
+    # Checked today → the CLI would answer from this same cache (update_latest's throttle), and it
+    # acts only when latest > version. So: no latest, or latest <= version, is a guaranteed no-op.
+    # Semver field by field in base 10 (a string compare puts 6.9.0 above 6.10.0); both sides must
+    # be plain digits-and-dots, or we fall through to the CLI and let it judge.
+    case "$today" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) today='';; esac
+    if [ -n "$today" ] && [ "$checked" = "$today" ]; then
+      case "$cur" in ''|*[!0-9.]*|.*|*.|*..*) cur='';; esac
+      case "$latest" in *[!0-9.]*|.*|*.|*..*) cur='';; esac
+      if [ -n "$cur" ]; then
+        [ -z "$latest" ] && exit 0
+        a="$latest." b="$cur."
+        for i in 1 2 3; do
+          x="${a%%.*}"; a="${a#*.}"; y="${b%%.*}"; b="${b#*.}"
+          [ $((10#${x:-0})) -gt $((10#${y:-0})) ] && break      # newer → the CLI has work
+          [ $((10#${x:-0})) -lt $((10#${y:-0})) ] && exit 0
+          [ "$i" = 3 ] && exit 0                                # equal
+        done
+      fi
+    fi
+  fi
   [ "$TESTMODE" = 1 ] && { printf 'update-hook: would run %s/ops/polaris update --auto\n' "$p"; exit 0; }
   mkdir -p "$p/.polaris" 2>/dev/null || true
   ( cd "$p" && bash ops/polaris update --auto 2>>"$p/.polaris/update.log" ) || true
