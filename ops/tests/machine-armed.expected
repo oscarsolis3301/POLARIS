@@ -8,3 +8,18 @@ the style is the POLARIS one
 machine copy stays opt-in
 no machine settings.json written
 a second run rewrites nothing
+== a fresh machine, armed: the key was missing, so it gets exactly the list ==
+  availableModels: ["opus", "sonnet", "haiku"]
+  PreToolUse       model-guard x1 ['*'] · 0 other entries
+  SessionStart     model-guard x1 ['-'] · 1 other entry
+  PreModelSwitch   model-guard x1 ['-'] · 0 other entries
+  PostModelSwitch  model-guard x1 ['-'] · 0 other entries
+  PostToolUse      model-guard x1 ['Agent'] · 0 other entries
+== a human's settings: Fable leaves their list, everything else of theirs stays ==
+  availableModels: ["opus", "sonnet"]
+  PreToolUse       model-guard x1 ['*'] · 1 other entry
+  SessionStart     model-guard x1 ['-'] · 1 other entry
+  PreModelSwitch   model-guard x1 ['-'] · 0 other entries
+  PostModelSwitch  model-guard x1 ['-'] · 0 other entries
+  PostToolUse      model-guard x1 ['Agent'] · 1 other entry
+re-armed: settings.json byte-identical — their Fable-free list kept as found

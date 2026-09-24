@@ -41,3 +41,39 @@ HOME="$FIX" USERPROFILE="$FIX" python polaris-v5.zip --claude-skill --no-permiss
 diff -r "$FIX/first" "$C" >/dev/null 2>&1 \
   && echo "a second run rewrites nothing" || echo "SECOND RUN REWROTE FILES — the machine-armed line will nag forever"
 rm -rf "$FIX"
+
+# ---- the model ban on an ARMED machine (ops/contracts/speed.md § 2, T-173) --------------------
+# The run above proves what --no-permissions must NOT write. This one arms for real — permissions on
+# — and pins what it MUST write: layer 1 (availableModels, so the harness itself offers no Fable) and
+# model-guard's five entries (PreToolUse "*" plus SessionStart, PreModelSwitch, PostModelSwitch and
+# PostToolUse "Agent"), merged, idempotent, never clobbering a human's own hooks or list. Same fixture
+# discipline: HOME, USERPROFILE and POLARIS_AWAKE_HOME all point into the mktemp -d.
+FIX="$(mktemp -d)"
+SJ="$FIX/.claude/settings.json"
+arm() { HOME="$FIX" USERPROFILE="$FIX" POLARIS_AWAKE_HOME="$FIX/awake" python polaris-v5.zip --claude-skill >/dev/null 2>&1; }
+show() { # python prints CRLF on Windows; every .expected is LF
+  python - "$SJ" <<'PY' | tr -d '\r'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+print("  availableModels: %s" % json.dumps(d.get("availableModels")))
+for ev in ("PreToolUse", "SessionStart", "PreModelSwitch", "PostModelSwitch", "PostToolUse"):
+    ours, other = [], 0
+    for e in d.get("hooks", {}).get(ev, []):
+        cmds = " ".join(str(h.get("command", "")) for h in e.get("hooks", [])).replace("\\", "/")
+        if "polaris/model-guard.sh" in cmds: ours.append(e.get("matcher", "-"))
+        else: other += 1
+    print("  %-16s model-guard x%d %s · %d other entr%s" % (ev, len(ours), ours, other, "y" if other == 1 else "ies"))
+PY
+}
+echo "== a fresh machine, armed: the key was missing, so it gets exactly the list =="
+arm; show
+echo "== a human's settings: Fable leaves their list, everything else of theirs stays =="
+printf '%s\n' '{"availableModels": ["opus", "fable", "claude-fable-5", "sonnet"], "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "mine.sh"}]}], "PostToolUse": [{"matcher": "Agent", "hooks": [{"type": "command", "command": "mine-too.sh"}]}]}}' > "$SJ"
+arm; show
+# Re-arming now meets a human list with no Fable in it and every entry already in place, so this one
+# run proves both halves of "never overriding": the list is kept as found, and nothing is rewritten.
+cp "$SJ" "$FIX/first.json"
+arm
+cmp -s "$FIX/first.json" "$SJ" && echo "re-armed: settings.json byte-identical — their Fable-free list kept as found" \
+  || echo "RE-ARMING CHANGED settings.json — the merge is not idempotent, or it overrode a human's list"
+rm -rf "$FIX"
