@@ -4,6 +4,17 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.7.1 — 2026-09-24
+
+**A folder named like the base branch made POLARIS silently miss work that had already landed.**
+A real install had a `main/` folder. With that, git refuses a bare `main` ("both revision and
+filename"), and because POLARIS hides git's error text, four lookups quietly came back empty: the
+"is this task landed?" check that `done`, `sweep`, `seal` and `report` rely on, both `history` views,
+and the sprint list the report and the brain read. Each of those four git calls now says plainly
+that `main` is a branch, so a folder of the same name can no longer blind them. A new check,
+`bare-ref-folder`, builds a repo with exactly that folder and fails if any of the four goes blind
+again. **BREAKING: none.**
+
 ## 6.7.0 — 2026-09-24
 
 **POLARIS had grown slow exactly where nobody looks — in the hooks that run before every tool call
