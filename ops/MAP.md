@@ -1,4 +1,4 @@
-# MAP — POLARIS            (updated: 2026-09-17, by EVOLVE)
+# MAP — POLARIS            (updated: 2026-09-24, by EVOLVE)
 
 ## Stack
 Bash (>= 3.2 — macOS default; no mapfile, no assoc arrays) + Python 3 stdlib only.
@@ -11,12 +11,14 @@ installation running this repo's board. Never hand-edit `ops/` — see ops/CONVE
 The installed copy also LAGS the source mid-sprint, and the tell that a selftest ran on the right
 driver is the LABEL LIST: `bash kit/ops/polaris doctor --selftest` registers kit-only drill labels
 (kit 37 = installed 37 at the 6.5.0 dogfood — `surfaces` landed in 6.4.0 and `skills` in 6.5.0;
-sprint 16 added NO drill, because the gallery arrived as a GOLDEN pair (`shots-gallery`) instead —
+sprint 16 added NO drill, because the gallery arrived as a GOLDEN pair (`shots-gallery`) instead, and
+sprint 17 added none either — its three new pairs are goldens too; recounted 2026-09-24, still 37 = 37 —
 the counts converge at every dogfood, diverging again the first sprint that adds a drill), so a green
 from `ops/polaris` can silently prove none of the sprint's new behavior. The counts move every
 sprint: recount `SELFTEST_LABELS` in both `lib/selftest/spine.sh` copies rather than trusting this line.
-Goldens are the OTHER suite and they drift faster: 31 pairs in `ops/tests/`, run by NOTHING automatic
-— not CI, not the fast tier (§ Board mechanics, 6.6).
+Goldens are the OTHER suite and they drift faster: 34 pairs in `ops/tests/`, run by NOTHING automatic
+— not CI, not the fast tier (§ Board mechanics, 6.6). Since 6.7.0 (kit) a `check` run from
+`.polaris/wt/<ID>` runs THAT worktree's pairs, and `--only` matching nothing exits 1 (§ Board mechanics, 6.7).
 
 ## Entry points
 | Path | What it is |
@@ -27,15 +29,16 @@ Goldens are the OTHER suite and they drift faster: 31 pairs in `ops/tests/`, run
 | kit/ops/bootstrap.py | The zipapp entry — packed to the archive ROOT as `__main__.py`, so `python polaris-v5.zip` just works. Also arms the machine: ~/.claude skill + cached kit + permission rules; arm_machine copies awake-hook.sh + awake-press.ps1 to ~/.claude/polaris/ and merges the four machine hooks (merge_awake_hooks); PERMS pre-authorize the harness's own tools (EnterWorktree ExitWorktree Workflow Task Agent TodoWrite SendMessage — golden perm-tools pins the set and the two human gates' absence). Since 6.4.0 arm_machine also lands `~/.claude/output-styles/polaris.md` and `~/.claude/skills/i-have-adhd/` (arm_file, write-iff-different — never `outputStyle` in the machine settings), and install.sh flips i-have-adhd's `disable-model-invocation` to false when the target's CONVENTIONS says `adhd: on` (golden machine-armed). |
 | kit/ops/pack.py | Kit-repo tool, never shipped. Builds polaris-v5.zip from `git ls-files` run inside kit/. `--dogfood` installs the published release here. |
 | kit/ops/dashboard.py | `polaris dash` — read-only live board on 127.0.0.1:7373. stdlib http.server. |
-| kit/ops/hooks/ownership-guard.sh | Claude Code PreToolUse guard. Three gates since 6.1.0: RULES (every session) + files_owned (feat/<ID> only) + primary_gate — writes to tracked source in the shared PRIMARY are denied while any task lock exists and HEAD is not feat/*. Fails OPEN by design. Beats the task worktree. |
-| kit/ops/hooks/checkout-guard.sh | Claude Code PreToolUse deny hook (6.1.0): checkout-mutating git is refused in the shared primary, allowed inside `.polaris/wt/<ID>`. Since 6.2.0 also denies worktree remove/prune/move, `clean` (except -n), push --delete, rm/Remove-Item on .polaris and broad process kills (mutating_other). Beats the worktree too. |
+| kit/ops/hooks/ownership-guard.sh | Claude Code PreToolUse guard. Three gates since 6.1.0: RULES (every session) + files_owned (feat/<ID> only) + primary_gate — writes to tracked source in the shared PRIMARY are denied while any task lock exists and HEAD is not feat/*. Fails OPEN by design. Beats the task worktree. Since 6.7.0 (T-174) the common path is ONE `git rev-parse` plus an in-hook RULES prefilter (`match_one` from a sourced ownership.sh, builtin loop): the CLI runs only when a rule's scope matches the path, python only when a content rule's does; the path is parsed from the first 4 KB of stdin because `jstr` is O(n²). Budget floor + 600 ms. |
+| kit/ops/hooks/checkout-guard.sh | Claude Code PreToolUse deny hook (6.1.0): checkout-mutating git is refused in the shared primary, allowed inside `.polaris/wt/<ID>`. Since 6.2.0 also denies worktree remove/prune/move, `clean` (except -n), push --delete, rm/Remove-Item on .polaris and broad process kills (mutating_other). Beats the worktree too. Since 6.7.0 (T-175) wired to `Bash|PowerShell` (readonly-allow stays Bash-only): `{` and `if`/`elseif`/`foreach` reset command position, a quoted `;` no longer splits, a worktree-affecting `git restore` denies and `git branch -d` is allowed. A newline is still plain whitespace (IDEAS, T-175). |
 | kit/ops/hooks/readonly-allow.sh | Claude Code PreToolUse auto-approver for Bash. Proves a command read-only, token by token, and skips the prompt (`next` and `next --brief` included). Deny by default: anything unparsed prompts as before. |
 | kit/ops/hooks/handover-hook.sh | The handover hooks (6.2.0): Stop — blocks ONCE per board-proven completion event with the next role's instruction; SessionStart compact / resume — re-anchors via `next --brief`; UserPromptSubmit — the prompted-at clock. Wired in kit/.claude/settings.json. |
 | kit/ops/hooks/awake-hook.sh + awake-press.ps1 | Machine-level keep-awake (6.2.0): the SessionStart/UserPromptSubmit/Stop/SessionEnd machine hooks AND the daemon loop (verdict from transcript mtime + live bg jobs, WMI spawn); the presser is an ES_SYSTEM_REQUIRED one-shot + F-key only while the user is idle and unlocked. ONE owner per machine, never per session; installed to ~/.claude/polaris/. `awake disable` must stop the daemon SPAWNING, not just the press (T-133). |
-| kit/ops/hooks/update-hook.sh | SessionStart hook, matcher `startup` (6.3.0): runs `update --auto` and passes its one line to the model; never fails the session. |
+| kit/ops/hooks/update-hook.sh | SessionStart hook, matcher `startup` (6.3.0): runs `update --auto` and passes its one line to the model; never fails the session. Since 6.7.0 (T-176) a pure-bash pre-check stops before the CLI starts when the repo is the kit itself (`kit/ops/pack.py`) or `.polaris/update-cache` says checked today and not behind; `update --auto`'s re-exec deletes its temp copy on exit. |
+| kit/ops/hooks/model-guard.sh | The MACHINE-wide model ban (Fable and Haiku, owner 2026-09-15), installed to ~/.claude/polaris/ by `merge_model_guard` in bootstrap.py, which also writes `availableModels`. v2 (6.7.0, T-173, speed.md § 2) branches on `hook_event_name`: SessionStart/PostModelSwitch write `~/.claude/polaris/model-state/<session_id>`; PreModelSwitch refuses a forbidden switch; PreToolUse `*` refuses a forbidden spawn (`claude-code-guide` included) at the door, then reads the one-line state file (transcript grep only as the fallback; a subagent's call reads ITS own transcript); PostToolUse `Agent` tells the parent to discard a forbidden run. Fails OPEN everywhere except those explicit denies. Golden model-guard-v2; budget floor + 300 ms. |
 | kit/ops/hooks/commit-msg | Git commit-msg hook: strips AI-provider attribution lines (bot co-authors, badge lines) — the product carries no AI fingerprints. |
-| kit/ops/index.py | The code index behind `find`/`show`. SQLite + FTS5, rebuilt per query. Contract: ops/contracts/code-index.md. |
-| kit/ops/bench.sh | Startup + lookup benchmark. Run before/after any change to the startup path. |
+| kit/ops/index.py | The code index behind `find`/`show`. SQLite + FTS5, rebuilt per query. Contract: ops/contracts/code-index.md. `find --api` takes several globs in one build (6.7.0, T-180 — `pack` makes ONE index call). `ops/polaris find` hard-sets POLARIS_ROOT to the primary, so worktree-true indexing is `POLARIS_ROOT="$PWD" python ops/index.py find --api …` (what api-kit.cmd runs since T-182). |
+| kit/ops/bench.sh | Startup + lookup benchmark. Run before/after any change to the startup path. `bench.sh guards` (6.7.0) times every hook best-of-N against the machine's `bash -c true` floor, hermetically, and exits 1 on any `OVER` — the speed.md § 1 budgets (T-182 quiet box, ms vs budget: model-guard 57/355 · ownership-guard 209/655 · checkout-guard 84/205 · readonly-allow 83/205). |
 
 ## Modules
 | Path | Purpose | Notes |
@@ -53,6 +56,7 @@ Goldens are the OTHER suite and they drift faster: 31 pairs in `ops/tests/`, run
 | kit/ops/selftest-install.sh | Local install drill: fresh · old-client · live-board · zip purity · uninstall. | The `test:` for any install.sh change. Run it with POLARIS_AWAKE_HOME pointed at a scratch dir. |
 | kit/ops/selftest-dashboard.sh | Dashboard smoke drill: start · GET / + /state · kill. | |
 | kit/.claude/ | settings.json (wires the two guards + readonly-allow, the handover hooks, the `startup` update hook; PERMS pre-authorize the harness's own tools) + skills/polaris (project) + skills/polaris-install (user-level, cached to ~/.claude at install). | |
+| docs/spikes/ | Time-boxed spike verdicts that a later sprint reads as its input. `laya-s1.md` (6.7.0, T-181): the Laya System-1 encoder's host, latency and harness-probe verdict — GPU host, shadow mode go, act mode no-go — that Sprint 19's router depends on. | Numbers and short paraphrases only, never transcript text. |
 | .github/workflows/ | OUR CI. ci.yml = 3-OS drills + "one version, everywhere". release.yml = tag → publish the zip. **ci.yml runs `doctor --selftest` ONLY** — it never runs `polaris check`, so no golden pair is gated by CI. | Danger zone: agents may not edit their own tests. |
 
 ## How a release reaches a user (know this before touching install/update)
@@ -145,6 +149,24 @@ Goldens are the OTHER suite and they drift faster: 31 pairs in `ops/tests/`, run
   calls it as a subprocess, so `int_on` there deadlocks the default path); and bash 3.2 has no
   `globstar` and no `${x,,}`. The bar itself lives in `ops/DESIGN.md` so it stops being pasted into
   every visual task.
+- 6.7 fast (ops/contracts/speed.md — a SURFACE-FROZEN sprint: no new fn, heading or KEYS row under
+  `kit/`, so T-182 re-pinned api-kit with zero hunks). `drift` § 7 is ONE awk pass over every column,
+  and cruft, drift-cruft and sweep loop over the `feat/*` refs, never over `done/`, with no `basename`
+  fork in any of their loops (T-177: ~720 s under load → ~5 s). Every finding line is byte-identical;
+  the one new line is an ADVISORY — `advisory: orphan branch feat/<name> — …` — printed, never
+  counted, never red in `drift --strict`, `qa` or `finish` (speed.md § 3 v1.1: as a CRUFT finding it
+  red'd three drills on fixture leftovers and would red every install with a legacy stray). `check`
+  from `.polaris/wt/<ID>` reads that worktree's `ops/tests` and runs each `.cmd` there; `--only`
+  matching nothing exits 1. `qa` keeps its suite stamp when the only non-suite reds are CRUFT-class
+  (still rc 1); MAP Deltas > 20 and LEARNED > 8 still withhold it (speed.md § 4). CONDUCTOR step 7.5
+  runs EVOLVE BEFORE the final `qa`, so its commit no longer invalidates a paid suite, and
+  `land --express` runs `verify:` between the suite and seal (speed.md § 4 supersedes
+  express-lane.md's order). `next` prints a `held:` line with its reason for every candidate a promote
+  gate holds; bg retention prunes only `.archive/*` runs finished > 7 days ago (every top-level
+  `<name>.prev` slot stays, by conductor decision — IDEAS 2026-09-24); the brain's learned.md reads
+  kickbacks at last (newest 12). The model ban is six independent layers (speed.md § 2): harness
+  `availableModels` · PreModelSwitch · the per-call state file · the spawn-input check · the
+  PostToolUse caveat · core.sh `model_denied`.
 
 ## CLI surface beyond the build loop (claim · build · verify · handoff · pack · find/show · check)
 `triage` (prints your lane) · `route [<ID>|--role R|--points N --risk R]` (mechanical model tier —
@@ -165,8 +187,10 @@ since 6.5.0) · `interview [--pending|--set k=v …]` (6.4.0) · `amend <ID> --v
 -m why` · `learned -m` · `skill gaps|list|propose|promote|demote|prune|restore` (6.5.0) · `shots`
 (6.6.0). Selftest labels now 37: `wtreap` (history.sh) · `awake` (policy.sh) · `handover` (board.sh)
 joined in 6.2.0, `autoupdate` (remote.sh) in 6.3.0, `surfaces` in 6.4.0 and `skills` in 6.5.0; the
-spine exports POLARIS_AWAKE_HOME so no drill touches the owner's awake registry. The 31 goldens are
-the second suite: handover-route + handover-stop pin every `next` verb and hook rung, perm-tools
+spine exports POLARIS_AWAKE_HOME so no drill touches the owner's awake registry. The 34 goldens are
+the second suite (6.7.0 added model-guard-v2 — every branch of the ban, hermetic HOME; drift-deps —
+drift's DEP/cruft/advisory lines and the worktree-true `check`; qa-stamp — the CRUFT-only stamp):
+handover-route + handover-stop pin every `next` verb and hook rung, perm-tools
 pins the pre-authorized tool set, cli-help-parity counts `next` (10), checkout-guard-denies +
 ownership-primary pin the two guards' refusal wording, skill-budget + skill-install pin the shelf,
 rules-health pins the RULES count and route-tier the model refusal, and shots-gallery walks the
@@ -186,8 +210,9 @@ Planner/Integrator (SURFACES.tsv only ever by `polaris done`).
 
 ## Generated / vendored — never edit, never read
 `.polaris/` (worktrees + update cache + generated brain/ + bg/ job dirs + shots/ captures +
-wt-archive/ + handover/ session dirs, gitignored) · `~/.claude/polaris/` (the machine-level awake
-and handover copies + the awake registry — arm_machine writes it, never a hand) · `polaris-v5.zip`
+wt-archive/ + handover/ session dirs, gitignored) · `~/.claude/polaris/` (the machine-level awake,
+handover and model-guard copies + the awake registry + model-guard's `model-state/<session_id>`
+files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 (build output, gitignored) · `archive/` (retired files, kept for history — never ships) · `__pycache__/`
 
 ## Hotspot files (conflict magnets — Planner must chain these, never parallel-own)
@@ -215,11 +240,3 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
   tarball/raw-channel paths working regardless, so this is untested-in-the-wild, not unsafe.
 
 ## Deltas
-
-- kit/ops/hooks/model-guard.sh v2 — also handles SessionStart, PreModelSwitch, PostModelSwitch and PostToolUse(Agent); the per-call verdict reads ~/.claude/polaris/model-state/<session_id>; bench.sh gains a `guards` mode; new golden ops/tests/model-guard-v2  (T-173, 2026-09-24)
-
-- new golden ops/tests/drift-deps — drift's dependency check is one awk pass over every column, its branch checks loop over feat/* refs, and `check` run from .polaris/wt/<ID> tests that worktree  (T-177, 2026-09-24)
-
-- docs/spikes/ — new: laya-s1.md, the Laya host, latency and harness-probe verdict that Sprint 19's router reads  (T-181, 2026-09-24)
-
-- new golden ops/tests/qa-stamp — qa keeps a green suite's stamp when only CRUFT is red; CONDUCTOR step 7.5 runs EVOLVE before the final qa; land --express runs verify: before seal  (T-179, 2026-09-24)
