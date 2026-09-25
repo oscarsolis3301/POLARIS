@@ -281,7 +281,7 @@ any hunk `speed.md` does not explain. Finally, prove every guard is inside its b
 - [ ] The whole golden set is green from the primary — proven by this task's own land (`uat: bash kit/ops/polaris check`), never by a full-suite line in verify.
 
 ## T-183 — "Release prep 6.7.0 — the version number and one changelog entry that also carries the never-released 6.6.0, with before-and-after numbers"
-points 1 · risk normal · landed 8dff9fe (2026-09-24) · claimed 2026-09-24
+points 1 · risk normal · landed 8dff9fe (2026-09-24) · claimed 2026-09-24 → done 2026-09-24
 files touched: CHANGELOG.md, kit/ops/VERSION
 
 ### Why
@@ -301,3 +301,30 @@ tag, does not touch `ops/VERSION`, and does not push a tag.
 - [ ] The first `## ` heading of CHANGELOG.md is `## 6.7.0 — <date>`, and that entry covers 6.6.0's work too.
 - [ ] The entry quotes measured before-and-after numbers, each taken from a landed task's Notes.
 - [ ] Older entries untouched.
+
+## T-184 — "A folder named like the base branch no longer hides landed work — four git lookups fixed, plus release prep 6.7.1"
+points 2 · risk normal · landed 04410c9 (2026-09-24) · claimed 2026-09-24
+files touched: CHANGELOG.md, kit/ops/VERSION, kit/ops/lib/integrate.sh, kit/ops/lib/knowledge.sh, ops/tests/bare-ref-folder.cmd, ops/tests/bare-ref-folder.expected
+
+### Why
+When a repo has a folder whose name is the same as its base branch (a real install has a `main/`
+folder), git refuses a bare branch name: "ambiguous argument 'main': both revision and filename".
+POLARIS hides git's error text, so the lookup quietly came back empty and POLARIS silently missed
+work that had already landed. Four git calls took the branch name bare: the "is this task landed?"
+lookup that done, sweep, seal and report all lean on; the two history views; and the sprint-id
+index the report and the brain read. Each now ends with ` --`, which tells git "that was a branch,
+not a folder". Calls that already used ranges, `rev-parse`, `merge-base` or a trailing ` --` were
+never at risk and are left alone.
+
+A new hermetic golden, `ops/tests/bare-ref-folder`, builds a throwaway repo with a `main` branch AND
+a `main/` folder and runs the real `history`, `history --tasks` and `report` commands against it, so
+any one of the four lookups going blind again turns the check red.
+
+Release prep only: `kit/ops/VERSION` says 6.7.1 and CHANGELOG gets one short 6.7.1 entry. The tag,
+the publish and the dogfood of `ops/` stay the owner's release step.
+
+### Acceptance
+- [ ] The four bare-branch git calls end with ` --`; nothing else in those files changes.
+- [ ] The new golden is RED on the pre-fix code and GREEN after.
+- [ ] No new kit function, heading or KEYS row: the api-kit golden is unchanged.
+- [ ] `kit/ops/VERSION` says `version: 6.7.1`; CHANGELOG's first heading is `## 6.7.1 — 2026-09-24`.
