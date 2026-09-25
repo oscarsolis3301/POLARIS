@@ -24,14 +24,14 @@ cmd_notify_gate() { # notify-gate <kind> [ID] — fire the notify: hook at a HUM
 
 status_brief() { # `status --brief` — ONE plain-English paragraph, no table (ops/contracts/status-brief.md).
   # voice: standard, no jargon. Grep-stable markers, written VERBATIM: "Last landed:" and "Next up:".
-  local done_c active_c review_c ready_c ids f parts lead line2 newest ntitle top nextup n
+  local done_c active_c review_c ready_c ids f b parts lead line2 newest ntitle top nextup n
   done_c=$(ls "$BOARD/done" 2>/dev/null | grep -c '\.md$' || true)
   active_c=$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)
   review_c=$(ls "$BOARD/review" 2>/dev/null | grep -c '\.md$' || true)
   ready_c=$(ls "$BOARD/ready" 2>/dev/null | grep -c '\.md$' || true)
   ids=""
   for f in "$BOARD/active/"*.md; do [ -e "$f" ] || break
-    ids="${ids:+$ids, }$(basename "$f" .md)"
+    b="${f##*/}"; ids="${ids:+$ids, }${b%.md}"
   done
   # each ·-joined sub-clause is DROPPED when its count is 0 (nothing to say), never zero-padded
   parts=""
@@ -74,13 +74,14 @@ cmd_status() {
   local f id age
   for f in "$BOARD/active/"*.md; do
     [ -e "$f" ] || { echo '  (none)'; break; }
-    id="$(basename "$f" .md)"; age="$(lock_age "$id")"
+    id="${f##*/}"; id="${id%.md}"; age="$(lock_age "$id")"
     printf '  %s · %s · lock age %ss%s\n' "$id" "$(fm_get owner "$f")" "${age:-?}" \
       "$( [ -n "${age:-}" ] && [ "$age" -gt $((STALE_H*3600)) ] && echo " ⚠ STALE — polaris resume $id to take over, or release")"
   done
   echo 'ready (top by wsjf):'
   { for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
-      printf '%s\t%s · %spts · wsjf %s\n' "$(fm_get wsjf "$f")" "$(basename "$f" .md)" \
+      id="${f##*/}"; id="${id%.md}"
+      printf '%s\t%s · %spts · wsjf %s\n' "$(fm_get wsjf "$f")" "$id" \
         "$(fm_get points "$f")" "$(fm_get wsjf "$f")"
     done; } | sort -rn | cut -f2- | head -5
   # blocked tasks are owned by no role until drained — surface them WITH the reason so they stop
@@ -88,7 +89,7 @@ cmd_status() {
   local bf bid any=0
   for bf in "$BOARD/blocked/"*.md; do [ -e "$bf" ] || break
     [ "$any" -eq 0 ] && echo 'blocked (needs regroom/escalation):'
-    any=1; bid="$(basename "$bf" .md)"
+    any=1; bid="${bf##*/}"; bid="${bid%.md}"
     printf '  %s · %s\n' "$bid" "$(grep '⛔' "$bf" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*-*[[:space:]]*//' | grep . || echo 'no reason recorded — open the task')"
   done
   # SHARED CHECKOUT (ops/contracts/shared-checkout.md). A second chat's FIRST read is `status`, and
@@ -146,7 +147,7 @@ cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatte
     for f in "$BOARD/$col/"*.md; do
       [ -e "$f" ] || break
       head -1 "$f" | tr -d '\r' | grep -q '^---$' || continue
-      id="$(basename "$f" .md)"
+      id="${f##*/}"; id="${id%.md}"
       printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$col" "$id" \
         "$(fm_get points "$f")" "$(fm_get wsjf "$f")" "$(fm_get risk "$f")" \
         "$(fm_list depends_on "$f" | tr '\n' ',' | sed 's/,$//')" \
@@ -2018,7 +2019,7 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
   local n=0 id="" f base pts risk owned p why="" lane=full k sum big
   for f in "$BOARD"/ready/*.md "$BOARD"/active/*.md; do
     [ -e "$f" ] || continue
-    base="$(basename "$f")"; [ "$base" = "IDEAS.md" ] && continue
+    base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
     n=$((n + 1)); id="${base%.md}"
   done
 
@@ -2037,7 +2038,7 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
     k=0
     for f in "$BOARD"/active/*.md; do
       [ -e "$f" ] || continue
-      [ "$(basename "$f")" = "IDEAS.md" ] && continue
+      [ "${f##*/}" = "IDEAS.md" ] && continue
       k=$((k + 1))
     done
     if [ "$k" -gt 0 ]; then
@@ -2046,7 +2047,7 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
     sum=0; big=0
     for f in "$BOARD"/ready/*.md; do
       [ -e "$f" ] || continue
-      base="$(basename "$f")"; [ "$base" = "IDEAS.md" ] && continue
+      base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
       id="${base%.md}"
       pts="$(fm_get points "$f")"; pts="${pts:-99}"
       risk="$(fm_get risk "$f")"; risk="${risk:-normal}"
@@ -2208,6 +2209,9 @@ cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the 
   local red=0 ran=0 k c out skip=0 force=0 full=0 a
   local t0 t1 head stamped dirty
   local scope=full carry=0 sel="" csf="" np=0 m=0 why="" p sc bsha c2 sred=0 fflag=""
+  # speed.md § 4: red is EVERYTHING; sred_any = a suite key went red; hred = a red that is neither a
+  # suite key nor CRUFT-class. The stamp needs sred_any=0 AND hred=0 — the rc still reads red alone.
+  local sred_any=0 hred=0
   for a in "$@"; do
     case "$a" in --force) force=1;; --full) full=1;; esac
   done
@@ -2284,7 +2288,7 @@ cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the 
         if ( cd "$PRIMARY" && bash -c "$c2" ) >"$out" 2>&1; then continue; fi
         printf '⛔ %s — RED: %s\n' "$k" "$c2"
         tail -15 "$out" | sed 's/^/     /'
-        red=1; sred=1; break
+        red=1; sred=1; sred_any=1; break
       done <<EOF
 $sel
 EOF
@@ -2296,7 +2300,7 @@ EOF
     else
       printf '⛔ %s — RED: %s\n' "$k" "$c"
       tail -15 "$out" | sed 's/^/     /'
-      red=1
+      red=1; sred_any=1
     fi
   done
   fi
@@ -2336,19 +2340,26 @@ EOF
     printf '⛔ drift — board hygiene findings:\n'
     grep '^⚠' "$out" | sed 's/^/     /' || true
     red=1
+    # speed.md § 4: a finding whose text starts CRUFT (a leftover branch) is still red, but it says
+    # nothing about the code the suite just proved, so it alone never withholds the stamp. Any other
+    # finding — MAP Deltas > 20 and LEARNED > 8 included — is a hard red, and so is a red drift that
+    # printed no finding at all (it died on something we cannot classify).
+    if ! grep -q '^⚠' "$out" || grep '^⚠' "$out" | grep -qv '^⚠ \[[0-9]*\] CRUFT'; then hred=1; fi
   fi
   if ( cmd_doctor ) >"$out" 2>&1; then
     say "doctor — env OK"
   else
     printf '⛔ doctor — RED:\n'
     tail -5 "$out" | sed 's/^/     /'
-    red=1
+    red=1; hred=1
   fi
   rm -f "$out"
-  [ "$red" -eq 0 ] || die "qa: red — fix the ⛔ lines above before calling the work done"
   # Stamp only a suite we actually RAN and that was fully green. Never stamp a skipped run (it
   # would just re-write the same sha) and never stamp a dirty tree — the stamp claims "this commit
   # is proven", and an uncommitted edit means the thing proven is not the thing on disk.
+  # The stamp is decided BEFORE the red verdict (speed.md § 4): every suite key green and the only
+  # other reds CRUFT-class ⇒ stamp, and qa STILL exits 1 below — so the next qa at this HEAD clears
+  # the branches without paying the suite again. Any other red withholds it, exactly as before.
   # The AFTER reads are the parallel-wave half of that same claim: a sibling lane lands while the
   # suite is halfway through, HEAD moves under it, and a stamp keyed on the BEFORE sha would green
   # a later `finish` on code nobody has ever tested. So HEAD must be where it started AND the tree
@@ -2360,14 +2371,16 @@ EOF
   # Stamp v3 (test-surfaces.md § 6): ONE line `<sha> <epoch> <scope>` — scoped iff the test key
   # ran a selection, full otherwise; a carried verdict re-stamps HEAD with the baseline's own scope.
   # Readers go through suite_stamp_scope (a 2-field pre-6.4 stamp reads as full).
-  if { [ "$ran" -ge 1 ] || [ "$carry" -eq 1 ]; } && [ "$head" != "none" ]; then
+  if { [ "$ran" -ge 1 ] || [ "$carry" -eq 1 ]; } && [ "$head" != "none" ] && [ "$sred_any" -eq 0 ] && [ "$hred" -eq 0 ]; then
     if [ "$head2" = "$head" ] && [ -z "$dirty" ] && [ -z "$dirty2" ]; then
       mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
       printf '%s %s %s\n' "$head" "$(date +%s)" "$scope" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
+      [ "$red" -eq 0 ] || note "suite stamp kept at $(printf '%.7s' "$head") — the only reds are leftover branches (CRUFT), so the next qa here skips the suite"
     else
       note "⚠ HEAD moved or the tree is not clean — stamp withheld, so the next qa re-runs the suite"
     fi
   fi
+  [ "$red" -eq 0 ] || die "qa: red — fix the ⛔ lines above before calling the work done"
   say "qa: all green"
 }
 
@@ -2397,7 +2410,7 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   fin_ids() { # ≤5 ids from a board column, comma-joined, "… +N more" beyond that (PROTOCOL.md § VOICE)
     local d="$1" g i=0 o=""
     for g in "$BOARD/$d/"*.md; do [ -e "$g" ] || break
-      i=$((i+1)); [ "$i" -le 5 ] && o="${o:+$o, }$(basename "$g" .md)"
+      i=$((i+1)); g="${g##*/}"; [ "$i" -le 5 ] && o="${o:+$o, }${g%.md}"
     done
     [ "$i" -gt 5 ] && o="$o … +$((i-5)) more"
     printf '%s' "$o"
@@ -2466,7 +2479,7 @@ EOF
   fi
   for lk in "$LOCKS"/*/; do
     [ -e "$lk" ] || break
-    n="$(basename "$lk")"; [ "$n" = ".board-mutex" ] && continue
+    n="${lk%/}"; n="${n##*/}"; [ "$n" = ".board-mutex" ] && continue
     if ! task_file "$n" active >/dev/null && ! task_file "$n" review >/dev/null; then
       fin_pending "orphan lock $n (age $(( $(lock_age "$n") / 3600 ))h) — bash ops/polaris sweep --fix"
     fi
@@ -2480,7 +2493,7 @@ EOF
   local bgd bgn bgp
   for bgd in "$PRIMARY"/.polaris/bg/*/; do
     [ -e "$bgd" ] || break
-    bgn="$(basename "$bgd")"
+    bgn="${bgd%/}"; bgn="${bgn##*/}"
     case "$bgn" in *.prev) continue;; esac
     [ -f "$bgd/rc" ] && continue
     bgp="$(cat "$bgd/pid" 2>/dev/null | tr -d ' \r\n')"
@@ -2497,7 +2510,7 @@ EOF
   [ "$bl" -eq 0 ] || fin_caveat "$bl blocked — $(fin_ids blocked) (name what is parked, and why, in your close)"
   for f in "$PRIMARY"/.polaris/wt/*/; do
     [ -e "$f" ] || break
-    n="$(basename "$f")"
+    n="${f%/}"; n="${n##*/}"
     task_file "$n" active >/dev/null || task_file "$n" review >/dev/null \
       || fin_caveat "worktree .polaris/wt/$n has no active task — bash ops/polaris sweep --fix"
   done
@@ -2744,7 +2757,7 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
   local ftier="" fmodel="" mtok="" tf tov tt
   for tf in "$BOARD/ready/"*.md; do
     [ -e "$tf" ] || break
-    [ "$(basename "$tf")" = "IDEAS.md" ] && continue
+    [ "${tf##*/}" = "IDEAS.md" ] && continue
     tov="$(fm_get model "$tf" 2>/dev/null || true)"
     case "$tov" in
       strong|mid|cheap) tt="$tov";;

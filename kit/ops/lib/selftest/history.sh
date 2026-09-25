@@ -101,6 +101,26 @@ drill_express() {
     set_fm status review ops/board/review/T-EX.md
     sed -i.bak 's|^test: .*$|test: true|' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
     git add -A; git commit -qm 'express drill: suite green'
+    # T-179 (ops/contracts/speed.md § 4): verify: runs BEFORE the seal, so a red one unwinds and
+    # kicks back exactly like a red suite — and the seal never happens: base and sprint/2 stay put.
+    # (The board is gitignored on base here, so the verify edit needs no commit to keep the tree clean.)
+    exvbase="$(git rev-parse main)"; exvtag="$(git rev-parse refs/tags/sprint/2)"
+    sed -i.bak 's|^  - test -f src/ex.txt$|  - echo EXPRESS-VBOOM \&\& false|' ops/board/review/T-EX.md && rm -f ops/board/review/T-EX.md.bak
+    grep -q 'EXPRESS-VBOOM' ops/board/review/T-EX.md || { echo "EXPRESS VERIFY FIXTURE FAIL (the red verify: line did not land)"; exit 1; }
+    "$SELF" land --express T-EX > "$T/ex7v.out" 2>&1 && { cat "$T/ex7v.out"; echo "EXPRESS VERIFY RED FAIL (a red verify: must die)"; exit 1; }
+    grep -q 'EXPRESS-VBOOM' "$T/ex7v.out" || { cat "$T/ex7v.out"; echo "EXPRESS VERIFY TAIL FAIL (output must carry the failing tail)"; exit 1; }
+    [ -f ops/board/active/T-EX.md ] || { cat "$T/ex7v.out"; echo "EXPRESS VERIFY KICKBACK FAIL (task must bounce to active/)"; exit 1; }
+    grep -q 'express verify red: .*EXPRESS-VBOOM' ops/board/active/T-EX.md || { echo "EXPRESS VERIFY NOTE FAIL (kickback note must carry the tail)"; exit 1; }
+    [ "$(git rev-parse "refs/heads/integrate/$exd")" = "$(git rev-parse main)" ] || { echo "EXPRESS VERIFY UNWIND FAIL (the land must reset away)"; exit 1; }
+    [ "$(git rev-parse main)" = "$exvbase" ] || { echo "EXPRESS VERIFY SEAL FAIL (a red verify must stop BEFORE the seal — base moved)"; exit 1; }
+    [ "$(git rev-parse refs/tags/sprint/2)" = "$exvtag" ] || { echo "EXPRESS VERIFY TAG FAIL (a red verify must stop BEFORE the seal — sprint/2 moved)"; exit 1; }
+    grep -q 'sealed — integrate/' "$T/ex7v.out" && { cat "$T/ex7v.out"; echo "EXPRESS VERIFY ORDER FAIL (verify: must run before seal)"; exit 1; }
+    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/.int-lease" ] && { echo "EXPRESS VERIFY LEASE FAIL (a red verify must release the integration lease)"; exit 1; }
+    git checkout -q main
+    mv ops/board/active/T-EX.md ops/board/review/T-EX.md    # back to review with its green verify: line
+    set_fm status review ops/board/review/T-EX.md
+    sed -i.bak 's|^  - echo EXPRESS-VBOOM && false$|  - test -f src/ex.txt|' ops/board/review/T-EX.md && rm -f ops/board/review/T-EX.md.bak
+    grep -q '^  - test -f src/ex.txt$' ops/board/review/T-EX.md || { echo "EXPRESS VERIFY RESTORE FAIL"; exit 1; }
     # T-153 (ops/contracts/sprint-report.md v3): the express seal writes the wave's burndown row.
     # The oracle for `remaining` is the board's other columns summed INDEPENDENTLY (sed over the
     # frontmatter, not fm_get) BEFORE three known fixtures go on: backlog 3 pts and ready 2 pts
@@ -123,6 +143,9 @@ drill_express() {
     # integrate/<today> deleted (reused from the red run above), tree clean, qa named at the end
     extagpre="$(git rev-parse refs/tags/sprint/2)"
     "$SELF" land --express T-EX > "$T/ex8.out" 2>&1 || { cat "$T/ex8.out"; echo "EXPRESS HAPPY FAIL"; exit 1; }
+    # T-179: the green verify: ran BEFORE the seal line, never after it
+    awk '/verify commands green/ && !v { v = NR } /sealed — integrate\// && !s { s = NR } END { exit !(v && s && v < s) }' "$T/ex8.out" \
+      || { cat "$T/ex8.out"; echo "EXPRESS VERIFY BEFORE SEAL FAIL (verify: must go green before the seal)"; exit 1; }
     # T-153: the fixture's SPRINT.md was the bare header, so this is the create-when-absent path —
     # a blank line, then ONE ## Burndown table (header, |---|, rows) at the end of the top section,
     # its LAST row exactly the wave's: today · 1 pt (T-EX) · the oracle. The row must be on the

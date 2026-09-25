@@ -1,0 +1,9 @@
+cruft-only: rc=1 stamp=HEAD suite-ran=1 skipped=0 clean=yes
+  ⚠ [1] CRUFT diverged: feat/T-9 carries commits not in main — inspect: git log main..feat/T-9 (never auto-deleted)
+cruft-again: rc=1 stamp=HEAD suite-ran=0 skipped=1 clean=yes
+  ⚠ [1] CRUFT diverged: feat/T-9 carries commits not in main — inspect: git log main..feat/T-9 (never auto-deleted)
+map-overflow: rc=1 stamp=none suite-ran=1 skipped=0 clean=yes
+  ⚠ [1] MAP: N delta lines — fold them into the sections (EVOLVE target)
+learned-overflow: rc=1 stamp=none suite-ran=1 skipped=0 clean=yes
+  ⚠ [1] LEARNED: N bullets — prune to ≤5 carry-overs (EVOLVE target)
+suite-red: rc=1 stamp=none suite-ran=1 skipped=0 clean=yes
