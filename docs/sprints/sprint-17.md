@@ -175,7 +175,7 @@ parser and prove it with a seeded kickback in the brain drill.
 - [ ] No new api rows (speed.md § 5).
 
 ## T-179 — "One suite per close — a green suite is kept when only leftover branches are red, and EVOLVE runs before the last qa instead of after it"
-points 2 · risk normal · landed 1d8786c (2026-09-24) · claimed 2026-09-24
+points 2 · risk normal · landed 1d8786c (2026-09-24) · claimed 2026-09-24 → done 2026-09-24
 files touched: kit/ops/lib/integrate.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/history.sh, kit/ops/lib/selftest/policy.sh, kit/ops/roles/CONDUCTOR.md, ops/tests/qa-stamp.cmd, ops/tests/qa-stamp.expected
 
 ### Why
@@ -255,3 +255,27 @@ pins, which Sprint 19 reads instead of redoing the work.
 - [ ] Probes (a), (b) and (c) each answered `yes` / `no` / `partial` with the evidence that decided it.
 - [ ] Zero-shot accuracy for both sets, each next to its majority baseline.
 - [ ] Nothing in this repo changes except `docs/spikes/laya-s1.md`; the venv, the labelled sets and the throwaway probe repo live outside it.
+
+## T-182 — "Re-pin the derived goldens — api-kit indexes the tree it runs in, and every guard is proven inside its time budget"
+points 1 · risk normal · landed 3b594ff (2026-09-24) · claimed 2026-09-24
+files touched: ops/tests/api-kit.cmd
+
+### Why
+Four goldens are DERIVED: they record a surface the rest of the kit produces (every function,
+heading and settings key under `kit/`, the help text, the settings-drift report, the startup
+budget). This sprint kept every lane surface-frozen so none of them moved mid-sprint
+(`ops/contracts/speed.md` § 5). This task is the one owner at the end: it proves they still hold,
+and fixes the one that could lie.
+
+`api-kit` asks the INSTALLED CLI to index the kit, and that index is anchored to the primary
+checkout, so run from a builder's worktree it silently checks the wrong tree. Make its `.cmd` index
+the tree it runs in (`POLARIS_ROOT`). Then re-pin api-kit, cli-help, keys-drift and startup-budget
+by comparing each golden with the live output — never by commit range — and STOP and hand back on
+any hunk `speed.md` does not explain. Finally, prove every guard is inside its budget with
+`bench.sh guards`, now that the three guard lanes have all landed.
+
+### Acceptance
+- [ ] `api-kit.cmd` indexes the tree it runs in, so it is not vacuous from a worktree.
+- [ ] api-kit, cli-help, keys-drift and startup-budget match live output; every changed line is explained by speed.md, or the task went back.
+- [ ] `bash kit/ops/bench.sh guards` exits 0: every § 1 budget met. Paste its output in Notes.
+- [ ] The whole golden set is green from the primary — proven by this task's own land (`uat: bash kit/ops/polaris check`), never by a full-suite line in verify.
