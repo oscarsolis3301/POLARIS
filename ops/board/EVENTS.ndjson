@@ -675,3 +675,4 @@
 {"ts":1790296770,"ev":"amend","id":"T-183","who":"Owner@DESKTOP","note":"verify[2]"}
 {"ts":1790296797,"ev":"handoff","id":"T-183","who":"Owner@DESKTOP","note":""}
 {"ts":1790296798,"ev":"all-review","id":"T-183","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
+{"ts":1790296922,"ev":"done","id":"T-183","who":"Owner@DESKTOP","note":"","pts":1}
