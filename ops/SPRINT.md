@@ -23,6 +23,7 @@ until the owner's release checkpoint, so lanes verify with the kit copy and work
 |---|---|---|
 | 2026-09-24 | 20 | 4 |
 | 2026-09-24 | 2 | 2 |
+| 2026-09-24 | 1 | 1 |
 
 # SPRINT 16 — The gallery and the bar (6.6.0)          capacity: 36   dates: 2026-09-17–
 
