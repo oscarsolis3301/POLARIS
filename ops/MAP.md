@@ -221,3 +221,5 @@ and handover copies + the awake registry — arm_machine writes it, never a hand
 - new golden ops/tests/drift-deps — drift's dependency check is one awk pass over every column, its branch checks loop over feat/* refs, and `check` run from .polaris/wt/<ID> tests that worktree  (T-177, 2026-09-24)
 
 - docs/spikes/ — new: laya-s1.md, the Laya host, latency and harness-probe verdict that Sprint 19's router reads  (T-181, 2026-09-24)
+
+- new golden ops/tests/qa-stamp — qa keeps a green suite's stamp when only CRUFT is red; CONDUCTOR step 7.5 runs EVOLVE before the final qa; land --express runs verify: before seal  (T-179, 2026-09-24)
