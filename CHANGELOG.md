@@ -4,6 +4,166 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.7.0 — 2026-09-24
+
+**POLARIS had grown slow exactly where nobody looks — in the hooks that run before every tool call
+and every edit, and in the audit every close runs — and the slowest of them was quietly letting the
+model ban through. 6.7.0 makes each one cheap, and ships the release that never went out: 6.6.0,
+"The gallery and the bar".**
+
+From 2026-09-15 the machine-wide model guard worked out which model a session was on by scanning the
+transcript before every tool call. A median Read went from 0.03 s to about 0.8 s, and when a
+conductor started several agents at once the scans piled up past the hook's 5-second limit — six
+times in one day — and a hook that times out lets the call through. So the ban was weakest at exactly
+the moment it mattered most. Around it, the ownership guard charged every edit 2.5–3.1 s; `drift`,
+which every `qa`, `finish`, promotion and plan runs, took twelve minutes; `next` took long enough
+that the re-anchor after a compaction never arrived; and the end of a run paid for the full suite
+twice. Sprint 17 measured each cost, removed its cause instead of raising its budget, and checked
+that the answers did not move: the ownership guard's verdicts are identical, and every `drift`
+finding line and `pack`'s output are byte-for-byte what they were. Beside it ships sprint 16's work,
+built on 2026-09-17 and never tagged: a visual task is now photographed before AND after, filed
+under the screen's human name, captioned with what the builder saw, and gathered into one gallery
+the owner opens — measured against `ops/DESIGN.md`, a design bar every repo now carries.
+
+**BREAKING:** spawning the built-in `claude-code-guide` agent type is now refused — it always runs
+Haiku, which is forbidden; use a general-purpose subagent or WebFetch instead. And re-arming the
+machine writes an `availableModels` allowlist into `~/.claude/settings.json` when there is none,
+`["opus", "sonnet", "haiku"]`; a list you already have keeps every entry except a Fable one. No
+other gate moved in the speed work. The one gate this entry moves besides those is 6.6.0's, and only
+in a repo that sets `visual:`: a visual task now hands off with two captures and a `--saw` sentence
+(`--no-before "<why>"` for a screen that did not exist before).
+
+| | before | after |
+|---|---|---|
+| every tool call — the machine-wide model guard | a median Read took 0.03 s until 09-15, then ~0.8 s: 0.5–2.3 s per call spent scanning the transcript, and 6 hits on its 5 s timeout in one day of agent fan-out — each one a call let through | 57 ms on a quiet box, against a 55 ms bash floor: one line read from a per-session state file |
+| every edit — the ownership guard | 2.5–3.1 s quiet, 3.2–4.9 s loaded | ~0.2 s quiet, ~0.5 s loaded; every verdict identical across 56 side-by-side cases |
+| `drift` — run by every `qa`, `finish`, promotion and plan | 720 s on the live board | 5.4 s, with a byte-identical verdict |
+| `next` | 7–28 s; scanning the background-job folders alone took 6.6 s | ~2 s; the folder scan takes 79 ms |
+| session start — the update hook | ~6.6 s, and every `update` re-exec leaked a 1.1 MB temp copy | ~0.44 s; the re-exec deletes its copy when it exits |
+| full suites per close | two, whenever EVOLVE moved HEAD after the final `qa` or leftover branches threw a green suite away: ~800 s per affected close | one — EVOLVE runs before the final `qa`, and `qa` keeps a green stamp when the only reds are leftover branches; 3 of the 3 remaining cases covered |
+| a Fable or Haiku spawn, switch or subagent | a subagent's own model was invisible, so `claude-code-guide` (pinned to Haiku) slipped through; a timed-out guard let the call through | refused at the switch, at the spawn and in the subagent's own transcript; a subagent that still ran on one is flagged afterwards; the harness offers no Fable at all |
+| a PowerShell `git switch main` in the shared checkout | passed untouched — the guard watched Bash only | refused, as in Bash; so is `git restore`, and `git branch -d` is allowed |
+| a screenshot (6.6.0) | one capture, taken afterwards, flat in `.polaris/shots/T-042-home.png`; a `saw:` line in a report nothing kept | before AND after, filed under the screen's name (`.polaris/shots/homepage/universal-search-bar/`), with `--saw` saved as the caption beside them |
+| where the pictures are (6.6.0) | nowhere a human looks | `polaris shots` writes one `INDEX.md`; with `gallery:` set, `done` publishes each screen's newest capture and caption as a committed gallery |
+| the design brief (6.6.0) | retyped into every visual task, or forgotten | `ops/DESIGN.md`, once per repo — INIT writes it, `heal` adds it to repos that predate it, `doctor` says when nobody has filled it in |
+
+- **The model guard reads one line, not the transcript.** `SessionStart` and `PostModelSwitch` write
+  the session's model to `~/.claude/polaris/model-state/<session_id>` (an id that is not plain
+  `[A-Za-z0-9_-]` writes nothing), and every tool call reads that one line. Only when the file is
+  missing does it fall back to the transcript — one `grep` over the last 64 KB instead of a bash
+  loop, so a 64 KB Workflow line whose model sits far from its end still gives the right verdict.
+  Every fail-open exit the old script had is still there.
+- **The ban no longer rests on one mechanism — six veto layers** (`ops/contracts/speed.md` § 2): the
+  harness's own `availableModels`, with no Fable in it · a `PreModelSwitch` that refuses the switch
+  itself · the per-call guard, which judges a subagent's calls by ITS transcript, not its parent's ·
+  a spawn check on `Agent`, `Task` and `Workflow` that refuses a requested Fable or Haiku model, and
+  the `claude-code-guide` type, before anything starts · a `PostToolUse` caveat telling the parent to
+  discard a subagent that somehow ran on one anyway · and `route`'s `model_denied`, unchanged. Haiku
+  stays refused everywhere in this release. The installer registers the four new events beside the
+  existing one — merged, idempotent, never clobbering a hook of your own.
+- **Every edit does the cheap work first.** The ownership guard started three git processes and the
+  whole `polaris _guard` CLI for every write, and one content rule for one file sent every write
+  through python. Now one `git rev-parse` returns everything it needs, a builtin loop over
+  `RULES.tsv` with the CLI's own `match_one` decides whether any rule could fire, and the CLI starts
+  only when one could — python only when a content rule's scope matches the path and the payload
+  carries a `\u` escape.
+- **checkout-guard covers PowerShell.** It stops any session switching the branch of the shared
+  primary checkout, and it was wired to Bash alone on a machine whose primary shell is PowerShell. It
+  now watches both, reads PowerShell's `{ }`, `if (…)` and `foreach (…)` forms, keeps a quoted `;`
+  whole, refuses a `git restore` that rewrites the primary's working tree, and stops refusing
+  `git branch -d`, which never touches it. `install.sh` merges the new matcher into a repo that has
+  the old one, once.
+- **Session start does nothing on a normal day.** Before it starts the CLI, the update hook checks in
+  plain bash, with no child process, whether it already checked today and nothing newer exists — and
+  stops there when so. The kit repo itself is skipped outright. `update`'s re-exec deletes its
+  temporary copy when it exits.
+- **`drift` in seconds, and `check` tests the tree it runs in.** Nearly all of `drift`'s twelve
+  minutes was its dependency check re-reading every task, finished ones included, once per
+  dependency. It is one awk pass over every column now, and the cruft checks loop over the few
+  `feat/*` branches that exist instead of over `done/`, with no `basename` fork per file. Every
+  finding line is byte-identical. One new line is advisory only —
+  `advisory: orphan branch feat/<name> — no task in any column` — never counted, and never a red for
+  `drift --strict`, `qa` or `finish`: an orphan may hold unmerged work, so it is never auto-cleared.
+  `check` run from a builder's worktree now tests that worktree (it used to test the primary and pass
+  having proven nothing), and `check --only <glob>` that matches nothing exits 1.
+- **`next` in about two seconds, and it says why it held something.** A `basename` process per
+  background-job folder became shell builtins, `.prev` archives are skipped first, and folders older
+  than 7 days are pruned — never a live job. When `next` declines to promote planned work it now
+  prints a held reason for all four ready-gate failures (contract missing · points outside 1–5 · a
+  dependency not done · an ownership overlap); three of the four used to drop the task without a
+  word. And the brain's kickback parser, which could never match a kickback event, works — the
+  "what came back" lessons are no longer always empty.
+- **One suite per close.** CONDUCTOR step 7.5 runs EVOLVE before the final `qa`, so the last suite
+  certifies the tree that ships. `qa` writes its suite stamp when every suite key is green and the
+  only other reds are leftover branches — it still exits 1 on them, but the next `qa` at that HEAD
+  runs no suite. MAP Deltas over 20 and LEARNED over 8 stay hard gates, with no stamp. And
+  `land --express` runs the task's `verify:` lines before `seal`, so a red one unwinds the landing
+  and kicks back instead of being found after it. No gate got weaker.
+- **`pack` makes one index call.** `find --api` takes several globs and builds the index once, and
+  `pack` asks for its whole owned list in that one call — its output is byte-identical. `claim`'s
+  note about the working folder now says what is true for a subagent: its Bash resets the folder
+  between calls, so use absolute paths.
+- **A meter, so it stays fast.** `bash ops/bench.sh guards` times each hook against a side-effect-free
+  input, best of N, in a throwaway HOME, and holds it to a budget set by the machine's own floor
+  (`bash -c true`): model guard floor + 300 ms, ownership guard floor + 600 ms, checkout guard and
+  readonly-allow floor + 150 ms; any `OVER` is rc 1. The sprint's last lane proved every guard inside
+  its budget, and `api-kit` now indexes the tree it runs in, so from a worktree it no longer checks
+  the primary by mistake.
+- **The Laya spike** (`docs/spikes/laya-s1.md`) — the verdict for the System-1 router planned for
+  6.9.0, so that sprint builds on facts instead of redoing the work. Laya answers in 230 ms p95 on
+  this machine's GPU against 2,363 ms on the best CPU path, so it runs on the GPU. Zero-shot it scores
+  no better than always guessing the most common answer, so the router starts in shadow mode, and
+  acting on its choices waits for a fine-tuned checkpoint. Of the three harness levers probed, a
+  PreToolUse hook can set a spawn's model (yes), writing `autoCompactWindow` mid-session changes
+  nothing until the next session (no), and a UserPromptSubmit `systemMessage` reaches only the human
+  (partial).
+
+The 6.6.0 half, built in sprint 16 and never tagged:
+
+- **Before AND after, under the screen's name.** A task names its surface in a new `screen:` field —
+  `Homepage / Universal Search Bar` — and its captures land in
+  `.polaris/shots/homepage/universal-search-bar/` instead of flat under a task ID. It is the one place
+  a human string becomes a path, so the slug refuses `..`, absolute paths, drive letters, backslashes
+  and more than two levels, and falls back to `misc/`. `pack` asks for the BEFORE shot as well as the
+  after — looking at a screen before you overhaul it is half the point — and names `ops/DESIGN.md` as
+  the bar it has to clear.
+- **`handoff --saw`, and a gate that counts two.** `handoff [ID] [--saw "…"] [--no-before "<why>"]`:
+  a visual task needs two fresh captures and a non-empty `--saw` sentence, which becomes the caption;
+  `--no-before` covers a brand-new screen and records why. The gate counts captures and never reads a
+  filename — POLARIS ships no capture tool, so demanding `*-after-*.png` would leave visual work in
+  every older repo un-handoffable — and a flat pre-6.6 `.polaris/shots/<ID>-*.png` still counts and is
+  filed into the screen's folder. `--saw` is checked for being non-empty and nothing more: a validator
+  cannot tell whether anyone looked. Every printed ship recipe carries `--saw` inline, because a
+  detached job has nobody to answer a prompt, and every positional `handoff` call works unchanged.
+- **`polaris shots`, and a gallery you can show someone.** `polaris shots` regenerates
+  `.polaris/shots/INDEX.md` — one file that renders in a Markdown preview, grouped by screen, newest
+  task first, before and after side by side under the caption. Set `gallery:` (say `docs/screens`)
+  and `done` copies each screen's newest capture and caption into it, replacing in place so the repo
+  does not keep growing, on the commit `done` already makes: no second commit, and no new lease —
+  taking one inside `done` would deadlock the self-landing path. `install.sh` marks
+  `docs/screens/**/*.png -text` so a Windows checkout cannot mangle them.
+- **The bar — `ops/DESIGN.md`.** A template of 60 lines or fewer: a `## THIS PRODUCT` slot the repo
+  fills in one sentence, seven concrete signs of AI slop to fail a screen against at a glance, and
+  pointers to `apple-design`, `frontend-design` and `make-interfaces-feel-better` instead of a copy of
+  them. INIT copies it once and asks one look-and-feel question. `heal` copies it into every repo that
+  predates it and never over one that exists — it is the owner's, like `ops/CONVENTIONS.md`. `doctor`
+  says when `## THIS PRODUCT` is still empty. The Planner names the screen and folds the bar into the
+  acceptance; the Integrator opens the pair and reads the caption, and a caption that does not match
+  the picture is a kickback.
+- **What rode along.** The visual code moved into its own module, `lib/visual.sh`, before a line of it
+  changed — proven by a golden left untouched. `ops/VISUAL.md` got the RULES guard its contract had
+  always claimed, and `ops/DESIGN.md` deliberately got none. Two goldens that had sat red for days
+  after the 09-15 model ban are re-pinned: `rules-health` (18 rules) and `route-tier`, which now
+  expects the refusal and proves a legal model still gets through. And two new goldens walk the new
+  work in throwaway repos: `shots-gallery`, backward compatibility included, and `heal-design`.
+
+**If you are already installed, you need do nothing for the speed** — the session-start hook updates
+a quiet board on its own, and the repo's guards come with the kit. The machine-wide pieces, the model
+guard's new events and the `availableModels` list, arrive the next time the machine is armed. For the
+gallery: give a visual task a `screen:`, set `gallery: docs/screens` in `ops/CONVENTIONS.md` when you
+want a committed set, and run `bash ops/polaris shots` to see what you have. Then write the one
+sentence under `## THIS PRODUCT` in `ops/DESIGN.md`.
+
 ## 6.5.0 — 2026-09-15
 
 **BREAKING for anyone who set `model_strong`/`model_mid`/`model_cheap`: Fable and Haiku are now

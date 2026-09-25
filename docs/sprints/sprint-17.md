@@ -257,7 +257,7 @@ pins, which Sprint 19 reads instead of redoing the work.
 - [ ] Nothing in this repo changes except `docs/spikes/laya-s1.md`; the venv, the labelled sets and the throwaway probe repo live outside it.
 
 ## T-182 — "Re-pin the derived goldens — api-kit indexes the tree it runs in, and every guard is proven inside its time budget"
-points 1 · risk normal · landed 3b594ff (2026-09-24) · claimed 2026-09-24
+points 1 · risk normal · landed 3b594ff (2026-09-24) · claimed 2026-09-24 → done 2026-09-24
 files touched: ops/tests/api-kit.cmd
 
 ### Why
@@ -279,3 +279,25 @@ any hunk `speed.md` does not explain. Finally, prove every guard is inside its b
 - [ ] api-kit, cli-help, keys-drift and startup-budget match live output; every changed line is explained by speed.md, or the task went back.
 - [ ] `bash kit/ops/bench.sh guards` exits 0: every § 1 budget met. Paste its output in Notes.
 - [ ] The whole golden set is green from the primary — proven by this task's own land (`uat: bash kit/ops/polaris check`), never by a full-suite line in verify.
+
+## T-183 — "Release prep 6.7.0 — the version number and one changelog entry that also carries the never-released 6.6.0, with before-and-after numbers"
+points 1 · risk normal · landed 8dff9fe (2026-09-24) · claimed 2026-09-24
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+Sprint 16's work (6.6.0, the screenshot gallery and the design bar) was built but never released,
+and this sprint makes POLARIS fast. Both ship together as 6.7.0. This task writes the two files a
+release needs from the repo: `kit/ops/VERSION` says `version: 6.7.0`, and `CHANGELOG.md` gets ONE new
+entry at the top, `## 6.7.0 — <date>`, that covers the 6.6.0 work and this sprint's, in plain words,
+with the measured before-and-after numbers the lanes recorded in their Notes (per-call guard time,
+`drift` time, `next` time, suite runs per close).
+
+The release itself — the serial selftest, the tag, the push, the dogfood of `ops/` and re-arming the
+machine — is the owner's release checkpoint in `plans/v4.md`, not this task. So this task does not
+tag, does not touch `ops/VERSION`, and does not push a tag.
+
+### Acceptance
+- [ ] `kit/ops/VERSION` says `version: 6.7.0`; nothing else in it changes.
+- [ ] The first `## ` heading of CHANGELOG.md is `## 6.7.0 — <date>`, and that entry covers 6.6.0's work too.
+- [ ] The entry quotes measured before-and-after numbers, each taken from a landed task's Notes.
+- [ ] Older entries untouched.
