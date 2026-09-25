@@ -1,7 +1,7 @@
 # Sprint 17 — Fast (6.7.0) (2026-09-24–)
 
 ## T-173 — "model-guard v2 — the model ban reads a tiny per-session file instead of scanning the transcript, checks every spawn, and stops failing open when many agents start at once"
-points 5 · risk normal · landed f221c08 (2026-09-24) · claimed 2026-09-24
+points 5 · risk normal · landed f221c08 (2026-09-24) · claimed 2026-09-24 → done 2026-09-24
 files touched: kit/ops/bench.sh, kit/ops/bootstrap.py, kit/ops/hooks/model-guard.sh, ops/tests/machine-armed.cmd, ops/tests/machine-armed.expected, ops/tests/model-guard-v2.cmd, ops/tests/model-guard-v2.expected
 
 ### Why
@@ -38,7 +38,7 @@ checks, the state-file rule and the bench output. Haiku stays refused everywhere
 - [ ] The golden touches nothing real: HOME and `POLARIS_AWAKE_HOME` point into its `mktemp -d`.
 
 ## T-174 — "ownership-guard fast path — one git call and a rules prefilter, so an ordinary edit stops paying three to five seconds"
-points 3 · risk normal · landed b7c5b01 (2026-09-24) · claimed 2026-09-24
+points 3 · risk normal · landed b7c5b01 (2026-09-24) · claimed 2026-09-24 → done 2026-09-24
 files touched: kit/ops/hooks/ownership-guard.sh, ops/tests/ownership-primary.cmd, ops/tests/ownership-primary.expected
 
 ### Why
@@ -66,7 +66,7 @@ Budget (enforced by T-182): a non-builder edit ≤ floor + 600 ms (`ops/contract
 - [ ] No new api rows (speed.md § 5).
 
 ## T-175 — "checkout-guard covers PowerShell — the same protection against switching the shared checkout's branch, now for this machine's primary shell"
-points 2 · risk normal · landed 6507aa8 (2026-09-24) · claimed 2026-09-24
+points 2 · risk normal · landed 6507aa8 (2026-09-24) · claimed 2026-09-24 → done 2026-09-24
 files touched: kit/.claude/settings.json, kit/ops/hooks/checkout-guard.sh, ops/tests/checkout-guard-denies.cmd, ops/tests/checkout-guard-denies.expected
 
 ### Why
@@ -91,7 +91,7 @@ the first, without duplicating it.
 - [ ] No new api rows (speed.md § 5).
 
 ## T-176 — "update-hook costs nothing on a normal start — a checked-today test in plain bash before the CLI starts, and no more leaked temp copies"
-points 1 · risk normal · landed 5243c33 (2026-09-24) · claimed 2026-09-24
+points 1 · risk normal · landed 5243c33 (2026-09-24) · claimed 2026-09-24 → done 2026-09-24
 files touched: kit/ops/hooks/update-hook.sh, kit/ops/lib/admin.sh
 
 ### Why
@@ -115,7 +115,7 @@ re-exec removes its temporary copy when it exits.
 - [ ] No new api rows (speed.md § 5).
 
 ## T-177 — "drift and check in seconds — one pass over the dependency graph, branch checks that loop over branches, and a check that tests the worktree it runs in"
-points 3 · risk normal · landed d5b5743 (2026-09-24) · claimed 2026-09-24
+points 3 · risk normal · landed d5b5743 (2026-09-24) · claimed 2026-09-24 → done 2026-09-24
 files touched: kit/ops/lib/observe.sh, ops/tests/drift-deps.cmd, ops/tests/drift-deps.expected
 
 ### Why
@@ -145,7 +145,7 @@ Every existing finding line stays byte-identical (`ops/contracts/speed.md` § 3)
 - [ ] No new api rows (speed.md § 5): the awk is inline in `cmd_drift`.
 
 ## T-178 — "next in about a second — no process per background job, held tasks say why they are held, and the brain finally reads kickbacks"
-points 3 · risk normal · landed 4fc90d5 (2026-09-24) · claimed 2026-09-24
+points 3 · risk normal · landed 4fc90d5 (2026-09-24) · claimed 2026-09-24 → done 2026-09-24
 files touched: kit/ops/lib/bg.sh, kit/ops/lib/handover.sh, kit/ops/lib/knowledge.sh, kit/ops/lib/selftest/brain.sh, ops/tests/handover-route.cmd, ops/tests/handover-route.expected
 
 ### Why
@@ -174,8 +174,35 @@ parser and prove it with a seeded kickback in the brain drill.
 - [ ] On a quiet box with the 153 bg folders: `next` < 3 s and `next --brief` < 10 s — before and after recorded in Notes (verify allows 5 s for load).
 - [ ] No new api rows (speed.md § 5).
 
+## T-179 — "One suite per close — a green suite is kept when only leftover branches are red, and EVOLVE runs before the last qa instead of after it"
+points 2 · risk normal · landed 1d8786c (2026-09-24) · claimed 2026-09-24
+files touched: kit/ops/lib/integrate.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/history.sh, kit/ops/lib/selftest/policy.sh, kit/ops/roles/CONDUCTOR.md, ops/tests/qa-stamp.cmd, ops/tests/qa-stamp.expected
+
+### Why
+The end of every conductor run pays for the full test suite twice, about 15 minutes each time.
+The real cause is the order of the last steps: the final `qa` goes green, then EVOLVE commits its
+tuning, which moves HEAD, so the next check has to run the whole suite again. On top of that, `qa`
+throws away a green suite whenever the only red is leftover-branch housekeeping.
+
+Three changes, and no gate gets weaker (`ops/contracts/speed.md` § 4):
+1. CONDUCTOR step 7.5 runs EVOLVE BEFORE the final `qa`, so the last suite run certifies the tree
+   that actually ships.
+2. `qa` writes its suite stamp when every suite key is green and the only other reds are
+   CRUFT-class (leftover branches). It still exits 1 on them, but the next `qa` at the same HEAD
+   does not re-run the suite. MAP Deltas over 20 and LEARNED over 8 stay hard gates: no stamp.
+3. `land --express` runs the task's `verify:` lines before `seal`, so a red one unwinds the landing
+   instead of being discovered after the seal.
+
+### Acceptance
+- [ ] CRUFT-only red with a green suite → the stamp equals HEAD, rc 1, and the next `qa` runs no suite key — in `drill_qa` and in `qa-stamp`.
+- [ ] A MAP Deltas > 20 red → rc 1 and NO stamp (LEARNED > 8 the same).
+- [ ] `land --express` runs `verify:` before seal; a red verify unwinds and kicks back — asserted in `drill_express`.
+- [ ] CONDUCTOR.md step 7.5 puts EVOLVE before the final `qa`; no heading changes; BUILDER.md and SOLO.md need no change (EVOLVE placement is conductor-only).
+- [ ] `drill_finish` green; every other drill green unchanged.
+- [ ] No new api rows, drill functions or drill labels (speed.md § 5): new assertions go inside the existing drills.
+
 ## T-180 — "pack and builder rider — one index call per pack, no basename loops in the builder, and a correct note about the working folder at claim"
-points 1 · risk normal · landed 4d45998 (2026-09-24) · claimed 2026-09-24
+points 1 · risk normal · landed 4d45998 (2026-09-24) · claimed 2026-09-24 → done 2026-09-24
 files touched: kit/ops/index.py, kit/ops/lib/builder.sh
 
 ### Why
@@ -199,7 +226,7 @@ the same call), not that a `cd` sticks.
 - [ ] No new api rows (speed.md § 5): the loop over globs lives inside the existing functions.
 
 ## T-181 — "Laya spike — measure the System-1 encoder on this machine and answer the three harness questions Sprint 19's router depends on"
-points 2 · risk normal · landed 71f9e31 (2026-09-24) · claimed 2026-09-24
+points 2 · risk normal · landed 71f9e31 (2026-09-24) · claimed 2026-09-24 → done 2026-09-24
 files touched: docs/spikes/laya-s1.md
 
 ### Why
