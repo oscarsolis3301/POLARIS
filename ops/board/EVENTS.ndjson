@@ -672,3 +672,4 @@
 {"ts":1790296152,"ev":"done","id":"T-182","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1790296198,"ev":"promote","id":"T-183","who":"Owner@DESKTOP","note":"deps done: T-182","pts":1}
 {"ts":1790296361,"ev":"claim","id":"T-183","who":"Owner@DESKTOP","note":"","pts":1}
+{"ts":1790296770,"ev":"amend","id":"T-183","who":"Owner@DESKTOP","note":"verify[2]"}
