@@ -588,7 +588,7 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
 
 cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: the integrator's whole
   # long path for the SINGLE-task case, in one pass: integrate branch → audit+land → ONE full
-  # CONVENTIONS suite → seal → run-verify → done → branch cleanup. Express collapses SESSIONS,
+  # CONVENTIONS suite → run-verify → seal → done → branch cleanup. Express collapses SESSIONS,
   # never checks — every gate of the long path runs exactly as it does there. Four pinned
   # refusals below die BEFORE step 1, mutating nothing; `finish` stays the mandatory finish line.
   local id="$1"
@@ -723,11 +723,27 @@ EOF
     mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
     printf '%s %s\n' "$((ex_t1 - ex_t0))" "$ex_t1" > "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true
   fi
+  # step 3b (speed.md § 4): the task's verify: lines, BEFORE the seal. After it, a red verify was
+  # found only once the wave was already merged and tagged — nothing left to unwind. Here it is a
+  # red exactly like step 3's: same unwind, same kickback carrying the failing tail, same die. In a
+  # subshell, so a die inside run-verify is a red rc rather than an exit with the lease held.
+  out="$(mktemp)"
+  if ( cmd_run_verify "$id" ) >"$out" 2>&1; then
+    cat "$out"; rm -f "$out"
+  else
+    printf '⛔ verify — RED\n' >&2
+    tail -15 "$out" | sed 's/^/     /' >&2
+    tailtxt="$(tail -3 "$out" | tr '\n' ' ' | cut -c1-200)"
+    rm -f "$out"
+    git reset -q --hard HEAD~1        # unwind the land — integrate/<date> back at $BASE state
+    cmd_kickback "$id" -m "express verify red: $tailtxt"
+    int_off    # kickback's `trap - EXIT` disarmed the on_die net — release the lease by hand
+    die "express: verify red — land unwound on integrate/$date, $id kicked back with the failing tail"
+  fi
   # step 4: seal — existing cmd_seal semantics, unchanged (tag sprint/<n>, pushes when remoted)
   cmd_seal "$date"
-  # step 5: prove + close — verify: commands on the sealed base, done (landed: stamp + cleanup),
-  # then the wave branch goes (its job is finished; a fresh one is cheap tomorrow)
-  cmd_run_verify "$id"
+  # step 5: close — done (landed: stamp + cleanup; verify: already ran in step 3b, on the tree this
+  # seal merged), then the wave branch goes (its job is finished; a fresh one is cheap tomorrow)
   cmd_done "$id"
   git branch -q -D "integrate/$date" 2>/dev/null || true
   [ -n "$ex_had" ] || int_off          # the lane's work is over — free it before the closing notes

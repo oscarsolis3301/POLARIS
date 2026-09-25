@@ -22,8 +22,8 @@ ask "shall I continue?" after the plan gate — the plan approval WAS the go for
 over ONLY when every one of these is true:
 - every task from the plan sits in `done/` — or in `blocked/` with a reason the human has been told;
 - `ready/` is drained (per `drain:`, step 7);
-- `bash ops/polaris qa` is green on the base branch — run by YOU, in this session;
 - EVOLVE's proposals are gathered (step 7.5);
+- `bash ops/polaris qa` is green on the base branch — run by YOU, in this session, after EVOLVE;
 - the close report (step 8) is delivered.
 Anything less, and your next action is a tool call, not a sign-off — **unless a run budget cap is
 reached (below), which is itself a legitimate ending.**
@@ -75,7 +75,7 @@ limit has failed, and no gate will have told you.
 **Context compacted mid-run?** The board is the run's memory, not your context — and
 the anchor hook already re-read the board for you the moment the compaction finished, so continue
 from its `next:` line: `build <ID>` → spawn that lane · `integrate` → spawn the integrator ·
-`wait` → those lanes are still running · `promote`/`finish` → you are at the tail, so qa → evolve →
+`wait` → those lanes are still running · `promote`/`finish` → you are at the tail, so evolve → qa →
 report. Never re-interview, never re-plan. (No anchor line in your context? `bash ops/polaris
 next --brief` prints it again.)
 
@@ -291,8 +291,8 @@ call per spawn; routing never blocks work.
    planner-promotion passes only; the original ready set and integrator dependency-wave promotions
    are round 0 (step 3 disclosed this whole depth). No subagent harness → classic `start` per
    slice, exactly today.
-7.5 **Evolve (subagent) — the run tunes the kit before it signs off.** After the final green `qa`,
-   spawn ONE:
+7.5 **Evolve (subagent) — the run tunes the kit before it signs off.** Once the last wave has
+   landed — BEFORE the final `qa`, never after it — spawn ONE:
    > You are EVOLVE, conductor-entered. Read ops/roles/EVOLVE.md and execute its diagnosis.
    > APPLY NOTHING — return your ≤3 findings with evidence and the exact proposed diffs as your
    > result.
@@ -303,6 +303,10 @@ call per spawn; routing never blocks work.
    Its proposals go into the close report, numbered — the human applies one by replying
    "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Skip this
    step only when the run built ≤1 task — there is no signal in a sample of one.
+   **Then the final `bash ops/polaris qa`** — after EVOLVE, not before it. An auto-applied evolve
+   commit moves HEAD, so a `qa` run ahead of it certifies a tree that no longer ships, and `finish`
+   pays the whole suite a second time. After EVOLVE, one `qa` proves the tree that actually ships and
+   stamps it; `finish` then skips the suite at that same commit. Red → the fix wave of step 6.5.
 8. **Report, then close.** In `voice:`, **≤8 lines** (INIT.md's cap, same reason): what got built and
    what it means for them, what was set aside and why, whether every check passed, one thing to try
    right now — then EVOLVE's numbered proposals ("reply approve <n> to apply"). One report; the
