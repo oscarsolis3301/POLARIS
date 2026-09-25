@@ -175,7 +175,7 @@ landed_sha() { # landed_sha <ID> [ref] — SHA of the squash commit in <ref> (de
     sha="${line%% *}"; subj="${line#* }"
     case "$subj" in *"[$id]") printf '%s' "$sha"; return 0;; esac
   done <<EOF
-$(git -C "$PRIMARY" log --fixed-strings --grep "[$id]" --format='%H %s' "$ref" 2>/dev/null)
+$(git -C "$PRIMARY" log --fixed-strings --grep "[$id]" --format='%H %s' "$ref" -- 2>/dev/null)
 EOF
   return 1
 }
@@ -1097,7 +1097,7 @@ cmd_history() { # history [--tasks <n>] — read-only changelog view of $BASE: f
     # starts at the OLDEST first-parent "Sprint <n> — " merge — every wave's tasks show. A
     # single-wave sprint finds its own merge → identical to the old sprint/<n>^1..sprint/<n>.
     local start
-    start="$(git -C "$PRIMARY" log --first-parent --format='%H %s' "$BASE" 2>/dev/null \
+    start="$(git -C "$PRIMARY" log --first-parent --format='%H %s' "$BASE" -- 2>/dev/null \
       | awk -v n="$n" 'BEGIN{p="Sprint " n " — "} index(substr($0,42),p)==1 {sha=$1} END{if (sha) print sha}')"
     [ -n "$start" ] || start="$(git -C "$PRIMARY" rev-parse "refs/tags/sprint/$n")"
     git -C "$PRIMARY" log --no-merges --date=short --format='%h %ad %s' "$start^1..sprint/$n" \
@@ -1105,7 +1105,7 @@ cmd_history() { # history [--tasks <n>] — read-only changelog view of $BASE: f
     return 0
   fi
   [ -z "${1:-}" ] || die "usage: polaris history [--tasks <n>]"
-  git -C "$PRIMARY" log --first-parent --date=short --format='%h %ad %s' "$BASE" 2>/dev/null \
+  git -C "$PRIMARY" log --first-parent --date=short --format='%h %ad %s' "$BASE" -- 2>/dev/null \
     | grep -Ev '^[0-9a-f]+ [0-9-]+ chore\(board\):' || true
   return 0
 }

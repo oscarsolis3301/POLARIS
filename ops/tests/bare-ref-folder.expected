@@ -1,0 +1,18 @@
+== history
+<sha> 2026-01-01 Sprint 1 — wave two
+<sha> 2026-01-01 Sprint 1 — wave one
+<sha> 2026-01-01 board
+<sha> 2026-01-01 init
+== history --tasks 1
+<sha> 2026-01-01 feat(src): two [T-2]
+<sha> 2026-01-01 feat(src): one [T-1]
+== report --sprint 1
+# Sprint 1 — fixture
+
+## T-1 — one
+points 1 · risk normal · landed <sha> (2026-01-01)
+files touched: src/one.txt
+
+## T-2 — two
+points 1 · risk normal · landed <sha> (2026-01-01)
+files touched: src/two.txt

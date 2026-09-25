@@ -62,7 +62,7 @@ resolve_sprint_ids() { # resolve_sprint_ids <n> — the sprint's task IDs (layer
   local n="$1"
   local tag="refs/tags/sprint/$n" prev="refs/tags/sprint/$((n-1))" haveprev="" msha f ls
   {
-    git -C "$PRIMARY" log --first-parent --format='%H%x09%s' "$BASE" 2>/dev/null \
+    git -C "$PRIMARY" log --first-parent --format='%H%x09%s' "$BASE" -- 2>/dev/null \
       | awk -F'\t' -v p="Sprint $n — " 'index($2,p)==1 {print $1}' \
       | while IFS= read -r msha; do
           [ -n "$msha" ] || continue
