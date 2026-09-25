@@ -664,3 +664,4 @@
 {"ts":1790294101,"ev":"claim","id":"T-179","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1790295450,"ev":"handoff","id":"T-179","who":"Owner@DESKTOP","note":""}
 {"ts":1790295450,"ev":"all-review","id":"T-179","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
+{"ts":1790295544,"ev":"done","id":"T-179","who":"Owner@DESKTOP","note":"","pts":2}
