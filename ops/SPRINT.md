@@ -1,3 +1,22 @@
+# SPRINT 18 — Effort ceiling + REA (6.8.0)          capacity: 18   dates: 2026-10-11–
+
+Two owner asks of 2026-10-11 (plan `effort-ceiling-rea`, decisions E1/E2/R1/L1). A subagent never runs
+above the chat's effort, and lowering the effort mid-run brings one notice, never an automatic
+restart. REA is set up on every machine POLARIS arms, updates itself after a 7-day soak, and "Use
+REA to…" routes in any project. REA's first job is studying Laya and Jev for Sprint 19.
+Contracts `ops/contracts/effort-ceiling.md` and `ops/contracts/rea.md`.
+
+7 tasks / 18 pts. W1 has four disjoint lanes: the effort probe spike (T-185), REA arming (T-187), the
+CLAUDE.md clause (T-189) and the Laya/Jev study (T-190). W2: the ceiling in model-guard (T-186, after
+T-185) and REA updates (T-188, after T-187). W3: release prep 6.8.0 (T-191). T-187 alone owns
+api-kit.expected; every other lane is surface-frozen (no new function, heading or key under kit/).
+Conductor-owned: the LIVE mid-run effort check (T-185) and every owner ask (checkpoint download, effort
+change, REA registration, Jev key). Lanes that hit one hand back.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 17 — Fast (6.7.0)          capacity: 24   dates: 2026-09-24–
 
 POLARIS makes everything slower when it is switched on, and the audit of 2026-09-24 found where the
