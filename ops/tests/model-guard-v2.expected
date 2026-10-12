@@ -71,6 +71,81 @@ transcript does not exist                                  rc 0
 transcript unreadable (a directory)                        rc 0
 transcript with no model line                              rc 0
 an event it was never registered for                       rc 0
+== the effort ceiling: a spawn never asks for more than its caller has (effort-ceiling.md § 2) ==
+main call on high records the ceiling                      rc 0
+    ceiling e1: high
+Agent effort max, chat high                                rc 2
+    stderr: polaris: effort 'max' is above this chat's 'high' (owner, E1) — spawn at effort 'high' or lower, or drop the effort parameter to inherit. Nothing was spawned.
+Agent effort high, chat high                               rc 0
+Agent effort low, chat high                                rc 0
+Task effort xhigh, chat high                               rc 2
+    stderr: polaris: effort 'xhigh' is above this chat's 'high' (owner, E1) — spawn at effort 'high' or lower, or drop the effort parameter to inherit. Nothing was spawned.
+Agent with no effort (nothing requested)                   rc 0
+Agent effort turbo (unknown word)                          rc 0
+Agent whose PROSE names effort max (not a request)         rc 0
+nested spawn at high, caller subagent on medium            rc 2
+    stderr: polaris: effort 'high' is above this chat's 'medium' (owner, E1) — spawn at effort 'medium' or lower, or drop the effort parameter to inherit. Nothing was spawned.
+nested spawn at medium, caller subagent on medium          rc 0
+    ceiling e1: high
+-- an agent definition asks, only for a type that is not built in --
+definition deep (effort: xhigh), chat high                 rc 2
+    stderr: polaris: the agent definition asks for 'xhigh', above this chat's 'high' (owner, E1) — pass an explicit effort: 'high' or lower on the spawn. Nothing was spawned.
+definition deep, explicit effort high                      rc 0
+plugin definition sec:scan (effort: xhigh), chat high      rc 2
+    stderr: polaris: the agent definition asks for 'xhigh', above this chat's 'high' (owner, E1) — pass an explicit effort: 'high' or lower on the spawn. Nothing was spawned.
+definition calm (effort: medium), chat high                rc 0
+built-in Explore (a same-named file asks max)              rc 0
+definition that exists nowhere                             rc 0
+definition proj in <cwd>/.claude/agents (effort: "max")    rc 2
+    stderr: polaris: the agent definition asks for 'max', above this chat's 'high' (owner, E1) — pass an explicit effort: 'high' or lower on the spawn. Nothing was spawned.
+-- a Workflow: every per-agent effort option --
+Workflow effort:'max', chat high                           rc 2
+    stderr: polaris: effort 'max' is above this chat's 'high' (owner, E1) — spawn at effort 'high' or lower, or drop the effort parameter to inherit. Nothing was spawned.
+Workflow low then xhigh, chat high                         rc 2
+    stderr: polaris: effort 'xhigh' is above this chat's 'high' (owner, E1) — spawn at effort 'high' or lower, or drop the effort parameter to inherit. Nothing was spawned.
+Workflow effort:'medium', chat high                        rc 0
+-- unknown on both sides, and the payload fallback --
+no caller effort, no ceiling, effort max                   rc 0
+    ceiling e2: (none)
+payload effort.level medium, env unset                     rc 0
+    ceiling e3: medium
+Agent effort high, payload says medium                     rc 2
+    stderr: polaris: effort 'high' is above this chat's 'medium' (owner, E1) — spawn at effort 'medium' or lower, or drop the effort parameter to inherit. Nothing was spawned.
+main PostToolUse on low records the ceiling                rc 0
+    ceiling e4: low
+-- the ceiling is the MAIN chat only, and is written only on a change --
+a subagent call on low                                     rc 0
+    ceiling e1: high
+UserPromptSubmit with a leaked CLAUDE_EFFORT=max           rc 0
+SessionStart with a leaked CLAUDE_EFFORT=max               rc 0
+    ceiling e1: high
+main call, same level                                      rc 0
+    rewritten when unchanged: no
+== mid-run: a pinned subagent left above a lowered chat is told about, never blocked ==
+the chat drops high -> medium                              rc 0
+    ceiling e1: medium
+pinned subagent on xhigh, ceiling medium                   rc 0
+    marker pin1: xhigh medium
+    pending lines: 1
+its next call                                              rc 0
+    pending lines: 1
+inheriting subagent, followed to medium                    rc 0
+    marker inh1: none
+SubagentStop with a note pending                           rc 0
+the main session next PreToolUse                           rc 0
+    stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"polaris: a subagent is still on xhigh after the chat dropped to medium; it will finish there — say \"restart it\" to re-run it at medium. Restart only when the human says so (owner, E2) and never stop it unasked: message that subagent to write a handoff and release its claim or lock, then spawn the replacement at the new level from that handoff."}}
+    .pending after: removed
+the main call after                                        rc 0
+the chat drops medium -> low                               rc 0
+pinned subagent again, ceiling now low                     rc 0
+    marker pin1: xhigh low
+    pending lines: 1
+a refused main spawn while a note is pending               rc 2
+    stderr: polaris: effort 'max' is above this chat's 'low' (owner, E1) — spawn at effort 'low' or lower, or drop the effort parameter to inherit. Nothing was spawned.
+    .pending after: present
+the next allowed main PreToolUse                           rc 0
+    stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"polaris: a subagent is still on xhigh after the chat dropped to low; it will finish there — say \"restart it\" to re-run it at low. Restart only when the human says so (owner, E2) and never stop it unasked: message that subagent to write a handoff and release its claim or lock, then spawn the replacement at the new level from that handoff."}}
+    .pending after: removed
 == the install branch: five entries, merged, never clobbering, idempotent ==
 model-guard: 5 of 5 hook entries written to <settings>
 model-guard: 0 of 5 hook entries written to <settings>
