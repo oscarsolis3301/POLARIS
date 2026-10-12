@@ -688,3 +688,4 @@
 {"ts":1791786543,"ev":"handoff","id":"T-189","who":"Owner@DESKTOP","note":""}
 {"ts":1791786703,"ev":"claim","id":"T-187","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1791786819,"ev":"release","id":"T-187","who":"Owner@DESKTOP","note":"→ ready: harness auto-mode classifier denied the kit/ops/bootstrap.py edit (arm_rea) as Unauthorized Persistence again, even with the owner's approval relayed by the conductor; needs a permission rule for Edit on kit/ops/bootstrap.py or a top-level session where the owner approves directly"}
+{"ts":1791786904,"ev":"handoff","id":"T-185","who":"Owner@DESKTOP","note":""}
