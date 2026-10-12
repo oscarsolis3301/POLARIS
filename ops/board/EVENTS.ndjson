@@ -693,3 +693,4 @@
 {"ts":1791787969,"ev":"blocked","id":"T-187","who":"Owner@DESKTOP","note":"→ blocked: parked to next run (owner 2026-10-11) — 6.8.0 ships without REA arming"}
 {"ts":1791787969,"ev":"blocked","id":"T-188","who":"Owner@DESKTOP","note":"→ blocked: parked to next run (owner 2026-10-11) — 6.8.0 ships without REA updates"}
 {"ts":1791789933,"ev":"done","id":"T-189","who":"Owner@DESKTOP","note":"","pts":1}
+{"ts":1791789950,"ev":"done","id":"T-185","who":"Owner@DESKTOP","note":"","pts":2}
