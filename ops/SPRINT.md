@@ -16,6 +16,7 @@ change, REA registration, Jev key). Lanes that hit one hand back.
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-10-11 | 6 | 6 |
 
 # SPRINT 17 — Fast (6.7.0)          capacity: 24   dates: 2026-09-24–
 
