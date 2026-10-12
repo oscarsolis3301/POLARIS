@@ -31,7 +31,7 @@ harness actually sends. This spike writes no kit code: its only repo output is
 - [ ] Nothing in this repo changes except `docs/spikes/effort-live.md`; the probe repo and logs live outside it.
 
 ## T-186 — "The effort ceiling — model-guard refuses a spawn above the chat's effort and tells you once when a running subagent is left above a lowered one"
-points 5 · risk normal · landed 67b0830 (2026-10-12) · claimed 2026-10-12
+points 5 · risk normal · landed 67b0830 (2026-10-12) · claimed 2026-10-12 → done 2026-10-12
 files touched: kit/ops/hooks/model-guard.sh, ops/tests/model-guard-v2.cmd, ops/tests/model-guard-v2.expected
 
 ### Why
@@ -109,3 +109,20 @@ the decision layer is built. This spike writes no kit code: its only repo output
 - [ ] Both label sets scored for both checkpoints, each beside its majority baseline; GPU p50/p95 per checkpoint.
 - [ ] REA footprint in bytes for a main chat and a subagent, compared with the slim budget.
 - [ ] Nothing in this repo changes except `docs/spikes/laya-jev-rea.md`; the venv, checkpoints, labelled sets and logs live outside it.
+
+## T-191 — "Release prep 6.8.0 — the version number and one changelog entry for the effort ceiling, the Use-REA-to routing clause and the two spikes"
+points 1 · risk normal · landed f5bab4a (2026-10-12) · claimed 2026-10-12
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+This sprint ships as its own release, before the next planned sprint. The kit is on 6.7.1, so this is
+6.8.0. This task writes the two files a release needs from the repo: `kit/ops/VERSION` says
+`version: 6.8.0`, and `CHANGELOG.md` gets ONE new entry at the top, `## 6.8.0 — <date>`, in plain words:
+subagents can no longer run above the chat's effort, and you get one notice (never an automatic restart)
+when you lower it mid-run; REA is set up on every armed machine and keeps itself updated after a 7-day
+soak; "Use REA to…" works in any project. Include any numbers the lanes recorded in their Notes (guard
+time, bytes added to CLAUDE.md).
+
+### Acceptance
+- [ ] `kit/ops/VERSION` says `version: 6.8.0`; the newest CHANGELOG heading is `## 6.8.0 — <date>`; the 6.7.1 entry is untouched below it.
+- [ ] The entry covers the effort ceiling, the mid-run notice, REA arming, REA updates and the routing clause, in plain words.
