@@ -4,6 +4,52 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.8.0 — 2026-10-12
+
+**A helper can no longer try harder than the chat that sent it. If you turn the chat's effort down
+while helpers are still at work, POLARIS lets them finish and tells you once, without stopping or
+restarting anything. And "Use REA to…" now means the same thing in every POLARIS project.**
+
+You pick how hard a chat thinks: low, medium, high, xhigh or max. Until now a helper could quietly
+ask for more than that. It could request `max` from a chat set to `high`, or come from an agent
+definition that always runs at `xhigh`. The model guard already checks every helper for banned
+models, and now it checks effort too. A helper may run at the chat's level or lower, never higher. A
+request above that is refused with one line naming the level to drop to. A helper started by another
+helper is held to the lower of its parent's level and the chat's. When the guard cannot tell a level,
+it lets the helper through, the same way it has always handled a check it cannot answer.
+
+If you lower the chat's effort mid-run, helpers that simply follow the chat pick up the new level on
+their next step, so nothing needs to happen there. A helper that was told its own level keeps it. For
+that one, POLARIS shows one plain notice and tells the chat once. The helper keeps working and is
+never restarted unless you ask.
+
+"Use REA to…" now works in any POLARIS project that has REA, the reverse-engineering kit. REA gathers
+the evidence first. A question then gets an answer, and a build request goes through the usual
+routing with that evidence attached. That is one short line in the protocol every chat reads.
+
+Two studies ship with it. `docs/spikes/effort-live.md` records which events carry the chat's effort,
+how a notice reaches you, and a live test run by the conductor. It confirmed that helpers which follow
+the chat change level mid-run, and that a helper given its own level stays there: one sat at `xhigh`
+under a `medium` chat, which is the gap this release closes. `docs/spikes/laya-jev-rea.md` is REA's
+study of Laya and Jev, the groundwork for the next sprint. Neither shipped Laya model beats a plain
+guess yet, so Laya does not choose effort yet, not even silently in the background. The study also
+measured what REA costs every chat.
+
+**BREAKING:** a helper asking for more effort than its chat is now refused, and that includes one
+whose agent definition sets a higher `effort:`. Ask again at the chat's level or lower, or raise the
+chat's effort first. No other gate moved. This release does not install, set up or update REA for
+you: REA is still yours to install, and its connection settings are exactly as you left them.
+
+| | before | after |
+|---|---|---|
+| a helper asking for more effort than its chat | allowed; a `max` helper could run under a `high` chat | refused, with one line naming the level to ask for |
+| an agent definition that always runs at `xhigh` | ran at `xhigh` whatever the chat was set to | refused under a lower chat; the same helper asking for the chat's level is allowed |
+| lowering the chat's effort mid-run | a helper with its own level kept running above the chat, and nobody was told | it keeps running and is never restarted; you get one notice, and the chat is told once |
+| the model guard's time per tool call | — | a median of 86 ms against a 74 ms shell floor on this machine, well inside its 374 ms budget |
+| "Use REA to…" | no shared meaning; each chat guessed | REA gathers evidence first, then the request is answered or routed; 155 bytes added to the protocol every chat reads |
+| what REA costs a chat | unmeasured | about 5.8 kB per chat and per helper when REA is connected, on top of the 17.7 kB POLARIS already measures per chat |
+| Laya choosing effort | an open question | measured: neither shipped model beats a plain guess, so it waits for the next sprint's training |
+
 ## 6.7.1 — 2026-09-24
 
 **A folder named like the base branch made POLARIS silently miss work that had already landed.**
