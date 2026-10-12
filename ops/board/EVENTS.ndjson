@@ -686,3 +686,4 @@
 {"ts":1791786432,"ev":"claim","id":"T-187","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1791786503,"ev":"release","id":"T-187","who":"Owner@DESKTOP","note":"→ ready: builder edit to kit/ops/bootstrap.py (arm_rea: npm install -g + rea setup registration) was denied by the harness auto-mode classifier as Unauthorized Persistence; needs the owner's direct approval or a permission rule"}
 {"ts":1791786543,"ev":"handoff","id":"T-189","who":"Owner@DESKTOP","note":""}
+{"ts":1791786703,"ev":"claim","id":"T-187","who":"Owner@DESKTOP","note":"","pts":3}
