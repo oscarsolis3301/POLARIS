@@ -60,6 +60,14 @@ and start no process; the write happens only on a change. Same `<session_id>` pl
 existing state file (`/`, `\` or `..` ⇒ no state at all ⇒ allow). Known limit, accepted: the ceiling is
 as fresh as the main session's last hook call.
 
+**Which calls may set it (T-185, `docs/spikes/effort-live.md` § Hook events).** ONLY main-session
+(no `agent_id`) **PreToolUse and PostToolUse** — both carry `$CLAUDE_EFFORT` and `effort.level`, and they
+always agree. A subagent's calls carry the SUBAGENT's level and never touch the ceiling file.
+SessionStart, UserPromptSubmit, SubagentStart and ConfigChange carry NEITHER — and in those events an
+apparent `$CLAUDE_EFFORT` is the launching shell's leaked value, not the chat's: never read the ceiling
+from them, even if a future registration routes them through this script. No new hook registration:
+model-guard's existing entries already see every main PreToolUse/PostToolUse.
+
 ### The spawn check (Agent, Task, Workflow) — placed AFTER the existing forbidden-model check
 - **Requested effort**, first source that is present wins:
   1. the call's `effort` parameter (Agent/Task `tool_input.effort`; for a Workflow, EVERY per-agent
@@ -86,22 +94,36 @@ as fresh as the main session's last hook call.
 ### Mid-run: a subagent's own calls are NEVER blocked by effort
 - A subagent call (payload has `agent_id`) whose `$CLAUDE_EFFORT` ranks above the recorded ceiling is
   ALLOWED (exit 0 as far as effort goes; the model ban is unaffected).
-- The first time this happens for a given `(agent_id, ceiling)`, the guard writes the marker
+- **Who this is about (T-185, § Live mid-run check): PINNED subagents only.** An inheriting subagent
+  follows a mid-run change from its next turn, so its level never ranks above the ceiling and it never
+  trips this path. Only a subagent spawned with an explicit `effort` (or an agent definition's) stays
+  where it was pinned and can be left above a lowered chat. No special-casing is needed: the rank
+  comparison below already selects exactly those.
+- The first time this happens for a given `(agent_id, ceiling)`, the guard — SILENTLY on the subagent's
+  call (nothing on stdout: a subagent's `systemMessage` lands only in the SUBAGENT's transcript and never
+  reaches the human or the main agent, § Delivery) — writes the marker
   ```
   $HOME/.claude/polaris/model-state/<session_id>.over/<agent_id>     # one line: "<agent effort> <ceiling>"
   ```
-  and emits ONE notice through the channel T-185 proves reaches the human (e.g. a `systemMessage`):
+  and appends the note to the pending-notes file `model-state/<session_id>.over/.pending`.
+  A later call with the same marker content writes nothing (no duplicate). A changed ceiling rewrites
+  the marker and appends once more.
+- **Delivery — the main session's next PreToolUse, and only there.** A main-session (no `agent_id`)
+  PreToolUse that finds `.pending` emits, ONCE, on stdout (consume-on-read: `.pending` removed after the
+  emit), the exact shape T-185 proved reaches the main agent:
+  ```
+  {"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"<notice> <restart recipe>"}}
+  ```
+  carrying both the notice
   `polaris: a subagent is still on <agent effort> after the chat dropped to <ceiling>; it will finish there — say "restart it" to re-run it at <ceiling>.`
-  A later call with the same marker content emits nothing (no duplicate). A changed ceiling rewrites
-  the marker and may notify once more.
-- **Telling the main agent:** at the main session's next registered event that T-185 proved can carry
-  `additionalContext`, the guard delivers the same note ONCE (consume-on-read: a pending-notes file
-  `model-state/<session_id>.over/.pending`, removed after delivery), with the restart recipe: message
-  the subagent to write a handoff and release its claim or lock, then spawn the replacement at the new
-  level from that handoff. **Only on the human's word** (E2) — the note says so.
-- If T-185 shows effort is LOCKED at spawn (running subagents never change): behaviour is identical;
-  only more running subagents appear in notices.
-- Raising effort mid-run: inheriting subagents follow (if T-185 confirms); pinned-lower ones stay lower
+  and the restart recipe: message the subagent to write a handoff and release its claim or lock, then
+  spawn the replacement at the new level from that handoff. **Only on the human's word** (E2) — the
+  note says so. That emit never changes the call's allow/deny outcome (a spawn refusal on the same call
+  still exits 2; the pending note then waits for the next main PreToolUse).
+- **NEVER emit `additionalContext` on SubagentStop** (nor any output there): it attaches to the subagent
+  and re-prompts it in a loop (T-185 saw 9 re-fires). model-guard is not registered on SubagentStop and
+  must not be; a SubagentStop payload fed to the script produces no stdout.
+- Raising effort mid-run: inheriting subagents follow (T-185 confirmed); pinned-lower ones stay lower
   (E1 allows it). No notice.
 
 ### Unchanged — pinned
@@ -122,7 +144,12 @@ New cases, all hermetic (`mktemp -d` HOME, `CLAUDE_EFFORT` set per call):
   explicit `effort: "high"` → allowed;
 - a Workflow script with `effort:'max'` under `high` → refused;
 - no source at all → allowed; unknown level word → allowed;
-- a subagent over the ceiling → allowed, exactly one notice, the marker written; its next call → no notice;
+- a pinned subagent over the ceiling → allowed, NO stdout, the marker and `.pending` written; its next
+  call → nothing new; the next main-session PreToolUse → exactly one `additionalContext` JSON line
+  (shape above) carrying the notice + recipe, `.pending` removed; the main call after → no stdout;
+- a SubagentStop payload → no stdout;
+- the ceiling file is NOT touched by a subagent's call, nor by a UserPromptSubmit/SessionStart payload
+  even with `CLAUDE_EFFORT` set (the leaked-shell-value case);
 - the ceiling file is written on a change and NOT rewritten when unchanged (mtime or content proof).
 Worktree-true run: `bash ops/tests/model-guard-v2.cmd 2>/dev/null | diff - ops/tests/model-guard-v2.expected`.
 
@@ -131,5 +158,12 @@ Main chat on `high`; the main agent calls Agent with `{"subagent_type":"general-
 → exit 2, stderr: `polaris: effort 'max' is above this chat's 'high' (owner, E1) — spawn at effort 'high' or lower, or drop the effort parameter to inherit. Nothing was spawned.`
 Same call with `"effort":"high"` → exit 0.
 
+## Recorded v2 option — NOT built
+T-185 § updatedInput effort proved a PreToolUse `updatedInput` CAN rewrite an Agent spawn's `effort`
+(the spawned subagent's own transcript read `"effort":"low"`), so the guard could CLAMP an over-limit
+spawn to the limit instead of refusing it. v1 keeps **refuse-at-spawn** (exit 2, the message above).
+Clamping is a v2 contract + an owner decision; T-186 does not implement it.
+
 ## Changelog
 - v1 2026-10-11: created for T-185, T-186.
+- v1.1 2026-10-11: T-185 findings folded in before T-186 is claimed (Planner regroom, owner-directed): ceiling set from main PreToolUse/PostToolUse only, never SessionStart/UserPromptSubmit/SubagentStart/ConfigChange (leaked shell value); the mid-run path concerns pinned subagents only; notice + recipe delivered as `additionalContext` on the main session's next PreToolUse; never any output on SubagentStop; the updatedInput clamp recorded as a v2 option, not built. No new hook registration.

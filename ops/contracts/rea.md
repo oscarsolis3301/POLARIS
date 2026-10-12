@@ -129,5 +129,30 @@ Headings, pinned (Sprint 19 reads them):
 Downloads (the `laya-typed-decisions` checkpoint) need the owner's yes FIRST: the builder hands back
 with the URL and size; the conductor relays it.
 
+## v2 — arming connects on demand; arming + updates move to the next run   (2026-10-11)
+Supersedes § 1's **Register** step and § 2's re-register step where they conflict. Everything else in
+§ 1/§ 2 (floors, opt-out, test seams, fail-open, quiet output, fixtures, api-kit rows) stands.
+- **Owner decision R2 (DECIDED 2026-10-11, in the conductor conversation — not a proposal):** "REA
+  connects on demand — skill and CLI always installed; the MCP server is connected only when 'Use REA
+  to…' is invoked." Measured cause: T-190 (`docs/spikes/laya-jev-rea.md` § REA footprint) put REA's
+  always-on MCP tool names at ~5.8 kB per context, +33% on `polaris slim`'s 17,661 B.
+- **Arming (`arm_rea`, T-187, next run):** installs the `rea` CLI and the `reverse-engineer-anything`
+  skill machine-wide, and does **NOT** register the `rea` MCP server in user (machine-wide) scope. The
+  exact `rea` argv that does skill-only registration is read off `rea setup --help` / REA's docs by the
+  builder and written into `ops/tests/rea-arm.expected`; if REA offers no skill-only path, T-187 STOPS
+  and hands back — never registers the MCP server as a fallback. "Already armed" = `rea` resolves AND
+  the skill dir exists (unchanged). `arm_rea` never removes an existing registration; taking this
+  machine's existing always-on MCP entry out of user scope is a one-time human step the next run's
+  conductor raises with the owner.
+- **Updates (T-188, next run):** `rea update` then the same skill-only registration — never a
+  re-registration that restores the MCP server machine-wide.
+- **Routing (T-189, landed):** "Use REA to…" ⇒ REA's skill, which connects the MCP server only when a
+  tool the CLI lacks is needed ("Connect only when needed"). No change to the shipped clause.
+- **Why the next run:** the harness auto-mode check refused T-187's `kit/ops/bootstrap.py` edit from a
+  subagent twice ("Unauthorized Persistence"), even with the owner's yes relayed. T-187 and T-188 run in
+  a fresh top-level chat where the owner approves the harness prompt directly; 6.8.0 ships without them.
+
 ## Changelog
 - v1 2026-10-11: created for T-187, T-188, T-189, T-190.
+- v2 2026-10-11: owner decision R2 (REA connects on demand — arming registers skill + CLI, never the MCP
+  server machine-wide); T-187/T-188 parked to the next run; 6.8.0 ships without REA arming.
