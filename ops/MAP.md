@@ -240,3 +240,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
   tarball/raw-channel paths working regardless, so this is untested-in-the-wild, not unsafe.
 
 ## Deltas
+
+- docs/spikes/ — new: effort-live.md, the hook-event and delivery facts the effort ceiling (T-186) and Sprint 19's act mode read  (T-185, 2026-10-12)
