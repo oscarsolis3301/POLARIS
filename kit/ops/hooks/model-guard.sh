@@ -8,6 +8,11 @@
 #                                    the session — or the subagent making the call — runs one
 #   PostToolUse (matcher "Agent")    a subagent that still ran on one → the parent is told to discard it
 #
+# THE EFFORT CEILING (ops/contracts/effort-ceiling.md § 2, owner E1/E2) rides the same two events: a
+# main-session PreToolUse/PostToolUse records the chat's effort; a spawn asking for more than its caller
+# has (or than the chat has) is refused; a pinned subagent left above a lowered chat is NEVER blocked —
+# the main agent is told once, on its next PreToolUse, and a restart happens only on the human's word.
+#
 # Exit 2 = block (stderr goes back to Claude, exactly like ownership-guard.sh). Exit 0 = allow.
 #
 # WHY THIS EXISTS. `model_strong: fable` plus `route` returning `strong` for every planner/integrator/
@@ -126,6 +131,68 @@ MG_TP="${MG_TP//\\//}"                       # ... and forward slashes are what 
 # <session_id> names a file, so it must be a plain name: `/`, `\` or `..` in it → no state at all.
 case "$MG_SID" in ''|*[!A-Za-z0-9_-]*) MG_SF='';; *) MG_SF="${HOME:+$HOME/.claude/polaris/model-state/$MG_SID}";; esac
 
+# --- the effort ceiling: record it, and note a pinned subagent left above it --
+# Order low < medium < high < xhigh < max. "a ranks above b" is read off MG_OR with no function and no
+# fork: a appears in what follows b (`${MG_OR#* b }`). Unknown, empty or missing ⇒ allow (fail open).
+# ONLY PreToolUse/PostToolUse carry the chat's effort (docs/spikes/effort-live.md § Hook events);
+# SessionStart, UserPromptSubmit, SubagentStart and ConfigChange carry none, and an apparent
+# $CLAUDE_EFFORT there is the launching shell's leaked value — so they never reach this block.
+MG_OR=' low medium high xhigh max '; MG_EF=''; MG_CE=''
+case "$MG_EV" in
+  PreToolUse|PostToolUse)
+    MG_EF="${CLAUDE_EFFORT:-}"                 # THIS caller's own level: env first, payload head second
+    if [ -z "$MG_EF" ]; then mg_re='"effort":[{]"level":"([^"]*)"'; [[ $MG_H =~ $mg_re ]] && MG_EF="${BASH_REMATCH[1]}"; fi
+    case "$MG_EF" in *[!A-Za-z]*) MG_EF='';; esac
+    if [ -n "$MG_SF" ]; then
+      { IFS= read -r MG_CE < "$MG_SF.effort"; } 2>/dev/null
+      MG_CE="${MG_CE%$'\r'}"
+      if [ -z "$MG_AID" ]; then
+        # The MAIN chat's level IS the ceiling. Builtin read + compare; the write happens only on a change.
+        if [ -n "$MG_EF" ] && [ "$MG_EF" != "$MG_CE" ]; then
+          [ -d "${MG_SF%/*}" ] || mkdir -p "${MG_SF%/*}" 2>/dev/null
+          { printf '%s\n' "$MG_EF" > "$MG_SF.effort"; } 2>/dev/null
+          MG_CE="$MG_EF"
+        fi
+        # A note left by a subagent's call is handed to the main agent on this call — only if it is
+        # allowed (a refusal's stdout is lost), so it rides the EXIT trap, which sees the final rc. The
+        # mv claims it atomically: two parallel main calls never both emit it. Consume-on-read.
+        if [ "$MG_EV" = PreToolUse ] && [ -f "$MG_SF.over/.pending" ]; then
+          trap 'mg_rc=$?
+            if [ "$mg_rc" = 0 ] && mv -f "$MG_SF.over/.pending" "$MG_SF.over/.pending.$$" 2>/dev/null; then
+              mg_n=""
+              while read -r mg_a mg_e mg_c; do
+                case "$mg_e" in low|medium|high|xhigh|max) ;; *) continue;; esac
+                case "$mg_c" in low|medium|high|xhigh|max) ;; *) continue;; esac
+                mg_n="$mg_n polaris: a subagent is still on $mg_e after the chat dropped to $mg_c; it will finish there — say \\\"restart it\\\" to re-run it at $mg_c."
+              done < "$MG_SF.over/.pending.$$"
+              rm -f "$MG_SF.over/.pending.$$" 2>/dev/null
+              if [ -n "$mg_n" ]; then
+                mg_n="${mg_n# } Restart only when the human says so (owner, E2) and never stop it unasked: message that subagent to write a handoff and release its claim or lock, then spawn the replacement at the new level from that handoff."
+                printf "%s\n" "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"$mg_n\"}}"
+              fi
+            fi' EXIT
+        fi
+      else
+        # A SUBAGENT's call is never blocked by effort (E2). A PINNED one above the ceiling is noted once
+        # per (agent_id, ceiling), silently: its own stdout would reach only its own transcript.
+        case "$MG_AID" in *[!A-Za-z0-9_-]*) ;; *)
+          case "$MG_EF" in low|medium|high|xhigh|max)
+            case "$MG_CE" in low|medium|high|xhigh|max)
+              case " ${MG_OR#* $MG_CE }" in *" $MG_EF "*)
+                mg_mk=''; { IFS= read -r mg_mk < "$MG_SF.over/$MG_AID"; } 2>/dev/null
+                if [ "${mg_mk%$'\r'}" != "$MG_EF $MG_CE" ]; then
+                  [ -d "$MG_SF.over" ] || mkdir -p "$MG_SF.over" 2>/dev/null
+                  { printf '%s\n' "$MG_EF $MG_CE" > "$MG_SF.over/$MG_AID" &&
+                    printf '%s %s %s\n' "$MG_AID" "$MG_EF" "$MG_CE" >> "$MG_SF.over/.pending"; } 2>/dev/null
+                fi;;
+              esac;;
+            esac;;
+          esac;;
+        esac
+      fi
+    fi;;
+esac
+
 case "$MG_EV" in
   # --- SessionStart · PostModelSwitch: record the model, never block ---------
   SessionStart|PostModelSwitch)
@@ -203,6 +270,77 @@ case "$MG_TOOL" in
     done <<MGEOF
 $MG_MS
 MGEOF
+    # 1b. The effort ceiling (owner, E1): a spawn may ask for its caller's effort or less, never more.
+    #     The limit is the smaller of THIS caller's own level (for a nested spawn, the subagent's) and
+    #     the recorded ceiling; one side unknown ⇒ the other; both unknown ⇒ allow.
+    MG_LIM="$MG_EF"
+    case "$MG_LIM" in low|medium|high|xhigh|max) ;; *) MG_LIM='';; esac
+    case "$MG_CE" in low|medium|high|xhigh|max)
+      if [ -z "$MG_LIM" ]; then MG_LIM="$MG_CE"
+      else case " ${MG_OR#* $MG_CE }" in *" $MG_LIM "*) MG_LIM="$MG_CE";; esac; fi;;
+    esac
+    if [ -n "$MG_LIM" ]; then
+      # Requested effort, first source present wins: the call's own parameter (a Workflow: EVERY
+      # per-agent `effort` option, exactly as the model check walks every `model`) …
+      MG_RQ=''; mg_src=''
+      if [ "$MG_TOOL" = Workflow ]; then
+        case "$MG_TI" in
+          *effort*) MG_RQ="$(printf '%s' "$MG_TI" | grep -aoE '[^A-Za-z0-9_]effort(\\?"|'"'"')?[[:space:]]*:[[:space:]]*(\\?"|'"'"')[^"'"'"'\\]*' 2>/dev/null)";;
+        esac
+      else
+        mg_re='"effort":"([^"]*)"'
+        [[ $MG_TI =~ $mg_re ]] && MG_RQ="${BASH_REMATCH[1]}"
+        # … else a non-built-in agent definition's `effort:` frontmatter. A plain type is looked up in
+        # <cwd>/.claude/agents then ~/.claude/agents; a <plugin>:<agent> type only in that plugin's own
+        # agents/ (installed cache first, then the marketplace checkout) — builtin globs, first hit wins.
+        if [ -z "$MG_RQ" ]; then
+          mg_ty=''; mg_re='"subagent_type":"([^"]*)"'
+          [[ $MG_TI =~ $mg_re ]] && mg_ty="${BASH_REMATCH[1]}"
+          case "$mg_ty" in general-purpose|Explore|Plan|claude|statusline-setup|claude-code-guide) mg_ty='';; esac
+          mg_pl=''
+          case "$mg_ty" in *:*) mg_pl="${mg_ty%%:*}"; mg_ty="${mg_ty#*:}";; esac
+          case "$mg_ty:$mg_pl" in *[!A-Za-z0-9_.:-]*|*..*|:*) mg_ty='';; esac
+          mg_d=''
+          if [ -n "$mg_ty" ] && [ -n "$mg_pl" ]; then
+            for mg_f in "$HOME"/.claude/plugins/cache/*/"$mg_pl"/*/agents/"$mg_ty".md \
+                        "$HOME"/.claude/plugins/marketplaces/*/plugins/"$mg_pl"/agents/"$mg_ty".md; do
+              [ -f "$mg_f" ] && { mg_d="$mg_f"; break; }
+            done
+          elif [ -n "$mg_ty" ]; then
+            mg_cw=''; mg_re='"cwd":"([^"]*)"'
+            [[ $MG_H =~ $mg_re ]] && { mg_cw="${BASH_REMATCH[1]//\\\\/\\}"; mg_cw="${mg_cw//\\//}"; }
+            for mg_f in ${mg_cw:+"$mg_cw/.claude/agents/$mg_ty.md"} ${HOME:+"$HOME/.claude/agents/$mg_ty.md"}; do
+              [ -f "$mg_f" ] && { mg_d="$mg_f"; break; }
+            done
+          fi
+          if [ -n "$mg_d" ]; then                # frontmatter only: a builtin read loop, stops at `---`
+            mg_i=0
+            while IFS= read -r mg_l || [ -n "$mg_l" ]; do
+              mg_l="${mg_l%$'\r'}"; mg_i=$((mg_i + 1))
+              if [ "$mg_i" = 1 ]; then [ "$mg_l" = '---' ] && continue; break; fi
+              [ "$mg_l" = '---' ] || [ "$mg_i" -gt 80 ] && break
+              mg_re='^effort:[[:space:]]*["'"'"']?([A-Za-z]+)'
+              [[ $mg_l =~ $mg_re ]] && { MG_RQ="${BASH_REMATCH[1]}"; mg_src=def; break; }
+            done < "$mg_d"
+          fi
+        fi
+      fi
+      # … neither ⇒ nothing requested ⇒ allow (the subagent inherits, already ≤ its caller).
+      mg_ab=" ${MG_OR#* $MG_LIM }"             # the levels above the limit
+      while IFS= read -r mg_l; do
+        mg_l="${mg_l##*[\"\']}"
+        case "$mg_l" in low|medium|high|xhigh|max) ;; *) continue;; esac
+        case "$mg_ab" in *" $mg_l "*) ;; *) continue;; esac
+        if [ "$mg_src" = def ]; then
+          printf '%s\n' "polaris: the agent definition asks for '$mg_l', above this chat's '$MG_LIM' (owner, E1) — pass an explicit effort: '$MG_LIM' or lower on the spawn. Nothing was spawned." >&2
+        else
+          printf '%s\n' "polaris: effort '$mg_l' is above this chat's '$MG_LIM' (owner, E1) — spawn at effort '$MG_LIM' or lower, or drop the effort parameter to inherit. Nothing was spawned." >&2
+        fi
+        exit 2
+      done <<MGEOF
+$MG_RQ
+MGEOF
+    fi
     ;;
 esac
 

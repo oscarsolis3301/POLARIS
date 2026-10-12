@@ -1,7 +1,7 @@
 # Sprint 18 — Effort ceiling + REA (6.8.0) (2026-10-11–)
 
 ## T-185 — "Effort probe spike — which hook events carry the chat's effort, how a notice reaches the human, and whether a spawn's effort can be rewritten"
-points 2 · risk normal · landed 6e52797 (2026-10-11) · claimed 2026-10-11
+points 2 · risk normal · landed 6e52797 (2026-10-11) · claimed 2026-10-11 → done 2026-10-12
 files touched: docs/spikes/effort-live.md
 
 ### Why
@@ -30,8 +30,35 @@ harness actually sends. This spike writes no kit code: its only repo output is
 - [ ] `## Live mid-run check` carries the conductor's result, attributed (who, when) — never fabricated by the builder.
 - [ ] Nothing in this repo changes except `docs/spikes/effort-live.md`; the probe repo and logs live outside it.
 
+## T-186 — "The effort ceiling — model-guard refuses a spawn above the chat's effort and tells you once when a running subagent is left above a lowered one"
+points 5 · risk normal · landed 67b0830 (2026-10-12) · claimed 2026-10-12
+files touched: kit/ops/hooks/model-guard.sh, ops/tests/model-guard-v2.cmd, ops/tests/model-guard-v2.expected
+
+### Why
+Owner decision E1: a subagent may run at the main chat's effort or lower, never higher. With Opus 5.5
+on high, subagents run at high or below. Today nothing stops a spawn from asking for `max`, or an agent
+definition from pinning `effort: xhigh`. Owner decision E2: if the human lowers the chat's effort while
+a subagent is running, the subagent is NOT stopped; the human gets one plain notice, and a restart
+happens only when they ask. Both belong in `kit/ops/hooks/model-guard.sh`, which already sees every
+tool call on the machine and already checks every spawn for forbidden models.
+
+Build exactly `ops/contracts/effort-ceiling.md` § 2: the effort order and fail-open rule; the ceiling
+file, written only on change, with builtins; the spawn check after the forbidden-model check (parameter,
+then a Workflow's per-agent option, then a non-built-in agent definition's `effort:`), limited by the
+smaller of the caller's own effort and the ceiling, refusing with one line that names the level to drop
+to; and the mid-run path that never blocks a subagent, writes one marker, emits one notice through the
+channel `docs/spikes/effort-live.md` proved, and hands the main agent the note once. Extend the golden
+with every case the contract lists.
+
+### Acceptance
+- [ ] Spawn above / equal / below the limit → refused (exit 2, one line naming the level) / allowed / allowed.
+- [ ] A nested spawn is limited by its caller's own effort; an `effort: xhigh` definition under `high` is refused and the same spawn with an explicit `high` allowed; a Workflow `effort:'max'` under `high` is refused; no source or an unknown word → allowed.
+- [ ] A subagent over the ceiling → allowed, one notice, marker written; its next call → no duplicate notice.
+- [ ] The forbidden-model ban, hook registration, `mg_denied` and every fail-open path are unchanged; model-guard stays `ok` in `bench.sh guards`.
+- [ ] No new top-level function in model-guard.sh (the api-kit diff is empty).
+
 ## T-189 — "Asking to use REA works in any POLARIS project — one routing clause in the protocol every session reads"
-points 1 · risk normal · landed 3e1950b (2026-10-11) · claimed 2026-10-11
+points 1 · risk normal · landed 3e1950b (2026-10-11) · claimed 2026-10-11 → done 2026-10-12
 files touched: kit/CLAUDE.md
 
 ### Why
@@ -51,7 +78,7 @@ attached. No new heading.
 - [ ] No heading added or changed (api-kit diff empty).
 
 ## T-190 — "REA studies Laya and Jev — the real checkpoints and wire exchange, the newer checkpoint measured on our own questions, and what REA costs every chat"
-points 3 · risk normal · landed fe6e062 (2026-10-11) · claimed 2026-10-11
+points 3 · risk normal · landed fe6e062 (2026-10-11) · claimed 2026-10-11 → done 2026-10-12
 files touched: docs/spikes/laya-jev-rea.md
 
 ### Why
