@@ -696,3 +696,4 @@
 {"ts":1791789950,"ev":"done","id":"T-185","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1791790003,"ev":"done","id":"T-190","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1791790270,"ev":"promote","id":"T-186","who":"Owner@DESKTOP","note":"deps done: T-185","pts":5}
+{"ts":1791790508,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"INTEGRATOR.md step 4 says 'git branch -d integrate/<date>' o"}

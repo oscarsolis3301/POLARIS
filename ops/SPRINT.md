@@ -604,3 +604,4 @@ exercises but a Builder cannot.
   `checkoutguard`/`readyoverlap`/`selfland` ever go red, read the failing rc assertion before the
   words — a printed refusal proves nothing; and a red in one of these drills most likely means the
   drill caught shipped code regressing, so report the assertion, never weaken it.
+- 2026-10-12 · INTEGRATOR.md step 4 says 'git branch -d integrate/<date>' on the primary, but the primary-checkout guard hook denies any git branch command there — integrate/2026-10-11 (fully merged) was left behind; seal or done should delete the merged integrate branch itself, or the guard should allow -d of a merged integrate/*
