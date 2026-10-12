@@ -24,14 +24,14 @@ cmd_notify_gate() { # notify-gate <kind> [ID] — fire the notify: hook at a HUM
 
 status_brief() { # `status --brief` — ONE plain-English paragraph, no table (ops/contracts/status-brief.md).
   # voice: standard, no jargon. Grep-stable markers, written VERBATIM: "Last landed:" and "Next up:".
-  local done_c active_c review_c ready_c ids f parts lead line2 newest ntitle top nextup n
+  local done_c active_c review_c ready_c ids f b parts lead line2 newest ntitle top nextup n
   done_c=$(ls "$BOARD/done" 2>/dev/null | grep -c '\.md$' || true)
   active_c=$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)
   review_c=$(ls "$BOARD/review" 2>/dev/null | grep -c '\.md$' || true)
   ready_c=$(ls "$BOARD/ready" 2>/dev/null | grep -c '\.md$' || true)
   ids=""
   for f in "$BOARD/active/"*.md; do [ -e "$f" ] || break
-    ids="${ids:+$ids, }$(basename "$f" .md)"
+    b="${f##*/}"; ids="${ids:+$ids, }${b%.md}"
   done
   # each ·-joined sub-clause is DROPPED when its count is 0 (nothing to say), never zero-padded
   parts=""
@@ -74,13 +74,14 @@ cmd_status() {
   local f id age
   for f in "$BOARD/active/"*.md; do
     [ -e "$f" ] || { echo '  (none)'; break; }
-    id="$(basename "$f" .md)"; age="$(lock_age "$id")"
+    id="${f##*/}"; id="${id%.md}"; age="$(lock_age "$id")"
     printf '  %s · %s · lock age %ss%s\n' "$id" "$(fm_get owner "$f")" "${age:-?}" \
       "$( [ -n "${age:-}" ] && [ "$age" -gt $((STALE_H*3600)) ] && echo " ⚠ STALE — polaris resume $id to take over, or release")"
   done
   echo 'ready (top by wsjf):'
   { for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
-      printf '%s\t%s · %spts · wsjf %s\n' "$(fm_get wsjf "$f")" "$(basename "$f" .md)" \
+      id="${f##*/}"; id="${id%.md}"
+      printf '%s\t%s · %spts · wsjf %s\n' "$(fm_get wsjf "$f")" "$id" \
         "$(fm_get points "$f")" "$(fm_get wsjf "$f")"
     done; } | sort -rn | cut -f2- | head -5
   # blocked tasks are owned by no role until drained — surface them WITH the reason so they stop
@@ -88,7 +89,7 @@ cmd_status() {
   local bf bid any=0
   for bf in "$BOARD/blocked/"*.md; do [ -e "$bf" ] || break
     [ "$any" -eq 0 ] && echo 'blocked (needs regroom/escalation):'
-    any=1; bid="$(basename "$bf" .md)"
+    any=1; bid="${bf##*/}"; bid="${bid%.md}"
     printf '  %s · %s\n' "$bid" "$(grep '⛔' "$bf" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*-*[[:space:]]*//' | grep . || echo 'no reason recorded — open the task')"
   done
   # SHARED CHECKOUT (ops/contracts/shared-checkout.md). A second chat's FIRST read is `status`, and
@@ -146,7 +147,7 @@ cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatte
     for f in "$BOARD/$col/"*.md; do
       [ -e "$f" ] || break
       head -1 "$f" | tr -d '\r' | grep -q '^---$' || continue
-      id="$(basename "$f" .md)"
+      id="${f##*/}"; id="${id%.md}"
       printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$col" "$id" \
         "$(fm_get points "$f")" "$(fm_get wsjf "$f")" "$(fm_get risk "$f")" \
         "$(fm_list depends_on "$f" | tr '\n' ',' | sed 's/,$//')" \
@@ -191,16 +192,17 @@ cruft_clear() { # cruft_clear — delete every local feat/<ID> whose task is don
   # besides the stamp — lossless by construction, because a branch only goes when its commits are
   # already in $BASE under another sha. Everything it skips, `drift` still reports.
   # rc 0 always; silent when nothing was cleared. Sets $CRUFT_CLEARED to the count.
-  local f id rc refs
+  local r id rc refs
   CRUFT_CLEARED=0
-  # ONE ref read for the whole pass. The per-task `show-ref` this replaces was a fork per done task
-  # to discover, on almost every board, that there is nothing to do at all.
-  refs="$(git -C "$PRIMARY" for-each-ref --format='%(refname:short)' 'refs/heads/feat/*' 2>/dev/null || true)"
+  # ONE ref read for the whole pass, and the loop walks the BRANCHES — a handful — never done/,
+  # which holds every task ever finished: that walk paid a `basename` fork per done task on every
+  # qa while any feat/* existed at all (speed.md § 3). Refnames never hold whitespace or glob
+  # characters (git check-ref-format), so the unquoted word split is exact.
+  refs="$(git -C "$PRIMARY" for-each-ref --format='%(refname)' 'refs/heads/feat/*' 2>/dev/null || true)"
   [ -n "$refs" ] || return 0
-  refs=" $(printf '%s' "$refs" | tr '\n' ' ') "
-  for f in "$BOARD/done/"*.md; do [ -e "$f" ] || break
-    id="$(basename "$f" .md)"
-    case "$refs" in *" feat/$id "*) : ;; *) continue ;; esac
+  for r in $refs; do
+    id="${r#refs/heads/feat/}"
+    [ -f "$BOARD/done/$id.md" ] || continue
     feat_tip_landed "$id" || continue
     if [ -d "$GCD/worktrees/$id" ]; then
       if beat_live "$id"; then continue; fi            # a lane is still standing in it — not cruft yet
@@ -221,7 +223,7 @@ cmd_sweep() { # report orphans + stale locks + idle worktrees + >24h bg jobs/arc
   local la lpid lalive psl="" psgot=0
   for d in "$LOCKS"/*/; do
     [ -e "$d" ] || break
-    id="$(basename "$d")"; [ "$id" = ".board-mutex" ] && continue
+    id="${d%/}"; id="${id##*/}"; [ "$id" = ".board-mutex" ] && continue
     la="$(lock_age "$id")"
     if ! task_file "$id" active >/dev/null && ! task_file "$id" review >/dev/null; then
       found=1
@@ -311,19 +313,17 @@ EOF
   # worktree — and only those whose tip feat_tip_landed can prove is already in $BASE. A diverged
   # tip is `drift`'s to report and nobody's to delete. `--fix` calls the same cruft_clear `qa`
   # calls, so there is exactly ONE implementation of "safe to delete" in the kit.
+  # Walks the feat/* refs, never done/ (speed.md § 3) — the same shape as cruft_clear.
   local crefs cf cfid
-  crefs="$(git -C "$PRIMARY" for-each-ref --format='%(refname:short)' 'refs/heads/feat/*' 2>/dev/null || true)"
-  if [ -n "$crefs" ]; then
-    crefs=" $(printf '%s' "$crefs" | tr '\n' ' ') "
-    for cf in "$BOARD/done/"*.md; do [ -e "$cf" ] || break
-      cfid="$(basename "$cf" .md)"
-      case "$crefs" in *" feat/$cfid "*) : ;; *) continue ;; esac
-      feat_tip_landed "$cfid" || continue
-      if [ -d "$GCD/worktrees/$cfid" ] && beat_live "$cfid"; then continue; fi
-      found=1
-      printf '⚠ CRUFT: feat/%s — task done, tip proven landed, no live worktree — sweep --fix clears it\n' "$cfid"
-    done
-  fi
+  crefs="$(git -C "$PRIMARY" for-each-ref --format='%(refname)' 'refs/heads/feat/*' 2>/dev/null || true)"
+  for cf in $crefs; do
+    cfid="${cf#refs/heads/feat/}"
+    [ -f "$BOARD/done/$cfid.md" ] || continue
+    feat_tip_landed "$cfid" || continue
+    if [ -d "$GCD/worktrees/$cfid" ] && beat_live "$cfid"; then continue; fi
+    found=1
+    printf '⚠ CRUFT: feat/%s — task done, tip proven landed, no live worktree — sweep --fix clears it\n' "$cfid"
+  done
   [ "$fix" = "--fix" ] && cruft_clear
   # background jobs (ops/contracts/bg-jobs.md): a non-.prev job dir whose start is >24h old is
   # leftover runtime state. Always reported; --fix rotates it to <name>.prev (archive, never
@@ -332,7 +332,7 @@ EOF
   local bgd bgn bgs bga bgp
   for bgd in "$PRIMARY/.polaris/bg"/*/; do
     [ -e "$bgd" ] || break
-    bgn="$(basename "$bgd")"
+    bgn="${bgd%/}"; bgn="${bgn##*/}"
     case "$bgn" in *.prev) continue;; esac
     bgs="$(cat "$bgd/start" 2>/dev/null | tr -d ' \r\n')"
     case "$bgs" in ''|*[!0-9]*) bgs=0;; esac
@@ -358,7 +358,7 @@ EOF
   now="$(date +%s)"
   for ad in "$PRIMARY/.polaris/bg/.archive"/*/; do
     [ -e "$ad" ] || break
-    an="$(basename "$ad")"
+    an="${ad%/}"; an="${an##*/}"
     at="$(stat -c %Y "${ad%/}" 2>/dev/null || stat -f %m "${ad%/}" 2>/dev/null || echo 0)"
     case "$at" in ''|*[!0-9]*) at=0;; esac
     [ $(( now - at )) -gt 86400 ] || continue
@@ -367,7 +367,7 @@ EOF
   done
   for hd in "$PRIMARY/.polaris/handover"/*/; do
     [ -e "$hd" ] || break
-    hn="$(basename "$hd")"
+    hn="${hd%/}"; hn="${hn##*/}"
     # NEWEST file, not the directory's own mtime: a state dir is written into for the whole life of
     # its session, and on some filesystems the dir mtime stops moving once the names stop changing.
     ht=0
@@ -518,6 +518,20 @@ cmd_doctor() {
   if [ -f "$CONV" ] && command -v interview_pending >/dev/null 2>&1; then
     local ipend
     ipend="$(interview_pending)" && note "preferences never set here: $ipend — one round of questions: ops/polaris interview"
+  fi
+  # THE BAR, STILL BLANK (ops/contracts/visual-check.md § v3.16). `heal` installs `ops/DESIGN.md`
+  # into every repo, but `heal` cannot interview — so the one section that names THIS product is
+  # still the template's empty slot, and this line is the only thing that ever says so.
+  # ALL THREE, or silence: the file is here · the sentinel is still in it · the repo has a `visual:`
+  # surface at all. A repo with no screens has no screen to hold to a bar and must never be nagged
+  # about one — absent-by-default, and the same anti-warning-storm discipline as the config-drift and
+  # surfaces-activation lines above. NO new CONVENTIONS key: `visual:` already answers "does this
+  # repo have screens", and a second knob for the same question is exactly the drift to avoid.
+  # NEVER name a kit version in the line — doctor's output is goldened, and a version reds it every
+  # release. The remedy is in the owner's terms, never a file-format instruction.
+  if [ -f "$OPS/DESIGN.md" ] && [ -n "$(cfg visual "")" ] \
+     && grep -qF '_(unfilled' "$OPS/DESIGN.md" 2>/dev/null; then
+    note "ops/DESIGN.md is installed but nobody has said what THIS product should look like — write one sentence there, in your own words, on the look and feel you want; every screen gets held to it"
   fi
   # v6.0 autonomy knobs (ops/contracts/hands-free-knobs.md § v2). The 5.13 knobs shipped OFF and
   # stayed off in exactly the repos that never learned they existed, so 6.0 INVERTS the fallbacks
@@ -822,6 +836,9 @@ rules_gate() { # rules_gate <owned-pattern> <ID|-> — does RULES gate this owne
   # (ask-approval.md § 5). `content` rules never gate planning: they judge diffs, not ownership.
   local p="$1" id="${2:--}" scope kind pat msg ask_scope=""
   RULES_GATE=""; RULES_GATE_SCOPE=""
+  # Read the memo in THIS shell: `$(rules_lines)` filled it inside a subshell and threw it away, so
+  # every call re-ran tr|grep|grep — each owned pattern of each ready task paid it, in drift and triage.
+  rules_lines >/dev/null
   while IFS="$POLARIS_TAB" read -r scope kind pat msg; do
     case "$kind" in path|ask) ;; *) continue;; esac
     pat_overlap "$p" "$scope" || continue
@@ -829,7 +846,7 @@ rules_gate() { # rules_gate <owned-pattern> <ID|-> — does RULES gate this owne
     [ -n "$ask_scope" ] && continue
     ask_approval_covers "$p" "$id" || ask_scope="$scope"
   done <<EOF
-$(rules_lines)
+$_RULES_CACHE
 EOF
   [ -n "$ask_scope" ] && { RULES_GATE=ask; RULES_GATE_SCOPE="$ask_scope"; return 0; }
   return 1
@@ -858,46 +875,130 @@ EOF
 cmd_drift() { # mechanical hygiene audit — the invariants, machine-checked. --strict: rc 1 on findings
   local strict="${1:-}" n=0 f g id id2 v d p s t hk hn hs hr
   finding() { n=$((n+1)); printf '⚠ [%d] %s\n' "$n" "$1"; }
+  # Warm both per-process memos in THIS shell: their readers call them as $(…), a subshell that
+  # fills the memo and discards it, so every rules/surfaces read below paid three forks again.
+  rules_lines >/dev/null; surfaces_lines >/dev/null
   # 1) THE invariant: files_owned disjoint across ready ∪ active (heuristic, see pat_overlap)
-  local claimable=""; for d in ready active; do
+  local claimable="" nready=0; set --
+  for d in ready active; do
     for f in "$BOARD/$d/"*.md; do [ -e "$f" ] || break; claimable="$claimable$f
-"; done; done
-  local seen=""
+"; set -- "$@" "$f"; done
+    if [ "$d" = ready ]; then nready=$#; fi
+  done
+  # ONE frontmatter pass over ready ∪ active — the only columns § 1 and § 2 read (speed.md § 3).
+  # Every key is read exactly as its reader reads it: contract/points/title as fm_get (first match),
+  # files_owned/surface as fm_list, depends_on as dep_ids — tagged <pos><TAB><key><TAB><value>,
+  # <pos> being the file's 0-based place in $claimable (ready first, then active, glob order).
+  # The per-key, per-pair awk starts this replaces were most of what drift still cost once § 7
+  # became one pass. Kept in fcon/fpts/fttl (scalars) and fown/fsrf/fdep (newline lists).
+  local nl='
+' fx fk fv fmx fcon fpts fttl fown fsrf fdep
+  if [ $# -gt 0 ]; then
+    fmx="$(awk '
+  function out(x, k, s) { printf "%d\t%s\t%s\n", x, k, s }
+  function item(x, k, s,   n, j, p) {
+    if (k != "depends_on") { out(x, k, s); return }
+    gsub(/\[/, " ", s); gsub(/\]/, " ", s); gsub(/,/, " ", s)
+    n = split(s, p, "[ ]")
+    for (j = 1; j <= n; j++) if (p[j] !~ /^[[:space:]]*$/) out(x, k, p[j])
+  }
+  function emit(x, k, s,   n, j, p, it) {
+    if (s == "") return
+    if (s ~ /^\[.*\]$/) {
+      s = substr(s, 2, length(s) - 2); n = split(s, p, ",")
+      for (j = 1; j <= n; j++) {
+        it = p[j]; sub(/^[ \t]*/, "", it); sub(/[ \t]*$/, "", it)
+        if (it != "") item(x, k, it)
+      }
+      return
+    }
+    item(x, k, s)
+  }
+  BEGIN {
+    ns = split("contract points title", sk, " "); nk = split("files_owned surface depends_on", lk, " ")
+    for (i = 1; i < ARGC; i++) {
+      path = ARGV[i]; x = i - 1; fs = 0; on = ""
+      while ((getline line < path) > 0) {
+        if (line ~ /^---[\r]?$/) { if (++fs > 1) break; continue }
+        if (fs != 1) continue
+        for (j = 1; j <= ns; j++) if (!((x, sk[j]) in got) && index(line, sk[j] ":") == 1) {
+          s = substr(line, length(sk[j]) + 2)
+          sub(/^[ \t]*/, "", s); sub(/[ \t]#.*$/, "", s); sub(/[ \t\r]*$/, "", s)
+          out(x, sk[j], s); got[x, sk[j]] = 1
+        }
+        hit = 0
+        for (j = 1; j <= nk; j++) if (index(line, lk[j] ":") == 1) {
+          on = lk[j]; hit = 1; s = substr(line, length(on) + 2)
+          sub(/^[ \t]*/, "", s); sub(/[ \t]#.*$/, "", s); sub(/[ \t\r]*$/, "", s)
+          emit(x, on, s)
+        }
+        if (hit) continue
+        if (on != "" && line ~ /^[ \t]*-[ \t]/) {
+          s = line; sub(/^[ \t]*-[ \t]+/, "", s); sub(/[ \t]#.*$/, "", s); sub(/[ \t\r]*$/, "", s)
+          if (s != "") item(x, on, s)
+          continue
+        }
+        if (on != "" && line ~ /^[A-Za-z_]/) on = ""
+      }
+      close(path)
+    }
+    exit
+  }' "$@" 2>/dev/null || true)"
+    while IFS= read -r v; do [ -z "$v" ] && continue
+      fx="${v%%$POLARIS_TAB*}"; v="${v#*$POLARIS_TAB}"; fk="${v%%$POLARIS_TAB*}"; fv="${v#*$POLARIS_TAB}"
+      case "$fk" in
+        contract) fcon[$fx]="$fv";;
+        points) fpts[$fx]="$fv";;
+        title) fttl[$fx]="$fv";;
+        files_owned) fown[$fx]="${fown[$fx]:-}$fv$nl";;
+        surface) fsrf[$fx]="${fsrf[$fx]:-}$fv$nl";;
+        depends_on) fdep[$fx]="${fdep[$fx]:-}$fv$nl";;
+      esac
+    done <<EOF
+$fmx
+EOF
+  fi
+  # The pairwise walk: each task's list comes from the pass above and is kept in oid[]/opat[], so
+  # the walk itself forks nothing — pat_overlap is pure `case`. Same pairs, same order, same lines.
+  local pa pb fo j k=0 oid opat
   while IFS= read -r f; do [ -z "$f" ] && continue
-    while IFS= read -r g; do [ -z "$g" ] && continue
-      id="$(basename "$f" .md)"; id2="$(basename "$g" .md)"
-      local pa pb
+    id="${f##*/}"; id="${id%.md}"
+    fo="${fown[$k]:-}"
+    j=0
+    while [ "$j" -lt "$k" ]; do
+      id2="${oid[$j]}"
       while IFS= read -r pa; do [ -z "$pa" ] && continue
         while IFS= read -r pb; do [ -z "$pb" ] && continue
           if pat_overlap "$pa" "$pb"; then
             finding "OWNERSHIP OVERLAP: $id ∩ $id2 on '$pa' / '$pb' — chain them (depends_on), never parallel"
           fi
         done <<EOF2
-$(fm_list files_owned "$g")
+${opat[$j]}
 EOF2
       done <<EOF1
-$(fm_list files_owned "$f")
+$fo
 EOF1
-    done <<EOF0
-$seen
-EOF0
-    seen="$seen$f
-"
+      j=$((j+1))
+    done
+    oid[$k]="$id"; opat[$k]="$fo"; k=$((k+1))
   done <<EOF
 $claimable
 EOF
-  # 2) ready-gate: contract exists · deps all done · ≤5 points
-  for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
-    id="$(basename "$f" .md)"
-    v="$(fm_get contract "$f")"
+  # 2) ready-gate: contract exists · deps all done · ≤5 points — the ready files are positions
+  # 0..nready-1 of the same list, so every key below comes from the one pass above.
+  k=0
+  for f in "$@"; do
+    [ "$k" -lt "$nready" ] || break
+    id="${f##*/}"; id="${id%.md}"
+    v="${fcon[$k]:-}"
     # NAMED but MISSING only — an unset contract is legal (handover.sh next_promote, builder.sh pack).
     [ -n "$v" ] && [ ! -f "$PRIMARY/$v" ] && finding "READY GATE: $id contract missing ($v) — blocked/, not ready/"
     while IFS= read -r d; do [ -z "$d" ] && continue
       task_file "$d" done >/dev/null || finding "READY GATE: $id depends_on $d which is NOT in done/"
     done <<EOF
-$(dep_ids "$f")
+${fdep[$k]:-}
 EOF
-    v="$(fm_get points "$f")"; case "$v" in 8|13) finding "READY GATE: $id is ${v}pts — must be split before ready/";; esac
+    v="${fpts[$k]:-}"; case "$v" in 8|13) finding "READY GATE: $id is ${v}pts — must be split before ready/";; esac
     # ask gate (ask-approval.md § 5): a ready task owning anything under an `ask` scope with no
     # covering approved: entry would spawn a Builder only to die on its first write — the ARC
     # sequence, stopped here at step 1. The asking belongs at the plan gate, where a human is
@@ -907,13 +1008,13 @@ EOF
         finding "READY GATE: $id owns '$p' under ask scope '$RULES_GATE_SCOPE' with no covering approved: entry — get the human's yes (polaris approve $id $RULES_GATE_SCOPE -m \"why\") or blocked/, not ready/"
       fi
     done <<EOF
-$(fm_list files_owned "$f")
+${fown[$k]:-}
 EOF
     # surface: items (test-surfaces.md § 3, § 7): `done` writes each one as an ops/SURFACES.tsv row
     # and merely skips a malformed one with a ⚠ — so the typo is caught HERE, at the plan gate, and
     # never discovered at done. A tests glob covering its own surface is the one row shape the
     # whole map cannot survive (D6), so it is refused before any builder claims the task.
-    v="$(fm_get title "$f")"
+    v="${fttl[$k]:-}"
     while IFS= read -r p; do [ -z "$p" ] && continue
       if d="$(surface_row_from_item "$p" "$id" "$v")"; then
         s="${d%%$POLARIS_TAB*}"; t="${d#*$POLARIS_TAB}"; t="${t%%$POLARIS_TAB*}"
@@ -922,8 +1023,9 @@ EOF
         finding "READY GATE: $id surface: '$p' — $d — fix the item before a builder claims it"
       fi
     done <<EOF
-$(fm_list surface "$f")
+${fsrf[$k]:-}
 EOF
+    k=$((k+1))
   done
   # 3) cruft: a done task's feat branch survived — THREE classes, not one (ops/contracts/
   # worktree-liveness.md § v2). Under `landing: self` a lane leaves its OWN branch behind by design
@@ -931,13 +1033,15 @@ EOF
   # fired on every self-landed wave — after `qa` had already paid the suite, which withheld the
   # stamp and made the next `finish` pay it all over again for a nit clearable in a second. A
   # branch is a finding only once nobody is standing in its worktree, and DELETABLE only with proof
-  # its tip is already in $BASE. ONE ref read, not a fork per done task.
-  local crefs; crefs="$(git -C "$PRIMARY" for-each-ref --format='%(refname:short)' 'refs/heads/feat/*' 2>/dev/null || true)"
-  if [ -n "$crefs" ]; then
-    crefs=" $(printf '%s' "$crefs" | tr '\n' ' ') "
-    for f in "$BOARD/done/"*.md; do [ -e "$f" ] || break
-      id="$(basename "$f" .md)"
-      case "$crefs" in *" feat/$id "*) : ;; *) continue ;; esac
+  # its tip is already in $BASE. ONE ref read, and the loop walks the BRANCHES, never done/ (speed.md
+  # § 3): a handful of refs instead of every task ever finished, with zero process starts per step.
+  # A branch whose name matches NO task in any column is an ADVISORY, never a finding: it may hold
+  # unmerged work, so nothing may clear it, and a new red class would red `qa` in every install that
+  # carries a legacy stray the moment it updates. It is printed so the stray is seen — nothing more.
+  local crefs; crefs="$(git -C "$PRIMARY" for-each-ref --format='%(refname)' 'refs/heads/feat/*' 2>/dev/null || true)"
+  for f in $crefs; do
+    id="${f#refs/heads/feat/}"
+    if [ -f "$BOARD/done/$id.md" ]; then
       if ! feat_tip_landed "$id"; then
         finding "CRUFT diverged: feat/$id carries commits not in $BASE — inspect: git log $BASE..feat/$id (never auto-deleted)"
       elif [ -d "$GCD/worktrees/$id" ] && beat_live "$id"; then
@@ -945,8 +1049,10 @@ EOF
       else
         finding "CRUFT: feat/$id still exists though $id is done — bash ops/polaris qa or sweep --fix clears it"
       fi
-    done
-  fi
+    elif ! task_file "$id" >/dev/null; then
+      note "advisory: orphan branch feat/$id — no task in any column (may hold unmerged work; never auto-cleared)"
+    fi
+  done
   # 4) stale forward refs: TODO(T-…) pointing at tasks already done
   local refs; refs="$(grep -RIn 'TODO([A-Za-z][A-Za-z0-9._-]*-[0-9A-Za-z]' "$BOARD" "$OPS/contracts" "$OPS/SPRINT.md" "$OPS/MAP.md" 2>/dev/null || true)"
   while IFS= read -r v; do [ -z "$v" ] && continue
@@ -964,19 +1070,89 @@ EOF
   # 6) telemetry safety
   [ -f "$EVENTS" ] && ! grep -q 'EVENTS\.ndjson merge=union' "$PRIMARY/.gitattributes" 2>/dev/null \
     && finding "TELEMETRY: EVENTS.ndjson without union-merge gitattribute — run: ops/polaris upgrade"
-  # 7) dependency graph across ALL columns: deps that exist nowhere + cycles (a ring never promotes)
-  local col2 idf d2
+  # 7) dependency graph across ALL columns: deps that exist nowhere + cycles (a ring never promotes).
+  # ONE inline awk pass over every column (speed.md § 3). The per-task walk it replaces re-read the
+  # whole board once per dependency, done/ included, and was ~94% of drift's wall time. Same verdicts
+  # in the same order: files in backlog ready active review blocked done order, glob order inside a
+  # column · a dependency is read exactly as dep_ids reads it (fm_list's block and flow shapes, then
+  # split on [ ] , and space) · an id resolves to the file task_file would pick (active first, done
+  # last) · a task is a DEP CYCLE iff it can reach itself. Files are read with getline, so one that
+  # another lane moves mid-pass reads as empty instead of killing the pass.
+  local col2 idf dout
+  set --
   for col2 in backlog ready active review blocked done; do
-    for idf in "$BOARD/$col2/"*.md; do [ -e "$idf" ] || break
-      id="$(basename "$idf" .md)"
-      while IFS= read -r d2; do [ -z "$d2" ] && continue
-        task_file "$d2" >/dev/null || finding "DEP MISSING: $id depends_on $d2 — no task by that id in any column"
-      done <<EOF
-$(dep_ids "$idf")
-EOF
-      dep_reaches "$id" "$id" "" && finding "DEP CYCLE: $id sits in a depends_on ring — it can never satisfy the ready gate; break the cycle"
-    done
+    for idf in "$BOARD/$col2/"*.md; do [ -e "$idf" ] || break; set -- "$@" "$idf"; done
   done
+  if [ $# -gt 0 ]; then
+    dout="$(awk '
+  function add(i, s,   n, k, p) {
+    gsub(/\[/, " ", s); gsub(/\]/, " ", s); gsub(/,/, " ", s)
+    n = split(s, p, "[ ]")
+    for (k = 1; k <= n; k++) if (p[k] !~ /^[[:space:]]*$/) { nd[i]++; dep[i, nd[i]] = p[k] }
+  }
+  function emit(i, s,   n, k, p, item) {
+    if (s == "") return
+    if (s ~ /^\[.*\]$/) {
+      s = substr(s, 2, length(s) - 2); n = split(s, p, ",")
+      for (k = 1; k <= n; k++) {
+        item = p[k]; sub(/^[ \t]*/, "", item); sub(/[ \t]*$/, "", item)
+        if (item != "") add(i, item)
+      }
+      return
+    }
+    add(i, s)
+  }
+  function reaches(s,   q, h, t, u, b, k) {
+    stamp++; h = 1; t = 0; b = best[s]
+    for (k = 1; k <= nd[b]; k++) q[++t] = dep[b, k]
+    while (h <= t) {
+      u = q[h++]
+      if (u == s) return 1
+      if (!(u in best) || vis[u] == stamp) continue
+      vis[u] = stamp; b = best[u]
+      for (k = 1; k <= nd[b]; k++) q[++t] = dep[b, k]
+    }
+    return 0
+  }
+  BEGIN {
+    split("active ready review blocked backlog done", c, " ")
+    for (k = 1; k <= 6; k++) rank[c[k]] = k
+    nf = ARGC - 1
+    for (i = 1; i <= nf; i++) {
+      path = ARGV[i]; n = split(path, seg, "/")
+      id = seg[n]; sub(/\.md$/, "", id); fid[i] = id
+      r = (n > 1 && (seg[n-1] in rank)) ? rank[seg[n-1]] : 9
+      if (!(id in best) || r < brank[id]) { best[id] = i; brank[id] = r }
+      fs = 0; on = 0
+      while ((getline line < path) > 0) {
+        if (line ~ /^---[\r]?$/) { if (++fs > 1) break; continue }
+        if (fs != 1) continue
+        if (index(line, "depends_on:") == 1) {
+          on = 1; s = substr(line, 12)
+          sub(/^[ \t]*/, "", s); sub(/[ \t]#.*$/, "", s); sub(/[ \t\r]*$/, "", s)
+          emit(i, s); continue
+        }
+        if (on && line ~ /^[ \t]*-[ \t]/) {
+          s = line; sub(/^[ \t]*-[ \t]+/, "", s); sub(/[ \t]#.*$/, "", s); sub(/[ \t\r]*$/, "", s)
+          if (s != "") add(i, s)
+          continue
+        }
+        if (on && line ~ /^[A-Za-z_]/) on = 0
+      }
+      close(path)
+    }
+    for (i = 1; i <= nf; i++) {
+      for (k = 1; k <= nd[i]; k++)
+        if (!(dep[i, k] in best)) printf "DEP MISSING: %s depends_on %s — no task by that id in any column\n", fid[i], dep[i, k]
+      if (!(fid[i] in cyc)) cyc[fid[i]] = reaches(fid[i])
+      if (cyc[fid[i]]) printf "DEP CYCLE: %s sits in a depends_on ring — it can never satisfy the ready gate; break the cycle\n", fid[i]
+    }
+    exit
+  }' "$@" 2>/dev/null || true)"
+    while IFS= read -r v; do if [ -n "$v" ]; then finding "$v"; fi; done <<EOF
+$dout
+EOF
+  fi
   # 8) surfaces (test-surfaces.md § 7): a row that would make change-scoped selection lie — the E
   # lines of surfaces_health. Its warnings (a glob in a rename window, an unarmed guard) never red
   # a wave gate; `ops/polaris surfaces` shows them.
@@ -1791,22 +1967,29 @@ cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output 
   # on purpose ("the goldens" are one concept), and it must be the first flag so a mistyped
   # `--scaffold --update` can never be read as a request to overwrite every reviewed golden.
   [ "${1:-}" = "--scaffold" ] && { shift; cmd_scaffold "$@"; return $?; }
-  local only="*" upd=0
+  local only="*" upd=0 named=0
   while [ $# -gt 0 ]; do
     case "$1" in
-      --only) only="${2:?--only needs a glob}"; shift 2;;
+      --only) only="${2:?--only needs a glob}"; named=1; shift 2;;
       --update) upd=1; shift;;
       *) die "usage: polaris check [--only <glob>] [--update] | check --scaffold [--app] [--cmd \"<shell>\"]";;
     esac
   done
-  local dir="$OPS/tests" f name exp rcf want got grc red=0 n=0
+  # WHICH tree (speed.md § 3): run from inside a builder's worktree, check tests THAT worktree —
+  # its ops/tests, run from its root. Anchored to the primary it proved the base instead, and a
+  # golden that exists only on the branch printed "no goldens matched" and passed having run
+  # nothing. The case test is the entry point's own beat test; anywhere else, unchanged.
+  local root="$PRIMARY" wt
+  case "$PWD" in */.polaris/wt/*) wt="${PWD##*/.polaris/wt/}"; wt="${wt%%/*}"
+    [ -n "$wt" ] && [ -d "$PRIMARY/.polaris/wt/$wt" ] && root="$PRIMARY/.polaris/wt/$wt";; esac
+  local dir="$root/ops/tests" f name exp rcf want got grc red=0 n=0
   [ -d "$dir" ] || { note "no ops/tests/ yet — add <name>.cmd + <name>.expected (polaris check --update writes the golden)"; return 0; }
   for f in "$dir"/*.cmd; do
     [ -e "$f" ] || break
-    name="$(basename "$f" .cmd)"
+    name="${f##*/}"; name="${name%.cmd}"
     case "$name" in $only) ;; *) continue;; esac
     n=$((n+1)); exp="$dir/$name.expected"; rcf="$dir/$name.rc"
-    got="$( cd "$PRIMARY" && bash -c "$(cat "$f")" 2>/dev/null )"; grc=$?
+    got="$( cd "$root" && bash -c "$(cat "$f")" 2>/dev/null )"; grc=$?
     want=0; [ -f "$rcf" ] && want="$(tr -d ' \r\n' < "$rcf")"
     if [ "$upd" -eq 1 ]; then printf '%s\n' "$got" > "$exp"; say "updated golden: $name"; continue; fi
     if [ ! -f "$exp" ]; then printf '⛔ %s — no golden yet (polaris check --only %s --update)\n' "$name" "$name"; red=1; continue; fi
@@ -1818,7 +2001,9 @@ cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output 
       red=1
     fi
   done
-  [ "$n" -eq 0 ] && { note "no goldens matched '$only'"; return 0; }
+  # A NAMED check that runs nothing is red: `--only <typo>` used to pass, proving nothing. A bare
+  # check over an empty ops/tests/ stays rc 0 — there is simply nothing yet.
+  [ "$n" -eq 0 ] && { note "no goldens matched '$only'"; [ "$named" -eq 1 ] && return 1; return 0; }
   [ "$red" -eq 0 ] || die "check: $n golden(s) run, at least one red"
   say "check: $n golden(s), all green"
 }
@@ -1834,7 +2019,7 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
   local n=0 id="" f base pts risk owned p why="" lane=full k sum big
   for f in "$BOARD"/ready/*.md "$BOARD"/active/*.md; do
     [ -e "$f" ] || continue
-    base="$(basename "$f")"; [ "$base" = "IDEAS.md" ] && continue
+    base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
     n=$((n + 1)); id="${base%.md}"
   done
 
@@ -1853,7 +2038,7 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
     k=0
     for f in "$BOARD"/active/*.md; do
       [ -e "$f" ] || continue
-      [ "$(basename "$f")" = "IDEAS.md" ] && continue
+      [ "${f##*/}" = "IDEAS.md" ] && continue
       k=$((k + 1))
     done
     if [ "$k" -gt 0 ]; then
@@ -1862,7 +2047,7 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
     sum=0; big=0
     for f in "$BOARD"/ready/*.md; do
       [ -e "$f" ] || continue
-      base="$(basename "$f")"; [ "$base" = "IDEAS.md" ] && continue
+      base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
       id="${base%.md}"
       pts="$(fm_get points "$f")"; pts="${pts:-99}"
       risk="$(fm_get risk "$f")"; risk="${risk:-normal}"
@@ -2024,6 +2209,9 @@ cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the 
   local red=0 ran=0 k c out skip=0 force=0 full=0 a
   local t0 t1 head stamped dirty
   local scope=full carry=0 sel="" csf="" np=0 m=0 why="" p sc bsha c2 sred=0 fflag=""
+  # speed.md § 4: red is EVERYTHING; sred_any = a suite key went red; hred = a red that is neither a
+  # suite key nor CRUFT-class. The stamp needs sred_any=0 AND hred=0 — the rc still reads red alone.
+  local sred_any=0 hred=0
   for a in "$@"; do
     case "$a" in --force) force=1;; --full) full=1;; esac
   done
@@ -2100,7 +2288,7 @@ cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the 
         if ( cd "$PRIMARY" && bash -c "$c2" ) >"$out" 2>&1; then continue; fi
         printf '⛔ %s — RED: %s\n' "$k" "$c2"
         tail -15 "$out" | sed 's/^/     /'
-        red=1; sred=1; break
+        red=1; sred=1; sred_any=1; break
       done <<EOF
 $sel
 EOF
@@ -2112,7 +2300,7 @@ EOF
     else
       printf '⛔ %s — RED: %s\n' "$k" "$c"
       tail -15 "$out" | sed 's/^/     /'
-      red=1
+      red=1; sred_any=1
     fi
   done
   fi
@@ -2152,19 +2340,26 @@ EOF
     printf '⛔ drift — board hygiene findings:\n'
     grep '^⚠' "$out" | sed 's/^/     /' || true
     red=1
+    # speed.md § 4: a finding whose text starts CRUFT (a leftover branch) is still red, but it says
+    # nothing about the code the suite just proved, so it alone never withholds the stamp. Any other
+    # finding — MAP Deltas > 20 and LEARNED > 8 included — is a hard red, and so is a red drift that
+    # printed no finding at all (it died on something we cannot classify).
+    if ! grep -q '^⚠' "$out" || grep '^⚠' "$out" | grep -qv '^⚠ \[[0-9]*\] CRUFT'; then hred=1; fi
   fi
   if ( cmd_doctor ) >"$out" 2>&1; then
     say "doctor — env OK"
   else
     printf '⛔ doctor — RED:\n'
     tail -5 "$out" | sed 's/^/     /'
-    red=1
+    red=1; hred=1
   fi
   rm -f "$out"
-  [ "$red" -eq 0 ] || die "qa: red — fix the ⛔ lines above before calling the work done"
   # Stamp only a suite we actually RAN and that was fully green. Never stamp a skipped run (it
   # would just re-write the same sha) and never stamp a dirty tree — the stamp claims "this commit
   # is proven", and an uncommitted edit means the thing proven is not the thing on disk.
+  # The stamp is decided BEFORE the red verdict (speed.md § 4): every suite key green and the only
+  # other reds CRUFT-class ⇒ stamp, and qa STILL exits 1 below — so the next qa at this HEAD clears
+  # the branches without paying the suite again. Any other red withholds it, exactly as before.
   # The AFTER reads are the parallel-wave half of that same claim: a sibling lane lands while the
   # suite is halfway through, HEAD moves under it, and a stamp keyed on the BEFORE sha would green
   # a later `finish` on code nobody has ever tested. So HEAD must be where it started AND the tree
@@ -2176,14 +2371,16 @@ EOF
   # Stamp v3 (test-surfaces.md § 6): ONE line `<sha> <epoch> <scope>` — scoped iff the test key
   # ran a selection, full otherwise; a carried verdict re-stamps HEAD with the baseline's own scope.
   # Readers go through suite_stamp_scope (a 2-field pre-6.4 stamp reads as full).
-  if { [ "$ran" -ge 1 ] || [ "$carry" -eq 1 ]; } && [ "$head" != "none" ]; then
+  if { [ "$ran" -ge 1 ] || [ "$carry" -eq 1 ]; } && [ "$head" != "none" ] && [ "$sred_any" -eq 0 ] && [ "$hred" -eq 0 ]; then
     if [ "$head2" = "$head" ] && [ -z "$dirty" ] && [ -z "$dirty2" ]; then
       mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
       printf '%s %s %s\n' "$head" "$(date +%s)" "$scope" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
+      [ "$red" -eq 0 ] || note "suite stamp kept at $(printf '%.7s' "$head") — the only reds are leftover branches (CRUFT), so the next qa here skips the suite"
     else
       note "⚠ HEAD moved or the tree is not clean — stamp withheld, so the next qa re-runs the suite"
     fi
   fi
+  [ "$red" -eq 0 ] || die "qa: red — fix the ⛔ lines above before calling the work done"
   say "qa: all green"
 }
 
@@ -2213,7 +2410,7 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   fin_ids() { # ≤5 ids from a board column, comma-joined, "… +N more" beyond that (PROTOCOL.md § VOICE)
     local d="$1" g i=0 o=""
     for g in "$BOARD/$d/"*.md; do [ -e "$g" ] || break
-      i=$((i+1)); [ "$i" -le 5 ] && o="${o:+$o, }$(basename "$g" .md)"
+      i=$((i+1)); g="${g##*/}"; [ "$i" -le 5 ] && o="${o:+$o, }${g%.md}"
     done
     [ "$i" -gt 5 ] && o="$o … +$((i-5)) more"
     printf '%s' "$o"
@@ -2282,7 +2479,7 @@ EOF
   fi
   for lk in "$LOCKS"/*/; do
     [ -e "$lk" ] || break
-    n="$(basename "$lk")"; [ "$n" = ".board-mutex" ] && continue
+    n="${lk%/}"; n="${n##*/}"; [ "$n" = ".board-mutex" ] && continue
     if ! task_file "$n" active >/dev/null && ! task_file "$n" review >/dev/null; then
       fin_pending "orphan lock $n (age $(( $(lock_age "$n") / 3600 ))h) — bash ops/polaris sweep --fix"
     fi
@@ -2296,7 +2493,7 @@ EOF
   local bgd bgn bgp
   for bgd in "$PRIMARY"/.polaris/bg/*/; do
     [ -e "$bgd" ] || break
-    bgn="$(basename "$bgd")"
+    bgn="${bgd%/}"; bgn="${bgn##*/}"
     case "$bgn" in *.prev) continue;; esac
     [ -f "$bgd/rc" ] && continue
     bgp="$(cat "$bgd/pid" 2>/dev/null | tr -d ' \r\n')"
@@ -2313,7 +2510,7 @@ EOF
   [ "$bl" -eq 0 ] || fin_caveat "$bl blocked — $(fin_ids blocked) (name what is parked, and why, in your close)"
   for f in "$PRIMARY"/.polaris/wt/*/; do
     [ -e "$f" ] || break
-    n="$(basename "$f")"
+    n="${f%/}"; n="${n##*/}"
     task_file "$n" active >/dev/null || task_file "$n" review >/dev/null \
       || fin_caveat "worktree .polaris/wt/$n has no active task — bash ops/polaris sweep --fix"
   done
@@ -2537,8 +2734,8 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
   # then read `.polaris/wt/<ID>` unquoted, where `<` is a redirection. Single quotes are safe here.
   # The handoff is a BOUNDARY, not an ending (ops/contracts/role-handover.md): the board itself
   # names the next step, so the pane asks it instead of going quiet with work still queued. The
-  # capture sentence rides along because a fleet pane never sees the conductor's kickoff template.
-  local msg="You are a BUILDER. Claim the top ready task and complete it end to end, then enter its worktree — every command until handoff runs there: EnterWorktree({path: '.polaris/wt/<ID>'}), or run everything via absolute paths under .polaris/wt/<ID>, then bash ops/polaris next and follow it. Touching a visual: path? run the shot: line pack printed, READ the png, and put a saw: line in your report.$loop"
+  # before/after + --saw sentence rides along because a fleet pane never sees the conductor's template.
+  local msg="You are a BUILDER. Claim the top ready task and complete it end to end, then enter its worktree — every command until handoff runs there: EnterWorktree({path: '.polaris/wt/<ID>'}), or run everything via absolute paths under .polaris/wt/<ID>, then bash ops/polaris next and follow it. Touching a visual: path? run the shot: line pack printed BEFORE and AFTER your edit, READ both pngs, and hand off with --saw '<what the after shot shows, and how it measures against ops/DESIGN.md>'.$loop"
   note "kickoff (paste into $n parallel sessions of ANY agent CLI — in Claude Code, \"start\" alone does it):"
   printf '   %s\n' "$msg"
 
@@ -2560,7 +2757,7 @@ cmd_fleet() { # fleet <N> [--loop] [--launch] [--dry-run] — print N Builder ki
   local ftier="" fmodel="" mtok="" tf tov tt
   for tf in "$BOARD/ready/"*.md; do
     [ -e "$tf" ] || break
-    [ "$(basename "$tf")" = "IDEAS.md" ] && continue
+    [ "${tf##*/}" = "IDEAS.md" ] && continue
     tov="$(fm_get model "$tf" 2>/dev/null || true)"
     case "$tov" in
       strong|mid|cheap) tt="$tov";;

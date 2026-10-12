@@ -22,8 +22,8 @@ ask "shall I continue?" after the plan gate — the plan approval WAS the go for
 over ONLY when every one of these is true:
 - every task from the plan sits in `done/` — or in `blocked/` with a reason the human has been told;
 - `ready/` is drained (per `drain:`, step 7);
-- `bash ops/polaris qa` is green on the base branch — run by YOU, in this session;
 - EVOLVE's proposals are gathered (step 7.5);
+- `bash ops/polaris qa` is green on the base branch — run by YOU, in this session, after EVOLVE;
 - the close report (step 8) is delivered.
 Anything less, and your next action is a tool call, not a sign-off — **unless a run budget cap is
 reached (below), which is itself a legitimate ending.**
@@ -75,7 +75,7 @@ limit has failed, and no gate will have told you.
 **Context compacted mid-run?** The board is the run's memory, not your context — and
 the anchor hook already re-read the board for you the moment the compaction finished, so continue
 from its `next:` line: `build <ID>` → spawn that lane · `integrate` → spawn the integrator ·
-`wait` → those lanes are still running · `promote`/`finish` → you are at the tail, so qa → evolve →
+`wait` → those lanes are still running · `promote`/`finish` → you are at the tail, so evolve → qa →
 report. Never re-interview, never re-plan. (No anchor line in your context? `bash ops/polaris
 next --brief` prints it again.)
 
@@ -178,14 +178,14 @@ call per spawn; routing never blocks work.
    > You are a BUILDER, conductor-entered. Read ops/roles/BUILDER.md and execute it. Claim <ID> and
    > complete it end to end. A spec ambiguity → return the question as your result instead of asking
    > the human. Ship per BUILDER.md step 5: `bash ops/polaris bg run ship-<ID> -- bash ops/polaris
-   > handoff`, then `bash ops/polaris bg wait ship-<ID> --max 300` repeated until the rc is not 2 —
-   > under `landing: self` (the default) that handoff lands your task through the integration lease
-   > and, last lane out, seals the wave. Stop after the collect; return: ID · branch · one-line
-   > summary · test results · landed / queued / in review.
+   > handoff --saw "<the after shot vs the bar>"`, then `bash ops/polaris bg wait ship-<ID> --max
+   > 300` repeated until the rc is not 2 — under `landing: self` (the default) that handoff lands
+   > your task through the integration lease and, last lane out, seals the wave. Stop after the
+   > collect; return: ID · branch · one-line summary · test results · landed / queued / in review.
    > FIRST run `bash ops/polaris pack <ID>` — that output IS your context: the task, its contract,
    > the house style to match, what you own, the API surface not to break, and your verify: list.
    > Anything it does not answer: `bash ops/polaris find <symbol>`, one hop, before any Grep.
-   > Touching a visual: path? run the shot: line pack printed, READ the png, and put a saw: line in your report — handoff refuses without the capture.
+   > Touching a visual: path? run the shot: line pack printed BEFORE you edit and again after, READ both against ops/DESIGN.md — the bar — and carry --saw "<the after shot vs that bar — PASS / WEAK / FAIL>" inline on the ship line (--no-before "<why>" for a brand-new screen); handoff refuses without two fresh captures, or without --saw.
    > you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout.
    > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    Say once where to watch (`bash ops/polaris dash` · 127.0.0.1:7373). As each lane reports, relay
@@ -204,7 +204,8 @@ call per spawn; routing never blocks work.
      human plainly what's parked and why, keep the other lanes going.
    - Builder dies without reporting → a lane gone silent past `stale_hours` is a DEAD lane, not a
      slow one. **A lane that stopped on a capture refusal is not dead** — it needs the shot: line run,
-     not a respawn. First try to resume the same agent — its context is intact, so a nudge usually revives
+     not a respawn; refused for a missing `--saw`, it needs the sentence written, not a respawn
+     either. First try to resume the same agent — its context is intact, so a nudge usually revives
      it right where it left off. No response → re-anchor from `bash ops/polaris status` +
      `git status` in its worktree to see how far it got, then release the task back to `ready/` and
      respawn one fresh builder per the retry path above.
@@ -290,8 +291,8 @@ call per spawn; routing never blocks work.
    planner-promotion passes only; the original ready set and integrator dependency-wave promotions
    are round 0 (step 3 disclosed this whole depth). No subagent harness → classic `start` per
    slice, exactly today.
-7.5 **Evolve (subagent) — the run tunes the kit before it signs off.** After the final green `qa`,
-   spawn ONE:
+7.5 **Evolve (subagent) — the run tunes the kit before it signs off.** Once the last wave has
+   landed — BEFORE the final `qa`, never after it — spawn ONE:
    > You are EVOLVE, conductor-entered. Read ops/roles/EVOLVE.md and execute its diagnosis.
    > APPLY NOTHING — return your ≤3 findings with evidence and the exact proposed diffs as your
    > result.
@@ -302,6 +303,10 @@ call per spawn; routing never blocks work.
    Its proposals go into the close report, numbered — the human applies one by replying
    "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Skip this
    step only when the run built ≤1 task — there is no signal in a sample of one.
+   **Then the final `bash ops/polaris qa`** — after EVOLVE, not before it. An auto-applied evolve
+   commit moves HEAD, so a `qa` run ahead of it certifies a tree that no longer ships, and `finish`
+   pays the whole suite a second time. After EVOLVE, one `qa` proves the tree that actually ships and
+   stamps it; `finish` then skips the suite at that same commit. Red → the fix wave of step 6.5.
 8. **Report, then close.** In `voice:`, **≤8 lines** (INIT.md's cap, same reason): what got built and
    what it means for them, what was set aside and why, whether every check passed, one thing to try
    right now — then EVOLVE's numbered proposals ("reply approve <n> to apply"). One report; the

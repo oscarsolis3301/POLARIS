@@ -24,18 +24,69 @@ cd "$ROOT" || exit 1
 P="ops/polaris"
 [ -x "$P" ] || P="bash ops/polaris"
 
-ms() { # ms <label> <command...> — best-of-$RUNS wall clock, in milliseconds
+ms() { # ms <label> <command...> — best-of-$RUNS wall clock, in milliseconds; stdin from $BENCH_IN if set
   local label="$1"; shift
   local i s e d min=99999999
   for i in $(seq 1 "$RUNS"); do
     s=$(date +%s%N)
-    "$@" >/dev/null 2>&1
+    if [ -n "${BENCH_IN:-}" ]; then "$@" <"$BENCH_IN" >/dev/null 2>&1; else "$@" >/dev/null 2>&1; fi
     e=$(date +%s%N)
     d=$(( (e - s) / 1000000 ))
     [ "$d" -lt "$min" ] && min="$d"
   done
   printf '%-28s %6sms\n' "$label" "$min"
 }
+
+# --- `bench.sh guards`: the per-call hooks against their budgets (ops/contracts/speed.md § 1) -----
+# A PreToolUse hook runs before EVERY tool call, and a hook that overruns its timeout FAILS OPEN — so
+# a slow guard is a guard that is not there (model-guard timed out 6 times in one fan-out and let
+# every one of those calls through). Budgets are relative to the machine's floor, `bash -c true`:
+# Windows pays ~10x Linux just to start bash, and a budget is for the hook's own work, not for that.
+# Each hook gets its common-path input on stdin (ms reads it from $BENCH_IN) and is timed from the
+# primary checkout, so the numbers are what a real session pays.
+# HERMETIC: HOME is a mktemp -d, so model-guard's state file is a fixture and the real
+# ~/.claude/polaris/model-state is never touched; POLARIS_AWAKE_HOME sits inside it, so awake-hook
+# never reaches the real registry, and `start` is the subcommand that never spawns the daemon.
+# stdout is exactly the TAB-separated lines below and nothing else; rc 1 iff one of them says OVER.
+if [ "${1:-}" = "guards" ]; then
+  HK=ops/hooks; [ -d kit/ops/hooks ] && HK=kit/ops/hooks   # the kit repo times its own source
+  HK="$(cd "$HK" 2>/dev/null && pwd)" || exit 1
+  PRIM="$(git rev-parse --show-toplevel 2>/dev/null)"; PRIM="${PRIM%%/.polaris/wt/*}"
+  FIX="$(mktemp -d)" || exit 1
+  trap 'rm -rf "$FIX"' EXIT
+  export HOME="$FIX" POLARIS_AWAKE_HOME="$FIX/awake"
+  unset CLAUDE_PROJECT_DIR CLAUDE_PID
+  mkdir -p "$FIX/.claude/polaris/model-state" "$FIX/repo/ops/board" "$FIX/repo/.polaris/wt/T-000"
+  # Any id the ban does not deny reads as allowed — so the fixture names no model at all.
+  printf 'bench-allowed\n' > "$FIX/.claude/polaris/model-state/bench"
+  : > "$FIX/t.jsonl"
+  J='{"session_id":"bench","transcript_path":"'"$FIX/t.jsonl"'","hook_event_name":'
+  printf '%s' "$J"'"PreToolUse","cwd":"'"$FIX"'","tool_name":"Read","tool_input":{"file_path":"'"$FIX/x.txt"'"}}' > "$FIX/mg.json"
+  printf '%s' "$J"'"PreToolUse","cwd":"'"$PRIM"'","tool_name":"Edit","tool_input":{"file_path":"'"$PRIM/docs/bench-probe.md"'","old_string":"a","new_string":"b"}}' > "$FIX/og.json"
+  printf '%s' "$J"'"PreToolUse","cwd":"'"$PRIM"'","tool_name":"Bash","tool_input":{"command":"git status"}}' > "$FIX/sh.json"
+  printf '%s' "$J"'"SessionStart","cwd":"'"$FIX/repo/.polaris/wt/T-000"'","source":"startup"}' > "$FIX/aw.json"
+  printf '%s' "$J"'"Stop","cwd":"'"$FIX/repo"'","stop_hook_active":false}' > "$FIX/hh.json"
+  FL="$(ms floor bash -c true)"; FL="${FL%ms}"; FL="${FL##* }"
+  printf 'floor\t%s\n' "$FL"
+  rc=0
+  # name | budget over the floor (- = timed, no budget yet) | hook | input | subcommand
+  for row in "model-guard|300|model-guard.sh|mg.json|" "ownership-guard|600|ownership-guard.sh|og.json|" \
+             "checkout-guard|150|checkout-guard.sh|sh.json|" "readonly-allow|150|readonly-allow.sh|sh.json|" \
+             "awake-hook|-|awake-hook.sh|aw.json|start" "handover-hook|-|handover-hook.sh|hh.json|stop"; do
+    IFS='|' read -r n b h j a <<EOF
+$row
+EOF
+    t="$(cd "${PRIM:-.}" 2>/dev/null; BENCH_IN="$FIX/$j" ms "$n" bash "$HK/$h" $a)"; t="${t%ms}"; t="${t##* }"
+    if [ "$b" = - ]; then
+      printf '%s\t%s\t-\t-\n' "$n" "$t"
+    else
+      b=$((FL + b)); v=ok
+      [ "$t" -gt "$b" ] && { v=OVER; rc=1; }
+      printf '%s\t%s\t%s\t%s\n' "$n" "$t" "$b" "$v"
+    fi
+  done
+  exit "$rc"
+fi
 
 echo "POLARIS bench — $(sed -n 's/^version: *//p' ops/VERSION 2>/dev/null | head -1) · best of $RUNS · $(git rev-parse --short HEAD 2>/dev/null)"
 echo "repo: $(git ls-files 2>/dev/null | wc -l | tr -d ' ') tracked files"

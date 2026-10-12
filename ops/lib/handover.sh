@@ -19,7 +19,7 @@ next_landable() { # next_landable — row 1's predicate, ONE pass over review/ a
   local f id rk ap lease now e hp sm dead
   NX_REV_OK=""; NX_REV_HUMAN=""; NX_LEASE=absent; NX_LEASE_WHO=""; NX_LEASE_M=0
   for f in "$BOARD/review/"*.md; do [ -e "$f" ] || break
-    id="$(basename "$f" .md)"
+    id="${f##*/}"; id="${id%.md}"
     rk="$(fm_get risk "$f" 2>/dev/null || true)"; ap="$(fm_list approved "$f" 2>/dev/null || true)"
     if [ "$rk" = "high" ] || [ -n "$ap" ]; then NX_REV_HUMAN="${NX_REV_HUMAN:+$NX_REV_HUMAN }$id"
     else NX_REV_OK="${NX_REV_OK:+$NX_REV_OK }$id"; fi
@@ -27,10 +27,14 @@ next_landable() { # next_landable — row 1's predicate, ONE pass over review/ a
   lease="$LOCKS/.int-lease"
   if [ -d "$lease" ]; then
     who; now="$(date +%s)"
-    e="$(cat "$lease/epoch" 2>/dev/null | tr -d ' \r\n')"; case "$e" in ''|*[!0-9]*) e="$now";; esac
+    # `read`, never `cat | tr`: two forks per file on a hook's clock (T-178). `2>/dev/null` sits
+    # BEFORE the `<` so a missing file stays silent (redirections apply left to right), and
+    # `|| true` because set -e would die on a missing file or a last line with no newline.
+    e=""; read -r e 2>/dev/null < "$lease/epoch" || true; e="${e%$'\r'}"; case "$e" in ''|*[!0-9]*) e="$now";; esac
     NX_LEASE_M=$(( (now - e) / 60 ))
-    NX_LEASE_WHO="$(cat "$lease/who" 2>/dev/null | tr -d '\r\n')"; NX_LEASE_WHO="${NX_LEASE_WHO:-unknown}"
-    hp="$(cat "$lease/pid" 2>/dev/null | tr -d ' \r\n')"
+    NX_LEASE_WHO=""; IFS= read -r NX_LEASE_WHO 2>/dev/null < "$lease/who" || true
+    NX_LEASE_WHO="${NX_LEASE_WHO%$'\r'}"; NX_LEASE_WHO="${NX_LEASE_WHO:-unknown}"
+    hp=""; read -r hp 2>/dev/null < "$lease/pid" || true; hp="${hp%$'\r'}"
     sm="$(cfg integration_stale_minutes 45)"; case "$sm" in ''|*[!0-9]*) sm=45;; esac
     NX_LEASE=live
     if [ "$hp" = "$$" ] || [ "$NX_LEASE_WHO" = "$WHO" ]; then NX_LEASE=mine
@@ -59,7 +63,7 @@ next_claimable() { # next_claimable — row 3's predicate: the top-wsjf ready ta
   [ -f "$d/plan" ] && { have=1; myplan="$(tr -d ' \r\n' < "$d/plan")"; }
   NX_BUILD=""; NX_BUILD_NOTE=""; NX_FOREIGN=""; NX_READY_N=0
   for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
-    id="$(basename "$f" .md)"; NX_READY_N=$(( NX_READY_N + 1 ))
+    id="${f##*/}"; id="${id%.md}"; NX_READY_N=$(( NX_READY_N + 1 ))
     [ -d "$LOCKS/$id" ] && continue
     grep -qx "$id" "$d/avoid" 2>/dev/null && continue
     pl="$(fm_get plan "$f" 2>/dev/null || true)"
@@ -88,13 +92,14 @@ next_promote() { # next_promote [--do] — row 4's scan, and `--do`'s worker. Ev
   # (mv + set_fm + evt promote), lands ONE board_commit + sync_board, and returns NX_PROMOTED.
   # v2: under `drain: plan` a candidate carrying a DIFFERENT plan slug than this run's is HELD by
   # name, never adopted — one "go" authorises one plan, and the refusal is reported, not silent.
-  local mode="${1:-}" f id w cands="" acc="" pts v d ok g gid cpat apat over deps others
-  local drain myplan="" pl pdir
+  local mode="${1:-}" f id w cands="" acc="" pts v d g gid cpat apat over deps others
+  local drain myplan="" pl pdir wt dc
   NX_ELIGIBLE=""; NX_PROMOTED=""; NX_HELD=""
   for f in "$BOARD/backlog/"*.md; do [ -e "$f" ] || break
-    [ "$(sed -n 1p "$f" | tr -d '\r')" = "---" ] || continue
+    v=""; IFS= read -r v 2>/dev/null < "$f" || true
+    [ "${v%$'\r'}" = "---" ] || continue
     w="$(fm_get wsjf "$f")"; case "$w" in ''|*[!0-9.]*) w=0;; esac
-    cands="$cands$w$POLARIS_TAB$(basename "$f" .md)
+    id="${f##*/}"; cands="$cands$w$POLARIS_TAB${id%.md}
 "
   done
   [ -n "$cands" ] || return 1
@@ -114,32 +119,47 @@ next_promote() { # next_promote [--do] — row 4's scan, and `--do`'s worker. Ev
   while IFS= read -r id; do
     [ -n "$id" ] || continue
     f="$BOARD/backlog/$id.md"; [ -f "$f" ] || continue
-    ok=1
+    # EVERY gate failure is HELD with its reason, one line naming the task — the first failure wins.
+    # These three used to `continue` in silence, so a planned task could fall out of both the
+    # eligible and the held list and vanish from the run without a word (T-178, audit quality-5).
+    # Which tasks pass is unchanged: only the silence is gone.
     # a contract is OPTIONAL (SOLO.md step 1: most small tasks have no seam). Only a contract that
     # is NAMED but MISSING fails the gate — Invariant 3 forbids a missing one, never an absent one.
-    v="$(fm_get contract "$f")"; [ -n "$v" ] && [ ! -f "$PRIMARY/$v" ] && ok=0
-    pts="$(fm_get points "$f")"; case "$pts" in ''|8|13) ok=0;; esac
-    deps=""
+    over=""
+    v="$(fm_get contract "$f")"; [ -n "$v" ] && [ ! -f "$PRIMARY/$v" ] && over="held: $id — contract $v missing"
+    pts="$(fm_get points "$f")"
+    if [ -z "$over" ]; then
+      case "$pts" in
+        '')   over="held: $id — points not set (must be 1-5)";;
+        8|13) over="held: $id — points $pts must be 1-5 — split it";;
+      esac
+    fi
+    deps=""; wt=""
     while IFS= read -r d; do [ -z "$d" ] && continue
-      deps="${deps:+$deps, }$d"; task_file "$d" done >/dev/null || ok=0
+      deps="${deps:+$deps, }$d"; task_file "$d" done >/dev/null && continue
+      dc=""; for g in active review ready blocked backlog; do [ -f "$BOARD/$g/$d.md" ] && { dc="$g"; break; }; done
+      wt="${wt:+$wt, }$d (${dc:-no such task})"
     done <<EOF_DEP
 $(dep_ids "$f")
 EOF_DEP
-    [ "$ok" -eq 1 ] || continue
+    [ -z "$over" ] && [ -n "$wt" ] && over="held: $id — waits on $wt"
     # the plan gate, ahead of the disjointness loop: a candidate with NO plan: is never foreign (the
     # rule next_claimable applies to ready/, so riders still flow), and a foreign one is held WITH ITS
     # REASON — a silent drop lands in neither the eligible nor the held list and reads as a bug (T-130).
-    over=""; pl="$(fm_get plan "$f" 2>/dev/null || true)"
-    if [ "$drain" = plan ] && [ -n "$myplan" ] && [ -n "$pl" ] && [ "$pl" != "$myplan" ]; then
+    pl="$(fm_get plan "$f" 2>/dev/null || true)"
+    if [ -z "$over" ] && [ "$drain" = plan ] && [ -n "$myplan" ] && [ -n "$pl" ] && [ "$pl" != "$myplan" ]; then
       over="held: $id — plan $pl is not this run's ($myplan) — drain: plan"
     fi
+    # already held: skip the disjointness walk — it can never overwrite a reason once one is set
+    [ -n "$over" ] && { NX_HELD="$NX_HELD   $over
+"; continue; }
     others="$(for g in "$BOARD/active/"*.md "$BOARD/ready/"*.md; do [ -e "$g" ] && printf '%s\n' "$g"; done; printf '%s' "$acc")"
     while IFS= read -r cpat; do [ -z "$cpat" ] && continue
       if [ -z "$over" ] && rules_gate "$cpat" "$id" && [ "$RULES_GATE" = "ask" ]; then
         over="held: $id — ask scope $RULES_GATE_SCOPE needs a human's yes"
       fi
       while IFS= read -r g; do [ -e "$g" ] || continue
-        gid="$(basename "$g" .md)"; [ "$gid" = "$id" ] && continue
+        gid="${g##*/}"; gid="${gid%.md}"; [ "$gid" = "$id" ] && continue
         while IFS= read -r apat; do [ -z "$apat" ] && continue
           if [ -z "$over" ] && pat_overlap "$cpat" "$apat"; then over="held: $id — overlaps $gid on '$cpat'"; fi
         done <<EOF_APAT
@@ -180,12 +200,12 @@ next_budget() { # next_budget <N> — row 2's predicate, asked ONLY when a build
   d="$(next_dir)"; NX_CAP=""; NX_BUDGET_NOTE=""
   mt="$(cfg run_max_tasks 12)"; case "$mt" in ''|*[!0-9]*) mt=12;; esac
   mm="$(cfg run_max_minutes 90)"; case "$mm" in ''|*[!0-9]*) mm=90;; esac
-  hops="$(cat "$d/hops" 2>/dev/null | tr -d ' \r\n')"; case "$hops" in ''|*[!0-9]*) hops=0;; esac
+  hops=""; read -r hops 2>/dev/null < "$d/hops" || true; hops="${hops%$'\r'}"; case "$hops" in ''|*[!0-9]*) hops=0;; esac
   [ "$mt" -ne 0 ] && [ "$hops" -ge "$mt" ] && NX_CAP=run_max_tasks
   if [ -z "$NX_CAP" ] && [ "$mm" -ne 0 ]; then
     now="$(date +%s)"; base=0
     for p in started prompted-at; do
-      s="$(cat "$d/$p" 2>/dev/null | tr -d ' \r\n')"; case "$s" in ''|*[!0-9]*) continue;; esac
+      s=""; read -r s 2>/dev/null < "$d/$p" || true; s="${s%$'\r'}"; case "$s" in ''|*[!0-9]*) continue;; esac
       [ "$s" -gt "$base" ] && base="$s"
     done
     [ "$base" -gt 0 ] && [ $(( (now - base) / 60 )) -ge "$mm" ] && NX_CAP=run_max_minutes
@@ -199,13 +219,15 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   # the board: line 1 = `<verb>[ <ID>]`, every other line a three-space note (the `triage` shape).
   # Writes nothing. `wait` is NEVER emitted with nothing in flight; `stop` fires only where a build
   # or promote would otherwise have, so a budget stops work rather than inventing it.
-  local d sid lk id f n can=0 pro=0 mine="" active="" blocked="" bgs="" p own cwds
+  local d sid lk id f n can=0 pro=0 mine="" active="" blocked="" bgs="" p own cwds m nl='
+'
   d="$(next_dir)"; sid="${CLAUDE_CODE_SESSION_ID:--}"
   # 0 — my own live lock on an active task: never a second task mid-task
   if [ "$sid" != "-" ]; then
     for lk in "$LOCKS"/*/; do [ -e "$lk" ] || break
-      lk="${lk%/}"; id="$(basename "$lk")"
-      [ "$(sed -n 4p "$lk/meta" 2>/dev/null | tr -d '\r')" = "$sid" ] || continue
+      lk="${lk%/}"; id="${lk##*/}"
+      m=""; { read -r m && read -r m && read -r m && IFS= read -r m; } 2>/dev/null < "$lk/meta" || true   # meta line 4 = the sid
+      [ "${m%$'\r'}" = "$sid" ] || continue
       mine="${mine:+$mine }$id"
       if task_file "$id" active >/dev/null; then printf 'resume %s\n' "$id"
         note "mid-task: your own lock is live — finish or release before anything else"; return 0; fi
@@ -230,16 +252,24 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
     note "eligible: $NX_ELIGIBLE — bash ops/polaris next --do promotes them under the board lock"; return 0; fi
   # 5 — wait, only with work genuinely in flight: others' lanes · a live foreign lease · an OWN live
   # bg job (ownership = the job's cwd, never its pid — bg-jobs.md v2) · review/ only a human lands.
-  for f in "$BOARD/active/"*.md; do [ -e "$f" ] || break; active="${active:+$active }$(basename "$f" .md)"; done
+  for f in "$BOARD/active/"*.md; do [ -e "$f" ] || break; f="${f##*/}"; active="${active:+$active }${f%.md}"; done
   cwds="$(printf '%s\n%s\n' "$PRIMARY" "$PWD"; for id in $mine; do wt_path "$id"; printf '\n'; done)"
-  cwds="$(printf '%s' "$cwds" | tr 'A-Z\\' 'a-z/')"
-  for f in "$PRIMARY"/.polaris/bg/*/; do [ -e "$f" ] || break
-    f="${f%/}"; n="$(basename "$f")"
-    case "$n" in *.prev) continue;; esac
+  cwds="$nl$(printf '%s' "$cwds" | tr 'A-Z\\' 'a-z/')$nl"
+  # ZERO forks per folder until a job is proven live (T-178): the registry is never pruned of its
+  # `.prev` archives, and one `basename` per folder was 24 s of this route on a 153-folder box —
+  # past the anchor hook's 10 s limit. So `.prev` goes first, before any other work, then the rc
+  # file, then `kill -0` (a builtin). Only a live rc-less job pays the one `tr` that case-folds.
+  for f in "$PRIMARY"/.polaris/bg/*/; do
+    case "$f" in *.prev/) continue;; esac
+    [ -e "$f" ] || break
+    f="${f%/}"; n="${f##*/}"
     [ -f "$f/rc" ] && continue
-    bg_alive "$(cat "$f/pid" 2>/dev/null | tr -d ' \r\n')" || continue
-    p="$(cat "$f/cwd" 2>/dev/null | tr -d ' \r\n' | tr 'A-Z\\' 'a-z/')"; own=0
-    [ -n "$p" ] && printf '%s' "$cwds" | grep -qxF "$p" && own=1
+    p=""; read -r p 2>/dev/null < "$f/pid" || true
+    bg_alive "${p%$'\r'}" || continue
+    p=""; IFS= read -r p 2>/dev/null < "$f/cwd" || true
+    p="${p%$'\r'}"; p="${p// /}"; [ -n "$p" ] || continue
+    p="$(printf '%s' "$p" | tr 'A-Z\\' 'a-z/')"; own=0
+    case "$cwds" in *"$nl$p$nl"*) own=1;; esac
     [ "$own" -eq 1 ] && bgs="${bgs:+$bgs }$n"
   done
   if [ -n "$active" ] || [ "$NX_LEASE" = live ] || [ -n "$bgs" ] || [ -n "$NX_REV_HUMAN" ]; then
@@ -253,7 +283,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   # 6 — otherwise the run's board is done; name what is parked, each only when non-empty
   printf 'finish\n'
   [ -n "$NX_FOREIGN" ] && note "foreign queued (drain: plan): $NX_FOREIGN"
-  for f in "$BOARD/blocked/"*.md; do [ -e "$f" ] || break; blocked="${blocked:+$blocked }$(basename "$f" .md)"; done
+  for f in "$BOARD/blocked/"*.md; do [ -e "$f" ] || break; f="${f##*/}"; blocked="${blocked:+$blocked }${f%.md}"; done
   [ -n "$blocked" ] && note "blocked/: $blocked"
   [ -n "$NX_REV_HUMAN" ] && note "risk: high awaiting approval: $NX_REV_HUMAN"
   return 0
@@ -263,13 +293,14 @@ next_brief() { # next_brief — `--brief`: ≤8 lines, no `|` anywhere, markers 
   # chat re-anchors from disk: role (my live lock on an active task ⇒ BUILDER · lease mine ⇒
   # INTEGRATOR · else none) · task and worktree (only with a lock, and only when the dir exists) ·
   # up to three of MY last events, newest first · line 1 of `next` · the role file it implies (omitted at `role: none`).
-  local sid lk id="" col="" role=none wt n line1 rfile now ts ev eid line
+  local sid lk id="" col="" role=none wt n line1 rfile now ts ev eid line m
   sid="${CLAUDE_CODE_SESSION_ID:--}"
   if [ "$sid" != "-" ]; then
     for lk in "$LOCKS"/*/; do [ -e "$lk" ] || break
       lk="${lk%/}"
-      [ "$(sed -n 4p "$lk/meta" 2>/dev/null | tr -d '\r')" = "$sid" ] || continue
-      id="$(basename "$lk")"; col="$(task_col "$id" 2>/dev/null || true)"; break
+      m=""; { read -r m && read -r m && read -r m && IFS= read -r m; } 2>/dev/null < "$lk/meta" || true   # meta line 4 = the sid
+      [ "${m%$'\r'}" = "$sid" ] || continue
+      id="${lk##*/}"; col="$(task_col "$id" 2>/dev/null || true)"; break
     done
   fi
   [ -n "$id" ] && [ "$col" = active ] && role=BUILDER
@@ -282,9 +313,13 @@ next_brief() { # next_brief — `--brief`: ≤8 lines, no `|` anywhere, markers 
   fi
   who; now="$(date +%s)"
   while IFS= read -r line; do [ -n "$line" ] || continue
-    ts="$(printf '%s' "$line" | sed -n 's/.*"ts":\([0-9]*\).*/\1/p')"
-    ev="$(printf '%s' "$line" | sed -n 's/.*"ev":"\([^"]*\)".*/\1/p')"
-    eid="$(printf '%s' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')"
+    # parameter expansion, not three `printf | sed` pairs per event: this runs on the anchor
+    # hook's 10 s clock (T-178). A JSON key appears once per line — an escaped one in a note
+    # reads `\"id\"` — so the first match is the key's.
+    ts=""; ev=""; eid=""
+    case "$line" in *'"ts":'*)  ts="${line#*\"ts\":}";   ts="${ts%%[!0-9]*}";; esac
+    case "$line" in *'"ev":"'*) ev="${line#*\"ev\":\"}";  ev="${ev%%\"*}";; esac
+    case "$line" in *'"id":"'*) eid="${line#*\"id\":\"}"; eid="${eid%%\"*}";; esac
     printf 'last: %s %s %sm ago\n' "$ev" "$eid" "$(( (now - ${ts:-$now}) / 60 ))"
   done <<EOF_EV
 $(grep -F "\"who\":\"$WHO\"" "$EVENTS" 2>/dev/null | tail -3 | sed '1!G;h;$!d')
@@ -307,7 +342,9 @@ cmd_next() { # next [--do|--brief] — dispatch. Bare: the route, read-only. --d
   board_pull   # T-148: a route is only as fresh as the board — fetch origin's first under claim-branch (first-run.md § 5)
   local promoted held
   case "${1:-}" in
-    '')      next_route;;
+    # bare: the route, then every `held:` line the promote scan wrote — after the row's own notes,
+    # so line 2 stays the row's note for the hook. Rows 0 and 1 never scan, so they print none.
+    '')      NX_HELD=""; next_route; [ -n "$NX_HELD" ] && printf '%s' "$NX_HELD";;
     --brief) next_brief;;
     --do)
       next_promote --do || true

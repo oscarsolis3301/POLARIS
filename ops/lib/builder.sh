@@ -18,7 +18,7 @@ cmd_claim() {
     # already coerces a blank/non-numeric wsjf to 0, so the ordering is identical without a sanitiser.
     candidates="$( { for f in "$BOARD/ready/"*.md; do
         [ -e "$f" ] || break
-        printf '%s\t%s\n' "$(fm_get wsjf "$f")" "$(basename "$f" .md)"
+        b="${f##*/}"; printf '%s\t%s\n' "$(fm_get wsjf "$f")" "${b%.md}"
       done; } | sort -rn | cut -f2- )"
     [ -n "$candidates" ] || die "ready/ is empty — nothing to claim"
   fi
@@ -67,7 +67,7 @@ cmd_claim() {
     # every board that already had one. ready/ is the addition, not the new precedence.
     for af in "$BOARD/active/"*.md "$BOARD/ready/"*.md; do
       [ -e "$af" ] || continue          # `continue`, not `break`: an empty column must not stop the other
-      aid="$(basename "$af" .md)"
+      aid="${af##*/}"; aid="${aid%.md}"
       [ "$aid" = "$cand" ] && continue  # the candidate is still in ready/ — it never overlaps itself
       case "$af" in "$BOARD/ready/"*) ov_col=ready;; *) ov_col=active;; esac
       while IFS= read -r cpat; do
@@ -203,7 +203,7 @@ EOF_SKGLOB
   # .claude/worktrees/ — so absolute paths under the worktree are that caller's PRIMARY instruction.
   # Each line stays ON ONE LINE, never hard-wrapped: verify: greps them, here and in the role files.
   note "now enter the worktree — every command until handoff runs there"
-  note "top-level session: EnterWorktree({path: \".polaris/wt/<ID>\"}) · pinned-cwd subagent or any other CLI: run everything via absolute paths under .polaris/wt/<ID> (or cd there — the shell's cwd persists between calls)"
+  note "top-level session: EnterWorktree({path: \".polaris/wt/<ID>\"}) · pinned-cwd subagent or any other CLI: run everything via absolute paths under .polaris/wt/<ID> (or cd there in the SAME call — a subagent's Bash resets its working folder between calls)"
 }
 
 cmd_verify() {
@@ -213,68 +213,48 @@ cmd_verify() {
   check_ownership "$tf" HEAD
   check_rules HEAD "$id"           # ID threaded: an `ask` rule cleared by <ID>'s approved: list
   run_verify_cmds "$tf"
-  # capture check, the ⚠ twin of handoff's gate (ops/contracts/visual-check.md): same test, same
-  # sentence, but mid-flight it only warns — a Builder may verify before the shot is taken. Inline
-  # on purpose (SURFACE-FROZEN wave: no new fn); the die lives in cmd_handoff.
-  local vis shot vf vhit vbase vshot vmt vok
-  vis="$(cfg visual "")"; shot="$(cfg shot "")"
-  if [ -n "$vis" ] && [ -n "$shot" ]; then
-    vhit=0
-    while IFS= read -r vf; do
-      [ -n "$vf" ] || continue
-      if printf '%s\n' "$vis" | tr ' ' '\n' | owned_match "$vf"; then vhit=1; break; fi
-    done <<EOF
-$(git diff --name-only --no-renames "$BASE...HEAD")
-EOF
-    if [ "$vhit" -eq 1 ]; then
-      vbase="$(git log -1 --format=%ct "$(git merge-base "$BASE" HEAD)" 2>/dev/null || echo 0)"
-      vok=0
-      for vshot in "$PRIMARY/.polaris/shots/$id-"*.png; do
-        [ -s "$vshot" ] || continue
-        vmt="$(stat -c %Y "$vshot" 2>/dev/null || stat -f %m "$vshot" 2>/dev/null || echo 0)"
-        if [ "${vmt:-0}" -ge "${vbase:-0}" ]; then vok=1; break; fi
-      done
-      [ "$vok" -eq 1 ] || note "⚠ $id changed a visual: path but .polaris/shots/$id-*.png has no capture newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off"
-    fi
-  fi
+  # capture check, the ⚠ twin of handoff's gate (ops/contracts/visual-check.md): the same body in
+  # lib/visual.sh and the same sentence, but mid-flight it only warns — a Builder may verify before
+  # the shot is taken. The die lives in cmd_handoff.
+  visual_gate "$id" warn 2 ""
 }
 
-cmd_handoff() {
-  local id="${1:-}"; [ -n "$id" ] || id="$(current_task_id)" || die "not on a feat/<ID> branch — pass the ID"
+cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
+  # The FIRST non-flag argument is the ID and both flags take a value, in any order, before or after
+  # it (ops/contracts/visual-check.md § v2.7). Until 6.6.0 this line was `local id="${1:-}"` with no
+  # parsing at all, so `handoff --saw "…"` read as a task literally named `--saw`. Ten call sites
+  # across the kit — every selftest drill, every printed ship recipe — pass the ID positionally and
+  # keep working byte-identically, which is exactly what the pack-visual golden pins.
+  # `--saw` is the caption that goes beside the pictures; the gate checks it for EMPTINESS and
+  # nothing else. `--no-before` says there was nothing to photograph yet (a brand-new screen), drops
+  # the requirement from two captures to one, and its reason is recorded in the caption so a missing
+  # before-shot is visible rather than silent.
+  local id="" saw="" nobefore="" need=2
+  local uho='usage: polaris handoff [ID] [--saw "<what the after shot shows>"] [--no-before "<why there was nothing to photograph>"]'
+  while [ $# -gt 0 ]; do case "$1" in
+    --saw)       saw="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
+    --no-before) nobefore="${2:-}"; [ $# -ge 2 ] && shift 2 || shift
+                 [ -n "$nobefore" ] || die "--no-before needs the reason — it is what the caption shows in place of the before-shot. $uho"
+                 need=1;;
+    -*)          die "unknown flag $1 — $uho";;
+    *)           [ -n "$id" ] || id="$1"; shift;;
+  esac; done
+  [ -n "$id" ] || id="$(current_task_id)" || die "not on a feat/<ID> branch — pass the ID"
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
   beat_touch "$id"                 # worktree-liveness: the handoff beats, so done sees a LIVE own lane
   git diff --quiet && git diff --cached --quiet || die "uncommitted changes — commit on feat/$id first"
   check_ownership "$tf" "feat/$id"
   check_rules "feat/$id" "$id"     # ID threaded: an `ask` rule cleared by <ID>'s approved: list
   run_verify_cmds "$tf"
-  # capture-exists gate (ops/contracts/visual-check.md § cmd_handoff): a diff that touches a visual:
-  # path ships with a capture or not at all. Fires only when BOTH visual: and shot: are set (absent by
-  # default) AND the branch's diff has a path matching a visual: glob; then ONE non-empty
-  # .polaris/shots/<ID>-*.png in the PRIMARY must be newer than the branch base (the merge-base
-  # commit's time), else the handoff dies HERE — before any board write, so the task stays in
-  # active/. Existence and freshness only: LOOKING at it is prose (the saw: line, the Integrator
-  # opening the png). Inline on purpose (SURFACE-FROZEN wave: no new fn); cmd_verify carries the ⚠ twin.
-  local vis shot vf vhit vbase vshot vmt vok
-  vis="$(cfg visual "")"; shot="$(cfg shot "")"
-  if [ -n "$vis" ] && [ -n "$shot" ]; then
-    vhit=0
-    while IFS= read -r vf; do
-      [ -n "$vf" ] || continue
-      if printf '%s\n' "$vis" | tr ' ' '\n' | owned_match "$vf"; then vhit=1; break; fi
-    done <<EOF
-$(git -C "$PRIMARY" diff --name-only --no-renames "$BASE...feat/$id")
-EOF
-    if [ "$vhit" -eq 1 ]; then
-      vbase="$(git -C "$PRIMARY" log -1 --format=%ct "$(git -C "$PRIMARY" merge-base "$BASE" "feat/$id")" 2>/dev/null || echo 0)"
-      vok=0
-      for vshot in "$PRIMARY/.polaris/shots/$id-"*.png; do
-        [ -s "$vshot" ] || continue
-        vmt="$(stat -c %Y "$vshot" 2>/dev/null || stat -f %m "$vshot" 2>/dev/null || echo 0)"
-        if [ "${vmt:-0}" -ge "${vbase:-0}" ]; then vok=1; break; fi
-      done
-      [ "$vok" -eq 1 ] || die "handoff refused: $id changed a visual: path but .polaris/shots/$id-*.png has no capture newer than the branch base — run the shot: line from pack, LOOK at the image, then hand off"
-    fi
-  fi
+  # capture gate (ops/contracts/visual-check.md § v2.6) — body in lib/visual.sh: a diff that touches
+  # a visual: path ships with its pictures and a word about them, or not at all, and it dies HERE,
+  # before any board write, so the task stays in active/. cmd_verify runs the same body in warn mode.
+  visual_gate "$id" die "$need" "$saw"
+  # The gate passed, so the captures are real: file any that landed outside this task's shot folder,
+  # then write the caption that goes beside them. Both still before the board write, so a refusal
+  # above leaves nothing behind, and both no-ops in a repo that sets no visual: key.
+  visual_file_strays "$id"
+  visual_caption "$id" "$saw" "$nobefore"
   map_delta_hint "$tf" "feat/$id"
   # publish: pr — feat branches never leave the machine; seal pushes ONE integrate branch instead
   # (ops/contracts/publish-modes.md). Everything else stays byte-identical to direct mode.
@@ -532,7 +512,7 @@ cmd_grant() { # grant <ID> <path> -m "why" — the SANCTIONED files_owned amendm
   for col in ready active; do
     for f in "$BOARD/$col/"*.md; do
       [ -e "$f" ] || break
-      oid="$(basename "$f" .md)"; [ "$oid" = "$id" ] && continue
+      oid="${f##*/}"; oid="${oid%.md}"; [ "$oid" = "$id" ] && continue
       while IFS= read -r pat; do
         [ -z "$pat" ] && continue
         pat_overlap "$path" "$pat" \
@@ -655,7 +635,7 @@ pack_brain_grep() { # pack_brain_grep <file> <pattern> — WHOLE brain bullets m
 }
 
 cmd_pack() { # pack <ID> — the whole context for one task, in ONE call. Read-only.
-  local id="${1:-}" f owned ctx contract pts risk title dirs d p pat any
+  local id="${1:-}" f owned ctx contract pts risk title dirs d p pat any api g row
   [ -n "$id" ] || id="$(current_task_id 2>/dev/null || true)"
   [ -n "$id" ] || die "usage: polaris pack <ID>   (or run it inside a feat/<ID> worktree)"
   f="$(task_file "$id" 2>/dev/null || true)"
@@ -725,15 +705,28 @@ EOF
   [ -n "$any" ] || printf '(no code-map entry — run: ops/polaris brain)\n'
 
   pack_section "PUBLIC SURFACE — do not break these signatures"
-  any=""
+  # `find --api` is the same index `check --scaffold` locks goldens from, so what prints here is
+  # exactly what a shape regression would flag later. ONE call for every owned path (T-180): one
+  # CLI start, one python, one index refresh — not one chain per path. The loop then re-cuts the
+  # answer per path with the match index.py's LIKE makes (`*` any run, no `*` = substring, `_` any
+  # one character, case-blind), so each path keeps its own 25-row cap, byte for byte as before.
+  any=""; api=""
+  set --
   while IFS= read -r p; do
     [ -n "$p" ] || continue
-    # `find --api` is the same index `check --scaffold` locks goldens from, so what prints here is
-    # exactly what a shape regression would flag later.
-    "$SELF" find --api "$p" 2>/dev/null | head -25 | grep . && any=1
+    set -- "$@" "$p"
   done <<EOF
 $owned
 EOF
+  [ "$#" -gt 0 ] && { api="$("$SELF" find --api "$@" 2>/dev/null)" || true; }
+  for p in "$@"; do
+    [ -n "$api" ] || break
+    g="$p"; case "$g" in *'*'*) ;; *) g="*$g*";; esac; g="${g//_/?}"
+    case "$api" in *"$POLARIS_TAB"*) ;; *) g='*';; esac   # no rows: the engine's own note, per path as before
+    printf '%s\n' "$api" | { shopt -s nocasematch; while IFS= read -r row; do
+        case "${row%%"$POLARIS_TAB"*}" in $g) printf '%s\n' "$row";; esac; done; } \
+      | LC_ALL=C sort -u | head -25 | grep . && any=1
+  done
   [ -n "$any" ] || printf '(nothing indexed for these paths — new files, or run: ops/polaris brain)\n'
 
   # 7. the lessons that already cost someone tokens, filtered to THIS task's files.
@@ -830,53 +823,10 @@ EOF_ITEMS
     fi
   fi
 
-  # 7b. SEE YOUR WORK (ops/contracts/visual-check.md § cmd_pack): the capture step, driven by real
-  # cfg reads of visual:/shot:/serve:/port_base: so each repo plugs in its own tool. Absent by
-  # default — no visual: ⇒ one line and nothing else changes. `touches it` = any files_owned
-  # pattern vs any visual: glob, both directions (pat_overlap, the claim gate's matcher); the globs
-  # are read through a here-doc, never a bare $vis, which the shell would expand against the cwd.
-  # Per-task port = port_base + (numeric tail of the ID mod 100): T-207 ⇒ +7, no digits ⇒
-  # port_base, no port_base ⇒ {PORT} stays literal. Inline on purpose (SURFACE-FROZEN: no new fn).
-  pack_section "SEE YOUR WORK — capture before handoff (ops/VISUAL.md)"
-  local vis vshot vserve vbase vport vnum vhit
-  vis="$(cfg visual "")"
-  if [ -z "$vis" ]; then
-    printf '(visual: unset — no capture step; ops/VISUAL.md explains how to add one)\n'
-  else
-    vshot="$(cfg shot "")"; vserve="$(cfg serve "")"; vbase="$(cfg port_base "")"
-    vhit=no
-    while IFS= read -r p; do
-      [ -n "$p" ] || continue
-      while IFS= read -r d; do
-        [ -n "$d" ] || continue
-        if [ "$vhit" = no ] && pat_overlap "$p" "$d"; then vhit=yes; fi
-      done <<EOF_VIS
-$(printf '%s\n' "$vis" | tr ' ' '\n')
-EOF_VIS
-    done <<EOF_OWN
-$owned
-EOF_OWN
-    vnum="${id##*[!0-9]}"
-    vport=""
-    case "$vbase" in ''|*[!0-9]*) ;; *)
-      vport="$vbase"; if [ -n "$vnum" ]; then vport=$(( vbase + 10#$vnum % 100 )); fi;;
-    esac
-    printf 'visual: %s · this task touches it: %s\n' "$vis" "$vhit"
-    if [ -n "$vserve" ]; then
-      if [ -n "$vport" ]; then vserve="${vserve//\{PORT\}/$vport}"; fi
-      printf 'serve: %s\n' "$vserve"
-    fi
-    if [ -n "$vshot" ]; then
-      vshot="${vshot//\{ID\}/$id}"
-      if [ -n "$vport" ]; then vshot="${vshot//\{PORT\}/$vport}"; fi
-      printf 'shot: %s\n' "$vshot"
-    else
-      printf 'shot: (unset — set shot: in ops/CONVENTIONS.md; ops/VISUAL.md)\n'
-    fi
-    if [ -n "$vport" ]; then printf 'port: %s\n' "$vport"; else printf 'port: (port_base unset — {PORT} stays literal)\n'; fi
-    printf 'proof: .polaris/shots/%s-*.png — then READ it and write one "saw: <what it shows>" line in your handoff\n' "$id"
-    printf 'read: ops/VISUAL.md\n'
-  fi
+  # 7b. SEE YOUR WORK (ops/contracts/visual-check.md § cmd_pack) — body in lib/visual.sh: the
+  # capture step, driven by real cfg reads of visual:/shot:/serve:/port_base: so each repo plugs in
+  # its own tool. Absent by default — no visual: ⇒ one line and nothing else changes.
+  visual_pack "$id" "$owned"
 
   # 8. what will actually be run against you. Knowing this up front is what stops a Builder
   # writing a verify: it cannot pass, or hand-checking something the list already proves.

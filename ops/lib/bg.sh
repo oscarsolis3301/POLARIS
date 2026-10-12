@@ -32,13 +32,33 @@ bg_rotate() { # bg_rotate <name> — archive a job dir to its ONE .prev slot (bg
   # can hold the dir open while a runner still writes its log — die honestly.
   local root="$PRIMARY/.polaris/bg"
   local n="${1:-}"
-  [ -d "$root/$n" ] || return 0
+  local now a an ae e x keep=$(( 7 * 86400 ))   # retention: 7 days, in code on purpose — no KEYS row (speed.md § 5)
+  [ -d "$root/$n" ] || return 0; now="$(date +%s)"
   if [ -d "$root/$n.prev" ]; then
     mkdir -p "$root/.archive"
-    mv "$root/$n.prev" "$root/.archive/$n-$(date +%s)" 2>/dev/null || true
+    mv "$root/$n.prev" "$root/.archive/$n-$now" 2>/dev/null || true
   fi
   mv "$root/$n" "$root/$n.prev" 2>/dev/null \
     || die "could not rotate '$n' to $n.prev — still running? bash ops/polaris bg status $n"
+  # RETENTION (T-178): rotation alone grows .archive/, so it trims it — an archived run that FINISHED
+  # over 7 days ago goes. Never a `<name>.prev` slot (conductor: each name keeps its last result),
+  # never an entry without rc (live, killed, crashed) or a readable end, never a name's newest run.
+  for a in "$root/.archive"/*/; do
+    [ -e "$a" ] || break
+    a="${a%/}"; an="${a##*/}"; ae="${an##*-}"; an="${an%-*}"
+    case "$ae" in "${a##*/}"|''|*[!0-9]*) continue;; esac          # not a <name>-<epoch> we wrote
+    [ -f "$a/rc" ] || continue; e=""; read -r e 2>/dev/null < "$a/end" || true; e="${e%$'\r'}"
+    case "$e" in ''|*[!0-9]*) continue;; *) [ $(( now - e )) -gt "$keep" ] || continue;; esac
+    if [ ! -d "$root/$an.prev" ]; then                              # newest unless a later archive exists
+      for x in "$root/.archive/$an-"*/; do
+        x="${x%/}"; x="${x##*/}"; [ "${x%-*}" = "$an" ] || { x=""; continue; }
+        case "${x##*-}" in ''|*[!0-9]*) x="";; *) [ "${x##*-}" -gt "$ae" ] && break; x="";; esac
+      done
+      [ -n "$x" ] || continue
+    fi
+    rm -rf "$a"
+  done
+  return 0
 }
 
 bg_run() { # bg run <name> [--force] [-- <cmd…>] — start a detached job (bg-jobs.md). A bare
@@ -142,20 +162,17 @@ bg_status() { # bg status [<name>] — rc-file-FIRST, then the pid, NEVER the re
   now="$(date +%s)"
   local name="${1:-}"
   if [ -z "$name" ]; then
-    local d n v s r any=""
+    local d n v s r p any=""
+    # builtins only, `.prev` first (T-178): a fork per folder cost seconds on a 150-folder registry
     for d in "$root"/*/; do
+      case "$d" in *.prev/) continue;; esac
       [ -e "$d" ] || break
-      n="$(basename "$d")"
-      case "$n" in *.prev) continue;; esac
-      any=1
-      if [ -f "$d/rc" ]; then
-        r="$(tr -d ' \r\n' < "$d/rc")"
-        v="red"; [ "$r" = "0" ] && v="green"
-      elif bg_alive "$(cat "$d/pid" 2>/dev/null | tr -d ' \r\n')"; then v="running"
-      else v="unknown"; fi
-      s="$(cat "$d/start" 2>/dev/null | tr -d ' \r\n')"
+      n="${d%/}"; n="${n##*/}"; any=1; r=""; p=""; v="unknown"
+      if [ -f "$d/rc" ]; then read -r r 2>/dev/null < "$d/rc" || true; v="red"; [ "${r%$'\r'}" = "0" ] && v="green"
+      else read -r p 2>/dev/null < "$d/pid" || true; bg_alive "${p%$'\r'}" && v="running"; fi
+      s=""; read -r s 2>/dev/null < "$d/start" || true; s="${s%$'\r'}"
       case "$s" in ''|*[!0-9]*) s="$now";; esac
-      printf '%s\t%s\t%s\n' "$n" "$v" "$(bg_age $(( now - s )))"
+      printf '%s\t%s\t' "$n" "$v"; bg_age $(( now - s )); printf '\n'
     done
     [ -n "$any" ] || printf 'no background jobs\n'
     return 0

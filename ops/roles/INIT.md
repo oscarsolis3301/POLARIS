@@ -69,6 +69,7 @@ Step 1 already read every manifest. Use it:
 | origin remote? | `git remote` |
 | `publish:` | `git remote get-url origin` matches `bitbucket.org` → suggest `pr` (a protected `<base>` rejects direct pushes); else default `direct` |
 | `shot:` `visual:` `port_base:` `serve:` | `tools/shot*.py` · screenshot scripts · playwright/puppeteer deps ⇒ suggest `shot:`; the app's page/component dirs ⇒ `visual:` globs; the dev-server script ⇒ `serve:` + a free `port_base:`; on Windows write python, never python3 |
+| `gallery:` | a repo that already keeps pictures for people to look at (`docs/screens/`, `docs/images/`, a tracked `screenshots/` dir) ⇒ suggest that path; else `docs/screens/` if you set `visual:` at all, and omit it when you did not — unset means captures stay in `.polaris/shots/` and there is nothing to show anyone |
 | candidate danger zones | what the survey saw: `.env*`, migrations dirs, prod config, lockfiles, generated/vendored dirs |
 | `stale_hours:` `reports:` `uat:` `notify:` | defaults; EVOLVE tunes them later from real data |
 
@@ -80,6 +81,15 @@ Anything you genuinely cannot find, leave blank and say so in 2c — do not inve
 
 It becomes the sprint goal AND the Planner's input in step 4. Take it in their words; do not make
 them phrase it as a ticket.
+
+**Riding with it — the one design question.** Did the survey find a `visual:` surface (2b)? Then
+the SAME call carries one more free-text line — never a round of its own:
+> Describe the look and feel you want, in a sentence.
+
+No repo can answer that, and the answer is the whole difference between a design bar that is the
+owner's and one that is the kit's. Take it verbatim into `## THIS PRODUCT` in `ops/DESIGN.md` at
+step 3. Express lane or long form it folds in with the goal, so the cap stays 3 interactions and
+the default stays 2. No `visual:` surface? Skip it and leave that section as the template shipped it.
 
 **Interaction 3 — only what could not default.** Express lane active (the default)? Skip this
 entirely, or ask ONLY question 3 when the survey left danger zones unclassified — questions 1–2
@@ -106,7 +116,7 @@ either derivable, defaultable, or EVOLVE's job once there is real data. Do not a
 has just said "install polaris" does not yet know their own sprint capacity in points.
 
 ## 3. Write the artifacts — silently. No progress commentary.
-Instantiate the skeletons below with survey + interview results — the `voice:`, `adhd:` and `claim:` lines carry the 2a answers. Then run `bash ops/polaris init-board` (creates board dirs, gitignores `.polaris/`, prepares the lock dir, seeds `EVENTS.ndjson` telemetry with its union-merge gitattribute, seeds `ops/RULES.tsv`, and seeds `ops/SURFACES.tsv` header-only — the test map `polaris done` fills from tasks' `surface:` lists and `surfaces --scaffold --apply` seeds from the layout, never a hand edit). Turn every danger-zone/content answer from the interview into an armed RULES line (format documented at the top of the file), and arm the seeded `ops/SURFACES.tsv` line the same way — it ships commented in the RULES header; delete its leading `#` so the map is `path`-guarded and only `ops/polaris` ever writes it. Now record the 2a answers where the kit applies them: `bash ops/polaris interview --set voice=<answer> --set adhd=<answer> --set claim=<answer>` — idempotent on the values you just wrote, and the one step that applies the `adhd:` side effect. `--set` refusing an answer means it cannot apply here yet: keep that key's default, quote the command's own remedy in the step-5 report, and move on. Then `bash ops/polaris surfaces --scaffold --apply` — the survey already derived `test:`; this maps what the layout makes unambiguous (zero rows is a fine answer) and the step-5 report says how many. Run `bash ops/polaris rules` to health-check them, and commit everything as `chore(polaris): initialize` — `interview --set` and the scaffold write, they never commit; this is that commit.
+Instantiate the skeletons below with survey + interview results — the `voice:`, `adhd:` and `claim:` lines carry the 2a answers. Then run `bash ops/polaris init-board` (creates board dirs, gitignores `.polaris/`, prepares the lock dir, seeds `EVENTS.ndjson` telemetry with its union-merge gitattribute, seeds `ops/RULES.tsv`, and seeds `ops/SURFACES.tsv` header-only — the test map `polaris done` fills from tasks' `surface:` lists and `surfaces --scaffold --apply` seeds from the layout, never a hand edit). Turn every danger-zone/content answer from the interview into an armed RULES line (format documented at the top of the file), and arm the seeded `ops/SURFACES.tsv` line the same way — it ships commented in the RULES header; delete its leading `#` so the map is `path`-guarded and only `ops/polaris` ever writes it. Now record the 2a answers where the kit applies them: `bash ops/polaris interview --set voice=<answer> --set adhd=<answer> --set claim=<answer>` — idempotent on the values you just wrote, and the one step that applies the `adhd:` side effect. `--set` refusing an answer means it cannot apply here yet: keep that key's default, quote the command's own remedy in the step-5 report, and move on. Then `bash ops/polaris surfaces --scaffold --apply` — the survey already derived `test:`; this maps what the layout makes unambiguous (zero rows is a fine answer) and the step-5 report says how many. Then install the design bar: copy `ops/templates/DESIGN.md` to `ops/DESIGN.md` IF AND ONLY IF `ops/DESIGN.md` does not already exist, and never overwrite one that does — it is repo-editable state exactly like `ops/CONVENTIONS.md`, which is why `install.sh` deliberately never copies it: on `$KIT_CODE` an update would clobber the owner's own bar. Write the look-and-feel sentence from 2c into its `## THIS PRODUCT` section, in their words, and leave the rest of the template as it shipped. Run `bash ops/polaris rules` to health-check them, and commit everything as `chore(polaris): initialize` — `interview --set` and the scaffold write, they never commit; this is that commit.
 
 Values you no longer ask for, so choose them: `stale_hours: 1`; `autolaunch: ask` (safe default — offers to open Builders after planning rather than surprising a brand-new user with spawned windows); SPRINT capacity — start at **10 points** and let EVOLVE calibrate it from real cycle data; omit `uat:` and `notify:` unless the survey found an obvious end-to-end command. Do not narrate any of this. The human sees one report, in step 4, after the Planner has run.
 
@@ -174,6 +184,10 @@ visual: <globs or omit>     # optional: the surface a human LOOKS at (files_owne
 port_base: <number or omit> # optional: per-task port = port_base + (numeric tail of ID mod 100), so
                             # parallel builders never collide. Unset ⇒ {PORT} stays literal.
 serve: <cmd or omit>        # optional: how to start THIS worktree's server on {PORT} for the capture.
+gallery: <dir or omit>      # optional: where `done` publishes ONE curated before/after image and
+                            # its caption per screen, committed on <base> for stakeholders. Unset
+                            # ⇒ captures stay local in .polaris/shots/ and nothing is committed.
+                            # NEVER name this directory in any task's files_owned.
 test_fast: <cmd or omit>    # optional: the BUILDER's pre-handoff gate when the full test: suite is slow.
                             # test: still runs at the wave gate, in qa, and in CI — no gate disappears.
                             # Set this the moment test: approaches your harness's tool timeout: a suite

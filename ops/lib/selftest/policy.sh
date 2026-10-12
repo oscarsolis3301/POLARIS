@@ -435,6 +435,8 @@ drill_qa() {
     # classes as drill_drift on qa's own ids (built with plumbing; the landed commits carry main's
     # tree, so the working tree never moves). Every assertion is on the BRANCH LIST, never on qa's
     # rc alone (T-131): "qa went red" says nothing about WHICH finding reddened it.
+    # T-179: COMMITTED, so the tree is clean and the stamp assertions below can observe a stamp at all.
+    git add -A; git commit -qm 'drill: qa fixture' >/dev/null 2>&1 || true
     qctree="$(git rev-parse 'main^{tree}')"
     qcc="$(git commit-tree "$qctree" -p main -m 'feat: T-QC work')"
     git branch -f feat/T-QC "$qcc" >/dev/null 2>&1
@@ -461,6 +463,13 @@ drill_qa() {
     grep -q 'cruft — cleared 1 branch(es)' "$T/qacruft.out" || { cat "$T/qacruft.out"; echo "QA CRUFT SAY FAIL (the count line prints only for what was actually cleared)"; exit 1; }
     grep -q 'CRUFT diverged: feat/T-QD' "$T/qacruft.out" || { cat "$T/qacruft.out"; echo "QA CRUFT REASON FAIL (qa must be red for the DIVERGED branch — assert the reason, never the rc)"; exit 1; }
     grep -q 'CRUFT: feat/T-QC' "$T/qacruft.out" && { cat "$T/qacruft.out"; echo "QA CRUFT STALE FINDING FAIL (a branch qa just cleared must not still be a finding)"; exit 1; }
+    # T-179 (ops/contracts/speed.md § 4): a green suite whose only other red is CRUFT-class KEEPS its
+    # stamp (rc 1 above, still), so the next qa at this HEAD runs no suite key — only the board checks.
+    qchead="$(git rev-parse HEAD)"
+    [ "$(cut -d' ' -f1 < .polaris/suite-stamp 2>/dev/null)" = "$qchead" ] || { cat "$T/qacruft.out"; echo "QA CRUFT STAMP FAIL (suite green + CRUFT-only reds must stamp HEAD)"; exit 1; }
+    "$SELF" qa > "$T/qacruft2.out" 2>&1 && { cat "$T/qacruft2.out"; echo "QA CRUFT RERUN RC FAIL (the diverged branch still reds qa)"; exit 1; }
+    grep -q "suite already green at $(printf '%.7s' "$qchead") — skipped" "$T/qacruft2.out" || { cat "$T/qacruft2.out"; echo "QA CRUFT SKIP FAIL (the stamped HEAD must skip the suite)"; exit 1; }
+    grep -qE '(test|lint|typecheck|build|uat) — (green|RED)' "$T/qacruft2.out" && { cat "$T/qacruft2.out"; echo "QA CRUFT RERUN FAIL (no suite key may run at a stamped HEAD)"; exit 1; }
     # sweep --fix shares the one implementation of "safe to delete", so it keeps the diverged one too
     "$SELF" sweep --fix > "$T/qasweep.out" 2>&1 || { cat "$T/qasweep.out"; echo "QA SWEEP RC FAIL"; exit 1; }
     [ -n "$(git branch --list feat/T-QD)" ] || { cat "$T/qasweep.out"; echo "QA SWEEP DIVERGED FAIL (sweep --fix must keep an unproven tip too)"; exit 1; }
@@ -471,9 +480,20 @@ drill_qa() {
     git branch -D feat/T-QD >/dev/null 2>&1 || true
     rm -f ops/board/done/T-QC.md ops/board/done/T-QD.md ops/board/done/T-QW.md
     "$SELF" qa > "$T/qaclean.out" 2>&1 || { cat "$T/qaclean.out"; echo "QA CRUFT HERMETIC FAIL (the fixture must leave qa green again)"; exit 1; }
+    # T-179: MAP Deltas > 20 stays a HARD gate — the suite runs green, qa is rc 1, and NO stamp.
+    qm=0; while [ "$qm" -lt 21 ]; do qm=$((qm+1)); printf -- '- qa drill delta %s (T-QM, 2026-09-24)\n' "$qm" >> ops/MAP.md; done
+    git add -A; git commit -qm 'drill: qa map overflow'
+    rm -f .polaris/suite-stamp
+    "$SELF" qa > "$T/qamap.out" 2>&1 && { cat "$T/qamap.out"; echo "QA MAP RC FAIL (MAP Deltas > 20 must red qa)"; exit 1; }
+    grep -q 'MAP: ' "$T/qamap.out" || { cat "$T/qamap.out"; echo "QA MAP REASON FAIL (qa must be red for the MAP overflow)"; exit 1; }
+    grep -q 'test — green' "$T/qamap.out" || { cat "$T/qamap.out"; echo "QA MAP SUITE FAIL (the suite must have run green, or the no-stamp proves nothing)"; exit 1; }
+    [ -f .polaris/suite-stamp ] && { cat "$T/qamap.out"; echo "QA MAP STAMP FAIL (a MAP overflow is a hard gate — no stamp)"; exit 1; }
+    git reset -q --hard HEAD~1
     printf 'test: false\n' > ops/CONVENTIONS.md
     "$SELF" qa >/dev/null 2>&1 && { echo "QA RED FAIL (red suite must rc 1)"; exit 1; }
-    rm -f ops/CONVENTIONS.md
+    # hermetic: CONVENTIONS.md absent and the tree clean, no stamp — the state drill_finish expects
+    rm -f ops/CONVENTIONS.md .polaris/suite-stamp
+    git add -A; git commit -qm 'drill: qa teardown' >/dev/null 2>&1 || true
 }
 drill_skills() {
     # ---- T-159 skills drill (ops/contracts/self-skills.md § 9) — one skill walked from gap to

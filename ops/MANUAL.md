@@ -90,12 +90,24 @@ Then the stale-tests proof, from `ops/SURFACES.tsv` (TAB-separated `surface · t
 `ops/RULES.tsv` is yours to maintain (Invariant 11) — but never delete or weaken a rule because it blocked you, and never approve your own way past one: the approval is a human's, recorded on the task by `polaris approve <ID> <scope> -m "why"`, which refuses inside a `feat/*` worktree. Converting a rule between `path` and `ask` is a HUMAN decision, never an agent's.
 
 ## Handoff (Builder)
+The tool's signature is `handoff [ID] [--saw "<what the after shot shows>"] [--no-before "<why
+there was nothing to photograph>"]` — the first non-flag argument is the ID, and the flags may come
+in any order, before it or after it. By hand there are no flags, so you do by hand what they record.
 Commit everything on `feat/<ID>`. Then, gated on `publish:` in `ops/CONVENTIONS.md`:
 - `publish: direct` (default / absent / unknown value) → `git push origin feat/<ID>`.
 - `publish: pr` → do NOT push (feat branches never leave the machine); all else identical.
 Then, in the PRIMARY checkout: `mv ops/board/active/<ID>.md ops/board/review/<ID>.md` with the
 acceptance boxes checked, append the handoff telemetry line, `board_commit "chore(board): handoff <ID>" ops/board/active/<ID>.md ops/board/review/<ID>.md ops/board/EVENTS.ndjson`
 + `sync_board`. **Do not merge; do not release the lock.**
+The capture gate, by hand: if `visual:` and `shot:` are set and your diff touches a `visual:` path,
+the tool would refuse unless `.polaris/shots/` holds TWO non-empty captures named `<ID>-*.png` whose
+mtime is at or after the commit time of `git merge-base <base> feat/<ID>`, plus a non-empty `--saw`
+text (`--no-before "<why>"` drops that to ONE capture, for a screen that did not exist before).
+So: run the repo's `shot:` command BEFORE your edit and again AFTER, LOOK at both images, move any
+capture that landed outside the task's shot folder into it, and write that folder's `<ID>.md`
+caption yourself — the task title, your `--saw` text, `before:`/`after:` basenames (or
+`(skipped — <why>)`), and today's date. Count and freshness are the whole test; filenames are never
+inspected. `ops/VISUAL.md` is the short version of all of this.
 
 ## Release / abort (Builder)
 In the PRIMARY checkout: `mv` the task back to `ops/board/ready/` (or `ops/board/blocked/` + a note),
