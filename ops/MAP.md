@@ -242,3 +242,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 ## Deltas
 
 - docs/spikes/ — new: effort-live.md, the hook-event and delivery facts the effort ceiling (T-186) and Sprint 19's act mode read  (T-185, 2026-10-12)
+
+- docs/spikes/ — new: laya-jev-rea.md, the REA study of Laya and Jev, the laya-typed-decisions re-measure and REA's per-context footprint that Sprint 19 reads  (T-190, 2026-10-12)
