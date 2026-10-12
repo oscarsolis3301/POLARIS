@@ -1,0 +1,84 @@
+# Sprint 18 — Effort ceiling + REA (6.8.0) (2026-10-11–)
+
+## T-185 — "Effort probe spike — which hook events carry the chat's effort, how a notice reaches the human, and whether a spawn's effort can be rewritten"
+points 2 · risk normal · landed 6e52797 (2026-10-11) · claimed 2026-10-11
+files touched: docs/spikes/effort-live.md
+
+### Why
+The owner wants subagents to never run at a higher effort than the chat itself, and wants to be told
+(not interrupted) when the chat's effort drops while a subagent is still running. Before the guard
+(T-186) is written we need hard facts from the harness, because the guard can only use what the
+harness actually sends. This spike writes no kit code: its only repo output is
+`docs/spikes/effort-live.md`, with the six headings `ops/contracts/effort-ceiling.md` § 1 pins.
+
+1. In a throwaway git repo OUTSIDE this one, using the method of `docs/spikes/laya-s1.md` § Method
+   (headless `claude -p`, `--max-turns` ≤ 3, `--setting-sources project,local`, a throwaway hook that
+   logs every event payload and its environment), answer contract questions 2–4: which events carry
+   `$CLAUDE_EFFORT` / `effort.level` (main vs subagent; PreToolUse, PostToolUse, UserPromptSubmit,
+   SubagentStart/Stop, ConfigChange); whether a subagent's PreToolUse `systemMessage` reaches the human
+   and which main-session event can deliver `additionalContext`; whether a PreToolUse `updatedInput` can
+   set an Agent spawn's `effort` (proved from the spawned subagent's own transcript).
+2. Question 1 (does an already-running inheriting subagent follow a mid-run effort change; does a pinned
+   one stay) is answered by the CONDUCTOR in the top-level chat, the only caller that can change a live
+   chat's effort. Its result arrives in your kickoff; write it under `## Live mid-run check` and name who
+   ran it and when.
+3. `## Verdict` gives one line per question (yes / no / partial) and what T-186 should do with it.
+
+### Acceptance
+- [ ] The six pinned headings exist; questions 2–4 each answered yes / no / partial with the evidence that decided it.
+- [ ] `## Hook events` is a table: event × env/payload × main/subagent, with the observed value.
+- [ ] `## Live mid-run check` carries the conductor's result, attributed (who, when) — never fabricated by the builder.
+- [ ] Nothing in this repo changes except `docs/spikes/effort-live.md`; the probe repo and logs live outside it.
+
+## T-189 — "Asking to use REA works in any POLARIS project — one routing clause in the protocol every session reads"
+points 1 · risk normal · landed 3e1950b (2026-10-11) · claimed 2026-10-11
+files touched: kit/CLAUDE.md
+
+### Why
+REA becomes standard equipment this sprint (owner decision R1), so a human in any POLARIS project should
+be able to say "Use REA to…" and get the right behaviour without a detour. `kit/CLAUDE.md` is injected
+into every session and every subagent, so every byte there is paid 6–8 times a run: the clause must be
+tiny (about 120 B, at most 160 B added; the file is 9,894 B today, so ≤ 10,054 B after).
+
+Add ONE clause inside § ROLE DISPATCH, next to the Guard bullet, that says (in substance,
+`ops/contracts/rea.md` § 3): "Use REA to…" means REA's skill (`reverse-engineer-anything`) gathers the
+evidence first; then a question gets answered, and a build request goes to `triage` with that evidence
+attached. No new heading.
+
+### Acceptance
+- [ ] The clause sits in § ROLE DISPATCH and routes build requests to `triage` with the evidence attached.
+- [ ] kit/CLAUDE.md grows by at most 160 bytes.
+- [ ] No heading added or changed (api-kit diff empty).
+
+## T-190 — "REA studies Laya and Jev — the real checkpoints and wire exchange, the newer checkpoint measured on our own questions, and what REA costs every chat"
+points 3 · risk normal · landed fe6e062 (2026-10-11) · claimed 2026-10-11
+files touched: docs/spikes/laya-jev-rea.md
+
+### Why
+Sprint 19 will let Laya (a small local encoder; free) make cheap decisions, including each spawn's effort
+(owner decision L1), and its server speaks the protocol of Jev, TypeSafe's paid hosted version. The T-181
+spike (`docs/spikes/laya-s1.md`) found the shipped base checkpoint no better than chance on our
+questions; a newer `laya-typed-decisions` checkpoint scores far better on Laya's own benchmark but has
+never been measured on ours. Owner decision R1 also says REA's first job is to study Laya and Jev before
+the decision layer is built. This spike writes no kit code: its only repo output is
+`docs/spikes/laya-jev-rea.md`, with the eight headings `ops/contracts/rea.md` § 4 pins.
+
+1. Use REA (already installed on this machine) on shipped artifacts only: (a) the installed `laya`
+   package and its checkpoints, meaning which checkpoint answers which question and how confidence is
+   calibrated; (b) the `laya-serve` runtime's real `POST /v1/systemone` exchange; (c) Jev's hosted API
+   only if the conductor passes you the NAME of an env var holding the owner's key, otherwise write
+   "skipped: no key".
+2. Measure `laya-typed-decisions` against the T-181 base checkpoint on the 30 spawn-difficulty labels
+   plus 30 new effort labels taken from real spawns and judged by outcome, each beside its majority
+   baseline, with GPU p50/p95.
+3. Measure REA's footprint: the bytes its tool names add to a main chat and to a subagent, against the
+   `polaris slim` budget; over budget → write the proposal (keep the skill, connect the MCP server only on
+   demand). Change nothing about the registration.
+4. `## Verdict`: which checkpoint, which host, Jev vs Laya on cost and latency, go/no-go for shadow-mode
+   effort decisions.
+
+### Acceptance
+- [ ] The eight pinned headings exist; (a) and (b) answered from runtime evidence; (c) answered or "skipped: no key".
+- [ ] Both label sets scored for both checkpoints, each beside its majority baseline; GPU p50/p95 per checkpoint.
+- [ ] REA footprint in bytes for a main chat and a subagent, compared with the slim budget.
+- [ ] Nothing in this repo changes except `docs/spikes/laya-jev-rea.md`; the venv, checkpoints, labelled sets and logs live outside it.

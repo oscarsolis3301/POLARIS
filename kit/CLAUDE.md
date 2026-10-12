@@ -43,6 +43,8 @@ Your kickoff names your role. Read `ops/roles/<ROLE>.md` and execute it. Nothing
   operational command ("run the tests", "deploy"), or POLARIS meta ("update POLARIS", "status") is
   NOT a work request — handle it normally. The discriminant is intent to *change* the repo vs.
   intent to *understand or operate* it. Genuinely unclear → ask in one line.
+- **"Use REA to…"** → skill `reverse-engineer-anything` gathers evidence first; then answer
+  a question, or send a build request to `triage` with it.
 - No role given and `ops/CONVENTIONS.md` does NOT exist → INIT has never run → you are INIT.
   That file is the ONLY "has INIT run?" test; an `ops/board/` from an older installer proves nothing.
 - **NEVER act as two roles inside one CONTEXT.** A hop at a board-proven boundary is not a second
