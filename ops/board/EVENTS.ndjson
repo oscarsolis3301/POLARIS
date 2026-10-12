@@ -690,3 +690,5 @@
 {"ts":1791786819,"ev":"release","id":"T-187","who":"Owner@DESKTOP","note":"→ ready: harness auto-mode classifier denied the kit/ops/bootstrap.py edit (arm_rea) as Unauthorized Persistence again, even with the owner's approval relayed by the conductor; needs a permission rule for Edit on kit/ops/bootstrap.py or a top-level session where the owner approves directly"}
 {"ts":1791786904,"ev":"handoff","id":"T-185","who":"Owner@DESKTOP","note":""}
 {"ts":1791787947,"ev":"handoff","id":"T-190","who":"Owner@DESKTOP","note":""}
+{"ts":1791787969,"ev":"blocked","id":"T-187","who":"Owner@DESKTOP","note":"→ blocked: parked to next run (owner 2026-10-11) — 6.8.0 ships without REA arming"}
+{"ts":1791787969,"ev":"blocked","id":"T-188","who":"Owner@DESKTOP","note":"→ blocked: parked to next run (owner 2026-10-11) — 6.8.0 ships without REA updates"}
