@@ -701,3 +701,4 @@
 {"ts":1791791080,"ev":"handoff","id":"T-186","who":"Owner@DESKTOP","note":""}
 {"ts":1791791081,"ev":"all-review","id":"T-186","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1791791207,"ev":"done","id":"T-186","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1791791300,"ev":"promote","id":"T-191","who":"Owner@DESKTOP","note":"deps done: T-186, T-189","pts":1}
