@@ -698,3 +698,5 @@
 {"ts":1791790270,"ev":"promote","id":"T-186","who":"Owner@DESKTOP","note":"deps done: T-185","pts":5}
 {"ts":1791790508,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"INTEGRATOR.md step 4 says 'git branch -d integrate/<date>' o"}
 {"ts":1791790555,"ev":"claim","id":"T-186","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1791791080,"ev":"handoff","id":"T-186","who":"Owner@DESKTOP","note":""}
+{"ts":1791791081,"ev":"all-review","id":"T-186","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
