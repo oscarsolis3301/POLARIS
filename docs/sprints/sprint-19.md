@@ -28,7 +28,7 @@ No new top-level function (api-kit.expected stays as it is) — inline the ID lo
 - [ ] The handover drill in kit/ops/lib/selftest/board.sh still holds under the new foreign rule — run `bash kit/ops/polaris doctor --selftest --only handover` ONCE via `bg run` before handoff and paste the verdict line in Notes (not in verify:; it is minutes).
 
 ## T-193 — "A leftover task no longer blocks \"done\" — drain defaults to plan in code, and release can park a ready task back in the backlog"
-points 3 · risk normal · landed fb32bee (2026-10-27) · claimed 2026-10-27
+points 3 · risk normal · landed fb32bee (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/MANUAL.md, kit/ops/lib/builder.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/policy.sh, kit/ops/polaris, ops/tests/drain-default.cmd, ops/tests/drain-default.expected
 
 ### Why
@@ -107,7 +107,7 @@ appears.
 - [ ] readonly-allow stays within its bench budget.
 
 ## T-196 — "Tev1 spike — does Together AI's local decision model beat our rules and the plain majority answer on our own questions?"
-points 3 · risk normal · landed a272aa6 (2026-10-27) · claimed 2026-10-27
+points 3 · risk normal · landed a272aa6 (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: docs/spikes/tev1.md
 
 ### Why
@@ -136,3 +136,28 @@ Order of work — do everything that needs no owner step FIRST:
 - [ ] The eight pinned headings exist; every accuracy figure sits beside its majority baseline, and on the test-depth set beside the rules.
 - [ ] Go/no-go stated with the held-out split and the margin; a blocked update or pull is a valid recorded no-go if the owner declines.
 - [ ] Nothing in this repo changes except docs/spikes/tev1.md; label sets, script and logs live under ~/.claude/polaris/laya/.
+
+## T-197 — "POLARIS can tell how much testing a change needs — none for text, look for styling, scoped or full for code — and says why"
+points 5 · risk normal · landed 3850d8d (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/KEYS.tsv, kit/ops/lib/core.sh, kit/ops/lib/observe.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/test-depth.cmd, ops/tests/test-depth.expected
+
+### Why
+A docs edit or a one-line CSS change pays the same 26-minute suite as a code change. This task builds
+the decision only — nothing calls it yet (T-198 wires it into qa and land). Per
+ops/contracts/test-depth.md § 1-3:
+
+1. KEYS.tsv gains `test_skip` (default `*.md docs/** *.txt LICENSE*`) and `test_look` (default
+   `*.css *.scss *.less *.svg *.png *.jpg *.jpeg *.gif *.webp *.ico`), since 6.9.0. The defaults live in
+   code (`cfg test_skip "<default>"`), never written into a repo's CONVENTIONS.
+2. `depth_for [<taskfile>…] < paths` in core.sh next to `tier_for`: pure, ONE line `<depth><TAB><why>`,
+   the six-row rule table with the pinned why strings. `test_depth:` can only raise depth.
+3. `polaris depth [<ID>]` (`cmd_depth` in observe.sh; dispatch + help line in kit/ops/polaris): read-only,
+   line 1 the depth word, then `   why:` and `   paths:` note lines.
+
+You own api-kit.expected after T-195: add exactly `depth_for`, `cmd_depth` and the two KEYS rows,
+diffed by content; STOP on any other hunk.
+
+### Acceptance
+- [ ] Hermetic golden `test-depth` covers every row of the contract's table plus the `test_skip: -` and ignored `test_depth: none` cases, and `polaris depth` on a fixture branch; seen failing once.
+- [ ] depth_for writes nothing and calls no git (pure — input on stdin, task files as args).
+- [ ] KEYS rows carry an honest absent-cost sentence in plain English.

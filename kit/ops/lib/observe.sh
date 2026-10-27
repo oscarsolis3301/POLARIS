@@ -2235,6 +2235,62 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
   return 0
 }
 
+cmd_depth() { # depth [<ID>] — read-only verdict: how much testing does this change need, and why
+  # (ops/contracts/test-depth.md § 3). Line 1 = the depth word alone; then `   why:` and
+  # `   paths:` note lines. With <ID>: paths = git diff --name-only $BASE...feat/<ID>, taskfile =
+  # that task's file. No ID: paths = surface_change_set — UNBOUNDED (no proven baseline) prints
+  # `full` / `no suite baseline` outright; taskfiles = every `[<ID>]` task-commit subject since the
+  # baseline (or $BASE on a branch), plus the current feat/<ID> branch, resolved with `task_file`.
+  # Nothing here writes anything — same read-only contract as `triage`/`drift`.
+  local id="${1:-}" tf="" paths="" n=0 skipn=0 line depth why csf p skip_raw sha cur baseline subj sid f tfs
+  if [ -n "$id" ]; then
+    tf="$(task_file "$id")" || die "depth: $id not found on the board"
+    paths="$(git -C "$PRIMARY" diff --name-only "$BASE...feat/$id" 2>/dev/null)"
+  else
+    csf="$(mktemp)"
+    if surface_change_set > "$csf"; then
+      paths="$(cat "$csf")"; rm -f "$csf"
+    else
+      rm -f "$csf"
+      printf 'full\n'; note "why: no suite baseline"
+      return 0
+    fi
+    baseline="${SURFACE_BASELINE:-}"
+    cur="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    [ -n "$baseline" ] || { [ "$cur" = "$BASE" ] || baseline="$BASE"; }
+    if [ -n "$baseline" ]; then
+      while IFS= read -r subj; do
+        [ -z "$subj" ] && continue
+        case "$subj" in *'['*']') sid="${subj##*[}"; sid="${sid%]}";; *) sid="";; esac
+        [ -n "$sid" ] || continue
+        f="$(task_file "$sid" 2>/dev/null)" || continue
+        case " $tfs " in *" $f "*) ;; *) tfs="${tfs:+$tfs }$f";; esac
+      done <<EOF
+$(git -C "$PRIMARY" log --format=%s "$baseline..HEAD" 2>/dev/null)
+EOF
+    fi
+    case "$cur" in
+      feat/*) f="$(task_file "${cur#feat/}" 2>/dev/null)" || f=""
+              if [ -n "$f" ]; then case " $tfs " in *" $f "*) ;; *) tfs="${tfs:+$tfs }$f";; esac; fi ;;
+    esac
+    tf="$tfs"
+  fi
+  n="$(printf '%s\n' "$paths" | grep -c .)"
+  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
+  [ "$skip_raw" = "-" ] && skip_raw=""
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    [ -n "$skip_raw" ] && owned_match "$p" $skip_raw && skipn=$((skipn+1))
+  done <<EOF
+$paths
+EOF
+  line="$(printf '%s\n' "$paths" | depth_for $tf)"
+  depth="${line%%$POLARIS_TAB*}"; why="${line#*$POLARIS_TAB}"
+  printf '%s\n' "$depth"
+  note "why: $why"
+  note "paths: $n changed ($skipn skipped by test_skip)"
+  return 0
+}
 cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the full CONVENTIONS suite
   # (test/lint/typecheck/build, uat if set), then drift --strict, then doctor's env check. Runs EVERY
   # check even after a red — one pass paints the whole picture — and exits 1 if anything was

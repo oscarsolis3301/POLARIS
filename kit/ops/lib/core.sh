@@ -75,6 +75,59 @@ tier_for() { # tier_for <points> <risk> — echo exactly ONE tier word (ops/cont
   else printf 'mid'; fi
   return 0
 }
+# --------------------------------------------------------------- test depth
+depth_for() { # depth_for [<taskfile>…] < <paths, one per line> — ONE line "<depth><TAB><why>" on
+  # stdout (ops/contracts/test-depth.md § 2); depth ∈ none | look | scoped | full. rc 0 ALWAYS —
+  # never dies, callers pass board data as-is. PURE: no writes to the repo, no git — stdin + the
+  # (read-only) task files are the whole input; the one temp file below is scratch for
+  # surface_select_cmd's paths-file argument and never touches tracked state.
+  # First match wins. A taskfile's `test_depth:` can only RAISE depth — anything but `full` is a
+  # no-op here, same as unset.
+  local tf id risk td skip_raw look_raw p nl nonskip="" nonlook="" lookn=0 csf sel rc
+  nl=$'\n'
+  for tf in "$@"; do
+    [ -f "$tf" ] || continue
+    id="$(fm_get id "$tf")"; [ -n "$id" ] || id="$(basename "$tf" .md)"
+    risk="$(fm_get risk "$tf")"
+    [ "$risk" = "high" ] && { printf 'full\t%s\n' "risk: high on $id"; return 0; }
+  done
+  for tf in "$@"; do
+    [ -f "$tf" ] || continue
+    id="$(fm_get id "$tf")"; [ -n "$id" ] || id="$(basename "$tf" .md)"
+    td="$(fm_get test_depth "$tf")"
+    [ "$td" = "full" ] && { printf 'full\t%s\n' "test_depth: full on $id"; return 0; }
+  done
+  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
+  [ "$skip_raw" = "-" ] && skip_raw=""
+  look_raw="$(cfg test_look '*.css *.scss *.less *.svg *.png *.jpg *.jpeg *.gif *.webp *.ico')"
+  [ "$look_raw" = "-" ] && look_raw=""
+  while IFS= read -r p || [ -n "$p" ]; do
+    [ -z "$p" ] && continue
+    if [ -n "$skip_raw" ] && owned_match "$p" $skip_raw; then continue; fi
+    nonskip="${nonskip:+$nonskip$nl}$p"
+  done
+  [ -n "$nonskip" ] || { printf 'none\t%s\n' "only test_skip paths"; return 0; }
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    if [ -n "$look_raw" ] && owned_match "$p" $look_raw; then
+      lookn=$((lookn+1)); continue
+    fi
+    nonlook="${nonlook:+$nonlook$nl}$p"
+  done <<EOF
+$nonskip
+EOF
+  [ -n "$nonlook" ] || { printf 'look\t%s\n' "only look paths ($lookn)"; return 0; }
+  csf="$(mktemp)"
+  printf '%s\n' "$nonlook" > "$csf"
+  if sel="$(surface_select_cmd "$csf")"; then rc=0; else rc=1; fi
+  rm -f "$csf"
+  if [ "$rc" -eq 0 ]; then
+    printf 'scoped\t%s\n' "every code path mapped in SURFACES.tsv"
+  else
+    printf 'full\t%s\n' "$sel"
+  fi
+  return 0
+}
 model_denied() { # model_denied <name> — rc 0 when <name> is a FORBIDDEN model.
   # OWNER DECISION 2026-09-15, absolute: POLARIS never selects Fable or Haiku, in any repo, on any
   # machine. Fable bills against a SEPARATE and much smaller weekly limit — one day of routing
