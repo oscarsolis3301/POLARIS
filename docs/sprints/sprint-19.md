@@ -138,7 +138,7 @@ Order of work — do everything that needs no owner step FIRST:
 - [ ] Nothing in this repo changes except docs/spikes/tev1.md; label sets, script and logs live under ~/.claude/polaris/laya/.
 
 ## T-197 — "POLARIS can tell how much testing a change needs — none for text, look for styling, scoped or full for code — and says why"
-points 5 · risk normal · landed 3850d8d (2026-10-27) · claimed 2026-10-27
+points 5 · risk normal · landed 3850d8d (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/KEYS.tsv, kit/ops/lib/core.sh, kit/ops/lib/observe.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/test-depth.cmd, ops/tests/test-depth.expected
 
 ### Why
@@ -161,3 +161,33 @@ diffed by content; STOP on any other hunk.
 - [ ] Hermetic golden `test-depth` covers every row of the contract's table plus the `test_skip: -` and ignored `test_depth: none` cases, and `polaris depth` on a fixture branch; seen failing once.
 - [ ] depth_for writes nothing and calls no git (pure — input on stdin, task files as args).
 - [ ] KEYS rows carry an honest absent-cost sentence in plain English.
+
+## T-198 — "Text and styling changes stop paying the whole test suite — qa and the express lane test to the depth the change needs, and log every decision"
+points 5 · risk normal · landed e27d8b6 (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/lib/core.sh, kit/ops/lib/integrate.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/history.sh, kit/ops/lib/selftest/policy.sh, ops/tests/api-kit.expected, ops/tests/depth-stamp.cmd, ops/tests/depth-stamp.expected
+
+### Why
+`finish` always runs `qa`, and qa runs the whole suite unless the last green run was at this exact
+commit — so a docs-only commit (EVOLVE's, a sprint report) or a CSS tweak re-pays 26 minutes. This task
+wires T-197's `depth_for` into the two callers (ops/contracts/test-depth.md § 4-5):
+
+1. `cmd_qa` (observe.sh ~:2240-2306) and `land --express` (integrate.sh ~:659-711) ask depth_for.
+   `none`/`look` run no suite key but every board check qa makes today; `scoped`/`full` unchanged.
+   `qa --full`/`--force` and an unbounded change set stay full. Task files come from the `[<ID>]`
+   subject scan (§ 4). `look` leaves the visual capture + `--saw` gate at handoff exactly as it is.
+2. The stamp's third field records the depth word.
+3. `surface_change_set` (core.sh ~:310) and `suite_stamp_carry` (integrate.sh ~:484) drop test_skip
+   paths, so a green stamp carries across a docs-only commit.
+4. Plan § E: every qa / land --express decision, and every `finish`, appends one row to
+   `.polaris/decisions.ndjson` after the run (§ 5 shape). At most one new helper function for it.
+
+CI and `pack.py --dogfood` still run the full serial suite and never read the stamp — untouched.
+Drills that pin stamp format/behaviour (selftest history.sh ~:203-222, policy.sh ~:99-167, fast.sh
+~:398-415) move only if their pinned meaning changed; say which in Notes. You own api-kit.expected
+after T-197: add only your helper's line; STOP on any other hunk.
+
+### Acceptance
+- [ ] Hermetic golden `depth-stamp`: docs-only commit after a green stamp → no suite key runs and the stamp carries; CSS-only → stamp field `look`; one decisions.ndjson row per qa with every § 5 key. Seen failing once.
+- [ ] qa-stamp golden green (re-pinned only where the depth line legitimately appears — content diff, STOP on anything else).
+- [ ] A change with no test_skip/test_look path gets a byte-identical verdict to 6.8.0.
+- [ ] `bash kit/ops/polaris doctor --selftest --only qa,express,surfaces,finish` run ONCE via `bg run` + chunked `bg wait` before handoff; verdict pasted in Notes.
