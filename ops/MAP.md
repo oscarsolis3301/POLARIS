@@ -252,3 +252,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - docs/spikes/ — new: tev1.md, the Tev1-on-Ollama measurement and go/no-go that Sprint 19 (6.10.0) builds on  (T-196, 2026-10-27)
 
 - kit/ops/lib/core.sh — depth_for (pure: changed paths + task files → none|look|scoped|full + why) beside tier_for; `polaris depth [<ID>]` (cmd_depth, observe.sh) prints it read-only; KEYS gains test_skip + test_look (6.9.0)  (T-197, 2026-10-27)
+
+- .polaris/decisions.ndjson — new gitignored log: one row per qa / land --express depth decision and per finish (ts, plan, task, kind, depth, why, paths, secs, rc); the suite stamp's third field is now none|look|scoped|full  (T-198, 2026-10-27)
