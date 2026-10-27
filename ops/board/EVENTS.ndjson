@@ -732,3 +732,4 @@
 {"ts":1793131300,"ev":"handoff","id":"T-197","who":"Owner@DESKTOP","note":""}
 {"ts":1793131301,"ev":"all-review","id":"T-197","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1793131437,"ev":"done","id":"T-197","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1793131522,"ev":"promote","id":"T-198","who":"Owner@DESKTOP","note":"deps done: T-197","pts":5}
