@@ -248,3 +248,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - kit/ops/hooks/model-guard.sh — also enforces the effort ceiling (E1) on Agent/Task/Workflow spawns; records ~/.claude/polaris/model-state/<sid>.effort and <sid>.over/<agent_id>  (T-186, 2026-10-12)
 
 - kit/ops/hooks/readonly-allow.sh — now wired to Bash|PowerShell; a PowerShell command gets its own deny-by-default verb table (git → git_ok, ops/polaris → polaris_ok); polaris_ok gains depth  (T-195, 2026-10-27)
+
+- docs/spikes/ — new: tev1.md, the Tev1-on-Ollama measurement and go/no-go that Sprint 19 (6.10.0) builds on  (T-196, 2026-10-27)
