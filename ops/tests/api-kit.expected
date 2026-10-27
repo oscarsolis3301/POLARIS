@@ -464,6 +464,7 @@ kit/ops/lib/observe.sh	fn	harness_stack
 kit/ops/lib/observe.sh	fn	harness_testdir
 kit/ops/lib/observe.sh	fn	harness_write_node
 kit/ops/lib/observe.sh	fn	harness_write_python
+kit/ops/lib/observe.sh	fn	metrics_depth_lines
 kit/ops/lib/observe.sh	fn	pat_overlap
 kit/ops/lib/observe.sh	fn	rules_gate
 kit/ops/lib/observe.sh	fn	scaffold_dirs

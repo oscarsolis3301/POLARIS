@@ -2772,7 +2772,11 @@ EOF
 }
 
 cmd_metrics() { # cycle time + throughput + kickbacks from EVENTS.ndjson — pure awk
-  [ -s "$EVENTS" ] || { note "no telemetry yet (EVENTS.ndjson empty) — runs accumulate it"; return 0; }
+  if [ ! -s "$EVENTS" ]; then
+    note "no telemetry yet (EVENTS.ndjson empty) — runs accumulate it"
+    metrics_depth_lines
+    return 0
+  fi
   awk -v now="$(date +%s)" '
     function get(k,   m){ m=""; if (match($0, "\""k"\":\"[^\"]*\"")) { m=substr($0,RSTART,RLENGTH); sub("\""k"\":\"","",m); sub("\"$","",m) } return m }
     function num(k,   m){ m=""; if (match($0, "\""k"\":[0-9]+"))     { m=substr($0,RSTART,RLENGTH); sub("\""k"\":","",m) } return m+0 }
@@ -2814,6 +2818,78 @@ cmd_metrics() { # cycle time + throughput + kickbacks from EVENTS.ndjson — pur
   printf 'WIP now: %s active · %s review\n' \
     "$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)" \
     "$(ls "$BOARD/review" 2>/dev/null | grep -c '\.md$' || true)"
+  metrics_depth_lines
+}
+
+metrics_depth_lines() { # test-depth.md § 6 — two lines, appended LAST: suite minutes skipped this
+  # sprint (by depth) and the per-run build/land/suite/finish split, read from
+  # .polaris/decisions.ndjson (T-198) + EVENTS.ndjson, sprint-scoped by SPRINT.md line 1's `dates:`.
+  # No log → both lines still print (n/a, -). Pure read, never fails the caller.
+  local sdate sepoch dec skip_line build_m land_m suite_m finish_m out
+  sdate="$(sed -n '1p' "$OPS/SPRINT.md" 2>/dev/null | sed -n 's/.*dates:[[:space:]]*\([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\).*/\1/p')"
+  sepoch=0
+  if [ -n "$sdate" ]; then
+    sepoch="$(date -d "$sdate" +%s 2>/dev/null || date -j -f %Y-%m-%d "$sdate" +%s 2>/dev/null || echo 0)"
+    case "$sepoch" in ''|*[!0-9]*) sepoch=0;; esac
+  fi
+  dec="$PRIMARY/.polaris/decisions.ndjson"
+  if [ -s "$dec" ]; then
+    skip_line="$(awk -v epoch="$sepoch" '
+      function get(k,   m){ m=""; if (match($0, "\""k"\":\"[^\"]*\"")) { m=substr($0,RSTART,RLENGTH); sub("\""k"\":\"","",m); sub("\"$","",m) } return m }
+      function num(k,   m){ m=""; if (match($0, "\""k"\":[0-9]+"))     { m=substr($0,RSTART,RLENGTH); sub("\""k"\":","",m) } return m+0 }
+      BEGIN{ nf=0; nd=0 }
+      { ts=num("ts"); if (ts<epoch) next
+        if (get("kind")!="test_depth") next
+        d=get("depth"); s=num("secs")
+        if (d=="full") { fs[nf]=s; nf++ } else { cnt[d]++; d2[nd]=s; nd++ }
+      }
+      END{
+        if (nf>0) {
+          for(i=1;i<nf;i++){v=fs[i];j=i-1;while(j>=0&&fs[j]>v){fs[j+1]=fs[j];j--}fs[j+1]=v}
+          med=fs[int((nf-1)/2)]; skip=0
+          for(i=0;i<nd;i++){ df=med-d2[i]; if (df>0) skip+=df }
+          printf "suite skipped this sprint: %.1f min (none %d · look %d · scoped %d)\n", skip/60, cnt["none"]+0, cnt["look"]+0, cnt["scoped"]+0
+        } else {
+          printf "suite skipped this sprint: n/a (no full suite timed yet)\n"
+        }
+      }
+    ' "$dec" 2>/dev/null)"
+    out="$(awk -v epoch="$sepoch" '
+      function get(k,   m){ m=""; if (match($0, "\""k"\":\"[^\"]*\"")) { m=substr($0,RSTART,RLENGTH); sub("\""k"\":\"","",m); sub("\"$","",m) } return m }
+      function num(k,   m){ m=""; if (match($0, "\""k"\":[0-9]+"))     { m=substr($0,RSTART,RLENGTH); sub("\""k"\":","",m) } return m+0 }
+      { ts=num("ts"); if (ts<epoch) next
+        kind=get("kind"); s=num("secs")
+        if (kind=="test_depth") { ssum+=s; sn++ }
+        else if (kind=="finish") { fsum+=s; fn++ }
+      }
+      END{ printf "%s %s\n", (sn? sprintf("%.1f", ssum/sn/60) : "-"), (fn? sprintf("%.1f", fsum/fn/60) : "-") }
+    ' "$dec" 2>/dev/null)"
+    set -- $out; suite_m="${1:--}"; finish_m="${2:--}"
+  else
+    skip_line="suite skipped this sprint: n/a (no full suite timed yet)"
+    suite_m="-"; finish_m="-"
+  fi
+  if [ -s "$EVENTS" ]; then
+    out="$(awk -v epoch="$sepoch" '
+      function get(k,   m){ m=""; if (match($0, "\""k"\":\"[^\"]*\"")) { m=substr($0,RSTART,RLENGTH); sub("\""k"\":\"","",m); sub("\"$","",m) } return m }
+      function num(k,   m){ m=""; if (match($0, "\""k"\":[0-9]+"))     { m=substr($0,RSTART,RLENGTH); sub("\""k"\":","",m) } return m+0 }
+      { ts=num("ts"); ev=get("ev"); id=get("id")
+        if (ev=="claim"   && !(id in claimed)) claimed[id]=ts
+        if (ev=="handoff" && !(id in ho))       ho[id]=ts
+        if (ev=="done"    && !(id in done))     done[id]=ts
+      }
+      END{
+        bs=0; bn=0; for (id in ho)   if (id in claimed && claimed[id]>=epoch) { bs+=ho[id]-claimed[id]; bn++ }
+        is=0; iN=0; for (id in done) if (id in ho      && ho[id]>=epoch)      { is+=done[id]-ho[id]; iN++ }
+        printf "%s %s\n", (bn? sprintf("%.1f", bs/bn/60) : "-"), (iN? sprintf("%.1f", is/iN/60) : "-")
+      }
+    ' "$EVENTS" 2>/dev/null)"
+    set -- $out; build_m="${1:--}"; land_m="${2:--}"
+  else
+    build_m="-"; land_m="-"
+  fi
+  printf '%s\n' "$skip_line"
+  printf 'per run: build %sm · land %sm · suite %sm · finish %sm\n' "$build_m" "$land_m" "$suite_m" "$finish_m"
 }
 
 cmd_why() { # why <ID> — the reasons a task bounced or blocked, from telemetry + its own body. The
