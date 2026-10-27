@@ -163,7 +163,7 @@ diffed by content; STOP on any other hunk.
 - [ ] KEYS rows carry an honest absent-cost sentence in plain English.
 
 ## T-198 — "Text and styling changes stop paying the whole test suite — qa and the express lane test to the depth the change needs, and log every decision"
-points 5 · risk normal · landed e27d8b6 (2026-10-27) · claimed 2026-10-27
+points 5 · risk normal · landed e27d8b6 (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/lib/core.sh, kit/ops/lib/integrate.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/history.sh, kit/ops/lib/selftest/policy.sh, ops/tests/api-kit.expected, ops/tests/depth-stamp.cmd, ops/tests/depth-stamp.expected
 
 ### Why
@@ -191,3 +191,50 @@ after T-197: add only your helper's line; STOP on any other hunk.
 - [ ] qa-stamp golden green (re-pinned only where the depth line legitimately appears — content diff, STOP on anything else).
 - [ ] A change with no test_skip/test_look path gets a byte-identical verdict to 6.8.0.
 - [ ] `bash kit/ops/polaris doctor --selftest --only qa,express,surfaces,finish` run ONCE via `bg run` + chunked `bg wait` before handoff; verdict pasted in Notes.
+
+## T-199 — "See where the time goes — metrics shows suite minutes skipped and the build / land / suite / finish split, and builders stop being pointed at the full suite"
+points 3 · risk normal · landed ded70b5 (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/lib/builder.sh, kit/ops/lib/observe.sh, ops/tests/api-kit.expected, ops/tests/depth-metrics.cmd, ops/tests/depth-metrics.expected
+
+### Why
+Two leftovers from the test-depth work (ops/contracts/test-depth.md § 6-7):
+
+1. `polaris metrics` gains two lines, appended last: suite minutes skipped this sprint (by depth) and
+   the per-run wall-clock split build / land / suite / finish, read from `.polaris/decisions.ndjson`
+   (T-198) and EVENTS.ndjson, sprint-scoped by SPRINT.md line 1's `dates:`. With no log both lines still
+   print (`n/a`, `-`). This is how the owner sees whether the sprint actually made runs faster.
+2. `pack` (builder.sh ~:835) stops falling back to `test:` when `test_fast:` is unset — it was pointing
+   builders at the 26-minute suite. It prints the pinned "(none set — …)" line instead.
+
+You own api-kit.expected after T-198: no new function is expected; if you add one, add only its line,
+diffed by content, and STOP on any other hunk.
+
+### Acceptance
+- [ ] Hermetic golden `depth-metrics` with a seeded decisions.ndjson pins both § 6 lines (with data, and with no log); seen failing once.
+- [ ] Existing metrics output above the new lines is unchanged.
+- [ ] pack-visual golden green (re-pin only the fast-tier line if it shows there — content diff).
+
+## T-200 — "The rulebook stops paying the suite twice — integrator and conductor run one stamped check, builders test what they touched, and the task template documents test_depth and plan"
+points 3 · risk normal · landed 0357fac (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/PROTOCOL.md, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/templates/TASK.md
+
+### Why
+The suite is paid twice in three places, and the prose is why (ops/contracts/test-depth.md § 8):
+
+- INTEGRATOR.md ~:30 hand-runs the suite, which writes no stamp, so the next `qa` pays again → "run
+  `bash ops/polaris qa`" (stamped, depth-aware).
+- CONDUCTOR.md runs qa at 6.5 AND ~:306 (EVOLVE's commit moves HEAD in between) → ONE `qa` at the end
+  of the run (a docs-only EVOLVE commit now carries the stamp anyway).
+- BUILDER.md ~:51: write tests for the acceptance criteria the change touches, not a new suite.
+- PLANNER.md ~:36: `verify:` lines must take seconds — never `doctor --selftest` (the full suite runs once
+  at the wave gate); replace the "scope it with `--only`" advice.
+- PROTOCOL.md testing-tiers table gains a depth row (none / look / scoped / full and when each applies).
+- templates/TASK.md documents `test_depth:` (raise-only, `full` is the only honoured value) and `plan:`
+  (required on every task a request authors).
+
+No heading added, renamed or removed in any of these files (api-kit.expected pins headings).
+CONDUCTOR.md and PLANNER.md were last edited by T-194 — build on its wording, do not undo it.
+
+### Acceptance
+- [ ] Every verify line green; PLANNER.md says verify: lines never carry `doctor --selftest`.
+- [ ] Plain English a first-time reader follows (voice: standard).

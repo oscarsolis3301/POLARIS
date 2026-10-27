@@ -1,0 +1,16 @@
+== 1. no decisions.ndjson, no EVENTS.ndjson — both lines still print (n/a, -) ==
+   no telemetry yet (EVENTS.ndjson empty) — runs accumulate it
+suite skipped this sprint: n/a (no full suite timed yet)
+per run: build -m · land -m · suite -m · finish -m
+== 2. seeded decisions.ndjson + EVENTS.ndjson, sprint-scoped ==
+WIP now: 0 active · 0 review
+suite skipped this sprint: 49.9 min (none 1 · look 1 · scoped 1)
+per run: build 10.0m · land 5.0m · suite 12.0m · finish 0.7m
+== 3. existing metrics output above the new lines is unchanged — same run, full output ==
+In plain English: 2 tasks done, a typical task takes 0.2h door to door; building averages 1.3h, landing 0.2h; 0 bounced.
+done total: 2   done 7d: 0   kickbacks total: 0 (7d: 0)
+cycle claim→done  avg: 1.5h   p50: 0.2h   n=2
+split  build(claim→handoff) avg: 1.3h n=2   ·   integrate(handoff→done) avg: 0.2h n=2
+WIP now: 0 active · 0 review
+suite skipped this sprint: 49.9 min (none 1 · look 1 · scoped 1)
+per run: build 10.0m · land 5.0m · suite 12.0m · finish 0.7m

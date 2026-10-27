@@ -27,7 +27,7 @@ git checkout -b integrate/<date> <base>
 # per task, in dependency order:
 bash ops/polaris land <ID>           # audits, then squash-merges feat/<ID> into ONE commit
                                       # (message = task-commit-msg + Landed-from trailer)
-<full test suite + lint + typecheck from CONVENTIONS.md>    # run ONCE, after all lands
+bash ops/polaris qa                  # stamped, depth-aware — run ONCE, after all lands
 ```
 Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
 

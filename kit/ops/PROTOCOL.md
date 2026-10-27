@@ -250,6 +250,18 @@ learn nothing, and re-run it. MEASURED on this repo, so nobody re-measures:
 | the full selftest, SERIAL — CI's tier now, not a local gate | 805s | **no** |
 | `ops/polaris qa` — the whole loop | 1225s | **no** |
 
+`qa` does not always pay for the row above it — `depth_for` (`ops/contracts/test-depth.md`) picks
+how much of the suite a change actually needs, once per `qa` or `land --express`:
+
+| depth | runs | when it applies |
+|---|---|---|
+| `none` | no suite key at all | every changed path is `test_skip` (docs, `.md`, `LICENSE*`) |
+| `look` | no suite key, but the before/after capture still runs | every changed path is `test_look` (css/svg/images) |
+| `scoped` | only the `test:` subset `SURFACES.tsv` maps to the change | every non-look path is mapped |
+| `full` | the whole `test:` suite, unchanged | anything unmapped, `risk: high`, or `test_depth: full` |
+
+CI and `pack.py --dogfood` always run `full`, serially, and never read the stamp.
+
 Three bands, and the band is a property of the MEASURED time, not of how important the command feels:
 1. **Under ~60s** — plain foreground call. No ceremony.
 2. **60s to the cap** — foreground WITH an explicit tool timeout ≥ the measured time (600000ms for

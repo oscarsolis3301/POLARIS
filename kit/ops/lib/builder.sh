@@ -850,7 +850,12 @@ EOF_ITEMS
   # writing a verify: it cannot pass, or hand-checking something the list already proves.
   pack_section "WHAT PROVES IT — polaris verify runs exactly this"
   fm_list verify "$f" 2>/dev/null | grep . || printf '(no verify: list — add one, narrow, each under ~10s)\n'
-  printf '\nthen the fast tier: %s\n' "$(cfg test_fast "$(cfg test '(no test: configured)')")"
+  local tf; tf="$(cfg test_fast '')"
+  if [ -n "$tf" ]; then
+    printf '\nthen the fast tier: %s\n' "$tf"
+  else
+    printf '\nthen the fast tier: (none set — verify: above is the per-task proof; the suite runs once at the wave gate)\n'
+  fi
 
   printf '\n--- end of pack. Anything beyond this needs a one-line reason in the task Notes. ---\n'
   return 0

@@ -242,12 +242,14 @@ call per spawn; routing never blocks work.
      integration lane busy → wait; rc 3 with a queued: line means report queued and retry at the next wave boundary
      — re-spawn the integrator at the NEXT boundary (its kickoff re-runs `land`/`seal`, which retake the
      lease themselves). Never park a second subagent on someone else's lease, and never ask the human.
-6.5 **Check — trust nothing, prove it.** Integration reported green? Run `bash ops/polaris qa`
-   YOURSELF — one command re-runs the whole suite, the build, board hygiene and the env check on
-   base. A subagent's "green" is never taken on faith — and note what that sentence licenses: YOU
-   running the deterministic `qa`, which costs a tool call and no tokens. It does NOT license a
-   second agent to re-check it by hand; those are different mechanisms and the scout was
-   grandfathered in alongside the rule, not by it.
+6.5 **Check — trust nothing, but pay for the proof exactly once.** A subagent's "green" is never
+   taken on faith — but the deterministic re-check (`bash ops/polaris qa`, one command for the
+   whole suite, the build, board hygiene and the env check on base) runs ONCE per run, at the very
+   end, in step 7.5, after EVOLVE — never here at a mid-run wave boundary. Running it here too would
+   pay for the same suite twice: EVOLVE's own commit between the two calls is docs-only, and `qa`'s
+   stamp already carries forward across a change that small. It does NOT license a second agent to
+   re-check it by hand; that is a different mechanism, and the scout below was grandfathered in
+   alongside the rule, not by it.
    **QA scout — `qa_scout:` in `ops/CONVENTIONS.md`, default `auto`.** `auto` spawns the scout ONLY
    when BOTH hold: `uat:` is empty (no automated runtime check exists at all) AND the run landed a
    task touching a `runnable:` path. `runnable:` unset ⇒ auto is OFF. `off` never spawns; `always`
