@@ -710,3 +710,4 @@
 {"ts":1793127805,"ev":"claim","id":"T-196","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1793127812,"ev":"claim","id":"T-195","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1793127819,"ev":"claim","id":"T-192","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1793128108,"ev":"handoff","id":"T-194","who":"Owner@DESKTOP","note":""}
