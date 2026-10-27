@@ -719,3 +719,4 @@
 {"ts":1793128758,"ev":"done","id":"T-195","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1793128819,"ev":"done","id":"T-192","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1793128860,"ev":"promote","id":"T-193","who":"Owner@DESKTOP","note":"deps done: T-192","pts":3}
+{"ts":1793129049,"ev":"release","id":"T-196","who":"Owner@DESKTOP","note":"→ ready: owner cleared the Ollama/model gate"}
