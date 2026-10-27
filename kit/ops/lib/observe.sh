@@ -570,7 +570,7 @@ cmd_doctor() {
         note "⚠ drain: '$dr' unknown (queue | plan | backlog) — behaving as the default"; dr=""
       fi
       case "$ds" in *[!0-9]*) note "⚠ drain_slices: '$ds' not a number — behaving as 2"; ds="";; esac
-      note "drain: ${dr:-queue} · drain_slices: ${ds:-2} (autonomy never composes drain)"
+      note "drain: ${dr:-plan} · drain_slices: ${ds:-2} (autonomy never composes drain)"
     fi
   fi
   # The two shared-checkout knobs (ops/contracts/shared-checkout.md). They are NOT composed by
@@ -2472,13 +2472,13 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   # drain: (ops/contracts/hands-free-knobs.md) decides whether a queued task blocks the close. Under
   # `plan` one "go" authorizes THE PLAN, not the board, so ready/ is legitimately non-empty at the
   # end — gating on it there would make the default run un-finishable. Under queue/backlog it gates.
-  rd=$(fin_count ready); dr="$(cfg drain "")"; dr="${dr:-queue}"
+  rd=$(fin_count ready); dr="$(cfg drain "")"; dr="${dr:-plan}"
   if [ "$rd" -gt 0 ]; then
     case "$dr" in
       plan) fin_caveat "$rd queued in ready/ under drain: plan — say so; \`start\` picks them up";;
       queue|backlog) fin_pending "$rd queued in ready/ and drain: $dr — drain them, or set drain: plan in ops/CONVENTIONS.md";;
-      *) note "⚠ unknown drain: '$dr' — treating it as queue (plan | queue | backlog)"
-         fin_pending "$rd queued in ready/ — drain them, or set drain: plan in ops/CONVENTIONS.md";;
+      *) note "⚠ unknown drain: '$dr' — treating it as plan (plan | queue | backlog)"
+         fin_caveat "$rd queued in ready/ under drain: plan — say so; \`start\` picks them up";;
     esac
   fi
   # An unmerged integrate/<date> is a whole wave that never reached <base> — the single most
