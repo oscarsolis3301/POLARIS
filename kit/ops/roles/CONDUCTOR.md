@@ -140,7 +140,8 @@ call per spawn; routing never blocks work.
    - `full` → steps 3–8, silently.
 3. **Plan gate — the one human gate.** Present the plan in `voice:`: what gets built, in how many
    parallel lanes, what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
-   `drain: queue` (the default) and other tasks already sitting in `ready/`, disclose that too —
+   `drain: queue` (unset defaults to `plan`, not this) and other tasks already sitting in `ready/`,
+   disclose that too —
    "…and once your plan lands I'll finish the N tasks already queued." `drain: backlog` →
    enumerate the FULL drain depth (every this-plan backlog task the `drain_slices` cap could
    reach), naming beyond-cap tasks as staying parked, so one "go" covers the whole run. Effective
@@ -276,7 +277,7 @@ call per spawn; routing never blocks work.
    automatically — dependency chains are why the human shouldn't have to say "continue". Never
    move a task between board folders by hand; that is the whole reason this command exists.
    Then the queue. **`drain: plan` is what INIT seeds** (`ops/CONVENTIONS.md`; the
-   CLI's own fallback for an unset key is `queue`, and `finish` reads the same key): the run
+   CLI's own fallback for an unset key is `plan` too, and `finish` reads the same key): the run
    stops after this plan's own tasks, and anything else queued waits for the next `start` — one "go"
    authorizes the plan the human just approved, not the whole board. Say so in one line at close:
    "N tasks still queued — `start` picks them up." Note this does NOT break dependency chains: the
