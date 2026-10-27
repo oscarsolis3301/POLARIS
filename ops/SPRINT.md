@@ -16,6 +16,7 @@ is surface-frozen. Verify lines are seconds; the full suite runs once at the wav
 | date | done pts | remaining |
 |---|---|---|
 | 2026-10-27 | 10 | 20 |
+| 2026-10-27 | 6 | 17 |
 
 # SPRINT 18 — Effort ceiling + REA (6.8.0)          capacity: 18   dates: 2026-10-11–
 
