@@ -217,6 +217,12 @@ kit/ops/hooks/readonly-allow.sh	fn	find_ok
 kit/ops/hooks/readonly-allow.sh	fn	git_ok
 kit/ops/hooks/readonly-allow.sh	fn	jstr
 kit/ops/hooks/readonly-allow.sh	fn	polaris_ok
+kit/ops/hooks/readonly-allow.sh	fn	ps_check_segment
+kit/ops/hooks/readonly-allow.sh	fn	ps_find_close_brace
+kit/ops/hooks/readonly-allow.sh	fn	ps_lc
+kit/ops/hooks/readonly-allow.sh	fn	ps_sb_verb
+kit/ops/hooks/readonly-allow.sh	fn	ps_scan
+kit/ops/hooks/readonly-allow.sh	fn	ps_verb_ok
 kit/ops/hooks/readonly-allow.sh	fn	scan
 kit/ops/hooks/readonly-allow.sh	fn	sed_ok
 kit/ops/hooks/readonly-allow.sh	fn	verb_ok
