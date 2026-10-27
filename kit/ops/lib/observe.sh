@@ -2008,7 +2008,7 @@ cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output 
   say "check: $n golden(s), all green"
 }
 
-cmd_triage() { # triage — print the LANE this board's work belongs in: solo | express | full.
+cmd_triage() { # triage [<ID…>] — print the LANE this board's work belongs in: solo | express | full.
   # The six conditions below were prose in CONDUCTOR.md, which meant a model re-derived them from
   # the board every run — reading task files, weighing points, re-reading CONVENTIONS — and paid
   # tokens to reach an answer the CLI already had. It is data, so it is a command.
@@ -2016,12 +2016,36 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
   #   solo    one context does plan+build+integrate. No subagents at all.
   #   express conductor + ONE builder + ONE integrator, landing through `land --express`.
   #   full    the ordinary loop: planner, N builders, integrator, wave gate.
+  # With ID(s) (stay-on-request.md § 1): ONLY the named tasks count toward the lane — a leftover
+  # already sitting in ready/ never drags the run into a bigger lane than the request needs. Each
+  # named ID must sit in ready/ or active/, else `die` (rc 1, nothing on stdout). With a session id,
+  # the FIRST named task's `plan:` is recorded as this run's scope, overwriting (the request defines
+  # the run, not the first claim) — `claim`'s first-claim write (builder.sh) stays the fallback for
+  # a bare `start`. No IDs ⇒ every branch below is byte-identical to before.
   local n=0 id="" f base pts risk owned p why="" lane=full k sum big
-  for f in "$BOARD"/ready/*.md "$BOARD"/active/*.md; do
-    [ -e "$f" ] || continue
-    base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
-    n=$((n + 1)); id="${base%.md}"
-  done
+  local named=0 first_id="" active_n=0 aid
+  if [ $# -gt 0 ]; then
+    named=1
+    for id in "$@"; do
+      f="$(task_file "$id" ready)" || f="$(task_file "$id" active)" || \
+        die "triage: $id is not in ready/ or active/"
+      [ -z "$first_id" ] && first_id="$id"
+    done
+    n=$#
+    if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+      local hs; hs="$PRIMARY/.polaris/handover/$CLAUDE_CODE_SESSION_ID"
+      mkdir -p "$hs" 2>/dev/null || true
+      f="$(task_file "$first_id")"
+      printf '%s\n' "$(fm_get plan "$f" 2>/dev/null || true)" 2>/dev/null > "$hs/plan" || true
+    fi
+    [ "$n" -eq 1 ] && id="$first_id"
+  else
+    for f in "$BOARD"/ready/*.md "$BOARD"/active/*.md; do
+      [ -e "$f" ] || continue
+      base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
+      n=$((n + 1)); id="${base%.md}"
+    done
+  fi
 
   if [ "$n" -eq 0 ]; then
     printf 'full\n'; note "nothing claimable — the board is empty, so a Planner runs first"; return 0
@@ -2036,19 +2060,31 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
     # single-task wording) · the express/publish knobs · the solo budget (≤4 tasks, ≤3 pts each,
     # ≤6 pts in all) · otherwise full.
     k=0
-    for f in "$BOARD"/active/*.md; do
-      [ -e "$f" ] || continue
-      [ "${f##*/}" = "IDEAS.md" ] && continue
-      k=$((k + 1))
-    done
+    if [ "$named" -eq 1 ]; then
+      for aid in "$@"; do
+        [ -f "$BOARD/active/$aid.md" ] && k=$((k + 1))
+      done
+    else
+      for f in "$BOARD"/active/*.md; do
+        [ -e "$f" ] || continue
+        [ "${f##*/}" = "IDEAS.md" ] && continue
+        k=$((k + 1))
+      done
+    fi
     if [ "$k" -gt 0 ]; then
       printf 'full\n'; note "$k task(s) already active — another lane is building; parallel lanes are the point"; return 0
     fi
     sum=0; big=0
-    for f in "$BOARD"/ready/*.md; do
-      [ -e "$f" ] || continue
-      base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
-      id="${base%.md}"
+    for id in $( if [ "$named" -eq 1 ]; then
+        for aid in "$@"; do [ -f "$BOARD/ready/$aid.md" ] && printf '%s\n' "$aid"; done
+      else
+        for f in "$BOARD"/ready/*.md; do
+          [ -e "$f" ] || continue
+          base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
+          printf '%s\n' "${base%.md}"
+        done
+      fi ); do
+      f="$BOARD/ready/$id.md"
       pts="$(fm_get points "$f")"; pts="${pts:-99}"
       risk="$(fm_get risk "$f")"; risk="${risk:-normal}"
       [ "$risk" = "normal" ] || why="risk: $risk (only a human may approve a merge)"

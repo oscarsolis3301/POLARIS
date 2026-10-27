@@ -116,3 +116,40 @@ bash ops/polaris check --update --only api-kit
 bash ops/polaris check --only api-kit --update
 bash ops/polaris check && bash ops/polaris check --update
 CASES
+# --- PowerShell (T-195): the same deny-by-default property, over PS's own grammar -------------
+while IFS= read -r c; do
+  [ -z "$c" ] && continue
+  case "$c" in '#'*) continue;; esac
+  printf '%s  %s\n' "$(bash "$H" --test-ps "$c")" "$c"
+done <<'PSCASES'
+# --- must ALLOW ------------------------------------------------------------------------------
+Get-ChildItem
+git -C . log -5
+Get-Content x | Select-String y
+Get-ChildItem -Recurse -Filter *.md -ErrorAction SilentlyContinue | Select-Object -First 5
+Get-Content ops/VERSION | Where-Object { $_ -match 'version' }
+git -C "C:\Users\Owner\Desktop\Polaris" log --oneline -5; Get-ChildItem ops | Select-Object Name
+bash ops/polaris depth
+bash ops/polaris depth T-1
+# --- must ASK: every door out of "read", same shape as the Bash battery above -----------------
+Get-Content x > y
+Get-Content x | Out-File y
+Set-Content x y
+Remove-Item x
+Invoke-Expression 'x'
+& ./x.ps1
+$a = 1
+Get-Date; $(rm x)
+@'x'@
+Get-ChildItem | ForEach-Object { Remove-Item $_ }
+git push
+Start-Process x
+Copy-Item a b
+PSCASES
+# --- PowerShell JSON layer: the stdin path, not just --test-ps -------------------------------
+J_PS_ALLOW='{"tool_name":"PowerShell","tool_input":{"command":"Get-ChildItem"}}'
+J_PS_ASK='{"tool_name":"PowerShell","tool_input":{"command":"Remove-Item x"}}'
+R=allow; [ -n "$(printf '%s' "$J_PS_ALLOW" | bash "$H")" ] || R=ask
+printf '%s  %s\n' "$R" "json: PowerShell allow case"
+R=allow; [ -n "$(printf '%s' "$J_PS_ASK" | bash "$H")" ] || R=ask
+printf '%s  %s\n' "$R" "json: PowerShell ask case"

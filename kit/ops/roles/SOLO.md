@@ -11,15 +11,18 @@ the CONTEXTS were. SOLO keeps every gate and pays for one context.
 job is the whole trivial path. Invariant 5 holds.
 
 ## Entry — mechanical, not a judgement call
+A bare `start` kickoff (take whatever's next) runs plain `bash ops/polaris triage`. A specific work
+request always authors its own task first (step 1) and runs `bash ops/polaris triage <ID>` instead
+— never the bare form, and never a ready task picked up just because it is there.
 ```
-bash ops/polaris triage
+bash ops/polaris triage [<ID>]
 ```
 Line 1 is your lane. **`solo` → continue. Anything else → STOP** and say which lane it named
 (`express` or `full`); the conductor or planner takes it from there. Do not argue with triage: it
 is reading points, risk, `express:`, `publish:` and the RULES-guarded paths directly off the board.
 
 If `triage` says `full` because the board is empty and the human just asked for something small,
-you may author the single task yourself (step 1) and re-run `triage` to confirm `solo`.
+author the single task yourself (step 1) and re-run `triage <ID>` to confirm `solo`.
 
 `triage` may also hand you up to 4 small tasks at once — its note states the budget it applied and
 the arithmetic behind it; never re-derive either. Work them ONE AT A TIME: claim → build → land
@@ -39,10 +42,12 @@ first and `ops/MAP.md` as the fallback. `bash ops/polaris find <symbol>` before 
 Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 
 ## The path
-1. **Author the task** (skip if one already sits in `ready/`). From `ops/templates/TASK.md`, into
-   `ops/board/ready/<ID>.md`. Keep it honest and small:
-   - `points:` small — `triage` holds the budget, so re-run it after authoring and let it confirm
-     `solo` · `risk: normal` · `files_owned:` the exact paths you will touch, nothing speculative ·
+1. **Always author the request's own task** — never pick up a leftover already sitting in `ready/`
+   just because it is there. From `ops/templates/TASK.md`, into `ops/board/ready/<ID>.md`. Keep it
+   honest and small:
+   - `plan:` a short slug for this request · `points:` small — `bash ops/polaris triage <ID>` holds
+     the budget, so run it right after authoring and let it confirm `solo` for THIS task ·
+     `risk: normal` · `files_owned:` the exact paths you will touch, nothing speculative ·
      `context_files:` the nearest existing example · `contract:` only if there is a real seam — a
      change this size usually has none · `surface:` only when the change touches code that has
      tests (grammar in `ops/templates/TASK.md`) — `done` turns each item into an `ops/SURFACES.tsv`
@@ -51,6 +56,9 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
      — `polaris verify` now refuses it, because `verify:` is paid up to 3× per task while the wave
      gate already runs the suite once.
    - Write `## Why` in plain language: it becomes the commit body verbatim.
+   - A leftover already in `ready/` whose `files_owned` overlaps this task is never run first: park
+     it — `bash ops/polaris release <leftover-ID> --to backlog -m "parked: not part of <plan>"` —
+     and name it in ONE line of your step-8 close.
    - Commit it to the board ref (`ops/MANUAL.md` § board-commit recipe), never to `<base>`.
 2. **Claim** — `bash ops/polaris claim <ID>`. This locks it and builds a worktree on `feat/<ID>`.
 2b. **Enter that worktree** — a step, not a suggestion, and the one step every collision so far
@@ -110,7 +118,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    anything, and it fires the `notify-gate done` hook itself, exactly once — you never call
    `notify-gate done` by hand. Run it ONCE, at the very end.
 8. **Close** — one short paragraph in the repo's `voice:`: what changed, how you know it works, what
-   you left alone. Under `standard` that is everyday words — outcomes, not git. Which close you
+   you left alone. Parked a leftover in step 1? Name it here, in ONE line. Under `standard` that is
+   everyday words — outcomes, not git. Which close you
    write is decided by step 7's **exit code**, never by how the work
    feels: **exit 0** → the `# 🎉 Complete!` H1 opens your reply, then the paragraph, carrying every
    `caveat:` line `finish` printed. **Non-zero** → no H1: what landed, the one pending thing, the
