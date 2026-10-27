@@ -117,6 +117,12 @@ The worktree is `wt_remove`'s, never yours: `bash ops/polaris sweep --fix` remov
 beat file is older than `wt_live_minutes`: `git worktree remove .polaris/wt/<ID>`
 (never `--force`; a dirty one is moved to `.polaris/wt-archive/`, never deleted).
 
+Parking a leftover (ops/contracts/stay-on-request.md § 4): `ops/polaris release <ID> --to backlog -m "parked: not
+part of <plan>"` also works on an UNCLAIMED task sitting in `ready/` — `mv` it to `ops/board/backlog/`, set
+`status: backlog` (owner stays null), append the release note, ONE `board_commit "chore(board): release <ID> →
+backlog"` + `sync_board`. No lock, no worktree — there is neither to touch. From `active/` the same `--to backlog`
+behaves exactly like `--to ready` above but lands the file in `ops/board/backlog/` instead.
+
 ## Grant (Builder) — amend `files_owned` mid-flight, the sanctioned way
 What `ops/polaris grant <ID> <path> -m "why"` does by hand. Preconditions — ALL must hold, else STOP and change NOTHING (no partial write, no commit):
 - `<ID>` is in `ops/board/active/` — amending unclaimed or finished work is a Planner act, not a grant;

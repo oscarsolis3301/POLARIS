@@ -1,7 +1,7 @@
 # Sprint 19 — Stay on the request (6.9.0) (2026-10-27–)
 
 ## T-192 — "A run stays on its request — triage counts only the tasks you name, records the run's plan, and an untagged leftover counts as someone else's work"
-points 3 · risk normal · landed b716747 (2026-10-27) · claimed 2026-10-27
+points 3 · risk normal · landed b716747 (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/lib/handover.sh, kit/ops/lib/observe.sh, kit/ops/polaris, ops/tests/request-scope.cmd, ops/tests/request-scope.expected
 
 ### Why
@@ -27,8 +27,32 @@ No new top-level function (api-kit.expected stays as it is) — inline the ID lo
 - [ ] handover-route golden still green (extend it only if a row's meaning changed; say which in Notes).
 - [ ] The handover drill in kit/ops/lib/selftest/board.sh still holds under the new foreign rule — run `bash kit/ops/polaris doctor --selftest --only handover` ONCE via `bg run` before handoff and paste the verdict line in Notes (not in verify:; it is minutes).
 
+## T-193 — "A leftover task no longer blocks \"done\" — drain defaults to plan in code, and release can park a ready task back in the backlog"
+points 3 · risk normal · landed fb32bee (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/MANUAL.md, kit/ops/lib/builder.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/policy.sh, kit/ops/polaris, ops/tests/drain-default.cmd, ops/tests/drain-default.expected
+
+### Why
+KEYS.tsv says `drain` defaults to `plan`, but `finish` and doctor's knob line treat an unset `drain` as
+`queue` (observe.sh ~:2439 and ~:573). So one leftover ready task blocks "done" and pushes the agent to
+run it. And the protocol tells an agent to park a leftover that collides with the request's files with
+`release <ID> --to backlog`, which today only accepts `ready|blocked` and only from active/.
+
+1. `${dr:-queue}` → `${dr:-plan}` in both places; an unknown value is treated as plan (a caveat, not a
+   pending item). A repo that set `drain: queue` keeps it.
+2. `release <ID> --to backlog -m "…"` (contract § 4): also works on an UNCLAIMED task in ready/ — moves
+   it to backlog/, one board commit, no lock or worktree touched. From active/ it behaves like `--to ready`
+   but lands in backlog/. Help text in kit/ops/polaris and the recipe in kit/ops/MANUAL.md say so.
+3. The finish drill in selftest/policy.sh (~:680) sets `drain: queue` explicitly for its queue half, so
+   both modes stay tested; remote.sh's knob-warning drill updated only if its pinned text moved.
+
+### Acceptance
+- [ ] New hermetic golden `drain-default` (contract § Executable check, second bullet) passes and was seen failing once.
+- [ ] No `dr:-queue` left in observe.sh.
+- [ ] No markdown heading added/renamed in MANUAL.md (api-kit unchanged).
+- [ ] `bash kit/ops/polaris doctor --selftest --only finish,remote` run ONCE via `bg run` before handoff; verdict pasted in Notes.
+
 ## T-194 — "The rulebook says it plainly — a request always gets its own task, a leftover is parked and named, never run first"
-points 2 · risk normal · landed 3b53b2b (2026-10-27) · claimed 2026-10-27
+points 2 · risk normal · landed 3b53b2b (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/CLAUDE.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md
 
 ### Why
@@ -55,7 +79,7 @@ No heading added, renamed or removed (api-kit.expected pins headings). `triage <
 - [ ] The wording is plain English a first-time reader follows (voice: standard).
 
 ## T-195 — "Plan mode stops asking about PowerShell reads — the read-only approver learns PowerShell, deny by default"
-points 5 · risk normal · landed b8ede0b (2026-10-27) · claimed 2026-10-27
+points 5 · risk normal · landed b8ede0b (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/.claude/settings.json, kit/ops/hooks/readonly-allow.sh, ops/tests/api-kit.expected, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected
 
 ### Why
@@ -81,3 +105,34 @@ appears.
 - [ ] Existing Bash battery lines byte-identical; new PowerShell allow + ask cases per the contract, including the real `git -C … log --oneline -5; Get-ChildItem ops | Select-Object Name` line, plus one JSON-layer case each way.
 - [ ] The golden was seen failing once (sabotage one refuse case to allow, see red, restore).
 - [ ] readonly-allow stays within its bench budget.
+
+## T-196 — "Tev1 spike — does Together AI's local decision model beat our rules and the plain majority answer on our own questions?"
+points 3 · risk normal · landed a272aa6 (2026-10-27) · claimed 2026-10-27
+files touched: docs/spikes/tev1.md
+
+### Why
+Tev1 is Together AI's experimental decision model; Ollama serves it from 0.35 on, on the same
+`/v1/systemone` protocol Laya's server speaks. Laya scored no better than always giving the most common
+answer on our questions (docs/spikes/laya-jev-rea.md). Whether Tev1 does better is unmeasured, so this
+is a spike, not an integration: its only repo output is docs/spikes/tev1.md with the headings
+ops/contracts/tev1.md pins.
+
+Order of work — do everything that needs no owner step FIRST:
+1. Build the NEW test-depth label set (~40 past kit commits) read-only from `git log --name-only`,
+   labelling each by ops/contracts/test-depth.md § 2's rule table (the "rules" answer) and then by
+   judgement; save `~/.claude/polaris/laya/data/test-depth.jsonl` in the same state/question shape as
+   the T-181/T-190 sets.
+2. Write the replay script `~/.claude/polaris/laya/tev1-replay.py` (outside the repo): replays all three
+   sets against `http://127.0.0.1:11434/v1/systemone`, records answer, confidence, latency; computes
+   accuracy vs majority baseline and vs rules on a held-out split, confidence separation, p50/p95.
+3. Check the machine: `ollama --version`, whether its server runs, which models are pulled.
+4. 🚩 OWNER GATE: Ollama ≥ 0.35 and both checkpoints pulled are the owner's step. If missing, STOP and
+   hand back (`release T-196 --to blocked -m "…"`) with ONE paste-ready block (one command per line, no
+   `&&`, no placeholders) and the sizes (tev1:0.8b 812 MB, tev1 4.5 GB). The conductor relays it and
+   re-kicks you; then resume at step 5.
+5. Run the replay for both checkpoints, measure VRAM with the 4B sharing the 8 GB, write tev1.md.
+
+### Acceptance
+- [ ] The eight pinned headings exist; every accuracy figure sits beside its majority baseline, and on the test-depth set beside the rules.
+- [ ] Go/no-go stated with the held-out split and the margin; a blocked update or pull is a valid recorded no-go if the owner declines.
+- [ ] Nothing in this repo changes except docs/spikes/tev1.md; label sets, script and logs live under ~/.claude/polaris/laya/.

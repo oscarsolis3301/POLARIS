@@ -42,7 +42,8 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  visual: path needs TWO captures newer than the branch base and one
                                  --saw line, which becomes the caption filed beside the pictures;
                                  --no-before says nothing existed to photograph yet and drops it to one
-  release <ID> [--to ready|blocked] [-m note]   abort: give the task back cleanly
+  release <ID> [--to ready|blocked|backlog] [-m note]   abort: give the task back cleanly;
+                                 --to backlog also parks a task sitting UNCLAIMED in ready/
   park [-m why]                  stash the primary's dirty tree (tracked + untracked) as
                                  polaris/park-<epoch> — a dirty shared checkout is parked, never
                                  asked about; reversible in ONE command

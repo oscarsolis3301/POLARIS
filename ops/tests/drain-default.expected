@@ -1,0 +1,13 @@
+== finish — no drain: key, 1 leftover in ready/ ==
+rc=0
+finish: run complete
+caveat: yes
+pending: no
+== release FIX-1 --to backlog -m ... (unclaimed, straight from ready/) ==
+rc=0
+backlog file: yes
+ready file still there: no
+status: backlog
+owner: null
+board commits made: 1
+worktree: none
