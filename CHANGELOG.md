@@ -4,6 +4,35 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.9.0 — 2026-10-27
+
+**A run now stays on the request that started it. A text or styling change skips the full suite.
+PowerShell reads stop interrupting plan mode with a prompt. And a spike into a System-1 model for
+test depth came back a clear no, for now.**
+
+Before this release, `triage`, `next`, a bare `claim` and `finish` all read the whole board, so an
+old leftover task could quietly run ahead of the thing you actually asked for — the incident that
+named this release. Now `triage <ID…>` can be pointed at the specific task or tasks a request
+produced, and only those count toward the lane it picks. The session remembers which plan it is
+working on, so a leftover with no plan, or a different one, gets queued instead of jumping the
+line. Draining a board now defaults to staying on that plan rather than taking anything next in
+line, and a leftover that does not belong to the current request can be parked straight to the
+backlog with one command instead of sitting in the way.
+
+Work is now sized by how much checking it actually needs. A change that is only text or styling
+gets a light pass instead of the full test suite; riskier changes still get the full check. `qa`
+and `land --express` pick the right depth automatically, and every one of those decisions is
+written to a small log so it can be reviewed later. The time a sprint reports now breaks out how
+many suite-minutes were skipped this way, and builders are pointed at what they touched rather than
+the whole suite by default.
+
+PowerShell commands that only read things — status checks, listings, and the like — no longer stop
+to ask for approval while a plan is being reviewed; only commands that change something still ask.
+
+`docs/spikes/tev1.md` records a spike into letting a small model choose test depth on its own. The
+verdict is no-go: it did not clear the bar against the plain rule-based approach, so depth stays
+rule-based for now.
+
 ## 6.8.0 — 2026-10-12
 
 **A helper can no longer try harder than the chat that sent it. If you turn the chat's effort down
