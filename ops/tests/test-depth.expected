@@ -1,0 +1,54 @@
+== rule 3: a docs-only change skips the suite outright ==
+depth T-1
+none
+   why: only test_skip paths
+   paths: 1 changed (1 skipped by test_skip)
+rc 0
+== rule 4: a css-only change runs the lighter look depth ==
+depth T-2
+look
+   why: only look paths (1)
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== rule 4: docs + css together — the docs path drops, one look path remains ==
+depth T-3
+look
+   why: only look paths (1)
+   paths: 2 changed (1 skipped by test_skip)
+rc 0
+== rule 5: a mapped lib file, every code path covered by ops/SURFACES.tsv ==
+depth T-4
+scoped
+   why: every code path mapped in SURFACES.tsv
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== rule 6: an unmapped lib file — surface_select_cmd names the reason ==
+depth T-5
+full
+   why: unmapped: src/unmapped.dat
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== rule 1: risk: high overrides everything, even a docs-only change ==
+depth T-6
+full
+   why: risk: high on T-6
+   paths: 1 changed (1 skipped by test_skip)
+rc 0
+== rule 2: test_depth: full overrides everything, even a docs-only change ==
+depth T-7
+full
+   why: test_depth: full on T-7
+   paths: 1 changed (1 skipped by test_skip)
+rc 0
+== test_depth: none is a no-op, never a floor — normal resolution still applies ==
+depth T-8
+none
+   why: only test_skip paths
+   paths: 1 changed (1 skipped by test_skip)
+rc 0
+== test_skip: '-' empties the skip list — the SAME docs-only change now goes full ==
+depth T-9
+full
+   why: unmapped: docs/readme.md
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
