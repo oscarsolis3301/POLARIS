@@ -20,6 +20,7 @@ is surface-frozen. Verify lines are seconds; the full suite runs once at the wav
 | 2026-10-27 | 5 | 12 |
 | 2026-10-27 | 5 | 7 |
 | 2026-10-27 | 6 | 1 |
+| 2026-10-27 | 1 | 0 |
 
 # SPRINT 18 — Effort ceiling + REA (6.8.0)          capacity: 18   dates: 2026-10-11–
 
