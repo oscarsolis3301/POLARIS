@@ -728,3 +728,4 @@
 {"ts":1793130121,"ev":"done","id":"T-196","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1793130170,"ev":"done","id":"T-193","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1793130212,"ev":"promote","id":"T-197","who":"Owner@DESKTOP","note":"deps done: T-193, T-195","pts":5}
+{"ts":1793131108,"ev":"claim","id":"T-197","who":"Owner@DESKTOP","note":"","pts":5}
