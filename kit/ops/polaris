@@ -153,13 +153,15 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)
-  triage                         which LANE this board's work belongs in — line 1 is one word:
+  triage [<ID…>]                 which LANE this board's work belongs in — line 1 is one word:
                                  solo (one context, zero subagents; 1 task ≤3pts — or up to 4
                                  tasks, ≤3pts each and ≤6pts in all, worked one at a time — risk
                                  normal, express on, publish direct) · express (one task, one
                                  builder, one integrator) · full (everything else). Reasons follow
                                  on note lines. Decide with this, never by re-reading the board
-                                 and weighing the conditions by hand.
+                                 and weighing the conditions by hand. With ID(s), ONLY the named
+                                 tasks count — a leftover in ready/ never widens the lane — and the
+                                 first one's plan: is recorded as this run's scope.
   route [<ID> | --role <R> | --points <N> [--risk <R>]]
                                  which MODEL TIER runs a piece of work — line 1 is always one
                                  word: strong | mid | cheap (a task's model: frontmatter
@@ -398,7 +400,7 @@ case "${1:-}" in
   doctor)     shift 2>/dev/null || true; awake_ensure || true; update_check_maybe || true; cmd_doctor "$@";;
   metrics)    cmd_metrics;;
   why)        shift; cmd_why "$@";;
-  triage)     cmd_triage;;
+  triage)     shift; cmd_triage "$@";;
   route)      shift; cmd_route "$@";;   # no update_check_maybe: read-only oracle, called before EVERY spawn — keep it quiet + pure
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
   rules)      cmd_rules;;
