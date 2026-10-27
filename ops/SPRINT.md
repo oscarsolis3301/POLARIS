@@ -1,3 +1,21 @@
+# SPRINT 19 — Stay on the request (6.9.0)          capacity: 33   dates: 2026-10-27–
+
+Owner asks of 2026-10-27 (plan `stay-on-request`). A run works the request it was given — never an old
+ready task like FIX-1 — text and styling changes stop paying the whole suite, plan mode stops prompting
+for PowerShell reads, and Tev1 is measured before the Laya sprint (v4 "Sprint 19", now 6.10.0) builds on it.
+Contracts `ops/contracts/stay-on-request.md`, `test-depth.md`, `readonly-powershell.md`, `tev1.md`.
+
+10 tasks / 33 pts. W1, four disjoint lanes: triage scope (T-192), the request wording (T-194),
+PowerShell reads (T-195), the Tev1 spike (T-196, hands back at the 🚩 Ollama update + pulls). Then the
+observe.sh chain T-192 → T-193 (drain default + park) → T-197 (depth_for, also after T-195) → T-198
+(qa/land + decision log) → T-199 (metrics + pack); T-200 (role prose) after T-194 + T-198; T-201
+release prep last. api-kit.expected owners in order: T-195 → T-197 → T-198 → T-199; every other lane
+is surface-frozen. Verify lines are seconds; the full suite runs once at the wave gate (bg run).
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 18 — Effort ceiling + REA (6.8.0)          capacity: 18   dates: 2026-10-11–
 
 Two owner asks of 2026-10-11 (plan `effort-ceiling-rea`, decisions E1/E2/R1/L1). A subagent never runs
