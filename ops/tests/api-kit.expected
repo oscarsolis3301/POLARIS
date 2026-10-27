@@ -333,6 +333,7 @@ kit/ops/lib/core.sh	fn	cfg_boot
 kit/ops/lib/core.sh	fn	claim_branch_drop
 kit/ops/lib/core.sh	fn	claim_branch_take
 kit/ops/lib/core.sh	fn	current_task_id
+kit/ops/lib/core.sh	fn	decision_log
 kit/ops/lib/core.sh	fn	depth_for
 kit/ops/lib/core.sh	fn	die
 kit/ops/lib/core.sh	fn	evt

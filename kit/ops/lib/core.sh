@@ -128,6 +128,32 @@ EOF
   fi
   return 0
 }
+decision_log() { # decision_log <kind> <plan> <task> <depth> <why> <secs> <rc> [<path>…] — append
+  # ONE line to $PRIMARY/.polaris/decisions.ndjson (test-depth.md § 5), AFTER the caller's work is
+  # done so secs/rc are real. <kind> is `test_depth` (carries depth/why/paths) or `finish` (pass ""
+  # for depth and why, no paths). Gitignored dir, best-effort, NEVER fails or changes the caller's
+  # rc — every write is swallowed on error, same discipline as the suite stamp. <path>… capped at
+  # 20 (the contract's own cap). The ONE helper the plan licenses for this append (§ E).
+  local kind="${1:-}" plan="${2:-}" task="${3:-}" depth="${4:-}" why="${5:-}" secs="${6:-0}" rc="${7:-0}"
+  shift 7 2>/dev/null || shift $#
+  case "$secs" in ''|*[!0-9]*) secs=0;; esac
+  case "$rc" in ''|*[!0-9]*) rc=0;; esac
+  local f="$PRIMARY/.polaris/decisions.ndjson" n=0 p pjs="" sep=""
+  mkdir -p "$PRIMARY/.polaris" 2>/dev/null || return 0
+  for p in "$@"; do
+    [ -z "$p" ] && continue
+    n=$((n+1)); [ "$n" -gt 20 ] && break
+    pjs="$pjs$sep\"$(jesc "$p")\""; sep=","
+  done
+  {
+    printf '{"ts":%s,"plan":"%s","task":"%s","kind":"%s"' "$(date +%s)" "$(jesc "$plan")" "$(jesc "$task")" "$(jesc "$kind")"
+    if [ "$kind" = test_depth ]; then
+      printf ',"depth":"%s","why":"%s","paths":[%s]' "$(jesc "$depth")" "$(jesc "$why")" "$pjs"
+    fi
+    printf ',"secs":%s,"rc":%s}\n' "$secs" "$rc"
+  } >> "$f" 2>/dev/null || true
+  return 0
+}
 model_denied() { # model_denied <name> — rc 0 when <name> is a FORBIDDEN model.
   # OWNER DECISION 2026-09-15, absolute: POLARIS never selects Fable or Haiku, in any repo, on any
   # machine. Fable bills against a SEPARATE and much smaller weekly limit — one day of routing
@@ -340,8 +366,11 @@ surface_change_set() { # surface_change_set [--force] — the paths a verdict is
   # SURFACE_BASELINE=<sha> SURFACE_BASELINE_SCOPE=<its scope> for the caller. --force, no stamp,
   # or a non-ancestor sha → rc 1, prints nothing: UNBOUNDED, the caller runs everything. Both
   # cases drop the board-noise paths — the reports dir, ops/MAP.md, ops/SURFACES.tsv — exactly the
-  # three suite_stamp_carry allows to change after a suite ran.
-  local force=0 cur="" list="" p rel sha="" junk="" stamp
+  # three suite_stamp_carry allows to change after a suite ran. Also drops test_skip paths
+  # (test-depth.md § 4): a docs-only commit then leaves an EMPTY change set, so the existing
+  # baseline-carry logic below (and every caller's own "nothing changed" branch) treats it exactly
+  # like a board-noise-only change — a green stamp carries across it with no new code path.
+  local force=0 cur="" list="" p rel sha="" junk="" stamp skip_raw
   [ "${1:-}" = "--force" ] && force=1
   SURFACE_BASELINE=""; SURFACE_BASELINE_SCOPE=""
   cur="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
@@ -358,9 +387,12 @@ surface_change_set() { # surface_change_set [--force] — the paths a verdict is
     list="$(git -C "$PRIMARY" diff --name-only "$BASE...HEAD" 2>/dev/null)" || return 1
   fi
   rel="$(cfg reports docs/sprints)"; rel="${rel%/}"; [ -n "$rel" ] || rel="docs/sprints"
+  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
+  [ "$skip_raw" = "-" ] && skip_raw=""
   while IFS= read -r p; do
     [ -z "$p" ] && continue
     case "$p" in "$rel/"*|ops/MAP.md|ops/SURFACES.tsv) continue;; esac
+    [ -n "$skip_raw" ] && owned_match "$p" $skip_raw && continue
     printf '%s\n' "$p"
   done <<EOF
 $list

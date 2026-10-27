@@ -1,0 +1,18 @@
+baseline: rc=0 stamp=HEAD scope=full suite-ran=2
+docs-only: rc=0 stamp=HEAD scope=none suite-ran=0
+  depth: none — only test_skip paths
+docs-again: rc=0 stamp=HEAD scope=none suite-ran=0
+css-only: rc=0 stamp=HEAD scope=look suite-ran=0
+  depth: look — only look paths (1)
+decisions rows: 2
+ts present in every row: yes
+plan present in every row: yes
+task present in every row: yes
+kind present in every row: yes
+depth present in every row: yes
+why present in every row: yes
+paths present in every row: yes
+secs present in every row: yes
+rc present in every row: yes
+"depth":"none"
+"depth":"look"

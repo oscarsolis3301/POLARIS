@@ -2304,6 +2304,10 @@ cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the 
   # speed.md § 4: red is EVERYTHING; sred_any = a suite key went red; hred = a red that is neither a
   # suite key nor CRUFT-class. The stamp needs sred_any=0 AND hred=0 — the rc still reads red alone.
   local sred_any=0 hred=0
+  # test-depth.md § 4: depth_skip=1 ⇒ the whole suite loop never runs (none|look). ddepth/dwhy carry
+  # whatever depth_for actually answered (any of the four words), empty when the gate never ran
+  # (--force, --full, or an unbounded change set) — decision_log below fires only when non-empty.
+  local depth_skip=0 ddepth="" dwhy="" dtf="" dcsf="" dline dbaseline dcur dsubj dsid df qf qplan qtaskid qpf dsecs
   for a in "$@"; do
     case "$a" in --force) force=1;; --full) full=1;; esac
   done
@@ -2328,6 +2332,49 @@ cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the 
   if [ "$skip" -eq 1 ]; then
     sc="$(suite_stamp_scope "$PRIMARY/.polaris/suite-stamp" || true)"
     say "suite already green at $(printf '%.7s' "$head") — skipped, proven ${sc:-full} (qa --force re-runs it)"
+  else
+  # test-depth.md § 4: decide ONCE whether this change needs the suite at all, before the per-key
+  # loop below. --force/--full and an unbounded change set (no proven baseline) never consult
+  # depth_for — they mean "run everything", exactly as before. Bounded ⇒ depth_for's verdict:
+  # none/look skip the WHOLE loop (no test/lint/typecheck/build/uat); scoped/full fall through to
+  # the loop UNCHANGED — its own test_select scoping just below is a separate, finer decision about
+  # the `test` key alone, and stays byte-identical to 6.8.0 either way. A dirty tree never consults
+  # the gate either: depth_for sees only COMMITTED diffs, and the whole point of `dirty` up top is
+  # that an uncommitted edit (a CONVENTIONS.md config change included) might be exactly what the
+  # next suite run needs to see — qa's own stated philosophy ("any uncommitted change... re-runs
+  # everything"), so the gate defers to it instead of reading a stale, HEAD-only "nothing changed".
+  if [ "$force" -eq 0 ] && [ "$full" -eq 0 ] && [ -z "$dirty" ]; then
+    dcsf="$(mktemp)"
+    if surface_change_set > "$dcsf"; then
+      # task files: every `[<ID>]` subject since the baseline (SURFACE_BASELINE, else $BASE on a
+      # branch), plus feat/<ID> when HEAD is on one — the same scan cmd_depth uses for its no-ID
+      # case, resolved with task_file in any column; missing files ignored.
+      dbaseline="${SURFACE_BASELINE:-}"
+      dcur="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+      [ -n "$dbaseline" ] || { [ "$dcur" = "$BASE" ] || dbaseline="$BASE"; }
+      dtf=""
+      if [ -n "$dbaseline" ]; then
+        while IFS= read -r dsubj; do
+          [ -z "$dsubj" ] && continue
+          case "$dsubj" in *'['*']') dsid="${dsubj##*[}"; dsid="${dsid%]}";; *) dsid="";; esac
+          [ -n "$dsid" ] || continue
+          df="$(task_file "$dsid" 2>/dev/null)" || continue
+          case " $dtf " in *" $df "*) ;; *) dtf="${dtf:+$dtf }$df";; esac
+        done <<EOF
+$(git -C "$PRIMARY" log --format=%s "$dbaseline..HEAD" 2>/dev/null)
+EOF
+      fi
+      case "$dcur" in
+        feat/*) df="$(task_file "${dcur#feat/}" 2>/dev/null)" || df=""
+                if [ -n "$df" ]; then case " $dtf " in *" $df "*) ;; *) dtf="${dtf:+$dtf }$df";; esac; fi ;;
+      esac
+      dline="$(depth_for $dtf < "$dcsf")"
+      ddepth="${dline%%$POLARIS_TAB*}"; dwhy="${dline#*$POLARIS_TAB}"
+    fi
+  fi
+  if [ "$ddepth" = none ] || [ "$ddepth" = look ]; then
+    note "depth: $ddepth — $dwhy"
+    scope="$ddepth"; depth_skip=1
   else
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
@@ -2396,6 +2443,7 @@ EOF
     fi
   done
   fi
+  fi
   # T-031 (ops/contracts/verification-tiering.md): stamp how long the suite took — one line,
   # "<seconds> <epoch>", written only when ≥1 suite command actually ran. `land` reads it for
   # the slow-suite hint; purely advisory, never a gate, best-effort write.
@@ -2415,7 +2463,7 @@ EOF
       rm -f "$csf"
     fi
   fi
-  [ "$ran" -eq 0 ] && [ "$skip" -eq 0 ] && [ "$carry" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
+  [ "$ran" -eq 0 ] && [ "$skip" -eq 0 ] && [ "$carry" -eq 0 ] && [ "$depth_skip" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
   # CRUFT (ops/contracts/worktree-liveness.md § v2): clear the provably-landed leftovers BEFORE
   # drift looks at them. This is qa's only mutation besides the stamp, and it is exactly the subset
   # of `sweep --fix` that is lossless by construction — a branch goes only when its commits are
@@ -2463,7 +2511,7 @@ EOF
   # Stamp v3 (test-surfaces.md § 6): ONE line `<sha> <epoch> <scope>` — scoped iff the test key
   # ran a selection, full otherwise; a carried verdict re-stamps HEAD with the baseline's own scope.
   # Readers go through suite_stamp_scope (a 2-field pre-6.4 stamp reads as full).
-  if { [ "$ran" -ge 1 ] || [ "$carry" -eq 1 ]; } && [ "$head" != "none" ] && [ "$sred_any" -eq 0 ] && [ "$hred" -eq 0 ]; then
+  if { [ "$ran" -ge 1 ] || [ "$carry" -eq 1 ] || [ "$depth_skip" -eq 1 ]; } && [ "$head" != "none" ] && [ "$sred_any" -eq 0 ] && [ "$hred" -eq 0 ]; then
     if [ "$head2" = "$head" ] && [ -z "$dirty" ] && [ -z "$dirty2" ]; then
       mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
       printf '%s %s %s\n' "$head" "$(date +%s)" "$scope" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
@@ -2472,6 +2520,26 @@ EOF
       note "⚠ HEAD moved or the tree is not clean — stamp withheld, so the next qa re-runs the suite"
     fi
   fi
+  # decision log (test-depth.md § 5): ONE row per qa that actually reached a depth verdict —
+  # AFTER the run, so secs/rc are real; never when the gate didn't run (skip/force/full/unbounded).
+  if [ -n "$ddepth" ]; then
+    if [ -n "$dtf" ]; then
+      qf="${dtf%% *}"
+      qplan="$(fm_get plan "$qf" 2>/dev/null)"
+      qtaskid="$(fm_get id "$qf" 2>/dev/null)"; [ -n "$qtaskid" ] || qtaskid="$(basename "$qf" .md)"
+    else
+      qplan=""; qtaskid=""
+    fi
+    if [ -z "$qplan" ]; then
+      qpf="$(next_dir)/plan"
+      [ -f "$qpf" ] && qplan="$(tr -d ' \r\n' < "$qpf" 2>/dev/null)"
+    fi
+    dsecs=$(( $(date +%s) - t0 ))
+    set -f   # word-split the paths below on IFS, never glob-expand one that happens to contain * or ?
+    decision_log test_depth "$qplan" "$qtaskid" "$ddepth" "$dwhy" "$dsecs" "$red" $([ -s "$dcsf" ] && head -20 "$dcsf")
+    set +f
+  fi
+  [ -z "$dcsf" ] || rm -f "$dcsf"
   [ "$red" -eq 0 ] || die "qa: red — fix the ⛔ lines above before calling the work done"
   say "qa: all green"
 }
@@ -2494,6 +2562,8 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   # lets an agent re-run finish freely while chasing pendings without muting the signal.
   local force="" PEND=0 CAV=0 CAVS="" br dr n out w it stamp key fired bl rd ib lk f line sc ssha
   local lho lag lsm
+  local fin_t0 fin_plan fin_pf
+  fin_t0="$(date +%s)"
   [ "${1:-}" = "--force" ] && force=1
   fin_pending() { PEND=$((PEND+1)); printf '⛔ pending: %s\n' "$1"; }
   fin_caveat()  { CAV=$((CAV+1));  CAVS="$CAVS$1
@@ -2649,10 +2719,17 @@ EOF
     rm -f "$out"
   fi
 
+  # decision log (test-depth.md § 5): one `finish` row, win or lose, AFTER the checks above so
+  # secs/rc are real. plan: the recorded session plan only — finish is about the whole run, never
+  # one task. Best-effort, never gates (decision_log swallows its own failures).
+  fin_plan=""; fin_pf="$(next_dir)/plan"
+  [ -f "$fin_pf" ] && fin_plan="$(tr -d ' \r\n' < "$fin_pf" 2>/dev/null)"
   if [ "$PEND" -gt 0 ]; then
+    decision_log finish "$fin_plan" "" "" "" "$(( $(date +%s) - fin_t0 ))" 1
     [ "$PEND" -eq 1 ] && { w="thing"; it="it"; } || { w="things"; it="them"; }
     die "finish: not done — $PEND $w pending; fix $it and run finish again"
   fi
+  decision_log finish "$fin_plan" "" "" "" "$(( $(date +%s) - fin_t0 ))" 0
 
   # From here down the verdict is rc 0 — the die above is the only exit. The Stop hook reads this
   # marker to know a session has already ended its RUN (ops/contracts/role-handover.md, the
