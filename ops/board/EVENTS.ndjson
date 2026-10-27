@@ -722,3 +722,4 @@
 {"ts":1793129049,"ev":"release","id":"T-196","who":"Owner@DESKTOP","note":"→ ready: owner cleared the Ollama/model gate"}
 {"ts":1793129099,"ev":"claim","id":"T-196","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1793129119,"ev":"claim","id":"T-193","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1793129500,"ev":"handoff","id":"T-196","who":"Owner@DESKTOP","note":""}
