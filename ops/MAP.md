@@ -250,3 +250,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - kit/ops/hooks/readonly-allow.sh — now wired to Bash|PowerShell; a PowerShell command gets its own deny-by-default verb table (git → git_ok, ops/polaris → polaris_ok); polaris_ok gains depth  (T-195, 2026-10-27)
 
 - docs/spikes/ — new: tev1.md, the Tev1-on-Ollama measurement and go/no-go that Sprint 19 (6.10.0) builds on  (T-196, 2026-10-27)
+
+- kit/ops/lib/core.sh — depth_for (pure: changed paths + task files → none|look|scoped|full + why) beside tier_for; `polaris depth [<ID>]` (cmd_depth, observe.sh) prints it read-only; KEYS gains test_skip + test_look (6.9.0)  (T-197, 2026-10-27)
