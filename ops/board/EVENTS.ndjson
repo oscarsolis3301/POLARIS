@@ -713,3 +713,5 @@
 {"ts":1793128108,"ev":"handoff","id":"T-194","who":"Owner@DESKTOP","note":""}
 {"ts":1793128134,"ev":"blocked","id":"T-196","who":"Owner@DESKTOP","note":"→ blocked: Steps 1-3 done, no repo changes: test-depth.jsonl (40 commits, 28 none/1 scoped/11 full, built read-only from git log --name-only against test-depth.md §2) at ~/.claude/polaris/laya/data/test-depth.jsonl; tev1-replay.py at ~/.claude/polaris/laya/tev1-replay.py (replays difficulty/effort/test-depth sets over /v1/systemone, scores vs majority + rules on a seeded held-out split, p50/p95, confidence separation). Machine check: ollama --version reports 0.30.7 (< 0.35 required), ollama list shows zero models pulled. Owner gate blocks step 5 (replay + docs/spikes/tev1.md)."}
 {"ts":1793128563,"ev":"handoff","id":"T-195","who":"Owner@DESKTOP","note":""}
+{"ts":1793128658,"ev":"handoff","id":"T-192","who":"Owner@DESKTOP","note":""}
+{"ts":1793128659,"ev":"all-review","id":"T-192","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
