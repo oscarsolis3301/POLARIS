@@ -193,7 +193,7 @@ after T-197: add only your helper's line; STOP on any other hunk.
 - [ ] `bash kit/ops/polaris doctor --selftest --only qa,express,surfaces,finish` run ONCE via `bg run` + chunked `bg wait` before handoff; verdict pasted in Notes.
 
 ## T-199 — "See where the time goes — metrics shows suite minutes skipped and the build / land / suite / finish split, and builders stop being pointed at the full suite"
-points 3 · risk normal · landed ded70b5 (2026-10-27) · claimed 2026-10-27
+points 3 · risk normal · landed ded70b5 (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/observe.sh, ops/tests/api-kit.expected, ops/tests/depth-metrics.cmd, ops/tests/depth-metrics.expected
 
 ### Why
@@ -215,7 +215,7 @@ diffed by content, and STOP on any other hunk.
 - [ ] pack-visual golden green (re-pin only the fast-tier line if it shows there — content diff).
 
 ## T-200 — "The rulebook stops paying the suite twice — integrator and conductor run one stamped check, builders test what they touched, and the task template documents test_depth and plan"
-points 3 · risk normal · landed 0357fac (2026-10-27) · claimed 2026-10-27
+points 3 · risk normal · landed 0357fac (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/PROTOCOL.md, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/templates/TASK.md
 
 ### Why
@@ -238,3 +238,18 @@ CONDUCTOR.md and PLANNER.md were last edited by T-194 — build on its wording, 
 ### Acceptance
 - [ ] Every verify line green; PLANNER.md says verify: lines never carry `doctor --selftest`.
 - [ ] Plain English a first-time reader follows (voice: standard).
+
+## T-201 — "Release prep 6.9.0 — the version number and one changelog entry for staying on the request, test depth, PowerShell reads and the Tev1 verdict"
+points 1 · risk normal · landed 69a3607 (2026-10-27) · claimed 2026-10-27
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+Every release lands in four places at once (ops/VERSION via the kit, CHANGELOG, git tag, published
+release); this task does the two file halves — the tag, the publish and the dogfood are the owner's 🚩
+step after the wave gate. Bump kit/ops/VERSION to 6.9.0 (URLs unchanged) and add ONE `## 6.9.0 — <date>`
+CHANGELOG entry in plain English: a run stays on its request (FIX-1 can't hijack it), text and styling
+changes skip the suite, PowerShell reads stop prompting in plan mode, and the Tev1 spike's verdict in a
+sentence. Sprint 19 (Laya) moves to 6.10.0.
+
+### Acceptance
+- [ ] VERSION and CHANGELOG agree on 6.9.0; nothing else changes.
