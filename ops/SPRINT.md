@@ -15,6 +15,7 @@ is surface-frozen. Verify lines are seconds; the full suite runs once at the wav
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-10-27 | 10 | 20 |
 
 # SPRINT 18 — Effort ceiling + REA (6.8.0)          capacity: 18   dates: 2026-10-11–
 
