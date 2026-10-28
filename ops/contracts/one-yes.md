@@ -149,3 +149,16 @@ T-213 removed `drill_hint`, whose tail was the only thing that committed the exp
 (`test: true` in CONVENTIONS.md, dirty tree) onto main; park then swept `src/ex.dat` into feat/T-PK on
 windows. `drill_express` now ends with its own hermetic cleanup (strip `test:`/`integration:` lines,
 commit `express drill cleanup`). Owner: kit/ops/lib/selftest/history.sh only. No interface change.
+
+## Fix wave 2: speed report latency (T-219)
+Measured on a real repo: `polaris speed` took 4m02s for 30 commits (one `cmd_depth --commit` each, every
+one re-deriving test selection), and `update` appends it. Speed must be BOUNDED and CHEAP. Owner:
+kit/ops/lib/admin.sh (`cmd_speed` only; no new function, so api-kit.expected is unchanged).
+- One `git log --name-only` call gives every commit's paths; none/look classify in-process with
+  `owned_match` against `test_skip`/`test_look` (same defaults as `depth_for`). Only commits that fall
+  through call `cmd_depth --commit`, newest first.
+- Wall-clock budget: literal `SPEED_BUDGET=20` seconds, env override `POLARIS_SPEED_BUDGET`, checked
+  between commits. Exceeded -> stop, print counts so far as
+  "Of your last N changes (stopped early at the time limit): ..." plus " M not checked." Fully evaluated
+  output grammar is unchanged. `update` calls the same function, so the same budget; `|| true` stays.
+- Not done: memoizing the pytest import graph (it lives in core.sh/observe.sh, not owned here).
