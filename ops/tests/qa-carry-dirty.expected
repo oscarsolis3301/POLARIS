@@ -1,0 +1,8 @@
+dirty-unset: rc=0 scope=full suite-ran=2
+last-suite-seconds: ok
+clean-unset: rc=0 scope=none suite-ran=0
+  depth: none — only test_skip paths
+last-suite-seconds: missing
+clean-set: rc=0 scope=none suite-ran=0
+  depth: none — only test_skip paths
+last-suite-seconds: missing
