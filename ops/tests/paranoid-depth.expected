@@ -1,0 +1,13 @@
+== paranoid, CSS-only land: no suite ==
+css-only: rc=0 suite-ran=0
+  depth: look — only look paths (1)
+== paranoid, risk: high docs-only land: no suite ==
+high-docs: rc=0 suite-ran=0
+  depth: none — only test_skip paths
+== paranoid, risk: high code land: depth follows the paths (test_select unset => full, said so) ==
+high-code: rc=0 suite-ran=2
+  depth: full — test_select unset
+last-suite-seconds: ok
+== dirty tree + ancestor stamp + test_select UNSET: the suite still runs, timing written ==
+dirty-unset: rc=0 suite-ran=2
+last-suite-seconds: ok

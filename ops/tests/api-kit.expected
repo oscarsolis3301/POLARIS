@@ -396,7 +396,6 @@ kit/ops/lib/integrate.sh	fn	cmd_run_verify
 kit/ops/lib/integrate.sh	fn	cmd_seal
 kit/ops/lib/integrate.sh	fn	cmd_task_commit_msg
 kit/ops/lib/integrate.sh	fn	in_primary
-kit/ops/lib/integrate.sh	fn	land_slow_suite_hint
 kit/ops/lib/integrate.sh	fn	landed_sha
 kit/ops/lib/integrate.sh	fn	seal_burndown_row
 kit/ops/lib/integrate.sh	fn	seal_sync

@@ -30,8 +30,8 @@ full
 rc 0
 == rule 1: risk: high overrides everything, even a docs-only change ==
 depth T-6
-full
-   why: risk: high on T-6
+none
+   why: only test_skip paths
    paths: 1 changed (1 skipped by test_skip)
 rc 0
 == rule 2: test_depth: full overrides everything, even a docs-only change ==

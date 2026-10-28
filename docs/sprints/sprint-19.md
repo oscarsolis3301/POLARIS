@@ -350,11 +350,21 @@ Implements one-yes.md sections 1-2. Add cmd_approve --plan <slug> -m (plain appr
 - [ ] every verify: line passes
 
 ## T-211 — "Next and the express lane agree: a plan-approved risky task is landable, an unapproved one still waits for the human"
-points 3 · risk normal · landed 594b4e1 (2026-10-28) · claimed 2026-10-28
+points 3 · risk normal · landed 594b4e1 (2026-10-28) · claimed 2026-10-28 → done 2026-10-28
 files touched: kit/ops/lib/handover.sh, kit/ops/lib/integrate.sh, ops/tests/plan-approval-gates.cmd, ops/tests/plan-approval-gates.expected
 
 ### Why
 Implements one-yes.md section 2 callers. next_landable (handover.sh) puts a task in NX_REV_OK when plan_covers is rc 0, else NX_REV_HUMAN. land --express (integrate.sh) replaces the 'risk: high never rides the express lane' refusal with plan_covers (reason line in the message). plan_covers lives in ownership.sh from T-210; do not edit it. Golden: covered risk-high task is landable and express accepts it; the same task unapproved is human-lane and express refuses; autonomy: standard refuses even with the approval. If an existing golden or selftest drill not in files_owned names the old express wording and must change, hand back.
+
+### Acceptance
+- [ ] every verify: line passes
+
+## T-212 — "A risky task no longer forces the whole suite, and paranoid re-checks just that one land"
+points 3 · risk normal · landed ee1513c (2026-10-28) · claimed 2026-10-28
+files touched: kit/ops/lib/core.sh, kit/ops/lib/integrate.sh, kit/ops/lib/selftest/history.sh, ops/tests/api-kit.expected, ops/tests/paranoid-depth.cmd, ops/tests/paranoid-depth.expected, ops/tests/test-depth.expected
+
+### Why
+Implements one-yes.md sections 3-4. Remove depth_for's rule 1 (risk: high forces full); test_depth: full stays the explicit force. integration: paranoid's per-land re-run becomes the depth-aware check of that one land (same decision qa makes); drop the slow-suite hint. observe.sh is owned only in case triage or qa wording references risk: high forcing full; keep edits minimal. The golden MUST include the dirty-tree rule from the contract: dirty tree + ancestor stamp + test_select UNSET still runs the suite and writes .polaris/last-suite-seconds. A paranoid CSS-only land runs no suite; a risk: high docs task is none. INTEGRATOR.md prose is T-216, not here.
 
 ### Acceptance
 - [ ] every verify: line passes
