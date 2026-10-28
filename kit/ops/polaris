@@ -63,6 +63,10 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  clears a policy gate — and only approve needs a human. REFUSES
                                  when no ask rule gates <scope> and on any feat/* branch, so a
                                  Builder can never approve itself; refusal mutates nothing)
+  approve --plan <slug> -m "why"  the owner's ONE yes at the plan gate: records the approval on
+                                 every task of the plan for each scope it needs (merge for
+                                 risk: high, need:<v> for its needs:, any ask rule it hits).
+                                 Same refusals as approve (feat/*, no -m); re-running adds nothing
   kickback <ID> [-m note]        Integrator: red merge → review→active
   audit <ID>                     Integrator: ownership check of feat/<ID>
   run-verify <ID>                Integrator: re-run task verify: commands in CWD
@@ -440,6 +444,7 @@ case "${1:-}" in
   uninstall)  shift; cmd_uninstall "$@";;
   _match)     shift; cmd_match "$@";;
   _guard)     shift; cmd_guard "$@";;
+  _plan_covers) shift; plan_covers "$(task_file "${1:?}")";;   # internal: the one-yes.md predicate, for goldens + hooks
   ''|help|-h|--help) usage;;
   *) usage; die "unknown command: $1";;
 esac
