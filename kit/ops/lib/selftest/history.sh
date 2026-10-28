@@ -223,6 +223,11 @@ drill_express() {
     grep -q 'test — green' "$T/exqa2.out" || { cat "$T/exqa2.out"; echo "EXPRESS QA RERUN FAIL (a moved HEAD must actually re-run test:)"; exit 1; }
     git reset -q --hard "$exhead"      # hermetic: drop the probe commit and the stamp keyed on it
     rm -f .polaris/suite-stamp
+    # hermetic cleanup (formerly done by drill_hint): strip the drill's config lines, commit so later drills start clean
+    sed -i.bak -e '/^test: true$/d' -e '/^integration:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'express drill cleanup' >/dev/null 2>&1 || true
+    # rewrite the tree with NO eol conversion: on Windows autocrlf=true leaves CRLF copies that the park drill (autocrlf off) would see as modified and drag into feat/T-PK
+    git -c core.autocrlf=false reset -q --hard >/dev/null 2>&1 || true
 }
 drill_pr-publish() {
     # T-033 self-provision: --only pr-publish skips the remote and notify drills, but it pushes to
