@@ -390,7 +390,7 @@ Implements one-yes.md section 5 wiring. related_cmds partitions the path list (.
 - [ ] every verify: line passes
 
 ## T-215 — "Show the speedup straight away: polaris speed, and the same report at the end of update"
-points 3 · risk normal · landed 2265f69 (2026-10-28) · claimed 2026-10-28
+points 3 · risk normal · landed 2265f69 (2026-10-28) · claimed 2026-10-28 → done 2026-10-28
 files touched: kit/ops/hooks/readonly-allow.sh, kit/ops/lib/admin.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected, ops/tests/speed-report.cmd, ops/tests/speed-report.expected
 
 ### Why
@@ -405,6 +405,16 @@ files touched: kit/CLAUDE.md, kit/ops/PROTOCOL.md, kit/ops/roles/CONDUCTOR.md, k
 
 ### Why
 Prose for one-yes.md. kit/CLAUDE.md STOP-AND-ASK gets ONE clause 'unless the approved plan named it' and must stay at or under 10054 bytes (it is about 10046 now, so trim a few words elsewhere in the same file). PLANNER.md: the pre-mortem lists every risky scope and sets needs: on the task. CONDUCTOR.md steps 3 and 6: run polaris approve --plan <slug> -m once after the go, quoting the approval; overlaps with other plans' tasks are ready-gate sequencing, never an owner question (at most one caveat line); say in one line when Claude Code's own auto-mode classifier refuses something POLARIS cannot lift. INTEGRATOR.md section 2 (the risk: high gate is covered by the approved plan; autonomy: standard keeps the stop) and the paranoid line near line 44 (per-land check is depth-aware, from T-212). SOLO.md and PROTOCOL.md: one line each if they restate the old rule. templates/TASK.md documents needs:. Do not touch ops/RULES.tsv or .github/.
+
+### Acceptance
+- [ ] every verify: line passes
+
+## T-217 — "Release 6.10.0 - one yes, hands-free: version and changelog (LAST)"
+points 2 · risk normal · landed 761ecd6 (2026-10-28) · claimed 2026-10-28
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+Bump kit/ops/VERSION to 6.10.0 and add a CHANGELOG.md '## 6.10.0' entry in the house voice: one yes at the plan gate (approve --plan, needs:), risky tasks no longer force the whole suite, paranoid is per-land and depth-aware, Python related tests, speed report on update and polaris speed. Tag, dogfood, publish and product-repo updates are the conductor's release ritual, not this task.
 
 ### Acceptance
 - [ ] every verify: line passes

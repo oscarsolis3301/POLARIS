@@ -4,6 +4,30 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.10.0 — 2026-10-28
+
+**One yes, hands-free. Approving the plan once now covers every risky step it names, so auto mode
+runs to the end without stopping to ask again. Risky work no longer drags the whole test suite
+along, Python projects get related-only testing, and `update` now shows you the speedup.**
+
+`polaris approve --plan` records your approval once for a whole plan. It covers every risky scope
+that plan names: merges of `risk: high` tasks, `ask` rules, and the schema, dependency and delete
+steps a task declares with the new `needs:` field. Auto mode then runs hands-free to the end.
+`autonomy: standard` keeps the per-merge stop. Anything the plan did not name still asks, and
+force-pushes and secrets still always ask.
+
+A `risk: high` task no longer forces the whole suite: how much gets tested follows the paths that
+actually changed. `integration: paranoid` now re-checks each land at that same depth rather than
+re-running everything, so the old slow-suite hint is gone, as its advice no longer applies.
+
+Python changes now run only the tests that import them, found through an import graph. A change
+that mixes node and Python runs both. Anything with no related test still falls back to the full
+run.
+
+`polaris speed`, and the same report at the end of `update`, looks at the repo's own last 30
+commits and shows how much less it will now test. It also adds a line for each setting still
+slowing things down, with the exact line to change.
+
 ## 6.9.0 — 2026-10-27
 
 **A run now stays on the request that started it. A text or styling change skips the full suite.
