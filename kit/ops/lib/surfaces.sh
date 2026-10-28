@@ -41,7 +41,7 @@ surfaces_runner() { # surfaces_runner <ls-file> — ONE line `<runner><TAB><temp
   return 1
 }
 
-related_cmds() { # related_cmds <paths-file> — one COMPLETE command per qualifying package, rc 0; or
+node_related_cmds() { # node_related_cmds <paths-file> — one COMPLETE command per qualifying package, rc 0; or
   # rc 1 + ONE reason line (ops/contracts/change-sized.md § 2). Each changed path's package is the
   # nearest ancestor dir holding a TRACKED package.json (root counts); it qualifies only when its
   # "test" script (read as surfaces_runner reads it) names vitest or jest AND that runner is
@@ -93,6 +93,48 @@ $list
 EOF
   printf '%s\n' "$out"
   return 0
+}
+
+related_cmds() { # related_cmds <paths-file> — node + python related commands, rc 0; or rc 1 + ONE reason
+  # line (ops/contracts/one-yes.md § 5). The path list is partitioned: `.py` and the pytest config
+  # names (pytest.ini tox.ini setup.cfg pyproject.toml requirements*.txt) go to pytest_related_files,
+  # the rest to node_related_cmds' rules. Node commands first, then pytest. ALL-OR-NOTHING: either
+  # side failing returns that side's reason. No python path => byte-identical to the node-only rules
+  # (including `no changed paths`).
+  local file="${1:-}" tf pf nf p py=0 nd=0 out="" o rc files f first="" tcmd nl
+  nl=$'\n'
+  [ -f "$file" ] || file=/dev/null
+  tf="$(mktemp)"; pf="$tf.py"; nf="$tf.node"; : > "$pf"; : > "$nf"
+  while IFS= read -r p || [ -n "$p" ]; do
+    [ -z "$p" ] && continue
+    case "${p##*/}" in
+      *.py|pytest.ini|tox.ini|setup.cfg|pyproject.toml|requirements*.txt) printf '%s\n' "$p" >> "$pf"; py=$((py+1)); [ -n "$first" ] || first="$p";;
+      *) printf '%s\n' "$p" >> "$nf"; nd=$((nd+1));;
+    esac
+  done < "$file"
+  if [ "$py" -eq 0 ]; then
+    rm -f "$pf" "$nf" "$tf"
+    node_related_cmds "$file"; return $?
+  fi
+  if [ "$nd" -gt 0 ]; then
+    o="$(node_related_cmds "$nf")"; rc=$?
+    if [ "$rc" -ne 0 ]; then rm -f "$tf" "$pf" "$nf"; printf '%s\n' "$o"; return 1; fi
+    out="$o"
+  fi
+  o="$(pytest_related_files "$pf")"; rc=$?
+  rm -f "$tf" "$pf" "$nf"
+  if [ "$rc" -ne 0 ]; then printf '%s\n' "$o"; return 1; fi
+  files=()
+  while IFS= read -r f; do [ -n "$f" ] && files+=("$f"); done <<PYFILES
+$o
+PYFILES
+  tcmd="$(cfg test "")"
+  if o="$(pytest_related_cmd "$tcmd" "${files[@]}")"; then
+    printf '%s\n' "${out:+$out$nl}$o"
+    return 0
+  fi
+  printf '%s has no related tests (%s)\n' "$first" "$o"
+  return 1
 }
 
 pytest_related_files() { # pytest_related_files <paths-file> — the test files a change reaches (ops/contracts/one-yes.md § 5)
