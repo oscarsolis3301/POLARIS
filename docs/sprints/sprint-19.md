@@ -410,7 +410,7 @@ Prose for one-yes.md. kit/CLAUDE.md STOP-AND-ASK gets ONE clause 'unless the app
 - [ ] every verify: line passes
 
 ## T-217 — "Release 6.10.0 - one yes, hands-free: version and changelog (LAST)"
-points 2 · risk normal · landed 761ecd6 (2026-10-28) · claimed 2026-10-28
+points 2 · risk normal · landed 761ecd6 (2026-10-28) · claimed 2026-10-28 → done 2026-10-28
 files touched: CHANGELOG.md, kit/ops/VERSION
 
 ### Why
@@ -418,3 +418,16 @@ Bump kit/ops/VERSION to 6.10.0 and add a CHANGELOG.md '## 6.10.0' entry in the h
 
 ### Acceptance
 - [ ] every verify: line passes
+
+## T-218 — "Selftest hygiene: the express drill cleans up after itself so the park drill starts from a clean tree"
+points 2 · risk normal · landed 242c8f7 (2026-10-28) · claimed 2026-10-28
+files touched: kit/ops/lib/selftest/history.sh
+
+### Why
+CI on main is red on windows-latest only: the park drill dies with `ownership violation - changed but NOT in files_owned: src/ex.dat`, then `PARK LAND RC FAIL`. Cause: T-213 deleted `drill_hint` from report.sh, whose last lines did a hidden cleanup nobody else does - `sed` removed the `integration:` and `test: true` lines from ops/CONVENTIONS.md and ran `git add -A; git commit -qm 'express drill cleanup'` on main. That commit swept the express drill's leftovers onto main so later drills (park, claimguard) began on a clean tree. With it gone, the express drill leaves `test: true` committed in CONVENTIONS.md plus the working tree not committed clean, and park's `git add -A` on feat/T-PK drags `src/ex.dat` in.
+
+Fix: end `drill_express` (after `rm -f .polaris/suite-stamp`, line ~225) with its own hermetic cleanup: delete the `^test: true$` line (and any `^integration:` line) from ops/CONVENTIONS.md with `sed -i.bak ... && rm -f ops/CONVENTIONS.md.bak`, then `git add -A; git commit -qm 'express drill cleanup' >/dev/null 2>&1 || true`. Change nothing else; every other drill stays byte-identical.
+
+### Acceptance
+- [ ] drill_express ends with the cleanup above; no other line in history.sh changes
+- [ ] `--only express,park` selftest is green (see Notes)
