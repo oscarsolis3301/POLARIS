@@ -362,6 +362,7 @@ kit/ops/lib/core.sh	fn	surface_change_set
 kit/ops/lib/core.sh	fn	surface_row_from_item
 kit/ops/lib/core.sh	fn	surface_row_matches
 kit/ops/lib/core.sh	fn	surface_rows_for
+kit/ops/lib/core.sh	fn	surface_run_landed
 kit/ops/lib/core.sh	fn	surface_select_cmd
 kit/ops/lib/core.sh	fn	surfaces_lines
 kit/ops/lib/core.sh	fn	surfaces_seed

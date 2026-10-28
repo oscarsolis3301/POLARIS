@@ -1,0 +1,9 @@
+css-only: rc=0 scope=look suite-ran=0
+  depth: look — only look paths (1)
+docs-only: rc=0 scope=none suite-ran=0
+  depth: none — only test_skip paths
+no-plan: rc=0 scope=full suite-ran=2
+code-landed: rc=0 scope=full suite-ran=2
+baseline: rc=0 scope=full suite-ran=2
+stamp-docs: rc=0 scope=none suite-ran=0
+  depth: none — only test_skip paths
