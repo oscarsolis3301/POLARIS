@@ -14,6 +14,11 @@ paranoid-fast-suite-advice-lines: 0
 config-untouched-drain: 1
 no-history:
 speed: no history yet
+budget-zero:
+1
+budget-zero-rc: 0
+slow-within-budget+2s: yes
+Of your last N changes (stopped early at the time limit): 0 would skip the test run, 0 run only related tests, C run everything. M not checked.
 update-guarded:
 1
 yes
