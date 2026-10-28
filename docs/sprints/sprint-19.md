@@ -433,7 +433,7 @@ Fix: end `drill_express` (after `rm -f .polaris/suite-stamp`, line ~225) with it
 - [ ] `--only express,park` selftest is green (see Notes)
 
 ## T-219 — "Speed report is bounded: cheap commits classified in one git call, expensive ones stop at a 20-second budget"
-points 3 · risk normal · landed d534533 (2026-10-28) · claimed 2026-10-28
+points 3 · risk normal · landed d534533 (2026-10-28) · claimed 2026-10-28 → done 2026-10-28
 files touched: kit/ops/lib/admin.sh, ops/tests/speed-report.cmd, ops/tests/speed-report.expected
 
 ### Why
@@ -447,3 +447,13 @@ Extend the golden: add a case with POLARIS_SPEED_BUDGET=0 (expect the stopped-ea
 - [ ] Fully evaluated output grammar unchanged (existing speed-report.expected lines still pass)
 - [ ] On a fixture with 30 commits and a fake slow decision (a PATH-shadow or env-injected sleep in the expensive path), `speed` returns within budget+2s and prints "stopped early at the time limit"
 - [ ] `update` tail still guarded by `|| true`; read-only (repo byte-identical after)
+
+## T-220 — "Release 6.10.1 - speed report stops at its time budget, plus a selftest cleanup fix: version and changelog (LAST)"
+points 1 · risk normal · landed 30e5085 (2026-10-28) · claimed 2026-10-28
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+6.10.0 is already tagged and published and a published tag never moves, so the two fixes that landed after it (T-218 self-test drill cleanup, T-219 bounded `polaris speed`) ship as 6.10.1. Change `version:` in kit/ops/VERSION to 6.10.1 and leave every other line of that multi-line keyed file exactly as is. Add a `## 6.10.1 — 2026-10-28` entry at the top of CHANGELOG.md (above the 6.10.0 entry) in the same plain-language style: `polaris speed`, and the speed report at the end of `update`, now stops at a 20-second budget instead of taking minutes on a big repo, printing "stopped early at the time limit" with the counts so far; plus an internal fix to a self-test drill's cleanup that had only shown up on Windows. Tag, dogfood and publish are the conductor's release ritual, not this task.
+
+### Acceptance
+- [ ] every verify: line passes (the VERSION file is multi-line: use grep, never `test "$(cat kit/ops/VERSION)" = ...`, the T-217 trap)
