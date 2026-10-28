@@ -1,0 +1,33 @@
+== before approval
+unapproved T-1 rc=1 risk: high and the plan did not approve merge
+unapproved T-2 rc=1 needs: schema and the plan did not approve need:schema
+plain T-4 rc=0 
+== refusals mutate nothing
+no-m: rc=1 ⛔ approve needs -m "why" | board identical
+unknown-slug: rc=1 ⛔ approve --plan refused: no task carries plan: nope | board identical
+positional: rc=1 ⛔ approve --plan takes no task ID or scope (T-1) | board identical
+feat-branch: rc=1 ⛔ approve refused on feat/T-9 | board identical
+== approve --plan p
+   ⚠ T-3 skipped — unknown needs: value 'bogus'
+   ⚠ T-5 skipped — no approved: front-matter field
+approved plan p: 2 scope(s) on 2 task(s)
+== after approval
+covered T-1 rc=0 
+covered T-2 rc=0 
+unknown-needs T-3 rc=1 needs: bogus and the plan did not approve need:bogus
+other-plan T-4 rc=0 
+needs-delete T-5 rc=1 needs: delete and the plan did not approve need:delete
+approved: [merge — WHO, DATE: plan p: the plan, approved]
+verify: []
+approved: [need:schema — WHO, DATE: plan p: the plan, approved]
+verify: []
+chore(board): approve plan p
+1
+== idempotent re-run
+approved plan p: 0 scope(s) on 0 task(s)
+board identical
+== a hand approval is not a plan entry
+hand T-4 rc=1 a hand-recorded approval is on the task
+== autonomy: standard keeps the per-merge stop
+standard T-1 rc=1 autonomy: standard
+trusted T-1 rc=0 
