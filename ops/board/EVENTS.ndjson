@@ -763,3 +763,4 @@
 {"ts":1793157826,"ev":"handoff","id":"T-203","who":"Owner@DESKTOP","note":""}
 {"ts":1793157828,"ev":"all-review","id":"T-203","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1793158003,"ev":"done","id":"T-203","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1793158037,"ev":"promote","id":"T-204","who":"Owner@DESKTOP","note":"deps done: T-203","pts":3}
