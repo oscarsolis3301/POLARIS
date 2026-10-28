@@ -2243,6 +2243,7 @@ cmd_depth() { # depth [<ID>] — read-only verdict: how much testing does this c
   # baseline (or $BASE on a branch), plus the current feat/<ID> branch, resolved with `task_file`.
   # Nothing here writes anything — same read-only contract as `triage`/`drift`.
   local id="${1:-}" tf="" paths="" n=0 skipn=0 line depth why csf p skip_raw sha cur baseline subj sid f tfs
+  tfs=""
   if [ -n "$id" ]; then
     tf="$(task_file "$id")" || die "depth: $id not found on the board"
     paths="$(git -C "$PRIMARY" diff --name-only "$BASE...feat/$id" 2>/dev/null)"
@@ -2385,7 +2386,7 @@ EOF
     # two lanes cannot disagree. Unset ⇒ this block is never entered and the loop is 6.3, byte for
     # byte. Selection is all-or-nothing: one changed path without a row ⇒ the whole suite (D3).
     sel=""
-    if [ "$k" = test ] && [ "$full" -eq 0 ] && [ -n "$(cfg test_select "")" ]; then
+    if [ "$k" = test ] && [ "$full" -eq 0 ] && { [ -n "$(cfg test_select "")" ] || [ "$(cfg test_related "")" != "-" ]; }; then
       csf="$(mktemp)"
       if surface_change_set $fflag > "$csf"; then
         if [ ! -s "$csf" ]; then
@@ -2402,7 +2403,7 @@ EOF
           rm -f "$csf"; break
         fi
         np="$(grep -c . "$csf" || true)"
-        if sel="$(surface_select_cmd "$csf")"; then
+        if sel="$(test_select_for "$csf")"; then
           m="$(printf '%s\n' "$sel" | grep -c . || true)"
           note "test — scoped to $m command(s): $np changed path(s) all mapped (qa --full runs test: verbatim)"
         else
@@ -2415,10 +2416,11 @@ EOF
                            esac;;
             'no rows')     why="ops/SURFACES.tsv has no rows";;
           esac
-          note "test — running the whole suite: $why"
+          # test_select unset: the related attempt alone failed — stay as quiet as before it existed
+          if [ -n "$(cfg test_select "")" ]; then note "test — running the whole suite: $why"; fi
         fi
       else
-        note "test — running the whole suite: no proven baseline on $BASE (no stamp, --force, or a stamp that is not an ancestor)"
+        [ -z "$(cfg test_select "")" ] || note "test — running the whole suite: no proven baseline on $BASE (no stamp, --force, or a stamp that is not an ancestor)"
       fi
       rm -f "$csf"
     fi

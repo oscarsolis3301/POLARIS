@@ -41,6 +41,60 @@ surfaces_runner() { # surfaces_runner <ls-file> — ONE line `<runner><TAB><temp
   return 1
 }
 
+related_cmds() { # related_cmds <paths-file> — one COMPLETE command per qualifying package, rc 0; or
+  # rc 1 + ONE reason line (ops/contracts/change-sized.md § 2). Each changed path's package is the
+  # nearest ancestor dir holding a TRACKED package.json (root counts); it qualifies only when its
+  # "test" script (read as surfaces_runner reads it) names vitest or jest AND that runner is
+  # installed under <pkg>/node_modules/.bin. No npx, no network. ALL-OR-NOTHING: one path without a
+  # qualifying package => rc 1, `<path> has no related tests (<why>)`. Bash 3.2: no assoc arrays.
+  local file="${1:-}" tracked p d pkg rel m v runner="" why="" order="" nl list rest cmd out="" n=0 pk pr
+  nl=$'\n'
+  [ -f "$file" ] || file=/dev/null
+  tracked="$(git -C "$PRIMARY" ls-files -- package.json '*/package.json' 2>/dev/null || true)"
+  list=""
+  while IFS= read -r p || [ -n "$p" ]; do
+    [ -z "$p" ] && continue
+    n=$((n+1))
+    d="$p"; pkg=""; why="no package.json"
+    while :; do
+      case "$d" in */*) d="${d%/*}";; *) d=".";; esac
+      if [ "$d" = "." ]; then m="package.json"; else m="$d/package.json"; fi
+      if printf '%s\n' "$tracked" | grep -qxF "$m"; then pkg="$d"; break; fi
+      [ "$d" = "." ] && break
+    done
+    if [ -n "$pkg" ]; then
+      v="$(grep -oE '"test"[[:space:]]*:[[:space:]]*"[^"]*"' "$PRIMARY/$m" 2>/dev/null || true)"
+      case "$v" in *vitest*) runner=vitest;; *jest*) runner=jest;; *) runner=""; why="no vitest/jest in test script";; esac
+      if [ -n "$runner" ]; then
+        if [ -f "$PRIMARY/$pkg/node_modules/.bin/$runner" ]; then why=""; else why="node_modules not installed"; fi
+      fi
+      [ -z "$why" ] || pkg=""
+    fi
+    if [ -z "$pkg" ]; then printf '%s has no related tests (%s)\n' "$p" "$why"; return 1; fi
+    if [ "$pkg" = "." ]; then rel="$p"; else rel="${p#"$pkg"/}"; fi
+    list="${list:+$list$nl}$pkg$POLARIS_TAB$runner$POLARIS_TAB$rel"
+  done < "$file"
+  [ "$n" -gt 0 ] || { printf 'no changed paths\n'; return 1; }
+  while IFS="$POLARIS_TAB" read -r pk runner rel; do
+    case "$nl$order$nl" in *"$nl$pk$nl"*) continue;; esac
+    order="${order:+$order$nl}$pk"
+    rest=""
+    while IFS="$POLARIS_TAB" read -r pr m v; do
+      [ "$pr" = "$pk" ] && rest="${rest:+$rest }$v"
+    done <<EOF
+$list
+EOF
+    if [ "$runner" = vitest ]; then cmd="./node_modules/.bin/vitest related --run $rest"
+    else cmd="./node_modules/.bin/jest --findRelatedTests $rest --passWithNoTests"; fi
+    [ "$pk" = "." ] || cmd="cd $pk && $cmd"
+    out="${out:+$out$nl}$cmd"
+  done <<EOF
+$list
+EOF
+  printf '%s\n' "$out"
+  return 0
+}
+
 surfaces_pairs() { # surfaces_pairs <runner> <ls-file> — candidate rows `<surface><TAB><tests><TAB><cmd><TAB><note>`
   # sorted by surface (LC_ALL=C), then the SKIP lines (`SKIP<TAB><what><TAB><reason>`), rc 0 always.
   # A row appears ONLY where the stack's own convention implies it (§ 13 pairing rules); `<name>`
