@@ -327,7 +327,7 @@ files touched: kit/ops/lib/core.sh, ops/tests/change-bound-dirty.cmd, ops/tests/
 - [ ] no new function, so ops/tests/api-kit.expected is untouched
 
 ## T-209 — "A qa on a dirty tree, or a repo with no test_select, never skips the suite on a carry"
-points 3 · risk normal · landed 4c31262 (2026-10-27) · claimed 2026-10-27
+points 3 · risk normal · landed 4c31262 (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/lib/observe.sh, ops/tests/qa-carry-dirty.cmd, ops/tests/qa-carry-dirty.expected
 
 ### Why
@@ -338,3 +338,13 @@ files touched: kit/ops/lib/observe.sh, ops/tests/qa-carry-dirty.cmd, ops/tests/q
 - [ ] dirty tree with test_select unset: suite runs and last-suite-seconds written
 - [ ] clean tree with test_select set: carry unchanged
 - [ ] change-bound and change-bound-dirty goldens still green
+
+## T-210 — "One yes at the plan gate: polaris approve --plan records the owner's approval on every task of the plan, and self-landing honours it"
+points 5 · risk normal · landed 340880e (2026-10-28) · claimed 2026-10-28
+files touched: kit/ops/lib/builder.sh, kit/ops/lib/ownership.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/plan-approval.cmd, ops/tests/plan-approval.expected
+
+### Why
+Implements one-yes.md sections 1-2. Add cmd_approve --plan <slug> -m (plain approve unchanged), the new needs: task field (schema | dependency | delete), and ONE predicate plan_covers <taskfile> in ownership.sh. self_land stops saying 'risk high or any approved entry' and asks plan_covers instead. Wire the --plan form into the dispatch and the help text. The golden builds fixtures with mktemp -d and covers: covered / unapproved / autonomy standard / needs / hand approval / feat branch / no -m / unknown slug / idempotent re-run, and asserts the board is byte-identical after every refusal. If an existing golden (ask-approval, readonly-allow) legitimately moves, it is listed in files_owned. Do NOT touch handover.sh or integrate.sh (T-211).
+
+### Acceptance
+- [ ] every verify: line passes
