@@ -26,7 +26,7 @@ full
    ran: nothing from a runner
 == python-path ==
 full
-   why: test_select unset
+   why: py/mod.py has no related tests (no test reaches it)
    paths: 1 changed (0 skipped by test_skip)
    ran: nothing from a runner
 == related-off ==

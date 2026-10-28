@@ -555,6 +555,7 @@ kit/ops/lib/skills.sh	fn	skill_propose
 kit/ops/lib/skills.sh	fn	skill_prune
 kit/ops/lib/skills.sh	fn	skill_restore
 kit/ops/lib/skills.sh	fn	skill_tier
+kit/ops/lib/surfaces.sh	fn	node_related_cmds
 kit/ops/lib/surfaces.sh	fn	pytest_related_cmd
 kit/ops/lib/surfaces.sh	fn	pytest_related_files
 kit/ops/lib/surfaces.sh	fn	related_cmds

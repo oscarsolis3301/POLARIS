@@ -43,3 +43,39 @@ pytest tests/test_b.py -q
 test command not parseable
 == no-pytest (rc 1) ==
 test command not parseable
+== related py-only (rc 0) ==
+pytest tests/c_test.py tests/test_b.py tests/test_deep.py -q
+== related py-two (rc 0) ==
+pytest tests/c_test.py tests/test_b.py tests/test_deep.py -q
+== related mixed (rc 0) ==
+cd web && ./node_modules/.bin/vitest related --run App.tsx
+pytest tests/c_test.py tests/test_b.py -q
+== related node-only (rc 0) ==
+cd web && ./node_modules/.bin/vitest related --run App.tsx
+== related py-unreached (rc 1) ==
+lone/orphan.py has no related tests (no test reaches it)
+== related mixed-py-unreached (rc 1) ==
+lone/orphan.py has no related tests (no test reaches it)
+== related mixed-node-unqualified (rc 1) ==
+notes.md has no related tests (no package.json)
+== related config-changed (rc 1) ==
+pytest.ini has no related tests (pytest config changed)
+== related not-parseable (rc 1) ==
+pkg/a.py has no related tests (test command not parseable)
+== related no-pytest-segment (rc 1) ==
+pkg/a.py has no related tests (test command not parseable)
+== depth --commit python ==
+scoped
+   why: related tests via pytest (1 file(s))
+   paths: 1 changed (0 skipped by test_skip)
+   would run: true pytest tests/test_a.py -q
+   would run: echo LINT
+== depth --commit mixed ==
+scoped
+   why: related tests via vitest in web/ + pytest (1 file(s))
+   paths: 2 changed (0 skipped by test_skip)
+   would run: cd web && ./node_modules/.bin/vitest related --run App.tsx
+   would run: true pytest tests/test_a.py -q
+   would run: echo LINT
+== dirty qa == rc=0 scope=full suite-ran=2
+last-suite-seconds: ok
