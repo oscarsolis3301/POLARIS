@@ -277,6 +277,7 @@ kit/ops/lib/admin.sh	fn	cmd_heal
 kit/ops/lib/admin.sh	fn	cmd_init_board
 kit/ops/lib/admin.sh	fn	cmd_interview
 kit/ops/lib/admin.sh	fn	cmd_slim
+kit/ops/lib/admin.sh	fn	cmd_speed
 kit/ops/lib/admin.sh	fn	cmd_uninstall
 kit/ops/lib/admin.sh	fn	cmd_update
 kit/ops/lib/admin.sh	fn	cmd_update_all

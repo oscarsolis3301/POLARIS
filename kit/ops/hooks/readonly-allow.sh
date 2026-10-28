@@ -209,6 +209,8 @@ git_ok() {
 polaris_ok() {
   case "${1:-}" in
     find|show|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|route|--help|-h|'') return 0;;
+    # `speed` is the read-only history report (one-yes.md § 6): bare only — any argument keeps its prompt.
+    speed) [ $# -le 1 ] && return 0 || return 1;;
     # `depth` reads the board/git and prints; `--commit <sha>` takes ONE hex sha or ref name, nothing
     # else (change-sized.md § 6) — any other shape of argument keeps its prompt.
     depth) case "${2:-}" in

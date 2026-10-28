@@ -25,6 +25,7 @@ allow  bash ops/polaris check --only api-kit
 allow  bash ops/polaris check --only api-kit && bash ops/polaris route --role BUILDER
 allow  bash ops/polaris pack T-001
 allow  bash ops/polaris depth --commit abc1234
+allow  bash ops/polaris speed
 allow  bash ops/polaris depth --commit HEAD~1
 allow  bash ops/polaris slim
 allow  bash ops/polaris next
@@ -96,6 +97,7 @@ allow  Get-Content x | Select-String y
 allow  Get-ChildItem -Recurse -Filter *.md -ErrorAction SilentlyContinue | Select-Object -First 5
 allow  Get-Content ops/VERSION | Where-Object { $_ -match 'version' }
 allow  git -C "C:\Users\Owner\Desktop\Polaris" log --oneline -5; Get-ChildItem ops | Select-Object Name
+ask  bash ops/polaris speed --apply
 allow  bash ops/polaris depth
 allow  bash ops/polaris depth T-1
 allow  bash ops/polaris depth --commit abc1234

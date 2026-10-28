@@ -37,6 +37,7 @@ bash ops/polaris check --only api-kit
 bash ops/polaris check --only api-kit && bash ops/polaris route --role BUILDER
 bash ops/polaris pack T-001
 bash ops/polaris depth --commit abc1234
+bash ops/polaris speed
 bash ops/polaris depth --commit HEAD~1
 bash ops/polaris slim
 # `next` reads the board and names the one thing this context does next, writing nothing. Every role
@@ -135,6 +136,7 @@ Get-Content x | Select-String y
 Get-ChildItem -Recurse -Filter *.md -ErrorAction SilentlyContinue | Select-Object -First 5
 Get-Content ops/VERSION | Where-Object { $_ -match 'version' }
 git -C "C:\Users\Owner\Desktop\Polaris" log --oneline -5; Get-ChildItem ops | Select-Object Name
+bash ops/polaris speed --apply
 bash ops/polaris depth
 bash ops/polaris depth T-1
 bash ops/polaris depth --commit abc1234
