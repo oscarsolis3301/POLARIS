@@ -265,11 +265,21 @@ Implements contract change-sized section 1. With no earlier green run, surface_c
 - [ ] every verify: line passes
 
 ## T-203 — "A component change runs only the tests that import it: the test runner picks the related tests, one decision shared by depth, qa and land"
-points 5 · risk normal · landed fbc63e3 (2026-10-27) · claimed 2026-10-27
+points 5 · risk normal · landed fbc63e3 (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/KEYS.tsv, kit/ops/lib/core.sh, kit/ops/lib/integrate.sh, kit/ops/lib/observe.sh, kit/ops/lib/surfaces.sh, ops/tests/api-kit.expected, ops/tests/related-tests.cmd, ops/tests/related-tests.expected
 
 ### Why
 Implements contract change-sized sections 2-4. Add related_cmds (vitest related --run / jest --findRelatedTests via the package's own node_modules/.bin, all-or-nothing, nearest tracked package.json) and the single test_select_for decision (SURFACES rows first, then related), wired through depth_for, cmd_qa's test key and land --express. New key test_related: (unset = on, - = off). Python repos keep today's behavior. If keys-drift.expected or cli-help need a one-line move, say so in Notes and use grant.
+
+### Acceptance
+- [ ] every verify: line passes
+
+## T-204 — "A narrowed run skips the slow live acceptance tier and says why: uat deferred at scoped, one depth line on every run"
+points 3 · risk normal · landed ce3416a (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/lib/integrate.sh, kit/ops/lib/observe.sh, ops/tests/api-kit.expected, ops/tests/depth-uat.cmd, ops/tests/depth-uat.expected
+
+### Why
+Implements contract change-sized section 5. At scoped depth qa and land --express skip the uat key and print the one pinned deferral line; every run prints one depth line, and at full it names what forced it and the last measured full time from .polaris/last-suite-seconds, so the owner sees why a run is slow before it starts. The golden uses a fake vitest that echoes its argv.
 
 ### Acceptance
 - [ ] every verify: line passes
