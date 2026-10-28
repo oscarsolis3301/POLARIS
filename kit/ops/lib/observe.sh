@@ -2235,6 +2235,19 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
   return 0
 }
 
+depth_line_say() { # depth_line_say <depth> <why> — change-sized.md § 5: the one depth line every
+  # run prints before running. At full it also names the last measured full-suite time.
+  local d="$1" w="$2" t="" s=""
+  if [ "$d" = full ] && [ -f "$PRIMARY/.polaris/last-suite-seconds" ]; then
+    s="$(cut -d' ' -f1 < "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true)"
+    case "$s" in
+      ''|*[!0-9]*) ;;
+      *) if [ "$s" -lt 60 ]; then t="${s}s"; else t="$(( (s + 30) / 60 ))m"; fi;;
+    esac
+  fi
+  if [ -n "$t" ]; then note "depth: $d — $w (last full run $t)"; else note "depth: $d — $w"; fi
+}
+uat_deferred_say() { note "uat — deferred: runs on full-depth changes, CI and release"; }
 cmd_depth() { # depth [<ID>] — read-only verdict: how much testing does this change need, and why
   # (ops/contracts/test-depth.md § 3). Line 1 = the depth word alone; then `   why:` and
   # `   paths:` note lines. With <ID>: paths = git diff --name-only $BASE...feat/<ID>, taskfile =
@@ -2377,9 +2390,12 @@ EOF
     note "depth: $ddepth — $dwhy"
     scope="$ddepth"; depth_skip=1
   else
+  [ -z "$ddepth" ] || depth_line_say "$ddepth" "$dwhy"
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
+    # change-sized.md § 5: at scoped depth the slow live tier is deferred, said once
+    if [ "$k" = uat ] && [ "$ddepth" = scoped ]; then uat_deferred_say; continue; fi
     # test — change-scoped selection (test-surfaces.md § 6), and ONLY when test_select: is set:
     # which of the ops/SURFACES.tsv commands can this change break? The decision itself lives in
     # core.sh (surface_change_set + surface_select_cmd) and is shared with `land --express`, so the
