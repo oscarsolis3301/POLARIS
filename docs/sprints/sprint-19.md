@@ -340,11 +340,21 @@ files touched: kit/ops/lib/observe.sh, ops/tests/qa-carry-dirty.cmd, ops/tests/q
 - [ ] change-bound and change-bound-dirty goldens still green
 
 ## T-210 — "One yes at the plan gate: polaris approve --plan records the owner's approval on every task of the plan, and self-landing honours it"
-points 5 · risk normal · landed 340880e (2026-10-28) · claimed 2026-10-28
+points 5 · risk normal · landed 340880e (2026-10-28) · claimed 2026-10-28 → done 2026-10-28
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/ownership.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/plan-approval.cmd, ops/tests/plan-approval.expected
 
 ### Why
 Implements one-yes.md sections 1-2. Add cmd_approve --plan <slug> -m (plain approve unchanged), the new needs: task field (schema | dependency | delete), and ONE predicate plan_covers <taskfile> in ownership.sh. self_land stops saying 'risk high or any approved entry' and asks plan_covers instead. Wire the --plan form into the dispatch and the help text. The golden builds fixtures with mktemp -d and covers: covered / unapproved / autonomy standard / needs / hand approval / feat branch / no -m / unknown slug / idempotent re-run, and asserts the board is byte-identical after every refusal. If an existing golden (ask-approval, readonly-allow) legitimately moves, it is listed in files_owned. Do NOT touch handover.sh or integrate.sh (T-211).
+
+### Acceptance
+- [ ] every verify: line passes
+
+## T-211 — "Next and the express lane agree: a plan-approved risky task is landable, an unapproved one still waits for the human"
+points 3 · risk normal · landed 594b4e1 (2026-10-28) · claimed 2026-10-28
+files touched: kit/ops/lib/handover.sh, kit/ops/lib/integrate.sh, ops/tests/plan-approval-gates.cmd, ops/tests/plan-approval-gates.expected
+
+### Why
+Implements one-yes.md section 2 callers. next_landable (handover.sh) puts a task in NX_REV_OK when plan_covers is rc 0, else NX_REV_HUMAN. land --express (integrate.sh) replaces the 'risk: high never rides the express lane' refusal with plan_covers (reason line in the message). plan_covers lives in ownership.sh from T-210; do not edit it. Golden: covered risk-high task is landable and express accepts it; the same task unapproved is human-lane and express refuses; autonomy: standard refuses even with the approval. If an existing golden or selftest drill not in files_owned names the old express wording and must change, hand back.
 
 ### Acceptance
 - [ ] every verify: line passes
