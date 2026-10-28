@@ -1,0 +1,36 @@
+== vitest-subpackage ==
+scoped
+   why: related tests via vitest in app/
+   paths: 1 changed (0 skipped by test_skip)
+   ran: vitest related --run src/a.tsx
+== jest-package ==
+scoped
+   why: related tests via jest in jlib/
+   paths: 1 changed (0 skipped by test_skip)
+   ran: jest --findRelatedTests src/b.js --passWithNoTests
+== two-packages ==
+scoped
+   why: related tests via vitest in app/ (+1 more)
+   paths: 2 changed (0 skipped by test_skip)
+   ran: vitest related --run src/a.tsx
+   ran: jest --findRelatedTests src/b.js --passWithNoTests
+== stray-path ==
+full
+   why: test_select unset
+   paths: 2 changed (0 skipped by test_skip)
+   ran: nothing from a runner
+== no-node-modules ==
+full
+   why: nomod/src/c.js has no related tests (node_modules not installed)
+   paths: 1 changed (0 skipped by test_skip)
+   ran: nothing from a runner
+== python-path ==
+full
+   why: test_select unset
+   paths: 1 changed (0 skipped by test_skip)
+   ran: nothing from a runner
+== related-off ==
+full
+   why: test_select unset
+   paths: 1 changed (0 skipped by test_skip)
+   ran: nothing from a runner

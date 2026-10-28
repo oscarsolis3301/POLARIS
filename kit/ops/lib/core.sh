@@ -119,10 +119,21 @@ EOF
   [ -n "$nonlook" ] || { printf 'look\t%s\n' "only look paths ($lookn)"; return 0; }
   csf="$(mktemp)"
   printf '%s\n' "$nonlook" > "$csf"
-  if sel="$(surface_select_cmd "$csf")"; then rc=0; else rc=1; fi
+  if sel="$(test_select_for "$csf")"; then rc=0; else rc=1; fi
   rm -f "$csf"
   if [ "$rc" -eq 0 ]; then
-    printf 'scoped\t%s\n' "every code path mapped in SURFACES.tsv"
+    case "$sel" in
+      "cd "*" && ./node_modules/.bin/"*|"./node_modules/.bin/"*)
+        # via related (change-sized.md § 3): first package's runner, then (+N more)
+        sel="$(printf '%s\n' "$sel" | awk 'NR==1{c=$0} {n++} END{
+          pk="."; if (c ~ /^cd /) { split(c, a, " "); pk=a[2] }
+          rn=(c ~ /vitest/) ? "vitest" : "jest"
+          w="related tests via " rn " in " pk "/"
+          if (n>1) w=w " (+" (n-1) " more)"
+          print w }')"
+        printf 'scoped\t%s\n' "$sel";;
+      *) printf 'scoped\t%s\n' "every code path mapped in SURFACES.tsv";;
+    esac
   else
     printf 'full\t%s\n' "$sel"
   fi
@@ -427,6 +438,20 @@ surface_change_set() { # surface_change_set [--force] — the paths a verdict is
 $list
 EOF
   return 0
+}
+test_select_for() { # test_select_for <paths-file> — THE one decision for the `test` key
+  # (change-sized.md § 3), shared by depth_for, cmd_qa and `land --express`. rc 0: the command(s) to
+  # run, one per line (SURFACES rows first, then the runner's own related-tests mode unless
+  # test_related is `-`). rc 1 + ONE reason line: run test: verbatim.
+  local file="${1:-}" sel rel
+  if sel="$(surface_select_cmd "$file")"; then printf '%s\n' "$sel"; return 0; fi
+  if [ "$(cfg test_related "")" != "-" ]; then
+    if rel="$(related_cmds "$file")"; then printf '%s\n' "$rel"; return 0; fi
+    # a path with no package at all is not news (every non-node repo): keep the SURFACES reason so
+    # such a repo decides byte-identically; a package that cannot run related tests is worth saying
+    case "$rel" in *'(no package.json)') ;; *) printf '%s\n' "$rel"; return 1;; esac
+  fi
+  printf '%s\n' "$sel"; return 1
 }
 surface_select_cmd() { # surface_select_cmd <paths-file> — rc 0: the commands to run INSTEAD of
   # test:, one per line — every distinct non-`-` cmd of the rows the changed paths match

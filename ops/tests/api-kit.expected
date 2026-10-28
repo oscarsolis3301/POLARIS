@@ -69,6 +69,7 @@ kit/ops/KEYS.tsv	key	stale_hours
 kit/ops/KEYS.tsv	key	test
 kit/ops/KEYS.tsv	key	test_fast
 kit/ops/KEYS.tsv	key	test_look
+kit/ops/KEYS.tsv	key	test_related
 kit/ops/KEYS.tsv	key	test_select
 kit/ops/KEYS.tsv	key	test_skip
 kit/ops/KEYS.tsv	key	typecheck
@@ -369,6 +370,7 @@ kit/ops/lib/core.sh	fn	surfaces_seed
 kit/ops/lib/core.sh	fn	sync_board
 kit/ops/lib/core.sh	fn	task_col
 kit/ops/lib/core.sh	fn	task_file
+kit/ops/lib/core.sh	fn	test_select_for
 kit/ops/lib/core.sh	fn	tier_for
 kit/ops/lib/core.sh	fn	who
 kit/ops/lib/core.sh	fn	wt_path
@@ -550,6 +552,7 @@ kit/ops/lib/skills.sh	fn	skill_propose
 kit/ops/lib/skills.sh	fn	skill_prune
 kit/ops/lib/skills.sh	fn	skill_restore
 kit/ops/lib/skills.sh	fn	skill_tier
+kit/ops/lib/surfaces.sh	fn	related_cmds
 kit/ops/lib/surfaces.sh	fn	surfaces_pairs
 kit/ops/lib/surfaces.sh	fn	surfaces_proposal
 kit/ops/lib/surfaces.sh	fn	surfaces_runner

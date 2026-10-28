@@ -674,9 +674,9 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
     ex_cmds="$c"; ex_selected=0
-    if [ "$k" = "test" ] && [ -n "$(cfg test_select "")" ]; then
+    if [ "$k" = "test" ] && { [ -n "$(cfg test_select "")" ] || [ "$(cfg test_related "")" != "-" ]; }; then
       if surface_change_set > "$ex_paths"; then
-        if ex_why="$(surface_select_cmd "$ex_paths")"; then
+        if ex_why="$(test_select_for "$ex_paths")"; then
           ex_cmds="$ex_why"; ex_m=0; ex_n=0; ex_selected=1
           while IFS= read -r ex_p; do if [ -n "$ex_p" ]; then ex_m=$((ex_m+1)); fi; done <<EOF
 $ex_cmds
@@ -690,10 +690,10 @@ EOF
             'unmapped: '*) ex_why="${ex_why#unmapped: }"; ex_p="${ex_why%% *}"
                            ex_why="$ex_p has no ops/SURFACES.tsv row${ex_why#"$ex_p"}";;
           esac
-          note "test — running the whole suite: $ex_why"
+          if [ -n "$(cfg test_select "")" ]; then note "test — running the whole suite: $ex_why"; fi
         fi
       else
-        note "test — running the whole suite: no proven baseline on $BASE (no stamp, --force, or a stamp that is not an ancestor)"
+        [ -z "$(cfg test_select "")" ] || note "test — running the whole suite: no proven baseline on $BASE (no stamp, --force, or a stamp that is not an ancestor)"
       fi
     fi
     while IFS= read -r c; do
