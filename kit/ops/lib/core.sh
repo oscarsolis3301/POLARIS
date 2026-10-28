@@ -81,16 +81,10 @@ depth_for() { # depth_for [<taskfile>…] < <paths, one per line> — ONE line "
   # never dies, callers pass board data as-is. PURE: no writes to the repo, no git — stdin + the
   # (read-only) task files are the whole input; the one temp file below is scratch for
   # surface_select_cmd's paths-file argument and never touches tracked state.
-  # First match wins. A taskfile's `test_depth:` can only RAISE depth — anything but `full` is a
+  # `risk: high` no longer forces depth (one-yes.md § 3). A taskfile's `test_depth:` can only RAISE depth — anything but `full` is a
   # no-op here, same as unset.
-  local tf id risk td skip_raw look_raw p nl nonskip="" nonlook="" lookn=0 csf sel rc
+  local tf id td skip_raw look_raw p nl nonskip="" nonlook="" lookn=0 csf sel rc
   nl=$'\n'
-  for tf in "$@"; do
-    [ -f "$tf" ] || continue
-    id="$(fm_get id "$tf")"; [ -n "$id" ] || id="$(basename "$tf" .md)"
-    risk="$(fm_get risk "$tf")"
-    [ "$risk" = "high" ] && { printf 'full\t%s\n' "risk: high on $id"; return 0; }
-  done
   for tf in "$@"; do
     [ -f "$tf" ] || continue
     id="$(fm_get id "$tf")"; [ -n "$id" ] || id="$(basename "$tf" .md)"

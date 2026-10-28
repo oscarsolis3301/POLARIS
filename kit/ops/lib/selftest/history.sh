@@ -63,7 +63,7 @@ drill_express() {
     rm -f ops/board/review/T-EX2.md
     # refusal: risk gate
     "$SELF" land --express T-EX > "$T/ex3.out" 2>&1 && { echo "EXPRESS RISK FAIL (risk: high must refuse)"; exit 1; }
-    grep -q 'risk: high never rides the express lane' "$T/ex3.out" || { echo "EXPRESS RISK MSG FAIL"; exit 1; }
+    grep -q 'express refused: risk: high and the plan did not approve merge' "$T/ex3.out" || { echo "EXPRESS RISK MSG FAIL"; exit 1; }
     set_fm risk normal ops/board/review/T-EX.md
     # refusal: express: off — and an unknown value warns, then fails the same safe way
     printf 'express: off\n' >> ops/CONVENTIONS.md
