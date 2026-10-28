@@ -420,6 +420,8 @@ surface_change_set() { # surface_change_set [--force] — the paths a verdict is
       list="$(git -C "$PRIMARY" diff --name-only "$sha" HEAD 2>/dev/null)" || return 1
       SURFACE_BASELINE="$sha"; SURFACE_BASELINE_SCOPE="$(suite_stamp_scope "$stamp" || true)"
     else
+      # fix wave 1: uncommitted edits are invisible to a commit diff — a dirty tree stays unbounded.
+      [ -z "$(git -C "$PRIMARY" status --porcelain 2>/dev/null)" ] || return 1
       list="$(surface_run_landed)" || return 1
       SURFACE_BOUND=run
     fi

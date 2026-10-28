@@ -1,0 +1,4 @@
+dirty-docs: rc=0 scope=none suite-ran=2
+clean-docs: rc=0 scope=none suite-ran=0
+  depth: none — only test_skip paths
+dirty-code: rc=0 scope=none suite-ran=2

@@ -305,7 +305,7 @@ Prose for contract change-sized. SOLO.md steps 4/5/7 no longer say a self-land f
 - [ ] every verify: line passes
 
 ## T-207 — "Write the release note: the 6.9.0 changelog entry gains the change-sized checks (no version bump)"
-points 1 · risk normal · landed 2a02db3 (2026-10-27) · claimed 2026-10-27
+points 1 · risk normal · landed 2a02db3 (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: CHANGELOG.md
 
 ### Why
@@ -313,3 +313,15 @@ Extend the EXISTING ## 6.9.0 entry in CHANGELOG.md (6.9.0 was never tagged, so t
 
 ### Acceptance
 - [ ] every verify: line passes
+
+## T-208 — "A tree with uncommitted edits always re-runs the suite: the run-landed shortcut only applies to a clean tree"
+points 2 · risk normal · landed b43926e (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/lib/core.sh, ops/tests/change-bound-dirty.cmd, ops/tests/change-bound-dirty.expected, ops/tests/change-bound.expected
+
+### Why
+`surface_change_set` (kit/ops/lib/core.sh), when `$BASE` has no usable suite stamp, falls back to the files the commits THIS run landed (`surface_run_landed`, change-sized.md § 1). That diff only sees committed work. When the working tree has uncommitted edits, the set can be bounded yet empty or miss those edits, so `qa` takes its "nothing this run changed needs a suite" carry branch and runs no suite key, writing no stamp or last-suite-seconds. `qa` is meant to re-run everything on a dirty tree. This is what failed the v6.9.0 release smoke (selftest drill_express: `QA STAMP FORMAT FAIL`) once earlier drills had left a plan and landed tasks. Fix: take the run-landed fallback only when `git -C "$PRIMARY" status --porcelain` is empty; dirty means return 1 (unbounded) with `SURFACE_BOUND` left empty, as for "no plan recorded". Nothing else changes: stamp-ancestor path, feat/ path and clean-tree behavior stay byte-identical. Add the hermetic golden ops/tests/change-bound-dirty.cmd (copy the mkfix/landed/plan/qa helpers from change-bound.cmd; fixture repos under mktemp -d; the fixture CONVENTIONS must also set `test_select: true {tests}` — the carry branch is only entered when test_select or test_related is set): (1) plan p1 + a landed docs-only task + `printf 'test: true\n' >> ops/CONVENTIONS.md` left uncommitted, `qa` => suite keys ran (suite-ran>0, stamp scope full); (2) the same landed docs-only plan on a CLEAN tree => scope=none suite-ran=0 as in change-bound; (3) plan + landed code task + dirty tree => suite ran. If porcelain also lists untracked files in a clean fixture (init-board leftovers), build the fixture so it is clean or use `--untracked-files=no`, and say which in Notes.
+
+### Acceptance
+- [ ] dirty tree + run-landed plan + test_select set => suite runs and the stamp is written
+- [ ] clean tree behaves exactly as change-bound.expected (golden unchanged, still green)
+- [ ] no new function, so ops/tests/api-kit.expected is untouched
