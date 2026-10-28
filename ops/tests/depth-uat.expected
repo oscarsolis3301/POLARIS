@@ -1,0 +1,15 @@
+baseline:
+  uat-runs=1
+scoped:
+  depth: scoped — every code path mapped in SURFACES.tsv
+  uat — deferred: runs on full-depth changes, CI and release
+  uat-runs=1
+full-timed:
+  depth: full — unmapped: lib/core.dat (last full run 2m)
+  uat-runs=2
+full-untimed:
+  depth: full — unmapped: lib/core.dat
+  uat-runs=3
+full-seconds:
+  depth: full — unmapped: lib/core.dat (last full run 42s)
+  uat-runs=4

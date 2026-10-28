@@ -454,6 +454,7 @@ kit/ops/lib/observe.sh	fn	cmd_why
 kit/ops/lib/observe.sh	fn	cruft_clear
 kit/ops/lib/observe.sh	fn	dep_ids
 kit/ops/lib/observe.sh	fn	dep_reaches
+kit/ops/lib/observe.sh	fn	depth_line_say
 kit/ops/lib/observe.sh	fn	feat_tip_landed
 kit/ops/lib/observe.sh	fn	fin_caveat
 kit/ops/lib/observe.sh	fn	fin_count
@@ -475,6 +476,7 @@ kit/ops/lib/observe.sh	fn	scaffold_try
 kit/ops/lib/observe.sh	fn	status_brief
 kit/ops/lib/observe.sh	fn	surfaces_apply
 kit/ops/lib/observe.sh	fn	surfaces_health
+kit/ops/lib/observe.sh	fn	uat_deferred_say
 kit/ops/lib/ownership.sh	fn	ask_approval_covers
 kit/ops/lib/ownership.sh	fn	ask_approvals_load
 kit/ops/lib/ownership.sh	fn	ask_rule_matches

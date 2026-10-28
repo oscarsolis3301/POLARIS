@@ -670,9 +670,11 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
     note "depth: $ex_depth — $ex_dwhy"
     ex_scope="$ex_depth"; ex_depth_skip=1
   else
+  [ -z "$ex_depth" ] || depth_line_say "$ex_depth" "$ex_dwhy"
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
+    if [ "$k" = uat ] && [ "$ex_depth" = scoped ]; then uat_deferred_say; continue; fi
     ex_cmds="$c"; ex_selected=0
     if [ "$k" = "test" ] && { [ -n "$(cfg test_select "")" ] || [ "$(cfg test_related "")" != "-" ]; }; then
       if surface_change_set > "$ex_paths"; then
