@@ -810,3 +810,4 @@
 {"ts":1793207145,"ev":"claim","id":"T-216","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1793207161,"ev":"grant","id":"T-213","who":"Owner@DESKTOP","note":"kit/ops/lib/selftest/report.sh"}
 {"ts":1793207165,"ev":"grant","id":"T-213","who":"Owner@DESKTOP","note":"kit/ops/lib/selftest/spine.sh"}
+{"ts":1793207308,"ev":"handoff","id":"T-216","who":"Owner@DESKTOP","note":""}
