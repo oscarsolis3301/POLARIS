@@ -775,3 +775,5 @@
 {"ts":1793160142,"ev":"done","id":"T-205","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1793160179,"ev":"promote","id":"T-207","who":"Owner@DESKTOP","note":"deps done: T-202, T-203, T-204, T-205, T-206","pts":1}
 {"ts":1793160213,"ev":"claim","id":"T-207","who":"Owner@DESKTOP","note":"","pts":1}
+{"ts":1793160287,"ev":"handoff","id":"T-207","who":"Owner@DESKTOP","note":""}
+{"ts":1793160289,"ev":"all-review","id":"T-207","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
