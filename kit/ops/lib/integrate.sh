@@ -601,10 +601,8 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
     case "$f" in */"$id".md) ;; *) other="$(basename "$f" .md)";; esac
   done
   [ -z "$other" ] || die "express lands exactly one task — review/ also holds $other; run the full integrate/land/seal path"
-  # refusal: risk: high never rides the express lane — invariant 9's human gate stays human
-  if [ "$(fm_get risk "$tf")" = "high" ]; then
-    die "risk: high never rides the express lane — integrate it by hand with the human in the loop"
-  fi
+  # refusal: plan_covers (one-yes.md section 2) — the human gate stays human unless the approved plan covers it
+  ex="$(plan_covers "$tf" 2>/dev/null)" || die "express refused: $ex — integrate it by hand with the human in the loop"
   # refusal: the express: knob — auto (default; unset = auto) | off; unknown warns once and
   # fails to the full ceremony (off is the safe side)
   ex="$(cfg express auto)"
