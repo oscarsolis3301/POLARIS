@@ -830,3 +830,5 @@
 {"ts":1793209768,"ev":"blocked","id":"T-217","who":"Owner@DESKTOP","note":"→ blocked: "}
 {"ts":1793209833,"ev":"plan","id":"T-217","who":"planner","note":"regroom blocked->ready: fix verify[1]"}
 {"ts":1793209857,"ev":"claim","id":"T-217","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1793209898,"ev":"handoff","id":"T-217","who":"Owner@DESKTOP","note":""}
+{"ts":1793209899,"ev":"all-review","id":"T-217","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
