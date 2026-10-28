@@ -122,3 +122,12 @@ a dirty-tree `qa` was BOUNDED-and-empty and took the carry branch (no suite key,
 Rule: `surface_change_set` takes the § 1 run-landed fallback ONLY when `git status --porcelain` on
 `$PRIMARY` is empty; dirty ⇒ rc 1, UNBOUNDED, `SURFACE_BOUND=""`. Clean-tree behavior, the stamp-ancestor
 path and the feat/ branch path are unchanged. No new function, no new global.
+
+## Fix wave 2 — carry needs a clean tree and a real test_select (v1.2, 2026-10-27)
+CI on main after wave 1 still failed drill_express (`QA STAMP FORMAT FAIL`). Since T-203 `cmd_qa`
+enters the test-selection block when `test_select:` is unset but `test_related` is on; there a BOUNDED
+and EMPTY change set against an earlier drill's ancestor stamp took the carry branch (`break`, ran=0, no
+last-suite-seconds) even on a dirty tree. Rule: selection (and therefore the carry) is entered only on a
+clean tree, and the bounded-empty carry applies only when `test_select:` is set. With `test_select:`
+unset and no related runner, `qa` runs `test:` verbatim exactly as 6.8.0. `land --express` has no carry
+branch and is unchanged. Task T-209.
