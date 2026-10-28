@@ -366,6 +366,53 @@ AUTOMODE
   fi
 }
 
+cmd_speed() { # speed — read-only (one-yes.md § 6): how the last 30 changes would be tested, from the repo's own
+  # history. Each commit is classified by `depth --commit` itself (cmd_depth, not a re-derivation).
+  # Writes nothing, runs no suite, never edits config. rc 0 always.
+  local shas sha n=0 a=0 b=0 c=0 d s="" t="" line v
+  shas="$(git -C "$PRIMARY" rev-list -n 30 "$BASE" 2>/dev/null || git -C "$PRIMARY" rev-list -n 30 HEAD 2>/dev/null || true)"
+  [ -n "$shas" ] || { printf 'speed: no history yet
+'; return 0; }
+  while IFS= read -r sha; do
+    [ -n "$sha" ] || continue
+    d="$(cmd_depth --commit "$sha" 2>/dev/null | sed -n 1p || true)"
+    case "$d" in
+      none|look) a=$((a+1));;
+      scoped)    b=$((b+1));;
+      full)      c=$((c+1));;
+      *)         continue;;
+    esac
+    n=$((n+1))
+  done <<EOF2
+$shas
+EOF2
+  [ "$n" -gt 0 ] || { printf 'speed: no history yet
+'; return 0; }
+  if [ -f "$PRIMARY/.polaris/last-suite-seconds" ]; then
+    s="$(cut -d' ' -f1 < "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true)"
+    case "$s" in
+      ''|*[!0-9]*) s="";;
+      *) if [ "$s" -lt 60 ]; then t="${s}s"; else t="$(( (s + 30) / 60 ))m"; fi;;
+    esac
+  fi
+  line="Of your last $n changes: $a would skip the test run, $b run only related tests, $c run everything."
+  [ -n "$t" ] && line="$line Your last full run took $t."
+  printf '%s
+' "$line"
+  [ "$(cfg drain "")" = queue ] && printf '   → one change lands at a time, in a queue: set drain: plan in ops/CONVENTIONS.md
+'
+  [ "$(cfg autonomy trusted)" = standard ] && printf '   → every merge stops for your yes: set autonomy: trusted in ops/CONVENTIONS.md
+'
+  [ "$(cfg plan_gate "")" = confirm ] && printf '   → every plan waits for a confirm: set plan_gate: auto in ops/CONVENTIONS.md
+'
+  v="$(cfg integration "")"
+  if [ "$v" = paranoid ] && [ -n "$s" ] && [ "$s" -gt 120 ]; then
+    printf '   → each landing re-checks on its own (your full run is over 2 minutes): set integration: batch in ops/CONVENTIONS.md
+'
+  fi
+  return 0
+}
+
 cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--major] · update --all [--repo-only] [--major]
   # The explicit form reuses install.sh's live-board path: kit code is refreshed; board, RULES,
   # CONVENTIONS, MAP and SPRINT are never touched. `--auto` is the SessionStart path (6.3.0,
@@ -539,6 +586,13 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   # uncommitted work is in a stash, and nothing else here will say so again.
   if [ "$parked" = 1 ]; then
     note "your parked work:  bash ops/polaris unpark  — returns the dirt this update stashed (after you have reviewed the diff)"
+  fi
+
+  # The speed report (one-yes.md § 6): what the repo's own history says it now gains. Guarded twice —
+  # a report must never fail an update.
+  if git -C "$PRIMARY" rev-parse --verify -q HEAD >/dev/null 2>&1; then
+    { printf '
+'; cmd_speed; } || true
   fi
 
   # Updated but never configured? Then the job is NOT done. The inner install.sh printed the

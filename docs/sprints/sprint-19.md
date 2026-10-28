@@ -380,11 +380,21 @@ Implements one-yes.md section 5 as NEW pure helpers in surfaces.sh, not yet call
 - [ ] every verify: line passes
 
 ## T-214 — "Python related tests, part 2: related_cmds uses it, mixed node + python runs both, one shared decision"
-points 3 · risk normal · landed 3c3d5f9 (2026-10-28) · claimed 2026-10-28
+points 3 · risk normal · landed 3c3d5f9 (2026-10-28) · claimed 2026-10-28 → done 2026-10-28
 files touched: kit/ops/KEYS.tsv, kit/ops/lib/core.sh, kit/ops/lib/surfaces.sh, ops/tests/api-kit.expected, ops/tests/pytest-related.cmd, ops/tests/pytest-related.expected, ops/tests/related-tests.expected
 
 ### Why
 Implements one-yes.md section 5 wiring. related_cmds partitions the path list (.py to python, the rest to node), emits both command sets (node first, then pytest), stays all-or-nothing, and test_related: - turns pytest mode off. core.sh depth_for rule 5 gets the pytest why string. test_select_for stays the ONE decision. The extended golden MUST include the dirty-tree rule: dirty tree + ancestor stamp + test_select UNSET still runs the whole suite and writes .polaris/last-suite-seconds, plus a mixed node+python case and a depth --commit case showing scoped with a pytest file list. KEYS.tsv: update the test_related row text only (mention python).
+
+### Acceptance
+- [ ] every verify: line passes
+
+## T-215 — "Show the speedup straight away: polaris speed, and the same report at the end of update"
+points 3 · risk normal · landed 2265f69 (2026-10-28) · claimed 2026-10-28
+files touched: kit/ops/hooks/readonly-allow.sh, kit/ops/lib/admin.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected, ops/tests/speed-report.cmd, ops/tests/speed-report.expected
+
+### Why
+Implements one-yes.md section 6. cmd_speed (read-only) classifies the last 30 commits with the SAME function depth --commit uses (call it, do not re-derive), prints the counts line plus last full run time, then one advice line per slowing setting (drain: queue, autonomy: standard, plan_gate: confirm, integration: paranoid with a suite over 2 minutes) naming the exact line to change. It never rewrites config. cmd_update calls it as its last block and must never fail the update. Add to dispatch, help, and polaris_ok in readonly-allow.sh. cmd_update itself cannot be run hermetically, so the golden covers polaris speed on a fixture history, and the update tail is checked with bash -n plus a grep that cmd_update calls the report guarded by || true.
 
 ### Acceptance
 - [ ] every verify: line passes

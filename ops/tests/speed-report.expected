@@ -1,0 +1,20 @@
+plain:
+Of your last 5 changes: 2 would skip the test run, 0 run only related tests, 3 run everything.
+  rc=0
+read-only: repo byte-identical after
+last-run-45s:
+1
+slow-settings:
+COUNTS Your last full run took 5m.
+   → one change lands at a time, in a queue: set drain: plan in ops/CONVENTIONS.md
+   → every merge stops for your yes: set autonomy: trusted in ops/CONVENTIONS.md
+   → every plan waits for a confirm: set plan_gate: auto in ops/CONVENTIONS.md
+   → each landing re-checks on its own (your full run is over 2 minutes): set integration: batch in ops/CONVENTIONS.md
+paranoid-fast-suite-advice-lines: 0
+config-untouched-drain: 1
+no-history:
+speed: no history yet
+update-guarded:
+1
+yes
+admin.sh parses
