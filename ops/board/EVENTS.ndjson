@@ -806,3 +806,4 @@
 {"ts":1793207073,"ev":"done","id":"T-212","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1793207103,"ev":"promote","id":"T-213","who":"Owner@DESKTOP","note":"deps done: T-212","pts":3}
 {"ts":1793207105,"ev":"promote","id":"T-216","who":"Owner@DESKTOP","note":"deps done: T-212","pts":3}
+{"ts":1793207141,"ev":"claim","id":"T-213","who":"Owner@DESKTOP","note":"","pts":3}
