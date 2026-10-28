@@ -315,7 +315,7 @@ Extend the EXISTING ## 6.9.0 entry in CHANGELOG.md (6.9.0 was never tagged, so t
 - [ ] every verify: line passes
 
 ## T-208 — "A tree with uncommitted edits always re-runs the suite: the run-landed shortcut only applies to a clean tree"
-points 2 · risk normal · landed b43926e (2026-10-27) · claimed 2026-10-27
+points 2 · risk normal · landed b43926e (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/lib/core.sh, ops/tests/change-bound-dirty.cmd, ops/tests/change-bound-dirty.expected, ops/tests/change-bound.expected
 
 ### Why
@@ -325,3 +325,16 @@ files touched: kit/ops/lib/core.sh, ops/tests/change-bound-dirty.cmd, ops/tests/
 - [ ] dirty tree + run-landed plan + test_select set => suite runs and the stamp is written
 - [ ] clean tree behaves exactly as change-bound.expected (golden unchanged, still green)
 - [ ] no new function, so ops/tests/api-kit.expected is untouched
+
+## T-209 — "A qa on a dirty tree, or a repo with no test_select, never skips the suite on a carry"
+points 3 · risk normal · landed 4c31262 (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/lib/observe.sh, ops/tests/qa-carry-dirty.cmd, ops/tests/qa-carry-dirty.expected
+
+### Why
+`cmd_qa` (kit/ops/lib/observe.sh, the `test` key block near line 2463) enters change-scoped selection when `test_select:` is set OR `test_related` is on (the default since T-203). In there, when `surface_change_set` is BOUNDED and empty (only board/skip-path files moved since an ancestor suite stamp), it takes the carry branch: `break` out of the suite loop, nothing runs, no `.polaris/last-suite-seconds` is written. Two things are wrong. (1) A carry is only legitimate on a CLEAN tree: qa's own rule is that any uncommitted change re-runs everything, and a commit diff cannot see uncommitted edits. (2) A repo with `test_select:` unset and no related-runner package must behave exactly as 6.8.0, which ran the whole `test:` suite; the carry/skip is a test_select feature. This is what still fails CI (selftest drill_express, `QA STAMP FORMAT FAIL`) after T-208. Fix, in cmd_qa only: (a) the selection block is entered only when the tree is clean (`[ -z "$dirty" ]`); (b) inside it, the bounded-and-empty carry (both the `SURFACE_BOUND=run` and the stamp-baseline branches) applies only when `test_select:` is set; otherwise fall through so `test:` runs verbatim. `land --express` (integrate.sh) has no carry branch and works on a clean integrate branch, so it needs no change. Add the hermetic golden ops/tests/qa-carry-dirty.cmd (copy mkfix/landed/plan/qa helpers from change-bound-dirty.cmd; fixtures under mktemp -d). Cases: (1) test_select UNSET, green stamp at an ancestor sha, only docs/ or src-skip commits since, then `printf 'test: true\n' >> ops/CONVENTIONS.md` uncommitted => qa runs the suite and `.polaris/last-suite-seconds` matches ^[0-9]+ [0-9]+$ (print `last-suite-seconds: ok|missing`); (2) same but tree CLEAN, test_select unset => suite still runs (6.8.0 behavior); (3) test_select SET, clean tree, same history => still carries (suite-ran=0). The golden MUST be red before the fix: record that in Notes. Other goldens (related-tests, test-depth, change-bound-dirty) are owned in case their expected output shifts; touch them only if verify shows a diff and the new output is the correct one.
+
+### Acceptance
+- [ ] qa-carry-dirty golden red on the pre-fix code, green after
+- [ ] dirty tree with test_select unset: suite runs and last-suite-seconds written
+- [ ] clean tree with test_select set: carry unchanged
+- [ ] change-bound and change-bound-dirty goldens still green

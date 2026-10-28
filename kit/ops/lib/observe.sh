@@ -2460,10 +2460,13 @@ EOF
     # two lanes cannot disagree. Unset ⇒ this block is never entered and the loop is 6.3, byte for
     # byte. Selection is all-or-nothing: one changed path without a row ⇒ the whole suite (D3).
     sel=""
-    if [ "$k" = test ] && [ "$full" -eq 0 ] && { [ -n "$(cfg test_select "")" ] || [ "$(cfg test_related "")" != "-" ]; }; then
+    if [ "$k" = test ] && [ "$full" -eq 0 ] && [ -z "$dirty" ] && { [ -n "$(cfg test_select "")" ] || [ "$(cfg test_related "")" != "-" ]; }; then
       csf="$(mktemp)"
       if surface_change_set $fflag > "$csf"; then
-        if [ ! -s "$csf" ]; then
+        if [ ! -s "$csf" ] && [ -z "$(cfg test_select "")" ]; then
+          # a carry is a test_select feature: unset runs test: verbatim, exactly as 6.8.0 (T-209)
+          :
+        elif [ ! -s "$csf" ]; then
           # BOUNDED and EMPTY: only board files moved since an ancestor stamp — the batch-wave
           # finish case — so the baseline's verdict carries to HEAD: the whole loop is skipped and
           # HEAD is re-stamped below with the scope that was actually proven.
