@@ -4,6 +4,17 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.10.1 — 2026-10-28
+
+**The speed report now stops at a time limit instead of taking minutes on a big repo.**
+
+`polaris speed`, and the speed report shown at the end of `update`, now stop at a 20-second
+budget. When a repo has too much history to read in that time, the report prints "stopped early at
+the time limit" along with the counts it reached so far, instead of making you wait.
+
+Also fixed: an internal clean-up step in one of the self-test drills, a problem that had only
+shown up on Windows. Nothing about how POLARIS behaves for you changes.
+
 ## 6.10.0 — 2026-10-28
 
 **One yes, hands-free. Approving the plan once now covers every risky step it names, so auto mode
