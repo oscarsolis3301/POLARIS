@@ -804,3 +804,5 @@
 {"ts":1793206958,"ev":"handoff","id":"T-212","who":"Owner@DESKTOP","note":""}
 {"ts":1793206958,"ev":"all-review","id":"T-212","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1793207073,"ev":"done","id":"T-212","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1793207103,"ev":"promote","id":"T-213","who":"Owner@DESKTOP","note":"deps done: T-212","pts":3}
+{"ts":1793207105,"ev":"promote","id":"T-216","who":"Owner@DESKTOP","note":"deps done: T-212","pts":3}
