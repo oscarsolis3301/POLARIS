@@ -4,6 +4,7 @@ docs-only: rc=0 scope=none suite-ran=0
   depth: none — only test_skip paths
 no-plan: rc=0 scope=full suite-ran=2
 code-landed: rc=0 scope=full suite-ran=2
+  depth: full — test_select unset
 baseline: rc=0 scope=full suite-ran=2
 stamp-docs: rc=0 scope=none suite-ran=0
   depth: none — only test_skip paths
