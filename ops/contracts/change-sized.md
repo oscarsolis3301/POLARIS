@@ -113,3 +113,12 @@ metacharacters).
 
 ## Changelog
 - v1 2026-10-27: created for T-202..T-207 (plan change-sized).
+
+## Fix wave 1 — a dirty tree never takes the run-landed fallback (v1.1, 2026-10-27)
+Found by the v6.9.0 release smoke (full `doctor --selftest`, drill_express `QA STAMP FORMAT FAIL`).
+§ 1's run-landed fallback diffs COMMITS (`landed_sha`), so uncommitted edits are invisible to it, while
+`qa`'s stated rule is dirty ⇒ re-run everything. With a plan and landed tasks left by earlier drills,
+a dirty-tree `qa` was BOUNDED-and-empty and took the carry branch (no suite key, no stamp).
+Rule: `surface_change_set` takes the § 1 run-landed fallback ONLY when `git status --porcelain` on
+`$PRIMARY` is empty; dirty ⇒ rc 1, UNBOUNDED, `SURFACE_BOUND=""`. Clean-tree behavior, the stamp-ancestor
+path and the feat/ branch path are unchanged. No new function, no new global.
