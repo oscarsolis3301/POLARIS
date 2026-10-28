@@ -173,6 +173,63 @@ EOF
   return 1
 }
 
+approved_entries() { # approved_entries <taskfile> — one line per approved: entry: "<scope>|<plan slug, or - for a hand entry>"
+  # fm_list cannot carry the plan test: an inline "[a, b]" list splits on the comma inside
+  # "<who>, <date>:", shredding an entry. So this reads the raw field. A PLAN entry (one-yes.md
+  # section 1) is `<scope> — <who>, <date>: plan <slug>: <msg>`; every other entry is a hand entry.
+  awk '
+    function emit(t,   m, sc, slug, n) {
+      n = 0
+      while (match(t, /[^ \[,]+ — [^,]*, [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]:/)) {
+        m = substr(t, RSTART, RLENGTH); t = substr(t, RSTART + RLENGTH)
+        sc = m; sub(/ — .*/, "", sc)
+        slug = "-"
+        if (match(t, /^ plan [^: ]+: /)) { slug = substr(t, 7, RLENGTH - 8) }
+        print sc "|" slug; n++
+      }
+      return n
+    }
+    function clean(t) { sub(/[ \t]#.*$/, "", t); sub(/[ \t\r]*$/, "", t); sub(/^[ \t]*/, "", t); return t }
+    /^---[\r]?$/ { fs++; if (fs == 2) exit; next }
+    fs != 1 { next }
+    !inf && index($0, "approved:") == 1 {
+      inf = 1; t = clean(substr($0, 10))
+      if (t ~ /^\[/) { sub(/^\[/, "", t); sub(/\][ \t]*$/, "", t); if (t != "" && !emit(t)) print "?|-"; inf = 0 }
+      else if (t != "") { if (!emit(t)) print "?|-"; inf = 0 }
+      next
+    }
+    inf && /^[ \t]*-[ \t]/ { l = $0; sub(/^[ \t]*-[ \t]*/, "", l); l = clean(l); if (!emit(l)) print "?|-"; next }
+    inf && /^[A-Za-z_]+:/ { inf = 0 }
+  ' "$1" 2>/dev/null
+}
+plan_covers() { # plan_covers <taskfile> — rc 0: may land without a human's mid-run yes; rc 1 + ONE reason
+  # line on stdout otherwise (ops/contracts/one-yes.md § 2). The ONE predicate: self_land,
+  # next_landable and land --express all ask it. Fail-closed on every doubt.
+  local tf="$1" rk ap ent plans="" v needs
+  [ "$(cfg autonomy trusted)" = "standard" ] && { echo "autonomy: standard"; return 1; }
+  rk="$(fm_get risk "$tf" 2>/dev/null || true)"
+  [ -n "$rk" ] || { echo "no risk: classification"; return 1; }
+  ap="$(approved_entries "$tf")"
+  while IFS= read -r ent; do
+    [ -n "$ent" ] || continue
+    case "${ent#*|}" in -) echo "a hand-recorded approval is on the task"; return 1;; esac
+    plans="$plans ${ent%%|*} "
+  done <<EOF
+$ap
+EOF
+  if [ "$rk" = "high" ]; then
+    case "$plans" in *" merge "*) ;; *) echo "risk: high and the plan did not approve merge"; return 1;; esac
+  fi
+  needs="$(fm_list needs "$tf" 2>/dev/null || true)"
+  while IFS= read -r v; do
+    [ -n "$v" ] || continue
+    case "$plans" in *" need:$v "*) ;; *) echo "needs: $v and the plan did not approve need:$v"; return 1;; esac
+  done <<EOF
+$needs
+EOF
+  return 0
+}
+
 rule_scan_path() { # rule_scan_path <repo-relative-path> [<ID>|-] — exit 1 + stderr msg on deny
   # The optional ID is the claimed task, and it exists for `ask` alone — the only kind that can be
   # cleared, and only by an approval recorded on that task. `path` never consults it: its behaviour

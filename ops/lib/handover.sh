@@ -12,7 +12,7 @@ next_dir() { # next_dir — this session's state dir: $PRIMARY/.polaris/handover
 }
 
 next_landable() { # next_landable — row 1's predicate, ONE pass over review/ and the lease.
-  # NX_REV_OK = landable IDs (risk ≠ high AND approved: empty) · NX_REV_HUMAN = the rest, whose
+  # NX_REV_OK = landable IDs (plan_covers rc 0) · NX_REV_HUMAN = the rest, whose
   # merge only a human may license · NX_LEASE = absent | mine | stale | live, on int_on's OWN steal
   # predicate (worktree-liveness.md § steals). rc 0 iff something is landable AND the lane is open —
   # under BOTH landing modes, since a self-land tail that queued leaves its task for nobody.
@@ -20,8 +20,8 @@ next_landable() { # next_landable — row 1's predicate, ONE pass over review/ a
   NX_REV_OK=""; NX_REV_HUMAN=""; NX_LEASE=absent; NX_LEASE_WHO=""; NX_LEASE_M=0
   for f in "$BOARD/review/"*.md; do [ -e "$f" ] || break
     id="${f##*/}"; id="${id%.md}"
-    rk="$(fm_get risk "$f" 2>/dev/null || true)"; ap="$(fm_list approved "$f" 2>/dev/null || true)"
-    if [ "$rk" = "high" ] || [ -n "$ap" ]; then NX_REV_HUMAN="${NX_REV_HUMAN:+$NX_REV_HUMAN }$id"
+    # one-yes.md section 2: the ONE predicate (ownership.sh) — rc 0 is landable, else the human lane
+    if ! plan_covers "$f" >/dev/null 2>&1; then NX_REV_HUMAN="${NX_REV_HUMAN:+$NX_REV_HUMAN }$id"
     else NX_REV_OK="${NX_REV_OK:+$NX_REV_OK }$id"; fi
   done
   lease="$LOCKS/.int-lease"

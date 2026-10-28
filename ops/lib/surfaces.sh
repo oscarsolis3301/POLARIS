@@ -41,7 +41,7 @@ surfaces_runner() { # surfaces_runner <ls-file> — ONE line `<runner><TAB><temp
   return 1
 }
 
-related_cmds() { # related_cmds <paths-file> — one COMPLETE command per qualifying package, rc 0; or
+node_related_cmds() { # node_related_cmds <paths-file> — one COMPLETE command per qualifying package, rc 0; or
   # rc 1 + ONE reason line (ops/contracts/change-sized.md § 2). Each changed path's package is the
   # nearest ancestor dir holding a TRACKED package.json (root counts); it qualifies only when its
   # "test" script (read as surfaces_runner reads it) names vitest or jest AND that runner is
@@ -93,6 +93,171 @@ $list
 EOF
   printf '%s\n' "$out"
   return 0
+}
+
+related_cmds() { # related_cmds <paths-file> — node + python related commands, rc 0; or rc 1 + ONE reason
+  # line (ops/contracts/one-yes.md § 5). The path list is partitioned: `.py` and the pytest config
+  # names (pytest.ini tox.ini setup.cfg pyproject.toml requirements*.txt) go to pytest_related_files,
+  # the rest to node_related_cmds' rules. Node commands first, then pytest. ALL-OR-NOTHING: either
+  # side failing returns that side's reason. No python path => byte-identical to the node-only rules
+  # (including `no changed paths`).
+  local file="${1:-}" tf pf nf p py=0 nd=0 out="" o rc files f first="" tcmd nl
+  nl=$'\n'
+  [ -f "$file" ] || file=/dev/null
+  tf="$(mktemp)"; pf="$tf.py"; nf="$tf.node"; : > "$pf"; : > "$nf"
+  while IFS= read -r p || [ -n "$p" ]; do
+    [ -z "$p" ] && continue
+    case "${p##*/}" in
+      *.py|pytest.ini|tox.ini|setup.cfg|pyproject.toml|requirements*.txt) printf '%s\n' "$p" >> "$pf"; py=$((py+1)); [ -n "$first" ] || first="$p";;
+      *) printf '%s\n' "$p" >> "$nf"; nd=$((nd+1));;
+    esac
+  done < "$file"
+  if [ "$py" -eq 0 ]; then
+    rm -f "$pf" "$nf" "$tf"
+    node_related_cmds "$file"; return $?
+  fi
+  if [ "$nd" -gt 0 ]; then
+    o="$(node_related_cmds "$nf")"; rc=$?
+    if [ "$rc" -ne 0 ]; then rm -f "$tf" "$pf" "$nf"; printf '%s\n' "$o"; return 1; fi
+    out="$o"
+  fi
+  o="$(pytest_related_files "$pf")"; rc=$?
+  rm -f "$tf" "$pf" "$nf"
+  if [ "$rc" -ne 0 ]; then printf '%s\n' "$o"; return 1; fi
+  files=()
+  while IFS= read -r f; do [ -n "$f" ] && files+=("$f"); done <<PYFILES
+$o
+PYFILES
+  tcmd="$(cfg test "")"
+  if o="$(pytest_related_cmd "$tcmd" "${files[@]}")"; then
+    printf '%s\n' "${out:+$out$nl}$o"
+    return 0
+  fi
+  printf '%s has no related tests (%s)\n' "$first" "$o"
+  return 1
+}
+
+pytest_related_files() { # pytest_related_files <paths-file> — the test files a change reaches (ops/contracts/one-yes.md § 5)
+  # rc 0 = the selected test files, sorted, one repo-relative path per line; rc 1 = ONE reason line
+  # `<path> has no related tests (<why>)`, <why> = `pytest config changed` | `no test reaches it`.
+  # Pure awk over `git ls-files '*.py'` under $PRIMARY: no execution. Only .py paths and the pytest
+  # config names are looked at (the caller partitions node paths away); none of them => rc 1.
+  local file="${1:-}" lsf out
+  [ -f "$file" ] || file=/dev/null
+  lsf="$(mktemp)"
+  git -C "$PRIMARY" ls-files -- '*.py' > "$lsf" 2>/dev/null || true
+  out="$(awk -v root="$PRIMARY" -v lsf="$lsf" -v chg="$file" '
+    function addedge(f, name,   t) {
+      while (name != "") {
+        if (name in mod) { t = mod[name]; if (t != f && !((t SUBSEP f) in seen)) { seen[t SUBSEP f] = 1; imp[t] = imp[t] "\n" f } return }
+        if (name !~ /\./) return
+        sub(/\.[^.]*$/, "", name)
+      }
+    }
+    function readstmt(f, s,   n, tk, i, base, rest, lv, pk) {
+      gsub(/[(),;]/, " ", s); n = split(s, tk, " ")
+      if (tk[1] == "import") {
+        for (i = 2; i <= n; i++) { if (tk[i] == "as") { i++; continue } addedge(f, tk[i]) }
+      } else if (tk[1] == "from" && n >= 3) {
+        base = tk[2]
+        if (base ~ /^\./) {
+          rest = base; sub(/^\.+/, "", rest); lv = length(base) - length(rest); pk = pkg[f]
+          while (lv > 1 && pk != "") { if (pk ~ /\./) sub(/\.[^.]*$/, "", pk); else pk = ""; lv-- }
+          base = (rest == "") ? pk : ((pk == "") ? rest : pk "." rest)
+        }
+        if (base != "") addedge(f, base)
+        for (i = 3; i <= n; i++) if (tk[i] == "import") break
+        for (i++; i <= n; i++) {
+          if (tk[i] == "as") { i++; continue }
+          if (tk[i] != "*") addedge(f, (base == "") ? tk[i] : base "." tk[i])
+        }
+      }
+    }
+    BEGIN {
+      while ((getline f < lsf) > 0) {
+        if (f == "") continue
+        nf++; fl[nf] = f; m = f; sub(/\.py$/, "", m)
+        isinit = (m == "__init__" || m ~ /\/__init__$/)
+        if (isinit) { if (m == "__init__") m = ""; else sub(/\/__init__$/, "", m) }
+        gsub(/\//, ".", m)
+        if (m != "" && !(m in mod)) mod[m] = f
+        known[f] = 1
+        if (isinit) pkg[f] = m; else if (m ~ /\./) { pk = m; sub(/\.[^.]*$/, "", pk); pkg[f] = pk } else pkg[f] = ""
+      }
+      for (k = 1; k <= nf; k++) {
+        f = fl[k]; p = root "/" f; open = 0; stmt = ""
+        while ((getline line < p) > 0) {
+          sub(/#.*/, "", line)
+          if (open) { stmt = stmt " " line; if (line ~ /\)/) { open = 0; readstmt(f, stmt) } continue }
+          if (line ~ /^[ \t]*(import|from)[ \t]/) {
+            if (line ~ /\([^)]*$/) { open = 1; stmt = line } else readstmt(f, line)
+          }
+        }
+        close(p)
+      }
+      nrel = 0
+      while ((getline c < chg) > 0) {
+        if (c == "") continue
+        b = c; sub(/^.*\//, "", b)
+        if (b == "conftest.py" || b == "pytest.ini" || b == "tox.ini" || b == "setup.cfg" || b == "pyproject.toml" || b ~ /^requirements.*\.txt$/) {
+          printf "F\t%s has no related tests (pytest config changed)\n", c; exit
+        }
+        if (c !~ /\.py$/) continue
+        nrel++
+        delete vis; q[1] = c; qh = 1; qt = 1; vis[c] = 1; got = 0
+        while (qh <= qt) {
+          x = q[qh++]
+          if (known[x]) { bx = x; sub(/^.*\//, "", bx); if (bx ~ /^test_.*\.py$/ || bx ~ /_test\.py$/) { sel[x] = 1; got = 1 } }
+          m2 = split(imp[x], il, "\n")
+          for (j = 1; j <= m2; j++) if (il[j] != "" && !(il[j] in vis)) { vis[il[j]] = 1; q[++qt] = il[j] }
+        }
+        if (!got) { printf "F\t%s has no related tests (no test reaches it)\n", c; exit }
+      }
+      if (nrel == 0) { printf "F\tno changed python paths\n"; exit }
+      for (x in sel) printf "T\t%s\n", x
+    }
+  ')" || true
+  rm -f "$lsf"
+  case "$out" in
+    F"$POLARIS_TAB"*) printf '%s\n' "${out#F"$POLARIS_TAB"}"; return 1;;
+    *) printf '%s\n' "$out" | sed "s/^T$POLARIS_TAB//" | LC_ALL=C sort; return 0;;
+  esac
+}
+
+pytest_related_cmd() { # pytest_related_cmd <test-cmd> <test-file>… — the repo's own pytest segment, paths replaced
+  # (ops/contracts/one-yes.md § 5). rc 0 = ONE command (only that segment of `test:` split on ` && `);
+  # rc 1 = `test command not parseable`. Every token after `pytest` that is not a `-flag` and not the
+  # value of a known value-flag is a path and is dropped; the files land where the first one was
+  # (else at the end of the segment, directly after the leading flags).
+  local cmd="${1:-}" seg tok toks prev out placed seen nl files="" f
+  shift 2>/dev/null || true
+  for f in "$@"; do files="${files:+$files }$f"; done
+  nl=$'\n'
+  [ -n "$files" ] || { echo "test command not parseable"; return 1; }
+  case "$cmd" in *doctor*|*polaris*) echo "test command not parseable"; return 1;; esac
+  while IFS= read -r seg; do
+    set -f; toks=($seg); set +f
+    out=""; seen=0; placed=0; prev=""
+    for tok in "${toks[@]}"; do
+      if [ "$seen" = 0 ]; then
+        out="${out:+$out }$tok"
+        case "$tok" in pytest|*/pytest) seen=1;; esac
+        continue
+      fi
+      case "$prev" in -k|-m|-p|-c|-o|--tb|--rootdir|--maxfail|--durations|-n) out="$out $tok"; prev=""; continue;; esac
+      case "$tok" in
+        -*) out="$out $tok"; prev="$tok";;
+        *) prev=""; if [ "$placed" = 0 ]; then out="$out $files"; placed=1; fi;;
+      esac
+    done
+    [ "$seen" = 1 ] || continue
+    [ "$placed" = 1 ] || out="$out $files"
+    printf '%s\n' "$out"
+    return 0
+  done <<EOF
+${cmd// && /$nl}
+EOF
+  echo "test command not parseable"; return 1
 }
 
 surfaces_pairs() { # surfaces_pairs <runner> <ls-file> — candidate rows `<surface><TAB><tests><TAB><cmd><TAB><note>`

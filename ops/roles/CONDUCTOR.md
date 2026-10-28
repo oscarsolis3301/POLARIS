@@ -154,6 +154,7 @@ call per spawn; routing never blocks work.
    present → wait exactly as `confirm`. The proceed line must SAY it proceeded: "plan_gate: auto —
    proceeding; say stop to halt". After the go you run autonomously; only the STOP-AND-ASK list,
    `risk: high` approval, and builder questions interrupt.
+   - **One yes covers the plan.** After the go, once, in the primary checkout: `bash ops/polaris approve --plan <slug> -m "<the human's words, quoted>"`. It records every scope the approved plan named (`merge`, `need:<v>`, `ask` rules) on its tasks, so nothing the plan named asks again mid-run. Overlap with another plan's tasks is ready-gate sequencing, never an owner question (at most one caveat line). Claude Code's own auto-mode classifier may still refuse an action; POLARIS cannot lift that, so say so in one line. `autonomy: standard` keeps the per-merge stop.
    - **An unapproved `ask` scope is a human gate here, like `risk: high`.** `ask` = the same denial
      as `path`, lifted only by a human's recorded approval on the task — so a task the planner parked
      for want of one is a decision only the human can make, and it is cheap HERE and expensive later.
@@ -233,7 +234,7 @@ call per spawn; routing never blocks work.
    > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
    > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    > Return your report: merged · kicked back + why · suite status · newly promoted.
-   - `risk: high` in its report → `bash ops/polaris notify-gate risk <ID>` (additive — approval
+   - `risk: high` in its report (not covered by the approved plan, or `autonomy: standard`) → `bash ops/polaris notify-gate risk <ID>` (additive — approval
      happens HERE, in conversation, under every knob), ask the human "approve <ID>?" and relay ONLY
      a literal approval to a follow-up integrator; no approval → it stays parked, say so.
    - Kickbacks → treat as a RED snag (one fresh-builder retry via its Notes, then re-integrate the

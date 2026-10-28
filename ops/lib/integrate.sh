@@ -444,20 +444,6 @@ in_primary() { # land/seal mutate the branch checked out in CWD — only the pri
   [ "$(cd "$top" 2>/dev/null && pwd -P)" = "$(cd "$PRIMARY" 2>/dev/null && pwd -P)" ]
 }
 
-land_slow_suite_hint() { # T-031 (ops/contracts/verification-tiering.md): after a successful land,
-  # ONE advisory note when a paranoid repo's suite has outgrown the per-land re-run rule —
-  # INTEGRATOR.md's batch-first guidance, made mechanical. Print-only: silent when the stamp is
-  # missing/garbled, integration: is not paranoid, or the suite took ≤120s. NEVER changes the
-  # exit status.
-  local stamp="$PRIMARY/.polaris/last-suite-seconds" secs
-  [ "$(cfg integration batch)" = "paranoid" ] || return 0
-  [ -f "$stamp" ] || return 0
-  secs="$(awk 'NR==1{print $1+0}' "$stamp" 2>/dev/null || true)"
-  case "$secs" in ''|*[!0-9]*) return 0;; esac
-  [ "$secs" -gt 120 ] || return 0
-  note "⚠ suite last took ${secs}s (>2 min) — paranoid re-runs it per land; consider integration: batch"
-  return 0
-}
 
 suite_stamp_carry() { # suite_stamp_carry <tested-sha> <scope> — T-123 (verification-tiering.md
   # § v2): express runs the suite at step 3 and used to throw the verdict away, so the next
@@ -583,7 +569,6 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   [ -n "$land_had" ] || int_off        # our lane work is done; a nested (express) hold stays held
   say "landed $id on $br — $(git log -1 --format=%s)"
   note "goes red on the suite? unwind: git reset --hard HEAD~1   ·   bounce: polaris kickback $id -m \"<why>\""
-  land_slow_suite_hint
 }
 
 cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: the integrator's whole
@@ -601,10 +586,8 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
     case "$f" in */"$id".md) ;; *) other="$(basename "$f" .md)";; esac
   done
   [ -z "$other" ] || die "express lands exactly one task — review/ also holds $other; run the full integrate/land/seal path"
-  # refusal: risk: high never rides the express lane — invariant 9's human gate stays human
-  if [ "$(fm_get risk "$tf")" = "high" ]; then
-    die "risk: high never rides the express lane — integrate it by hand with the human in the loop"
-  fi
+  # refusal: plan_covers (one-yes.md section 2) — the human gate stays human unless the approved plan covers it
+  ex="$(plan_covers "$tf" 2>/dev/null)" || die "express refused: $ex — integrate it by hand with the human in the loop"
   # refusal: the express: knob — auto (default; unset = auto) | off; unknown warns once and
   # fails to the full ceremony (off is the safe side)
   ex="$(cfg express auto)"

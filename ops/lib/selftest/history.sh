@@ -63,7 +63,7 @@ drill_express() {
     rm -f ops/board/review/T-EX2.md
     # refusal: risk gate
     "$SELF" land --express T-EX > "$T/ex3.out" 2>&1 && { echo "EXPRESS RISK FAIL (risk: high must refuse)"; exit 1; }
-    grep -q 'risk: high never rides the express lane' "$T/ex3.out" || { echo "EXPRESS RISK MSG FAIL"; exit 1; }
+    grep -q 'express refused: risk: high and the plan did not approve merge' "$T/ex3.out" || { echo "EXPRESS RISK MSG FAIL"; exit 1; }
     set_fm risk normal ops/board/review/T-EX.md
     # refusal: express: off — and an unknown value warns, then fails the same safe way
     printf 'express: off\n' >> ops/CONVENTIONS.md
@@ -223,6 +223,11 @@ drill_express() {
     grep -q 'test — green' "$T/exqa2.out" || { cat "$T/exqa2.out"; echo "EXPRESS QA RERUN FAIL (a moved HEAD must actually re-run test:)"; exit 1; }
     git reset -q --hard "$exhead"      # hermetic: drop the probe commit and the stamp keyed on it
     rm -f .polaris/suite-stamp
+    # hermetic cleanup (formerly done by drill_hint): strip the drill's config lines, commit so later drills start clean
+    sed -i.bak -e '/^test: true$/d' -e '/^integration:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    git add -A; git commit -qm 'express drill cleanup' >/dev/null 2>&1 || true
+    # rewrite the tree with NO eol conversion: on Windows autocrlf=true leaves CRLF copies that the park drill (autocrlf off) would see as modified and drag into feat/T-PK
+    git -c core.autocrlf=false reset -q --hard >/dev/null 2>&1 || true
 }
 drill_pr-publish() {
     # T-033 self-provision: --only pr-publish skips the remote and notify drills, but it pushes to

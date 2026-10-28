@@ -348,7 +348,9 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
   [ -f "$tf" ] || return 0
   local rk; rk="$(fm_get risk "$tf" 2>/dev/null || true)"
   local ap; ap="$(fm_list approved "$tf" 2>/dev/null || true)"
-  if [ "$rk" = "high" ] || [ -n "$ap" ]; then
+  # one-yes.md section 2: the ONE predicate decides - a plan the owner approved covers its own scopes.
+  if ! plan_covers "$tf" >/dev/null; then
+    [ -n "$rk" ] || [ -n "$ap" ] || return 0   # unclassified, nothing approved: silent integrator path
     say "risk: high never self-lands — a human must approve the merge; task stays in review/"
     return 0
   fi
@@ -553,6 +555,7 @@ EOF
 }
 
 cmd_approve() { # approve <ID> <scope> -m "why" — the sibling of grant (ops/contracts/ask-approval.md).
+  case " $* " in *" --plan "*) cmd_approve_plan "$@"; return;; esac
   # Records a HUMAN's yes on ONE task's approved: list — to an `ask` rule, or to an ops/SURFACES.tsv
   # row (the stale-tests gate's exemption, ops/contracts/test-surfaces.md § 5). It records a decision,
   # it never infers one: nothing gating <scope> — no ask rule, no row → refuse and SAY so (approving
@@ -593,6 +596,90 @@ cmd_approve() { # approve <ID> <scope> -m "why" — the sibling of grant (ops/co
   mutex_off; trap - EXIT
   say "approved: $scope → $id approved: (a recorded human decision — per-task, per-scope, expires with the task)"
   note "verify/handoff will name this approval when it clears the rule or the stale-tests gate, so the Integrator sees the exception"
+}
+
+cmd_approve_plan() { # approve --plan <slug> -m "why" — ONE yes for every scope an approved plan named
+  # (ops/contracts/one-yes.md § 1). Same containment as plain approve: never on feat/*, -m required,
+  # every refusal mutates nothing. Idempotent: a scope already carrying this plan's entry is skipped.
+  local slug="" msg="" u='usage: polaris approve --plan <slug> -m "why"'
+  while [ $# -gt 0 ]; do case "$1" in
+    --plan) slug="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
+    -m)     msg="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
+    -*)     die "unknown flag $1 — $u";;
+    *)      die "approve --plan takes no task ID or scope ($1) — $u";;
+  esac; done
+  [ -n "$slug" ] || die "$u"
+  local br; br="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  case "$br" in feat/*)
+    die "approve refused on $br — a Builder never approves its own gate. Hand back instead: the human records their yes from the primary checkout (ops/contracts/ask-approval.md § 3)";;
+  esac
+  [ -n "$msg" ] || die "approve needs -m \"why\" — the human's reason goes on the task's record ($u)"
+  local col f any=""
+  for col in active ready review blocked backlog done; do
+    for f in "$BOARD/$col/"*.md; do
+      [ -f "$f" ] || continue
+      [ "$(fm_get plan "$f" 2>/dev/null || true)" = "$slug" ] && any=1
+    done
+  done
+  [ -n "$any" ] || die "approve --plan refused: no task carries plan: $slug"
+  who
+  local day; day="$(date +%F)"
+  local n=0 m=0 tid want sc v ok kind rs pat rmsg rk existing entry wrote nl='
+'
+  mutex_on
+  for col in active ready review blocked backlog done; do
+    for f in "$BOARD/$col/"*.md; do
+      [ -f "$f" ] || continue
+      [ "$(fm_get plan "$f" 2>/dev/null || true)" = "$slug" ] || continue
+      tid="$(fm_get id "$f" 2>/dev/null || true)"; [ -n "$tid" ] || { tid="${f##*/}"; tid="${tid%.md}"; }
+      want=""; ok=1
+      rk="$(fm_get risk "$f" 2>/dev/null || true)"
+      [ "$rk" = "high" ] && want="merge"
+      while IFS= read -r v; do
+        [ -n "$v" ] || continue
+        case "$v" in
+          schema|dependency|delete) want="$want${nl}need:$v";;
+          *) note "⚠ $tid skipped — unknown needs: value '$v'"; ok=""; break;;
+        esac
+      done <<EOF
+$(fm_list needs "$f" 2>/dev/null || true)
+EOF
+      [ -n "$ok" ] || continue
+      while IFS="$POLARIS_TAB" read -r rs kind pat rmsg; do
+        [ "$kind" = "ask" ] || continue
+        while IFS= read -r pat; do
+          [ -n "$pat" ] || continue
+          if owned_match "$pat" "$rs"; then want="$want$nl$rs"; break; fi
+        done <<EOF
+$(fm_list files_owned "$f" 2>/dev/null || true)
+EOF
+      done <<EOF
+$(rules_lines)
+EOF
+      existing="$(approved_entries "$f")"
+      wrote=""
+      while IFS= read -r sc; do
+        [ -n "$sc" ] || continue
+        case "$nl$existing$nl" in *"$nl$sc|$slug$nl"*) continue;; esac
+        entry="$sc — $WHO, $day: plan $slug: $msg"
+        if fm_append_item approved "$entry" "$f"; then
+          existing="$existing$nl$sc|$slug"; n=$((n+1)); wrote=1
+        else
+          note "⚠ $tid skipped — no approved: front-matter field"; break
+        fi
+      done <<EOF
+$(printf '%s\n' "$want" | awk 'NF && !seen[$0]++')
+EOF
+      [ -z "$wrote" ] || m=$((m+1))
+    done
+  done
+  if [ "$n" -gt 0 ]; then
+    evt approve-plan "$slug"
+    board_commit "chore(board): approve plan $slug"
+    sync_board
+  fi
+  mutex_off; trap - EXIT
+  say "approved plan $slug: $n scope(s) on $m task(s)"
 }
 
 # ------------------------------------------------------------------ pack (5.21.0)

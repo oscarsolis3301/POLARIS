@@ -132,7 +132,7 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
   lane: `bash ops/polaris release <ID> --to ready -m "bigger than solo — needs the full loop"` and
   say so. That is the correct outcome, not a failure.
 - **STOP AND ASK the human** on anything in CLAUDE.md's stop list — deleting a file, adding a
-  dependency, DB schema or migrations, auth/payments/prod config, force-push, `risk: high`. Those
+  dependency, DB schema or migrations, auth/payments/prod config, force-push, `risk: high` (unless the approved plan named it). Those
   are why `triage` refuses them; if one surfaces mid-build, stop and hand back.
 - **Scope = the task.** No drive-by refactors. Something else needs doing → one line in
   `ops/board/backlog/IDEAS.md` for the Planner.

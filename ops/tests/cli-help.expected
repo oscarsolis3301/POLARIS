@@ -38,6 +38,10 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  clears a policy gate — and only approve needs a human. REFUSES
                                  when no ask rule gates <scope> and on any feat/* branch, so a
                                  Builder can never approve itself; refusal mutates nothing)
+  approve --plan <slug> -m "why"  the owner's ONE yes at the plan gate: records the approval on
+                                 every task of the plan for each scope it needs (merge for
+                                 risk: high, need:<v> for its needs:, any ask rule it hits).
+                                 Same refusals as approve (feat/*, no -m); re-running adds nothing
   kickback <ID> [-m note]        Integrator: red merge → review→active
   audit <ID>                     Integrator: ownership check of feat/<ID>
   run-verify <ID>                Integrator: re-run task verify: commands in CWD
@@ -134,6 +138,8 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  follow. With <ID>: the task's own diff off $BASE. No ID: the
                                  board's current unbounded/bounded change set. --commit <sha>: that commit's paths, and
                                  the exact commands qa would run (and the uat it would skip). Read-only
+  speed                          how your last 30 changes would be tested (skip / related tests / everything),
+                                 your last full run time, and one line per slowing setting. Read-only
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)

@@ -63,6 +63,10 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  clears a policy gate — and only approve needs a human. REFUSES
                                  when no ask rule gates <scope> and on any feat/* branch, so a
                                  Builder can never approve itself; refusal mutates nothing)
+  approve --plan <slug> -m "why"  the owner's ONE yes at the plan gate: records the approval on
+                                 every task of the plan for each scope it needs (merge for
+                                 risk: high, need:<v> for its needs:, any ask rule it hits).
+                                 Same refusals as approve (feat/*, no -m); re-running adds nothing
   kickback <ID> [-m note]        Integrator: red merge → review→active
   audit <ID>                     Integrator: ownership check of feat/<ID>
   run-verify <ID>                Integrator: re-run task verify: commands in CWD
@@ -159,6 +163,8 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  follow. With <ID>: the task's own diff off $BASE. No ID: the
                                  board's current unbounded/bounded change set. --commit <sha>: that commit's paths, and
                                  the exact commands qa would run (and the uat it would skip). Read-only
+  speed                          how your last 30 changes would be tested (skip / related tests / everything),
+                                 your last full run time, and one line per slowing setting. Read-only
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)
@@ -416,6 +422,7 @@ case "${1:-}" in
   surfaces)   shift 2>/dev/null || true; cmd_surfaces "$@";;   # no update_check_maybe: read-only, drift calls it
   shots)      cmd_shots;;   # no update_check_maybe: rewrites a generated index and commits nothing
   qa)         shift 2>/dev/null || true; cmd_qa "$@";;   # every flag forwarded: `qa --force --full` used to drop --full
+  speed)      shift 2>/dev/null || true; cmd_speed;;   # no update_check_maybe: read-only report, same class as depth
   depth)      shift 2>/dev/null || true; cmd_depth "$@";;   # no update_check_maybe: read-only, same class as triage/drift
   bg)         shift; case "${1:-}" in run) awake_ensure || true;; esac; cmd_bg "$@";;   # no update_check_maybe:
               # run/status/tail/wait ride hot agent loops — keep them quiet + pure. Only `run` ensures the
@@ -440,6 +447,7 @@ case "${1:-}" in
   uninstall)  shift; cmd_uninstall "$@";;
   _match)     shift; cmd_match "$@";;
   _guard)     shift; cmd_guard "$@";;
+  _plan_covers) shift; plan_covers "$(task_file "${1:?}")";;   # internal: the one-yes.md predicate, for goldens + hooks
   ''|help|-h|--help) usage;;
   *) usage; die "unknown command: $1";;
 esac

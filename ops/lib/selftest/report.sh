@@ -117,29 +117,3 @@ drill_brief() {
     rm -f ops/board/done/T-BR1.md ops/board/ready/T-BR2.md ops/board/active/T-BR3.md
     # ========= end T-032 status --brief + metrics summary drills =========
 }
-drill_hint() {
-    # slow-suite hint: fake stamp 180s + integration: paranoid → land prints it; batch → silent
-    printf -- '---\nid: T-EY\ntitle: hint file\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nowner: null\nbranch: feat/T-EY\nstatus: review\nfiles_owned:\n  - src/ey.txt\nverify: []\n---\n' > ops/board/review/T-EY.md
-    git checkout -q -b feat/T-EY main
-    echo ey > src/ey.txt; git add -A; git commit -qm ok
-    git checkout -q main
-    printf 'integration: paranoid\n' >> ops/CONVENTIONS.md
-    git add -A; git commit -qm 'hint drill: paranoid'
-    printf '180 1700000000\n' > .polaris/last-suite-seconds
-    git checkout -q -b integrate/2026-01-03
-    "$SELF" land T-EY > "$T/hint1.out" || { echo "HINT LAND FAIL"; exit 1; }
-    grep -q 'suite last took 180s' "$T/hint1.out" || { echo "HINT FIRE FAIL (paranoid + 180s stamp must print the note)"; exit 1; }
-    grep -q 'integration: batch' "$T/hint1.out" || { echo "HINT GUIDE FAIL (the note must name integration: batch)"; exit 1; }
-    git reset -q --hard HEAD~1                  # unwind the land so the silent case re-lands the same task
-    sed -i.bak 's/^integration: paranoid$/integration: batch/' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
-    git add -A; git commit -qm 'hint drill: batch'
-    "$SELF" land T-EY > "$T/hint2.out" || { echo "HINT SILENT LAND FAIL"; exit 1; }
-    grep -q 'suite last took' "$T/hint2.out" && { echo "HINT SILENT FAIL (integration: batch must not print the note)"; exit 1; }
-    # cleanup: nothing sealed here — drop the drill refs, restore the pre-drill CONVENTIONS
-    git checkout -q main
-    git branch -q -D integrate/2026-01-03
-    git branch -q -D feat/T-EY
-    rm -f ops/board/review/T-EY.md .polaris/last-suite-seconds
-    sed -i.bak -e '/^integration:/d' -e '/^test: true$/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
-    git add -A; git commit -qm 'express drill cleanup'
-}
