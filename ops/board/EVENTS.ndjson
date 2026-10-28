@@ -784,3 +784,4 @@
 {"ts":1793161725,"ev":"handoff","id":"T-208","who":"Owner@DESKTOP","note":""}
 {"ts":1793161726,"ev":"all-review","id":"T-208","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1793161890,"ev":"done","id":"T-208","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1793162453,"ev":"claim","id":"T-209","who":"Owner@DESKTOP","note":"","pts":3}
