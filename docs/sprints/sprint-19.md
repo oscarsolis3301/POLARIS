@@ -255,7 +255,7 @@ sentence. Sprint 19 (Laya) moves to 6.10.0.
 - [ ] VERSION and CHANGELOG agree on 6.9.0; nothing else changes.
 
 ## T-202 — "A small change in a never-green repo checks only what this run changed: the change set is bounded to the commits the run landed"
-points 5 · risk normal · landed 2750616 (2026-10-27) · claimed 2026-10-27
+points 5 · risk normal · landed 2750616 (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/lib/core.sh, kit/ops/lib/observe.sh, ops/tests/api-kit.expected, ops/tests/change-bound.cmd, ops/tests/change-bound.expected
 
 ### Why
@@ -264,8 +264,18 @@ Implements contract change-sized section 1. With no earlier green run, surface_c
 ### Acceptance
 - [ ] every verify: line passes
 
+## T-203 — "A component change runs only the tests that import it: the test runner picks the related tests, one decision shared by depth, qa and land"
+points 5 · risk normal · landed fbc63e3 (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/KEYS.tsv, kit/ops/lib/core.sh, kit/ops/lib/integrate.sh, kit/ops/lib/observe.sh, kit/ops/lib/surfaces.sh, ops/tests/api-kit.expected, ops/tests/related-tests.cmd, ops/tests/related-tests.expected
+
+### Why
+Implements contract change-sized sections 2-4. Add related_cmds (vitest related --run / jest --findRelatedTests via the package's own node_modules/.bin, all-or-nothing, nearest tracked package.json) and the single test_select_for decision (SURFACES rows first, then related), wired through depth_for, cmd_qa's test key and land --express. New key test_related: (unset = on, - = off). Python repos keep today's behavior. If keys-drift.expected or cli-help need a one-line move, say so in Notes and use grant.
+
+### Acceptance
+- [ ] every verify: line passes
+
 ## T-206 — "Tell the roles the new truth: SOLO, the depth table and the task template drop the old full-suite-after-self-land wording"
-points 2 · risk normal · landed 0dd23e4 (2026-10-27) · claimed 2026-10-27
+points 2 · risk normal · landed 0dd23e4 (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/PROTOCOL.md, kit/ops/roles/SOLO.md, kit/ops/templates/TASK.md
 
 ### Why
