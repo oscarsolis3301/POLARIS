@@ -420,7 +420,7 @@ Bump kit/ops/VERSION to 6.10.0 and add a CHANGELOG.md '## 6.10.0' entry in the h
 - [ ] every verify: line passes
 
 ## T-218 — "Selftest hygiene: the express drill cleans up after itself so the park drill starts from a clean tree"
-points 2 · risk normal · landed 242c8f7 (2026-10-28) · claimed 2026-10-28
+points 2 · risk normal · landed 242c8f7 (2026-10-28) · claimed 2026-10-28 → done 2026-10-28
 files touched: kit/ops/lib/selftest/history.sh
 
 ### Why
@@ -431,3 +431,19 @@ Fix: end `drill_express` (after `rm -f .polaris/suite-stamp`, line ~225) with it
 ### Acceptance
 - [ ] drill_express ends with the cleanup above; no other line in history.sh changes
 - [ ] `--only express,park` selftest is green (see Notes)
+
+## T-219 — "Speed report is bounded: cheap commits classified in one git call, expensive ones stop at a 20-second budget"
+points 3 · risk normal · landed d534533 (2026-10-28) · claimed 2026-10-28
+files touched: kit/ops/lib/admin.sh, ops/tests/speed-report.cmd, ops/tests/speed-report.expected
+
+### Why
+`polaris speed` ran 4 minutes on a real 30-commit repo because each commit called `depth --commit`, which re-derives test selection (including a pytest import-graph awk over every tracked .py). `update` prints the speed report last, so an update now blocks about 4 minutes - the opposite of "update and feel faster". Make it bounded and cheap.
+
+Do (contract: one-yes.md "Fix wave 2"): inside `cmd_speed` only. (1) Replace the `rev-list` + per-commit loop with ONE `git -C "$PRIMARY" log --name-only --format=%x01%h -n 30 "$BASE"` (fallback HEAD) and parse into per-commit path lists. (2) Classify none/look in-process with `owned_match` and `cfg test_skip` / `cfg test_look` using the same defaults and `-` handling as `depth_for` in kit/ops/lib/core.sh; commits that fall through get `cmd_depth --commit <sha>` newest first. A commit with no paths (merge) is skipped as today. (3) Budget: `local budget="${POLARIS_SPEED_BUDGET:-20}"`, use bash `SECONDS`, checked before each expensive call (cheap ones cost nothing); when exceeded stop calling cmd_depth; remaining un-evaluated commits count as not checked. (4) Output: fully evaluated = byte-identical to today. Stopped early = `Of your last N changes (stopped early at the time limit): ...counts... M not checked.` where N is the number evaluated; the last-run and advice lines stay. Keep `cmd_speed; } || true` in `cmd_update`. Memoizing the pytest graph is out of scope (not in owned files).
+Extend the golden: add a case with POLARIS_SPEED_BUDGET=0 (expect the stopped-early wording, no crash) and one with a fake slow decision.
+
+### Acceptance
+- [ ] No per-commit git call remains in cmd_speed; none/look never invoke cmd_depth
+- [ ] Fully evaluated output grammar unchanged (existing speed-report.expected lines still pass)
+- [ ] On a fixture with 30 commits and a fake slow decision (a PATH-shadow or env-injected sleep in the expensive path), `speed` returns within budget+2s and prints "stopped early at the time limit"
+- [ ] `update` tail still guarded by `|| true`; read-only (repo byte-identical after)
