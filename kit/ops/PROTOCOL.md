@@ -130,7 +130,7 @@ CONVENTIONS). SOLO and `land --express` proved one session can carry one task fr
 integration lease IS the Integrator (Invariant 9): there is exactly one holder at any instant, and
 taking it is what makes a session one. No check moves: verify/ownership/RULES still gate the
 handoff, `land` is still squash + audit, the full suite still runs once per wave, and the hard
-stops keep the classic path — risk: high never self-lands — a human must approve the merge; task stays in review/.
+stops keep the classic path — risk: high never self-lands — a human must approve the merge; task stays in review/ (unless the approved plan covered it: `approve --plan`).
 The landing tail can wait on a busy lease, so a session detaches it (`bg run ship-<ID>` + chunked
 `bg wait --max 300` — § LONG COMMANDS) and polls the rc; `landing: integrator` restores the classic
 handoff byte-for-byte.

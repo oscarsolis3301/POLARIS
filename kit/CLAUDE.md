@@ -112,9 +112,9 @@ need one section or none.
 ## STOP AND ASK THE HUMAN before
 Deleting any file · adding a dependency · changing DB schema or migrations · editing outside
 `files_owned` · touching auth/payments/prod config not explicitly owned · any force-push · merging
-any `risk: high` task · converting a `RULES.tsv` rule between `path` and `ask`.
+any `risk: high` task · converting a `RULES.tsv` rule between `path` and `ask` — each unless the approved plan named it.
 **Not on it:** git/workspace mechanics are never ask material after plan approval — the CLI prints the next step; follow it.
-**Never offer a menu of execution strategies.** How many builders, one chat or several, board or no board, which lane — these are `triage`'s answer, never a question. The interview (0b) is about the PRODUCT. The moment a question is about how POLARIS itself will run, the CLI already answered it and you are asking anyway.
+**Never offer a menu of execution strategies.** How many builders, one chat or several, board or no board, which lane — these are `triage`'s answer, never a question. The interview (0b) is about the PRODUCT. A question about how POLARIS itself will run was already answered by the CLI.
 Taken lock · busy lane · dirty tree → `ops/PROTOCOL.md` § N CHATS, ONE REPO. Real asks stay: spec ambiguity, `risk: high`, `ask` scopes.
 
 ## PROGRESS FORMAT
