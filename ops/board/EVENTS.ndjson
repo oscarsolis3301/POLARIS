@@ -828,3 +828,4 @@
 {"ts":1793209705,"ev":"promote","id":"T-217","who":"Owner@DESKTOP","note":"deps done: T-215, T-216","pts":2}
 {"ts":1793209731,"ev":"claim","id":"T-217","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1793209768,"ev":"blocked","id":"T-217","who":"Owner@DESKTOP","note":"→ blocked: "}
+{"ts":1793209833,"ev":"plan","id":"T-217","who":"planner","note":"regroom blocked->ready: fix verify[1]"}
