@@ -12,7 +12,11 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   claim [ID]                     lock + ready→active + worktree  (no ID = top wsjf; skips locked)
   resume [ID]                    re-enter an already-claimed active task (crash/kickback/new session)
   verify [ID]                    diff ⊆ files_owned + run verify: commands (in worktree)
-  handoff [ID]                   verify + push + active→review   (lock stays)
+  handoff [ID] [--saw "<what the after shot shows>"] [--no-before "<why>"]
+                                 verify + push + active→review   (lock stays). A task that changed a
+                                 visual: path needs TWO captures newer than the branch base and one
+                                 --saw line, which becomes the caption filed beside the pictures;
+                                 --no-before says nothing existed to photograph yet and drops it to one
   release <ID> [--to ready|blocked] [-m note]   abort: give the task back cleanly
   park [-m why]                  stash the primary's dirty tree (tracked + untracked) as
                                  polaris/park-<epoch> — a dirty shared checkout is parked, never
@@ -158,6 +162,11 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  listed as skipped; writes nothing. --apply writes those rows
                                  (tagged [scaffold]) and sets test_select: when it is unset — on
                                  <base> only; nothing is committed for you
+  shots                          rebuild .polaris/shots/INDEX.md — every screenshot this repo has
+                                 taken, grouped by screen, newest first, before beside after with
+                                 the caption underneath. Open it in VS Code's Markdown preview.
+                                 Then says where the committed gallery: copy lives, or that the
+                                 key is unset. No subcommands: `done` publishes the gallery itself
   qa [--force] [--full]          is everything okay, in ONE shot: test/lint/typecheck/build/uat
                                  from CONVENTIONS + drift --strict + doctor env check. Runs every
                                  check even after a red; rc 1 if anything was red.

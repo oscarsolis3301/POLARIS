@@ -275,11 +275,21 @@ Implements contract change-sized sections 2-4. Add related_cmds (vitest related 
 - [ ] every verify: line passes
 
 ## T-204 — "A narrowed run skips the slow live acceptance tier and says why: uat deferred at scoped, one depth line on every run"
-points 3 · risk normal · landed ce3416a (2026-10-27) · claimed 2026-10-27
+points 3 · risk normal · landed ce3416a (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/lib/integrate.sh, kit/ops/lib/observe.sh, ops/tests/api-kit.expected, ops/tests/depth-uat.cmd, ops/tests/depth-uat.expected
 
 ### Why
 Implements contract change-sized section 5. At scoped depth qa and land --express skip the uat key and print the one pinned deferral line; every run prints one depth line, and at full it names what forced it and the last measured full time from .polaris/last-suite-seconds, so the owner sees why a run is slow before it starts. The golden uses a fake vitest that echoes its argv.
+
+### Acceptance
+- [ ] every verify: line passes
+
+## T-205 — "Ask why a commit would be slow without running anything: polaris depth --commit <sha>"
+points 3 · risk normal · landed 6e6bc54 (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/hooks/readonly-allow.sh, kit/ops/lib/observe.sh, kit/ops/polaris, ops/tests/cli-help.expected, ops/tests/depth-commit.cmd, ops/tests/depth-commit.expected, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected
+
+### Why
+Implements contract change-sized section 6. cmd_depth gains --commit <sha>: read-only, prints depth, why and the exact commands qa would run (and the uat it would skip). Added to help, dispatch and the readonly-allow polaris_ok list, so it needs no permission prompt. The conductor runs it on real history (job cb0a1ea) at release time.
 
 ### Acceptance
 - [ ] every verify: line passes

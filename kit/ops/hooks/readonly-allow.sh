@@ -208,7 +208,14 @@ git_ok() {
 # the board and print a number — bare or with an ID, both pass.
 polaris_ok() {
   case "${1:-}" in
-    find|show|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|route|depth|--help|-h|'') return 0;;
+    find|show|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|route|--help|-h|'') return 0;;
+    # `depth` reads the board/git and prints; `--commit <sha>` takes ONE hex sha or ref name, nothing
+    # else (change-sized.md § 6) — any other shape of argument keeps its prompt.
+    depth) case "${2:-}" in
+             --commit) case "${3:-}" in ''|-*|*[!A-Za-z0-9._/~^-]*) return 1;; esac
+                       [ $# -le 3 ] && return 0 || return 1;;
+             *) return 0;;
+           esac;;
     # `slim` bare is a report and writes nothing; `--apply`/`--restore` MOVE files under ~/.claude,
     # so they keep their prompt. Same split as check vs check --update.
     slim) case "${2:-}" in '') return 0;; *) return 1;; esac;;

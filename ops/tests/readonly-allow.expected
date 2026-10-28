@@ -24,6 +24,8 @@ allow  bash ops/polaris check
 allow  bash ops/polaris check --only api-kit
 allow  bash ops/polaris check --only api-kit && bash ops/polaris route --role BUILDER
 allow  bash ops/polaris pack T-001
+allow  bash ops/polaris depth --commit abc1234
+allow  bash ops/polaris depth --commit HEAD~1
 allow  bash ops/polaris slim
 allow  bash ops/polaris next
 allow  find ops -maxdepth 2 -type f -exec wc -l {} + | sort -rn | head -50
@@ -37,6 +39,10 @@ allow  bash ops/polaris bg tail qa -n 40
 allow  bash ops/polaris bg wait qa --max 120
 allow  bash ops/polaris route --role CONDUCTOR | head -1
 allow  bash ops/polaris bg status qa && bash ops/polaris bg tail qa -n 5
+ask  bash ops/polaris depth --commit abc1234 extra
+ask  bash ops/polaris depth --commit -x
+ask  bash ops/polaris depth --commit
+ask  bash ops/polaris depth --commit "$(evil)"
 ask  rm -rf /tmp/x
 ask  sed -i 's/a/b/' file.txt
 ask  sed 's/a/b/w /tmp/out' f
@@ -92,6 +98,8 @@ allow  Get-Content ops/VERSION | Where-Object { $_ -match 'version' }
 allow  git -C "C:\Users\Owner\Desktop\Polaris" log --oneline -5; Get-ChildItem ops | Select-Object Name
 allow  bash ops/polaris depth
 allow  bash ops/polaris depth T-1
+allow  bash ops/polaris depth --commit abc1234
+allow  bash ops/polaris depth --commit HEAD~1
 ask  Get-Content x > y
 ask  Get-Content x | Out-File y
 ask  Set-Content x y
