@@ -370,7 +370,7 @@ Implements one-yes.md sections 3-4. Remove depth_for's rule 1 (risk: high forces
 - [ ] every verify: line passes
 
 ## T-213 — "Python related tests, part 1: find which test files a changed module reaches, and build the pytest command"
-points 3 · risk normal · landed ccd2a01 (2026-10-28) · claimed 2026-10-28
+points 3 · risk normal · landed ccd2a01 (2026-10-28) · claimed 2026-10-28 → done 2026-10-28
 files touched: kit/ops/lib/selftest/report.sh, kit/ops/lib/selftest/spine.sh, kit/ops/lib/surfaces.sh, ops/tests/api-kit.expected, ops/tests/pytest-related.cmd, ops/tests/pytest-related.expected
 
 ### Why
@@ -379,8 +379,18 @@ Implements one-yes.md section 5 as NEW pure helpers in surfaces.sh, not yet call
 ### Acceptance
 - [ ] every verify: line passes
 
+## T-214 — "Python related tests, part 2: related_cmds uses it, mixed node + python runs both, one shared decision"
+points 3 · risk normal · landed 3c3d5f9 (2026-10-28) · claimed 2026-10-28
+files touched: kit/ops/KEYS.tsv, kit/ops/lib/core.sh, kit/ops/lib/surfaces.sh, ops/tests/api-kit.expected, ops/tests/pytest-related.cmd, ops/tests/pytest-related.expected, ops/tests/related-tests.expected
+
+### Why
+Implements one-yes.md section 5 wiring. related_cmds partitions the path list (.py to python, the rest to node), emits both command sets (node first, then pytest), stays all-or-nothing, and test_related: - turns pytest mode off. core.sh depth_for rule 5 gets the pytest why string. test_select_for stays the ONE decision. The extended golden MUST include the dirty-tree rule: dirty tree + ancestor stamp + test_select UNSET still runs the whole suite and writes .polaris/last-suite-seconds, plus a mixed node+python case and a depth --commit case showing scoped with a pytest file list. KEYS.tsv: update the test_related row text only (mention python).
+
+### Acceptance
+- [ ] every verify: line passes
+
 ## T-216 — "Say it in the rules: the approved plan covers its scopes (CLAUDE.md, planner, conductor, integrator, task template)"
-points 3 · risk normal · landed 54161bf (2026-10-28) · claimed 2026-10-28
+points 3 · risk normal · landed 54161bf (2026-10-28) · claimed 2026-10-28 → done 2026-10-28
 files touched: kit/CLAUDE.md, kit/ops/PROTOCOL.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md, kit/ops/templates/TASK.md
 
 ### Why
