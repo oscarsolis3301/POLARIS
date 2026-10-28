@@ -779,3 +779,4 @@
 {"ts":1793160289,"ev":"all-review","id":"T-207","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1793160453,"ev":"done","id":"T-207","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1793160902,"ev":"promote","id":"T-208","who":"Owner@DESKTOP","note":"deps done: none","pts":2}
+{"ts":1793160957,"ev":"claim","id":"T-208","who":"Owner@DESKTOP","note":"","pts":2}
