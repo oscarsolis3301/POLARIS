@@ -535,7 +535,6 @@ kit/ops/lib/selftest/remote.sh	fn	drill_remote
 kit/ops/lib/selftest/remote.sh	fn	drill_syncrace
 kit/ops/lib/selftest/remote.sh	fn	drill_upgrade
 kit/ops/lib/selftest/report.sh	fn	drill_brief
-kit/ops/lib/selftest/report.sh	fn	drill_hint
 kit/ops/lib/selftest/report.sh	fn	drill_metrics
 kit/ops/lib/selftest/report.sh	fn	drill_report
 kit/ops/lib/selftest/spine.sh	fn	drill_on
@@ -556,6 +555,8 @@ kit/ops/lib/skills.sh	fn	skill_propose
 kit/ops/lib/skills.sh	fn	skill_prune
 kit/ops/lib/skills.sh	fn	skill_restore
 kit/ops/lib/skills.sh	fn	skill_tier
+kit/ops/lib/surfaces.sh	fn	pytest_related_cmd
+kit/ops/lib/surfaces.sh	fn	pytest_related_files
 kit/ops/lib/surfaces.sh	fn	related_cmds
 kit/ops/lib/surfaces.sh	fn	surfaces_pairs
 kit/ops/lib/surfaces.sh	fn	surfaces_proposal
