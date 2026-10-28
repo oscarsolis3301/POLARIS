@@ -360,11 +360,31 @@ Implements one-yes.md section 2 callers. next_landable (handover.sh) puts a task
 - [ ] every verify: line passes
 
 ## T-212 — "A risky task no longer forces the whole suite, and paranoid re-checks just that one land"
-points 3 · risk normal · landed ee1513c (2026-10-28) · claimed 2026-10-28
+points 3 · risk normal · landed ee1513c (2026-10-28) · claimed 2026-10-28 → done 2026-10-28
 files touched: kit/ops/lib/core.sh, kit/ops/lib/integrate.sh, kit/ops/lib/selftest/history.sh, ops/tests/api-kit.expected, ops/tests/paranoid-depth.cmd, ops/tests/paranoid-depth.expected, ops/tests/test-depth.expected
 
 ### Why
 Implements one-yes.md sections 3-4. Remove depth_for's rule 1 (risk: high forces full); test_depth: full stays the explicit force. integration: paranoid's per-land re-run becomes the depth-aware check of that one land (same decision qa makes); drop the slow-suite hint. observe.sh is owned only in case triage or qa wording references risk: high forcing full; keep edits minimal. The golden MUST include the dirty-tree rule from the contract: dirty tree + ancestor stamp + test_select UNSET still runs the suite and writes .polaris/last-suite-seconds. A paranoid CSS-only land runs no suite; a risk: high docs task is none. INTEGRATOR.md prose is T-216, not here.
+
+### Acceptance
+- [ ] every verify: line passes
+
+## T-213 — "Python related tests, part 1: find which test files a changed module reaches, and build the pytest command"
+points 3 · risk normal · landed ccd2a01 (2026-10-28) · claimed 2026-10-28
+files touched: kit/ops/lib/selftest/report.sh, kit/ops/lib/selftest/spine.sh, kit/ops/lib/surfaces.sh, ops/tests/api-kit.expected, ops/tests/pytest-related.cmd, ops/tests/pytest-related.expected
+
+### Why
+Implements one-yes.md section 5 as NEW pure helpers in surfaces.sh, not yet called by related_cmds: an awk import graph over tracked .py files and a rewrite of the repo's own pytest segment of test: (split on &&) with its path args replaced. The golden sources surfaces.sh in a mktemp -d fixture and checks: pkg/a.py imported by pkg/b.py imported by tests/test_b.py gives exactly tests/test_b.py; conftest / pytest config / pyproject / requirements give fallback; an unreached module gives fallback; a compound test: rewrites only the pytest segment. related_cmds itself and core.sh are T-214.
+
+### Acceptance
+- [ ] every verify: line passes
+
+## T-216 — "Say it in the rules: the approved plan covers its scopes (CLAUDE.md, planner, conductor, integrator, task template)"
+points 3 · risk normal · landed 54161bf (2026-10-28) · claimed 2026-10-28
+files touched: kit/CLAUDE.md, kit/ops/PROTOCOL.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md, kit/ops/templates/TASK.md
+
+### Why
+Prose for one-yes.md. kit/CLAUDE.md STOP-AND-ASK gets ONE clause 'unless the approved plan named it' and must stay at or under 10054 bytes (it is about 10046 now, so trim a few words elsewhere in the same file). PLANNER.md: the pre-mortem lists every risky scope and sets needs: on the task. CONDUCTOR.md steps 3 and 6: run polaris approve --plan <slug> -m once after the go, quoting the approval; overlaps with other plans' tasks are ready-gate sequencing, never an owner question (at most one caveat line); say in one line when Claude Code's own auto-mode classifier refuses something POLARIS cannot lift. INTEGRATOR.md section 2 (the risk: high gate is covered by the approved plan; autonomy: standard keeps the stop) and the paranoid line near line 44 (per-land check is depth-aware, from T-212). SOLO.md and PROTOCOL.md: one line each if they restate the old rule. templates/TASK.md documents needs:. Do not touch ops/RULES.tsv or .github/.
 
 ### Acceptance
 - [ ] every verify: line passes
