@@ -143,3 +143,9 @@ No such setting → no advice lines. Fewer than 1 commit → one line `speed: no
 
 ## Changelog
 - v1 2026-10-28: created for T-210..T-217 (plan one-yes).
+
+## Fix wave 1: selftest drill hygiene (T-218)
+T-213 removed `drill_hint`, whose tail was the only thing that committed the express drill's leftovers
+(`test: true` in CONVENTIONS.md, dirty tree) onto main; park then swept `src/ex.dat` into feat/T-PK on
+windows. `drill_express` now ends with its own hermetic cleanup (strip `test:`/`integration:` lines,
+commit `express drill cleanup`). Owner: kit/ops/lib/selftest/history.sh only. No interface change.
