@@ -801,3 +801,5 @@
 {"ts":1793206399,"ev":"promote","id":"T-212","who":"Owner@DESKTOP","note":"deps done: T-211","pts":3}
 {"ts":1793206421,"ev":"claim","id":"T-212","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1793206434,"ev":"grant","id":"T-212","who":"Owner@DESKTOP","note":"kit/ops/lib/selftest/history.sh"}
+{"ts":1793206958,"ev":"handoff","id":"T-212","who":"Owner@DESKTOP","note":""}
+{"ts":1793206958,"ev":"all-review","id":"T-212","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
