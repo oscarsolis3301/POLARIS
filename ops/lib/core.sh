@@ -75,6 +75,96 @@ tier_for() { # tier_for <points> <risk> — echo exactly ONE tier word (ops/cont
   else printf 'mid'; fi
   return 0
 }
+# --------------------------------------------------------------- test depth
+depth_for() { # depth_for [<taskfile>…] < <paths, one per line> — ONE line "<depth><TAB><why>" on
+  # stdout (ops/contracts/test-depth.md § 2); depth ∈ none | look | scoped | full. rc 0 ALWAYS —
+  # never dies, callers pass board data as-is. PURE: no writes to the repo, no git — stdin + the
+  # (read-only) task files are the whole input; the one temp file below is scratch for
+  # surface_select_cmd's paths-file argument and never touches tracked state.
+  # First match wins. A taskfile's `test_depth:` can only RAISE depth — anything but `full` is a
+  # no-op here, same as unset.
+  local tf id risk td skip_raw look_raw p nl nonskip="" nonlook="" lookn=0 csf sel rc
+  nl=$'\n'
+  for tf in "$@"; do
+    [ -f "$tf" ] || continue
+    id="$(fm_get id "$tf")"; [ -n "$id" ] || id="$(basename "$tf" .md)"
+    risk="$(fm_get risk "$tf")"
+    [ "$risk" = "high" ] && { printf 'full\t%s\n' "risk: high on $id"; return 0; }
+  done
+  for tf in "$@"; do
+    [ -f "$tf" ] || continue
+    id="$(fm_get id "$tf")"; [ -n "$id" ] || id="$(basename "$tf" .md)"
+    td="$(fm_get test_depth "$tf")"
+    [ "$td" = "full" ] && { printf 'full\t%s\n' "test_depth: full on $id"; return 0; }
+  done
+  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
+  [ "$skip_raw" = "-" ] && skip_raw=""
+  look_raw="$(cfg test_look '*.css *.scss *.less *.svg *.png *.jpg *.jpeg *.gif *.webp *.ico')"
+  [ "$look_raw" = "-" ] && look_raw=""
+  while IFS= read -r p || [ -n "$p" ]; do
+    [ -z "$p" ] && continue
+    if [ -n "$skip_raw" ] && owned_match "$p" $skip_raw; then continue; fi
+    nonskip="${nonskip:+$nonskip$nl}$p"
+  done
+  [ -n "$nonskip" ] || { printf 'none\t%s\n' "only test_skip paths"; return 0; }
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    if [ -n "$look_raw" ] && owned_match "$p" $look_raw; then
+      lookn=$((lookn+1)); continue
+    fi
+    nonlook="${nonlook:+$nonlook$nl}$p"
+  done <<EOF
+$nonskip
+EOF
+  [ -n "$nonlook" ] || { printf 'look\t%s\n' "only look paths ($lookn)"; return 0; }
+  csf="$(mktemp)"
+  printf '%s\n' "$nonlook" > "$csf"
+  if sel="$(test_select_for "$csf")"; then rc=0; else rc=1; fi
+  rm -f "$csf"
+  if [ "$rc" -eq 0 ]; then
+    case "$sel" in
+      "cd "*" && ./node_modules/.bin/"*|"./node_modules/.bin/"*)
+        # via related (change-sized.md § 3): first package's runner, then (+N more)
+        sel="$(printf '%s\n' "$sel" | awk 'NR==1{c=$0} {n++} END{
+          pk="."; if (c ~ /^cd /) { split(c, a, " "); pk=a[2] }
+          rn=(c ~ /vitest/) ? "vitest" : "jest"
+          w="related tests via " rn " in " pk "/"
+          if (n>1) w=w " (+" (n-1) " more)"
+          print w }')"
+        printf 'scoped\t%s\n' "$sel";;
+      *) printf 'scoped\t%s\n' "every code path mapped in SURFACES.tsv";;
+    esac
+  else
+    printf 'full\t%s\n' "$sel"
+  fi
+  return 0
+}
+decision_log() { # decision_log <kind> <plan> <task> <depth> <why> <secs> <rc> [<path>…] — append
+  # ONE line to $PRIMARY/.polaris/decisions.ndjson (test-depth.md § 5), AFTER the caller's work is
+  # done so secs/rc are real. <kind> is `test_depth` (carries depth/why/paths) or `finish` (pass ""
+  # for depth and why, no paths). Gitignored dir, best-effort, NEVER fails or changes the caller's
+  # rc — every write is swallowed on error, same discipline as the suite stamp. <path>… capped at
+  # 20 (the contract's own cap). The ONE helper the plan licenses for this append (§ E).
+  local kind="${1:-}" plan="${2:-}" task="${3:-}" depth="${4:-}" why="${5:-}" secs="${6:-0}" rc="${7:-0}"
+  shift 7 2>/dev/null || shift $#
+  case "$secs" in ''|*[!0-9]*) secs=0;; esac
+  case "$rc" in ''|*[!0-9]*) rc=0;; esac
+  local f="$PRIMARY/.polaris/decisions.ndjson" n=0 p pjs="" sep=""
+  mkdir -p "$PRIMARY/.polaris" 2>/dev/null || return 0
+  for p in "$@"; do
+    [ -z "$p" ] && continue
+    n=$((n+1)); [ "$n" -gt 20 ] && break
+    pjs="$pjs$sep\"$(jesc "$p")\""; sep=","
+  done
+  {
+    printf '{"ts":%s,"plan":"%s","task":"%s","kind":"%s"' "$(date +%s)" "$(jesc "$plan")" "$(jesc "$task")" "$(jesc "$kind")"
+    if [ "$kind" = test_depth ]; then
+      printf ',"depth":"%s","why":"%s","paths":[%s]' "$(jesc "$depth")" "$(jesc "$why")" "$pjs"
+    fi
+    printf ',"secs":%s,"rc":%s}\n' "$secs" "$rc"
+  } >> "$f" 2>/dev/null || true
+  return 0
+}
 model_denied() { # model_denied <name> — rc 0 when <name> is a FORBIDDEN model.
   # OWNER DECISION 2026-09-15, absolute: POLARIS never selects Fable or Haiku, in any repo, on any
   # machine. Fable bills against a SEPARATE and much smaller weekly limit — one day of routing
@@ -280,6 +370,32 @@ EOF
   printf '%s\t%s\t%s\t%s [%s]\n' "$surface" "$tests" "$cmd" "$note" "$id"
   return 0
 }
+surface_run_landed() { # surface_run_landed — files changed by the commits THIS run landed (the
+  # session plan's done/ + review/ tasks, via landed_sha). rc 1 + nothing printed when no plan is
+  # recorded, no task of it exists, or any landed_sha is unresolved (change-sized.md § 1).
+  local pf plan f st id sha n=0 out="" files
+  pf="$(next_dir)/plan"
+  [ -f "$pf" ] || return 1
+  plan="$(tr -d ' 
+' < "$pf" 2>/dev/null)"
+  [ -n "$plan" ] || return 1
+  for f in "$BOARD"/done/*.md "$BOARD"/review/*.md; do
+    [ -f "$f" ] || continue
+    st="$(fm_get plan "$f" 2>/dev/null || true)"
+    [ "$st" = "$plan" ] || continue
+    id="$(fm_get id "$f" 2>/dev/null || true)"; [ -n "$id" ] || id="$(basename "$f" .md)"
+    sha="$(landed_sha "$id")" || return 1
+    [ -n "$sha" ] || return 1
+    files="$(git -C "$PRIMARY" diff-tree --no-commit-id --name-only -r --root "$sha" 2>/dev/null)" || return 1
+    out="${out:+$out
+}$files"
+    n=$((n+1))
+  done
+  [ "$n" -ge 1 ] || return 1
+  [ -z "$out" ] || printf '%s
+' "$out" | sort -u
+  return 0
+}
 surface_change_set() { # surface_change_set [--force] — the paths a verdict is about, one per
   # line; rc 0 = BOUNDED. $PRIMARY HEAD off $BASE (a feat/ or integrate/ branch) → the branch's
   # own diff, `git diff --name-only $BASE...HEAD`, the stamp never consulted. On $BASE → the suite
@@ -287,32 +403,57 @@ surface_change_set() { # surface_change_set [--force] — the paths a verdict is
   # SURFACE_BASELINE=<sha> SURFACE_BASELINE_SCOPE=<its scope> for the caller. --force, no stamp,
   # or a non-ancestor sha → rc 1, prints nothing: UNBOUNDED, the caller runs everything. Both
   # cases drop the board-noise paths — the reports dir, ops/MAP.md, ops/SURFACES.tsv — exactly the
-  # three suite_stamp_carry allows to change after a suite ran.
-  local force=0 cur="" list="" p rel sha="" junk="" stamp
+  # three suite_stamp_carry allows to change after a suite ran. Also drops test_skip paths
+  # (test-depth.md § 4): a docs-only commit then leaves an EMPTY change set, so the existing
+  # baseline-carry logic below (and every caller's own "nothing changed" branch) treats it exactly
+  # like a board-noise-only change — a green stamp carries across it with no new code path.
+  local force=0 cur="" list="" p rel sha="" junk="" stamp skip_raw
   [ "${1:-}" = "--force" ] && force=1
-  SURFACE_BASELINE=""; SURFACE_BASELINE_SCOPE=""
+  SURFACE_BASELINE=""; SURFACE_BASELINE_SCOPE=""; SURFACE_BOUND=""
   cur="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
   if [ "$cur" = "$BASE" ]; then
     [ "$force" -eq 0 ] || return 1
     stamp="$PRIMARY/.polaris/suite-stamp"
-    [ -s "$stamp" ] || return 1
-    read -r sha junk < "$stamp" || true
-    [ -n "$sha" ] || return 1
-    git -C "$PRIMARY" merge-base --is-ancestor "$sha" HEAD 2>/dev/null || return 1
-    list="$(git -C "$PRIMARY" diff --name-only "$sha" HEAD 2>/dev/null)" || return 1
-    SURFACE_BASELINE="$sha"; SURFACE_BASELINE_SCOPE="$(suite_stamp_scope "$stamp" || true)"
+    # change-sized.md § 1: no usable stamp ancestor → fall back to what THIS run landed.
+    if [ -s "$stamp" ]; then read -r sha junk < "$stamp" || true; fi
+    if [ -n "$sha" ] && git -C "$PRIMARY" merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then
+      list="$(git -C "$PRIMARY" diff --name-only "$sha" HEAD 2>/dev/null)" || return 1
+      SURFACE_BASELINE="$sha"; SURFACE_BASELINE_SCOPE="$(suite_stamp_scope "$stamp" || true)"
+    else
+      # fix wave 1: uncommitted edits are invisible to a commit diff — a dirty tree stays unbounded.
+      [ -z "$(git -C "$PRIMARY" status --porcelain 2>/dev/null)" ] || return 1
+      list="$(surface_run_landed)" || return 1
+      SURFACE_BOUND=run
+    fi
   else
     list="$(git -C "$PRIMARY" diff --name-only "$BASE...HEAD" 2>/dev/null)" || return 1
   fi
   rel="$(cfg reports docs/sprints)"; rel="${rel%/}"; [ -n "$rel" ] || rel="docs/sprints"
+  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
+  [ "$skip_raw" = "-" ] && skip_raw=""
   while IFS= read -r p; do
     [ -z "$p" ] && continue
     case "$p" in "$rel/"*|ops/MAP.md|ops/SURFACES.tsv) continue;; esac
+    [ -n "$skip_raw" ] && owned_match "$p" $skip_raw && continue
     printf '%s\n' "$p"
   done <<EOF
 $list
 EOF
   return 0
+}
+test_select_for() { # test_select_for <paths-file> — THE one decision for the `test` key
+  # (change-sized.md § 3), shared by depth_for, cmd_qa and `land --express`. rc 0: the command(s) to
+  # run, one per line (SURFACES rows first, then the runner's own related-tests mode unless
+  # test_related is `-`). rc 1 + ONE reason line: run test: verbatim.
+  local file="${1:-}" sel rel
+  if sel="$(surface_select_cmd "$file")"; then printf '%s\n' "$sel"; return 0; fi
+  if [ "$(cfg test_related "")" != "-" ]; then
+    if rel="$(related_cmds "$file")"; then printf '%s\n' "$rel"; return 0; fi
+    # a path with no package at all is not news (every non-node repo): keep the SURFACES reason so
+    # such a repo decides byte-identically; a package that cannot run related tests is worth saying
+    case "$rel" in *'(no package.json)') ;; *) printf '%s\n' "$rel"; return 1;; esac
+  fi
+  printf '%s\n' "$sel"; return 1
 }
 surface_select_cmd() { # surface_select_cmd <paths-file> — rc 0: the commands to run INSTEAD of
   # test:, one per line — every distinct non-`-` cmd of the rows the changed paths match

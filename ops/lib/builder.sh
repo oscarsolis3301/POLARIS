@@ -409,13 +409,31 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
   return 0
 }
 
-cmd_release() { # release <ID> [--to ready|blocked] [-m "note"]
-  local id="${1:?usage: polaris release <ID> [--to ready|blocked] [-m note]}"; shift
+cmd_release() { # release <ID> [--to ready|blocked|backlog] [-m "note"]
+  local id="${1:?usage: polaris release <ID> [--to ready|blocked|backlog] [-m note]}"; shift
   local to="ready" msg=""
   while [ $# -gt 0 ]; do case "$1" in
     --to) to="$2"; shift 2;; -m) msg="$2"; shift 2;; *) die "unknown flag $1";;
   esac; done
-  [ "$to" = "ready" ] || [ "$to" = "blocked" ] || die "--to must be ready or blocked"
+  [ "$to" = "ready" ] || [ "$to" = "blocked" ] || [ "$to" = "backlog" ] \
+    || die "--to must be ready, blocked or backlog"
+  # --to backlog also parks a task that is UNCLAIMED in ready/ (ops/contracts/stay-on-request.md § 4):
+  # no lock, no worktree — a leftover that collides with the run's request can be parked without
+  # pretending to claim it first. ready|blocked keep the active/-only behaviour, unchanged.
+  if [ "$to" = "backlog" ] && [ -z "$(task_file "$id" active)" ]; then
+    local rtf; rtf="$(task_file "$id" ready)" || die "$id is not in active/ or ready/"
+    who
+    mutex_on
+    mv "$BOARD/ready/$id.md" "$BOARD/backlog/$id.md"
+    set_fm owner null "$BOARD/backlog/$id.md"; set_fm status backlog "$BOARD/backlog/$id.md"
+    [ -n "$msg" ] && printf -- '- ⛔ released by %s: %s\n' "$WHO" "$msg" >> "$BOARD/backlog/$id.md"
+    evt release "$id" "→ backlog: $msg"
+    board_commit "chore(board): release $id → backlog"
+    sync_board
+    mutex_off; trap - EXIT
+    say "$id → backlog/ · no lock or worktree held"
+    return 0
+  fi
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
   local wt; wt="$(wt_path "$id")"
   # the refusal comes FIRST (ops/contracts/worktree-liveness.md, the release rows): from OUTSIDE the
@@ -832,7 +850,12 @@ EOF_ITEMS
   # writing a verify: it cannot pass, or hand-checking something the list already proves.
   pack_section "WHAT PROVES IT — polaris verify runs exactly this"
   fm_list verify "$f" 2>/dev/null | grep . || printf '(no verify: list — add one, narrow, each under ~10s)\n'
-  printf '\nthen the fast tier: %s\n' "$(cfg test_fast "$(cfg test '(no test: configured)')")"
+  local tf; tf="$(cfg test_fast '')"
+  if [ -n "$tf" ]; then
+    printf '\nthen the fast tier: %s\n' "$tf"
+  else
+    printf '\nthen the fast tier: (none set — verify: above is the per-task proof; the suite runs once at the wave gate)\n'
+  fi
 
   printf '\n--- end of pack. Anything beyond this needs a one-line reason in the task Notes. ---\n'
   return 0

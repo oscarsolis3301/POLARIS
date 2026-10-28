@@ -204,10 +204,18 @@ git_ok() {
 # ops/polaris: the read commands only. `claim`, `handoff`, `land`, `seal`, `done`, `update`,
 # `uninstall` and friends mutate the board, a branch or the installed kit — they keep their prompt.
 # `route` joins the plain readers: it derives a tier from task frontmatter and CONVENTIONS and
-# writes nothing at all.
+# writes nothing at all. `depth` (T-195/T-197) joins them too: `depth` and `depth <ID>` only read
+# the board and print a number — bare or with an ID, both pass.
 polaris_ok() {
   case "${1:-}" in
     find|show|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|route|--help|-h|'') return 0;;
+    # `depth` reads the board/git and prints; `--commit <sha>` takes ONE hex sha or ref name, nothing
+    # else (change-sized.md § 6) — any other shape of argument keeps its prompt.
+    depth) case "${2:-}" in
+             --commit) case "${3:-}" in ''|-*|*[!A-Za-z0-9._/~^-]*) return 1;; esac
+                       [ $# -le 3 ] && return 0 || return 1;;
+             *) return 0;;
+           esac;;
     # `slim` bare is a report and writes nothing; `--apply`/`--restore` MOVE files under ~/.claude,
     # so they keep their prompt. Same split as check vs check --update.
     slim) case "${2:-}" in '') return 0;; *) return 1;; esac;;
@@ -410,23 +418,217 @@ scan() {
   return 0
 }
 
+# ---------------------------------------------------------------- PowerShell: deny by default
+# PowerShell is the primary shell on Windows, so plan mode's reads arrive as `tool_name
+# "PowerShell"` just as often as `"Bash"`. This is a SEPARATE, PURE-BASH parser — it never shells
+# out to powershell.exe — proving the same "read-only, token by token" property scan() proves for
+# Bash, over PowerShell's own grammar. Same corollary as above: any doubt is NO OUTPUT AT ALL.
+#
+# Allowed cmdlets (case-insensitive) and their common aliases, per ops/contracts/readonly-powershell.md.
+ps_lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+ps_verb_ok() {
+  case "$(ps_lc "$1")" in
+    get-childitem|gci|ls|dir)       return 0;;
+    get-content|gc|cat|type)        return 0;;
+    get-item|gi)                    return 0;;
+    get-itemproperty|gp)            return 0;;
+    get-location|gl|pwd)            return 0;;
+    get-command|gcm)                return 0;;
+    get-date)                       return 0;;
+    select-string|sls)              return 0;;
+    select-object|select)           return 0;;
+    where-object|where|'?')         return 0;;
+    measure-object|measure)         return 0;;
+    sort-object|sort)               return 0;;
+    group-object|group)             return 0;;
+    format-table|ft)                return 0;;
+    format-list|fl)                 return 0;;
+    out-string)                     return 0;;
+    test-path)                      return 0;;
+    resolve-path|rvpa)              return 0;;
+    split-path)                     return 0;;
+    join-path)                      return 0;;
+    convertfrom-json)                return 0;;
+    convertto-json)                  return 0;;
+    write-output|echo|write)        return 0;;
+    *)                              return 1;;
+  esac
+}
+
+# Only these four take a trailing `{ … }` script block (the contract's own list — Measure-Object
+# is an allowed verb but not a script-block one).
+ps_sb_verb() {
+  case "$(ps_lc "$1")" in
+    where-object|where|'?'|select-object|select|sort-object|sort|group-object|group) return 0;;
+    *) return 1;;
+  esac
+}
+
+# Finds the `}` matching the `{` whose contents start at index $2 in $1, tracking quotes so a
+# brace inside a string does not end the block early. Index comes back in REPLY_IDX.
+ps_find_close_brace() {
+  local cmd="$1" i="$2"
+  local len=${#cmd} depth=1 c st=none
+  while [ "$i" -lt "$len" ]; do
+    c="${cmd:i:1}"
+    case "$st" in
+      single) [ "$c" = "'" ] && st=none; i=$((i + 1)); continue;;
+      double)
+        case "$c" in '"') st=none;; '`') i=$((i + 1));; esac
+        i=$((i + 1)); continue;;
+    esac
+    case "$c" in
+      "'") st=single;;
+      '"') st=double;;
+      '{') depth=$((depth + 1));;
+      '}') depth=$((depth - 1)); [ "$depth" -eq 0 ] && { REPLY_IDX="$i"; return 0; };;
+    esac
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# One pipeline segment (or one script-block segment — `$_`/`$PSItem` reads pass the same gate
+# as a verb, since a script block is just a tiny expression, not a command).
+ps_check_segment() {
+  local toks="$1" OLDIFS="$IFS" v
+  [ -n "$toks" ] || return 0
+  IFS="$SEP"
+  # shellcheck disable=SC2086
+  set -- $toks
+  IFS="$OLDIFS"
+  [ $# -gt 0 ] || return 0
+  v="$1"; shift
+  case "$v" in
+    '$'*) return 0;;                    # $_, $PSItem, $_.Prop — a read, never a command
+    git)  git_ok "$@";;
+    bash)
+      case "${1:-}" in
+        ops/polaris|./ops/polaris) shift; polaris_ok "$@";;
+        *) return 1;;
+      esac;;
+    ops/polaris|./ops/polaris) polaris_ok "$@";;
+    *)    ps_verb_ok "$v";;
+  esac
+}
+
+# ONE pass over a PowerShell command string. Mirrors scan()'s shape and the same fail-closed
+# rule: the moment anything is not fully understood, return 1 and the normal prompt runs.
+ps_scan() {
+  local cmd="$1"                 # separate statement: `local a=$1 b=${#a}` is not portable
+  local len=${#cmd}
+  local i=0 c n st=none tok='' toks='' prevtok='' closeidx inner
+  while [ "$i" -lt "$len" ]; do
+    c="${cmd:i:1}"
+    case "$st" in
+      single)
+        if [ "$c" = "'" ]; then
+          if [ "${cmd:i+1:1}" = "'" ]; then tok="$tok'"; i=$((i + 2)); continue; fi
+          st=none; i=$((i + 1)); continue
+        fi
+        tok="$tok$c"; i=$((i + 1)); continue;;
+      double)
+        case "$c" in
+          '"') st=none; i=$((i + 1)); continue;;
+          '`')
+            n="${cmd:i+1:1}"
+            case "$n" in
+              n|r|t|0|a|b|f|v|"'"|'"'|'`'|'$'|'#') tok="$tok$c$n"; i=$((i + 2)); continue;;
+              *) return 1;;                              # an escape we do not decode
+            esac;;
+          '$')
+            [ "${cmd:i+1:1}" = "(" ] && return 1          # $(...) inside a string: still a subexpression
+            tok="$tok$c"; i=$((i + 1)); continue;;
+          *) tok="$tok$c"; i=$((i + 1)); continue;;
+        esac;;
+    esac
+
+    n="${cmd:i+1:1}"
+    case "$c" in
+      "'")  st=single; i=$((i + 1));;
+      '"')  st=double; i=$((i + 1));;
+      '`')  return 1;;                                    # backtick line-continuation / escape
+      '$')  [ "$n" = "(" ] && return 1; tok="$tok$c"; i=$((i + 1));;
+      '@')  case "$n" in "'"|'"'|'(') return 1;; esac; tok="$tok$c"; i=$((i + 1));;
+      '&')  return 1;;                                    # call operator
+      '(' | ')') return 1;;                               # not parsed outside a script block
+      '{')
+        if [ -z "$tok" ] && ps_sb_verb "$prevtok"; then
+          ps_find_close_brace "$cmd" "$((i + 1))" || return 1
+          closeidx="$REPLY_IDX"
+          inner="${cmd:i+1:closeidx-i-1}"
+          ps_scan "$inner" || return 1                    # recurse: same rules apply inside
+          tok='{}'; i=$((closeidx + 1))
+        else
+          return 1
+        fi;;
+      '}')  return 1;;                                    # unmatched / unexpected close
+      '=')
+        case "${tok:-$prevtok}" in
+          -*) tok="$tok$c"; i=$((i + 1));;                # a flag's `=value`
+          *)  return 1;;                                  # an assignment
+        esac;;
+      ';' | $'\n')
+        [ -n "$tok" ] && { toks="$toks$SEP$tok"; prevtok="$tok"; tok=''; }
+        ps_check_segment "${toks#$SEP}" || return 1
+        toks=''; prevtok=''; i=$((i + 1));;
+      '|')
+        [ -n "$tok" ] && { toks="$toks$SEP$tok"; prevtok="$tok"; tok=''; }
+        ps_check_segment "${toks#$SEP}" || return 1
+        toks=''; prevtok=''; i=$((i + 1));;
+      '<')  return 1;;                                    # not a construct this parser proves
+      '>')
+        case "$tok" in
+          '')        return 1;;                           # bare `>` always writes
+          '*')       tok='';;                              # `*>` prefix
+          *[!0-9]*)  return 1;;
+          *)         tok='';;                              # `N>` prefix
+        esac
+        i=$((i + 1))
+        if [ "${cmd:i:1}" = "&" ]; then                     # N>&1 / N>&2 — merge, no file written
+          i=$((i + 1))
+          case "${cmd:i:1}" in 1|2) i=$((i + 1));; *) return 1;; esac
+        elif [ "${cmd:i:5}" = '$null' ]; then i=$((i + 5))  # N>$null / *>$null
+        else return 1
+        fi;;
+      ' ' | '	')
+        [ -n "$tok" ] && { toks="$toks$SEP$tok"; prevtok="$tok"; tok=''; }
+        i=$((i + 1));;
+      *) tok="$tok$c"; i=$((i + 1));;
+    esac
+  done
+  [ "$st" = none ] || return 1                              # unterminated quote
+  [ -n "$tok" ] && toks="$toks$SEP$tok"
+  ps_check_segment "${toks#$SEP}" || return 1
+  return 0
+}
+
 # ---------------------------------------------------------------- entry
 if [ "${1:-}" = "--test" ]; then
   scan "${2:-}" && echo allow || echo ask
   exit 0
 fi
+if [ "${1:-}" = "--test-ps" ]; then
+  ps_scan "${2:-}" && echo allow || echo ask
+  exit 0
+fi
 
 IN="$(cat)"
 jstr tool_name "$IN" || exit 0
-[ "$REPLY" = "Bash" ] || exit 0
+case "$REPLY" in
+  Bash)       SCANNER=scan;    REASON="every segment proven read-only";;
+  PowerShell) SCANNER=ps_scan; REASON="every PowerShell segment proven read-only";;
+  *)          exit 0;;
+esac
 jstr command "${IN#*\"tool_input\"}" || exit 0
 CMD="$REPLY"
 [ -n "$CMD" ] || exit 0
 
-scan "$CMD" || exit 0
+"$SCANNER" "$CMD" || exit 0
 VERDICT=allow
 
 # Claude Code reads this and skips the prompt. Any other output shape is ignored, which is
 # another reason a bug here degrades to "ask" rather than to "allow".
-printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"%s","permissionDecisionReason":"POLARIS: every segment proven read-only"}}\n' "$VERDICT"
+printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"%s","permissionDecisionReason":"POLARIS: %s"}}\n' "$VERDICT" "$REASON"
 exit 0

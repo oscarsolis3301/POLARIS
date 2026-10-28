@@ -1,4 +1,4 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.5.0] -->
+<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.9.0] -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 Model-agnostic operating system for running N coding agents in parallel on this repo with zero merge
@@ -35,15 +35,17 @@ Your kickoff names your role. Read `ops/roles/<ROLE>.md` and execute it. Nothing
   same chat; closing with "open a new chat and say…" is the exact failure this row exists to end.
 - **Scope guard:** `start` fires only when the message *is* a start phrase. "start the dev server",
   "go fix the header" name an object — they are ordinary requests, not kickoffs.
-- **Unprompted work request → run `triage`, same as `start`.** No role named, not a start phrase,
-  but the message asks to *change the product* (add / build / create / implement / improve /
-  redesign / refactor / fix / remove) → author the task if none exists, then let `triage` pick the
-  lane. **Never guess SOLO-vs-CONDUCTOR from the prose** — guessing wrong costs a whole sprint, and
-  the command is free. Describe what you want and POLARIS routes it; no "which role?" detour.
+- **Unprompted work request → always author its own task, then `triage <ID>`.** No role named, not
+  a start phrase, but the message asks to *change the product* (add / build / create / implement /
+  improve / redesign / refactor / fix / remove) → author the task with a `plan:` slug, `triage
+  <ID>`, claim that ID. A ready task is never picked up just because it sits there. **Never guess
+  SOLO-vs-CONDUCTOR** — the command is free; describe what you want, POLARIS routes it.
 - **Guard:** a question about existing code ("what/why/how does X work", "where is…"), an
   operational command ("run the tests", "deploy"), or POLARIS meta ("update POLARIS", "status") is
   NOT a work request — handle it normally. The discriminant is intent to *change* the repo vs.
   intent to *understand or operate* it. Genuinely unclear → ask in one line.
+- **"Use REA to…"** → skill `reverse-engineer-anything` gathers evidence first; then answer
+  a question, or send a build request to `triage` with it.
 - No role given and `ops/CONVENTIONS.md` does NOT exist → INIT has never run → you are INIT.
   That file is the ONLY "has INIT run?" test; an `ops/board/` from an older installer proves nothing.
 - **NEVER act as two roles inside one CONTEXT.** A hop at a board-proven boundary is not a second

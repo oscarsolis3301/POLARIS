@@ -42,7 +42,8 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  visual: path needs TWO captures newer than the branch base and one
                                  --saw line, which becomes the caption filed beside the pictures;
                                  --no-before says nothing existed to photograph yet and drops it to one
-  release <ID> [--to ready|blocked] [-m note]   abort: give the task back cleanly
+  release <ID> [--to ready|blocked|backlog] [-m note]   abort: give the task back cleanly;
+                                 --to backlog also parks a task sitting UNCLAIMED in ready/
   park [-m why]                  stash the primary's dirty tree (tracked + untracked) as
                                  polaris/park-<epoch> — a dirty shared checkout is parked, never
                                  asked about; reversible in ONE command
@@ -150,16 +151,26 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   metrics                        opens with a plain-English summary line, then cycle · throughput ·
                                  kickbacks · build-vs-integrate split (EVENTS.ndjson)
   why <ID>                       why a task bounced/blocked: kickback + release/blocked notes from telemetry + body
+  depth [<ID> | --commit <sha>]  how much testing this change needs — line 1 is one word: none
+                                 (only test_skip paths, e.g. docs) · look (only test_look paths,
+                                 e.g. css/images) · scoped (every code path mapped in
+                                 ops/SURFACES.tsv) · full (anything else, risk: high, or
+                                 test_depth: full on the task). `   why:` + `   paths:` note lines
+                                 follow. With <ID>: the task's own diff off $BASE. No ID: the
+                                 board's current unbounded/bounded change set. --commit <sha>: that commit's paths, and
+                                 the exact commands qa would run (and the uat it would skip). Read-only
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)
-  triage                         which LANE this board's work belongs in — line 1 is one word:
+  triage [<ID…>]                 which LANE this board's work belongs in — line 1 is one word:
                                  solo (one context, zero subagents; 1 task ≤3pts — or up to 4
                                  tasks, ≤3pts each and ≤6pts in all, worked one at a time — risk
                                  normal, express on, publish direct) · express (one task, one
                                  builder, one integrator) · full (everything else). Reasons follow
                                  on note lines. Decide with this, never by re-reading the board
-                                 and weighing the conditions by hand.
+                                 and weighing the conditions by hand. With ID(s), ONLY the named
+                                 tasks count — a leftover in ready/ never widens the lane — and the
+                                 first one's plan: is recorded as this run's scope.
   route [<ID> | --role <R> | --points <N> [--risk <R>]]
                                  which MODEL TIER runs a piece of work — line 1 is always one
                                  word: strong | mid | cheap (a task's model: frontmatter
@@ -398,13 +409,14 @@ case "${1:-}" in
   doctor)     shift 2>/dev/null || true; awake_ensure || true; update_check_maybe || true; cmd_doctor "$@";;
   metrics)    cmd_metrics;;
   why)        shift; cmd_why "$@";;
-  triage)     cmd_triage;;
+  triage)     shift; cmd_triage "$@";;
   route)      shift; cmd_route "$@";;   # no update_check_maybe: read-only oracle, called before EVERY spawn — keep it quiet + pure
   drift)      shift 2>/dev/null || true; cmd_drift "${1:-}";;
   rules)      cmd_rules;;
   surfaces)   shift 2>/dev/null || true; cmd_surfaces "$@";;   # no update_check_maybe: read-only, drift calls it
   shots)      cmd_shots;;   # no update_check_maybe: rewrites a generated index and commits nothing
   qa)         shift 2>/dev/null || true; cmd_qa "$@";;   # every flag forwarded: `qa --force --full` used to drop --full
+  depth)      shift 2>/dev/null || true; cmd_depth "$@";;   # no update_check_maybe: read-only, same class as triage/drift
   bg)         shift; case "${1:-}" in run) awake_ensure || true;; esac; cmd_bg "$@";;   # no update_check_maybe:
               # run/status/tail/wait ride hot agent loops — keep them quiet + pure. Only `run` ensures the
               # keep-awake daemon: a detached suite is exactly the stretch where nobody touches the keyboard.

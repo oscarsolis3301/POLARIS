@@ -22,3 +22,4 @@ ops/tests/*.cmd text eol=lf
 docs/sprints/*.md text eol=lf
 # Telemetry: append-only, union-merged, never eol-converted (init-board also arms this line).
 ops/board/EVENTS.ndjson merge=union -text
+docs/screens/**/*.png -text

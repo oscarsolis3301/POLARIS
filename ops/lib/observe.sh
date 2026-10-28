@@ -570,7 +570,7 @@ cmd_doctor() {
         note "⚠ drain: '$dr' unknown (queue | plan | backlog) — behaving as the default"; dr=""
       fi
       case "$ds" in *[!0-9]*) note "⚠ drain_slices: '$ds' not a number — behaving as 2"; ds="";; esac
-      note "drain: ${dr:-queue} · drain_slices: ${ds:-2} (autonomy never composes drain)"
+      note "drain: ${dr:-plan} · drain_slices: ${ds:-2} (autonomy never composes drain)"
     fi
   fi
   # The two shared-checkout knobs (ops/contracts/shared-checkout.md). They are NOT composed by
@@ -2008,7 +2008,7 @@ cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output 
   say "check: $n golden(s), all green"
 }
 
-cmd_triage() { # triage — print the LANE this board's work belongs in: solo | express | full.
+cmd_triage() { # triage [<ID…>] — print the LANE this board's work belongs in: solo | express | full.
   # The six conditions below were prose in CONDUCTOR.md, which meant a model re-derived them from
   # the board every run — reading task files, weighing points, re-reading CONVENTIONS — and paid
   # tokens to reach an answer the CLI already had. It is data, so it is a command.
@@ -2016,12 +2016,36 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
   #   solo    one context does plan+build+integrate. No subagents at all.
   #   express conductor + ONE builder + ONE integrator, landing through `land --express`.
   #   full    the ordinary loop: planner, N builders, integrator, wave gate.
+  # With ID(s) (stay-on-request.md § 1): ONLY the named tasks count toward the lane — a leftover
+  # already sitting in ready/ never drags the run into a bigger lane than the request needs. Each
+  # named ID must sit in ready/ or active/, else `die` (rc 1, nothing on stdout). With a session id,
+  # the FIRST named task's `plan:` is recorded as this run's scope, overwriting (the request defines
+  # the run, not the first claim) — `claim`'s first-claim write (builder.sh) stays the fallback for
+  # a bare `start`. No IDs ⇒ every branch below is byte-identical to before.
   local n=0 id="" f base pts risk owned p why="" lane=full k sum big
-  for f in "$BOARD"/ready/*.md "$BOARD"/active/*.md; do
-    [ -e "$f" ] || continue
-    base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
-    n=$((n + 1)); id="${base%.md}"
-  done
+  local named=0 first_id="" active_n=0 aid
+  if [ $# -gt 0 ]; then
+    named=1
+    for id in "$@"; do
+      f="$(task_file "$id" ready)" || f="$(task_file "$id" active)" || \
+        die "triage: $id is not in ready/ or active/"
+      [ -z "$first_id" ] && first_id="$id"
+    done
+    n=$#
+    if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+      local hs; hs="$PRIMARY/.polaris/handover/$CLAUDE_CODE_SESSION_ID"
+      mkdir -p "$hs" 2>/dev/null || true
+      f="$(task_file "$first_id")"
+      printf '%s\n' "$(fm_get plan "$f" 2>/dev/null || true)" 2>/dev/null > "$hs/plan" || true
+    fi
+    [ "$n" -eq 1 ] && id="$first_id"
+  else
+    for f in "$BOARD"/ready/*.md "$BOARD"/active/*.md; do
+      [ -e "$f" ] || continue
+      base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
+      n=$((n + 1)); id="${base%.md}"
+    done
+  fi
 
   if [ "$n" -eq 0 ]; then
     printf 'full\n'; note "nothing claimable — the board is empty, so a Planner runs first"; return 0
@@ -2036,19 +2060,31 @@ cmd_triage() { # triage — print the LANE this board's work belongs in: solo | 
     # single-task wording) · the express/publish knobs · the solo budget (≤4 tasks, ≤3 pts each,
     # ≤6 pts in all) · otherwise full.
     k=0
-    for f in "$BOARD"/active/*.md; do
-      [ -e "$f" ] || continue
-      [ "${f##*/}" = "IDEAS.md" ] && continue
-      k=$((k + 1))
-    done
+    if [ "$named" -eq 1 ]; then
+      for aid in "$@"; do
+        [ -f "$BOARD/active/$aid.md" ] && k=$((k + 1))
+      done
+    else
+      for f in "$BOARD"/active/*.md; do
+        [ -e "$f" ] || continue
+        [ "${f##*/}" = "IDEAS.md" ] && continue
+        k=$((k + 1))
+      done
+    fi
     if [ "$k" -gt 0 ]; then
       printf 'full\n'; note "$k task(s) already active — another lane is building; parallel lanes are the point"; return 0
     fi
     sum=0; big=0
-    for f in "$BOARD"/ready/*.md; do
-      [ -e "$f" ] || continue
-      base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
-      id="${base%.md}"
+    for id in $( if [ "$named" -eq 1 ]; then
+        for aid in "$@"; do [ -f "$BOARD/ready/$aid.md" ] && printf '%s\n' "$aid"; done
+      else
+        for f in "$BOARD"/ready/*.md; do
+          [ -e "$f" ] || continue
+          base="${f##*/}"; [ "$base" = "IDEAS.md" ] && continue
+          printf '%s\n' "${base%.md}"
+        done
+      fi ); do
+      f="$BOARD/ready/$id.md"
       pts="$(fm_get points "$f")"; pts="${pts:-99}"
       risk="$(fm_get risk "$f")"; risk="${risk:-normal}"
       [ "$risk" = "normal" ] || why="risk: $risk (only a human may approve a merge)"
@@ -2199,6 +2235,134 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
   return 0
 }
 
+depth_line_say() { # depth_line_say <depth> <why> — change-sized.md § 5: the one depth line every
+  # run prints before running. At full it also names the last measured full-suite time.
+  local d="$1" w="$2" t="" s=""
+  if [ "$d" = full ] && [ -f "$PRIMARY/.polaris/last-suite-seconds" ]; then
+    s="$(cut -d' ' -f1 < "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true)"
+    case "$s" in
+      ''|*[!0-9]*) ;;
+      *) if [ "$s" -lt 60 ]; then t="${s}s"; else t="$(( (s + 30) / 60 ))m"; fi;;
+    esac
+  fi
+  if [ -n "$t" ]; then note "depth: $d — $w (last full run $t)"; else note "depth: $d — $w"; fi
+}
+uat_deferred_say() { note "uat — deferred: runs on full-depth changes, CI and release"; }
+cmd_depth() { # depth [<ID>] — read-only verdict: how much testing does this change need, and why
+  # (ops/contracts/test-depth.md § 3). Line 1 = the depth word alone; then `   why:` and
+  # `   paths:` note lines. With <ID>: paths = git diff --name-only $BASE...feat/<ID>, taskfile =
+  # that task's file. No ID: paths = surface_change_set — UNBOUNDED (no proven baseline) prints
+  # `full` / `no suite baseline` outright; taskfiles = every `[<ID>]` task-commit subject since the
+  # baseline (or $BASE on a branch), plus the current feat/<ID> branch, resolved with `task_file`.
+  # Nothing here writes anything — same read-only contract as `triage`/`drift`.
+  local id="" tf="" paths="" n=0 skipn=0 line depth why csf p skip_raw sha cur baseline subj sid f tfs commit=""
+  local du="usage: polaris depth [<ID> | --commit <sha>]" rp="" k c sel
+  tfs=""
+  case "${1:-}" in
+    --commit) commit="${2:-}"; [ -n "$commit" ] && [ $# -eq 2 ] || { printf '%s\n' "$du"; return 2; };;
+    -*)       printf '%s\n' "$du"; return 2;;
+    *)        id="${1:-}"; [ $# -le 1 ] || { printf '%s\n' "$du"; return 2; };;
+  esac
+  if [ -n "$commit" ]; then
+    # change-sized.md § 6: what WOULD qa run for this commit — read-only, runs nothing, stamps nothing
+    sha="$(git -C "$PRIMARY" rev-parse --verify -q "$commit^{commit}" 2>/dev/null)"       || { printf '⛔ no such commit: %s\n' "$commit"; return 2; }
+    if git -C "$PRIMARY" rev-parse --verify -q "$sha^" >/dev/null 2>&1; then rp=""; else rp="--root"; fi
+    paths="$(git -C "$PRIMARY" diff-tree --no-commit-id --name-only -r $rp "$sha" 2>/dev/null)"
+    subj="$(git -C "$PRIMARY" log -1 --format=%s "$sha" 2>/dev/null)"
+    case "$subj" in *'['*']') sid="${subj##*[}"; sid="${sid%]}"; tfs="$(task_file "$sid" 2>/dev/null)" || tfs="";; esac
+    tf="$tfs"
+  elif [ -n "$id" ]; then
+    tf="$(task_file "$id")" || die "depth: $id not found on the board"
+    paths="$(git -C "$PRIMARY" diff --name-only "$BASE...feat/$id" 2>/dev/null)"
+  else
+    csf="$(mktemp)"
+    if surface_change_set > "$csf"; then
+      paths="$(cat "$csf")"; rm -f "$csf"
+    else
+      rm -f "$csf"
+      printf 'full\n'; note "why: no suite baseline"
+      return 0
+    fi
+    baseline="${SURFACE_BASELINE:-}"
+    cur="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    [ -n "$baseline" ] || { [ "$cur" = "$BASE" ] || baseline="$BASE"; }
+    if [ -n "$baseline" ]; then
+      while IFS= read -r subj; do
+        [ -z "$subj" ] && continue
+        case "$subj" in *'['*']') sid="${subj##*[}"; sid="${sid%]}";; *) sid="";; esac
+        [ -n "$sid" ] || continue
+        f="$(task_file "$sid" 2>/dev/null)" || continue
+        case " $tfs " in *" $f "*) ;; *) tfs="${tfs:+$tfs }$f";; esac
+      done <<EOF
+$(git -C "$PRIMARY" log --format=%s "$baseline..HEAD" 2>/dev/null)
+EOF
+    fi
+    case "$cur" in
+      feat/*) f="$(task_file "${cur#feat/}" 2>/dev/null)" || f=""
+              if [ -n "$f" ]; then case " $tfs " in *" $f "*) ;; *) tfs="${tfs:+$tfs }$f";; esac; fi ;;
+    esac
+    tf="$tfs"
+  fi
+  n="$(printf '%s\n' "$paths" | grep -c .)"
+  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
+  [ "$skip_raw" = "-" ] && skip_raw=""
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    [ -n "$skip_raw" ] && owned_match "$p" $skip_raw && skipn=$((skipn+1))
+  done <<EOF
+$paths
+EOF
+  line="$(printf '%s\n' "$paths" | depth_for $tf)"
+  depth="${line%%$POLARIS_TAB*}"; why="${line#*$POLARIS_TAB}"
+  csf=""
+  if [ -n "$commit" ] && [ "$depth" != none ] && [ "$depth" != look ]; then
+    # the paths qa would hand test_select_for: the change set minus test_skip
+    csf="$(mktemp)"
+    while IFS= read -r p; do
+      [ -z "$p" ] && continue
+      if [ -n "$skip_raw" ] && owned_match "$p" $skip_raw; then continue; fi
+      printf '%s\n' "$p"
+    done > "$csf" <<PATHS
+$paths
+PATHS
+    # a full verdict with test_select unset only says "test_select unset": name the first path that
+    # has no related tests instead, when there is one (nothing is run to find it)
+    if [ "$depth" = full ] && [ "$why" = "test_select unset" ]; then
+      while IFS= read -r p; do
+        [ -z "$p" ] && continue
+        printf '%s\n' "$p" > "$csf.1"
+        if sel="$(related_cmds "$csf.1")"; then :; else why="$sel"; break; fi
+      done < "$csf"
+      rm -f "$csf.1"
+    fi
+  fi
+  printf '%s\n' "$depth"
+  note "why: $why"
+  note "paths: $n changed ($skipn skipped by test_skip)"
+  if [ -n "$commit" ]; then
+    if [ -z "$csf" ]; then
+      note "would run: nothing"
+    else
+      for k in test lint typecheck build uat; do
+        c="$(cfg "$k" "")"
+        [ -z "$c" ] && continue
+        if [ "$k" = uat ] && [ "$depth" = scoped ]; then continue; fi
+        if [ "$k" = test ] && [ "$depth" != full ] || { [ "$k" = test ] && { [ -n "$(cfg test_select "")" ] || [ "$(cfg test_related "")" != "-" ]; }; }; then
+          if sel="$(test_select_for "$csf")"; then
+            while IFS= read -r c; do [ -n "$c" ] && note "would run: $c"; done <<CMDS
+$sel
+CMDS
+            continue
+          fi
+        fi
+        note "would run: $c"
+      done
+      if [ "$depth" = scoped ] && [ -n "$(cfg uat "")" ]; then note "would skip: uat"; fi
+    fi
+    rm -f "$csf"
+  fi
+  return 0
+}
 cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the full CONVENTIONS suite
   # (test/lint/typecheck/build, uat if set), then drift --strict, then doctor's env check. Runs EVERY
   # check even after a red — one pass paints the whole picture — and exits 1 if anything was
@@ -2212,6 +2376,10 @@ cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the 
   # speed.md § 4: red is EVERYTHING; sred_any = a suite key went red; hred = a red that is neither a
   # suite key nor CRUFT-class. The stamp needs sred_any=0 AND hred=0 — the rc still reads red alone.
   local sred_any=0 hred=0
+  # test-depth.md § 4: depth_skip=1 ⇒ the whole suite loop never runs (none|look). ddepth/dwhy carry
+  # whatever depth_for actually answered (any of the four words), empty when the gate never ran
+  # (--force, --full, or an unbounded change set) — decision_log below fires only when non-empty.
+  local depth_skip=0 ddepth="" dwhy="" dtf="" dcsf="" dline dbaseline dcur dsubj dsid df qf qplan qtaskid qpf dsecs
   for a in "$@"; do
     case "$a" in --force) force=1;; --full) full=1;; esac
   done
@@ -2237,28 +2405,82 @@ cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the 
     sc="$(suite_stamp_scope "$PRIMARY/.polaris/suite-stamp" || true)"
     say "suite already green at $(printf '%.7s' "$head") — skipped, proven ${sc:-full} (qa --force re-runs it)"
   else
+  # test-depth.md § 4: decide ONCE whether this change needs the suite at all, before the per-key
+  # loop below. --force/--full and an unbounded change set (no proven baseline) never consult
+  # depth_for — they mean "run everything", exactly as before. Bounded ⇒ depth_for's verdict:
+  # none/look skip the WHOLE loop (no test/lint/typecheck/build/uat); scoped/full fall through to
+  # the loop UNCHANGED — its own test_select scoping just below is a separate, finer decision about
+  # the `test` key alone, and stays byte-identical to 6.8.0 either way. A dirty tree never consults
+  # the gate either: depth_for sees only COMMITTED diffs, and the whole point of `dirty` up top is
+  # that an uncommitted edit (a CONVENTIONS.md config change included) might be exactly what the
+  # next suite run needs to see — qa's own stated philosophy ("any uncommitted change... re-runs
+  # everything"), so the gate defers to it instead of reading a stale, HEAD-only "nothing changed".
+  if [ "$force" -eq 0 ] && [ "$full" -eq 0 ] && [ -z "$dirty" ]; then
+    dcsf="$(mktemp)"
+    if surface_change_set > "$dcsf"; then
+      # task files: every `[<ID>]` subject since the baseline (SURFACE_BASELINE, else $BASE on a
+      # branch), plus feat/<ID> when HEAD is on one — the same scan cmd_depth uses for its no-ID
+      # case, resolved with task_file in any column; missing files ignored.
+      dbaseline="${SURFACE_BASELINE:-}"
+      dcur="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+      [ -n "$dbaseline" ] || { [ "$dcur" = "$BASE" ] || dbaseline="$BASE"; }
+      dtf=""
+      if [ -n "$dbaseline" ]; then
+        while IFS= read -r dsubj; do
+          [ -z "$dsubj" ] && continue
+          case "$dsubj" in *'['*']') dsid="${dsubj##*[}"; dsid="${dsid%]}";; *) dsid="";; esac
+          [ -n "$dsid" ] || continue
+          df="$(task_file "$dsid" 2>/dev/null)" || continue
+          case " $dtf " in *" $df "*) ;; *) dtf="${dtf:+$dtf }$df";; esac
+        done <<EOF
+$(git -C "$PRIMARY" log --format=%s "$dbaseline..HEAD" 2>/dev/null)
+EOF
+      fi
+      case "$dcur" in
+        feat/*) df="$(task_file "${dcur#feat/}" 2>/dev/null)" || df=""
+                if [ -n "$df" ]; then case " $dtf " in *" $df "*) ;; *) dtf="${dtf:+$dtf }$df";; esac; fi ;;
+      esac
+      dline="$(depth_for $dtf < "$dcsf")"
+      ddepth="${dline%%$POLARIS_TAB*}"; dwhy="${dline#*$POLARIS_TAB}"
+    fi
+  fi
+  if [ "$ddepth" = none ] || [ "$ddepth" = look ]; then
+    note "depth: $ddepth — $dwhy"
+    scope="$ddepth"; depth_skip=1
+  else
+  [ -z "$ddepth" ] || depth_line_say "$ddepth" "$dwhy"
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
+    # change-sized.md § 5: at scoped depth the slow live tier is deferred, said once
+    if [ "$k" = uat ] && [ "$ddepth" = scoped ]; then uat_deferred_say; continue; fi
     # test — change-scoped selection (test-surfaces.md § 6), and ONLY when test_select: is set:
     # which of the ops/SURFACES.tsv commands can this change break? The decision itself lives in
     # core.sh (surface_change_set + surface_select_cmd) and is shared with `land --express`, so the
     # two lanes cannot disagree. Unset ⇒ this block is never entered and the loop is 6.3, byte for
     # byte. Selection is all-or-nothing: one changed path without a row ⇒ the whole suite (D3).
     sel=""
-    if [ "$k" = test ] && [ "$full" -eq 0 ] && [ -n "$(cfg test_select "")" ]; then
+    if [ "$k" = test ] && [ "$full" -eq 0 ] && [ -z "$dirty" ] && { [ -n "$(cfg test_select "")" ] || [ "$(cfg test_related "")" != "-" ]; }; then
       csf="$(mktemp)"
       if surface_change_set $fflag > "$csf"; then
-        if [ ! -s "$csf" ]; then
+        if [ ! -s "$csf" ] && [ -z "$(cfg test_select "")" ]; then
+          # a carry is a test_select feature: unset runs test: verbatim, exactly as 6.8.0 (T-209)
+          :
+        elif [ ! -s "$csf" ]; then
           # BOUNDED and EMPTY: only board files moved since an ancestor stamp — the batch-wave
           # finish case — so the baseline's verdict carries to HEAD: the whole loop is skipped and
           # HEAD is re-stamped below with the scope that was actually proven.
+          if [ "${SURFACE_BOUND:-}" = run ]; then
+            scope=none; carry=1
+            note "nothing this run changed needs a suite"
+            rm -f "$csf"; break
+          fi
           bsha="${SURFACE_BASELINE:-$head}"; scope="${SURFACE_BASELINE_SCOPE:-full}"; carry=1
           say "suite already green at $(printf '%.7s' "$bsha") — only board files changed since; skipped, proven $scope (qa --force re-runs it)"
           rm -f "$csf"; break
         fi
         np="$(grep -c . "$csf" || true)"
-        if sel="$(surface_select_cmd "$csf")"; then
+        if sel="$(test_select_for "$csf")"; then
           m="$(printf '%s\n' "$sel" | grep -c . || true)"
           note "test — scoped to $m command(s): $np changed path(s) all mapped (qa --full runs test: verbatim)"
         else
@@ -2271,10 +2493,11 @@ cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the 
                            esac;;
             'no rows')     why="ops/SURFACES.tsv has no rows";;
           esac
-          note "test — running the whole suite: $why"
+          # test_select unset: the related attempt alone failed — stay as quiet as before it existed
+          if [ -n "$(cfg test_select "")" ]; then note "test — running the whole suite: $why"; fi
         fi
       else
-        note "test — running the whole suite: no proven baseline on $BASE (no stamp, --force, or a stamp that is not an ancestor)"
+        [ -z "$(cfg test_select "")" ] || note "test — running the whole suite: no proven baseline on $BASE (no stamp, --force, or a stamp that is not an ancestor)"
       fi
       rm -f "$csf"
     fi
@@ -2304,6 +2527,7 @@ EOF
     fi
   done
   fi
+  fi
   # T-031 (ops/contracts/verification-tiering.md): stamp how long the suite took — one line,
   # "<seconds> <epoch>", written only when ≥1 suite command actually ran. `land` reads it for
   # the slow-suite hint; purely advisory, never a gate, best-effort write.
@@ -2323,7 +2547,7 @@ EOF
       rm -f "$csf"
     fi
   fi
-  [ "$ran" -eq 0 ] && [ "$skip" -eq 0 ] && [ "$carry" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
+  [ "$ran" -eq 0 ] && [ "$skip" -eq 0 ] && [ "$carry" -eq 0 ] && [ "$depth_skip" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
   # CRUFT (ops/contracts/worktree-liveness.md § v2): clear the provably-landed leftovers BEFORE
   # drift looks at them. This is qa's only mutation besides the stamp, and it is exactly the subset
   # of `sweep --fix` that is lossless by construction — a branch goes only when its commits are
@@ -2371,7 +2595,7 @@ EOF
   # Stamp v3 (test-surfaces.md § 6): ONE line `<sha> <epoch> <scope>` — scoped iff the test key
   # ran a selection, full otherwise; a carried verdict re-stamps HEAD with the baseline's own scope.
   # Readers go through suite_stamp_scope (a 2-field pre-6.4 stamp reads as full).
-  if { [ "$ran" -ge 1 ] || [ "$carry" -eq 1 ]; } && [ "$head" != "none" ] && [ "$sred_any" -eq 0 ] && [ "$hred" -eq 0 ]; then
+  if { [ "$ran" -ge 1 ] || [ "$carry" -eq 1 ] || [ "$depth_skip" -eq 1 ]; } && [ "$head" != "none" ] && [ "$sred_any" -eq 0 ] && [ "$hred" -eq 0 ]; then
     if [ "$head2" = "$head" ] && [ -z "$dirty" ] && [ -z "$dirty2" ]; then
       mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
       printf '%s %s %s\n' "$head" "$(date +%s)" "$scope" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
@@ -2380,6 +2604,26 @@ EOF
       note "⚠ HEAD moved or the tree is not clean — stamp withheld, so the next qa re-runs the suite"
     fi
   fi
+  # decision log (test-depth.md § 5): ONE row per qa that actually reached a depth verdict —
+  # AFTER the run, so secs/rc are real; never when the gate didn't run (skip/force/full/unbounded).
+  if [ -n "$ddepth" ]; then
+    if [ -n "$dtf" ]; then
+      qf="${dtf%% *}"
+      qplan="$(fm_get plan "$qf" 2>/dev/null)"
+      qtaskid="$(fm_get id "$qf" 2>/dev/null)"; [ -n "$qtaskid" ] || qtaskid="$(basename "$qf" .md)"
+    else
+      qplan=""; qtaskid=""
+    fi
+    if [ -z "$qplan" ]; then
+      qpf="$(next_dir)/plan"
+      [ -f "$qpf" ] && qplan="$(tr -d ' \r\n' < "$qpf" 2>/dev/null)"
+    fi
+    dsecs=$(( $(date +%s) - t0 ))
+    set -f   # word-split the paths below on IFS, never glob-expand one that happens to contain * or ?
+    decision_log test_depth "$qplan" "$qtaskid" "$ddepth" "$dwhy" "$dsecs" "$red" $([ -s "$dcsf" ] && head -20 "$dcsf")
+    set +f
+  fi
+  [ -z "$dcsf" ] || rm -f "$dcsf"
   [ "$red" -eq 0 ] || die "qa: red — fix the ⛔ lines above before calling the work done"
   say "qa: all green"
 }
@@ -2402,6 +2646,8 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   # lets an agent re-run finish freely while chasing pendings without muting the signal.
   local force="" PEND=0 CAV=0 CAVS="" br dr n out w it stamp key fired bl rd ib lk f line sc ssha
   local lho lag lsm
+  local fin_t0 fin_plan fin_pf
+  fin_t0="$(date +%s)"
   [ "${1:-}" = "--force" ] && force=1
   fin_pending() { PEND=$((PEND+1)); printf '⛔ pending: %s\n' "$1"; }
   fin_caveat()  { CAV=$((CAV+1));  CAVS="$CAVS$1
@@ -2436,13 +2682,13 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   # drain: (ops/contracts/hands-free-knobs.md) decides whether a queued task blocks the close. Under
   # `plan` one "go" authorizes THE PLAN, not the board, so ready/ is legitimately non-empty at the
   # end — gating on it there would make the default run un-finishable. Under queue/backlog it gates.
-  rd=$(fin_count ready); dr="$(cfg drain "")"; dr="${dr:-queue}"
+  rd=$(fin_count ready); dr="$(cfg drain "")"; dr="${dr:-plan}"
   if [ "$rd" -gt 0 ]; then
     case "$dr" in
       plan) fin_caveat "$rd queued in ready/ under drain: plan — say so; \`start\` picks them up";;
       queue|backlog) fin_pending "$rd queued in ready/ and drain: $dr — drain them, or set drain: plan in ops/CONVENTIONS.md";;
-      *) note "⚠ unknown drain: '$dr' — treating it as queue (plan | queue | backlog)"
-         fin_pending "$rd queued in ready/ — drain them, or set drain: plan in ops/CONVENTIONS.md";;
+      *) note "⚠ unknown drain: '$dr' — treating it as plan (plan | queue | backlog)"
+         fin_caveat "$rd queued in ready/ under drain: plan — say so; \`start\` picks them up";;
     esac
   fi
   # An unmerged integrate/<date> is a whole wave that never reached <base> — the single most
@@ -2557,10 +2803,17 @@ EOF
     rm -f "$out"
   fi
 
+  # decision log (test-depth.md § 5): one `finish` row, win or lose, AFTER the checks above so
+  # secs/rc are real. plan: the recorded session plan only — finish is about the whole run, never
+  # one task. Best-effort, never gates (decision_log swallows its own failures).
+  fin_plan=""; fin_pf="$(next_dir)/plan"
+  [ -f "$fin_pf" ] && fin_plan="$(tr -d ' \r\n' < "$fin_pf" 2>/dev/null)"
   if [ "$PEND" -gt 0 ]; then
+    decision_log finish "$fin_plan" "" "" "" "$(( $(date +%s) - fin_t0 ))" 1
     [ "$PEND" -eq 1 ] && { w="thing"; it="it"; } || { w="things"; it="them"; }
     die "finish: not done — $PEND $w pending; fix $it and run finish again"
   fi
+  decision_log finish "$fin_plan" "" "" "" "$(( $(date +%s) - fin_t0 ))" 0
 
   # From here down the verdict is rc 0 — the die above is the only exit. The Stop hook reads this
   # marker to know a session has already ended its RUN (ops/contracts/role-handover.md, the
@@ -2603,7 +2856,11 @@ EOF
 }
 
 cmd_metrics() { # cycle time + throughput + kickbacks from EVENTS.ndjson — pure awk
-  [ -s "$EVENTS" ] || { note "no telemetry yet (EVENTS.ndjson empty) — runs accumulate it"; return 0; }
+  if [ ! -s "$EVENTS" ]; then
+    note "no telemetry yet (EVENTS.ndjson empty) — runs accumulate it"
+    metrics_depth_lines
+    return 0
+  fi
   awk -v now="$(date +%s)" '
     function get(k,   m){ m=""; if (match($0, "\""k"\":\"[^\"]*\"")) { m=substr($0,RSTART,RLENGTH); sub("\""k"\":\"","",m); sub("\"$","",m) } return m }
     function num(k,   m){ m=""; if (match($0, "\""k"\":[0-9]+"))     { m=substr($0,RSTART,RLENGTH); sub("\""k"\":","",m) } return m+0 }
@@ -2645,6 +2902,78 @@ cmd_metrics() { # cycle time + throughput + kickbacks from EVENTS.ndjson — pur
   printf 'WIP now: %s active · %s review\n' \
     "$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)" \
     "$(ls "$BOARD/review" 2>/dev/null | grep -c '\.md$' || true)"
+  metrics_depth_lines
+}
+
+metrics_depth_lines() { # test-depth.md § 6 — two lines, appended LAST: suite minutes skipped this
+  # sprint (by depth) and the per-run build/land/suite/finish split, read from
+  # .polaris/decisions.ndjson (T-198) + EVENTS.ndjson, sprint-scoped by SPRINT.md line 1's `dates:`.
+  # No log → both lines still print (n/a, -). Pure read, never fails the caller.
+  local sdate sepoch dec skip_line build_m land_m suite_m finish_m out
+  sdate="$(sed -n '1p' "$OPS/SPRINT.md" 2>/dev/null | sed -n 's/.*dates:[[:space:]]*\([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\).*/\1/p')"
+  sepoch=0
+  if [ -n "$sdate" ]; then
+    sepoch="$(date -d "$sdate" +%s 2>/dev/null || date -j -f %Y-%m-%d "$sdate" +%s 2>/dev/null || echo 0)"
+    case "$sepoch" in ''|*[!0-9]*) sepoch=0;; esac
+  fi
+  dec="$PRIMARY/.polaris/decisions.ndjson"
+  if [ -s "$dec" ]; then
+    skip_line="$(awk -v epoch="$sepoch" '
+      function get(k,   m){ m=""; if (match($0, "\""k"\":\"[^\"]*\"")) { m=substr($0,RSTART,RLENGTH); sub("\""k"\":\"","",m); sub("\"$","",m) } return m }
+      function num(k,   m){ m=""; if (match($0, "\""k"\":[0-9]+"))     { m=substr($0,RSTART,RLENGTH); sub("\""k"\":","",m) } return m+0 }
+      BEGIN{ nf=0; nd=0 }
+      { ts=num("ts"); if (ts<epoch) next
+        if (get("kind")!="test_depth") next
+        d=get("depth"); s=num("secs")
+        if (d=="full") { fs[nf]=s; nf++ } else { cnt[d]++; d2[nd]=s; nd++ }
+      }
+      END{
+        if (nf>0) {
+          for(i=1;i<nf;i++){v=fs[i];j=i-1;while(j>=0&&fs[j]>v){fs[j+1]=fs[j];j--}fs[j+1]=v}
+          med=fs[int((nf-1)/2)]; skip=0
+          for(i=0;i<nd;i++){ df=med-d2[i]; if (df>0) skip+=df }
+          printf "suite skipped this sprint: %.1f min (none %d · look %d · scoped %d)\n", skip/60, cnt["none"]+0, cnt["look"]+0, cnt["scoped"]+0
+        } else {
+          printf "suite skipped this sprint: n/a (no full suite timed yet)\n"
+        }
+      }
+    ' "$dec" 2>/dev/null)"
+    out="$(awk -v epoch="$sepoch" '
+      function get(k,   m){ m=""; if (match($0, "\""k"\":\"[^\"]*\"")) { m=substr($0,RSTART,RLENGTH); sub("\""k"\":\"","",m); sub("\"$","",m) } return m }
+      function num(k,   m){ m=""; if (match($0, "\""k"\":[0-9]+"))     { m=substr($0,RSTART,RLENGTH); sub("\""k"\":","",m) } return m+0 }
+      { ts=num("ts"); if (ts<epoch) next
+        kind=get("kind"); s=num("secs")
+        if (kind=="test_depth") { ssum+=s; sn++ }
+        else if (kind=="finish") { fsum+=s; fn++ }
+      }
+      END{ printf "%s %s\n", (sn? sprintf("%.1f", ssum/sn/60) : "-"), (fn? sprintf("%.1f", fsum/fn/60) : "-") }
+    ' "$dec" 2>/dev/null)"
+    set -- $out; suite_m="${1:--}"; finish_m="${2:--}"
+  else
+    skip_line="suite skipped this sprint: n/a (no full suite timed yet)"
+    suite_m="-"; finish_m="-"
+  fi
+  if [ -s "$EVENTS" ]; then
+    out="$(awk -v epoch="$sepoch" '
+      function get(k,   m){ m=""; if (match($0, "\""k"\":\"[^\"]*\"")) { m=substr($0,RSTART,RLENGTH); sub("\""k"\":\"","",m); sub("\"$","",m) } return m }
+      function num(k,   m){ m=""; if (match($0, "\""k"\":[0-9]+"))     { m=substr($0,RSTART,RLENGTH); sub("\""k"\":","",m) } return m+0 }
+      { ts=num("ts"); ev=get("ev"); id=get("id")
+        if (ev=="claim"   && !(id in claimed)) claimed[id]=ts
+        if (ev=="handoff" && !(id in ho))       ho[id]=ts
+        if (ev=="done"    && !(id in done))     done[id]=ts
+      }
+      END{
+        bs=0; bn=0; for (id in ho)   if (id in claimed && claimed[id]>=epoch) { bs+=ho[id]-claimed[id]; bn++ }
+        is=0; iN=0; for (id in done) if (id in ho      && ho[id]>=epoch)      { is+=done[id]-ho[id]; iN++ }
+        printf "%s %s\n", (bn? sprintf("%.1f", bs/bn/60) : "-"), (iN? sprintf("%.1f", is/iN/60) : "-")
+      }
+    ' "$EVENTS" 2>/dev/null)"
+    set -- $out; build_m="${1:--}"; land_m="${2:--}"
+  else
+    build_m="-"; land_m="-"
+  fi
+  printf '%s\n' "$skip_line"
+  printf 'per run: build %sm · land %sm · suite %sm · finish %sm\n' "$build_m" "$land_m" "$suite_m" "$finish_m"
 }
 
 cmd_why() { # why <ID> — the reasons a task bounced or blocked, from telemetry + its own body. The

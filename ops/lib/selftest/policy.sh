@@ -107,7 +107,13 @@ drill_surfaces() {
     #     The row's cmd appends MAPPED to a witness file: (6) below reads it to prove what ran.
     printf -- '---\nid: T-SF\ntitle: the sf surface\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/sf/\n  - tests/sf/\nsurface:\n  - src/sf/ tests: tests/sf/ cmd: sh -c "echo MAPPED >> %s/sf.ran" note: the sf surface\nverify: []\n---\n## Why\nsurfaces drill.\n' "$T" > ops/board/ready/T-SF.md
     "$SELF" claim T-SF >/dev/null || { echo "SURFACES CLAIM FAIL"; exit 1; }
-    ( cd .polaris/wt/T-SF && mkdir -p src/sf tests/sf && echo a > src/sf/a.txt && echo t > tests/sf/a_test.txt \
+    # T-198 (test-depth.md § 4): surface_change_set now drops test_skip paths too, and the kit's
+    # default test_skip glob includes *.txt — so every probe file below that must SURVIVE into the
+    # qa-facing change set (everything from (6) on, which exercises qa's scoped/full selection) uses
+    # a .dat extension, never .txt, exactly like the test-depth.cmd fixture does for the same reason.
+    # (1)-(5) above/below never go through surface_change_set (claim/verify/handoff/land's stale-
+    # tests gate is a direct branch diff), so the rename changes nothing about what they prove.
+    ( cd .polaris/wt/T-SF && mkdir -p src/sf tests/sf && echo a > src/sf/a.dat && echo t > tests/sf/a_test.dat \
       && git add -A && git commit -qm 'sf: source and tests' \
       && "$SELF" verify T-SF >/dev/null 2>&1 && "$SELF" handoff T-SF >/dev/null 2>&1 ) \
       || { echo "SURFACES HANDOFF FAIL (a change to a surface WITH its tests must pass every gate)"; exit 1; }
@@ -130,17 +136,17 @@ drill_surfaces() {
     #     (4) a comment-only added line under the surface is not a surface change.
     printf -- '---\nid: T-SF2\ntitle: sf refactor\ntype: feature\nscope: src\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/sf/\n  - tests/sf/\napproved:\nverify: []\n---\n## Notes\n' > ops/board/ready/T-SF2.md
     "$SELF" claim T-SF2 >/dev/null || { echo "SURFACES CLAIM2 FAIL"; exit 1; }
-    ( cd .polaris/wt/T-SF2 && echo refactor >> src/sf/a.txt && git commit -qam 'sf: source only'
+    ( cd .polaris/wt/T-SF2 && echo refactor >> src/sf/a.dat && git commit -qam 'sf: source only'
       "$SELF" verify T-SF2 > "$T/sfv1.out" 2>"$T/sfv1.err" && { cat "$T/sfv1.out"; echo "SURFACES STALE FAIL (a mapped surface changed and its tests did not — verify must rc 1)"; exit 1; }
-      grep -q "SURFACES stale: src/sf/a.txt changed under 'src/sf/'" "$T/sfv1.err" || { cat "$T/sfv1.err"; echo "SURFACES STALE MSG FAIL (the deny names the path and the surface, on stderr)"; exit 1; }
+      grep -q "SURFACES stale: src/sf/a.dat changed under 'src/sf/'" "$T/sfv1.err" || { cat "$T/sfv1.err"; echo "SURFACES STALE MSG FAIL (the deny names the path and the surface, on stderr)"; exit 1; }
       "$SELF" handoff T-SF2 >/dev/null 2>&1 && { echo "SURFACES HANDOFF GATE FAIL (handoff must refuse the same diff)"; exit 1; }
       [ -f "$T/repo/ops/board/active/T-SF2.md" ] || { echo "SURFACES HANDOFF MOVED FAIL (a refused handoff must leave the task in active/)"; exit 1; }
-      echo more >> tests/sf/a_test.txt && git commit -qam 'sf: tests too'
+      echo more >> tests/sf/a_test.dat && git commit -qam 'sf: tests too'
       "$SELF" verify T-SF2 > "$T/sfv2.out" 2>&1 || { cat "$T/sfv2.out"; echo "SURFACES FRESH FAIL (the tests moved too — verify must rc 0)"; exit 1; }
       grep -q 'surfaces clean: 1 row(s) checked' "$T/sfv2.out" || { cat "$T/sfv2.out"; echo "SURFACES CLEAN LINE FAIL (a clean pass with rows present says how many it checked)"; exit 1; }
-      git reset -q --hard HEAD~2 && printf '# a comment, nothing more\n' >> src/sf/a.txt && git commit -qam 'sf: comment only'
+      git reset -q --hard HEAD~2 && printf '# a comment, nothing more\n' >> src/sf/a.dat && git commit -qam 'sf: comment only'
       "$SELF" verify T-SF2 >/dev/null 2>&1 || { echo "SURFACES COMMENT FAIL (a comment-only added line gates nothing)"; exit 1; }
-      git reset -q --hard HEAD~1 && echo refactor >> src/sf/a.txt && git commit -qam 'sf: source only again'
+      git reset -q --hard HEAD~1 && echo refactor >> src/sf/a.dat && git commit -qam 'sf: source only again'
       "$SELF" verify T-SF2 >/dev/null 2>&1 && { echo "SURFACES STALE AGAIN FAIL (no approval yet — verify must still refuse)"; exit 1; }
       true ) || exit 1
     # (5) the ONE exemption is a human's recorded decision, from the primary: no ask rule covers
@@ -162,7 +168,7 @@ drill_surfaces() {
     printf 'test: sh -c "echo FULL >> %s/sf.ran"\ntest_select: sh -c "echo TPL {tests} >> %s/sf.ran"\n' "$T" "$T" >> ops/CONVENTIONS.md
     git add -A; git commit -qm 'surfaces drill: selection on'
     sfc1="$(git rev-parse main)"
-    echo more >> src/sf/a.txt; git commit -qam 'surfaces drill: a mapped change'
+    echo more >> src/sf/a.dat; git commit -qam 'surfaces drill: a mapped change'
     sfc2="$(git rev-parse main)"
     printf '%s %s full\n' "$sfc1" "$(date +%s)" > .polaris/suite-stamp      # an ancestor stamp: the change set is HEAD~1..HEAD
     : > "$T/sf.ran"
@@ -173,14 +179,16 @@ drill_surfaces() {
     [ -f .polaris/suite-stamp ] || { cat "$T/sfqa1.out"; echo "SURFACES STAMP MISSING FAIL (a green scoped qa stamps HEAD — the report above says why it did not)"; exit 1; }
     read -r sfsha sfep sfsc < .polaris/suite-stamp
     [ "$sfsha" = "$sfc2" ] && [ "$sfsc" = scoped ] || { cat "$T/sfqa1.out"; cat .polaris/suite-stamp; echo "SURFACES STAMP SCOPED FAIL (want '<HEAD> <epoch> scoped')"; exit 1; }
-    echo more >> src/a.txt; git commit -qam 'surfaces drill: an unmapped change'
+    # a NEW, dedicated file — never the shared src/a.txt other drills in this suite read/restore —
+    # outside every mapped surface dir, so it stays genuinely unmapped under T-198's test_skip drop.
+    echo more > src/surfaces-unmapped.dat; git add -A; git commit -qm 'surfaces drill: an unmapped change'
     sfc3="$(git rev-parse main)"
     "$SELF" qa > "$T/sfqa2.out" 2>&1 || true
     grep -q 'running the whole suite' "$T/sfqa2.out" || { cat "$T/sfqa2.out"; echo "SURFACES UNMAPPED FAIL (one unmapped path ⇒ the whole suite, and qa says so)"; exit 1; }
     grep -q FULL "$T/sf.ran" || { cat "$T/sfqa2.out"; echo "SURFACES UNMAPPED RAN FAIL (test: must run verbatim)"; exit 1; }
     read -r sfsha sfep sfsc < .polaris/suite-stamp
     [ "$sfsha" = "$sfc3" ] && [ "$sfsc" = full ] || { cat "$T/sfqa2.out"; cat .polaris/suite-stamp; echo "SURFACES STAMP FULL FAIL (want '<HEAD> <epoch> full')"; exit 1; }
-    echo more >> src/sf/a.txt; git commit -qam 'surfaces drill: a second mapped change'
+    echo more >> src/sf/a.dat; git commit -qam 'surfaces drill: a second mapped change'
     sfc4="$(git rev-parse main)"
     sffull="$(grep -c FULL "$T/sf.ran" || true)"
     "$SELF" qa --full > "$T/sfqa3.out" 2>&1 || true
@@ -191,7 +199,7 @@ drill_surfaces() {
     "$SELF" qa > "$T/sfqa4.out" 2>&1 || true
     grep -q 'skipped, proven full' "$T/sfqa4.out" || { cat "$T/sfqa4.out"; echo "SURFACES SKIP FAIL (a stamp naming HEAD skips the suite and says what was proven)"; exit 1; }
     printf 'src/tpl/\ttests/tpl/\t-\ta template row [drill]\n' >> ops/SURFACES.tsv     # by hand: this is the fixture, not a lane
-    mkdir -p src/tpl && echo t > src/tpl/x.txt && git add -A && git commit -qm 'surfaces drill: a - row and its change'
+    mkdir -p src/tpl && echo t > src/tpl/x.dat && git add -A && git commit -qm 'surfaces drill: a - row and its change'
     "$SELF" qa > "$T/sfqa5.out" 2>&1 || true
     grep -q 'TPL tests/tpl/' "$T/sf.ran" || { cat "$T/sfqa5.out"; echo "SURFACES TEMPLATE FAIL (a - row runs test_select: with {tests} = its tests glob)"; exit 1; }
     grep -q 'test — green (scoped: 1 command(s))' "$T/sfqa5.out" || { cat "$T/sfqa5.out"; echo "SURFACES TEMPLATE LINE FAIL (the template is one selected command)"; exit 1; }
@@ -677,11 +685,14 @@ drill_finish() {
     [ -f .polaris/finish-stamp ] && { echo "FINISH PENDING STAMP FAIL (a pending run must not stamp)"; exit 1; }
     grep -q 'run-done' "$T/notify.log" 2>/dev/null && { echo "FINISH PENDING HOOK FAIL (a pending run must not fire done)"; exit 1; }
     rm -f ops/board/review/T-FIN.md
-    # 2) drain: — the default (queue) gates on a queued task; drain: plan demotes the SAME board to
-    #    a caveat, because one "go" there authorizes the plan and not the board.
+    # 2) drain: — SET explicitly to queue so this half still gates on a queued task (the default is
+    #    now plan — ops/contracts/stay-on-request.md § 3); drain: plan demotes the SAME board to a
+    #    caveat, because one "go" there authorizes the plan and not the board.
+    printf 'drain: queue\n' >> ops/CONVENTIONS.md; git add -A; git commit -qm 'drill: drain queue'
     printf -- '---\nid: T-FQ\npoints: 1\nwsjf: 1\nstatus: ready\ncontract: ops/contracts/fin.md\nfiles_owned:\n  - src/fq.txt\n---\n' > ops/board/ready/T-FQ.md
     "$SELF" finish > "$T/fin2.out" 2>&1 && { cat "$T/fin2.out"; echo "FINISH DRAIN FAIL (a queued task under drain: queue must rc 1)"; exit 1; }
     grep -q 'pending: 1 queued' "$T/fin2.out" || { cat "$T/fin2.out"; echo "FINISH DRAIN MSG FAIL"; exit 1; }
+    grep -v '^drain:' ops/CONVENTIONS.md > "$T/conv.tmp" && mv "$T/conv.tmp" ops/CONVENTIONS.md
     printf 'drain: plan\n' >> ops/CONVENTIONS.md; git add -A; git commit -qm 'drill: drain plan'
     "$SELF" finish > "$T/fin3.out" 2>&1 || { cat "$T/fin3.out"; echo "FINISH DRAIN-PLAN FAIL (drain: plan must not gate on ready/)"; exit 1; }
     grep -q 'caveat: 1 queued' "$T/fin3.out" || { cat "$T/fin3.out"; echo "FINISH DRAIN-PLAN CAVEAT FAIL (parked work must still be REPORTED)"; exit 1; }

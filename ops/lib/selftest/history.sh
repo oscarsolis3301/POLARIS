@@ -44,10 +44,13 @@ drill_express() {
     grep -qE '^[0-9]+ [0-9]+$' .polaris/last-suite-seconds || { echo "QA STAMP FORMAT FAIL (want one \"<seconds> <epoch>\" line)"; exit 1; }
     git add -A; git commit -qm 'express drill: suite on'
     # a review task + its feat branch, shaped exactly as handoff leaves them (risk: high at birth
-    # so the risk refusal drills on the real frontmatter key)
-    printf -- '---\nid: T-EX\ntitle: express file\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: high\nowner: null\nbranch: feat/T-EX\nstatus: review\nfiles_owned:\n  - src/ex.txt\nverify:\n  - test -f src/ex.txt\n---\n## Why\nexpress drill.\n\n## Acceptance criteria\n- [ ] lands\n' > ops/board/review/T-EX.md
+    # so the risk refusal drills on the real frontmatter key). T-198: src/ex.dat, never src/ex.txt —
+    # surface_change_set now drops test_skip paths (depth_for's gate runs ahead of express's suite
+    # loop too), and *.txt is in the kit's own default test_skip glob; .dat keeps this a genuine
+    # code change the suite must still see, exactly like test-depth.cmd's own fixture files.
+    printf -- '---\nid: T-EX\ntitle: express file\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: high\nowner: null\nbranch: feat/T-EX\nstatus: review\nfiles_owned:\n  - src/ex.dat\nverify:\n  - test -f src/ex.dat\n---\n## Why\nexpress drill.\n\n## Acceptance criteria\n- [ ] lands\n' > ops/board/review/T-EX.md
     git checkout -q -b feat/T-EX main
-    echo ex > src/ex.txt; git add -A; git commit -qm ok
+    echo ex > src/ex.dat; git add -A; git commit -qm ok
     git checkout -q main
     exd="$(date +%F)"
     expre="$(git rev-parse main)"
@@ -105,7 +108,7 @@ drill_express() {
     # kicks back exactly like a red suite — and the seal never happens: base and sprint/2 stay put.
     # (The board is gitignored on base here, so the verify edit needs no commit to keep the tree clean.)
     exvbase="$(git rev-parse main)"; exvtag="$(git rev-parse refs/tags/sprint/2)"
-    sed -i.bak 's|^  - test -f src/ex.txt$|  - echo EXPRESS-VBOOM \&\& false|' ops/board/review/T-EX.md && rm -f ops/board/review/T-EX.md.bak
+    sed -i.bak 's|^  - test -f src/ex.dat$|  - echo EXPRESS-VBOOM \&\& false|' ops/board/review/T-EX.md && rm -f ops/board/review/T-EX.md.bak
     grep -q 'EXPRESS-VBOOM' ops/board/review/T-EX.md || { echo "EXPRESS VERIFY FIXTURE FAIL (the red verify: line did not land)"; exit 1; }
     "$SELF" land --express T-EX > "$T/ex7v.out" 2>&1 && { cat "$T/ex7v.out"; echo "EXPRESS VERIFY RED FAIL (a red verify: must die)"; exit 1; }
     grep -q 'EXPRESS-VBOOM' "$T/ex7v.out" || { cat "$T/ex7v.out"; echo "EXPRESS VERIFY TAIL FAIL (output must carry the failing tail)"; exit 1; }
@@ -119,8 +122,8 @@ drill_express() {
     git checkout -q main
     mv ops/board/active/T-EX.md ops/board/review/T-EX.md    # back to review with its green verify: line
     set_fm status review ops/board/review/T-EX.md
-    sed -i.bak 's|^  - echo EXPRESS-VBOOM && false$|  - test -f src/ex.txt|' ops/board/review/T-EX.md && rm -f ops/board/review/T-EX.md.bak
-    grep -q '^  - test -f src/ex.txt$' ops/board/review/T-EX.md || { echo "EXPRESS VERIFY RESTORE FAIL"; exit 1; }
+    sed -i.bak 's|^  - echo EXPRESS-VBOOM && false$|  - test -f src/ex.dat|' ops/board/review/T-EX.md && rm -f ops/board/review/T-EX.md.bak
+    grep -q '^  - test -f src/ex.dat$' ops/board/review/T-EX.md || { echo "EXPRESS VERIFY RESTORE FAIL"; exit 1; }
     # T-153 (ops/contracts/sprint-report.md v3): the express seal writes the wave's burndown row.
     # The oracle for `remaining` is the board's other columns summed INDEPENDENTLY (sed over the
     # frontmatter, not fm_get) BEFORE three known fixtures go on: backlog 3 pts and ready 2 pts
@@ -214,7 +217,7 @@ drill_express() {
     grep -q "suite already green at $exsk — skipped" "$T/exqa1.out" || { cat "$T/exqa1.out"; echo "EXPRESS QA SKIP FAIL (the carried stamp must skip the suite, naming the sealed sha)"; exit 1; }
     grep -q 'test — green' "$T/exqa1.out" && { cat "$T/exqa1.out"; echo "EXPRESS QA RAN FAIL (a skipped suite must not run test:)"; exit 1; }
     [ "$(cut -d' ' -f1 < .polaris/suite-stamp)" = "$exhead" ] || { echo "EXPRESS QA STAMP FAIL (a skipped qa must leave the stamp alone)"; exit 1; }
-    echo carry >> src/ex.txt; git add -A; git commit -qm 'express drill: post-carry commit'
+    echo carry >> src/ex.dat; git add -A; git commit -qm 'express drill: post-carry commit'
     "$SELF" qa > "$T/exqa2.out" 2>&1 || true
     grep -q 'suite already green' "$T/exqa2.out" && { cat "$T/exqa2.out"; echo "EXPRESS QA RERUN SKIP FAIL (a moved HEAD must re-run the suite)"; exit 1; }
     grep -q 'test — green' "$T/exqa2.out" || { cat "$T/exqa2.out"; echo "EXPRESS QA RERUN FAIL (a moved HEAD must actually re-run test:)"; exit 1; }

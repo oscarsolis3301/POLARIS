@@ -55,19 +55,22 @@ next_landable() { # next_landable — row 1's predicate, ONE pass over review/ a
 }
 
 next_claimable() { # next_claimable — row 3's predicate: the top-wsjf ready task (ties by ID) that is
-  # unlocked, not in this session's `avoid` list and not foreign. Foreign = drain: plan AND the
-  # task's plan: set AND ≠ the plan this session first claimed under (<dir>/plan; no file ⇒ nothing
-  # is foreign). NX_BUILD + NX_BUILD_NOTE · NX_FOREIGN (finish names them) · NX_READY_N.
+  # unlocked, not in this session's `avoid` list and not foreign. Foreign = drain: plan AND a
+  # recorded session plan (<dir>/plan exists and is non-empty) AND the task's plan: is EMPTY or ≠
+  # that plan (stay-on-request.md § 2 — a leftover with no plan: is foreign too, not just a
+  # mismatched one). No plan file, or an empty one ⇒ nothing is foreign — a bare `start` on an
+  # untagged board keeps taking the top task, exactly as before. NX_BUILD + NX_BUILD_NOTE ·
+  # NX_FOREIGN (finish names them) · NX_READY_N.
   local d f id w pl drain myplan="" have="" cands="" title pts
   d="$(next_dir)"; drain="$(cfg drain plan)"
-  [ -f "$d/plan" ] && { have=1; myplan="$(tr -d ' \r\n' < "$d/plan")"; }
+  if [ -f "$d/plan" ]; then myplan="$(tr -d ' \r\n' < "$d/plan")"; [ -n "$myplan" ] && have=1; fi
   NX_BUILD=""; NX_BUILD_NOTE=""; NX_FOREIGN=""; NX_READY_N=0
   for f in "$BOARD/ready/"*.md; do [ -e "$f" ] || break
     id="${f##*/}"; id="${id%.md}"; NX_READY_N=$(( NX_READY_N + 1 ))
     [ -d "$LOCKS/$id" ] && continue
     grep -qx "$id" "$d/avoid" 2>/dev/null && continue
     pl="$(fm_get plan "$f" 2>/dev/null || true)"
-    if [ "$drain" = "plan" ] && [ -n "$pl" ] && [ -n "$have" ] && [ "$pl" != "$myplan" ]; then
+    if [ "$drain" = "plan" ] && [ -n "$have" ] && { [ -z "$pl" ] || [ "$pl" != "$myplan" ]; }; then
       NX_FOREIGN="${NX_FOREIGN:+$NX_FOREIGN }$id"; continue
     fi
     w="$(fm_get wsjf "$f")"; case "$w" in ''|*[!0-9.]*) w=0;; esac

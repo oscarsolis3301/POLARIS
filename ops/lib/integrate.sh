@@ -653,16 +653,32 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   # at all; `qa --full` afterwards is the escape hatch.
   local k c out tailtxt
   local ex_ran=0 ex_t0 ex_t1 ex_tested="" ex_scope="" ex_cmds ex_paths ex_why ex_p ex_m=0 ex_n ex_selected
+  local ex_depth="" ex_dwhy="" ex_depth_skip=0 ex_dcsf="" ex_dline ex_plan ex_taskid ex_pf
   ex_t0="$(date +%s)"
   out="$(mktemp)"
   ex_paths="$(mktemp)"
+  # test-depth.md § 4: the SAME whole-suite gate `qa` runs, ahead of the per-key loop below —
+  # <ID>'s own task file is the one taskfile (express lands exactly one). none/look skip the WHOLE
+  # loop; scoped/full fall through UNCHANGED — the loop's own test_select scoping just below stays
+  # the separate, finer decision it always was.
+  ex_dcsf="$(mktemp)"
+  if surface_change_set > "$ex_dcsf"; then
+    ex_dline="$(depth_for "$tf" < "$ex_dcsf")"
+    ex_depth="${ex_dline%%$POLARIS_TAB*}"; ex_dwhy="${ex_dline#*$POLARIS_TAB}"
+  fi
+  if [ "$ex_depth" = none ] || [ "$ex_depth" = look ]; then
+    note "depth: $ex_depth — $ex_dwhy"
+    ex_scope="$ex_depth"; ex_depth_skip=1
+  else
+  [ -z "$ex_depth" ] || depth_line_say "$ex_depth" "$ex_dwhy"
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
+    if [ "$k" = uat ] && [ "$ex_depth" = scoped ]; then uat_deferred_say; continue; fi
     ex_cmds="$c"; ex_selected=0
-    if [ "$k" = "test" ] && [ -n "$(cfg test_select "")" ]; then
+    if [ "$k" = "test" ] && { [ -n "$(cfg test_select "")" ] || [ "$(cfg test_related "")" != "-" ]; }; then
       if surface_change_set > "$ex_paths"; then
-        if ex_why="$(surface_select_cmd "$ex_paths")"; then
+        if ex_why="$(test_select_for "$ex_paths")"; then
           ex_cmds="$ex_why"; ex_m=0; ex_n=0; ex_selected=1
           while IFS= read -r ex_p; do if [ -n "$ex_p" ]; then ex_m=$((ex_m+1)); fi; done <<EOF
 $ex_cmds
@@ -676,10 +692,10 @@ EOF
             'unmapped: '*) ex_why="${ex_why#unmapped: }"; ex_p="${ex_why%% *}"
                            ex_why="$ex_p has no ops/SURFACES.tsv row${ex_why#"$ex_p"}";;
           esac
-          note "test — running the whole suite: $ex_why"
+          if [ -n "$(cfg test_select "")" ]; then note "test — running the whole suite: $ex_why"; fi
         fi
       else
-        note "test — running the whole suite: no proven baseline on $BASE (no stamp, --force, or a stamp that is not an ancestor)"
+        [ -z "$(cfg test_select "")" ] || note "test — running the whole suite: no proven baseline on $BASE (no stamp, --force, or a stamp that is not an ancestor)"
       fi
     fi
     while IFS= read -r c; do
@@ -709,12 +725,28 @@ EOF
       say "$k — green"
     fi
   done
+  fi
   rm -f "$out" "$ex_paths"
+  # decision log (test-depth.md § 5): one row when the gate above actually reached a depth.
+  # AFTER the run, so secs/rc are real — express only reaches here on a green suite (a red one
+  # dies from inside the loop, above, via kickback). Best-effort, never gates.
+  if [ -n "$ex_depth" ]; then
+    ex_plan="$(fm_get plan "$tf" 2>/dev/null)"
+    ex_taskid="$(fm_get id "$tf" 2>/dev/null)"; [ -n "$ex_taskid" ] || ex_taskid="$id"
+    if [ -z "$ex_plan" ]; then
+      ex_pf="$(next_dir)/plan"
+      [ -f "$ex_pf" ] && ex_plan="$(tr -d ' \r\n' < "$ex_pf" 2>/dev/null)"
+    fi
+    set -f
+    decision_log test_depth "$ex_plan" "$ex_taskid" "$ex_depth" "$ex_dwhy" "$(( $(date +%s) - ex_t0 ))" 0 $([ -s "$ex_dcsf" ] && head -20 "$ex_dcsf")
+    set +f
+  fi
+  rm -f "$ex_dcsf"
   # T-123 (verification-tiering v2): the commit the suite just proved — captured HERE, on
   # integrate/<date>, right after the last green, before seal/done move anything. Plus the
   # suite duration, same "<seconds> <epoch>" line qa writes, so the slow-suite hint works after
   # an express land too. Both best-effort; neither can fail the lane.
-  if [ "$ex_ran" -ge 1 ]; then
+  if [ "$ex_ran" -ge 1 ] || [ "$ex_depth_skip" -eq 1 ]; then
     ex_tested="$(git rev-parse HEAD 2>/dev/null || true)"   # nothing ran ⇒ nothing proven ⇒ no carry
     # T-137 (§ 6, stamp v3): WHAT it proved, not just that it was green. `full` for every path but
     # one — selection off, no baseline, an unmapped path, or no `test:` key at all.
