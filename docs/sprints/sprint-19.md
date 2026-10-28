@@ -285,7 +285,7 @@ Implements contract change-sized section 5. At scoped depth qa and land --expres
 - [ ] every verify: line passes
 
 ## T-205 — "Ask why a commit would be slow without running anything: polaris depth --commit <sha>"
-points 3 · risk normal · landed 6e6bc54 (2026-10-27) · claimed 2026-10-27
+points 3 · risk normal · landed 6e6bc54 (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: kit/ops/hooks/readonly-allow.sh, kit/ops/lib/observe.sh, kit/ops/polaris, ops/tests/cli-help.expected, ops/tests/depth-commit.cmd, ops/tests/depth-commit.expected, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected
 
 ### Why
@@ -300,6 +300,16 @@ files touched: kit/ops/PROTOCOL.md, kit/ops/roles/SOLO.md, kit/ops/templates/TAS
 
 ### Why
 Prose for contract change-sized. SOLO.md steps 4/5/7 no longer say a self-land finish pays the full suite (it now sizes to the run's own change); the PROTOCOL.md depth table says scoped means related tests and uat deferred; TASK.md notes test_depth: full is the way to force everything. No heading added, renamed or removed. Disjoint from the code chain, so it can run in parallel.
+
+### Acceptance
+- [ ] every verify: line passes
+
+## T-207 — "Write the release note: the 6.9.0 changelog entry gains the change-sized checks (no version bump)"
+points 1 · risk normal · landed 2a02db3 (2026-10-27) · claimed 2026-10-27
+files touched: CHANGELOG.md
+
+### Why
+Extend the EXISTING ## 6.9.0 entry in CHANGELOG.md (6.9.0 was never tagged, so this folds in): run-scoped change set, related tests, uat deferral plus the depth line, polaris depth --commit. Do NOT bump kit/ops/VERSION and do not add a second 6.9.0 heading. Tag, dogfood, publish and product-repo updates are the conductor's release ritual, not this task.
 
 ### Acceptance
 - [ ] every verify: line passes

@@ -29,6 +29,19 @@ the whole suite by default.
 PowerShell commands that only read things — status checks, listings, and the like — no longer stop
 to ask for approval while a plan is being reviewed; only commands that change something still ask.
 
+Checks are now change-sized: they match the size of the change, even in a repo that has never had a green run. With no
+earlier green run to compare against, a run used to treat everything as changed and pay for the full
+suite. It now looks only at what the run itself landed, so a run that only touched docs or styling
+skips the suite entirely. When a change does touch code, `qa`, `land --express` and `depth` ask the
+project's own test runner (vitest or jest) which tests relate to the files that changed, and run just
+those. One shared decision serves all three, and a new `test_related:` setting turns it off with `-`.
+Python projects and anything without an installed runner behave exactly as before.
+
+The slow live `uat` check is held back on these smaller runs and one line says so. Every run also
+prints one depth line saying what it chose and why. When the answer is the full suite, that line names
+what forced it and how long the last full run took. And `polaris depth --commit <sha>` answers "why
+would this commit be slow?" without running anything or writing a thing.
+
 `docs/spikes/tev1.md` records a spike into letting a small model choose test depth on its own. The
 verdict is no-go: it did not clear the bar against the plain rule-based approach, so depth stays
 rule-based for now.
