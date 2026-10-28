@@ -359,6 +359,32 @@ EOF
   printf '%s\t%s\t%s\t%s [%s]\n' "$surface" "$tests" "$cmd" "$note" "$id"
   return 0
 }
+surface_run_landed() { # surface_run_landed — files changed by the commits THIS run landed (the
+  # session plan's done/ + review/ tasks, via landed_sha). rc 1 + nothing printed when no plan is
+  # recorded, no task of it exists, or any landed_sha is unresolved (change-sized.md § 1).
+  local pf plan f st id sha n=0 out="" files
+  pf="$(next_dir)/plan"
+  [ -f "$pf" ] || return 1
+  plan="$(tr -d ' 
+' < "$pf" 2>/dev/null)"
+  [ -n "$plan" ] || return 1
+  for f in "$BOARD"/done/*.md "$BOARD"/review/*.md; do
+    [ -f "$f" ] || continue
+    st="$(fm_get plan "$f" 2>/dev/null || true)"
+    [ "$st" = "$plan" ] || continue
+    id="$(fm_get id "$f" 2>/dev/null || true)"; [ -n "$id" ] || id="$(basename "$f" .md)"
+    sha="$(landed_sha "$id")" || return 1
+    [ -n "$sha" ] || return 1
+    files="$(git -C "$PRIMARY" diff-tree --no-commit-id --name-only -r --root "$sha" 2>/dev/null)" || return 1
+    out="${out:+$out
+}$files"
+    n=$((n+1))
+  done
+  [ "$n" -ge 1 ] || return 1
+  [ -z "$out" ] || printf '%s
+' "$out" | sort -u
+  return 0
+}
 surface_change_set() { # surface_change_set [--force] — the paths a verdict is about, one per
   # line; rc 0 = BOUNDED. $PRIMARY HEAD off $BASE (a feat/ or integrate/ branch) → the branch's
   # own diff, `git diff --name-only $BASE...HEAD`, the stamp never consulted. On $BASE → the suite
@@ -372,17 +398,20 @@ surface_change_set() { # surface_change_set [--force] — the paths a verdict is
   # like a board-noise-only change — a green stamp carries across it with no new code path.
   local force=0 cur="" list="" p rel sha="" junk="" stamp skip_raw
   [ "${1:-}" = "--force" ] && force=1
-  SURFACE_BASELINE=""; SURFACE_BASELINE_SCOPE=""
+  SURFACE_BASELINE=""; SURFACE_BASELINE_SCOPE=""; SURFACE_BOUND=""
   cur="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
   if [ "$cur" = "$BASE" ]; then
     [ "$force" -eq 0 ] || return 1
     stamp="$PRIMARY/.polaris/suite-stamp"
-    [ -s "$stamp" ] || return 1
-    read -r sha junk < "$stamp" || true
-    [ -n "$sha" ] || return 1
-    git -C "$PRIMARY" merge-base --is-ancestor "$sha" HEAD 2>/dev/null || return 1
-    list="$(git -C "$PRIMARY" diff --name-only "$sha" HEAD 2>/dev/null)" || return 1
-    SURFACE_BASELINE="$sha"; SURFACE_BASELINE_SCOPE="$(suite_stamp_scope "$stamp" || true)"
+    # change-sized.md § 1: no usable stamp ancestor → fall back to what THIS run landed.
+    if [ -s "$stamp" ]; then read -r sha junk < "$stamp" || true; fi
+    if [ -n "$sha" ] && git -C "$PRIMARY" merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then
+      list="$(git -C "$PRIMARY" diff --name-only "$sha" HEAD 2>/dev/null)" || return 1
+      SURFACE_BASELINE="$sha"; SURFACE_BASELINE_SCOPE="$(suite_stamp_scope "$stamp" || true)"
+    else
+      list="$(surface_run_landed)" || return 1
+      SURFACE_BOUND=run
+    fi
   else
     list="$(git -C "$PRIMARY" diff --name-only "$BASE...HEAD" 2>/dev/null)" || return 1
   fi

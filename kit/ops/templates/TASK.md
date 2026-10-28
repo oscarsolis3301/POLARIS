@@ -19,7 +19,8 @@ risk: normal             # high = auth/payments/schema/prod-config → human app
 test_depth:              # optional; raise-only — the only value that does anything is `full`,
                          # which forces the wave gate to run the whole suite for this task even
                          # when depth_for would otherwise pick none/look/scoped. Any other value is
-                         # ignored. See ops/contracts/test-depth.md
+                         # ignored. `test_depth: full` is the way to force everything, including the
+                         # live uat tier a scoped run defers. See ops/contracts/test-depth.md
 model:                   # optional; strong|mid|cheap tier word, or a literal model name — overrides
                          # the tier `polaris route` derives for this task. ops/contracts/model-routing.md
 status: backlog          # mirrors the folder; folder is the source of truth

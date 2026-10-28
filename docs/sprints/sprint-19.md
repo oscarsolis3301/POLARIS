@@ -240,7 +240,7 @@ CONDUCTOR.md and PLANNER.md were last edited by T-194 — build on its wording, 
 - [ ] Plain English a first-time reader follows (voice: standard).
 
 ## T-201 — "Release prep 6.9.0 — the version number and one changelog entry for staying on the request, test depth, PowerShell reads and the Tev1 verdict"
-points 1 · risk normal · landed 69a3607 (2026-10-27) · claimed 2026-10-27
+points 1 · risk normal · landed 69a3607 (2026-10-27) · claimed 2026-10-27 → done 2026-10-27
 files touched: CHANGELOG.md, kit/ops/VERSION
 
 ### Why
@@ -253,3 +253,23 @@ sentence. Sprint 19 (Laya) moves to 6.10.0.
 
 ### Acceptance
 - [ ] VERSION and CHANGELOG agree on 6.9.0; nothing else changes.
+
+## T-202 — "A small change in a never-green repo checks only what this run changed: the change set is bounded to the commits the run landed"
+points 5 · risk normal · landed 2750616 (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/lib/core.sh, kit/ops/lib/observe.sh, ops/tests/api-kit.expected, ops/tests/change-bound.cmd, ops/tests/change-bound.expected
+
+### Why
+Implements contract change-sized section 1. With no earlier green run, surface_change_set gives up and every finish pays the full suite, even for a docs edit. Instead, union the files changed by this run's landed plan tasks (landed_sha) and set SURFACE_BOUND=run, so depth_for decides on the real change and cmd_qa's bounded-and-empty branch stamps scope none. No plan recorded or nothing landed stays unbounded exactly as today. Owns api-kit.expected first in the chain (T-202, T-203, T-204, T-205).
+
+### Acceptance
+- [ ] every verify: line passes
+
+## T-206 — "Tell the roles the new truth: SOLO, the depth table and the task template drop the old full-suite-after-self-land wording"
+points 2 · risk normal · landed 0dd23e4 (2026-10-27) · claimed 2026-10-27
+files touched: kit/ops/PROTOCOL.md, kit/ops/roles/SOLO.md, kit/ops/templates/TASK.md
+
+### Why
+Prose for contract change-sized. SOLO.md steps 4/5/7 no longer say a self-land finish pays the full suite (it now sizes to the run's own change); the PROTOCOL.md depth table says scoped means related tests and uat deferred; TASK.md notes test_depth: full is the way to force everything. No heading added, renamed or removed. Disjoint from the code chain, so it can run in parallel.
+
+### Acceptance
+- [ ] every verify: line passes

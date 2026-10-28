@@ -257,8 +257,8 @@ how much of the suite a change actually needs, once per `qa` or `land --express`
 |---|---|---|
 | `none` | no suite key at all | every changed path is `test_skip` (docs, `.md`, `LICENSE*`) |
 | `look` | no suite key, but the before/after capture still runs | every changed path is `test_look` (css/svg/images) |
-| `scoped` | only the `test:` subset `SURFACES.tsv` maps to the change | every non-look path is mapped |
-| `full` | the whole `test:` suite, unchanged | anything unmapped, `risk: high`, or `test_depth: full` |
+| `scoped` | only the related tests: the `test:` subset `SURFACES.tsv` maps to the change, or the runner's own related tests (vitest/jest) when the package has one installed; the live `uat` tier is deferred (uat deferred: it runs on full-depth changes, CI and release) | every non-look path is mapped or has related tests |
+| `full` | the whole `test:` suite, unchanged | anything unmapped with no related tests, `risk: high`, or `test_depth: full` |
 
 CI and `pack.py --dogfood` always run `full`, serially, and never read the stamp.
 

@@ -79,8 +79,9 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    `polaris done` from a task's `surface:` list and is RULES-guarded. A wrong or missing row → one
    line in `ops/board/backlog/IDEAS.md`, or a `surface:` item on the task (step 1).
    Then the repo's fast tier: `test_fast:` from `ops/CONVENTIONS.md` when it is set — seconds, on
-   every change. When it is UNSET there is NO fallback: do not run `test:` here. The full suite is
-   the WAVE gate and is paid once — at `land --express`, or at `finish` — and `finish` skips it
+   every change. When it is UNSET there is NO fallback: do not run `test:` here. The suite is
+   sized to the change — at `land --express`, or at `finish`, `qa` runs only the related tests for
+   a small change and the whole suite only when the change needs it — and `finish` skips it
    outright when `.polaris/suite-stamp` already names HEAD (an express land writes that stamp since
    6.3.0). Reaching for `test:` per change is how a one-line edit came to pay the whole suite twice.
    (Working on POLARIS itself? Its own seconds-long check is `bash ops/polaris doctor --fast`.)
@@ -111,8 +112,7 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    `bash ops/polaris finish`. It runs `qa` for you (free when HEAD has not moved since
    an express land's green suite — since 6.3.0 an express land STAMPS `.polaris/suite-stamp` with the
    commit it proved, so a following `finish` skips the suite instead of paying it a second time; the
-   stamp is per-commit, so after a step-5 self-land there is none yet and `finish` pays the suite here: that is the wave's ONE full run, arriving at the
-   finish line instead of the express lane) and then proves the **RUN** is over, not just the
+   stamp is per-commit, so after a step-5 self-land there is none yet and `finish` runs `qa` here, sized to what this run changed: related tests for a small change, the whole suite only when the change needs it) and then proves the **RUN** is over, not just the
    task: nothing in `active/` or `review/`, `ready/` drained per `drain:`, no unmerged
    `integrate/<date>`, no orphan locks, clean tree on `<base>`. It names exactly what is pending, if
    anything, and it fires the `notify-gate done` hook itself, exactly once — you never call
@@ -151,7 +151,7 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
 
 ## What you must NOT skip
 Every gate the long path runs, you run: `verify` (ownership + RULES + SURFACES freshness) · the task's `verify:` list ·
-the full suite once — at `land --express`, or at `finish` after a step-5 self-land ·
+the suite once, sized to the change — at `land --express`, or at `finish` after a step-5 self-land ·
 both captures and the `--saw` line measuring them against `ops/DESIGN.md`, when `pack` printed a
 capture section · `finish`.
 SOLO collapses SESSIONS, never CHECKS — the same

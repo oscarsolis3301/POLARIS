@@ -2392,6 +2392,11 @@ EOF
           # BOUNDED and EMPTY: only board files moved since an ancestor stamp — the batch-wave
           # finish case — so the baseline's verdict carries to HEAD: the whole loop is skipped and
           # HEAD is re-stamped below with the scope that was actually proven.
+          if [ "${SURFACE_BOUND:-}" = run ]; then
+            scope=none; carry=1
+            note "nothing this run changed needs a suite"
+            rm -f "$csf"; break
+          fi
           bsha="${SURFACE_BASELINE:-$head}"; scope="${SURFACE_BASELINE_SCOPE:-full}"; carry=1
           say "suite already green at $(printf '%.7s' "$bsha") — only board files changed since; skipped, proven $scope (qa --force re-runs it)"
           rm -f "$csf"; break
