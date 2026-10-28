@@ -1,0 +1,45 @@
+== chain (rc 0) ==
+tests/c_test.py
+tests/test_b.py
+tests/test_deep.py
+== one-hop (rc 0) ==
+tests/c_test.py
+tests/test_b.py
+== relative-parent (rc 0) ==
+tests/test_deep.py
+== test-selects-itself (rc 0) ==
+tests/test_b.py
+== two-modules (rc 0) ==
+tests/c_test.py
+tests/test_b.py
+tests/test_deep.py
+== conftest (rc 1) ==
+conftest.py has no related tests (pytest config changed)
+== pytest-ini (rc 1) ==
+pytest.ini has no related tests (pytest config changed)
+== requirements (rc 1) ==
+requirements-dev.txt has no related tests (pytest config changed)
+== unreached (rc 1) ==
+lone/orphan.py has no related tests (no test reaches it)
+== third-party (rc 1) ==
+lone/third.py has no related tests (no test reaches it)
+== config-beats-reach (rc 1) ==
+conftest.py has no related tests (pytest config changed)
+== non-python (rc 1) ==
+no changed python paths
+== plain (rc 0) ==
+pytest tests/test_b.py -q
+== repo-example (rc 0) ==
+PYTHONPATH=. backend/.venv/Scripts/python -m pytest backend/tests/test_b.py -q
+== compound (rc 0) ==
+pytest tests/test_b.py tests/c_test.py -q
+== value-flags (rc 0) ==
+python -m pytest -k slow -n 4 tests/test_b.py --tb short -x
+== no-path (rc 0) ==
+pytest -q -x tests/test_b.py
+== two-paths (rc 0) ==
+pytest tests/test_b.py -q
+== polaris-indirection (rc 1) ==
+test command not parseable
+== no-pytest (rc 1) ==
+test command not parseable
