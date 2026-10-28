@@ -2255,9 +2255,23 @@ cmd_depth() { # depth [<ID>] — read-only verdict: how much testing does this c
   # `full` / `no suite baseline` outright; taskfiles = every `[<ID>]` task-commit subject since the
   # baseline (or $BASE on a branch), plus the current feat/<ID> branch, resolved with `task_file`.
   # Nothing here writes anything — same read-only contract as `triage`/`drift`.
-  local id="${1:-}" tf="" paths="" n=0 skipn=0 line depth why csf p skip_raw sha cur baseline subj sid f tfs
+  local id="" tf="" paths="" n=0 skipn=0 line depth why csf p skip_raw sha cur baseline subj sid f tfs commit=""
+  local du="usage: polaris depth [<ID> | --commit <sha>]" rp="" k c sel
   tfs=""
-  if [ -n "$id" ]; then
+  case "${1:-}" in
+    --commit) commit="${2:-}"; [ -n "$commit" ] && [ $# -eq 2 ] || { printf '%s\n' "$du"; return 2; };;
+    -*)       printf '%s\n' "$du"; return 2;;
+    *)        id="${1:-}"; [ $# -le 1 ] || { printf '%s\n' "$du"; return 2; };;
+  esac
+  if [ -n "$commit" ]; then
+    # change-sized.md § 6: what WOULD qa run for this commit — read-only, runs nothing, stamps nothing
+    sha="$(git -C "$PRIMARY" rev-parse --verify -q "$commit^{commit}" 2>/dev/null)"       || { printf '⛔ no such commit: %s\n' "$commit"; return 2; }
+    if git -C "$PRIMARY" rev-parse --verify -q "$sha^" >/dev/null 2>&1; then rp=""; else rp="--root"; fi
+    paths="$(git -C "$PRIMARY" diff-tree --no-commit-id --name-only -r $rp "$sha" 2>/dev/null)"
+    subj="$(git -C "$PRIMARY" log -1 --format=%s "$sha" 2>/dev/null)"
+    case "$subj" in *'['*']') sid="${subj##*[}"; sid="${sid%]}"; tfs="$(task_file "$sid" 2>/dev/null)" || tfs="";; esac
+    tf="$tfs"
+  elif [ -n "$id" ]; then
     tf="$(task_file "$id")" || die "depth: $id not found on the board"
     paths="$(git -C "$PRIMARY" diff --name-only "$BASE...feat/$id" 2>/dev/null)"
   else
@@ -2300,9 +2314,53 @@ $paths
 EOF
   line="$(printf '%s\n' "$paths" | depth_for $tf)"
   depth="${line%%$POLARIS_TAB*}"; why="${line#*$POLARIS_TAB}"
+  csf=""
+  if [ -n "$commit" ] && [ "$depth" != none ] && [ "$depth" != look ]; then
+    # the paths qa would hand test_select_for: the change set minus test_skip
+    csf="$(mktemp)"
+    while IFS= read -r p; do
+      [ -z "$p" ] && continue
+      if [ -n "$skip_raw" ] && owned_match "$p" $skip_raw; then continue; fi
+      printf '%s\n' "$p"
+    done > "$csf" <<PATHS
+$paths
+PATHS
+    # a full verdict with test_select unset only says "test_select unset": name the first path that
+    # has no related tests instead, when there is one (nothing is run to find it)
+    if [ "$depth" = full ] && [ "$why" = "test_select unset" ]; then
+      while IFS= read -r p; do
+        [ -z "$p" ] && continue
+        printf '%s\n' "$p" > "$csf.1"
+        if sel="$(related_cmds "$csf.1")"; then :; else why="$sel"; break; fi
+      done < "$csf"
+      rm -f "$csf.1"
+    fi
+  fi
   printf '%s\n' "$depth"
   note "why: $why"
   note "paths: $n changed ($skipn skipped by test_skip)"
+  if [ -n "$commit" ]; then
+    if [ -z "$csf" ]; then
+      note "would run: nothing"
+    else
+      for k in test lint typecheck build uat; do
+        c="$(cfg "$k" "")"
+        [ -z "$c" ] && continue
+        if [ "$k" = uat ] && [ "$depth" = scoped ]; then continue; fi
+        if [ "$k" = test ] && [ "$depth" != full ] || { [ "$k" = test ] && { [ -n "$(cfg test_select "")" ] || [ "$(cfg test_related "")" != "-" ]; }; }; then
+          if sel="$(test_select_for "$csf")"; then
+            while IFS= read -r c; do [ -n "$c" ] && note "would run: $c"; done <<CMDS
+$sel
+CMDS
+            continue
+          fi
+        fi
+        note "would run: $c"
+      done
+      if [ "$depth" = scoped ] && [ -n "$(cfg uat "")" ]; then note "would skip: uat"; fi
+    fi
+    rm -f "$csf"
+  fi
   return 0
 }
 cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the full CONVENTIONS suite

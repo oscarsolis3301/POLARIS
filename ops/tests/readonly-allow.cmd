@@ -36,6 +36,8 @@ bash ops/polaris check
 bash ops/polaris check --only api-kit
 bash ops/polaris check --only api-kit && bash ops/polaris route --role BUILDER
 bash ops/polaris pack T-001
+bash ops/polaris depth --commit abc1234
+bash ops/polaris depth --commit HEAD~1
 bash ops/polaris slim
 # `next` reads the board and names the one thing this context does next, writing nothing. Every role
 # runs it at EVERY boundary now, so a prompt on it would be the loudest in the kit. `--do` is below.
@@ -61,6 +63,10 @@ bash ops/polaris bg wait qa --max 120
 bash ops/polaris route --role CONDUCTOR | head -1
 bash ops/polaris bg status qa && bash ops/polaris bg tail qa -n 5
 # --- must ASK: every door out of "read" ---------------------------------------
+bash ops/polaris depth --commit abc1234 extra
+bash ops/polaris depth --commit -x
+bash ops/polaris depth --commit
+bash ops/polaris depth --commit "$(evil)"
 rm -rf /tmp/x
 sed -i 's/a/b/' file.txt
 sed 's/a/b/w /tmp/out' f
@@ -131,6 +137,8 @@ Get-Content ops/VERSION | Where-Object { $_ -match 'version' }
 git -C "C:\Users\Owner\Desktop\Polaris" log --oneline -5; Get-ChildItem ops | Select-Object Name
 bash ops/polaris depth
 bash ops/polaris depth T-1
+bash ops/polaris depth --commit abc1234
+bash ops/polaris depth --commit HEAD~1
 # --- must ASK: every door out of "read", same shape as the Bash battery above -----------------
 Get-Content x > y
 Get-Content x | Out-File y

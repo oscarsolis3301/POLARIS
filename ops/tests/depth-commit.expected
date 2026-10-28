@@ -1,0 +1,39 @@
+scoped:
+scoped
+   why: related tests via vitest in web/
+   paths: 1 changed (0 skipped by test_skip)
+   would run: cd web && ./node_modules/.bin/vitest related --run src/App.tsx
+   would run: echo LINT
+   would skip: uat
+  rc=0
+full:
+full
+   why: lib/core.dat has no related tests (no package.json)
+   paths: 1 changed (0 skipped by test_skip)
+   would run: true
+   would run: echo LINT
+   would run: echo UAT
+  rc=0
+none:
+none
+   why: only test_skip paths
+   paths: 1 changed (1 skipped by test_skip)
+   would run: nothing
+  rc=0
+look:
+look
+   why: only look paths (1)
+   paths: 1 changed (0 skipped by test_skip)
+   would run: nothing
+  rc=0
+root:
+full
+bad-sha:
+⛔ no such commit: deadbeef
+  rc=2
+id-and-commit:
+usage: polaris depth [<ID> | --commit <sha>]
+  rc=2
+read-only: repo byte-identical after
+qa-agrees-scoped: scoped / scoped
+qa-agrees-full: full / full
