@@ -853,3 +853,4 @@
 {"ts":1793733853,"ev":"handoff","id":"T-230","who":"Owner@DESKTOP","note":""}
 {"ts":1793736420,"ev":"handoff","id":"T-228","who":"Owner@DESKTOP","note":""}
 {"ts":1793747811,"ev":"done","id":"T-228","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1793748905,"ev":"done","id":"T-230","who":"Owner@DESKTOP","note":"","pts":3}
