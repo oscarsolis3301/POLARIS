@@ -75,12 +75,7 @@ drill_express() {
     grep -q "express: 'bogus' unknown" "$T/ex5.out" || { echo "EXPRESS UNKNOWN WARN FAIL (unknown value must warn)"; exit 1; }
     grep -q 'express: off' "$T/ex5.out" || { echo "EXPRESS UNKNOWN MSG FAIL (unknown value must fail as off)"; exit 1; }
     sed -i.bak '/^express:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
-    # refusal: publish: pr
-    printf 'publish: pr\n' >> ops/CONVENTIONS.md
-    "$SELF" land --express T-EX > "$T/ex6.out" 2>&1 && { echo "EXPRESS PR FAIL (publish: pr must refuse)"; exit 1; }
-    grep -q 'express needs publish: direct' "$T/ex6.out" || { echo "EXPRESS PR MSG FAIL"; exit 1; }
-    git checkout -q -- ops/CONVENTIONS.md       # restore publish: direct (default) for everything below
-    # all four refusals died BEFORE any mutation — and BEFORE step 0, so no lease is left behind
+    # all the refusals died BEFORE any mutation — and BEFORE step 0, so no lease is left behind
     # (express-lane v2: refusals precede the integration lease; a doomed express never queues)
     [ "$(git rev-parse main)" = "$expre" ] || { echo "EXPRESS REFUSE MUTATE FAIL (base moved)"; exit 1; }
     git rev-parse -q --verify "refs/heads/integrate/$exd" >/dev/null && { echo "EXPRESS REFUSE MUTATE FAIL (integrate branch created)"; exit 1; }
@@ -252,6 +247,8 @@ drill_pr-publish() {
       || { echo "PR URL SSH FAIL"; exit 1; }
     [ "$(pr_create_url 'https://u@bitbucket.org/acme/arc.git' 2026-01-02 main)" = 'https://bitbucket.org/acme/arc/pull-requests/new?source=integrate/2026-01-02&dest=main' ] \
       || { echo "PR URL HTTPS FAIL"; exit 1; }
+    [ "$(pr_create_url 'git@bitbucket.org:acme/arc.git' 2026-01-02 main ship/2026-01-02)" = 'https://bitbucket.org/acme/arc/pull-requests/new?source=ship/2026-01-02&dest=main' ] \
+      || { echo "PR URL SRC FAIL"; exit 1; }
     [ -z "$(pr_create_url 'git@github.com:acme/arc.git' 2026-01-02 main)" ] || { echo "PR URL FOREIGN FAIL (non-bitbucket must yield nothing)"; exit 1; }
     printf -- '---\nid: T-P\ntitle: pr mode file\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/p.txt\nverify: []\n---\n' > ops/board/ready/T-P.md
     "$SELF" claim T-P >/dev/null
@@ -259,23 +256,12 @@ drill_pr-publish() {
     git ls-remote origin 'refs/heads/feat/*' | grep -q . && { echo "PR HANDOFF FAIL (feat branches must never leave the machine)"; exit 1; }
     git checkout -q -b integrate/2026-01-02
     "$SELF" land T-P >/dev/null || { echo "PR LAND FAIL"; exit 1; }
-    basepre="$(git rev-parse main)"; rbasepre="$(git ls-remote origin refs/heads/main | cut -f1)"
-    # unmerged wave → --sync dies naming the missing task, and tags nothing
+    # ---- legacy path (v1 flow): an integrate/<date> an older kit already PUSHED, merged on the host ----
+    # v2 seal pushes nothing, so the drill pushes the wave by hand to stand in for the old seal.
+    git push -q origin integrate/2026-01-02 || { echo "PR LEGACY PUSH FAIL"; exit 1; }
     "$SELF" seal --sync 2026-01-02 > "$T/prsync0.out" 2>&1 && { echo "PR SYNC UNMERGED FAIL (must die before the PR merges)"; exit 1; }
     grep -q 'T-P' "$T/prsync0.out" || { echo "PR SYNC NAME FAIL (die must name the missing task)"; exit 1; }
     git rev-parse -q --verify refs/tags/sprint/2 >/dev/null && { echo "PR SYNC MUTATE FAIL (failed sync must not tag)"; exit 1; }
-    : > "$T/notify.log"
-    "$SELF" seal 2026-01-02 > "$T/prseal.out" || { cat "$T/prseal.out"; echo "PR SEAL FAIL"; exit 1; }
-    git ls-remote --exit-code origin refs/heads/integrate/2026-01-02 >/dev/null || { echo "PR SEAL PUSH FAIL (integrate branch must reach origin)"; exit 1; }
-    [ "$(git ls-remote origin refs/heads/main | cut -f1)" = "$rbasepre" ] || { echo "PR SEAL REMOTE BASE FAIL (origin base must not move)"; exit 1; }
-    [ "$(git rev-parse main)" = "$basepre" ] || { echo "PR SEAL LOCAL FAIL (no local merge in pr mode)"; exit 1; }
-    git rev-parse -q --verify refs/tags/sprint/2 >/dev/null && { echo "PR SEAL TAG FAIL (no tag before --sync)"; exit 1; }
-    [ -f ops/board/review/T-P.md ] || { echo "PR SEAL BOARD FAIL (tasks stay in review/)"; exit 1; }
-    [ -d "$(git rev-parse --git-common-dir)/polaris-locks/T-P" ] || { echo "PR SEAL LOCK FAIL (locks stay until done)"; exit 1; }
-    grep -q 'open a PR from integrate/2026-01-02 into main on your host' "$T/prseal.out" || { echo "PR SEAL URL FALLBACK FAIL"; exit 1; }
-    grep -q 'Sprint 2 — pr sprint' "$T/prseal.out" || { echo "PR SEAL TITLE FAIL (suggested title missing)"; exit 1; }
-    grep -q -- '- feat(src): pr mode file \[T-P\]' "$T/prseal.out" || { echo "PR SEAL BULLET FAIL (description bullets missing)"; exit 1; }
-    ngwait '^run-done/done//run-done$' || { echo "PR SEAL NOTIFY FAIL (pr seal must fire notify-gate done)"; exit 1; }
     # the human merges the PR — simulated with a --no-ff merge pushed from a temp clone
     git clone -q "$T/origin.git" "$T/prhost" 2>/dev/null
     ( set -e; cd "$T/prhost"; git config user.email t@t; git config user.name t
@@ -289,6 +275,34 @@ drill_pr-publish() {
     git rev-parse -q --verify refs/heads/integrate/2026-01-02 >/dev/null 2>&1 && { echo "PR SYNC BRANCH FAIL (local integrate branch must go)"; exit 1; }
     git ls-remote --exit-code origin refs/heads/integrate/2026-01-02 >/dev/null 2>&1 && { echo "PR SYNC REMOTE BRANCH FAIL (origin integrate branch must go)"; exit 1; }
     "$SELF" done T-P >/dev/null || { echo "PR DONE FAIL (rule-1 gate must pass after --sync)"; exit 1; }
+    # ---- v2 local staging seal: merge + tag happen HERE, nothing leaves the machine ----
+    printf -- '---\nid: T-Q\ntitle: pr staged file\ntype: feature\npoints: 1\nwsjf: 5\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/q.txt\nverify: []\n---\n' > ops/board/ready/T-Q.md
+    "$SELF" claim T-Q >/dev/null
+    ( cd .polaris/wt/T-Q && echo q > src/q.txt && git add -A && git commit -qm ok && "$SELF" handoff T-Q >/dev/null )
+    "$SELF" land T-Q >/dev/null || { echo "PR LAND2 FAIL"; exit 1; }
+    prd="$(date +%F)"; basepre="$(git rev-parse main)"; rbasepre="$(git ls-remote origin refs/heads/main | cut -f1)"
+    rtagpre="$(git ls-remote origin refs/tags/sprint/2 | cut -f1)"; rrefs="$(git ls-remote origin | grep -v polaris/board | sort)"
+    "$SELF" seal "$prd" > "$T/prseal.out" || { cat "$T/prseal.out"; echo "PR SEAL FAIL"; exit 1; }
+    [ "$(git ls-remote origin | grep -v polaris/board | sort)" = "$rrefs" ] || { echo "PR SEAL PUSH FAIL (pr seal must push NOTHING — origin refs changed)"; exit 1; }
+    [ "$(git ls-remote origin refs/heads/main | cut -f1)" = "$rbasepre" ] || { echo "PR SEAL REMOTE BASE FAIL (origin base must not move)"; exit 1; }
+    [ "$(git rev-parse main)" != "$basepre" ] || { echo "PR SEAL LOCAL FAIL (pr seal must merge into local base)"; exit 1; }
+    git log -1 --format=%B main | grep -q '\[T-Q\]$' || { echo "PR SEAL BULLET FAIL (merge bullets missing)"; exit 1; }
+    [ "$(git rev-parse 'refs/tags/sprint/2^{commit}')" = "$(git rev-parse main)" ] || { echo "PR SEAL TAG FAIL (sprint tag must move to the local merge)"; exit 1; }
+    [ "$(git ls-remote origin refs/tags/sprint/2 | cut -f1)" = "$rtagpre" ] || { echo "PR SEAL TAG PUSH FAIL (tag must stay local)"; exit 1; }
+    grep -q 'staged locally' "$T/prseal.out" || { echo "PR SEAL NOTE FAIL"; exit 1; }
+    "$SELF" done T-Q >/dev/null || { echo "PR DONE2 FAIL (dependents are claimable at once)"; exit 1; }
+    # ---- polaris sync: ship branch merged on the host → local base catches up, ship branch gone ----
+    "$SELF" sync > "$T/prsy0.out" 2>&1; [ ! -s "$T/prsy0.out" ] || { cat "$T/prsy0.out"; echo "PR SYNC QUIET FAIL (nothing to do must print nothing)"; exit 1; }
+    git push -q origin "main:refs/heads/ship/$prd" || { echo "PR SHIP PUSH FAIL"; exit 1; }
+    "$SELF" sync > "$T/prsy1.out" 2>&1; [ ! -s "$T/prsy1.out" ] || { cat "$T/prsy1.out"; echo "PR SYNC UNMERGED FAIL (unmerged ship branch → silent)"; exit 1; }
+    ( set -e; cd "$T/prhost"; git fetch -q origin; git merge -q --no-ff "origin/ship/$prd" -m 'Merged in ship (pull request #2)'; git push -q origin main ) \
+      || { echo "PR SHIP MERGE SIM FAIL"; exit 1; }
+    "$SELF" sync > "$T/prsy2.out" 2>&1; [ "$(wc -l < "$T/prsy2.out")" -eq 1 ] || { cat "$T/prsy2.out"; echo "PR SYNC LINE FAIL (an acting sync prints exactly one line)"; exit 1; }
+    [ "$(git rev-parse main)" = "$(git ls-remote origin refs/heads/main | cut -f1)" ] || { echo "PR SYNC FF FAIL"; exit 1; }
+    git ls-remote --exit-code origin "refs/heads/ship/$prd" >/dev/null 2>&1 && { echo "PR SYNC SHIP REMOTE FAIL"; exit 1; }
+    [ "$(git ls-remote origin refs/tags/sprint/2 | cut -f1)" = "$(git rev-parse refs/tags/sprint/2)" ] || { echo "PR SYNC TAGS FAIL (tags must be pushed)"; exit 1; }
+    sed -i.bak '/^publish:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
+    "$SELF" sync > "$T/prsy3.out" 2>&1; [ ! -s "$T/prsy3.out" ] || { echo "SYNC DIRECT NOOP FAIL"; exit 1; }
     # direct mode: --sync has nothing to do · unknown publish: warns once + behaves direct
     sed -i.bak '/^publish:/d' ops/CONVENTIONS.md && rm -f ops/CONVENTIONS.md.bak
     "$SELF" seal --sync 2026-01-02 > "$T/prd.out" 2>&1 && { echo "SYNC DIRECT FAIL (direct mode --sync must die)"; exit 1; }

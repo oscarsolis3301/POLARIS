@@ -395,6 +395,7 @@ kit/ops/lib/integrate.sh	fn	cmd_land_express
 kit/ops/lib/integrate.sh	fn	cmd_rollback
 kit/ops/lib/integrate.sh	fn	cmd_run_verify
 kit/ops/lib/integrate.sh	fn	cmd_seal
+kit/ops/lib/integrate.sh	fn	cmd_sync
 kit/ops/lib/integrate.sh	fn	cmd_task_commit_msg
 kit/ops/lib/integrate.sh	fn	in_primary
 kit/ops/lib/integrate.sh	fn	landed_sha

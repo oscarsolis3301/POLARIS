@@ -652,9 +652,10 @@ base_push_reject() {
   printf '%s %s\n' "$(date +%F)" "$(( ${c:-0} + 1 ))" > "$f"
 }
 base_push_clear() { rm -f "$PRIMARY/.polaris/base-push-rejected" 2>/dev/null || true; }
-pr_create_url() { # pr_create_url <origin-url> <date> <dest> — Bitbucket PR-create URL on stdout
+pr_create_url() { # pr_create_url <origin-url> <date> <dest> [<source-branch>] — Bitbucket PR-create URL on stdout
   # (ssh or https origin); non-Bitbucket or unparseable → prints nothing, never dies.
-  local url="$1" date="$2" dest="$3" path=""
+  local url="$1" date="$2" dest="$3" src="${4:-}" path=""
+  [ -n "$src" ] || src="integrate/$date"
   case "$url" in
     *bitbucket.org*)
       path="${url#*bitbucket.org}"
@@ -662,7 +663,7 @@ pr_create_url() { # pr_create_url <origin-url> <date> <dest> — Bitbucket PR-cr
       path="${path%/}"
       case "$path" in *.git) path="${path%.git}";; esac
       case "$path" in
-        */*) printf 'https://bitbucket.org/%s/pull-requests/new?source=integrate/%s&dest=%s\n' "$path" "$date" "$dest";;
+        */*) printf 'https://bitbucket.org/%s/pull-requests/new?source=%s&dest=%s\n' "$path" "$src" "$dest";;
       esac;;
   esac
   return 0

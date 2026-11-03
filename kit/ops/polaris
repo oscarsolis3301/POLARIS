@@ -82,8 +82,9 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   seal [<date>]                  Integrator: seal the wave — merge integrate/<date> into base
                                  (--no-ff, per-task bullets) + lightweight tag sprint/<n>; a later
                                  wave's seal MOVES the tag (sprint's latest sealed checkpoint).
-                                 publish: pr (CONVENTIONS key, default direct): NO local merge —
-                                 pushes ONLY integrate/<date> + prints the PR-create URL
+                                 publish: pr (CONVENTIONS key, default direct): staged LOCALLY — same merge + tag as
+                                 direct, nothing pushed; finish ships the run as ONE link
+  sync                           publish: pr only — after the human merges the ship PR, catch base up; silent unless it acts
   seal --sync [<date>]           publish: pr only — finish the wave after the human merges the PR
                                  (MERGE COMMIT strategy, never squash): verify every [<ID>] subject
                                  reached base, tag sprint/<n>, delete integrate/<date> local+remote
@@ -399,6 +400,7 @@ case "${1:-}" in
   task-commit-msg) shift; cmd_task_commit_msg "$@";;
   land)       shift; cmd_land "$@";;
   seal)       shift; cmd_seal "$@";;
+  sync)       shift; cmd_sync "$@";;
   history)    shift; cmd_history "$@";;
   report)     shift; cmd_report "$@";;
   learned)    shift; cmd_learned "$@";;
