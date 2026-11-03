@@ -69,3 +69,52 @@ tagged + pushed, integrate/2026-07-20 gone both sides → `done T-7`, `done T-8`
 ## Changelog
 - v1 2026-07-20: created for T-022, T-024 (consumed by T-025, T-026)
 - v1.1 2026-07-20 (QA fix wave, T-027 + T-028): corrects the --sync missing-subject die wording — by the time it fires, step 1 has ALREADY moved local `<base>` (--ff-only pull), so "nothing mutated" is false. The die keeps naming the missing IDs and now states the pinned phrase "already fast-forwarded" plus that tag, integrate/<date> and the board are untouched. `kit/ops/MANUAL.md` --sync step 2 mirrors the same wording (T-028).
+
+## v2 — one link per run  (plan: one-link · 2026-11-03 · T-228..T-231)
+Why: under `publish: pr` every dependency layer cost a PR, a human merge and a "continue?" stop.
+v2 makes pr mode behave like direct mode LOCALLY and ships the whole run as ONE link at the end.
+Consumed by T-228 (seal/sync), T-229 (finish/triage), T-230 (hook/caps), T-231 (prose).
+
+### Local staging seal (pr mode)
+- `seal` in pr mode merges the wave into LOCAL `<base>` and tags `sprint/<n>` locally exactly as direct
+  mode does, but pushes NOTHING (no `<base>`, no tag, no `integrate/<date>`). Tasks reach `done/`
+  normally, dependents are claimable at once, and claims see the earlier code.
+- Local `<base>` therefore RUNS AHEAD of origin until the human merges the PR. That is intended.
+- `land --express` and `triage` no longer treat pr as special: small requests take the SOLO/express lane.
+- Legacy: a pushed `integrate/<date>` from the v1 flow still works with `seal --sync` (steps in v1).
+
+### ship branch
+- Name `ship/<date>` (the run's first-ship date, YYYY-MM-DD). Reuse rule: an open `ship/*` on origin
+  is reused (fast-forward only), so the same PR updates; none open -> create `ship/<today>`.
+- `finish` (pr mode, all else green, local `<base>` ahead of origin) pushes local `<base>` to
+  `origin ship/<date>` fast-forward, prints EXACTLY ONE link via `pr_create_url <source-branch>`
+  (source arg defaults to `integrate/<date>`), writes `.polaris/ship`, fires `notify-gate done`, exits 0.
+  The pending reasons "on integrate", "waiting to land", "integrate not in main" and the unpushed
+  caveat do not apply in pr mode. Nothing ever pushes to `<base>` itself.
+
+### `polaris sync` (pr mode only; silent; runs at the top of `triage` and in `next`'s entry; ONE fetch)
+| origin state | action | output |
+|---|---|---|
+| ship branch merged into origin `<base>` (merge commit) | `pull --ff-only`, push tags, delete `ship/*` local + remote | one line |
+| ship branch not merged / none | nothing; new work stacks on the same ship branch | none |
+| squash-merged or diverged `<base>` | touch nothing | one ⛔ line |
+| offline / fetch fails | touch nothing | one ⚠ line |
+Direct mode: `sync` is a no-op.
+
+### Stop-hook bounce rule
+A closing message ending in "?" is bounced ONCE while `next` line 1 is `build|integrate|promote`:
+"Work left — next says <line>. The plan approval covers it; do it. A real product/approval question?
+ask again and you will be let through." The second attempt (`stop_hook_active`) passes. `next` line 1
+`finish|wait|stop` keeps the question allowed.
+
+### Run-cap rule
+`run_max_tasks` / `run_max_minutes` / `run_max_agents` and the hook's `allow:cap` count ONLY work
+outside the session's recorded plan (`.polaris/handover/<sid>/plan`). Fix waves, scouts and foreign
+drain still count. Runaway-guard agent cap = max(run_max_agents, 2 x plan tasks).
+
+### Executable check
+Golden `pr-one-link` (T-229): 3 chained tasks reach `done/` with no human step · origin gains only
+`ship/<date>` (pre-receive rejects `<base>`) · `finish` exits 0 with exactly one link · simulated merge
+then `triage` syncs · unmerged + second run fast-forwards the same ship branch.
+
+- v2 2026-11-03: one-link program; breaking-ish: pr-mode `seal` no longer pushes `integrate/<date>`.
