@@ -80,10 +80,11 @@ bash ops/polaris seal [<date>]       # same preconditions + sprint-report commit
                                       # prints the PR-create URL + suggested title `Sprint <n> — <goal>`
                                       # + description, fires notify-gate done. tasks stay in review/,
                                       # locks stay, integrate/<date> stays until --sync.
+# v2 (one link per run): seal stages locally, nothing waits for a merge; `polaris sync` (top of triage/next) pulls the merged ship branch.
 # → open the printed URL and merge the PR with the host's MERGE-COMMIT strategy — NEVER squash, or
 #   the per-task squash commits are lost from <base>. (Non-Bitbucket/unparseable origin: seal prints
 #   the source + dest branches instead of a URL — open the PR by hand.)
-# once the human confirms the PR is merged:
+# legacy v1 flow only (a pushed integrate/<date>) - v2 runs use `polaris sync` at triage instead:
 bash ops/polaris seal --sync [<date>]  # clean tree + git pull --ff-only origin <base>; verifies every
                                       # [<ID>] subject is now in <base> (any missing → dies naming them,
                                       # mutates nothing); tags sprint/<n> per clean-history (create, or

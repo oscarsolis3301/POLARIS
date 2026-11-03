@@ -88,3 +88,7 @@ Under `voice: technical`:
 Under `voice: standard` (the default) this is **≤6 lines of plain English**, not a table dump: what you split the work into, how many can start right now vs. are waiting on others, anything that needs them (a `risk: high` task, a missing contract, an assumption you made), and what the fan-out did — builders opened beside them (say how many and that `bash ops/polaris dash` watches them), or, if nothing launched, `start` to begin. The board is on disk; they can read it or run `bash ops/polaris status` any time. Never make them parse `wsjf`, `files_owned` or point values to find out whether their sprint is ready.
 
 **Entered from INIT (bootstrap)?** Then INIT's step 5 report is the only report — fold yours into it. One report per session, not two.
+
+## Carving rules added for one-link runs
+- Findings about THIS run's code keep this run's `plan:` slug; one task per file-set.
+- Carve the fewest tasks that keep files disjoint; never merge siblings beyond 5 points.
