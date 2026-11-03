@@ -366,15 +366,51 @@ AUTOMODE
   fi
 }
 
-cmd_speed() { # speed — read-only (one-yes.md § 6): how the last 30 changes would be tested, from the repo's own
-  # history. Each commit is classified by `depth --commit` itself (cmd_depth, not a re-derivation).
-  # Writes nothing, runs no suite, never edits config. rc 0 always.
-  local shas sha n=0 a=0 b=0 c=0 d s="" t="" line v
-  shas="$(git -C "$PRIMARY" rev-list -n 30 "$BASE" 2>/dev/null || git -C "$PRIMARY" rev-list -n 30 HEAD 2>/dev/null || true)"
-  [ -n "$shas" ] || { printf 'speed: no history yet
-'; return 0; }
-  while IFS= read -r sha; do
-    [ -n "$sha" ] || continue
+cmd_speed() { # speed — read-only (one-yes.md § 6 + fix wave 2): how the last 30 changes would be tested, from the
+  # repo's own history. ONE git call lists every commit's paths; none/look are decided in-process with the
+  # SAME test_skip/test_look defaults as depth_for (core.sh); only commits that fall through ask cmd_depth
+  # --commit (the expensive one), newest first, under a time budget. Writes nothing, runs no suite, never
+  # edits config. rc 0 always.
+  local budget="${POLARIS_SPEED_BUDGET:-20}" start="$SECONDS" stopped=0 nm=0 hdr
+  local raw p cur="" sha n=0 a=0 b=0 c=0 d s="" t="" line v skip_raw look_raw k i ns=0 allskip allskl
+  local -a SH PA
+  case "$budget" in ''|*[!0-9]*) budget=20;; esac
+  raw="$(git -C "$PRIMARY" log --name-only --format=%x01%h -n 30 "$BASE" 2>/dev/null || git -C "$PRIMARY" log --name-only --format=%x01%h -n 30 HEAD 2>/dev/null || true)"
+  [ -n "$raw" ] || { printf 'speed: no history yet\n'; return 0; }
+  while IFS= read -r p || [ -n "$p" ]; do
+    case "$p" in
+      $'\001'*) SH[ns]="${p#$'\001'}"; PA[ns]=""; ns=$((ns+1));;
+      '') ;;
+      *) [ "$ns" -gt 0 ] && { k=$((ns-1)); PA[k]="${PA[k]}${PA[k]:+
+}$p"; };;
+    esac
+  done <<EOF2
+$raw
+EOF2
+  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
+  [ "$skip_raw" = "-" ] && skip_raw=""
+  look_raw="$(cfg test_look '*.css *.scss *.less *.svg *.png *.jpg *.jpeg *.gif *.webp *.ico')"
+  [ "$look_raw" = "-" ] && look_raw=""
+  i=0
+  while [ "$i" -lt "$ns" ]; do
+    sha="${SH[i]}"; cur="${PA[i]}"; i=$((i+1))
+    [ -n "$cur" ] || continue
+    allskip=1; allskl=1
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      if [ -n "$skip_raw" ] && owned_match "$p" $skip_raw; then continue; fi
+      allskip=0
+      if [ -n "$look_raw" ] && owned_match "$p" $look_raw; then continue; fi
+      allskl=0; break
+    done <<EOF3
+$cur
+EOF3
+    if [ "$allskl" -eq 1 ]; then
+      a=$((a+1)); n=$((n+1)); continue
+    fi
+    if [ "$stopped" -eq 0 ] && [ $((SECONDS - start)) -ge "$budget" ]; then stopped=1; fi
+    if [ "$stopped" -eq 1 ]; then nm=$((nm+1)); continue; fi
+    [ -n "${POLARIS_SPEED_TEST_SLEEP:-}" ] && sleep "$POLARIS_SPEED_TEST_SLEEP"
     d="$(cmd_depth --commit "$sha" 2>/dev/null | sed -n 1p || true)"
     case "$d" in
       none|look) a=$((a+1));;
@@ -383,11 +419,8 @@ cmd_speed() { # speed — read-only (one-yes.md § 6): how the last 30 changes w
       *)         continue;;
     esac
     n=$((n+1))
-  done <<EOF2
-$shas
-EOF2
-  [ "$n" -gt 0 ] || { printf 'speed: no history yet
-'; return 0; }
+  done
+  [ "$n" -gt 0 ] || [ "$nm" -gt 0 ] || { printf 'speed: no history yet\n'; return 0; }
   if [ -f "$PRIMARY/.polaris/last-suite-seconds" ]; then
     s="$(cut -d' ' -f1 < "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true)"
     case "$s" in
@@ -395,7 +428,10 @@ EOF2
       *) if [ "$s" -lt 60 ]; then t="${s}s"; else t="$(( (s + 30) / 60 ))m"; fi;;
     esac
   fi
-  line="Of your last $n changes: $a would skip the test run, $b run only related tests, $c run everything."
+  hdr="Of your last $n changes"
+  [ "$stopped" -eq 1 ] && hdr="$hdr (stopped early at the time limit)"
+  line="$hdr: $a would skip the test run, $b run only related tests, $c run everything."
+  [ "$stopped" -eq 1 ] && line="$line $nm not checked."
   [ -n "$t" ] && line="$line Your last full run took $t."
   printf '%s
 ' "$line"
