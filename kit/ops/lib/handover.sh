@@ -195,6 +195,19 @@ EOF_CAND
   [ -n "$NX_ELIGIBLE" ]
 }
 
+next_inplan() { # next_inplan <ID...> — 0 only when this session recorded a plan AND every task named
+  # carries that plan: slug (T-230: run caps count only work OUTSIDE the plan; fix waves, scouts and
+  # foreign drain carry another slug, or none, so they still count).
+  local d mp="" id f pl
+  d="$(next_dir)"; [ -f "$d/plan" ] && mp="$(tr -d ' \r\n' < "$d/plan")"
+  [ -n "$mp" ] && [ "$#" -gt 0 ] || return 1
+  for id in "$@"; do
+    f="$(task_file "$id" 2>/dev/null)" || return 1
+    pl="$(fm_get plan "$f" 2>/dev/null || true)"; [ "$pl" = "$mp" ] || return 1
+  done
+  return 0
+}
+
 next_budget() { # next_budget <N> — row 2's predicate, asked ONLY when a build or a promote would
   # otherwise fire: hops ≥ run_max_tasks (cap ≠ 0), or minutes since max(started, prompted-at) ≥
   # run_max_minutes (cap ≠ 0). NX_CAP names the cap that hit; NX_BUDGET_NOTE is the CONDUCTOR's
@@ -248,7 +261,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   next_promote && pro=1
   n="$(printf '%s' "$NX_ELIGIBLE" | wc -w | tr -d ' ')"
   if [ "$can" -eq 1 ] || [ "$pro" -eq 1 ]; then
-    if next_budget $(( NX_READY_N + n )); then printf 'stop\n'; note "$NX_BUDGET_NOTE"; return 0; fi
+    if ! { { [ "$can" -eq 1 ] && next_inplan $NX_BUILD; } || { [ "$can" -eq 0 ] && next_inplan $NX_ELIGIBLE; }; } && next_budget $(( NX_READY_N + n )); then printf 'stop\n'; note "$NX_BUDGET_NOTE"; return 0; fi
   fi
   if [ "$can" -eq 1 ]; then printf 'build %s\n' "$NX_BUILD"; note "$NX_BUILD_NOTE"; return 0; fi
   if [ "$pro" -eq 1 ]; then printf 'promote\n'

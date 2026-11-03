@@ -386,3 +386,6 @@ tarball:  <URL of the kit tarball>               # what `update` downloads
 - Board mutations = `board_commit` on `refs/heads/polaris/board` in the primary checkout ONLY (the sole `<base>` commits any mutation makes are `done`'s `docs(map):` / `docs(surfaces):` when `map_delta` or `surface:` is non-empty); code = `feat/<ID>` in worktrees ONLY.
 - Locks are runtime race-breakers; the task file's `owner:` is the durable record.
 - A lock with no matching `active/` or `review/` task is an orphan — safe to remove. A stale active lock is a HUMAN decision.
+
+### `publish: pr` v2 by hand - one link per run
+`seal` in pr mode merges into LOCAL `<base>` and tags locally exactly like direct; push nothing. At the end push local `<base>` to `origin ship/<date>` fast-forward only (reuse an open `ship/*`), and hand the human the one PR link. After the human merges (merge commit): `git pull --ff-only origin <base>`, push tags, delete `ship/<date>` local and remote - what `polaris sync` does.

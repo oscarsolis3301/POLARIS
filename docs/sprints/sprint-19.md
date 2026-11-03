@@ -449,7 +449,7 @@ Extend the golden: add a case with POLARIS_SPEED_BUDGET=0 (expect the stopped-ea
 - [ ] `update` tail still guarded by `|| true`; read-only (repo byte-identical after)
 
 ## T-220 — "Release 6.10.1 - speed report stops at its time budget, plus a selftest cleanup fix: version and changelog (LAST)"
-points 1 · risk normal · landed 30e5085 (2026-10-28) · claimed 2026-10-28
+points 1 · risk normal · landed 30e5085 (2026-10-28) · claimed 2026-10-28 → done 2026-10-28
 files touched: CHANGELOG.md, kit/ops/VERSION
 
 ### Why
@@ -457,3 +457,42 @@ files touched: CHANGELOG.md, kit/ops/VERSION
 
 ### Acceptance
 - [ ] every verify: line passes (the VERSION file is multi-line: use grep, never `test "$(cat kit/ops/VERSION)" = ...`, the T-217 trap)
+
+## T-228 — "pr mode stages locally: seal merges into local main and pushes nothing, plus polaris sync"
+points 5 · risk normal · landed c1db246 (2026-11-03) · claimed 2026-11-03
+files touched: kit/ops/lib/core.sh, kit/ops/lib/integrate.sh, kit/ops/lib/selftest/history.sh, kit/ops/polaris, ops/tests/api-kit.expected
+
+### Why
+Under publish: pr, every layer of dependent tasks costs a PR, a human merge and a "continue?" stop, because seal pushes integrate/<date> and the task cannot reach done/ until the human merges. Read ops/contracts/publish-modes.md "v2 - one link per run" first; it is the spec. Change cmd_seal's pr branch (integrate.sh ~925-951) so it does the same LOCAL merge into base and the same local sprint tag as direct mode, but pushes nothing. Remove the pr refusal in `land --express` (~602) so express and solo work in pr mode. Keep `seal --sync` working for a legacy pushed integrate/<date>. Add `cmd_sync` (+ dispatch and a help line in kit/ops/polaris): pr mode only, silent unless it acts; ONE fetch; ship branch merged into origin base -> `pull --ff-only`, push tags, delete ship/* local and remote, one line; not merged -> nothing; squash-merged or diverged -> one stop line, nothing touched; offline -> one warning line. Direct mode: no-op. Give pr_create_url (core.sh ~655) an optional source-branch argument defaulting to integrate/<date>. The drills live in kit/ops/lib/selftest/history.sh (NOT remote.sh): update the express pr-refusal assertions (~78-81) and the pr-publish drill so seal no longer pushes and the legacy `seal --sync` path is still proven. Run that drill ONCE by hand (`doctor --selftest --only pr-publish,express`, in the background: it exceeds 2 minutes, so never put it in verify:). Refresh the two .expected goldens with `check --update --only <name>` and review the diff.
+
+### Acceptance
+- [ ] pr-mode seal creates the local merge and tag, and `git ls-remote origin` shows no new ref
+- [ ] `land --express` no longer refuses pr
+- [ ] `polaris sync` follows the contract's decision table, silent when nothing to do
+- [ ] pr_create_url accepts a source branch, default unchanged
+- [ ] legacy `seal --sync` still proven by the updated drill
+- [ ] verify: lines pass
+
+## T-230 — "No more continue? stops: the Stop hook bounces a closing question while work is left, run caps ignore the approved plan"
+points 3 · risk normal · landed e4ea2a9 (2026-11-03) · claimed 2026-11-03
+files touched: kit/ops/KEYS.tsv, kit/ops/hooks/handover-hook.sh, kit/ops/lib/handover.sh, ops/tests/run-caps-plan.cmd, ops/tests/run-caps-plan.expected, ops/tests/stop-question.cmd, ops/tests/stop-question.expected
+
+### Why
+The agent stopped to ask "continue?" between layers and the Stop hook let it, because any message ending in "?" is allowed (handover-hook.sh ~164, hh_question). Read ops/contracts/publish-modes.md "v2 - one link per run" (Stop-hook bounce rule, Run-cap rule). Move the `hh_question` allow to AFTER `next` is read: line 1 build|integrate|promote -> block once with "Work left - next says <line>. The plan approval covers it; do it. A real product/approval question? ask again and you will be let through"; a second attempt (stop_hook_active) passes; line 1 finish|wait|stop keeps allow:question. In handover.sh the next_route budget `stop` rows (~217, ~251) and the hook's allow:cap count ONLY work outside the session's recorded plan (`.polaris/handover/<sid>/plan`); fix waves, scouts and foreign drain still count; the runaway guard's agent cap becomes max(run_max_agents, 2 x plan tasks). Update the run_max_* descriptions in KEYS.tsv to say plan work is not counted. Add goldens `stop-question` and `run-caps-plan` (hermetic, mktemp, copy handover-stop.cmd's fixture style), and keep handover-stop / handover-route green.
+
+### Acceptance
+- [ ] a closing "?" is bounced once while next names work, and passes on the second attempt
+- [ ] a closing "?" is allowed when next says finish|wait|stop
+- [ ] caps do not stop a run mid-plan, and still count fix waves, scouts and foreign drain
+- [ ] verify: lines pass
+
+## T-231 — "Prose: in pr mode nothing waits for a merge, the close is the link, fewest tasks that keep files disjoint"
+points 2 · risk normal · landed f9155bd (2026-11-03) · claimed 2026-11-03
+files touched: kit/.claude/output-styles/polaris.md, kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md
+
+### Why
+Words only, one line each, matching ops/contracts/publish-modes.md "v2 - one link per run". CONDUCTOR.md: in pr mode nothing waits for a merge, the close is the one link; never close with "continue or stop?" while `next` names work. SOLO.md (sections 5-8): same. INTEGRATOR.md (~line 86): use `polaris sync` instead of "once the human confirms the PR is merged". PLANNER.md: findings about THIS run's code keep this run's `plan:`, one task per file-set; carve the fewest tasks that keep files disjoint; never merge siblings beyond 5 points. kit/.claude/output-styles/polaris.md (section "How a session ends"): under pr the one next step is the merge link; human-only checks go in one non-blocking flag list after it, never as questions. PROTOCOL.md and MANUAL.md pr-mode paragraphs: local staging seal, ship/<date>, `sync`. Do NOT touch kit/CLAUDE.md. T-226 (parked) used to own PROTOCOL/INTEGRATOR/SOLO/CONDUCTOR; it stays in backlog until this lands.
+
+### Acceptance
+- [ ] every verify: grep passes
+- [ ] no file outside files_owned changed, and kit/CLAUDE.md untouched

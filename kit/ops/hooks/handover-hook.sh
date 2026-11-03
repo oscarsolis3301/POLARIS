@@ -117,8 +117,27 @@ hh_question() {
   [ -n "$1" ] && [ -f "$1" ] || return 1
   t="$(tail -400 "$1" 2>/dev/null | grep '"type":"assistant"' | grep '{"type":"text"' | tail -1)"
   [ -n "$t" ] || return 1
-  case "$t" in *'\n⛔'*|*'"text":"⛔'*|*'?"}'*|*'?\n"}'*) return 0;; esac
+  REPLY=stop                                  # the stop mark: a real stop, never bounced
+  case "$t" in *'\n⛔'*|*'"text":"⛔'*) return 0;; esac
+  REPLY=q                                     # a closing question: bounced once while work is left
+  case "$t" in *'?"}'*|*'?\n"}'*) return 0;; esac
   return 1
+}
+# Plan work? $1 primary, $2 state dir, $3.. task IDs -> 0 only when the session has a recorded plan
+# and EVERY id's task carries that plan slug (T-230: caps count only work outside the plan).
+hh_inplan() {
+  local p="$1" d="$2" mp='' id f pl c
+  shift 2
+  [ -f "$d/plan" ] && mp="$(tr -d ' \r\n' < "$d/plan" 2>/dev/null)"
+  [ -n "$mp" ] && [ "$#" -gt 0 ] || return 1
+  for id in "$@"; do
+    f=''
+    for c in active ready review backlog blocked; do [ -f "$p/ops/board/$c/$id.md" ] && { f="$p/ops/board/$c/$id.md"; break; }; done
+    [ -n "$f" ] || return 1
+    pl="$(sed -n 's/^plan:[[:space:]]*//p' "$f" 2>/dev/null | head -1)"; pl="$(printf '%s' "$pl" | tr -d ' \r"')"
+    [ "$pl" = "$mp" ] || return 1
+  done
+  return 0
 }
 # Is our landing tail still up? $1 primary, $2 cwd -> REPLY = an OWN ship-<ID> job with no rc yet.
 hh_bg_live() {
@@ -146,7 +165,7 @@ hh_emit() {
 }
 # The gate ladder, in the pinned order.
 hh_stop() {
-  local p dir ev hop cap hops n out l1 n2 verb id ids hi job
+  local p dir ev hop cap hops n out l1 n2 verb id ids hi job q=0 capped=0 plan=0
   hh_primary "$CWD" || hh_emit allow:no-state ''
   p="$REPLY"; dir="$p/.polaris/handover/$SID"
   [ -n "$SID" ] && [ -f "$dir/last-event" ] || hh_emit allow:no-state ''
@@ -159,18 +178,30 @@ hh_stop() {
   hh_cfg run_max_tasks "$p" 0; cap="${REPLY:-0}"
   hh_state "$dir" hops; hops="${REPLY:-0}"
   case "$hops:$cap" in *[!0-9:]*) hops=0; cap=0;; esac
-  [ "$cap" != 0 ] && [ "$hops" -ge "$cap" ] && hh_emit allow:cap ''
+  [ "$cap" != 0 ] && [ "$hops" -ge "$cap" ] && { [ -s "$dir/plan" ] && capped=1 || hh_emit allow:cap ""; }  # a recorded plan defers the cap to the verb below
   hh_subagent "$TP" "$SID" "$dir/last-event" && hh_emit allow:subagent ''
-  hh_question "$TP" && hh_emit allow:question ''
+  hh_question "$TP" && { [ "$REPLY" = stop ] && hh_emit allow:question ""; q=1; }
   hh_bg_live "$p" "$CWD" && { job="$REPLY"                   # consumes nothing: the tail resumes
     hh_emit block:collect "Your landing tail $job is still running: bash ops/polaris bg wait $job --max 300 (repeat while rc 2), then bash ops/polaris next."; }
   if [ -n "${POLARIS_HANDOVER_NEXT:-}" ]; then out="$POLARIS_HANDOVER_NEXT"
   else out="$(cd "$p" 2>/dev/null && bash "${POLARIS_HANDOVER_CLI:-$p/ops/polaris}" next 2>/dev/null)"; fi
   l1="$(printf '%s\n' "$out" | head -1)"; l1="${l1%$'\r'}"
   verb="${l1%% *}"; id="${l1#* }"; [ "$id" = "$l1" ] && id=''
-  case "$verb" in wait|stop|resume) hh_emit "allow:$verb" '';; build|integrate|promote|finish) ;;
-    *) hh_emit allow:no-verb '';; esac
-  n=$((hops + 1)); printf '%s\n' "$n" > "$dir/hops"          # the writes land BEFORE the emit, so
+  case "$verb" in wait|stop|resume) [ "$q" = 1 ] && hh_emit allow:question ''; hh_emit "allow:$verb" '';;
+    build|integrate|promote|finish) ;;
+    *) [ "$q" = 1 ] && hh_emit allow:question ''; hh_emit allow:no-verb '';; esac
+  # plan work (T-230): tasks of the session's recorded plan are not counted against the run caps
+  case "$verb" in
+    build)   hh_inplan "$p" "$dir" $id && plan=1;;
+    integrate) ids="$(printf '%s\n' "$out" | sed -n 's/^   review\/: //p')"; hh_inplan "$p" "$dir" $ids && plan=1;;
+    promote) ids="$(printf '%s\n' "$out" | sed -n 's/^   eligible: \(.*\) — bash.*$/\1/p')"; hh_inplan "$p" "$dir" $ids && plan=1;;
+  esac
+  [ "$capped" = 1 ] && [ "$plan" = 0 ] && hh_emit allow:cap ''
+  if [ "$q" = 1 ]; then
+    [ "$verb" = finish ] && hh_emit allow:question ''
+    hh_emit block:question "Work left - next says $l1. The plan approval covers it; do it. A real product/approval question? ask again and you will be let through."
+  fi
+  n=$((hops + 1)); [ "$plan" = 1 ] && n="$hops"; printf '%s\n' "$n" > "$dir/hops"   # plan hops are free; the writes land BEFORE the emit, so
   printf '%s\n' "$ev" > "$dir/hopped-event"                  # one event still buys one hop on a crash
   case "$verb" in
     build)  n2="$(printf '%s\n' "$out" | sed -n 2p)"; n2="${n2#   }"; n2="${n2%, wsjf *}"

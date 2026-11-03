@@ -1,0 +1,6 @@
+block:build
+hops=1
+allow:cap
+hops=1
+build T-SQ1
+stop

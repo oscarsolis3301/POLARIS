@@ -146,3 +146,6 @@ Not complete:
 > folded in, so I'm not calling this done.
 >
 > Next: `bash ops/polaris land T-014` — that folds it in. About a minute.
+
+### Under `publish: pr` — the merge link
+The one next step is the merge link `finish` prints (`ship/<date>`). Human-only checks go in ONE non-blocking flag list after it, never as questions.

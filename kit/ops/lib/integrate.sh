@@ -597,9 +597,6 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
     *)    printf "   ⚠ express: '%s' unknown (auto | off) — behaving as off\n" "$ex" >&2
           die "express: off (an unknown value behaves as off) — run the full ceremony";;
   esac
-  # refusal: a pr-mode wave ends at a PR the human merges, never at a one-pass seal
-  publish_resolve
-  [ "$PUB" = "direct" ] || die "express needs publish: direct — publish: pr waves end at a PR, not a seal"
   # context — the same preconditions land/seal enforce: primary checkout, ON <base>
   in_primary || die "express runs in the primary checkout — cd \"$PRIMARY\" first"
   local br; br="$(git rev-parse --abbrev-ref HEAD)"
@@ -922,34 +919,6 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
   # it is a docs(sprint-N) commit with no [<ID>] suffix (ID resolution ignores it).
   git checkout -q "integrate/$date"
   seal_report_commit "$n" "$date"
-  if [ "$PUB" = "pr" ]; then
-    # ---------------- publish: pr — the ENTIRE pr fork (one block, one seam) ----------------
-    # All preconditions + the tag gate above ran check-only. From here: NO local merge, NO tag,
-    # NO $BASE ref change (local or remote) — everything mutating waits for `seal --sync` after
-    # the human merges the PR. Tasks stay in review/, locks stay, integrate/<date> stays.
-    # (T-023: the wave's sprint-report commit lands HERE, on integrate/$date, before the push.)
-    has_remote || { int_off; die "publish: pr needs an origin remote — nowhere to push integrate/$date"; }
-    git push -q -u origin "integrate/$date" || { int_off; die "push of integrate/$date failed — check origin access"; }
-    board_changed_touch   # brain freshness (ops/contracts/brain.md): the wave left the machine.
-                          # No auto-refresh here — the fold happens at `seal --sync`, not now.
-    [ -n "$seal_had" ] || int_off   # lane work done — release BEFORE the notify hook, which may
-                                    # block on a human gate; the lane must not wait with it
-    local prurl
-    prurl="$(pr_create_url "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null || true)" "$date" "$BASE")"
-    say "wave pushed — ONLY integrate/$date left the machine ($BASE and tags untouched)"
-    if [ -n "$prurl" ]; then
-      note "open the PR: $prurl"
-    else
-      note "open a PR from integrate/$date into $BASE on your host"
-    fi
-    note "suggested title: Sprint $n — $goal"
-    note "suggested description:"
-    printf '%s\n' "$subjects" | sed 's/^/     - /'
-    note "merge with the MERGE COMMIT strategy (never squash — the per-task commits must survive)"
-    note "merged? finish the wave: bash ops/polaris seal --sync $date"
-    cmd_notify_gate done
-    return 0
-  fi
   local msg
   msg="Sprint $n — $goal
 
@@ -976,7 +945,9 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
   else
     git tag "sprint/$n"
   fi
-  if has_remote; then
+  if [ "$PUB" = "pr" ]; then
+    : # publish: pr (publish-modes v2): local staging seal — merge + tag stay on this machine; `finish` ships ONE ship/<date> link
+  elif has_remote; then
     # push $BASE on its own so its result is known: success clears the protected-branch stamp,
     # rejection records it (doctor reads the count). The tag push follows only once base lands.
     if git push -q origin "$BASE" 2>/dev/null; then
@@ -1012,7 +983,8 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
   # A wave is not a run: a sprint may seal several times (INTEGRATOR.md § 4). So this POINTS at the
   # run-level verdict rather than calling it — an auto-called finish would print `⛔ pending:` inside
   # two successful seals out of three, and would put the whole suite between the merge and the push.
-  note "wave sealed. run over? bash ops/polaris finish"
+  if [ "$PUB" = "pr" ]; then note "wave staged locally — nothing pushed; finish ships the run as ONE link"
+  else note "wave sealed. run over? bash ops/polaris finish"; fi
 }
 
 seal_sync() { # seal --sync <date> — pr mode only: finish the wave AFTER the human merges the PR
@@ -1167,4 +1139,57 @@ cmd_rollback() { # rollback <ID | sprint/<n>> — one forward revert commit on $
   esac
   [ -n "$rb_had" ] || int_off
   say "reverted $target — one forward commit on $BASE: $(git log -1 --format=%s)"
+}
+
+cmd_sync() { # sync — publish: pr only, silent unless it acts (ops/contracts/publish-modes.md v2).
+  # ONE fetch. A ship/* branch merged (merge commit) into origin's $BASE → ff the local $BASE, push
+  # sprint tags, delete the ship branch local + remote, one line. Not merged → nothing. Squash-merged
+  # or diverged → one ⛔ line, nothing touched. Offline → one ⚠ line. publish: direct → no-op.
+  publish_resolve
+  [ "$PUB" = "pr" ] || return 0
+  has_remote || return 0
+  git -C "$PRIMARY" fetch -q origin 2>/dev/null || { printf '   ⚠ sync: origin unreachable — left everything as it was\n'; return 0; }
+  local ob="refs/remotes/origin/$BASE" lb="refs/heads/$BASE" ships s sh merged="" open=""
+  git -C "$PRIMARY" rev-parse -q --verify "$ob" >/dev/null || return 0
+  ships="$(git -C "$PRIMARY" for-each-ref --format='%(refname)' 'refs/remotes/origin/ship/*' 2>/dev/null)"
+  [ -n "$ships" ] || return 0
+  for s in $ships; do
+    if git -C "$PRIMARY" merge-base --is-ancestor "$s" "$ob" 2>/dev/null; then merged="$merged ${s#refs/remotes/origin/}"
+    else open="$open $s"; fi
+  done
+  if [ -n "$merged" ]; then
+    if ! git -C "$PRIMARY" merge-base --is-ancestor "$lb" "$ob" 2>/dev/null; then
+      printf '⛔ sync: origin %s moved past your local %s — nothing touched, reconcile by hand\n' "$BASE" "$BASE"; return 0
+    fi
+    if [ "$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null)" = "$BASE" ]; then
+      git -C "$PRIMARY" merge -q --ff-only "$ob" >/dev/null 2>&1 \
+        || { printf '⛔ sync: could not fast-forward %s — nothing touched, reconcile by hand\n' "$BASE"; return 0; }
+    else
+      git -C "$PRIMARY" update-ref "$lb" "$ob" "$(git -C "$PRIMARY" rev-parse "$lb")" \
+        || { printf '⛔ sync: could not fast-forward %s — nothing touched, reconcile by hand\n' "$BASE"; return 0; }
+    fi
+    local tg lt rt rtags   # new sprint tag → plain push; a moved one → compare-and-swap, as seal does
+    rtags="$(git -C "$PRIMARY" ls-remote origin 'refs/tags/sprint/*' 2>/dev/null)"
+    for tg in $(git -C "$PRIMARY" tag -l 'sprint/*'); do
+      lt="$(git -C "$PRIMARY" rev-parse "refs/tags/$tg")"
+      rt="$(printf '%s\n' "$rtags" | awk -v r="refs/tags/$tg" '$2==r{print $1}')"
+      [ "$lt" = "$rt" ] && continue
+      if [ -z "$rt" ]; then git -C "$PRIMARY" push -q origin "refs/tags/$tg" >/dev/null 2>&1 || true
+      else git -C "$PRIMARY" push -q --force-with-lease="refs/tags/$tg:$rt" origin "refs/tags/$tg" >/dev/null 2>&1 || true; fi
+    done
+    for sh in $merged; do
+      git -C "$PRIMARY" branch -q -D "$sh" >/dev/null 2>&1 || true
+      git -C "$PRIMARY" push -q origin ":refs/heads/$sh" >/dev/null 2>&1 || true
+    done
+    board_changed_touch 2>/dev/null || true
+    say "sync: ${merged# } merged — $BASE caught up, tags pushed, ship branch removed"
+    return 0
+  fi
+  # nothing merged: origin $BASE strictly ahead/behind/equal is fine; neither (a squash merge or a
+  # rewritten base) means the ship branch can never be recognised as merged.
+  if ! git -C "$PRIMARY" merge-base --is-ancestor "$ob" "$lb" 2>/dev/null \
+     && ! git -C "$PRIMARY" merge-base --is-ancestor "$lb" "$ob" 2>/dev/null; then
+    printf '⛔ sync: origin %s diverged from local (squash-merged? the ship PR needs a MERGE COMMIT) — nothing touched\n' "$BASE"
+  fi
+  return 0
 }
