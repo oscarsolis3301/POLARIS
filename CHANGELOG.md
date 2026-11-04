@@ -4,6 +4,25 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.11.0 — 2026-11-04
+
+**One request, one link. On a repo that needs pull requests, a whole run now finishes with a single link to approve, and the agent no longer stops to ask "continue?" in the middle.**
+
+Before, every layer of dependent tasks needed its own merge, so one request could turn into six pull
+requests and five stops. Now the work stages on your own computer: tasks reach done, the next ones
+start straight away, and nothing waits on you. At the end `finish` pushes one `ship/<date>` branch and
+prints one link. `polaris sync` notices when you have merged it and folds it in by itself, at the start
+of the next request.
+
+- Small requests on a pull-request repo take the one-context solo lane again, instead of the full
+  planning ceremony.
+- The agent no longer ends a turn with a "continue?" question while the approved plan still has work left.
+- The run limits (task count and time) no longer cut an approved plan short.
+
+Good to know: on a pull-request repo, your local main now runs ahead of origin until you merge the link.
+And `seal` no longer pushes `integrate/<date>` in that mode (a branch already pushed by an older run still
+works with `seal --sync`).
+
 ## 6.10.1 — 2026-10-28
 
 **The speed report now stops at a time limit instead of taking minutes on a big repo.**
