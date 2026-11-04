@@ -1,0 +1,34 @@
+== 1 triage under publish: pr ==
+solo
+== 2 three chained tasks, no human step ==
+T-1: done=yes
+T-2: done=yes
+T-3: done=yes
+local main moved: yes
+files on main: 3
+origin so far:
+  refs/heads/main
+== 3 finish ships one link ==
+finish rc=0
+1
+https://bitbucket.org/acme/arc/pull-requests/new?source=ship/<date>&dest=main
+origin now:
+  refs/heads/main
+  refs/heads/ship/<date>
+origin main untouched: yes
+ship == local main: yes
+ship recorded: ship/<date>
+== 4 the human merges, triage syncs ==
+local main == origin main: yes
+origin now:
+  refs/heads/main
+== 5 a second run, then a third that is not merged yet ==
+T-4: done=yes
+finish rc=0
+1
+T-5: done=yes
+finish rc=0
+1
+same branch moved forward: yes
+ship branches on origin: 1
+origin main untouched since the merge: yes

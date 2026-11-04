@@ -93,3 +93,10 @@ mv "$FIX/repo/ops/board/ready/T-4.md" "$FIX/repo/ops/board/active/T-4.md"
 OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
 printf '%s\n' "$OUT" | sed -n 1p
 printf '%s\n' "$OUT" | grep -c '^   1 task(s) already active — another lane is building'
+# --- T-229: publish: pr no longer forces `full` (publish-modes.md v2). The seal stages locally and
+# `finish` ships one link, so small work takes the same lane it would under direct.
+rm -f "$FIX/repo/ops/board/active/T-4.md" "$FIX/repo/ops/board/ready/T-3.md"
+printf 'publish: pr\n' >> "$FIX/repo/ops/CONVENTIONS.md"
+OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
+printf '%s\n' "$OUT" | sed -n 1p
+printf '%s\n' "$OUT" | grep -c 'publish: pr' || true
