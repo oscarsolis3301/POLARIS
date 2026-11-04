@@ -858,3 +858,4 @@
 {"ts":1793749150,"ev":"promote","id":"T-229","who":"Owner@DESKTOP","note":"deps done: T-228","pts":5}
 {"ts":1793816940,"ev":"claim","id":"T-229","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1793828103,"ev":"handoff","id":"T-229","who":"Owner@DESKTOP","note":""}
+{"ts":1793828876,"ev":"done","id":"T-229","who":"Owner@DESKTOP","note":"","pts":5}
