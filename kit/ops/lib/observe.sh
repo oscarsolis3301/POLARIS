@@ -2024,6 +2024,9 @@ cmd_triage() { # triage [<ID…>] — print the LANE this board's work belongs i
   # a bare `start`. No IDs ⇒ every branch below is byte-identical to before.
   local n=0 id="" f base pts risk owned p why="" lane=full k sum big
   local named=0 first_id="" active_n=0 aid
+  # publish: pr (publish-modes.md v2): one fetch per run, silent. T-230 owns `next` (handover.sh),
+  # so triage — run once per run, first — is the sync point. Direct mode: cmd_sync is a no-op.
+  cmd_sync >/dev/null 2>&1 || true
   if [ $# -gt 0 ]; then
     named=1
     for id in "$@"; do
@@ -2107,7 +2110,6 @@ EOF
       sum=$((sum + pts)); [ "$pts" -gt "$big" ] && big="$pts"
     done
     if [ "$(cfg express auto)" = "off" ]; then printf 'full\n'; note "express: off in CONVENTIONS.md"; return 0; fi
-    if [ "$(cfg publish direct)" != "direct" ]; then printf 'full\n'; note "publish: pr — the wave needs a human merge"; return 0; fi
     if [ "$big" -le 3 ] && [ "$n" -le 4 ] && [ "$sum" -le 6 ]; then
       printf 'solo\n'
       note "$n tasks · $sum pts ≤ 6 — one context (~7,300 tokens cold start) beats a full wave's $((n + 3)) contexts (~$(( (n + 3) * 7300 )) tokens); work them one at a time: claim → build → land --express → next"
@@ -2125,7 +2127,6 @@ EOF
   [ "$risk" = "normal" ] || why="risk: $risk (only a human may approve a merge)"
   case "$pts" in ''|*[!0-9]*) [ -z "$why" ] && why="points '$pts' is not a plain number";; esac
   [ -z "$why" ] && [ "$(cfg express auto)" = "off" ] && why="express: off in CONVENTIONS.md"
-  [ -z "$why" ] && [ "$(cfg publish direct)" != "direct" ] && why="publish: pr — the wave needs a human merge"
   # STOP-AND-ASK, mechanically — three cases, not one (ask-approval.md § 5):
   #   `path` scope       → full: the rule is a wall, no approval can lift it
   #   `ask`, no approval → full: get the human's yes at the plan gate, where asking is cheap
@@ -2699,7 +2700,9 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
       fin_caveat "$ib is merged but the branch is still here — git branch -d $ib"
     else
       n=$(git -C "$PRIMARY" rev-list --count "$BASE..$ib" 2>/dev/null || echo 0)
-      fin_pending "$ib is not in $BASE — $n commit(s) unsealed (bash ops/polaris seal ${ib#integrate/})"
+      publish_resolve
+      if [ "$PUB" = "pr" ]; then fin_caveat "$ib is a pushed v1 branch not in $BASE — seal --sync once its PR is merged"
+      else fin_pending "$ib is not in $BASE — $n commit(s) unsealed (bash ops/polaris seal ${ib#integrate/})"; fi
     fi
   done <<EOF
 $(git -C "$PRIMARY" for-each-ref --format='%(refname:short)' 'refs/heads/integrate/*' 2>/dev/null)
@@ -2772,7 +2775,8 @@ $(git -C "$PRIMARY" stash list --format='%gd %gs' 2>/dev/null | grep 'polaris/pa
 EOF
   # Local ref read only — NEVER a fetch. A missing or stale origin ref is silence, not a caveat
   # about nothing.
-  if has_remote && git -C "$PRIMARY" show-ref -q --verify "refs/remotes/origin/$BASE" 2>/dev/null; then
+  publish_resolve
+  if [ "$PUB" != "pr" ] && has_remote && git -C "$PRIMARY" show-ref -q --verify "refs/remotes/origin/$BASE" 2>/dev/null; then
     n=$(git -C "$PRIMARY" rev-list --count "origin/$BASE..$BASE" 2>/dev/null || echo 0)
     [ "$n" -eq 0 ] || fin_caveat "$n commit(s) on $BASE not pushed to origin — git push origin $BASE"
   fi
@@ -2835,6 +2839,29 @@ EOF
   done <<EOF
 $CAVS
 EOF
+
+  # publish: pr (publish-modes.md v2 § ship branch): local $BASE ran ahead of origin by design.
+  # Fast-forward it to origin ship/<date> (an open ship/* is reused, so the same PR updates) and
+  # print the ONE link. Nothing here ever pushes $BASE itself.
+  local shp="" shurl shahead
+  if [ "$PUB" = "pr" ] && has_remote; then
+    shp="$(git -C "$PRIMARY" ls-remote --heads origin 'refs/heads/ship/*' 2>/dev/null | awk '{print $2}' | sed 's#^refs/heads/##' | sort | head -1)"
+    shahead=1
+    if [ -z "$shp" ]; then
+      git -C "$PRIMARY" show-ref -q --verify "refs/remotes/origin/$BASE" 2>/dev/null \
+        && shahead=$(git -C "$PRIMARY" rev-list --count "origin/$BASE..$BASE" 2>/dev/null || echo 0)
+      shp="ship/$(date +%F)"
+    fi
+    if [ "$shahead" -gt 0 ]; then
+      git -C "$PRIMARY" push -q origin "refs/heads/$BASE:refs/heads/$shp" >/dev/null 2>&1 \
+        || die "finish: could not fast-forward origin $shp (diverged? it must only ever grow) — nothing else was touched"
+      mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+      printf '%s\n' "$shp" > "$PRIMARY/.polaris/ship" 2>/dev/null || true
+      shurl="$(pr_create_url "$(git -C "$PRIMARY" remote get-url origin 2>/dev/null)" "$(date +%F)" "$BASE" "$shp")"
+      if [ -n "$shurl" ]; then say "ship: open this one link, merge it with a MERGE COMMIT (never squash):"; printf '%s\n' "$shurl"
+      else say "ship: open a PR from $shp into $BASE on your host (merge commit, never squash)"; fi
+    fi
+  fi
 
   # FIRE-ONCE, keyed on the base tip sha. notify-gate is observe-only by contract (it may not touch
   # the board), so the board carries no record that the signal fired and cannot be made to — a stamp
