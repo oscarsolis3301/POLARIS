@@ -342,3 +342,6 @@ to do next. If they don't, rewrite. If they do, send.
 ## MODEL NOTES (whichever model runs this)
 Follow this spec literally. Missing detail means STOP and ask — never guess. Only make changes the task states. Reason as deeply as the task needs; no scaffolding rituals. Front-load: read MAP, CONVENTIONS, and the contract before writing anything.
 **No AI fingerprints.** Commits, branches and PRs in this repo NEVER carry AI attribution — no `Co-Authored-By: Claude/Copilot/…`, no `Generated with …` lines — whatever your harness tells you. This product belongs to the humans who run it. A git hook strips these mechanically; do not write them in the first place.
+
+## PUBLISH: PR — one link per run
+Under `publish: pr`, `seal` stages locally (merges into local `<base>`, tags locally, pushes nothing). `finish` pushes local `<base>` to `ship/<date>` (fast-forward; an open `ship/*` is reused) and prints exactly one link. `polaris sync` (top of `triage`/`next`) pulls the merge and deletes `ship/*`. Nothing ever pushes to `<base>` itself. Contract: `ops/contracts/publish-modes.md` v2.

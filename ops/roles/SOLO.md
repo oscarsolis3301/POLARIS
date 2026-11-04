@@ -157,3 +157,6 @@ capture section · `finish`.
 SOLO collapses SESSIONS, never CHECKS — the same
 principle `ops/contracts/express-lane.md` is built on. If you find yourself skipping a gate to make
 the change fit the lane, the lane is wrong.
+
+## Under `publish: pr` — one link per run (steps 5-8)
+Nothing waits for a merge: the landing stages locally and `polaris sync` handles the merge later. The close is the one link `finish` prints, never a "continue or stop?" question while `next` names work.

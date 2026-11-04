@@ -336,3 +336,6 @@ capped by `autolaunch_max`; builders get their classic minimal context and NOTHI
 board summaries, never the repo; one retry per task, never loops of retries. When a run degrades
 (you're re-reading your own summaries), say so and hand the remainder to fresh sessions via
 `ops/polaris fleet` instead of grinding on.
+
+## Under `publish: pr` — one link per run
+Nothing waits for a merge: seal stages locally, dependents are claimable at once, and `polaris sync` (run by `triage` and `next`) picks up the merge later. The close is the one link `finish` prints (`ship/<date>`). Never close with "continue or stop?" while `next` names work.

@@ -33,9 +33,9 @@ builder_questions	5.13.0	default-safe	unset lets Builders default reversible spe
 evolve_apply	5.13.0	auto-reversible	unset lets EVOLVE apply its inert allowlist since 6.0; confirm queues every item for approval
 drain	5.10.0	plan	a run stops after the approved plan's own tasks; queue and backlog reach further
 drain_slices	5.13.0	2	caps planner-promotion rounds under drain: backlog — ignored under any other drain mode
-run_max_tasks	5.18.0	12	a run builds at most 12 tasks, then integrates what landed and reports
-run_max_minutes	5.18.0	90	a run takes no new work 90 minutes after kickoff — checked at wave boundaries only
-run_max_agents	5.18.0	20	a run spawns at most 20 subagents in total
+run_max_tasks	5.18.0	12	a run builds at most 12 tasks, then integrates what landed and reports (plan work is not counted)
+run_max_minutes	5.18.0	90	a run takes no new work 90 minutes after kickoff — checked at wave boundaries only (plan work is not counted)
+run_max_agents	5.18.0	20	a run spawns at most 20 subagents in total, or 2 x its plan tasks if more (plan work is not counted)
 run_fix_waves	5.18.0	2	the Check phase retries a red suite at most twice before handing you the failures
 qa_scout	5.18.0	auto	the runtime QA scout spawns only when uat: is empty AND the run touched a runnable: path
 runnable	5.18.0	<globs or omit>	this repo declares no runnable surface, so qa_scout: auto resolves to off
