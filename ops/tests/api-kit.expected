@@ -1,6 +1,7 @@
 kit/.claude/output-styles/polaris.md	heading	How a session ends
 kit/.claude/output-styles/polaris.md	heading	Output discipline — under both voices, always
 kit/.claude/output-styles/polaris.md	heading	The endings that are not exit 0
+kit/.claude/output-styles/polaris.md	heading	Under `publish: pr` — the merge link
 kit/.claude/output-styles/polaris.md	heading	Voice
 kit/.claude/output-styles/polaris.md	heading	What a close reads like
 kit/.claude/output-styles/polaris.md	heading	🚩 Handing a step to the human
@@ -103,6 +104,7 @@ kit/ops/MANUAL.md	heading	Sprint <n> — <goal>            (dates from the SPRIN
 kit/ops/MANUAL.md	heading	Telemetry (every transition above)
 kit/ops/MANUAL.md	heading	The modular CLI — the entry script and `ops/lib/`
 kit/ops/MANUAL.md	heading	`publish: direct` (default) — fold + tag locally
+kit/ops/MANUAL.md	heading	`publish: pr` v2 by hand - one link per run
 kit/ops/MANUAL.md	heading	`publish: pr` — one host PR per wave, the human merges
 kit/ops/MANUAL.md	heading	exit 0 on success
 kit/ops/MANUAL.md	heading	unknown value → warn once, behave as OFF (fail to the full ceremony — the safe side)
@@ -122,6 +124,7 @@ kit/ops/PROTOCOL.md	heading	MODEL NOTES (whichever model runs this)
 kit/ops/PROTOCOL.md	heading	MODEL ROUTING (auto — polaris route decides)
 kit/ops/PROTOCOL.md	heading	N CHATS, ONE REPO — who waits, who parks, who queues
 kit/ops/PROTOCOL.md	heading	POLARIS v5 — PROTOCOL reference
+kit/ops/PROTOCOL.md	heading	PUBLISH: PR — one link per run
 kit/ops/PROTOCOL.md	heading	STATE = THE BOARD (git-tracked, human-readable)
 kit/ops/PROTOCOL.md	heading	THE TOOL — `ops/polaris`
 kit/ops/PROTOCOL.md	heading	TOKEN DISCIPLINE — this is how we stay cheap and fast
@@ -200,6 +203,7 @@ kit/ops/hooks/handover-hook.sh	fn	hh_anchor
 kit/ops/hooks/handover-hook.sh	fn	hh_bg_live
 kit/ops/hooks/handover-hook.sh	fn	hh_cfg
 kit/ops/hooks/handover-hook.sh	fn	hh_emit
+kit/ops/hooks/handover-hook.sh	fn	hh_inplan
 kit/ops/hooks/handover-hook.sh	fn	hh_jstr
 kit/ops/hooks/handover-hook.sh	fn	hh_licensed
 kit/ops/hooks/handover-hook.sh	fn	hh_primary
@@ -381,6 +385,7 @@ kit/ops/lib/handover.sh	fn	next_brief
 kit/ops/lib/handover.sh	fn	next_budget
 kit/ops/lib/handover.sh	fn	next_claimable
 kit/ops/lib/handover.sh	fn	next_dir
+kit/ops/lib/handover.sh	fn	next_inplan
 kit/ops/lib/handover.sh	fn	next_landable
 kit/ops/lib/handover.sh	fn	next_promote
 kit/ops/lib/handover.sh	fn	next_route
@@ -617,6 +622,7 @@ kit/ops/roles/CONDUCTOR.md	heading	ROLE: CONDUCTOR — one chat, the whole loop
 kit/ops/roles/CONDUCTOR.md	heading	The one rule that makes this legal
 kit/ops/roles/CONDUCTOR.md	heading	The second rule — a finished phase is a starting gun
 kit/ops/roles/CONDUCTOR.md	heading	The third rule — a run has a budget, and reaching it is a clean finish
+kit/ops/roles/CONDUCTOR.md	heading	Under `publish: pr` — one link per run
 kit/ops/roles/EVOLVE.md	heading	Hard limits — these keep EVOLVE safe
 kit/ops/roles/EVOLVE.md	heading	Protocol
 kit/ops/roles/EVOLVE.md	heading	ROLE: EVOLVE — make the kit fit THIS repo better, with evidence
@@ -664,13 +670,15 @@ kit/ops/roles/INTEGRATOR.md	heading	ROLE: INTEGRATOR — merge, verify, unblock
 kit/ops/roles/INTEGRATOR.md	heading	Report (nothing else)
 kit/ops/roles/INTEGRATOR.md	heading	`publish: direct` — the default: seal writes `<base>` locally
 kit/ops/roles/INTEGRATOR.md	heading	`publish: pr` — one host PR per wave: the human's merge writes `<base>`, not you
-kit/ops/roles/INTEGRATOR.md	heading	once the human confirms the PR is merged:
+kit/ops/roles/INTEGRATOR.md	heading	legacy v1 flow only (a pushed integrate/<date>) - v2 runs use `polaris sync` at triage instead:
 kit/ops/roles/INTEGRATOR.md	heading	per task, in dependency order:
 kit/ops/roles/INTEGRATOR.md	heading	the per-task squash commits are lost from <base>. (Non-Bitbucket/unparseable origin: seal prints
 kit/ops/roles/INTEGRATOR.md	heading	the source + dest branches instead of a URL — open the PR by hand.)
 kit/ops/roles/INTEGRATOR.md	heading	then, per landed task, on <base>:
 kit/ops/roles/INTEGRATOR.md	heading	then, per landed task, on <base>: run-verify <ID> · done <ID>  (done's [<ID>]-in-base gate now passes)
+kit/ops/roles/INTEGRATOR.md	heading	v2 (one link per run): seal stages locally, nothing waits for a merge; `polaris sync` (top of triage/next) pulls the merged ship branch.
 kit/ops/roles/INTEGRATOR.md	heading	→ open the printed URL and merge the PR with the host's MERGE-COMMIT strategy — NEVER squash, or
+kit/ops/roles/PLANNER.md	heading	Carving rules added for one-link runs
 kit/ops/roles/PLANNER.md	heading	Pointing — Fibonacci (measures blast radius + uncertainty, not hours)
 kit/ops/roles/PLANNER.md	heading	Priority — WSJF
 kit/ops/roles/PLANNER.md	heading	Protocol
@@ -682,6 +690,7 @@ kit/ops/roles/SOLO.md	heading	Entry — mechanical, not a judgement call
 kit/ops/roles/SOLO.md	heading	Hard limits — these end the session, not the gate
 kit/ops/roles/SOLO.md	heading	SOLO — one small change, one context, zero subagents
 kit/ops/roles/SOLO.md	heading	The path
+kit/ops/roles/SOLO.md	heading	Under `publish: pr` — one link per run (steps 5-8)
 kit/ops/roles/SOLO.md	heading	What you must NOT skip
 kit/ops/selftest-dashboard.sh	fn	cleanup
 kit/ops/selftest-dashboard.sh	fn	die
