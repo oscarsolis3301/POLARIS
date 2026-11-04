@@ -459,7 +459,7 @@ files touched: CHANGELOG.md, kit/ops/VERSION
 - [ ] every verify: line passes (the VERSION file is multi-line: use grep, never `test "$(cat kit/ops/VERSION)" = ...`, the T-217 trap)
 
 ## T-228 — "pr mode stages locally: seal merges into local main and pushes nothing, plus polaris sync"
-points 5 · risk normal · landed c1db246 (2026-11-03) · claimed 2026-11-03
+points 5 · risk normal · landed c1db246 (2026-11-03) · claimed 2026-11-03 → done 2026-11-03
 files touched: kit/ops/lib/core.sh, kit/ops/lib/integrate.sh, kit/ops/lib/selftest/history.sh, kit/ops/polaris, ops/tests/api-kit.expected
 
 ### Why
@@ -473,8 +473,22 @@ Under publish: pr, every layer of dependent tasks costs a PR, a human merge and 
 - [ ] legacy `seal --sync` still proven by the updated drill
 - [ ] verify: lines pass
 
+## T-229 — "finish ships the run as one link, triage stops forcing the full lane for pr, pr-one-link golden"
+points 5 · risk normal · landed 5d65589 (2026-11-04) · claimed 2026-11-04
+files touched: kit/ops/lib/observe.sh, ops/tests/express-pr.cmd, ops/tests/express-pr.expected, ops/tests/pr-one-link.cmd, ops/tests/pr-one-link.expected, ops/tests/triage-lane.cmd, ops/tests/triage-lane.expected
+
+### Why
+Depends on T-228 (local staging seal + `sync` + pr_create_url source arg). Read ops/contracts/publish-modes.md "v2 - one link per run" first. In kit/ops/lib/observe.sh: (1) cmd_triage (~2110 and ~2128) stops forcing `full` for pr, so small requests route solo/express. (2) cmd_finish in pr mode drops the pending reasons at ~2672 "on integrate", ~2681 "waiting to land", ~2702 "integrate not in main" and the ~2777 unpushed caveat; when all else is green and local base is ahead of origin it fast-forward pushes local base to `origin ship/<date>` (reusing an open ship/* branch), prints EXACTLY ONE link through pr_create_url with that source branch, writes .polaris/ship, fires notify-gate done and exits 0. (3) Call `sync` silently at the top of cmd_triage, pr mode only, one fetch. `next` lives in handover.sh, which T-230 owns: do not edit it; the triage call is the sync point and Notes should say so. Add the hermetic golden `pr-one-link` under ops/tests (mktemp repo + bare origin whose pre-receive rejects pushes to main, origin url faked as bitbucket): 3 chained tasks reach done/ with no human step; origin gains only ship/<date>; finish exits 0 with exactly one link; a simulated merge on origin then triage syncs; unmerged plus a second run fast-forwards the same ship branch. Output must carry no sha, path, time or user. Update the triage-lane golden and the express-pr golden (create express-pr if absent, else refresh) with `check --update --only <name>` and review the diff.
+
+### Acceptance
+- [ ] pr-one-link golden passes and is hermetic (mktemp -d, trap cleanup)
+- [ ] origin gains only ship/<date>, never main
+- [ ] finish in pr mode prints exactly one link and exits 0
+- [ ] triage no longer answers `full` merely because of pr
+- [ ] verify: lines pass
+
 ## T-230 — "No more continue? stops: the Stop hook bounces a closing question while work is left, run caps ignore the approved plan"
-points 3 · risk normal · landed e4ea2a9 (2026-11-03) · claimed 2026-11-03
+points 3 · risk normal · landed e4ea2a9 (2026-11-03) · claimed 2026-11-03 → done 2026-11-03
 files touched: kit/ops/KEYS.tsv, kit/ops/hooks/handover-hook.sh, kit/ops/lib/handover.sh, ops/tests/run-caps-plan.cmd, ops/tests/run-caps-plan.expected, ops/tests/stop-question.cmd, ops/tests/stop-question.expected
 
 ### Why
@@ -487,7 +501,7 @@ The agent stopped to ask "continue?" between layers and the Stop hook let it, be
 - [ ] verify: lines pass
 
 ## T-231 — "Prose: in pr mode nothing waits for a merge, the close is the link, fewest tasks that keep files disjoint"
-points 2 · risk normal · landed f9155bd (2026-11-03) · claimed 2026-11-03
+points 2 · risk normal · landed f9155bd (2026-11-03) · claimed 2026-11-03 → done 2026-11-03
 files touched: kit/.claude/output-styles/polaris.md, kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md
 
 ### Why
