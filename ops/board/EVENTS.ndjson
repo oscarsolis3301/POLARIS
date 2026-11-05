@@ -903,3 +903,4 @@
 {"ts":1793922805,"ev":"promote","id":"T-242","who":"Owner@DESKTOP","note":"deps done: T-238, T-239","pts":3}
 {"ts":1793922807,"ev":"promote","id":"T-243","who":"Owner@DESKTOP","note":"deps done: T-239","pts":3}
 {"ts":1793922809,"ev":"promote","id":"T-247","who":"Owner@DESKTOP","note":"deps done: T-235","pts":2}
+{"ts":1793923056,"ev":"claim","id":"T-242","who":"Owner@DESKTOP","note":"","pts":3}
