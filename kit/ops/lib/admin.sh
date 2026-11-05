@@ -883,6 +883,10 @@ heal_models() { # neutralise any forbidden model_* value in CONVENTIONS. rc 0 al
 heal_claudemd() { # append the marked efficiency section to the repo's OWN CLAUDE.md, once.
   # APPEND-ONLY and marker-guarded. If the marker is present we do nothing at all — we do not
   # rewrite it, because a human may have edited the text and their copy is not ours to overwrite.
+  # 6.12.0 (ops/contracts/save-hops.md § 3.1, E5): what a repo that never had the section receives is
+  # SHORTER. The lookup ladder and the ask-first rule now live once, in the managed block's FEWEST HOPS
+  # section, so this text points there instead of saying it twice — every byte here is injected into
+  # every session. A section an older kit appended keeps its old text: the marker guard above.
   local f="$PRIMARY/CLAUDE.md"
   [ -f "$f" ] || return 0
   grep -qF "$HEAL_MARK" "$f" 2>/dev/null && return 0
@@ -890,15 +894,13 @@ heal_claudemd() { # append the marked efficiency section to the repo's OWN CLAUD
     printf '\n%s\n' "$HEAL_MARK"
     printf '%s\n' '## Token efficiency — the first property'
     printf '%s\n' ''
-    printf '%s\n' 'Every token is the owner'"'"'s money and the supply is fixed. Finish the task, prove it, spend as'
-    printf '%s\n' 'little as possible.'
+    printf '%s\n' 'Every token is the owner'"'"'s money. Finish the task, prove it, spend as little as possible — the'
+    printf '%s\n' 'lookup ladder and the ask-first rule live in the POLARIS block above (FEWEST HOPS).'
     printf '%s\n' ''
-    printf '%s\n' '- **Prefer ONE context over three.** Twenty-five subagents in a day is a failure, not diligence.'
-    printf '%s\n' '- **Run the smallest check that proves the change** — never a full suite for a small diff.'
-    printf '%s\n' '- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.'
+    printf '%s\n' '- **Prefer ONE context over three**, and the smallest check that proves the change.'
+    printf '%s\n' '- **Never name a model** — every spawn inherits the session.'
     printf '%s\n' '- **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:'
     printf '%s\n' '  one command per line, never `&&` (PowerShell has no chain operators), no placeholders.'
-    printf '%s\n' '- **Ask early** rather than burning tokens guessing.'
     printf '%s\n' ''
     printf '%s\n' 'Added by `polaris heal`. Edit freely — it is appended once and never rewritten.'
   } >> "$f" 2>/dev/null || return 0
@@ -910,6 +912,17 @@ cmd_heal() { # heal — repair the configuration efficiency depends on. Safe to 
   [ -f "$CONV" ] || { note "heal: no ops/CONVENTIONS.md — INIT has never run here; nothing to heal"; return 0; }
   heal_models
   heal_claudemd
+  # THE KNOWLEDGE BASE (ops/contracts/save-hops.md § 3.1). Every role file says to read .polaris/brain/
+  # first, yet only a typed `polaris brain` ever built it — so most repos never had one, and the
+  # shortcut chain began with a missing step. heal runs on every update and every live-board install,
+  # so it is the one place that reaches them all. ONLY when the folder is absent: an existing brain is
+  # kept fresh by done, seal and doctor, never rebuilt here. Inline, no new fn (§ 0.9). The build costs
+  # ≈ 10 s once; its own output is swallowed and success is ONE `note` — never `say`, so the
+  # installer's quiet-line budget stays intact. A failed build is SILENT and fails nothing: no brain is
+  # the status quo, not an error, and the next heal simply tries again.
+  if [ ! -d "$PRIMARY/.polaris/brain" ] && "$SELF" brain >/dev/null 2>&1; then
+    note "healed: .polaris/brain/ — built the knowledge base every role reads first (git-ignored)"
+  fi
   # THE DESIGN BAR (ops/contracts/visual-check.md § v3.15). `ops/DESIGN.md` is written by INIT and by
   # NOTHING else, and INIT runs once — when a repo first adopts POLARIS. So every repo that adopted it
   # before 6.6.0 updates, receives `ops/templates/DESIGN.md`, and never gets the file five role
@@ -928,6 +941,11 @@ cmd_heal() { # heal — repair the configuration efficiency depends on. Safe to 
     cp "$OPS/templates/DESIGN.md" "$OPS/DESIGN.md" 2>/dev/null \
       && note "healed: ops/DESIGN.md — the design bar every screen is judged against, installed from the template; fill in its '## THIS PRODUCT' section with one sentence on the look and feel you want, in your own words"
   fi
+  # THE LAYOUT VERDICT (save-hops § 0.5). Refresh .polaris/hops-due, the one file `next`, `triage` and
+  # the update hint READ to learn whether the layout pass is due — they never run hops themselves.
+  # Last, after heal's own work, with exactly the call done and seal make. Never a heal failure; until
+  # `hops --due` ships it has nothing to run and stays a silent no-op.
+  "$SELF" hops --due >/dev/null 2>&1 || true
   say "heal: configuration checked"
   return 0
 }
