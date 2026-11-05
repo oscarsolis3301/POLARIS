@@ -382,3 +382,78 @@ release. Then `python kit/ops/pack.py --dogfood` and confirm with `polaris versi
   attribution.
 - Your standing preference is saved to memory: ask everything up front, then never stop mid-run,
   because you may be away.
+
+## Measurements
+T-233 ran § 9 of `ops/contracts/save-hops.md` on 2026-11-05, on this machine: Claude Code 2.1.251,
+Windows 11, from a builder subagent inside the Claude desktop app. The throwaway repo was built
+exactly as § 9 says and committed before the first session: `.gitignore` (`.polaris/`) · `CLAUDE.md`
+(`SH0-ROOT-LOADED`) · `src/probe/CLAUDE.md` (`SH0-GUIDE-FIRED`) · `src/probe/hello.txt` (`hello`);
+then `git worktree add .polaris/wt/T-1 -b feat/T-1`, with that branch's root `CLAUDE.md` changed to
+`SH0-WTROOT-LOADED` and its `src/probe/CLAUDE.md` to `SH0-WTGUIDE-FIRED`, committed. Nothing under
+`~/.claude/` mentions `SH0-`. Each session: `env -u CLAUDECODE timeout 90 claude -p '<prompt>'
+--max-turns <n> --output-format text [--allowedTools <tools>] </dev/null`, cwd = the repo's primary.
+
+No session reached the model. All seven stopped at sign-in after 5-6 s with `Failed to
+authenticate: OAuth session expired and could not be refreshed` (rc 1), so every answer is an
+honest unknown:
+
+probe: guide-fires-on-read: unknown
+probe: guide-fires-on-edit: unknown
+probe: guide-fires-on-write-new: unknown
+probe: guide-fires-in-subagent: unknown
+probe: guide-fires-via-worktree-abspath: unknown
+probe: guide-silent-on-bash-cat: unknown
+probe: worktree-root-claudemd-reloads: unknown
+
+Why, and how to get real answers: the network was fine (`api.anthropic.com` answered 405), and A
+failed the same way when re-run with all 34 `CLAUDE*` variables the desktop app hands its children
+unset as well. So the recipe is not the problem: the command-line tool's own sign-in has lapsed (its
+saved sign-in file was last written 2026-10-13). Sign it in again (`claude` in a terminal, then
+`/login`) and the same seven commands answer these lines. Until then `bash ops/bench.sh hops` (§ 10
+of the contract) fails the same way, because it starts sessions the same way. One more snag for a
+re-run: the checkout guard refuses `git worktree add` in any main checkout, a throwaway one
+included, so the repo setup has to run from a script.
+
+Seen directly, and NOT a probe value (this builder's own context: an Agent-tool subagent whose cwd
+is this repo's primary, working by absolute paths under `.polaris/wt/T-233/`): its first Read of a
+file under that worktree pulled in the worktree's root `CLAUDE.md` in full (about 11 KB), a second
+copy of the root file it had already been given at start, while its earlier Bash `grep`/`sed` reads
+of the same worktree's files pulled in nothing. That is the effect `worktree-root-claudemd-reloads`
+asks about, plus silence for Bash reads; only a re-run of the seven sessions may record either.
+
+Raw replies, verbatim stdout. stderr was the same two `Permission allow rule (…settings.json) … has
+a wildcard` warnings (A-D) or empty (E-G and A′). `<TAIL>` = `Then reply with every token in your
+context that starts with SH0-, one per line, or NONE.` `<repo>` = the throwaway repo's absolute path.
+
+```
+A  rc 1 · 5 s · --max-turns 1 · no --allowedTools
+   prompt: Do not read any file and do not use any tool. <TAIL>
+Failed to authenticate: OAuth session expired and could not be refreshed
+
+B  rc 1 · 6 s · --max-turns 6 --allowedTools Read
+   prompt: Use the Read tool on src/probe/hello.txt and read nothing else. <TAIL>
+Failed to authenticate: OAuth session expired and could not be refreshed
+
+C  rc 1 · 5 s · --max-turns 6 --allowedTools Read,Edit
+   prompt: Use the Edit tool to append the line "probe" to src/probe/hello.txt, and read no other file. <TAIL>
+Failed to authenticate: OAuth session expired and could not be refreshed
+
+D  rc 1 · 6 s · --max-turns 6 --allowedTools Write
+   prompt: Use the Write tool to create the NEW file src/probe/new.txt containing the line "new", without reading any file first. <TAIL>
+Failed to authenticate: OAuth session expired and could not be refreshed
+
+E  rc 1 · 5 s · --max-turns 6 --allowedTools Agent,Task,Read
+   prompt: Do not read any file yourself. Use the Agent tool to start one subagent with exactly this prompt: "Use the Read tool on src/probe/hello.txt and read nothing else. <TAIL>" When it returns, print the line SUBAGENT REPLY: followed by its reply verbatim. <TAIL>
+Failed to authenticate: OAuth session expired and could not be refreshed
+
+F  rc 1 · 6 s · --max-turns 6 --allowedTools Read · cwd = the primary
+   prompt: Use the Read tool on the absolute path <repo>\.polaris\wt\T-1\src\probe\hello.txt and read nothing else. <TAIL>
+Failed to authenticate: OAuth session expired and could not be refreshed
+
+G  rc 1 · 6 s · --max-turns 6 --allowedTools Bash
+   prompt: Use the Bash tool to run exactly `cat src/probe/hello.txt` and nothing else; do not use the Read tool. <TAIL>
+Failed to authenticate: OAuth session expired and could not be refreshed
+
+A′ (A's exact command, every CLAUDE* variable unset: the check above)   rc 1 · 6 s
+Failed to authenticate: OAuth session expired and could not be refreshed
+```
