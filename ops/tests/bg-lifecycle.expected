@@ -27,7 +27,7 @@ bg status nope
 ⛔ nope red — rc 1 in <dur> · tail: bash ops/polaris bg tail nope
 rc 1
 == running: rc 2, and a same-name run REFUSES instead of racing ==
-bg run slow -- sleep 8
+bg run slow -- sh .polaris/hold.sh
 ✅ bg: 'slow' started (pid <pid>) — log: <reg>/slow/log · collect: bash ops/polaris bg wait slow
 rc 0
 bg status slow
@@ -70,7 +70,7 @@ bg tail ok -n 1
 second-run
 rc 0
 == a same-name job from ANOTHER cwd is refused, --force included ==
-bg run own -- sleep 8   [started from repo/src]
+bg run own -- sh hold-own.sh   [started from repo/src]
 ✅ bg: 'own' started (pid <pid>) — log: <reg>/own/log · collect: bash ops/polaris bg wait own
 rc 0
 bg run own -- true

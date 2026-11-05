@@ -6,11 +6,10 @@
 #
 # HERMETIC BY CONSTRUCTION (the T-062 pattern): fixture repo, CLI run from INSIDE it, so the job
 # registry created below lives under the FIXTURE's .polaris/bg — never this repo's. FAST COMMANDS
-# ONLY (true/false/echo/sleep 8, small --max): a golden that runs on every `check` may never wait
-# on a real suite. Total runtime is seconds; `sleep 8` is the one deliberate wait, and it is 8 and
-# not 3 on purpose — the rc-2 and duplicate-refusal probes each pay a fresh CLI startup (~0.7s,
-# more on a loaded box), and a job that finishes early turns rc 2 into rc 0 and reds this golden
-# forever. Margin is cheaper than a flake.
+# ONLY (true/false/echo/a gated hold, small --max): a golden that runs on every `check` may never wait
+# on a real suite. Total runtime is seconds; the gated hold is the one deliberate wait — the rc-2 and
+# duplicate-refusal probes each pay a fresh CLI startup, and a job that finishes early turns rc 2
+# into rc 0, so the job waits for the test to release it instead of guessing a margin.
 KIT="$(pwd)/kit/ops/polaris"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
@@ -50,9 +49,14 @@ B wait nope --max 30
 B status nope
 
 echo '== running: rc 2, and a same-name run REFUSES instead of racing =='
-B run slow -- sleep 8
+# The slow job holds on a GATE file, not a timer: it cannot finish before the probes below on ANY
+# machine (a timer did, on a box where one CLI call costs ~20s), and it ends the moment we open the gate.
+printf 'i=0; while [ ! -f .polaris/hold-go ] && [ $i -lt 300 ]; do sleep 1; i=$((i+1)); done
+' > "$FIX/repo/.polaris/hold.sh"
+B run slow -- sh .polaris/hold.sh
 B status slow
 B run slow -- true
+: > "$FIX/repo/.polaris/hold-go"
 B wait slow --max 30
 
 echo '== rotation ARCHIVES the finished run into its ONE .prev slot =='
@@ -89,12 +93,15 @@ echo '== a same-name job from ANOTHER cwd is refused, --force included =='
 # a pid Windows may already have handed to somebody else. Ownership is the job's cwd (bg-jobs.md
 # v2), so from the repo root the subdir's live job is untouchable, --force included. $FIX is the
 # fourth machine-specific byte bg emits here (the owner's cwd), so it normalizes like the others.
-printf 'bg run own -- sleep 8   [started from repo/src]\n'
-out="$( cd "$FIX/repo/src" && bash "$KIT" bg run own -- sleep 8 2>&1 )"; rc=$?
+# The live job holds on its own gate file (same reason as `slow` above), released after both probes.
+printf 'i=0; while [ ! -f "%s" ] && [ $i -lt 300 ]; do sleep 1; i=$((i+1)); done\n' "$FIX/repo/.polaris/own-go" > "$FIX/repo/.polaris/hold-own.sh"
+printf 'bg run own -- sh hold-own.sh   [started from repo/src]\n'
+out="$( cd "$FIX/repo/src" && bash "$KIT" bg run own -- sh ../.polaris/hold-own.sh 2>&1 )"; rc=$?
 printf '%s\n' "$out" | N
 printf 'rc %s\n' "$rc"
 B run own -- true         | sed "s#$FIX#<fix>#g"
 B run own --force -- true | sed "s#$FIX#<fix>#g"
+: > "$FIX/repo/.polaris/own-go"
 B wait own --max 30
 
 echo '== a third run archives the old .prev instead of deleting it =='
