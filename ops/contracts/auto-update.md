@@ -218,3 +218,24 @@ gains `— runs THIS kit's updater in each, so a 5.x install is reached too; --m
 
 ### Changelog
 - v2 2026-09-14: the walk runs the current kit in each target (reaches pre-6.3.0 installs), `--major`, gone entries pruned; drill 6b/6c (T-151, plan sprint-c).
+
+## v3 — the layout pass rides the update (2026-11-05, plan save-hops, 6.12.0 — T-238 · T-242)
+Interface: `ops/contracts/save-hops.md` § 0.5, § 3.1, § 5. What changes here:
+- **heal writes the verdict.** Every update (and every live-board install) runs the NEW kit's `heal`
+  via install.sh; heal builds a missing `.polaris/brain/` and refreshes `.polaris/hops-due` with
+  `"$SELF" hops --due >/dev/null 2>&1 || true`. Never an update failure; ≈ 10 s once, inside the
+  hook's 120 s budget.
+- **The `--auto` success line**, pinned in v1 above, gains ONE suffix when the pass is due — otherwise it
+  is byte-identical:
+  `✅ POLARIS updated <cur> → <new> at session start — ops/ and CLAUDE.md are new; re-read your role file before acting · layout pass due — runs when your next piece of work wraps up`
+  Still one line; still never a question.
+- **The explicit epilogue** ends with ONE line when due: `▶ NEXT — save hops: read ops/roles/TIDY.md and
+  run it now` on a quiet board, `▶ NEXT — save hops: the layout pass is due — it runs when your next
+  piece of work wraps up` on a busy one. The never-set-up INIT epilogue wins: never a second `▶ NEXT`.
+- `ops/LAYOUT.tsv` is owner state: `update_dirt_overlaps_kit` exempts it and the `untouched:` line names it.
+- **Honest boundary.** Both lines are printed by the RUNNING kit's `cmd_update`, so the first hop from
+  ≤ 6.11 into 6.12.0 prints neither — the new heal still writes the verdict, and `next` offers the pass
+  at the end of the next run. Every later update prints them.
+
+### Changelog
+- v3 2026-11-05: heal is the update path's verdict writer; the `--auto` suffix and the explicit `▶ NEXT` hint (T-238 · T-242, plan save-hops).

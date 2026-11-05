@@ -190,3 +190,25 @@ unknown warns) stay green unchanged. Goldens NEVER pin a line embedding a versio
 - v1 2026-07-18: created for T-012..T-016 (5.13.0 Hands-Free Core).
 - v2 2026-08-03: autonomy by default for POLARIS 6.0.0 — defaults invert, `autonomy: standard` is
   the opt-out, doctor always prints, fail-safe unknown handling. For T-075/T-076/T-077/T-079/T-080.
+
+## v3 — ask first, then finish (2026-11-05, plan save-hops, 6.12.0 — T-236 · T-237 · T-245 · T-244)
+Owner decision 2026-11-04 (plans/save-hops.md): every question is asked BEFORE work starts; after
+that the owner is assumed away and the run never stops mid-way. Applies under the default `trusted`
+composition; `autonomy: standard` keeps today's ask-right-away behavior at both gates below.
+- **The one round.** The conductor's interview (CONDUCTOR step 1) carries everything the run could
+  need — when the layout pass is due, the ≤ 3 `hops --questions` fold into that same round.
+- **A builder QUESTION mid-run** (`builder_questions` resolving to default-safe cannot answer it): the
+  question goes into the task's Notes, `release <ID> --to blocked -m "<question>"`,
+  `notify-gate question <ID>`; the other lanes keep running.
+- **`risk: high` not covered by the plan** (G14): `notify-gate risk <ID>`; the task stays in `review/`
+  and goes to the close. Invariant 9 is unchanged — it never merges without the recorded yes.
+- **The close names what waits.** `next` prints `finish` when only human-gated work is in flight
+  (role-handover.md v3); `finish` lists each blocked task with its one-line reason, read from its
+  `blocked` event (save-hops.md § 2.4); the close is `⛔ waiting on you: approve <ID>` — no 🎉.
+- **SOLO**: anything on the STOP-AND-ASK list found mid-run parks that piece (`release --to blocked`)
+  and the rest finishes.
+- Nothing here softens a hard gate: risk: high approval, the STOP-AND-ASK list, RULES.tsv, the ready
+  gate, contract-before-code, green-before-review all stand.
+
+### Changelog
+- v3 2026-11-05: ask first, then finish — question parking, `notify-gate risk`, the human-gated close (plan save-hops).

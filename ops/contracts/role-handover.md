@@ -390,3 +390,32 @@ three promote. Asserts the board (`ls ready/`), the event count and rc — never
 
 ### Changelog
 - v2 2026-09-14: plan gate in `next_promote` (drain: plan), `promote` alias, CONDUCTOR step 7 names the command (T-154 · T-155 · T-158, plan sprint-c).
+
+## v3 — human-gated review alone is `finish`; the `tidy` verb (2026-11-05, plan save-hops, 6.12.0 — T-236 code · T-245 prose)
+Owner decision 2026-11-04 (plans/save-hops.md "Your decisions": never stop mid-run; every question is
+asked before work starts). The full interface lives in `ops/contracts/save-hops.md` § 2.1–2.2; this
+section records what it supersedes here.
+
+### 1. Human-gated review work alone routes to `finish` (supersedes v1.1 § 1)
+- Row 5's condition loses `[ -n "$NX_REV_HUMAN" ]`: in flight = an `active/` task · a live foreign lease
+  · an own live bg job. A `review/` task only a human can land no longer holds the run open.
+- Row 6 (`finish`) prints its existing note `   risk: high awaiting approval: <IDs>` — no longer dead
+  source. `finish` then exits non-zero on that review/ work, so the close is
+  `⛔ waiting on you: approve <ID>` (no 🎉) and nothing loops. Invariant 9 is unchanged: the merge still
+  waits for the human's recorded yes; only the waiting moved from mid-run to the close.
+- `handover-route`'s human-gated case and the `handover` drill's case (14) flip to `finish`.
+
+### 2. Row 5.5 — `tidy`
+- Evaluated exactly where row 6 would print `finish`: `NX_REV_HUMAN` empty, the verdict
+  `.polaris/hops-due` due (save-hops.md § 0.5), and the once-per-session marker
+  `.polaris/handover/<sid>/tidy` absent (§ 0.6) → line 1 `tidy`, two notes, and the marker is created in
+  the same call. `next` still writes nothing else.
+- Verb set: `resume · build · integrate · promote · wait · stop · tidy · finish`.
+- `next --brief`: `tidy` names `ops/roles/TIDY.md`.
+
+### 3. Hook rung `block:tidy`
+- A blocking verb and a FREE hop (like plan work — run caps never skip the pass); with a pending
+  question it is `allow:question`, like `finish`. Reason pinned in save-hops.md § 2.2.
+
+### Changelog
+- v3 2026-11-05: human-gated review alone → `finish`; row 5.5 `tidy` + its marker; `block:tidy` (T-236 · T-245, plan save-hops).
