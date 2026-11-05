@@ -816,7 +816,7 @@ drill_park() {
     # nothing here claims, so there is no lock and no worktree to clean up after.
     printf -- '---\nid: T-PK\ntitle: park lane file\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nowner: null\nbranch: feat/T-PK\nstatus: review\nfiles_owned:\n  - src/pk.txt\nverify: []\n---\n' > ops/board/review/T-PK.md
     git checkout -q -b feat/T-PK main
-    echo pk > src/pk.txt; git add -A; git commit -qm ok
+    echo pk > src/pk.txt; git add src/pk.txt; git commit -qm ok   # the lane's file only: -A swept a neighbour's stray change in, and land refused the branch (T-254)
     git checkout -q main
     printf 'park land dirt\n' >> src/a.txt          # TRACKED dirt: land's dirty gate is diff-based
     cp src/a.txt "$T/pk-a.snap"

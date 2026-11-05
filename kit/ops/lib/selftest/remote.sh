@@ -167,8 +167,12 @@ drill_notify() {
     "$SELF" notify-gate risk >/dev/null 2>&1 && { echo "NOTIFY-GATE ID FAIL (risk without ID must rc!=0)"; exit 1; }
     # a notify: hook that logs its env as EV/SEVERITY/ID/NOTE lines. The shim BACKGROUNDS the
     # hook, so every assertion polls for its line (bounded, ≤2s) — never races it.
+    # Hermetic (selftest-sharding.md v1.1, T-254): keep the entry bytes of CONVENTIONS.md (or the
+    # fact that it was absent) and the blob main holds for it, so the teardown puts exactly that back.
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/ng-conv.bak"; else rm -f "$T/ng-conv.bak"; fi
+    ng_blob="$(git rev-parse -q --verify HEAD:ops/CONVENTIONS.md || true)"
     printf 'notify: printf "%%s/%%s/%%s/%%s\\n" "$POLARIS_EV" "$POLARIS_SEVERITY" "$POLARIS_ID" "$POLARIS_NOTE" >> %s\n' "$T/notify.log" > ops/CONVENTIONS.md
-    git add -A; git commit -qm notify-hook
+    git add ops/CONVENTIONS.md; git commit -qm notify-hook   # this file only: -A would sweep a neighbour's stray change into main
     evn="$(wc -l < ops/board/EVENTS.ndjson)"
     "$SELF" notify-gate plan
     "$SELF" notify-gate risk T-42
@@ -237,7 +241,17 @@ drill_notify() {
     grep -q 'plan_gate=confirm · builder_questions=ask · evolve_apply=confirm' "$T/doc-dial.out" \
       || { echo "KNOB DIAL TYPO FAIL (an unknown autonomy: value must behave as standard)"; exit 1; }
     grep -q "autonomy: 'trustd' unknown" "$T/doc-dial.out" || { echo "KNOB DIAL WARN FAIL"; exit 1; }
-    git checkout -q -- ops/CONVENTIONS.md
+    # hermetic teardown: the saved copy goes back byte for byte, never via `git checkout` (that hands
+    # back the drill's own commit, in the box's line endings: CRLF under Windows autocrlf, which a
+    # drill pinning autocrlf off reads as modified, so park swept it into feat/T-PK). Then commit
+    # the restore, so main holds its entry blob again and the tree is clean.
+    if [ -f "$T/ng-conv.bak" ]; then cp "$T/ng-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    git add -A -- ops/CONVENTIONS.md 2>/dev/null || true   # 2>: autocrlf chatter on Windows
+    git commit -qm 'notify drill cleanup' >/dev/null 2>&1 || true
+    { if [ -f "$T/ng-conv.bak" ]; then cmp -s ops/CONVENTIONS.md "$T/ng-conv.bak"; else [ ! -e ops/CONVENTIONS.md ]; fi; } \
+      && [ "$(git rev-parse -q --verify HEAD:ops/CONVENTIONS.md || true)" = "$ng_blob" ] && [ -z "$(git status --porcelain)" ] \
+      || { git status --porcelain; echo "NOTIFY HERMETIC FAIL (ops/CONVENTIONS.md must come back byte-identical, committed as main held it, tree clean)"; exit 1; }
+    rm -f "$T/ng-conv.bak"
 }
 drill_upgrade() {
     # ================== T-021 upgrade-migration drill (ops/contracts/quiet-board.md) ==================
