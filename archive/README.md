@@ -21,3 +21,12 @@ of it.
 
 Setting up a project now creates the board itself (`polaris init-board`, which INIT runs), so the
 installer has nothing to copy and these files have no job left. Retired in v5.2.0.
+
+## 2026-11-04 — the first draft of the save-hops plan
+`2026-11-04-save-hops-draft/`
+
+The first write-up of "POLARIS should reorganize a project so agents need fewer lookups". A review
+against the kit's real code found it would not reliably deliver — its shortcut chain started with
+pieces most repos never get, its trigger rarely fired, and moving files safely needed more than the
+import finder could see. The reviewed version lives at `plans/save-hops.md`; this draft is kept so
+the reasoning behind every fix stays readable.
