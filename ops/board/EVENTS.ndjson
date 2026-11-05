@@ -864,3 +864,4 @@
 {"ts":1793833063,"ev":"blocked","id":"T-232","who":"Owner@DESKTOP","note":"→ blocked: SHIPPED, nothing left to build: 6.11.0 was cut by the conductor directly (tag v6.11.0, release published, dogfooded at fb99e12). Parked because the CLI has no retire verb for work completed outside a lane."}
 {"ts":1793909792,"ev":"claim","id":"T-234","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1793909800,"ev":"claim","id":"T-236","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1793909807,"ev":"claim","id":"T-239","who":"Owner@DESKTOP","note":"","pts":3}
