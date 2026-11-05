@@ -258,3 +258,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - "integrate.sh: pr-mode seal stages locally (no push); new `polaris sync` folds a merged ship branch in"  (T-228, 2026-11-03)
 
 - kit/ops/lib/selftest/hops.sh — new: hops_fixture, the scripted type-sorted fixture repo that the hops drill, the hop benchmark and the end-to-end check share (ops/contracts/save-hops.md § 8.2)  (T-235, 2026-11-05)
+
+- kit/ops/lib/knowledge.sh — polaris where [--write|--strip] (cmd_where, guide_purpose): the 15-line root map in CLAUDE.md below the POLARIS block, a projection of MAP.md and the folder guides; the brain's code map now takes a folder's purpose from its guide first (ops/contracts/save-hops.md § 0.2, § 3.3–3.4)  (T-239, 2026-11-05)
