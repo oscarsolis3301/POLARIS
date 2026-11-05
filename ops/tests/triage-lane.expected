@@ -20,3 +20,27 @@ full
 1
 solo
 0
+full
+   nothing claimable — the board is empty, so a Planner runs first
+tidy
+   the board is empty and the layout pass is due: ~18% fewer folders per change · 3 folders of 5+ files have no guide
+   read ops/roles/TIDY.md — one context, no subagents
+1
+1
+full
+   nothing claimable — the board is empty, so a Planner runs first
+full
+   nothing claimable — the board is empty, so a Planner runs first
+full
+   nothing claimable — the board is empty, so a Planner runs first
+full
+   nothing claimable — the board is empty, so a Planner runs first
+full
+   nothing claimable — the board is empty, so a Planner runs first
+tidy
+   the board is empty and the layout pass is due: ~18% fewer folders per change · 3 folders of 5+ files have no guide
+   read ops/roles/TIDY.md — one context, no subagents
+solo
+solo
+tl-1/tidy
+tl-8/tidy

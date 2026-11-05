@@ -1,9 +1,10 @@
-# POLARIS lib/handover.sh — `polaris next` sourced by ops/polaris (the lib loader): the seven-verb
+# POLARIS lib/handover.sh — `polaris next` sourced by ops/polaris (the lib loader): the eight-verb
 # router read off the board, `--do` promotes backlog under the board lock, `--brief` re-anchors a
 # compacted chat (ops/contracts/role-handover.md). A session ends with its task (Invariant 5), so
 # every next role used to need a human kickoff; `next` names the next context's role from disk.
-# Read-only by contract; `--do` alone writes, and only the board. bash 3.2: no mapfile, no assoc
-# arrays, no `case` inside `$(...)`. Exactly EIGHT fns, no more — api-kit pins every name.
+# Read-only by contract but for ONE file, the tidy marker (save-hops.md § 0.6); `--do` alone writes
+# the board. bash 3.2: no mapfile, no assoc arrays, no `case` inside `$(...)`. Exactly EIGHT fns,
+# no more — api-kit pins every name.
 
 next_dir() { # next_dir — this session's state dir: $PRIMARY/.polaris/handover/<sid>/ (gitignored,
   # per checkout, never the board). Never created here — evt() and the hooks write it, `next` reads.
@@ -235,7 +236,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   # the board: line 1 = `<verb>[ <ID>]`, every other line a three-space note (the `triage` shape).
   # Writes nothing. `wait` is NEVER emitted with nothing in flight; `stop` fires only where a build
   # or promote would otherwise have, so a budget stops work rather than inventing it.
-  local d sid lk id f n can=0 pro=0 mine="" active="" blocked="" bgs="" p own cwds m nl='
+  local d sid lk id f n can=0 pro=0 mine="" active="" blocked="" bgs="" p own cwds m vs vv vm nl='
 '
   d="$(next_dir)"; sid="${CLAUDE_CODE_SESSION_ID:--}"
   # 0 — my own live lock on an active task: never a second task mid-task
@@ -267,7 +268,9 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   if [ "$pro" -eq 1 ]; then printf 'promote\n'
     note "eligible: $NX_ELIGIBLE — bash ops/polaris next --do promotes them under the board lock"; return 0; fi
   # 5 — wait, only with work genuinely in flight: others' lanes · a live foreign lease · an OWN live
-  # bg job (ownership = the job's cwd, never its pid — bg-jobs.md v2) · review/ only a human lands.
+  # bg job (ownership = the job's cwd, never its pid — bg-jobs.md v2). review/ work only a human can
+  # land is NOT in flight (role-handover.md v3): it no longer holds a run open mid-way — row 6 closes
+  # the run and names it, and the merge still waits for the human's recorded yes (Invariant 9).
   for f in "$BOARD/active/"*.md; do [ -e "$f" ] || break; f="${f##*/}"; active="${active:+$active }${f%.md}"; done
   cwds="$(printf '%s\n%s\n' "$PRIMARY" "$PWD"; for id in $mine; do wt_path "$id"; printf '\n'; done)"
   cwds="$nl$(printf '%s' "$cwds" | tr 'A-Z\\' 'a-z/')$nl"
@@ -288,7 +291,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
     case "$cwds" in *"$nl$p$nl"*) own=1;; esac
     [ "$own" -eq 1 ] && bgs="${bgs:+$bgs }$n"
   done
-  if [ -n "$active" ] || [ "$NX_LEASE" = live ] || [ -n "$bgs" ] || [ -n "$NX_REV_HUMAN" ]; then
+  if [ -n "$active" ] || [ "$NX_LEASE" = live ] || [ -n "$bgs" ]; then
     printf 'wait\n'
     [ -n "$active" ] && note "active: $active"
     [ "$NX_LEASE" = live ] && note "lease: $NX_LEASE_WHO (${NX_LEASE_M}m)"
@@ -296,7 +299,28 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
     [ -n "$NX_REV_HUMAN" ] && note "review/ awaits a human: $NX_REV_HUMAN"
     return 0
   fi
-  # 6 — otherwise the run's board is done; name what is parked, each only when non-empty
+  # 5.5 — tidy (save-hops.md § 2.1): the board is done, nothing in review/ waits on a human, and the
+  # CACHED layout verdict is due for the current base — once per session. Files only, never `hops`
+  # itself: this runs on the anchor hook's 10 s clock. Due ⇔ .polaris/hops-due exists AND field 2 is
+  # 0 AND field 1 is $BASE's sha now AND `hops:` is not off; anything else is silence (§ 0.5). The
+  # forks (cfg, git) are paid only once the file already says due. The marker <dir>/tidy is written
+  # in the call that prints the verb, so a session is routed to the pass at most once (§ 0.6) — and
+  # never named `hops`: that file in the same dir is the Stop hook's hop counter.
+  if [ -z "$NX_REV_HUMAN" ] && [ ! -e "$d/tidy" ] && [ -f "$PRIMARY/.polaris/hops-due" ]; then
+    vs=""; vv=""; vm=""
+    IFS="$POLARIS_TAB" read -r vs vv vm 2>/dev/null < "$PRIMARY/.polaris/hops-due" || true
+    vs="${vs%$'\r'}"; vv="${vv%$'\r'}"; vm="${vm%$'\r'}"
+    if [ "$vv" = 0 ] && [ -n "$vs" ] && [ "$(cfg hops on)" != off ] \
+       && [ "$vs" = "$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)" ]; then
+      { mkdir -p "$d" && date +%s > "$d/tidy"; } 2>/dev/null || true
+      printf 'tidy\n'
+      note "layout pass due: ${vm#layout pass due — }"
+      note "read ops/roles/TIDY.md — one context, it lands one task; then bash ops/polaris next"
+      return 0
+    fi
+  fi
+  # 6 — otherwise the run's board is done; name what is parked, each only when non-empty. Human-gated
+  # review/ work lands here too (v3), carrying the approval note: the close names what waits on you.
   printf 'finish\n'
   [ -n "$NX_FOREIGN" ] && note "foreign queued (drain: plan): $NX_FOREIGN"
   for f in "$BOARD/blocked/"*.md; do [ -e "$f" ] || break; f="${f##*/}"; blocked="${blocked:+$blocked }${f%.md}"; done
@@ -345,6 +369,7 @@ EOF_EV
   case "${line1%% *}" in
     resume|build)      rfile=BUILDER;;
     integrate|promote) rfile=INTEGRATOR;;
+    tidy)              rfile=TIDY;;
     *)                 rfile="$role";;
   esac
   [ "$rfile" = none ] || printf 'read ops/roles/%s.md if this context lost it\n' "$rfile"

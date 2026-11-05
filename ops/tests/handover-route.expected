@@ -10,9 +10,29 @@ resume T-HR1
 integrate
 1
 2
-wait
+finish
 1
 1
+risk: high awaiting approval: T-HR3
+finish
+1
+0
+finish
+1
+0
+finish
+1
+0
+tidy
+1
+2
+   layout pass due: ~40% fewer folders per change · 3 folders of 5+ files have no guide
+   read ops/roles/TIDY.md — one context, it lands one task; then bash ops/polaris next
+carriage-return: no
+marker: 1 · hop counter: untouched
+finish
+1
+0
 promote
 1
 1

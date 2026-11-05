@@ -89,8 +89,8 @@ mkdir -p "$P/.polaris/bg/ship-T-HS1"; printf '%s\n' "$P" > "$P/.polaris/bg/ship-
 hook
 printf 'hops-after-collect: %s\n' "$(cat "$D/hops" 2>/dev/null || echo none)"
 rm -rf "$P/.polaris/bg"
-# --- the rails: line 1 of `next` maps to exactly one word, and the four blocking verbs are the
-#     only four. An unknown first word is the fail-OPEN default — a router this hook cannot read
+# --- the rails: line 1 of `next` maps to exactly one word, and the five blocking verbs are the
+#     only five. An unknown first word is the fail-OPEN default — a router this hook cannot read
 #     must never be able to trap the session. ------------------------------------------------
 rail() { rm -f "$D/hops" "$D/hopped-event"
   printf '%s' "$J" | POLARIS_HANDOVER_NEXT="$1" bash "$HOOK" --test stop
@@ -99,6 +99,7 @@ rail "build T-HS1"
 rail "integrate"
 rail "promote"
 rail "finish"
+rail "tidy"
 rail "wait"
 rail "stop"
 rail "resume T-HS1"
@@ -109,6 +110,19 @@ rail "finish"
 printf 'hops-after-block: %s\n' "$(cat "$D/hops")"
 printf 'hopped-event-matches-last: %s\n' "$(cmp -s "$D/hopped-event" "$D/last-event" && echo yes || echo no)"
 hook
+# --- tidy, the layout pass (save-hops.md § 2.2), is a FREE hop like plan work: past the run cap,
+#     with a plan recorded, it still blocks — a cap never skips the pass the owner asked for — the
+#     counter stays where it was, and the event is consumed all the same. Raw, no --test, so the
+#     pinned reason ships verbatim with its hop number. A pending question lets it through exactly
+#     like finish: the run's end is where a question belongs. -----------------------------------
+conv auto 1
+printf 'p\n' > "$D/plan"; printf '1\n' > "$D/hops"; rm -f "$D/hopped-event"
+printf '%s' "$J" | POLARIS_HANDOVER_NEXT=tidy bash "$HOOK" stop
+printf 'hops-after-tidy: %s · consumed: %s\n' "$(cat "$D/hops")" "$(cmp -s "$D/hopped-event" "$D/last-event" && echo yes || echo no)"
+rm -f "$D/plan" "$D/hops" "$D/hopped-event"; conv auto 2
+tr_text "which one?"
+printf '%s' "$J" | POLARIS_HANDOVER_NEXT=tidy bash "$HOOK" --test stop
+tr_text "done"
 # --- ONE un-stubbed case: the hook really runs the router against the real board, and the verb it
 #     reads back off disk is the verb it blocks with. ---------------------------------------
 rm -f "$D/hops" "$D/hopped-event"
@@ -123,3 +137,4 @@ printf '%s' "$J" | POLARIS_HANDOVER_NEXT=finish bash "$HOOK" stop
 # --- the reason templates are pinned prose (contract § Reason templates). Counting the BUILDER one
 #     catches a second copy drifting in beside the first — two templates, two behaviours. -------
 printf 'pinned-reason-lines: %s\n' "$(grep -c 'You are a BUILDER (hop' "$HOOK")"
+printf 'pinned-tidy-lines: %s\n' "$(grep -c 'You are TIDY (hop' "$HOOK")"

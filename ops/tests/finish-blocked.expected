@@ -1,0 +1,10 @@
+== five parked: the real release, newest-wins, a tie at exactly 80, a blank note, a long one ==
+rc=0
+finish: run complete
+0
+   caveat: 5 blocked — T-1 (→ blocked: waits on the owner's "yes" for C:\data and more) · T-2 (→ blocked: the newest reason wins, even when an older line comes after it) · T-3 (→ blocked: exactly eighty characters — shown in full, never cut, and no ellipsis) · T-4 (no reason recorded) · T-5 (→ blocked: the owner picks a layout — flat · by feature · by layer — before a fi…) (name what is parked, and why, in your close)
+== six parked: no event at all, 81 characters, and the sixth folds into … +1 more ==
+rc=0
+finish: run complete
+0
+   caveat: 6 blocked — T-3 (→ blocked: exactly eighty characters — shown in full, never cut, and no ellipsis) · T-4 (no reason recorded) · T-5 (→ blocked: the owner picks a layout — flat · by feature · by layer — before a fi…) · T-6 (no reason recorded) · T-7 (→ blocked: one character over eighty — the cut keeps eighty and adds one ellipsi…) … +1 more (name what is parked, and why, in your close)

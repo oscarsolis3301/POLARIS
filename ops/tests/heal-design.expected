@@ -1,3 +1,26 @@
+heal rc: 0
+0
+brain: no
+heal rc: 0
+healed: .polaris/brain/ — built the knowledge base every role reads first (git-ignored)
+brain: yes
+owner prose: intact
+
+<!-- POLARIS:EFFICIENCY -->
+## Token efficiency — the first property
+
+Every token is the owner's money. Finish the task, prove it, spend as little as possible — the
+lookup ladder and the ask-first rule live in the POLARIS block above (FEWEST HOPS).
+
+- **Prefer ONE context over three**, and the smallest check that proves the change.
+- **Never name a model** — every spawn inherits the session.
+- **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:
+  one command per line, never `&&` (PowerShell has no chain operators), no placeholders.
+
+Added by `polaris heal`. Edit freely — it is appended once and never rewritten.
+heal rc: 0
+0
+older section: untouched
 0
 file: no
 healed: ops/DESIGN.md
@@ -12,3 +35,4 @@ owner text: intact
 0
 0
 file: no
+brain: no

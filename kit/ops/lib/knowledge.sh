@@ -1,5 +1,5 @@
-# POLARIS lib/knowledge.sh — sprint reports + the generated brain, sourced by ops/polaris (the lib
-# loader): report/render helpers, cmd_report, seal_report_commit, the brain_* writers, and cmd_brain.
+# POLARIS lib/knowledge.sh — sprint reports + the generated brain, sourced by ops/polaris (the lib loader): report/render
+# helpers, cmd_report, seal_report_commit, the brain_* writers, cmd_brain, guide_purpose and cmd_where (the root map).
 
 # --------------------------------------------------- sprint reports (T-023)
 # `report` renders a management-readable per-sprint markdown file from the board + git history;
@@ -324,6 +324,24 @@ stale? refresh: ops/polaris brain --refresh
 EOF
 }
 
+guide_purpose() { # guide_purpose <dir> [<root>] — the purpose line of <dir>/CLAUDE.md's guide block
+  # (ops/contracts/save-hops.md § 0.1): the first non-blank line inside the block, leading `#`s and
+  # spaces removed. A guide is a TRACKED <dir>/CLAUDE.md holding a line that is exactly the marker;
+  # the root `.` never is one. rc 1 and nothing when there is none. <root> = the tree to read
+  # (default the primary; `where` passes the worktree it runs in). CRLF reads like LF.
+  local d="${1:-}" root="${2:-$PRIMARY}"
+  d="${d%/}"
+  case "$d" in ''|.) return 1;; esac
+  [ -f "$root/$d/CLAUDE.md" ] || return 1
+  git -C "$root" ls-files --error-unmatch -- "$d/CLAUDE.md" >/dev/null 2>&1 || return 1
+  awk 'BEGIN { r = 1 }
+    { sub(/\r$/, "") }
+    !g && $0 == "<!-- polaris:guide -->" { g = 1; next }
+    g && $0 == "<!-- /polaris:guide -->" { exit }
+    g { s = $0; sub(/^[# ]+/, "", s); if (s ~ /[^ \t]/) { print s; r = 0; exit } }
+    END { exit r }' "$root/$d/CLAUDE.md"
+}
+
 brain_code_map() { # code-map.md — per-DIRECTORY digest (≤15 lines/dir; caller caps 300 total).
   # Scale by summarizing per directory, never by listing files (contract § Hop guarantee).
   printf '# code map — per-directory digest (files: count · symbols: grepped defs · hotspot: from ops/MAP.md)\n'
@@ -345,8 +363,9 @@ brain_code_map() { # code-map.md — per-DIRECTORY digest (≤15 lines/dir; call
     n="$(printf '%s\n' "$files" | grep -c . || true)"
     exts="$(printf '%s\n' "$files" | sed -n 's/.*\(\.[A-Za-z0-9_]*\)$/\1/p' | sort | uniq -c \
         | sort -rn | head -3 | awk '{printf "%s ", $2}' | sed 's/ $//')"
-    purpose=""
-    [ "$d" != "." ] && [ -f "$PRIMARY/$d/README.md" ] \
+    purpose=""   # the folder's own guide speaks first (save-hops § 3.3), then its README heading
+    [ "$d" != "." ] && [ -f "$PRIMARY/$d/CLAUDE.md" ] && { purpose="$(guide_purpose "$d")" || purpose=""; }
+    [ -z "$purpose" ] && [ "$d" != "." ] && [ -f "$PRIMARY/$d/README.md" ] \
       && purpose="$(sed -n 's/^#\{1,\}[[:space:]]\{1,\}//p' "$PRIMARY/$d/README.md" | head -1 || true)"
     syms="$(printf '%s\n' "$files" | tr '\n' '\0' \
         | { cd "$PRIMARY" && xargs -0 grep -hIE '^(cmd_[A-Za-z0-9_]+\(\)|[A-Za-z_][A-Za-z0-9_]*\(\)[ \t]*\{|function[ \t]|def[ \t]|class[ \t])' 2>/dev/null; } \
@@ -639,4 +658,135 @@ cmd_brain() { # brain [--refresh] — generate .polaris/brain/ (ops/contracts/br
       || git -C "$PRIMARY" rev-parse --short HEAD 2>/dev/null || echo none)"
   printf '%s %s\n' "$ep" "$sha" > "$BR/.stamp"
   say "brain $kind: .polaris/brain/ (INDEX + code-map$( [ "$build_map" -eq 1 ] || printf ' [unchanged, kept]' ) + board + contracts + commands + gotchas + prefs + learned) · stamp $ep $sha"
+}
+
+# ------------------------------------------- where — the root map (ops/contracts/save-hops.md § 0.2, § 3.4)
+# "Where things live" in ≤ 15 lines between two markers in the repo-root CLAUDE.md — the one file every
+# session already has in context — so a cold agent knows where to look before it searches. A PROJECTION,
+# never a second source: the facts live in ops/MAP.md (Entry points · Modules · the Deltas tail) and in
+# the folder guides; edit those and the next `where --write` follows (`done` runs it beside a map_delta).
+# Writes go through a temp file + mv, as install.sh does for the managed block, and never touch a byte
+# outside the markers: head/tail copy the rest of the file, CRLF lines and a missing last newline kept.
+cmd_where() { # where [--write | --strip] — print the root map · write it below the POLARIS block · take it out
+  local mode="${1:-}"
+  case "$#:$mode" in 0:|1:--write|1:--strip) ;; *) die "usage: polaris where [--write | --strip]";; esac
+  # WHICH tree — check's test: inside a task worktree it is THAT tree (the layout pass writes its map
+  # on its own branch); anywhere else, the primary.
+  local root="$PRIMARY" wt
+  case "$PWD" in */.polaris/wt/*) wt="${PWD##*/.polaris/wt/}"; wt="${wt%%/*}"
+    [ -n "$wt" ] && [ -d "$PRIMARY/.polaris/wt/$wt" ] && root="$PRIMARY/.polaris/wt/$wt";; esac
+  local cm="$root/CLAUDE.md" om='<!-- polaris:where -->' cmk='<!-- /polaris:where -->' block="" k=0 nl='
+'
+  if [ "$mode" = "--write" ] && [ ! -f "$cm" ]; then note "where: no CLAUDE.md here — nothing to write"; return 1; fi
+  if [ "$mode" != "--strip" ]; then
+    # the guided folders (§ 0.1): every tracked <dir>/CLAUDE.md holding the marker → "dir NL purpose NL"
+    local f g="" p map="$root/ops/MAP.md"
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      p="$(guide_purpose "${f%/CLAUDE.md}" "$root")" || continue
+      g="$g${f%/CLAUDE.md}$nl$p$nl"
+    done <<EOF
+$(git -C "$root" -c core.quotepath=off ls-files 2>/dev/null | grep '/CLAUDE\.md$' || true)
+EOF
+    [ -f "$map" ] || map=/dev/null
+    # ONE awk over MAP.md, in bytes (LC_ALL=C) so every awk counts alike: the 90-character cut walks
+    # UTF-8 by hand and never splits a character. Line 1 out is the item count, then the block.
+    block="$(G="$g" LC_ALL=C awk -v om="$om" -v cmk="$cmk" '
+      function cut(s,   i, n, c) {   # the first 90 characters, then "…" — continuation bytes do not count
+        for (i = 1; i <= length(s); i++) { c = substr(s, i, 1); if ((c < "\200" || c > "\277") && ++n > 90) return substr(s, 1, i - 1) "…" }
+        return s
+      }
+      function keep(b, p, q) { if (p != "" && substr(p, 1, 1) != "<") { nb[b]++; P[b, nb[b]] = p; Q[b, nb[b]] = q } }
+      function trow(b, row,   f) {   # | <c1> | <c2> | … → path = c1 minus backticks and spaces, purpose = c2
+        split(row, f, "|"); gsub(/[` \t]/, "", f[2]); sub(/^[ \t]+/, "", f[3]); sub(/[ \t]+$/, "", f[3]); keep(b, f[2], f[3])
+      }
+      function lrow(b, row,   i, p, q) {   # [- ]<path> — <purpose>, a Delta trailing (<ID>, <date>) dropped
+        sub(/^- /, "", row); i = index(row, DASH); if (i < 2) return
+        p = substr(row, 1, i - 1); if (p ~ /[ \t]/) return
+        gsub(/`/, "", p); q = substr(row, i + length(DASH)); sub(TRAILER, "", q); keep(b, p, q)
+      }
+      function endtable(  x) { if (pend != "") trow(pb, pend); pend = "" }
+      function item(p, q, g) { return "- `" p "`" (q != "" ? DASH cut(q) : "") (g ? " · guide" : "") }
+      BEGIN {
+        DASH = " — "; TRAILER = "[ \t]+\\([A-Za-z0-9._-]+, [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\\)$"
+        n = split(ENVIRON["G"], gl, "\n"); for (i = 1; i < n; i += 2) { gd[++gn] = gl[i]; gp[gl[i]] = gl[i + 1] }
+      }
+      { sub(/\r$/, "") }
+      /^## / { endtable(); h = tolower(substr($0, 4)); sec = ""
+               if (index(h, "entry points") == 1) sec = "E"; else if (index(h, "modules") == 1) sec = "M"
+               else if (index(h, "deltas") == 1) sec = "D"
+               next }
+      /^# / { endtable(); sec = ""; next }
+      (sec == "E" || sec == "M") && /^\|/ {
+        if ($0 ~ /^\|[-:| \t]*$/ && $0 ~ /-/) { pend = ""; next }   # the delimiter row: the line above was the header
+        endtable(); pend = $0; pb = sec; next
+      }
+      { endtable() }
+      sec == "E" || sec == "M" { lrow(sec, $0); next }
+      sec == "D" || $0 ~ TRAILER { lrow("D", $0) }   # a Delta done appended below a later heading counts too
+      END {
+        endtable()
+        for (bi = 1; bi <= 3; bi++) {
+          b = substr("EMD", bi, 1)
+          for (j = 1; j <= nb[b]; j++) {
+            p = P[b, j]; key = p; sub(/\/$/, "", key); if (key in seen) continue
+            seen[key] = 1; q = Q[b, j]; if (q == "" && (key in gp)) q = gp[key]
+            out[++k] = item(p, q, key in gp)
+          }
+        }
+        for (i = 1; i <= gn; i++) if (!(gd[i] in seen)) { seen[gd[i]] = 1; out[++k] = item(gd[i] "/", gp[gd[i]], 1) }
+        print k + 0; print om; print "## Where things live"
+        print "_Generated by `ops/polaris where` from ops/MAP.md and the folder guides — edit those, not this._"
+        for (i = 1; i <= k && i <= 13; i++) {
+          if (k > 13 && i == 13) print "- … " (k - 12) " more in ops/MAP.md"; else print out[i]
+        }
+        print cmk
+      }' "$map")" || { note "where: cannot read ops/MAP.md"; return 1; }
+    k="${block%%[!0-9]*}"; block="${block#$k}"; block="${block#?}"
+    if [ -z "$mode" ]; then printf '%s\n' "$block"; return 0; fi
+  fi
+  [ -f "$cm" ] || return 0                                   # --strip with no CLAUDE.md: nothing to take out
+  # Locate in ONE read: our block (s..t; sb = a blank line right above it), the managed block's END
+  # line (e) and the line count (n).
+  local pos s t e n sb cr="" crc first="" tmp="$cm.polaris-tmp" l nonl=0
+  pos="$(awk -v om="$om" -v cmk="$cmk" -v em='<!-- POLARIS:END -->' '
+      { sub(/\r$/, "") }
+      !s && $0 == om { s = NR; sb = (NR > 1 && prev ~ /^[ \t]*$/) }
+      s && !t && NR > s && $0 == cmk { t = NR }
+      !e && index($0, em) == 1 { e = NR }
+      { prev = $0 }
+      END { print s + 0, t + 0, e + 0, NR + 0, sb + 0 }' "$cm")" || { note "where: cannot read CLAUDE.md"; return 1; }
+  set -- $pos; s="$1" t="$2" e="$3" n="$4" sb="$5"
+  if [ "$s" -gt 0 ] && [ "$t" -eq 0 ]; then
+    note "where: CLAUDE.md has $om but no $cmk below it — mend it by hand; nothing changed"; return 1
+  fi
+  if [ "$mode" = "--strip" ]; then
+    [ "$s" -gt 0 ] || return 0                               # no root map: silence
+    if [ "$sb" -eq 1 ]; then s=$((s - 1)); fi              # and ONE blank line directly above it
+    { if [ "$s" -gt 1 ]; then head -n "$((s - 1))" "$cm"; fi; tail -n +"$((t + 1))" "$cm"; } > "$tmp" \
+      && mv -f "$tmp" "$cm" || { rm -f "$tmp"; note "where: could not rewrite CLAUDE.md — nothing changed"; return 1; }
+    printf 'where: root map removed\n'; return 0
+  fi
+  if [ "$s" -gt 0 ] && [ "$(sed -n "${s},${t}p" "$cm" | tr -d '\r')" = "$block" ]; then
+    printf 'where: root map unchanged\n'; return 0           # and the file is not rewritten
+  fi
+  # The block is written in the file's own line ending, read off line 1 by bash itself: on Git Bash
+  # awk, grep and sed drop the CR before a script sees it — only a builtin read (or head/tail) keeps it.
+  crc="$(printf '\r')"; { IFS= read -r first || true; } < "$cm"
+  case "$first" in *"$crc") cr="$crc";; esac
+  if [ -n "$(tail -c 1 "$cm")" ]; then nonl=1; fi           # the last line has no newline of its own
+  {
+    if [ "$s" -gt 0 ]; then                                  # replace it where it sits
+      if [ "$s" -gt 1 ]; then head -n "$((s - 1))" "$cm"; fi
+    else                                                     # first write: below END (none → at EOF), one blank line above
+      if [ "$e" -gt 0 ]; then head -n "$e" "$cm"; else cat "$cm"; fi
+      if [ "$nonl" -eq 1 ] && { [ "$e" -eq 0 ] || [ "$e" -eq "$n" ]; }; then printf '%s\n' "$cr"; fi
+      printf '%s\n' "$cr"
+    fi
+    while IFS= read -r l; do printf '%s%s\n' "$l" "$cr"; done <<EOF
+$block
+EOF
+    if [ "$s" -gt 0 ]; then tail -n +"$((t + 1))" "$cm"; elif [ "$e" -gt 0 ]; then tail -n +"$((e + 1))" "$cm"; fi
+  } > "$tmp" && mv -f "$tmp" "$cm" || { rm -f "$tmp"; note "where: could not rewrite CLAUDE.md — nothing changed"; return 1; }
+  printf 'where: root map written to CLAUDE.md (%s items)\n' "$k"
 }

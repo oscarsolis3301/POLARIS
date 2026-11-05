@@ -31,9 +31,9 @@ trap 'rm -rf "$FIX"' EXIT
 ) >/dev/null 2>&1
 OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
 # Line 1 must be EXACTLY one bare word, always — reasons go on `   ` note lines below it, so a
-# caller can branch on line 1 without parsing.
+# caller can branch on line 1 without parsing. The word is one of FOUR since T-237 (tidy joined).
 printf '%s\n' "$OUT" | sed -n '1p'
-printf '%s\n' "$OUT" | sed -n '1p' | grep -cE '^(solo|express|full)$'
+printf '%s\n' "$OUT" | sed -n '1p' | grep -cE '^(solo|express|full|tidy)$'
 printf '%s\n' "$OUT" | sed -n '2,$p' | grep -c '^   '
 # The SOLO envelope. 5.21.0 widened it 2 -> 3 points because the gates were never the expense, the
 # CONTEXTS were: a 3-point task in `express` opens three cold starts to land work one context
@@ -100,3 +100,40 @@ printf 'publish: pr\n' >> "$FIX/repo/ops/CONVENTIONS.md"
 OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
 printf '%s\n' "$OUT" | sed -n 1p
 printf '%s\n' "$OUT" | grep -c 'publish: pr' || true
+# --- T-237: the tidy lane (save-hops.md § 2.3, § 0.5-§ 0.6). A bare triage on an EMPTY, QUIET board
+# whose cached layout verdict says due prints `tidy` with two pinned note lines and writes the
+# once-per-session marker; every other state keeps today's `full` lines BYTE FOR BYTE, so each case
+# prints the whole answer, not just line 1. The cache carries the fixture's REAL base sha — a made-up
+# one is exactly the stale cache a reader must refuse — and every call pins its own session id, so
+# the marker under test is never the environment's.
+rm -f "$FIX/repo/ops/board/ready/"T-*.md "$FIX/repo/ops/CONVENTIONS.md"
+SHA="$(git -C "$FIX/repo" rev-parse main)"
+HD="$FIX/repo/.polaris/hops-due"
+DUE='layout pass due — ~18% fewer folders per change · 3 folders of 5+ files have no guide'
+T() { ( cd "$FIX/repo" && CLAUDE_CODE_SESSION_ID="$1" bash "$KIT" triage 2>&1 ); }
+mkdir -p "$FIX/repo/.polaris"
+# 1) no cache → today's empty-board answer
+T tl-1
+# 2) due + empty + quiet → tidy and both notes, line 1 still one bare word, the marker holds an epoch
+printf '%s\t0\t%s\n' "$SHA" "$DUE" > "$HD"
+OUT="$(T tl-1)"
+printf '%s\n' "$OUT"
+printf '%s\n' "$OUT" | sed -n '1p' | grep -cE '^(solo|express|full|tidy)$'
+grep -cE '^[0-9]+$' "$FIX/repo/.polaris/handover/tl-1/tidy"
+# 3) the same session again: the marker holds → full
+T tl-1
+# 4) not due (field 2 is 1) · 5) a stale sha · 6) hops: off · 7) not quiet (a task in review/) → full
+printf '%s\t1\t-\n' "$SHA" > "$HD"; T tl-4
+printf '%s\t0\t%s\n' 0000000000000000000000000000000000000000 "$DUE" > "$HD"; T tl-5
+printf '%s\t0\t%s\n' "$SHA" "$DUE" > "$HD"
+printf 'hops: off\n' > "$FIX/repo/ops/CONVENTIONS.md"; T tl-6; rm -f "$FIX/repo/ops/CONVENTIONS.md"
+printf -- '---\nid: T-7\npoints: 1\nstatus: review\n---\n' > "$FIX/repo/ops/board/review/T-7.md"; T tl-7
+rm -f "$FIX/repo/ops/board/review/T-7.md"
+# 8) a CRLF cache (python on Windows writes one until the dogfood) still reads due, the \r stripped
+printf '%s\t0\t%s\r\n' "$SHA" "$DUE" > "$HD"; T tl-8
+# 9) ready work is never rerouted, bare or named: the empty-board branch is never reached
+printf -- '---\nid: T-1\ntitle: fixture task\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/a.txt\nverify: []\n---\n' > "$FIX/repo/ops/board/ready/T-1.md"
+T tl-9 | sed -n 1p
+( cd "$FIX/repo" && CLAUDE_CODE_SESSION_ID=tl-9 bash "$KIT" triage T-1 2>&1 ) | sed -n 1p
+# ...and only the two sessions that were told `tidy` carry the marker
+ls -d "$FIX/repo/.polaris/handover/"*/tidy | sed 's#.*/handover/##'

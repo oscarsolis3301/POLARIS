@@ -45,6 +45,7 @@ kit/ops/KEYS.tsv	key	express
 kit/ops/KEYS.tsv	key	gallery
 kit/ops/KEYS.tsv	key	generated
 kit/ops/KEYS.tsv	key	handover
+kit/ops/KEYS.tsv	key	hops
 kit/ops/KEYS.tsv	key	integration
 kit/ops/KEYS.tsv	key	integration_stale_minutes
 kit/ops/KEYS.tsv	key	integration_wait_minutes
@@ -422,7 +423,9 @@ kit/ops/lib/knowledge.sh	fn	brain_refresh_if_present
 kit/ops/lib/knowledge.sh	fn	cmd_brain
 kit/ops/lib/knowledge.sh	fn	cmd_learned
 kit/ops/lib/knowledge.sh	fn	cmd_report
+kit/ops/lib/knowledge.sh	fn	cmd_where
 kit/ops/lib/knowledge.sh	fn	event_ts
+kit/ops/lib/knowledge.sh	fn	guide_purpose
 kit/ops/lib/knowledge.sh	fn	render_sprint
 kit/ops/lib/knowledge.sh	fn	render_task_section
 kit/ops/lib/knowledge.sh	fn	report_dir
@@ -521,6 +524,7 @@ kit/ops/lib/selftest/history.sh	fn	drill_pr-publish
 kit/ops/lib/selftest/history.sh	fn	drill_selfland
 kit/ops/lib/selftest/history.sh	fn	drill_tcm
 kit/ops/lib/selftest/history.sh	fn	drill_wtreap
+kit/ops/lib/selftest/hops.sh	fn	hops_fixture
 kit/ops/lib/selftest/policy.sh	fn	drill_awake
 kit/ops/lib/selftest/policy.sh	fn	drill_bg
 kit/ops/lib/selftest/policy.sh	fn	drill_checkoutguard
