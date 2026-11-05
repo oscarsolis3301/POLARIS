@@ -884,3 +884,4 @@
 {"ts":1793916708,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"2026-11-05 · A red batch land can't be unwound by an agent:"}
 {"ts":1793916713,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"2026-11-05 · T-236 kicked back for a golden it didn't own: "}
 {"ts":1793917175,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"2026-11-05 · Pre-existing on base 176d6b9, not this wave: s"}
+{"ts":1793917873,"ev":"handoff","id":"T-236","who":"Owner@DESKTOP","note":""}
