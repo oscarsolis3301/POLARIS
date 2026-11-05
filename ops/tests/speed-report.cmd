@@ -5,6 +5,10 @@
 #
 # HERMETIC: a throwaway fixture repo under mktemp -d, the CLI run from INSIDE it.
 KIT="$(pwd)/kit/ops/polaris"
+# The content cases below test WHAT the report says, not how fast it says it; the budget has its own
+# cases (budget-zero, slow-within-budget) that set POLARIS_SPEED_BUDGET themselves. A generous default
+# keeps a slow machine (one git call ~20s on Windows under load) from turning content into "stopped early".
+export POLARIS_SPEED_BUDGET=600
 ADMIN="$(pwd)/kit/ops/lib/admin.sh"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
@@ -60,10 +64,16 @@ SLOW="$FIX/slow"
   for i in $(seq 1 30); do echo "v$i" > lib.dat; git commit -qam "c$i"; done
 ) >/dev/null 2>&1
 cd "$SLOW"; mkdir -p .polaris
+# measured ABOVE the command's own startup (a zero-budget run): a slow machine pays ~20s just to
+# start, and that is not what this case proves. Unbounded, 30 commits x 2s add >=60s of sleep alone,
+# so a 30s ceiling still separates "the budget stopped it" from "it ran to the end" on any machine.
+T0=$SECONDS
+POLARIS_SPEED_BUDGET=0 POLARIS_SPEED_TEST_SLEEP=2 bash "$KIT" speed >/dev/null 2>&1
+BASE=$((SECONDS - T0))
 T0=$SECONDS
 OUT="$(POLARIS_SPEED_BUDGET=3 POLARIS_SPEED_TEST_SLEEP=2 bash "$KIT" speed 2>&1)"
-EL=$((SECONDS - T0))
-echo "slow-within-budget+2s: $([ "$EL" -le 8 ] && echo yes || echo "no ${EL}s")"
+EL=$((SECONDS - T0 - BASE))
+echo "slow-within-budget+2s: $([ "$EL" -le 30 ] && echo yes || echo "no ${EL}s")"
 printf '%s\n' "$OUT" | sed 's/^Of your last [0-9]* changes/Of your last N changes/; s/[0-9][0-9]* not checked/M not checked/; s/[0-9][0-9]* run everything/C run everything/'
 cd "$R"
 echo "update-guarded:"
