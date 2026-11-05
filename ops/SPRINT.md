@@ -1,3 +1,23 @@
+# SPRINT 20 — Save hops (6.12.0)          capacity: 69   dates: 2026-11-05–
+
+Owner ask of 2026-11-04 (plan `save-hops`, plans/save-hops.md, approved in plan mode). Every project
+gets fewer lookups by itself: `polaris hops` (inside index.py, so it ships) measures how many folders one
+change touches; the tidy lane fixes the layout with moves `hops --proof` shows changed nothing but
+paths, writes folder guides, and runs at the end of a run; `pack` carries the guides to builders and a
+15-line root map lands in CLAUDE.md. Questions come first; a run never stops mid-way.
+Contract `ops/contracts/save-hops.md` (+ v3 of role-handover, hands-free-knobs, auto-update).
+
+21 tasks / 69 pts in five waves. The index.py chain is the spine and owns api-kit.expected, one per
+wave: T-234 resolver (W1) → T-241 hops core (W2) → T-248 moves + proof (W3) → T-251 cadence (W4);
+every other lane adds only the rows the contract pins. W1 also: probe T-233, fixture T-235, next/hook
+T-236, triage/finish T-237, heal T-238, where T-239, pack T-240. W2: update T-242, done/seal T-243,
+CLAUDE.md+PROTOCOL T-244, CONDUCTOR+SOLO T-245, INIT+PLANNER T-246, bench T-247. W3: stale guides
+T-249, TIDY.md T-250. W4: the drill T-252. T-253 releases 6.12.0 LAST. Verify lines are seconds; the
+full suite runs once per wave (bg run); landing: integrator for this run.
+
+## Burndown
+| date | done pts | remaining |
+
 # SPRINT 19 — Stay on the request (6.9.0)          capacity: 33   dates: 2026-10-27–
 
 Owner asks of 2026-10-27 (plan `stay-on-request`). A run works the request it was given — never an old
