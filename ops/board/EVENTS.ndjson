@@ -878,3 +878,4 @@
 {"ts":1793911644,"ev":"handoff","id":"T-239","who":"Owner@DESKTOP","note":""}
 {"ts":1793912315,"ev":"handoff","id":"T-240","who":"Owner@DESKTOP","note":""}
 {"ts":1793912851,"ev":"handoff","id":"T-235","who":"Owner@DESKTOP","note":""}
+{"ts":1793916428,"ev":"kickback","id":"T-236","who":"Owner@DESKTOP","note":"golden plan-approval-gates red on the merge AND on feat/T-236 alone, green on main 176d6b9: ops/tests/plan-approval-gates.expected:2-3 and :11-12 still pin next's old row 5 (wait + 'review/ awaits a human: T-1'), while kit/ops/lib/handover.sh:294 + :328 now route that case to finish + 'risk: high awaiting approval: T-1'. The golden was in nobody's files_owned; granted ops/tests/plan-approval-gates.expected to you — refresh it to the v3 behaviour (bash kit/ops/polaris check --update --only plan-approval-gates), re-verify, hand off. Everything else in this task is green."}
