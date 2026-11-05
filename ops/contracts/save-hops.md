@@ -301,9 +301,11 @@ next: bash ops/polaris hops --tsv lists every row · ops/roles/TIDY.md runs the 
   directly inside → `SPLIT <dir>/ <n> -`. Reported only; a pass never acts on it.
 - `--due` (G17, N3), in order, each step final:
   1. `hops: off` → not due.  2. < 20 tracked files → not due.
-  3. cooldown: the last pass (§ 0.4) exists and `git rev-list --count --no-merges <sha>..<base>` < 30
+  3. a self-hosting kit repo (`kit/ops/pack.py` tracked — the same test `update --auto` uses to skip
+     itself) → not due: the pass never offers itself on POLARIS's own source (bare `hops` still reports).
+  4. cooldown: the last pass (§ 0.4) exists and `git rev-list --count --no-merges <sha>..<base>` < 30
      → not due.
-  4. compute: saving = (F − F′) / F with F′ applying the FIRST 25 MOVE rows (one pass's cap) — keep rows
+  5. compute: saving = (F − F′) / F with F′ applying the FIRST 25 MOVE rows (one pass's cap) — keep rows
      and FIXED are already out; unguided = the GUIDES rows. Due iff saving ≥ 0.15 or unguided ≥ 3.
   Due → ONE line `layout pass due — <reasons joined by " · ">` (`~<pct>% fewer folders per change` ·
   `<n> folders of 5+ files have no guide`), rc 0. Not due → silent, rc 1. Every run rewrites § 0.5.
