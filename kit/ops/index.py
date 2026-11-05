@@ -16,6 +16,7 @@ Three tiers, all emitting byte-identical output:
   3 no sqlite       live scan, no persistence — slower, never wrong
 """
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -29,8 +30,10 @@ except ImportError:                                   # tier 3
 
 if hasattr(sys.stdout, "reconfigure"):                # Windows cp1252 would mangle UTF-8 paths
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        # newline="\n": Windows writes every "\n" as "\r\n" otherwise, and no golden could compare
+        # this output byte for byte. Any file index.py writes opens with newline="\n" too, same reason.
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace", newline="\n")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace", newline="\n")
     except Exception:
         pass
 
@@ -263,11 +266,55 @@ def selfcheck():
         if got != want:
             print("FAIL resolve %r from %s: expected %r, got %r" % (raw, src, want, got))
             bad += 1
+    # ...and with the repo facts build() passes (ops/contracts/save-hops.md § 1.1). The aliases come
+    # from the same _aliases build() uses, fed config text carrying what real ones do: comments,
+    # trailing commas, and a "@/*" that a naive comment strip would eat.
+    paths2 = {"src/components/Cart.tsx": 11, "src/components/CartItem.tsx": 12,
+              "src/hooks/index.ts": 13, "web/lib/fmt/money.js": 14,
+              "src/shop/__init__.py": 15, "src/shop/cart.py": 16, "src/shop/pay/__init__.py": 17}
+    bybase2 = {}
+    for _p, _i in paths2.items():
+        bybase2.setdefault(os.path.basename(_p), []).append((_p, _i))
+    aliases = _aliases({
+        "tsconfig.json": '{\n  "compilerOptions": {\n    "paths": {"@/*": ["src/*"],},  /* the app */\n'
+                         '    "baseUrl": ".", // the root\n  },\n}\n',
+        "web/jsconfig.json": '{"compilerOptions": {"baseUrl": "lib"}}'})
+    fact_cases = [
+        ("@/components/Cart", "src/pages/home.tsx", 11),   # paths alias, extension tried
+        ("@/hooks", "src/app.ts", 13),                     # alias to a folder: its index.ts
+        ("fmt/money", "web/app.js", 14),                   # bare baseUrl: web/ + lib/ + spec
+        ("@/components/Cart", "web/app.js", None),         # nearest config wins: web/'s has no @/*
+        ("react", "src/app.ts", None),                     # baseUrl "." never makes a package local
+        ("shop.cart", "tests/test_cart.py", 16),           # python src/ root
+        ("shop.pay", "tests/test_pay.py", 17),             # python package: its __init__.py
+        ("shop", "tests/test_shop.py", 15),                # one segment is a dotted name too
+    ]
+    for raw, src, want in fact_cases:
+        got = resolve_import(raw, src, paths2, bybase2, aliases=aliases, pyroots=["src"])
+        if got != want:
+            print("FAIL resolve %r from %s: expected %r, got %r" % (raw, src, want, got))
+            bad += 1
+    # path mentions: which non-code lines NAME a path, the second half of `find --importers`
+    cart = "src/components/Cart.tsx"
+    men_cases = [
+        (cart, "package.json", '{\n  "main": "src/components/Cart.tsx"\n}\n', [2]),
+        (cart, "Dockerfile.web", "FROM node:20\nCOPY src/components/Cart.tsx /app/\n", [2]),
+        (cart, "docs/ui.md", "Rows live in components/CartItem.\n", []),   # CartItem is not Cart
+        (cart, "docs/ui.md", "old: mycomponents/Cart\n", []),              # nor is mycomponents
+        (cart, "src/pages/home.tsx", "// see components/Cart\n", []),      # code: its imports are edges
+        ("src/main.ts", "README.md", "Run main to start.\n", []),          # a bare word names nothing
+        ("kit/ops/index.py", ".github/workflows/ci.yml", "- run: python kit/ops/index.py\n", [1]),
+    ]
+    for path, rel, text, want in men_cases:
+        got = _mentioned(path, rel, text)
+        if got != want:
+            print("FAIL mention %s in %s: expected %r, got %r" % (path, rel, want, got))
+            bad += 1
     if bad:
         print("selfcheck FAILED (%d)" % bad)
         return 1
-    print("selfcheck ok (%d language fixtures, %d import cases, %d resolve cases)"
-          % (len(FIXTURES), len(imp_cases), len(res_cases)))
+    print("selfcheck ok (%d language fixtures, %d import cases, %d resolve cases, %d mention cases)"
+          % (len(FIXTURES), len(imp_cases), len(res_cases) + len(fact_cases), len(men_cases)))
     return 0
 
 
@@ -348,23 +395,34 @@ def connect(root, create=True):
     return con, have
 
 
-def resolve_import(raw, src, paths, bybase):
+def resolve_import(raw, src, paths, bybase, aliases=None, pyroots=None):
     """Best-effort import spec -> indexed path. Unresolvable = external package = NULL.
 
     Deliberately conservative: a wrong edge is worse than a missing one, because --importers
     is used to decide what a change can break.
+
+    aliases (every tsconfig/jsconfig, see _aliases) and pyroots (["src"] in a src/-layout python
+    repo) are the repo facts build() passes; left at None, every rule behaves exactly as before them.
     """
     raw = raw.strip().strip("'\"")
     if not raw:
         return None
     d = os.path.dirname(src)
+    rel_ext = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".py", ".sh", ".css")
+    idx_ext = (".ts", ".tsx", ".js", ".jsx")
+    # `@/components/Cart` and baseUrl specs mean nothing without the importer's config, and only
+    # JS/TS read one — so only a JS/TS importer's non-relative spec tries them, ahead of all else.
+    if aliases and not raw.startswith(".") and lang_of(src) in ("js", "ts"):
+        for b in _alias_bases(raw, src, aliases):
+            for c in [b] + [b + e for e in rel_ext] + [b + "/index" + e for e in idx_ext]:
+                if c in paths:
+                    return paths[c]
     cands = []
     if raw.startswith("."):
         if raw.startswith("./") or raw.startswith("../"):        # js/ts/sh relative
             base = os.path.normpath(os.path.join(d, raw)).replace("\\", "/")
-            cands += [base] + [base + e for e in
-                               (".ts", ".tsx", ".js", ".jsx", ".mjs", ".py", ".sh", ".css")]
-            cands += [base + "/index" + e for e in (".ts", ".tsx", ".js", ".jsx")]
+            cands += [base] + [base + e for e in rel_ext]
+            cands += [base + "/index" + e for e in idx_ext]
         else:                                                     # python relative: .mod / ..pkg.mod
             up = len(raw) - len(raw.lstrip("."))
             rest = raw[up:].replace(".", "/")
@@ -375,9 +433,13 @@ def resolve_import(raw, src, paths, bybase):
     elif "/" in raw:                                              # repo-relative (sh source, c include)
         cands += [raw, os.path.normpath(os.path.join(d, raw)).replace("\\", "/")]
         cands += [raw + e for e in (".ts", ".js", ".py", ".sh")]
-    elif "." in raw and not raw.endswith((".h", ".hpp")):         # dotted module: py/java/cs
-        cands.append(raw.replace(".", "/") + ".py")
-        cands.append(raw.replace(".", "/") + ".java")
+    elif ("." in raw and not raw.endswith((".h", ".hpp"))) or lang_of(src) == "py":
+        # dotted module: py/java/cs. A python name (one segment counts: `import shop`) is a module,
+        # else a package's __init__.py — at the root first, then under each source root (src/).
+        mod = raw.replace(".", "/")
+        for r in [""] + [p + "/" for p in pyroots or ()]:
+            cands += [r + mod + ".py", r + mod + "/__init__.py"]
+        cands.append(mod + ".java")
     for c in cands:
         if c in paths:
             return paths[c]
@@ -439,6 +501,121 @@ def _closest(candidates, src):
     if len(scored) > 1 and scored[0][0] == scored[1][0]:
         return None
     return scored[0][1]
+
+
+def _rel(*parts):
+    """Join + normalize to a repo-relative `/` path; the repo root is ""."""
+    p = os.path.normpath(os.path.join(*parts)).replace("\\", "/")
+    return "" if p == "." else p
+
+
+def _jsonc(text):
+    """tsconfig/jsconfig text -> dict, or None. Those files are JSON plus `//` and `/* */` comments
+    and trailing commas. Each pass matches a whole string FIRST at every position, so `"@/*"` and
+    `"http://x"` survive — a naive comment regex eats `/*": ["src/*` straight out of a paths map."""
+    s = re.sub(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/', lambda m: m.group(1) or "",
+               text.lstrip("\ufeff"), flags=re.S)
+    s = re.sub(r'("(?:\\.|[^"\\])*")|,(?=\s*[}\]])', lambda m: m.group(1) or "", s)
+    try:
+        v = json.loads(s)
+    except ValueError:
+        return None
+    return v if isinstance(v, dict) else None
+
+
+def _aliases(configs):
+    """{tsconfig.json or jsconfig.json path: its text} -> {its folder: (baseUrl dir or None,
+    [(pattern, [target, ...]), ...])}, every dir repo-relative, `paths` targets joined to baseUrl
+    (no baseUrl: to the config's folder, as TypeScript 4.1+ does).
+
+    A config governs the files under its folder and the nearest one wins — even one with no paths,
+    and tsconfig.json over a jsconfig.json beside it, as tsserver picks.
+    `extends` is NOT followed: a config that inherits its paths resolves only what it states itself.
+    """
+    out = {}
+    for cfg in sorted(configs, key=lambda p: (os.path.dirname(p),
+                                              os.path.basename(p) != "tsconfig.json")):
+        d = os.path.dirname(cfg)
+        if d in out:
+            continue
+        opts = (_jsonc(configs[cfg]) or {}).get("compilerOptions")
+        opts = opts if isinstance(opts, dict) else {}
+        base = opts.get("baseUrl")
+        base = _rel(d, base) if isinstance(base, str) else None
+        rules = []
+        pmap = opts.get("paths")
+        for pat, targets in (pmap.items() if isinstance(pmap, dict) else ()):
+            if isinstance(targets, list):
+                rules.append((pat, [_rel(d if base is None else base, t)
+                                    for t in targets if isinstance(t, str)]))
+        out[d] = (base, rules)
+    return out
+
+
+def _alias_bases(raw, src, aliases):
+    """What a non-relative JS/TS spec names through its importer's nearest config: the best `paths`
+    pattern's targets (an exact pattern, else the longest prefix before the `*` — TypeScript's own
+    rule), then `<baseUrl>/<spec>`. Extensionless: the caller tries each like a relative import."""
+    d = os.path.dirname(src)
+    while d not in aliases:
+        if not d:
+            return []
+        d = os.path.dirname(d)
+    base, rules = aliases[d]
+    best = None                                    # (prefix length, targets, what the * matched)
+    for pat, targets in rules:
+        pre, star, suf = pat.partition("*")
+        if not star:
+            if raw == pat:                         # an exact pattern beats every wildcard
+                best = (len(raw) + 1, targets, "")
+                break
+        elif (raw.startswith(pre) and raw.endswith(suf) and len(raw) >= len(pre) + len(suf)
+              and (best is None or len(pre) > best[0])):
+            best = (len(pre), targets, raw[len(pre):len(raw) - len(suf)])
+    out = [_rel(t.replace("*", best[2])) for t in best[1]] if best else []
+    if base is not None:
+        out.append(_rel(base, raw))
+    return [c for c in out if c]
+
+
+def _tail(path):
+    """`src/components/Cart.tsx` -> `components/Cart`: the path as configs, docs and Dockerfiles
+    write it — extension and one leading `src/` (the python source root) dropped. None when no `/`
+    is left: a bare word like `main` would match half the prose in the repo."""
+    t = os.path.splitext(path)[0]
+    t = t[4:] if t.startswith("src/") else t
+    return t if "/" in t else None
+
+
+def _mention_src(rel):
+    """The non-code files that name paths in plain text: docs, configs, CI, Dockerfiles, Makefiles."""
+    base = os.path.basename(rel)
+    return (rel.startswith(".github/") or base.startswith("Dockerfile") or base == "Makefile"
+            or os.path.splitext(base)[1].lower() in (".md", ".json", ".yml", ".yaml", ".toml",
+                                                     ".ini", ".cfg", ".txt", ".mk"))
+
+
+def _mentioned(path, rel, text):
+    """The 1-based lines where non-code file `rel` names `path` by its tail. The character after the
+    tail is not a letter, digit or `_` (or the line ends) — so `components/CartItem` never names
+    `components/Cart` — and neither is the one before it (`toolkit/ops/x` does not name `kit/ops/x`)."""
+    tail = _tail(path)
+    if not tail or rel == path or not _mention_src(rel) or tail not in text:
+        return []
+    pat = re.compile(r"(?<!\w)%s(?!\w)" % re.escape(tail))
+    return [ln for ln, line in enumerate(text.splitlines(), 1)
+            if len(line) <= MAXLINE and pat.search(line)]
+
+
+def _mentions(root, path):
+    """[(file, line)] for every tracked non-code file naming `path`. Read live, not from the index:
+    most of those files (.ini, Dockerfile, Makefile) are not code and the index never stores them."""
+    out = []
+    if _tail(path):
+        for rel in tracked(root):
+            if _mention_src(rel) and rel != path:
+                out += [(rel, ln) for ln in _mentioned(path, rel, read(root, rel) or "")]
+    return out
 
 
 def flags_for(path):
@@ -565,6 +742,12 @@ def build(root, full=False):
         for p, i in paths.items():
             bybase.setdefault(os.path.basename(p), []).append((p, i))
         byid = {i: p for p, i in paths.items()}
+        # the repo facts the resolver needs: every tsconfig/jsconfig's aliases, and python's src/
+        # root when a package or module sits directly under src/ (ops/contracts/save-hops.md § 1.1)
+        aliases = _aliases({p: read(root, p) or "" for p in paths
+                            if os.path.basename(p) in ("tsconfig.json", "jsconfig.json")})
+        pyroots = ["src"] if any(p.startswith("src/") and re.match(r"src/[^/]+(?:/__init__)?\.py$", p)
+                                 for p in paths) else []
         upd = []
         # fetchall() first: re-using `cur` for a lookup INSIDE its own iteration silently resets
         # the outer result set, which is why every edge resolved to NULL before this.
@@ -573,7 +756,7 @@ def build(root, full=False):
             src = byid.get(eid_src)
             if not src:
                 continue
-            dst = resolve_import(raw, src, paths, bybase)
+            dst = resolve_import(raw, src, paths, bybase, aliases=aliases, pyroots=pyroots)
             if dst and dst != eid_src:          # never self-edge
                 upd.append((dst, eid_src, line, raw))
         if upd:
@@ -688,13 +871,22 @@ def cmd_find(root, args):
         if not f:
             return 1
         if mode == "--importers":
+            edge_at = set()
             for path, line, raw in cur.execute(
                     "SELECT f.path,e.line,e.raw FROM edges e JOIN files f ON f.id=e.src_id "
                     "WHERE e.dst_id=?", (f[0],)):
                 rows.append((0, path, line, "%s:%d\t%s" % (path, line, raw)))
+                edge_at.add((path, line))
+            # then every non-code line that NAMES it (configs, docs, CI, Dockerfiles), sort key 1 so
+            # they follow all the edges: a path nobody mentions prints byte for byte as before
+            for path, line in _mentions(root, q):
+                if (path, line) not in edge_at:
+                    rows.append((1, path, line, "%s:%d\tmention %s" % (path, line, _tail(q))))
         else:
+            # fetchall(): the path lookup below re-uses `cur`, which silently ended this loop at the
+            # first RESOLVED edge (same trap as build()'s) — rare while few edges resolved, routine now
             for raw, line, dst in cur.execute(
-                    "SELECT raw,line,dst_id FROM edges WHERE src_id=?", (f[0],)):
+                    "SELECT raw,line,dst_id FROM edges WHERE src_id=?", (f[0],)).fetchall():
                 d = "-"
                 if dst:
                     r = cur.execute("SELECT path FROM files WHERE id=?", (dst,)).fetchone()
