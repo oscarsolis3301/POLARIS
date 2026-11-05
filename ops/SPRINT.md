@@ -670,3 +670,4 @@ exercises but a Builder cannot.
   words — a printed refusal proves nothing; and a red in one of these drills most likely means the
   drill caught shipped code regressing, so report the assertion, never weaken it.
 - 2026-10-12 · INTEGRATOR.md step 4 says 'git branch -d integrate/<date>' on the primary, but the primary-checkout guard hook denies any git branch command there — integrate/2026-10-11 (fully merged) was left behind; seal or done should delete the merged integrate branch itself, or the guard should allow -d of a merged integrate/*
+- 2026-11-05 · 2026-11-05 · A red batch land can't be unwound by an agent: INTEGRATOR.md §3's 'git reset --hard' is denied in the primary by checkout-guard (shared-checkout §1); only land --express unwinds inside the CLI. T-236 was kicked back but its squash stayed on integrate/2026-11-05 until a human reset. Needs a CLI verb that drops one task from the wave (cf. 2026-10-12 'branch -d').
