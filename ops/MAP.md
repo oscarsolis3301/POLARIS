@@ -256,3 +256,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - .polaris/decisions.ndjson — new gitignored log: one row per qa / land --express depth decision and per finish (ts, plan, task, kind, depth, why, paths, secs, rc); the suite stamp's third field is now none|look|scoped|full  (T-198, 2026-10-27)
 
 - "integrate.sh: pr-mode seal stages locally (no push); new `polaris sync` folds a merged ship branch in"  (T-228, 2026-11-03)
+
+- kit/ops/lib/selftest/hops.sh — new: hops_fixture, the scripted type-sorted fixture repo that the hops drill, the hop benchmark and the end-to-end check share (ops/contracts/save-hops.md § 8.2)  (T-235, 2026-11-05)
