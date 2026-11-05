@@ -1,0 +1,48 @@
+== 1. a cold repo: the first pack builds the missing brain, quietly, before HOUSE STYLE reads it ==
+brain before the first pack: no
+brain after it: yes
+| what | detected | evidence |
+lines of brain-build chatter in the pack: 0
+== 2. a guide two folders up is found; a CLAUDE.md without the marker is climbed past ==
+follows: WHERE THIS LIVES
+# src/CLAUDE.md
+# src/ — the shop's application code
+
+Features import each other through `@/…`, never by climbing with ../
+== 3. a brain that already exists is never rebuilt by pack ==
+learned.md after the next pack: still gone — left as it was
+== 4. globs, dir/ patterns, an untracked guide, the 25-line and 3-guide caps, CRLF ==
+# lib/CLAUDE.md
+# lib/ — shell helpers every feature shares
+- rule 2
+- rule 3
+- rule 4
+- rule 5
+- rule 6
+- rule 7
+- rule 8
+- rule 9
+- rule 10
+- rule 11
+- rule 12
+- rule 13
+- rule 14
+- rule 15
+- rule 16
+- rule 17
+- rule 18
+- rule 19
+- rule 20
+- rule 21
+- rule 22
+- rule 23
+- rule 24
+- rule 25
+# web/CLAUDE.md
+# web/ — the pages a customer sees
+# tools/CLAUDE.md
+# tools/ — build scripts, saved with CRLF line ends
+== 5. no guide anywhere above an owned path: no section at all — not even its header ==
+FOLDER GUIDES sections: 0
+== 6. a brain build that fails changes nothing: the old no-brain line still prints ==
+(no brain yet — run: ops/polaris brain)
