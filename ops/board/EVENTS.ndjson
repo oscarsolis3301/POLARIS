@@ -882,3 +882,4 @@
 {"ts":1793916438,"ev":"grant","id":"T-236","who":"Owner@DESKTOP","note":"ops/tests/plan-approval-gates.expected"}
 {"ts":1793916443,"ev":"amend","id":"T-236","who":"Owner@DESKTOP","note":"verify[+]"}
 {"ts":1793916708,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"2026-11-05 · A red batch land can't be unwound by an agent:"}
+{"ts":1793916713,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"2026-11-05 · T-236 kicked back for a golden it didn't own: "}
