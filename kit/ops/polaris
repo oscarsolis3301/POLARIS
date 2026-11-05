@@ -153,6 +153,9 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  reads FIRST (INDEX + code-map/board/contracts/commands/gotchas);
                                  --refresh skips code-map when code is unchanged. seal auto-refreshes
                                  an existing brain; doctor warns when it is stale
+  where [--write | --strip]      the ≤15-line root map — where things live — from ops/MAP.md and the
+                                 folder guides; --write puts it in CLAUDE.md below the POLARIS block
+                                 (done keeps it fresh), --strip takes it out
   metrics                        opens with a plain-English summary line, then cycle · throughput ·
                                  kickbacks · build-vs-integrate split (EVENTS.ndjson)
   why <ID>                       why a task bounced/blocked: kickback + release/blocked notes from telemetry + body
@@ -178,6 +181,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  and weighing the conditions by hand. With ID(s), ONLY the named
                                  tasks count — a leftover in ready/ never widens the lane — and the
                                  first one's plan: is recorded as this run's scope.
+                                 tidy = the board is empty and the layout pass is due (ops/roles/TIDY.md)
   route [<ID> | --role <R> | --points <N> [--risk <R>]]
                                  which MODEL TIER runs a piece of work — line 1 is always one
                                  word: strong | mid | cheap (a task's model: frontmatter
@@ -187,7 +191,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  CONDUCTOR asks it before every spawn; fleet rides the max
                                  tier over ready/
   next [--do|--brief]            what this session does NEXT, read off the board — line 1 is ONE verb:
-                                 resume <ID> · build <ID> · integrate · promote · wait · stop · finish;
+                                 resume <ID> · build <ID> · integrate · promote · wait · stop · tidy · finish;
                                  --do performs a promote under the board lock · --brief re-anchors a chat
   promote                        = next --do: promote every backlog/ task that now clears the ready
                                  gate, ONE board commit, then the fresh route (line 1 is still a verb)
@@ -260,6 +264,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  own CLAUDE.md, once. install and update run it for you, so every
                                  machine self-repairs. Append-only, marker-guarded, idempotent — it
                                  never edits your prose, never deletes, never rewrites a human choice
+                                 also builds .polaris/brain/ when it is missing and refreshes the layout verdict
   interview [--pending | --set <key>=<value> …]
                                  the preferences a repo cannot derive — how to be talked to
                                  (voice), ADHD-shaped replies (adhd), one computer or several
@@ -407,6 +412,7 @@ case "${1:-}" in
   rollback)   shift; cmd_rollback "$@";;
   status)     shift 2>/dev/null || true; awake_ensure || true; update_check_maybe || true; cmd_status "${1:-}";;
   brain)      shift 2>/dev/null || true; cmd_brain "${1:-}";;   # no update_check_maybe: agents run it cold and often — keep it quiet + pure
+  where)      shift 2>/dev/null || true; cmd_where "$@";;
   # find/show are handled by the FAST PATH at the top of this file and never reach here — they
   # exit before the globals below them exist. They stay in `usage` above because that is what
   # documents them; ops/tests/cli-help-parity.cmd asserts they are still listed.
