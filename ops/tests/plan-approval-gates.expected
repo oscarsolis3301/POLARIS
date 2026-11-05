@@ -1,6 +1,6 @@
 == unapproved: human lane, express refuses
-wait
-   review/ awaits a human: T-1
+finish
+   risk: high awaiting approval: T-1
 express refused: risk: high and the plan did not approve merge
 == approve --plan p
 == approved: landable, express passes the gate (the knob speaks next)
@@ -8,6 +8,6 @@ integrate
    review/: T-1
 express: off
 == autonomy: standard refuses even with the approval
-wait
-   review/ awaits a human: T-1
+finish
+   risk: high awaiting approval: T-1
 express refused: autonomy: standard

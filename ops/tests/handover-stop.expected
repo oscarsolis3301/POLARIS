@@ -13,6 +13,7 @@ block:build
 block:integrate
 block:promote
 block:finish
+block:tidy
 allow:wait
 allow:stop
 allow:resume
@@ -21,6 +22,10 @@ block:finish
 hops-after-block: 1
 hopped-event-matches-last: yes
 allow:consumed
+{"decision":"block","reason":"The layout pass is due. You are TIDY (hop 1): read ops/roles/TIDY.md and run it now — one context, no subagents, it lands one task. Then bash ops/polaris next."}
+hops-after-tidy: 1 · consumed: yes
+allow:question
 block:build
 {"decision":"block","reason":"This run's board is done. From the primary: bash ops/polaris finish — its exit code decides your close (0 opens with # 🎉 Complete!; otherwise no H1, name the one pending thing)."}
 pinned-reason-lines: 1
+pinned-tidy-lines: 1

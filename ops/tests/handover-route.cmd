@@ -44,7 +44,7 @@ route() { # one board state, three assertions off ONE invocation: line 1 verbati
   # the note count. `next` writes nothing, so each state is exactly what the lines above it built.
   OUT="$(bash "$KIT" next "$@" 2>&1)"
   printf '%s\n' "$OUT" | sed -n 1p
-  printf '%s\n' "$OUT" | sed -n 1p | grep -cE '^(resume|build|integrate|promote|wait|stop|finish)( T-[A-Z0-9]+)?$'
+  printf '%s\n' "$OUT" | sed -n 1p | grep -cE '^(resume|build|integrate|promote|wait|stop|tidy|finish)( T-[A-Z0-9]+)?$'
   printf '%s\n' "$OUT" | sed -n '2,$p' | grep -c '^   '
   # the promote notes, verbatim minus their indent — the only note text this golden pins, because
   # `--do` is the one verb that CHANGES the board and its report is what the human reads back.
@@ -65,12 +65,41 @@ rm -rf "$L/T-HR1"; rm -f ops/board/active/T-HR1.md
 mk review T-HR2 5 normal src/b.txt
 mk review T-HR3 5 high src/b.txt
 route
-# --- row 5, the v1.1 correction: human-gated review work ALONE is `wait`, never `finish`. A task
-#     waiting on a human IS in flight — with the human — which is why row 6's approval note is
-#     unreachable dead source and no case here may assert `finish` for it. ----------------------
+# --- row 6, contract v3 (supersedes v1.1's `wait`): human-gated review work ALONE is `finish`, its
+#     note naming what waits on the human — a task only a human can merge no longer holds a run open
+#     mid-way, and its merge still needs that human's yes. A DUE layout verdict sits on disk here on
+#     purpose: the pass never runs while review/ holds work for the human, so this is still `finish`,
+#     not row 5.5. The verdict carries the fixture's REAL base sha — the reader compares field 1
+#     with $BASE's sha now, so a made-up sha would prove the silence, never the pass. -----------
 rm -f ops/board/review/T-HR2.md
+mkdir -p .polaris; B="$(git rev-parse main)"
+printf '%s\t0\tlayout pass due — ~40%% fewer folders per change · 3 folders of 5+ files have no guide\n' "$B" > .polaris/hops-due
 route
+printf '%s\n' "$OUT" | sed -n 's/^   \(risk: high awaiting approval: .*\)$/\1/p'
 rm -f ops/board/review/T-HR3.md
+# --- row 5.5, tidy (save-hops.md § 2.1): the board is done and the cached verdict says due — but
+#     only a verdict that IS due, for THIS base, with the pass switched on, may route a session.
+#     Each silence first (not due · a verdict for an older base · `hops: off`), each `finish`. ----
+printf '%s\t1\t-\n' "$B" > .polaris/hops-due
+route
+printf '%s\t0\tlayout pass due — stale\n' "$(git rev-parse main~1)" > .polaris/hops-due
+route
+printf '%s\t0\tlayout pass due — ~40%% fewer folders per change · 3 folders of 5+ files have no guide\n' "$B" > .polaris/hops-due
+printf 'hops: off\n' > ops/CONVENTIONS.md
+route
+rm -f ops/CONVENTIONS.md
+# --- then the real thing, the verdict written CRLF the way Windows python writes it until the
+#     dogfood: line 1 `tidy`, its two pinned notes verbatim with the cache message minus its lead,
+#     no carriage return carried into them, and the once-per-session marker (an epoch) written by
+#     that same call — under `tidy`, never `hops`, the Stop hook's counter beside it. ----------
+printf '%s\t0\tlayout pass due — ~40%% fewer folders per change · 3 folders of 5+ files have no guide\r\n' "$B" > .polaris/hops-due
+route
+printf '%s\n' "$OUT" | sed -n '2,$p'
+case "$OUT" in *"$(printf '\r')"*) echo "carriage-return: yes";; *) echo "carriage-return: no";; esac
+printf 'marker: %s · hop counter: %s\n' "$(grep -cE '^[0-9]+$' .polaris/handover/hr-sid/tidy 2>/dev/null)" "$([ -e .polaris/handover/hr-sid/hops ] && echo touched || echo untouched)"
+# --- ...and a session is routed to the pass at most once: the very next `next` is `finish`. ----
+route
+rm -rf .polaris/hops-due .polaris/handover/hr-sid
 # --- row 4: a backlog task that passes the full ready gate. IDEAS.md carries no frontmatter and
 #     must be skipped in silence rather than crashing the scan. -------------------------------
 mk backlog T-HR5 5 normal src/a.txt
