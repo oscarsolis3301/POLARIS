@@ -291,6 +291,14 @@ drill_pr-publish() {
     [ "$(git ls-remote origin refs/tags/sprint/2 | cut -f1)" = "$rtagpre" ] || { echo "PR SEAL TAG PUSH FAIL (tag must stay local)"; exit 1; }
     grep -q 'staged locally' "$T/prseal.out" || { echo "PR SEAL NOTE FAIL"; exit 1; }
     "$SELF" done T-Q >/dev/null || { echo "PR DONE2 FAIL (dependents are claimable at once)"; exit 1; }
+    # T-256 hermeticity: a plain seal merges + tags the wave but keeps integrate/<today> (only
+    # --sync deletes one). CI runs every drill one after another in ONE practice repo, and express,
+    # next in that order, must create today's wave itself (busyint's queued-land check looks for it
+    # too), so drop the branch here, standing on main the way drill_park drops its wave, and prove
+    # it is gone: a leak then fails pr-publish itself, never an innocent drill later in the run.
+    git checkout -q main
+    git branch -q -D "integrate/$prd" 2>/dev/null || true
+    git rev-parse -q --verify "refs/heads/integrate/$prd" >/dev/null && { echo "PR SEAL BRANCH FAIL (the staged wave integrate/<today> must not outlive the drill — the next drill needs a fresh day)"; exit 1; }
     # ---- polaris sync: ship branch merged on the host → local base catches up, ship branch gone ----
     "$SELF" sync > "$T/prsy0.out" 2>&1; [ ! -s "$T/prsy0.out" ] || { cat "$T/prsy0.out"; echo "PR SYNC QUIET FAIL (nothing to do must print nothing)"; exit 1; }
     git push -q origin "main:refs/heads/ship/$prd" || { echo "PR SHIP PUSH FAIL"; exit 1; }
