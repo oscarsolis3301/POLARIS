@@ -521,7 +521,7 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   [ -f "$VER" ] || die "ops/VERSION missing — this kit predates versioning; reinstall from a fresh zip"
   command -v curl >/dev/null 2>&1 || die "update needs curl on PATH"
   command -v tar  >/dev/null 2>&1 || die "update needs tar on PATH"
-  local tarball repo cur sha T K pending
+  local tarball repo cur sha T K pending h
   local parked=0
   tarball="$(ver tarball || true)"; [ -n "$tarball" ] || die "no tarball: in ops/VERSION"
   repo="$(ver repo || true)"; cur="$(ver version)"
@@ -594,7 +594,7 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   # in ops/VERSION, and the refreshed/untouched pair is a statement of what install.sh just did.
   note "what changed:   $(ver changelog 2>/dev/null | grep . || echo 'see the project CHANGELOG')"
   note "refreshed here: ops/ kit code · the managed CLAUDE.md block · .claude/ skills + output style"
-  note "untouched:      board · RULES.tsv · CONVENTIONS.md · MAP.md · SPRINT.md"
+  note "untouched:      board · RULES.tsv · CONVENTIONS.md · MAP.md · SPRINT.md · LAYOUT.tsv"
   # The 6.0 default flip is a BREAKING change to the safety posture of every installed repo, and it
   # arrives through this very command — reaching owners who never read the changelog. The banner is
   # what makes that honest instead of silent (ops/contracts/key-registry.md § 4; the two lines are
@@ -635,6 +635,12 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   # run-INIT epilogue mid-stream, but these closing lines buried it — and an agent reads the END
   # of the output as "what's left". Reprint it LAST (same block as install.sh; the `▶ NEXT`
   # line-start is load-bearing — CI's quiet-count sed keys on it; never quote the kickoff phrase).
+  # Configured, and THE LAYOUT PASS is due (save-hops.md § 5)? heal refreshed the verdict above (and
+  # inside install.sh), so the update ends by naming that next step on ONE line, last, for the same
+  # reason. The never-set-up epilogue wins — the hint is its `elif`, so there is never a second
+  # `▶ NEXT`. An `elif`, not a bare `h=… && printf`: a not-due hint is rc 1, and as update's last
+  # command under the entry's `set -e` it would fail the update itself — and `--auto`, which judges
+  # this very run by its rc, would print its failure line for an update that landed.
   if [ ! -f "$PRIMARY/ops/CONVENTIONS.md" ]; then
     printf '\n'
     printf '▶ NEXT — to the AI agent reading this: this repo has never been set up, so the update is\n'
@@ -643,6 +649,8 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
     printf '  tell the human to open a new chat or hand them a kickoff phrase to type — INIT is your\n'
     printf '  job, now. This holds whatever the human asked for: an unconfigured POLARIS is not\n'
     printf '  delivered. (No AI reading this? Ask your AI chat in this repo to set up POLARIS.)\n'
+  elif h="$(update_hops_hint explicit)"; then
+    printf '\n%s\n' "$h"
   fi
 }
 
@@ -683,22 +691,49 @@ board_quiescent() { # board_quiescent — rc 0 quiet · rc 1 busy; QUIET_WHY = t
 
 update_dirt_overlaps_kit() { # stdin = `git status --porcelain`; rc 0 = some dirty path is one install.sh overwrites
   # The kit's footprint and nothing else: everything under ops/ EXCEPT the repo's own state
-  # (board, contracts, CONVENTIONS, MAP, SPRINT, RULES, ROADMAP, tests), plus the .claude/ pieces,
-  # CLAUDE.md, .gitignore and .gitattributes. A rename (`R old -> new`) tests the NEW path. Any
-  # other dirty path is the human's work, outside the footprint, and must never block an update.
+  # (board, contracts, CONVENTIONS, MAP, SPRINT, RULES, LAYOUT, ROADMAP, tests), plus the .claude/
+  # pieces, CLAUDE.md, .gitignore and .gitattributes. A rename (`R old -> new`) tests the NEW path.
+  # Any other dirty path is the human's work, outside the footprint, and must never block an update.
+  # ops/LAYOUT.tsv (6.12.0, save-hops.md § 0.4) is the layout pass's record of what it kept or moved:
+  # owner state exactly like RULES.tsv — install and update never write it, so its dirt is never the kit's.
   local line p cr; cr="$(printf '\r')"
   while IFS= read -r line; do
     p="${line#???}"; p="${p%$cr}"
     case "$p" in *' -> '*) p="${p##* -> }";; esac
     case "$p" in \"*\") p="${p#\"}"; p="${p%\"}";; esac   # git quotes paths with odd bytes
     case "$p" in
-      ops/board/*|ops/contracts/*|ops/CONVENTIONS.md|ops/MAP.md|ops/SPRINT.md|ops/RULES.tsv|ops/ROADMAP.md|ops/tests/*) ;;
+      ops/board/*|ops/contracts/*|ops/CONVENTIONS.md|ops/MAP.md|ops/SPRINT.md|ops/RULES.tsv|ops/LAYOUT.tsv|ops/ROADMAP.md|ops/tests/*) ;;
       ops/*) return 0;;
       .claude/settings.json|.claude/skills/polaris/*|.claude/skills/i-have-adhd/*|.claude/output-styles/polaris.md) return 0;;
       CLAUDE.md|.gitignore|.gitattributes) return 0;;
     esac
   done
   return 1
+}
+
+update_hops_hint() { # update_hops_hint <explicit|auto> — the layout-pass line an update ends with; not due → rc 1, silent
+  # save-hops.md § 5. READS the verdict cache .polaris/hops-due (§ 0.5) — heal refreshed it during
+  # the update that just ran — and never runs hops itself. Due ⇔ the file exists AND field 2
+  # is 0 AND field 1 is $BASE's sha now AND `hops:` is not off; anything else is rc 1 and silence.
+  # The forks (cfg, git) are paid only once the file already says due. `explicit` (a typed update)
+  # names the next step on a line of its own: run the pass now on a quiet board, or let it run when
+  # the next piece of work wraps up on a busy one. `auto` (the session-start line) is a SUFFIX —
+  # leading space, NO newline — because that path stays exactly one line and never asks.
+  local f="$PRIMARY/.polaris/hops-due" vs="" vv="" vm=""
+  [ -f "$f" ] || return 1
+  IFS="$POLARIS_TAB" read -r vs vv vm 2>/dev/null < "$f" || true
+  vs="${vs%$'\r'}"; vv="${vv%$'\r'}"
+  [ "$vv" = 0 ] && [ -n "$vs" ] || return 1
+  [ "$(cfg hops on)" != off ] || return 1
+  [ "$vs" = "$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)" ] || return 1
+  case "${1:-}" in
+    auto) printf ' · layout pass due — runs when your next piece of work wraps up';;
+    explicit)
+      if board_quiescent; then printf '▶ NEXT — save hops: read ops/roles/TIDY.md and run it now\n'
+      else printf '▶ NEXT — save hops: the layout pass is due — it runs when your next piece of work wraps up\n'; fi;;
+    *) return 1;;
+  esac
+  return 0
 }
 
 cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionStart path, auto-update.md § algorithm.
@@ -757,7 +792,10 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionS
   fi
   new="$(ver version 2>/dev/null || true)"
   if [ "$rc" -eq 0 ] && [ -n "$new" ] && [ "$new" != "$cur" ]; then
-    printf '✅ POLARIS updated %s → %s at session start — ops/ and CLAUDE.md are new; re-read your role file before acting\n' "$cur" "$new"
+    # The layout pass rides this line as a SUFFIX when it is due (save-hops.md § 5, auto-update.md
+    # v3) — still one line, still never a question; not due → the suffix is empty and the line is
+    # byte-identical to 6.11 (the autoupdate drill's end-anchored greps hold it there).
+    printf '✅ POLARIS updated %s → %s at session start — ops/ and CLAUDE.md are new; re-read your role file before acting%s\n' "$cur" "$new" "$(update_hops_hint auto || true)"
   else
     printf '⚠ auto-update %s → %s failed — see .polaris/update.log; the repo is unchanged unless the log says otherwise\n' "$cur" "$latest"
   fi
@@ -1393,6 +1431,12 @@ cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and re
     die "re-run with --yes to confirm"
   fi
 
+  # --- CLAUDE.md: the root map first (save-hops.md § 5). `where` wrote it directly below the managed
+  # block, so the strip below would keep it — and the separator under it with it. It leaves with
+  # POLARIS; absent → silent. Run from the primary, in a subshell: the map lives in the same file the
+  # block strip edits, and nothing in a map nicety may stop an uninstall halfway. Folder guides stay —
+  # plain Markdown that still helps any reader once POLARIS is gone, and the repo's own.
+  ( cd "$PRIMARY" && cmd_where --strip ) >/dev/null 2>&1 || true
   # --- CLAUDE.md: drop only the managed block (+ the separator install.sh wrote after it)
   local CM="$PRIMARY/CLAUDE.md" B='<!-- POLARIS:BEGIN' E='<!-- POLARIS:END -->'
   if [ -f "$CM" ] && grep -qF "$E" "$CM"; then

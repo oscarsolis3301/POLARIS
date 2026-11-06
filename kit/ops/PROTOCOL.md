@@ -10,6 +10,7 @@ when you actually need it. Read the section you need, not the file.
 | what lives where on disk | STATE = THE BOARD |
 | why a lane exists, and why one role never does two jobs | LANES |
 | what a second chat does when the lock, the lane or the tree is busy | N CHATS, ONE REPO |
+| the lookup ladder · when the layout pass runs · ask first, then finish | SAVE HOPS |
 | how to stay cheap: pack-first, find-first, read-less | TOKEN DISCIPLINE |
 | which model tier a role deserves | MODEL ROUTING |
 | how to run a command that outlives the 600s tool cap | LONG COMMANDS |
@@ -179,7 +180,49 @@ abandoned lease is stolen with a note.
 second planner can file a task between your board read and your claim, and the claim-time
 disjointness gate is the backstop that blocks the loser rather than letting two chats edit one file.
 
+## SAVE HOPS — fewest lookups, ask first, then finish
+A hop is one lookup — a file opened, a search run — and each costs tokens and minutes. A Builder
+starts with `bash ops/polaris pack <ID>`: one call, whose FOLDER GUIDES section already holds the
+nearest guide for each owned folder; then rung 4. Everyone else stops at the first rung that answers:
+1. **The root map** — `## Where things live`, ≤ 15 lines just below the POLARIS block of the repo's
+   own `CLAUDE.md`: in context already, zero hops (`where --write` projects it from `ops/MAP.md` and
+   the guides — edit those, never the map).
+2. **`.polaris/brain/INDEX.md`** — any fact in ≤ 4 hops. No brain yet → `ops/MAP.md`.
+3. **The folder's guide**, `<dir>/CLAUDE.md` — what the folder is for, what to read first, what to
+   leave alone.
+4. **`polaris find <symbol>`** → `path:line` · **`polaris show <path>#<symbol>`** → just that body.
+5. **Grep, last** — for text nothing above can match.
+
+**A layout that makes you jump is a bug.** `polaris hops` measures it (folders touched per change,
+busy folders with no guide; no LLM, never edits) and the tidy lane fixes it: `ops/roles/TIDY.md`,
+one context, no subagents, ONE task. No drive-by moves in any other task.
+- **When.** `next` prints `tidy` where a run would `finish`; `triage` prints it on an empty, quiet
+  board; an explicit `update` ends with `▶ NEXT — save hops: …` and `update --auto` adds
+  `· layout pass due — …` to its line. All three only read `.polaris/hops-due` (written by
+  `hops --due`; `done`, `seal` and `heal` refresh it). At most once per session, never within 30
+  changes of the last pass, and `hops: off` in `ops/CONVENTIONS.md` turns it off everywhere.
+- **May:** moves `hops --proof` shows changed nothing but paths (≤ 25 files, every step proven and
+  checked green) · guides (≤ 8) · the root map · `ops/LAYOUT.tsv` rows. **Never:** a merge without
+  the human's up-front yes (a merge deletes; a proven move does not) · a path `hops` holds FIXED
+  (tooling, framework-routed, vendored, guarded, public API) · a logic change · a stop mid-run: what
+  it cannot prove or decide becomes a `keep` row, and its report lists those.
+
+**Ask first, then finish.** Every question goes in ONE round before work starts: the conductor's
+interview, plus the ≤ 3 `hops --questions` when the pass is due. After it the owner is away, and
+nothing stops mid-run. A builder question default-safe cannot answer → the question into the task's
+Notes, `release <ID> --to blocked -m "<question>"`, `notify-gate question <ID>`; the other lanes keep
+going. `risk: high` the plan did not cover → `notify-gate risk <ID>`; it stays in `review/` and the
+close names it (Invariant 9 unchanged). `finish` names each blocked task and why; with only
+human-gated work left, close on `⛔ waiting on you: approve <ID>` — no 🎉. `autonomy: standard` asks
+right away at both gates, as before. No hard gate gets softer.
+
+**What loads by itself is measured, not assumed.** The 6.12.0 probe (2026-11-05) answered `unknown`
+for all seven of its cases — no session could sign in — so nothing here counts on a folder guide
+loading by itself (Read, Edit, a new file, a worktree path, a subagent): open it when the ladder
+gets there. By construction, `pack` prints a builder's guides and the root map sits in `CLAUDE.md`.
+
 ## TOKEN DISCIPLINE — this is how we stay cheap and fast
+The lookup ladder lives in § SAVE HOPS.
 
 > **THE MISSION, and it outranks thoroughness.** Every token is the owner's money and the supply is
 > fixed. Finish the task, prove it, spend as little as possible. Prefer ONE context over three —

@@ -15,6 +15,7 @@ Three tiers, all emitting byte-identical output:
   2 sqlite, no FTS5 -t uses LIKE over the body column
   3 no sqlite       live scan, no persistence — slower, never wrong
 """
+import fnmatch
 import hashlib
 import json
 import os
@@ -618,6 +619,21 @@ def _mentions(root, path):
     return out
 
 
+def _resolver_facts(root, paths):
+    """{indexed path: id} -> (bybase, aliases, pyroots): what resolve_import needs beyond the edge
+    itself. One home, because build() and `hops` must resolve an import to the SAME file: the
+    basename buckets, every tsconfig/jsconfig's aliases, and python's src/ root when a package or
+    module sits directly under src/ (ops/contracts/save-hops.md § 1.1)."""
+    bybase = {}
+    for p, i in paths.items():
+        bybase.setdefault(os.path.basename(p), []).append((p, i))
+    aliases = _aliases({p: read(root, p) or "" for p in paths
+                        if os.path.basename(p) in ("tsconfig.json", "jsconfig.json")})
+    pyroots = ["src"] if any(p.startswith("src/") and re.match(r"src/[^/]+(?:/__init__)?\.py$", p)
+                             for p in paths) else []
+    return bybase, aliases, pyroots
+
+
 def flags_for(path):
     f = 0
     if TESTY.search(path):
@@ -738,16 +754,8 @@ def build(root, full=False):
     # dst_id starts NULL. Unresolved (external package) legitimately stays NULL.
     if full or changed or gone:
         paths = {p: i for i, p in cur.execute("SELECT id,path FROM files")}
-        bybase = {}
-        for p, i in paths.items():
-            bybase.setdefault(os.path.basename(p), []).append((p, i))
         byid = {i: p for p, i in paths.items()}
-        # the repo facts the resolver needs: every tsconfig/jsconfig's aliases, and python's src/
-        # root when a package or module sits directly under src/ (ops/contracts/save-hops.md § 1.1)
-        aliases = _aliases({p: read(root, p) or "" for p in paths
-                            if os.path.basename(p) in ("tsconfig.json", "jsconfig.json")})
-        pyroots = ["src"] if any(p.startswith("src/") and re.match(r"src/[^/]+(?:/__init__)?\.py$", p)
-                                 for p in paths) else []
+        bybase, aliases, pyroots = _resolver_facts(root, paths)
         upd = []
         # fetchall() first: re-using `cur` for a lookup INSIDE its own iteration silently resets
         # the outer result set, which is why every edge resolved to NULL before this.
@@ -953,11 +961,379 @@ def cmd_stats(root):
     return 0
 
 
+# ---------------------------------------------------------------- hops
+# `polaris hops` (ops/contracts/save-hops.md § 1): how many folders ONE change touches, and where a
+# feature scattered across components/, hooks/ and utils/ should live instead. Read-only and no LLM —
+# git history and the import graph in, a report out; it never edits code. It lives in this file
+# because index.py already ships to every installed repo, and a new file would not.
+_HOPS_USAGE = ("⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]"
+               " [--score | --owned | --proof | --remap <moves.tsv>]\n")
+# words too generic to name a feature: a cluster called "utils" tells nobody where to look
+_HOPS_STOP = frozenset((
+    "index main test tests spec util utils helper helpers common shared component components hook "
+    "hooks service services type types model models view views page pages style styles lib src "
+    "core base impl mock mocks data config constants").split())
+_HOPS_TOKEN = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+")    # words, camelCase split
+_HOPS_CITE = re.compile(r"`([^`]+)`")
+_GUIDE_OPEN, _GUIDE_CLOSE = "<!-- polaris:guide -->", "<!-- /polaris:guide -->"
+
+
+def _hops_cfg(conv, key, default=""):
+    """core.sh `cfg` over CONVENTIONS.md text: the first `key:` line wins, a ` # comment` is cut,
+    and a value that is nothing but a comment reads empty — so the default."""
+    for line in conv.split("\n"):
+        if line.startswith(key + ":"):
+            v = line[len(key) + 1:].rstrip("\r").lstrip(" \t")
+            v = "" if v.startswith("#") else re.sub(r"[ \t]#.*", "", v)
+            return v.rstrip(" \t") or default
+    return default
+
+
+def _hops_rows(root, rel):
+    """The data lines of a TAB-separated state file (RULES, SURFACES, LAYOUT), split into fields."""
+    return [line.rstrip("\r").split("\t") for line in (read(root, rel) or "").split("\n")
+            if line.strip() and not line.startswith("#")]
+
+
+def _hops_match(path, pat):
+    """THE files_owned matcher (ownership.sh match_one): `dir/` is a prefix; anything else is a glob
+    whose `*` crosses `/` — an exact path being a glob with no wildcard in it."""
+    return path.startswith(pat) if pat.endswith("/") else fnmatch.fnmatchcase(path, pat)
+
+
+def _hops_in_flight(root, base):
+    """§ 1.4 rule 10: the paths somebody has unmerged work on, FIXED for this pass only — every path
+    git status names (`dir/` for an untracked folder it reports whole), and every path a local or
+    remote branch changed in commits <base> lacks: an open ship PR counts, the board ref does not."""
+    out = set()
+    st = sh(["git", "status", "--porcelain", "-z"], root).split("\0")
+    i = 0
+    while i < len(st):
+        e, i = st[i], i + 1
+        if len(e) > 3:
+            out.add(e[3:])
+            if "R" in e[:2] or "C" in e[:2]:       # -z puts a rename's source in the next field
+                out.add(st[i] if i < len(st) else "")
+                i += 1
+    log = sh(["git", "-c", "core.quotePath=false", "log", "--name-only", "--format=",
+              "--exclude=polaris/*", "--branches", "--exclude=*/polaris/*", "--remotes",
+              "--not", base, "--"], root)
+    out.update(log.split("\n"))
+    out.discard("")
+    return out
+
+
+def _hops_fixed(root, base):
+    """§ 1.4 rules 1-8 and 10 as ONE predicate: True = never proposed as a `from` or a `to`, and not
+    counted in the score. Rule 9, the public surface, is T-248's."""
+    conv = read(root, "ops/CONVENTIONS.md") or ""
+    pats = _hops_cfg(conv, "generated").split()                                       # 4
+    gal = _hops_cfg(conv, "gallery").strip("/")
+    pats += [gal + "/"] if gal else []
+    pats += [r[0] for r in _hops_rows(root, "ops/RULES.tsv")                          # 5
+             if len(r) > 1 and r[1] in ("path", "ask")]
+    pats += [g for r in _hops_rows(root, "ops/SURFACES.tsv")                          # 6
+             for g in r[:2] if g not in ("", "-")]
+    pats += [r[0] for r in _hops_rows(root, "ops/LAYOUT.tsv")                         # 7
+             if len(r) > 1 and r[1] == "keep"]
+    flight = _hops_in_flight(root, base)                                              # 10
+    held = tuple(p for p in flight if p.endswith("/"))
+    # 2: app/ pages/ routes/ are framework-ROUTED under a next/nuxt/svelte/remix/astro config at
+    # the root and framework-LOOKING without one — nothing moves in or out of either this pass
+    # (asking about the second kind is --questions, T-251's)
+    routed = {"migrations", "public", "static", "app", "pages", "routes"}
+    unity = {"Resources", "StreamingAssets", "Editor", "Plugins"}                      # 8
+
+    def _fixed(p):
+        segs = p.split("/")[:-1]
+        return (not segs or segs[0] in ("ops", ".claude", ".github", ".polaris", "archive")  # 1
+                or bool(routed.intersection(segs)) or bool(VENDOR.search(p))               # 2, 3
+                or bool(unity.intersection(segs)) or p.endswith((".meta", ".asmdef", ".asmref"))
+                or p in flight or p.startswith(held) or any(_hops_match(p, x) for x in pats))
+    return _fixed
+
+
+def _hops_history(root, base, tracked):
+    """§ 1.3: the last 300 non-merge changes on <base>, each as the set of TODAY's tracked paths it
+    touched. Renames map old names onto today's — chains too: the log runs newest first, so every
+    rename is seen before the older changes that still use the old name — and a path gone since
+    drops out. A change of more than 40 paths (a mass rename, a vendored drop) or one only under
+    ops/ says nothing about how the features are laid out, so it is skipped."""
+    out = sh(["git", "-c", "core.quotePath=false", "log", "-n", "300", "--no-merges", "-M",
+              "--name-status", "--format=%x1e%H", base, "--"], root)
+    commits = []
+    for line in out.split("\n"):
+        if line.startswith("\x1e"):
+            commits.append([])
+        elif commits and "\t" in line:
+            f = line.split("\t")
+            commits[-1].append((f[0][:1], f[1], f[2] if len(f) > 2 else ""))
+    alias, kept = {}, []
+    for rows in commits:
+        raw = [new or old for _, old, new in rows]
+        names = {alias.get(p, p) for p in raw}
+        for st, old, new in rows:
+            if st == "R" and new:
+                alias[old] = alias.get(new, new)
+        if len(rows) > 40 or all(p.startswith("ops/") for p in raw):
+            continue
+        kept.append(names & tracked)
+    return kept
+
+
+def _hops_imports(root, movable):
+    """§ 1.3 static coupling: {(a, b), a < b} for every resolved import edge with both ends movable.
+    Each edge is resolved AFRESH from its raw spec rather than trusting the stored dst_id: build()
+    re-inserts an edited file under a new id and never re-resolves the edges still pointing at the
+    old one (the stale-edge line in IDEAS.md), so the stored graph quietly loses the edges into the
+    files that change most — the very files this report is about. Same resolver, same facts."""
+    con, _, _, _ = build(root)
+    try:
+        byid = dict(con.execute("SELECT id,path FROM files").fetchall())
+        paths = {p: i for i, p in byid.items()}
+        bybase, aliases, pyroots = _resolver_facts(root, paths)
+        pairs = set()
+        for sid, raw in con.execute("SELECT src_id,raw FROM edges").fetchall():
+            a = byid.get(sid)
+            if a in movable:
+                b = byid.get(resolve_import(raw, a, paths, bybase, aliases=aliases, pyroots=pyroots))
+                if b in movable and b != a:
+                    pairs.add((min(a, b), max(a, b)))
+    finally:
+        con.close()
+    return pairs
+
+
+def _hops_clusters(commits, pairs):
+    """§ 1.5: w(a,b) = changes touching both + 2 when either imports the other; clusters are the
+    connected components over the edges with w >= 3, so an import alone never links two files — it
+    takes a change they shared as well. -> ([sorted cluster], {file: sum of its w >= 3 weights})"""
+    w = {}
+    for c in commits:
+        c = sorted(c)
+        for i, a in enumerate(c):
+            for b in c[i + 1:]:
+                w[(a, b)] = w.get((a, b), 0) + 1
+    for k in pairs:
+        w[k] = w.get(k, 0) + 2
+    up, strength = {}, {}
+
+    def _top(x):
+        while up.get(x, x) != x:
+            up[x] = up.get(up[x], up[x])
+            x = up[x]
+        return x
+    for (a, b), n in sorted(w.items()):
+        if n >= 3:
+            strength[a] = strength.get(a, 0) + n
+            strength[b] = strength.get(b, 0) + n
+            ra, rb = _top(a), _top(b)
+            if ra != rb:
+                up[max(ra, rb)] = min(ra, rb)
+    groups = {}
+    for f in strength:
+        groups.setdefault(_top(f), []).append(f)
+    return [sorted(g) for g in groups.values()], strength
+
+
+def _hops_name(files, strength):
+    """§ 1.5: the most frequent lowercase token of the files' names (extension dropped, camelCase
+    split), at least 4 letters and not a generic word; ties alphabetical. No such token: the stem of
+    the most-connected file."""
+    n = {}
+    for p in files:
+        stem = os.path.splitext(p.rpartition("/")[2])[0]
+        for t in {m.lower() for m in _HOPS_TOKEN.findall(stem)}:
+            if len(t) >= 4 and t.isalpha() and t not in _HOPS_STOP:
+                n[t] = n.get(t, 0) + 1
+    if n:
+        return min(n, key=lambda t: (-n[t], t))
+    return os.path.splitext(min(files, key=lambda p: (-strength.get(p, 0), p)).rpartition("/")[2])[0]
+
+
+def _hops_home(files, name, folders):
+    """§ 1.5: <deepest common parent of the files>/<name>/ — under src/ when that parent is the root
+    and src/ holds any of them. A folder of that name that already exists is used as is, spelled the
+    way it is on disk (a case-insensitive disk would merge the two spellings anyway)."""
+    common = []
+    for segs in zip(*[p.split("/")[:-1] for p in files]):
+        if any(s != segs[0] for s in segs):
+            break
+        common.append(segs[0])
+    parent = "/".join(common)
+    if not parent and any(p.startswith("src/") for p in files):
+        parent = "src"
+    home = (parent + "/" if parent else "") + name
+    if home not in folders:
+        same = sorted(d for d in folders if d.lower() == home.lower())
+        home = same[0] if same else home
+    return home + "/"
+
+
+def _hops_guides(root, files):
+    """§ 0.1: {dir: [its block's lines]} for every TRACKED <dir>/CLAUDE.md (dir is never the root)
+    holding the marker line; the block runs to the closing marker, or to EOF. Text outside the
+    block is the owner's and is never read."""
+    out = {}
+    for p in files:
+        if p.endswith("/CLAUDE.md"):
+            lines = [x.rstrip("\r") for x in (read(root, p) or "").split("\n")]
+            if _GUIDE_OPEN in lines:
+                body = lines[lines.index(_GUIDE_OPEN) + 1:]
+                if _GUIDE_CLOSE in body:
+                    body = body[:body.index(_GUIDE_CLOSE)]
+                out[p[:-len("/CLAUDE.md")]] = body
+    return out
+
+
+def _hops_purpose(root, d, guides):
+    """A folder's purpose for MAP: its guide's purpose line (§ 0.1), else the first heading of its
+    README.md, else `-`. Never a TAB: the --tsv rows are TAB-separated."""
+    for line in guides.get(d, ()):
+        s = re.sub(r"^[# ]+", "", line)
+        if s.strip(" \t"):
+            return s.replace("\t", " ")
+    for line in (read(root, d + "/README.md") or "").split("\n"):
+        m = re.match(r"#+\s+(\S.*)", line.rstrip("\r"))
+        if m:
+            return m.group(1).replace("\t", " ")
+    return "-"
+
+
+def _hops_stale(root, guides):
+    """§ 0.1: [(guide, citation)] for every citation nothing on disk answers. A citation is a backtick
+    span with no whitespace, `://` or `*`, not starting with -, $ or <, that holds a `/` or ends in
+    a 1-8 character extension; it resolves against the guide's folder, then the repo root, and a
+    trailing `/` asks for a folder. Guides only: no history, no index — drift calls this."""
+    out = []
+    for d in sorted(guides):
+        seen = set()
+        for line in guides[d]:
+            for c in _HOPS_CITE.findall(line):
+                if (c in seen or re.search(r"\s", c) or "://" in c or "*" in c or c[0] in "-$<"
+                        or not ("/" in c or re.search(r"\.[A-Za-z0-9]{1,8}$", c))):
+                    continue
+                seen.add(c)
+                at = [os.path.join(root, d, c.lstrip("/")), os.path.join(root, c.lstrip("/"))]
+                if not any(os.path.isdir(x) if c.endswith("/") else os.path.exists(x) for x in at):
+                    out.append((d + "/CLAUDE.md", c))
+    return out
+
+
+def cmd_hops(root, args):
+    """hops [--tsv | --stale] — the layout report (ops/contracts/save-hops.md § 1.2-§ 1.5).
+
+    bare: the screen, at most 40 lines · --tsv: every row, TAB-separated, nothing capped · --stale:
+    only the STALE rows, rc 0 when there is one and 1 when there is none. A flag of a later task
+    (--score --owned --proof --remap --due --facts --questions), or anything else, is a usage line
+    on stderr and rc 2 — never a traceback. Read-only: the one file it writes is the index cache
+    build() keeps for `find` anyway.
+    """
+    if len(args) > 1 or (args and args[0] not in ("--tsv", "--stale")):
+        sys.stderr.write(_HOPS_USAGE)
+        return 2
+    mode = args[0] if args else ""
+    files = [p for p in sh(["git", "ls-files", "-z"], root).split("\0") if p]
+    if mode == "--stale":
+        stale = _hops_stale(root, _hops_guides(root, files))
+        for g, c in stale:
+            print("STALE\t%s\t%s" % (g, c))
+        return 0 if stale else 1
+    if len(files) < 20:
+        # Too small to measure, and cheap to say so: no git log, no index build. --tsv prints no
+        # rows at all — a SCORE over a handful of files would be a number nobody should act on.
+        if not mode:
+            print("hops — %d tracked files: too small to measure" % len(files))
+        return 0
+    base = _hops_cfg(read(root, "ops/CONVENTIONS.md") or "", "base", "main")
+    fixed = _hops_fixed(root, base)
+    tracked = set(files)
+    movable = {p for p in files if not fixed(p)}
+    commits = [c for c in (k & movable for k in _hops_history(root, base, tracked)) if c]
+    clusters, strength = _hops_clusters(commits, _hops_imports(root, movable))
+    nch = len(commits)
+    score = "%.2f" % (sum(len({p.rpartition("/")[0] for p in c}) for c in commits) / nch
+                      if nch else 0.0)
+    per, folders = {}, set()
+    for p in files:
+        segs = p.split("/")[:-1]
+        folders.update("/".join(segs[:i]) for i in range(1, len(segs) + 1))
+        if p in movable and segs:
+            d = "/".join(segs)
+            per[d] = per.get(d, 0) + 1
+    dirs = sorted(per, key=lambda d: (-per[d], d))
+    guides = _hops_guides(root, files)
+    big = [d for d in dirs if per[d] >= 5]
+    missing = [d for d in big if d not in guides]
+    stale = _hops_stale(root, guides)
+
+    # SCATTER: a cluster spanning 3+ folders, the biggest win first — (folders - 1) x the changes
+    # that touched it — then by name. MOVE: each file not yet in its home goes to <home><basename>,
+    # unless two would land on one name, the target exists or is FIXED, or the home would pass 30
+    # files (one giant folder must never win the score). A 30+ file cluster gets no MOVE rows.
+    scat = []
+    for cl in clusters:
+        k = len({p.rpartition("/")[0] for p in cl})
+        if k >= 3:
+            name = _hops_name(cl, strength)
+            touched = sum(1 for c in commits if c.intersection(cl))
+            scat.append((-(k - 1) * touched, name, cl, k))
+    scat.sort()
+    rows, moves, claimed = [], [], set()
+    for _, name, cl, k in scat:
+        home = _hops_home(cl, name, folders)
+        rows.append((name, k, home, cl))
+        if len(cl) > 30 or os.path.isfile(os.path.join(root, home[:-1])):
+            continue
+        want = {}
+        for p in cl:
+            if not p.startswith(home):
+                want.setdefault(home + p.rpartition("/")[2], []).append(p)
+        mv = sorted((ps[0], t) for t, ps in want.items()
+                    if len(ps) == 1 and t not in tracked and t not in claimed and not fixed(t)
+                    and not os.path.lexists(os.path.join(root, t)))
+        inside = sum(1 for p in files if p.rpartition("/")[0] == home[:-1])
+        if mv and inside + len(mv) <= 30:
+            moves += [(f, t, name) for f, t in mv]
+            claimed.update(t for _, t in mv)
+
+    head = (score, nch, len([d for d in big if d in guides]), len(big))
+    if mode == "--tsv":
+        out = ["SCORE\t%s\t%d\t%d\t%d" % head]
+        out += ["MAP\t%s/\t%d\t%s\t%s" % (d, per[d], _hops_purpose(root, d, guides),
+                                          "yes" if d in guides else "no") for d in dirs]
+        out += ["SCATTER\t%s\t%d\t%s\t%s" % (n, k, h, ",".join(cl)) for n, k, h, cl in rows]
+        out += ["MOVE\t%s\t%s\t%s" % m for m in moves]
+        out += ["GUIDES\t%s/\t%d" % (d, per[d]) for d in missing]
+        out += ["STALE\t%s\t%s" % s for s in stale]
+        print("\n".join(out))
+        return 0
+    print("hops — %s folders per change over %d changes · guides %d/%d folders of 5+ files" % head)
+    for d in dirs[:12]:
+        print("MAP       %s/ · %d files · %s · guide %s" % (
+            d, per[d], _hops_purpose(root, d, guides), "yes" if d in guides else "no"))
+    if len(dirs) > 12:
+        print("MAP       +%d more folders" % (len(dirs) - 12))
+    for n, k, h, cl in rows[:8]:
+        print("SCATTER   %s: %d folders → %s (%d files)%s"
+              % (n, k, h, len(cl), " … too big for one pass" if len(cl) > 30 else ""))
+    if missing:
+        print("GUIDES    missing: %s%s" % (" · ".join("%s/ (%d)" % (d, per[d]) for d in missing[:8]),
+                                          " · +%d" % (len(missing) - 8) if len(missing) > 8 else ""))
+    for g, c in stale[:4]:
+        print("STALE     %s cites %s (missing)" % (g, c))
+    if len(stale) > 4:
+        print("STALE     +%d more" % (len(stale) - 4))
+    print("next: bash ops/polaris hops --tsv lists every row · ops/roles/TIDY.md runs the pass")
+    return 0
+
+
 def usage():
     sys.stderr.write(
         "usage: index.py find <symbol>|-f <glob>|-t <text>|--importers <path>|--imports <path>\n"
         "                       |--api <glob>...   [-n N]\n"
         "       index.py show <path>#<symbol> | <path>:<line>\n"
+        "       index.py hops [--tsv | --stale]\n"
         "       index.py stats | refresh | rebuild | selfcheck\n")
     return 2
 
@@ -979,6 +1355,8 @@ def main(argv):
         return cmd_find(root, argv[1:])
     if cmd == "show":
         return cmd_show(root, argv[1]) if len(argv) > 1 else usage()
+    if cmd == "hops":
+        return cmd_hops(root, argv[1:])
     if cmd == "stats":
         return cmd_stats(root)
     if cmd in ("refresh", "rebuild"):

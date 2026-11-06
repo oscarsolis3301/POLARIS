@@ -14,6 +14,7 @@ kit/.claude/skills/polaris-install/SKILL.md	heading	Say exactly this, and nothin
 kit/.claude/skills/polaris-install/SKILL.md	heading	Uninstall
 kit/.claude/skills/polaris-install/SKILL.md	heading	Update
 kit/.claude/skills/polaris-install/SKILL.md	heading	What the installer prints
+kit/CLAUDE.md	heading	FEWEST HOPS — the core principle
 kit/CLAUDE.md	heading	INVARIANTS — NEVER violate
 kit/CLAUDE.md	heading	POLARIS v5 — Parallel Sprint Protocol
 kit/CLAUDE.md	heading	PROGRESS FORMAT
@@ -126,6 +127,7 @@ kit/ops/PROTOCOL.md	heading	MODEL ROUTING (auto — polaris route decides)
 kit/ops/PROTOCOL.md	heading	N CHATS, ONE REPO — who waits, who parks, who queues
 kit/ops/PROTOCOL.md	heading	POLARIS v5 — PROTOCOL reference
 kit/ops/PROTOCOL.md	heading	PUBLISH: PR — one link per run
+kit/ops/PROTOCOL.md	heading	SAVE HOPS — fewest lookups, ask first, then finish
 kit/ops/PROTOCOL.md	heading	STATE = THE BOARD (git-tracked, human-readable)
 kit/ops/PROTOCOL.md	heading	THE TOOL — `ops/polaris`
 kit/ops/PROTOCOL.md	heading	TOKEN DISCIPLINE — this is how we stay cheap and fast
@@ -254,6 +256,7 @@ kit/ops/index.py	const	TESTY
 kit/ops/index.py	const	VENDOR
 kit/ops/index.py	fn	build
 kit/ops/index.py	fn	cmd_find
+kit/ops/index.py	fn	cmd_hops
 kit/ops/index.py	fn	cmd_show
 kit/ops/index.py	fn	cmd_stats
 kit/ops/index.py	fn	connect
@@ -299,6 +302,7 @@ kit/ops/lib/admin.sh	fn	semver_gt
 kit/ops/lib/admin.sh	fn	slim_scan
 kit/ops/lib/admin.sh	fn	update_check_maybe
 kit/ops/lib/admin.sh	fn	update_dirt_overlaps_kit
+kit/ops/lib/admin.sh	fn	update_hops_hint
 kit/ops/lib/admin.sh	fn	update_latest
 kit/ops/lib/admin.sh	fn	ver
 kit/ops/lib/awake.sh	fn	awake_conf
@@ -649,6 +653,7 @@ kit/ops/roles/INIT.md	heading	Entry points
 kit/ops/roles/INIT.md	heading	Generated / vendored — never edit, never read
 kit/ops/roles/INIT.md	heading	History model — tell every new repo how its git log will read
 kit/ops/roles/INIT.md	heading	Hotspot files (conflict magnets: routers, DI registries, index barrels)
+kit/ops/roles/INIT.md	heading	Layout
 kit/ops/roles/INIT.md	heading	Learned (Integrator appends ≤3 bullets per integration; Planner reads first)
 kit/ops/roles/INIT.md	heading	MAP — <repo name>            (updated: <date>, by INIT)
 kit/ops/roles/INIT.md	heading	MAP.md skeleton (HARD CAP 200 lines — it is a map, not documentation)

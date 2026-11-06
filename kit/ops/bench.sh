@@ -20,6 +20,7 @@ set -u
 
 RUNS="${POLARIS_BENCH_RUNS:-5}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HERE="$PWD"   # the caller's folder: `hops <dir>` reads a relative <dir> from here, not from $ROOT
 cd "$ROOT" || exit 1
 P="ops/polaris"
 [ -x "$P" ] || P="bash ops/polaris"
@@ -85,6 +86,118 @@ EOF
       printf '%s\t%s\t%s\t%s\n' "$n" "$t" "$b" "$v"
     fi
   done
+  exit "$rc"
+fi
+
+# --- `bench.sh hops [--dry-run] <dir>`: five lookups counted in turns (ops/contracts/save-hops.md § 10)
+# A better layout score is a promise; fewer turns for a real agent is the saving. This asks five
+# fixed "where is X" questions on the practice shop, one fresh headless session each, and prints how
+# many turns each answer took. <dir> missing → hops_fixture builds the shop there first; an existing
+# <dir> is asked as it is. The conductor runs it once on the shop and once on a copy after a tidy
+# pass, and the after total must be lower. A real call spends tokens on five sessions and can take
+# 15 minutes, so it is the conductor's step alone, through `bash ops/polaris bg run`. Tests and
+# verify: lines use --dry-run only: it prints the questions and the exact command lines, builds
+# nothing and runs nothing. To prove the real path without tokens, put a stand-in `claude` first on
+# PATH that prints a canned `--output-format json` reply: PATH is the only seam, so what runs is the
+# § 10 line itself. stdout is exactly q<n><TAB><num_turns><TAB><first line of the answer> per
+# question (a failed or timed-out run: q<n><TAB>-<TAB>error), then total<TAB><sum>. Any failed run
+# makes the total `-` and rc 1: a sum with a hole in it compares to nothing. Why it failed → stderr.
+if [ "${1:-}" = "hops" ]; then
+  shift
+  dry=0; dir=""; bad=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --dry-run) dry=1 ;;
+      -*) bad="$1" ;;
+      *) if [ -z "$dir" ]; then dir="$1"; else bad="$1"; fi ;;
+    esac
+    shift
+  done
+  if [ -z "$dir" ] || [ -n "$bad" ]; then
+    printf '⛔ usage: bash ops/bench.sh hops [--dry-run] <dir>%s\n' "${bad:+ — not understood: $bad}" >&2
+    exit 2
+  fi
+  case "$dir" in /*|[A-Za-z]:[\\/]*) ;; *) dir="$HERE/$dir" ;; esac
+  if [ -e "$dir" ] && [ ! -d "$dir" ]; then
+    printf '⛔ %s is a file — name a folder, or a missing one to build the practice shop in\n' "$dir" >&2
+    exit 2
+  fi
+  QS=("Where is the checkout cart total computed?" "Which function uploads a profile avatar?"
+      "Where does search debounce its input?" "Where is an invoice number formatted?"
+      "Which test covers the checkout coupon rule?")
+  tab=$'\t'; cr=$'\r'
+  if [ "$dry" = 1 ]; then
+    echo "hop benchmark, dry run: nothing is built and nothing is asked"
+    if [ -d "$dir" ]; then s="there, so a real run asks inside it as it is"; else s="missing, so a real run builds the practice shop there first"; fi
+    printf 'folder\t%s\t%s\n' "$dir" "$s"
+    n=0; for q in "${QS[@]}"; do n=$((n + 1)); printf 'q%s\t%s\n' "$n" "$q"; done
+    echo "a real run asks them inside that folder, one session each, with these commands:"
+  else
+    # `-c pass` proves a REAL interpreter: the Windows Store python3 stub sits on PATH and only prints an ad.
+    PY=""; python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
+    [ -n "$PY" ] || { echo "⛔ the hop benchmark needs python3 (or python) on PATH to read the answers" >&2; exit 1; }
+    if [ ! -e "$dir" ]; then
+      FX="$ROOT/ops/lib/selftest/hops.sh"
+      [ -f "$FX" ] || { printf '⛔ the practice shop builder is missing: %s\n' "$FX" >&2; exit 1; }
+      printf 'building the practice shop in %s\n' "$dir" >&2
+      bash -c '. "$1" && hops_fixture "$2"' bench "$FX" "$dir" || exit 1
+    fi
+    T="$(mktemp -d)" || exit 1
+    trap 'rm -rf "$T"' EXIT
+    printf 'asking %s questions in %s, one fresh session each (up to 3 minutes apiece)\n' "${#QS[@]}" "$dir" >&2
+  fi
+  n=0; sum=0; rc=0
+  for q in "${QS[@]}"; do
+    n=$((n + 1))
+    # The § 10 command, in ONE place: the dry run prints exactly these words, the real run executes them.
+    set -- env -u CLAUDECODE timeout 180 claude -p "$q Answer with path:line only." --output-format json --max-turns 15
+    if [ "$dry" = 1 ]; then printf '%s "%s" %s\n' "${*:1:7}" "$8" "${*:9}"; continue; fi
+    ( cd "$dir" && exec "$@" ) </dev/null >"$T/out" 2>"$T/err"
+    r=$?
+    # The reply → "<num_turns><TAB><first answer line>" and rc 0, or "-<TAB><why>" and rc 1. A list of
+    # messages (the json shape of other CLI versions) is read by its last "result" entry.
+    "$PY" - "$T/out" >"$T/res" 2>/dev/null <<'PY'
+import json, sys
+sys.stdout.reconfigure(encoding="utf-8", errors="replace", newline="\n")
+try:
+    raw = open(sys.argv[1], "rb").read().decode("utf-8", "replace")
+except OSError:
+    raw = ""
+try:
+    d = json.loads(raw)
+except ValueError:
+    d = None
+if isinstance(d, list):
+    d = ([m for m in d if isinstance(m, dict) and m.get("type") == "result"] or [None])[-1]
+if not isinstance(d, dict):
+    print("-\t" + ("the reply was not JSON" if raw.strip() else ""))
+    sys.exit(1)
+t = d.get("num_turns")
+lines = str(d.get("result") or "").strip().splitlines()
+a = lines[0].replace("\t", " ").strip() if lines else ""
+if type(t) is int and not d.get("is_error") and d.get("subtype", "success") == "success":
+    print("%d\t%s" % (t, a or "-"))
+    sys.exit(0)
+n = " (after %d turn%s)" % (t, "" if t == 1 else "s") if type(t) is int else ""
+print("-\t%s%s" % (a or d.get("subtype") or "no answer", n))
+sys.exit(1)
+PY
+    p=$?
+    res=""; IFS= read -r res <"$T/res"; res="${res%"$cr"}"
+    if [ "$r" = 0 ] && [ "$p" = 0 ]; then
+      printf 'q%s\t%s\n' "$n" "$res"
+      sum=$((sum + ${res%%"$tab"*}))
+    else
+      printf 'q%s\t-\terror\n' "$n"
+      rc=1
+      why=""; [ "$p" = 0 ] || why="${res#*"$tab"}"
+      [ "$r" = 124 ] && why="no answer within 180 s"
+      [ -n "$why" ] || { IFS= read -r why <"$T/err"; why="${why%"$cr"}"; }
+      printf 'q%s did not answer, exit %s: %s\n' "$n" "$r" "${why:-no reply}" >&2
+    fi
+  done
+  [ "$dry" = 1 ] && exit 0
+  if [ "$rc" = 0 ]; then printf 'total\t%s\n' "$sum"; else printf 'total\t-\n'; fi
   exit "$rc"
 fi
 

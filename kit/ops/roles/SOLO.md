@@ -107,8 +107,9 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    task back to you — fix it here, in this session, and land again. (After a step-5 self-land there
    is nothing left to do here — the task is already done and sealed.)
 7. **Finish — only when `next` says so.** `bash ops/polaris next` names the one thing this chat does
-   next; anything but `finish` on line 1 (`build <ID>` · `integrate` · `promote` · `wait`) is more
-   work, so follow it — that hop is the next context, not a second role. Line 1 `finish` →
+   next; anything but `finish` on line 1 (`build <ID>` · `integrate` · `promote` · `wait` · `tidy`)
+   is more work, so follow it — that hop is the next context, not a second role. `tidy` → read
+   `ops/roles/TIDY.md` and run the pass here (a board-proven hop), then `next`. Line 1 `finish` →
    `bash ops/polaris finish`. It runs `qa` for you (free when HEAD has not moved since
    an express land's green suite — since 6.3.0 an express land STAMPS `.polaris/suite-stamp` with the
    commit it proved, so a following `finish` skips the suite instead of paying it a second time; the
@@ -123,7 +124,9 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    write is decided by step 7's **exit code**, never by how the work
    feels: **exit 0** → the `# 🎉 Complete!` H1 opens your reply, then the paragraph, carrying every
    `caveat:` line `finish` printed. **Non-zero** → no H1: what landed, the one pending thing, the
-   next command. Full shape in `.claude/output-styles/polaris.md` § How a session ends.
+   next command — and when `finish` names only human-gated work (`next` listed it as `risk: high
+   awaiting approval:`), close with `⛔ waiting on you: approve <ID>`: no 🎉, no looping.
+   Full shape in `.claude/output-styles/polaris.md` § How a session ends.
 
 Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
 
@@ -133,7 +136,9 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
   say so. That is the correct outcome, not a failure.
 - **STOP AND ASK the human** on anything in CLAUDE.md's stop list — deleting a file, adding a
   dependency, DB schema or migrations, auth/payments/prod config, force-push, `risk: high` (unless the approved plan named it). Those
-  are why `triage` refuses them; if one surfaces mid-build, stop and hand back.
+  are why `triage` refuses them; if one surfaces mid-run, park that piece —
+  `bash ops/polaris release <ID> --to blocked -m "<what it needs from the human>"` — and finish the
+  rest; the close names it.
 - **Scope = the task.** No drive-by refactors. Something else needs doing → one line in
   `ops/board/backlog/IDEAS.md` for the Planner.
 - A port in use is someone else's — take the port `pack` gave you; never reclaim a port by killing.

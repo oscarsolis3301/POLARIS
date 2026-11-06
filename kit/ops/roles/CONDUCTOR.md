@@ -26,7 +26,7 @@ over ONLY when every one of these is true:
 - `bash ops/polaris qa` is green on the base branch — run by YOU, in this session, after EVOLVE;
 - the close report (step 8) is delivered.
 Anything less, and your next action is a tool call, not a sign-off — **unless a run budget cap is
-reached (below), which is itself a legitimate ending.**
+reached (below) or only human-gated work is left (step 8): each is a legitimate ending.**
 
 `bash ops/polaris finish` (step 8) is the mechanical half of that list, in ONE call — board, branch
 and `qa` — and it exits 0 only when all of them hold. It knows nothing about EVOLVE or the report:
@@ -50,7 +50,7 @@ never mid-task:
 builder/SOLO finish · spawn no new wave and promote no new slice · integrate and seal whatever
 reached `review/` · run `bash ops/polaris qa` on base so the run still ends green or honestly red ·
 add ONE line to the close report — `budget: <which cap> reached — N tasks left on the board; say
-start to continue` · then run `bash ops/polaris finish`. A budgeted stop is the one ending where a
+start to continue` · then run `bash ops/polaris finish`. A budgeted stop is an ending where a
 **non-zero** `finish` is correct and expected: the board still holds queued work, so there is **no
 `# 🎉 Complete!` H1** — you close warm and SHORT in `voice:`, naming the cap, what landed, and
 `start` as the single next step. A budgeted stop is a SUCCESS, not a failure; report it in `voice:`
@@ -75,9 +75,9 @@ limit has failed, and no gate will have told you.
 **Context compacted mid-run?** The board is the run's memory, not your context — and
 the anchor hook already re-read the board for you the moment the compaction finished, so continue
 from its `next:` line: `build <ID>` → spawn that lane · `integrate` → spawn the integrator ·
-`wait` → those lanes are still running · `promote`/`finish` → you are at the tail, so evolve → qa →
-report. Never re-interview, never re-plan. (No anchor line in your context? `bash ops/polaris
-next --brief` prints it again.)
+`wait` → those lanes are still running · `tidy` → step 2.5's TIDY subagent · `promote`/`finish` →
+you are at the tail, so evolve → qa → report. Never re-interview, never re-plan. (No anchor line
+in your context? `bash ops/polaris next --brief` prints it again.)
 
 ## Protocol
 **Route every spawn.** Before you spawn ANY subagent, ask the oracle which model it gets: `bash
@@ -92,6 +92,9 @@ call per spawn; routing never blocks work.
    Anything still open after 3 becomes a defaulted assumption carried into the 0c brief, or a
    `spike` task — never a 4th round. The brief gate is what makes that safe: a wrong assumption
    costs one message, and every round you ask can block on a human who has walked away.
+   **Ask first, then finish:** this is the run's only question time. `.polaris/hops-due` says the
+   layout pass is due? Fold `bash ops/polaris hops --questions` (≤ 3) into this SAME round — never a
+   separate one — and carry the answers verbatim into the TIDY kickoff (step 2.5).
    Wrong brief → re-interview. Confirmed
    brief → carry it verbatim into the planner kickoff.
    **No objective in the kickoff + `ready/` empty + `ops/ROADMAP.md` exists?** The next unstarted
@@ -124,7 +127,7 @@ call per spawn; routing never blocks work.
      > You are SOLO, conductor-entered. Read ops/roles/SOLO.md and execute it. Run
      > `bash ops/polaris triage` first and work every task it hands you ONE AT A TIME — claim →
      > build → land → `bash ops/polaris next` → the next claim. Stop after your last land: do NOT
-     > run `finish`. Return: IDs landed · one-line summary each · test results.
+     > run `finish`. Return: IDs landed · one-line summary each · test results · line 1 of your last `next`.
      > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
      > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
      > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
@@ -138,6 +141,16 @@ call per spawn; routing never blocks work.
      a single task carries no signal (the EVOLVE skip rule already exists). Both subagents still
      carry the two standing kickoff lines (brain-first + long-commands).
    - `full` → steps 3–8, silently.
+   - `tidy` → ONE TIDY subagent (routed per the preamble rule), then YOU run
+     `bash ops/polaris finish`. Any lane can end on this verb, once per session — run
+     `bash ops/polaris next` before the solo and express lanes' `finish` (full lane: step 7) and
+     treat a `tidy` in a lane's report the same: this subagent first, then that lane's own ending.
+     > You are TIDY, conductor-entered. Read ops/roles/TIDY.md and execute it — one context, no subagents. Up-front answers: <answers, or none>. Return: before/after score · what moved · what was left for you to decide. Do NOT run next or finish.
+     > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
+     > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
+     > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
+     > you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout.
+     > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
 3. **Plan gate — the one human gate.** Present the plan in `voice:`: what gets built, in how many
    parallel lanes, what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
    `drain: queue` (unset defaults to `plan`, not this) and other tasks already sitting in `ready/`,
@@ -152,14 +165,15 @@ call per spawn; routing never blocks work.
    full disclosure, proceed WITHOUT waiting ONLY when BOTH hold: no `risk: high` task in the plan
    or in the disclosed drain depth · nothing on the STOP-AND-ASK list touched by any of it; either
    present → wait exactly as `confirm`. The proceed line must SAY it proceeded: "plan_gate: auto —
-   proceeding; say stop to halt". After the go you run autonomously; only the STOP-AND-ASK list,
-   `risk: high` approval, and builder questions interrupt.
+   proceeding; say stop to halt". After the go you run autonomously and never stop to ask: a
+   builder question, a `risk: high` the plan did not cover, or a STOP-AND-ASK item parks, and the
+   close names it (steps 5, 6, 8) — `autonomy: standard` still asks right away.
    - **One yes covers the plan.** After the go, once, in the primary checkout: `bash ops/polaris approve --plan <slug> -m "<the human's words, quoted>"`. It records every scope the approved plan named (`merge`, `need:<v>`, `ask` rules) on its tasks, so nothing the plan named asks again mid-run. Overlap with another plan's tasks is ready-gate sequencing, never an owner question (at most one caveat line). Claude Code's own auto-mode classifier may still refuse an action; POLARIS cannot lift that, so say so in one line. `autonomy: standard` keeps the per-merge stop.
    - **An unapproved `ask` scope is a human gate here, like `risk: high`.** `ask` = the same denial
      as `path`, lifted only by a human's recorded approval on the task — so a task the planner parked
      for want of one is a decision only the human can make, and it is cheap HERE and expensive later.
      Disclose it with the scope and why the task needs it, fire `bash ops/polaris notify-gate
-     question <ID>` (additive, exactly as in step 5 — the ask still happens in this conversation),
+     question <ID>` (additive — the ask still happens in this conversation),
      and on a literal yes record it yourself in the primary checkout: `bash ops/polaris approve <ID>
      <scope> -m "why"`, after which the planner can promote it. **You never approve on the human's
      behalf** — no yes, no `approve`, and the task stays parked; say so. An unapproved `ask` scope
@@ -194,12 +208,14 @@ call per spawn; routing never blocks work.
    ONE line in `voice:` — "✅ 2 of 5 done — the new navigation is in, every check passed" — useful, plain,
    never a dump. Lane free + ready task left → spawn the next builder immediately.
 5. **Snags — never silently swallow one.**
-   - Builder returns a QUESTION → ask the human right away (choice UI, `voice:`; other lanes keep
-     running; `bash ops/polaris notify-gate question <ID>` fires too — additive, the ask still
-     happens here), then spawn a fresh builder on that task with the answer appended to its
-     kickoff. `builder_questions: default-safe` → fewer questions return: builders default only
-     reversible, low-stakes spec details, each recorded as an `- assumed:` Notes line; a question
-     the run cannot answer still parks the task to `blocked/` — never a stall.
+   - Builder returns a QUESTION → under the default (`builder_questions: default-safe`) it parks,
+     never stops the run: the question goes into the task's Notes through `bash ops/polaris release
+     <ID> --to blocked -m "<the question>"`, then `bash ops/polaris notify-gate question <ID>`; the
+     other lanes keep running and the close names it. Few come back at all: builders default
+     reversible, low-stakes spec details, each an `- assumed:` Notes line. Under
+     `autonomy: standard` (or `builder_questions: ask`): ask the human right away (choice UI,
+     `voice:`; other lanes keep running; `notify-gate question <ID>` fires too), then spawn a fresh
+     builder on that task with the answer appended to its kickoff.
    - Builder returns RED (tests failing, handoff refused) → ONE automatic retry: append the failure
      to the task's Notes, spawn a fresh builder on it ("Resume <ID>: read its Notes for the failure,
      fix, hand off"). Still red → `bash ops/polaris release <ID> --to blocked -m "<why>"`, tell the
@@ -233,10 +249,12 @@ call per spawn; routing never blocks work.
    > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
    > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
    > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
-   > Return your report: merged · kicked back + why · suite status · newly promoted.
-   - `risk: high` in its report (not covered by the approved plan, or `autonomy: standard`) → `bash ops/polaris notify-gate risk <ID>` (additive — approval
-     happens HERE, in conversation, under every knob), ask the human "approve <ID>?" and relay ONLY
-     a literal approval to a follow-up integrator; no approval → it stays parked, say so.
+   > Return your report: merged · kicked back + why · suite status · newly promoted · line 1 of your last `next --do`.
+   - `risk: high` in its report (not covered by the approved plan, or `autonomy: standard`) →
+     `bash ops/polaris notify-gate risk <ID>`. By default it then stays in review/ and goes to the
+     close (step 8) — the run never stops for it; under `autonomy: standard` ask "approve <ID>?"
+     right away. Either way only the human's literal approval, relayed to a follow-up integrator,
+     merges it (Invariant 9); no approval → it stays parked, say so.
    - Kickbacks → treat as a RED snag (one fresh-builder retry via its Notes, then re-integrate the
      survivors).
    - **A `queued:` line in its report (rc 3) means the lane was busy, not broken.**
@@ -295,6 +313,8 @@ call per spawn; routing never blocks work.
    planner-promotion passes only; the original ready set and integrator dependency-wave promotions
    are round 0 (step 3 disclosed this whole depth). No subagent harness → classic `start` per
    slice, exactly today.
+   **`tidy` on line 1** — of `next`, `next --do` or a lane's report → step 2.5's TIDY subagent (once
+   per run: `next` routes a session there once), then `bash ops/polaris next` again.
 7.5 **Evolve (subagent) — the run tunes the kit before it signs off.** Once the last wave has
    landed — BEFORE the final `qa`, never after it — spawn ONE:
    > You are EVOLVE, conductor-entered. Read ops/roles/EVOLVE.md and execute its diagnosis.
@@ -323,7 +343,9 @@ call per spawn; routing never blocks work.
    - **exit 0** → the `# 🎉 Complete!` H1 opens your final reply, then the report, carrying every
      `caveat:` line `finish` printed — blocked tasks, tasks still queued under `drain: plan`.
    - **non-zero** → NO H1 and no `🎉`. Your next action is a tool call, not a sign-off (rule two):
-     fix the one thing `finish` named and run it again. The only exception is a budget cap, above.
+     fix the one thing `finish` named and run it again. Two exceptions: a budget cap, above, and
+     `finish` naming only human-gated work (`next` listed it as `risk: high awaiting approval:`) —
+     your reply then closes with `⛔ waiting on you: approve <ID>`: no 🎉, no looping.
 
    Full shape in `.claude/output-styles/polaris.md` § How a session ends.
    With the queue drained and the checks green there is nothing left to offer — the next run starts

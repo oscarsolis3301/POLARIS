@@ -253,6 +253,7 @@ EOF
     ft_assert 'R  CLAUDE.md -> notes.md → rc 1 (OLD path ignored)' ! update_dirt_overlaps_kit <<< 'R  CLAUDE.md -> notes.md'
     ft_assert ' M ops/contracts/x.md → rc 1'             ! update_dirt_overlaps_kit <<< ' M ops/contracts/x.md'
     ft_assert ' M ops/RULES.tsv → rc 1'                  ! update_dirt_overlaps_kit <<< ' M ops/RULES.tsv'
+    ft_assert ' M ops/LAYOUT.tsv → rc 1'                 ! update_dirt_overlaps_kit <<< ' M ops/LAYOUT.tsv'
     ft_assert ' M ops/tests/x.expected → rc 1'           ! update_dirt_overlaps_kit <<< ' M ops/tests/x.expected'
     ft_assert ' M ops/polaris → rc 0'                      update_dirt_overlaps_kit <<< ' M ops/polaris'
     ft_assert ' M .claude/settings.json → rc 0'            update_dirt_overlaps_kit <<< ' M .claude/settings.json'
@@ -265,6 +266,51 @@ EOF
     ft_assert 'app dirt only, two lines → rc 1'          ! update_dirt_overlaps_kit <<< "?? src/x.py${ft_nl} M README.md"
     ft_assert 'empty status → rc 1'                      ! update_dirt_overlaps_kit <<< ''
     ft_section dirt ) || ft_red=1
+
+  # ---- hops-hint (save-hops.md § 5, § 0.5) — update_hops_hint <explicit|auto> READS the verdict
+  # cache .polaris/hops-due and never runs hops: due ⇔ field 2 is 0 AND field 1 is $BASE's sha now
+  # AND `hops:` is not off; anything else is rc 1 and silence. `git` is stubbed on the opener line,
+  # the section's own override beside its globals — it answers the one call the reader makes with a
+  # fixed sha and anything else with nothing, so the tier still runs no git and gains no module fn
+  # (exactly three, fast-tier.md). PRIMARY borrows the quiescent fixture's bgrc/ (its .polaris/
+  # exists; its one bg job has an rc file, so the board reads quiet) and BOARD flips between q/empty
+  # and q/active for quiet vs busy. Each case is ONE call that captures both facts: the rc, and the
+  # bytes up to a sentinel `x`, so a newline — or the auto suffix's lack of one — is proven too.
+  ( FT_SEC=hops-hint; git() { [ "$*" = "-C $PRIMARY rev-parse --verify -q $BASE" ] && printf '%s\n' "$ft_sha"; }
+    ft_sha=0123456789abcdef0123456789abcdef01234567; ft_hd="$FT_TMP/q/bgrc/.polaris/hops-due"
+    PRIMARY="$FT_TMP/q/bgrc"; BOARD="$FT_TMP/q/empty/board"; LOCKS="$FT_TMP/q/empty/locks"; CONV="$ft_conv"; BASE=main
+    printf '%s\t0\tlayout pass due — 3 folders scatter one change\r\n' "$ft_sha" > "$ft_hd"
+    ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'due + quiet → rc 0'                                test "$ft_rc" = 0
+    ft_assert 'due + quiet → the run-it-now line, one newline'    test "$ft_out" = "▶ NEXT — save hops: read ops/roles/TIDY.md and run it now${ft_nl}x"
+    BOARD="$FT_TMP/q/active/board"
+    ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'due + busy → rc 0'                                 test "$ft_rc" = 0
+    ft_assert 'due + busy → the wraps-up line, one newline'       test "$ft_out" = "▶ NEXT — save hops: the layout pass is due — it runs when your next piece of work wraps up${ft_nl}x"
+    ft_out="$(update_hops_hint auto && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'auto → rc 0'                                       test "$ft_rc" = 0
+    ft_assert 'auto → the suffix: leading space, NO newline'      test "$ft_out" = ' · layout pass due — runs when your next piece of work wraps upx'
+    ft_assert 'an unknown mode → rc 1'                            ! update_hops_hint sideways
+    BOARD="$FT_TMP/q/empty/board"; CONV="$FT_TMP/conv-hops-off"
+    printf 'hops: off\n' > "$CONV"
+    ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'hops: off → rc 1'                                  test "$ft_rc" = 1
+    ft_assert 'hops: off → nothing'                               test -z "$ft_out"
+    CONV="$ft_conv"
+    printf '%s\t0\r\n' "$ft_sha" > "$ft_hd"
+    ft_assert 'a CR after the verdict is stripped → still due'    update_hops_hint explicit
+    printf '%s\t1\t-\n' "$ft_sha" > "$ft_hd"
+    ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'not due → rc 1'                                    test "$ft_rc" = 1
+    ft_assert 'not due → nothing'                                 test -z "$ft_out"
+    ft_assert 'not due → auto adds nothing (the session-start line stays byte-identical)' test -z "$(update_hops_hint auto || true)"
+    printf 'fedcba9876543210fedcba9876543210fedcba98\t0\tlayout pass due — 3 folders scatter one change\n' > "$ft_hd"
+    ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'sha mismatch (the base moved on) → rc 1'           test "$ft_rc" = 1
+    ft_assert 'sha mismatch → nothing'                            test -z "$ft_out"
+    PRIMARY="$FT_TMP/q/empty"
+    ft_assert 'no cache file → rc 1'                              ! update_hops_hint explicit
+    ft_section hops-hint ) || ft_red=1
 
 
   # ---- surfaces-tsv (test-surfaces.md § 1, § 4) — surfaces_lines over a temp ops/SURFACES.tsv:
