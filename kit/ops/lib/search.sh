@@ -56,5 +56,8 @@ index_fast() { # index_fast find|show|hops <args…> — the WHOLE command. Alwa
     printf "   no python3 — 'find' is unavailable; use Grep/Glob for this one (everything else works)\n"
     exit 3; }
   # POLARIS_ROOT is index.py's documented override (index.py:625), so it needs no git call of its own.
+  # hops alone keeps a caller's POLARIS_ROOT when it names a real folder: a tidy pass asks about its
+  # task worktree after the moves (TIDY.md step 8). The engine above stays the primary's.
+  [ "$cmd" = hops ] && [ -d "${POLARIS_ROOT:-}" ] && root="$POLARIS_ROOT"
   POLARIS_ROOT="$root" exec $eng "$cmd" "$@"
 }
