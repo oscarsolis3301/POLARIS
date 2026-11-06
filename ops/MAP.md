@@ -262,3 +262,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - kit/ops/lib/knowledge.sh — polaris where [--write|--strip] (cmd_where, guide_purpose): the 15-line root map in CLAUDE.md below the POLARIS block, a projection of MAP.md and the folder guides; the brain's code map now takes a folder's purpose from its guide first (ops/contracts/save-hops.md § 0.2, § 3.3–3.4)  (T-239, 2026-11-05)
 
 - kit/ops/index.py — polaris hops (fast path beside find/show): the layout report — folders per change from history and imports, SCATTER and MOVE proposals with a home per feature, MAP, GUIDES, STALE, FIXED paths never proposed; --tsv, --stale (ops/contracts/save-hops.md § 1)  (T-241, 2026-11-05)
+
+- kit/ops/bench.sh — bench.sh hops [--dry-run] <dir>: the hop benchmark — five fixed lookups on the hops fixture, num_turns each, run before and after a tidy pass (ops/contracts/save-hops.md § 10)  (T-247, 2026-11-05)
