@@ -529,6 +529,7 @@ kit/ops/lib/selftest/history.sh	fn	drill_pr-publish
 kit/ops/lib/selftest/history.sh	fn	drill_selfland
 kit/ops/lib/selftest/history.sh	fn	drill_tcm
 kit/ops/lib/selftest/history.sh	fn	drill_wtreap
+kit/ops/lib/selftest/hops.sh	fn	drill_hops
 kit/ops/lib/selftest/hops.sh	fn	hops_fixture
 kit/ops/lib/selftest/policy.sh	fn	drill_awake
 kit/ops/lib/selftest/policy.sh	fn	drill_bg

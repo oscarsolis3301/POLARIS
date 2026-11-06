@@ -33,7 +33,7 @@ else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a 
    before-score.
 3. **The proposal.** The `MOVE` rows of `bash ops/polaris hops --tsv`, in order, become
    `.polaris/hops-plan.tsv` rows `move<TAB><from><TAB><to>` — at most 25 moved files and 8 guides
-   (the first `GUIDES` rows) per pass; the rest wait for the next one. An approved merge adds
+   (picked after the moves, step 8) per pass; the rest wait for the next one. An approved merge adds
    `merge<TAB><from><TAB><into>`. Files only, never a `.meta` (it travels with its asset). Then
    `bash ops/polaris hops --score .polaris/hops-plan.tsv`. Wait for a yes only under
    `autonomy: standard`, and only where you can ask.
@@ -44,8 +44,8 @@ else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a 
    (most Unity repos end here).
 5. **One task**, authored exactly as SOLO.md step 1, minus its `triage` confirm (this lane is
    chosen): `files_owned` = what `bash ops/polaris hops --owned .polaris/hops-plan.tsv` prints + each
-   guide (`<dir>/CLAUDE.md`) + `CLAUDE.md` + `ops/LAYOUT.tsv` · `plan: hops-<version>` (`version:` in
-   `ops/VERSION`) · ≤ 5 points · `risk: normal` · `verify:` =
+   guide step 8 may write (`<dir>/CLAUDE.md`, every `to` folder too) + `CLAUDE.md` + `ops/LAYOUT.tsv` ·
+   `plan: hops-<version>` (`version:` in `ops/VERSION`) · ≤ 5 points · `risk: normal` · `verify:` =
    `bash ops/polaris hops --proof .polaris/hops-plan.tsv` + the proving check · `needs: [delete]`
    ONLY for an approved merge — then, before the claim, record the human's up-front yes:
    `bash ops/polaris approve --plan hops-<version> -m "<their answer, quoted>"`. Claim; work in the
@@ -61,11 +61,12 @@ else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a 
 7. **`bash ops/polaris hops --remap .polaris/hops-plan.tsv`** — the harness baseline follows the
    moves, so a module that truly vanished still fails. Never `harness --refresh`.
 8. **Guides, map, record, suite, land.**
-   - Each guide: `bash ops/polaris hops --facts <dir>`, then `ops/templates/FOLDER-CLAUDE.md` filled
-     from those facts alone, never by exploring — stable knowledge in plain Markdown, no POLARIS
-     command, no file inventories or symbols (the code map keeps those). A folder `CLAUDE.md` without
-     the `<!-- polaris:guide -->` line gets the block appended after one blank line; the human's text
-     is never rewritten.
+   - Guides: the first 8 `GUIDES` rows of `POLARIS_ROOT=<task worktree> bash ops/polaris hops --tsv`,
+     new folders too. Each: `POLARIS_ROOT=<task worktree> bash ops/polaris hops --facts <dir>`, then
+     `ops/templates/FOLDER-CLAUDE.md` filled from those facts alone, never by exploring — stable
+     knowledge in plain Markdown, no POLARIS command, no file inventories or symbols (the code map
+     keeps those). A folder `CLAUDE.md` without the `<!-- polaris:guide -->` line gets the block
+     appended after one blank line; the human's text is never rewritten.
    - `git add` the guides, THEN `bash ops/polaris where --write` (it lists tracked guides only).
    - `ops/LAYOUT.tsv`: a new file's first line is exactly
      `# path<TAB>verdict<TAB>why — the layout record; polaris hops never proposes a keep row`; then
