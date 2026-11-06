@@ -622,57 +622,42 @@ exercises but a Builder cannot.
 - A DERIVED-SURFACE GOLDEN COUPLES EVERY LANE THAT TOUCHES ITS SURFACE — the discipline is EARNED
   (three sprints of defects, then sprints 9–11 at 0 kickbacks), keep carving it: ONE owner per wave
   for `ops/tests/api-kit.expected`, every cross-lane delta pinned BYTE-EXACT in the contract,
-  everyone else surface-frozen. Three refinements, each proven the hard way: (a) PIN BY SURFACE
-  KIND — the index records fns AND markdown headings AND KEYS.tsv key rows, so a task adding a key
-  row needs that row pinned beside the fn (T-088's true delta was TWO lines where the contract
-  pinned one; the owner caught it inside its own ownership). (b) THE OWNER CANNOT HAND OFF RED, and
-  under one-owner-per-wave the owner handing off last is the norm — when another lane's landing
-  moves the golden, either the owner lands FIRST or the integrator records the landed surface
-  mid-wave (key-registry/shared-checkout § 5 recipe: two independent derivations must agree, review
-  the commit line-by-line, never `check --update` on faith) — two occurrences, two variants, zero
-  luck. (c) SCOPE A REFRESH BY CONTENT DIFF, NEVER COMMIT RANGE — diff the golden against live
-  output (`cmd | diff - golden`); a range hides gaps older than itself (T-091 bounced exactly
-  there, and the STOP-on-unexpected-hunk clause is what turned a silent mis-capture into a clean
-  bounce — keep writing it into every golden task). Related, one layer down: a NEW golden is
-  invisible to its author's own verify — `cmd_check` is primary-anchored, so a pair born in a
-  worktree passes VACUOUSLY (`no goldens matched`); after landing one, the integrator runs
-  `check --only <name>`, sabotages it red, restores it green — a golden nobody has seen fail is
-  not evidence.
+  everyone else surface-frozen. (a) PIN BY SURFACE KIND — the index records fns AND markdown
+  headings AND KEYS.tsv key rows (T-088's true delta was two lines; the contract pinned one).
+  (b) THE OWNER CANNOT HAND OFF RED — when another lane's landing moves the golden, the owner lands
+  FIRST or the integrator records the landed surface mid-wave (key-registry/shared-checkout § 5:
+  two independent derivations must agree; never `check --update` on faith). (c) SCOPE A REFRESH BY
+  CONTENT DIFF, NEVER COMMIT RANGE (`cmd | diff - golden`; T-091 bounced on a range). (d) A TASK
+  THAT CHANGES WHAT A VERB PRINTS OWNS EVERY GOLDEN THAT PINS THE OLD LINE — T-236 bounced on
+  `plan-approval-gates.expected` (sprint 20 W1) although § Planner calibration 2026-09-17 already
+  says so: at carve time, grep `ops/tests/*.expected` for the old line. And a NEW golden passes
+  vacuously in its author's worktree (`check` is primary-anchored): after landing one, the
+  integrator runs `check --only <name>`, sabotages it red, restores it green.
 - A BASE-BOUND COMMIT DURING A WAVE LANDS ON THE CHECKED-OUT INTEGRATE BRANCH AND RIDES THE SEAL —
-  and it is schedule overlap BY DESIGN, not bad luck: the Planner grooms the next wave's contracts
-  during exactly the landing window (twice in sprint 9; zero recurrences since the pre-seal read
-  became reflex — every sprint-11 wave read `git log <base>..integrate/<date>` before sealing).
-  INTEGRATOR: read every commit you did not land; a subject without a `[<ID>]` suffix is the tell,
-  and it is invisible after the merge. Same family: never touch tags by hand — `seal` OWNS
-  `sprint/<n>` in both publish modes, and a manual `--force` push on the ref namespace holding
-  every sprint's history is the one place a no-op and a catastrophe look identical until you check.
-- A VERIFICATION REQUIREMENT MUST NAME A CALLER WHO CAN ACTUALLY RUN IT — T-087's contract
-  demanded the top-level `EnterWorktree` entry be re-verified LIVE, but the builder was a
-  pinned-cwd subagent, the one caller structurally unable to test it (the tool refuses there by
-  design). The builder rightly refused to claim it worked and left the item open in Notes; it was
-  settled only when a TOP-LEVEL session (the conductor) ran the entry first-hand pre-land.
-  PLANNER/CONDUCTOR: when an acceptance item can only be proven from a specific execution context,
-  route that proof to a session that HAS the context and record who ran it — an open item that no
-  assigned lane can close otherwise rides silently into review/.
-- FAIL-CLOSED BEATS FIXTURE CHURN (sprint 11 W3): T-088 ships `landing:` default `self` IN CODE
-  (the 6.0.0 lesson — `update` never rewrites CONVENTIONS), which would have fired inside every
-  existing drill's `handoff` (scratch fixture repos have no CONVENTIONS.md) and wrecked the
-  spine's inline choreography. The builder's recorded `- assumed:` resolution — `self_land`
-  refuses SILENTLY when a task carries NO `risk:` frontmatter at all (unclassified = cannot be
-  proven not-stop-and-ask) — held at the wave gate exactly as claimed: full suite byte-identical,
-  SELFTEST-PASS, zero drill churn. The corollary cuts the other way and is now pasted into
-  T-089's Notes: its selfland drill fixtures MUST declare `risk:` explicitly, or `self_land`
-  silently refuses and the drill tests NOTHING — a silently-vacuous drill is worse than a missing
-  one. PLANNER: when a default-in-code feature meets legacy fixtures, refusing on the
-  unclassifiable is the carve that keeps the suite stable AND every new test honest.
-- A NEUTERED GUARD STILL TALKS — TRUST THE RC, NOT THE REFUSAL TEXT (sprint 11 W4, T-089's sabotage evidence).
-  When `primary_gate`'s deny exit was dropped in a throwaway kit copy, the refusal message still
-  printed while the hook exited 0 — a fail-open that reads as a deny to any eye parsing prose. The
-  drills therefore assert exit codes and JSON shape, never message presence. INTEGRATOR: if
-  `checkoutguard`/`readyoverlap`/`selfland` ever go red, read the failing rc assertion before the
-  words — a printed refusal proves nothing; and a red in one of these drills most likely means the
-  drill caught shipped code regressing, so report the assertion, never weaken it.
-- 2026-10-12 · INTEGRATOR.md step 4 says 'git branch -d integrate/<date>' on the primary, but the primary-checkout guard hook denies any git branch command there — integrate/2026-10-11 (fully merged) was left behind; seal or done should delete the merged integrate branch itself, or the guard should allow -d of a merged integrate/*
-- 2026-11-05 · 2026-11-05 · A red batch land can't be unwound by an agent: INTEGRATOR.md §3's 'git reset --hard' is denied in the primary by checkout-guard (shared-checkout §1); only land --express unwinds inside the CLI. T-236 was kicked back but its squash stayed on integrate/2026-11-05 until a human reset. Needs a CLI verb that drops one task from the wave (cf. 2026-10-12 'branch -d').
-- 2026-11-05 · 2026-11-05 · T-236 kicked back for a golden it didn't own: its contracted next row-5 change (human-only review/ -> finish) broke ops/tests/plan-approval-gates.expected, which pins the old 'wait' line and sat in no files_owned. PLANNER: when a task changes what a verb prints, grep ops/tests/*.expected for the old line and give every pinning golden to that task.
-- 2026-11-05 · 2026-11-05 · Pre-existing on base 176d6b9, not this wave: selftest --parallel 3 is red in shard 1 (handover case 11; T-236 carries the fix) and shard 2 (drill_park dies on ownership: ops/CONVENTIONS.md). Composition leaks: --only park green, --only notify,park red; busyint also reds after report..brief. Serial order hides both. Needs a drill-hermeticity task.
+  schedule overlap BY DESIGN: the Planner grooms the next wave's contracts during exactly the
+  landing window (twice in sprint 9; zero since the pre-seal read became reflex). INTEGRATOR: read
+  `git log <base>..integrate/<date>` before sealing — a subject without a `[<ID>]` suffix (other
+  than seal's own `docs(sprint-N): report`) is the tell, and it is invisible after the merge. Same
+  family: never touch tags by hand — `seal` OWNS `sprint/<n>` in both publish modes.
+- A VERIFICATION REQUIREMENT MUST NAME A CALLER WHO CAN ACTUALLY RUN IT — T-087's contract demanded
+  a LIVE re-verify of the top-level `EnterWorktree` entry, but its builder was a pinned-cwd
+  subagent, the one caller the tool refuses by design; it was settled only when the conductor ran
+  the entry first-hand pre-land. PLANNER/CONDUCTOR: route a proof that needs a specific execution
+  context to a session that HAS it and record who ran it — an open item no assigned lane can close
+  rides silently into review/.
+- THE INTEGRATOR'S RAW-GIT STEPS ARE GUARD-DENIED IN THE PRIMARY, FOR EVERY SESSION — the unwind
+  `git reset --hard HEAD~1` (INTEGRATOR.md § 3, and the hint `land` itself prints) and § 4's
+  `git branch -d integrate/<date>` are both refused by checkout-guard (shared-checkout § 1), and
+  `land` skips re-landing an ID already on the wave branch. 2026-10-12: integrate/2026-10-11 (fully
+  merged) was left behind. 2026-11-05: T-236 was kicked back but its squash stayed on
+  integrate/2026-11-05 until the human ran `git reset --hard main`. Only `land --express` unwinds
+  inside the CLI. Until a verb drops one land, a red batch land needs the human's one paste-ready
+  line (🚩) — never route around the guard.
+- A SHARDED GREEN IS NOT A CI GREEN — TWICE NOW. `test:` runs `doctor --selftest --parallel 3`; CI
+  runs the same drills serially on three systems, and a drill that leaks state passes in one order
+  and fails in the other. Sprint 13 shipped a dead v6.3.0 tag this way. From 2026-11-03 23:09Z
+  every push to main was red on all three systems (10 runs: the 6.11.0 release, its dogfood, all
+  three sprint-20 seals), read by nobody until the conductor queried the check-runs API:
+  pr-publish left integrate/<today> behind, so express failed (T-256). Same run, same family: the
+  notify/park/busyint composition leaks (T-254). Before a seal you trust or any tag: CI green on
+  that commit (`gh run list --branch main --limit 1`), or one SERIAL `doctor --selftest`.
