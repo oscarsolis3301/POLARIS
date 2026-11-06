@@ -4,6 +4,40 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.12.0 — 2026-11-06
+
+**Fewer lookups, found and fixed by POLARIS itself. POLARIS now notices when a project's layout makes agents jump between folders, measures it, and tidies it up on its own at the end of a run. And a run no longer stops in the middle to ask you something.**
+
+When one feature's files are spread across many folders, every change sends an agent hunting
+through all of them, and every extra lookup costs you time and tokens. `polaris hops` measures how
+many folders a typical change touches and works out one home for each scattered feature. When a
+layout pass would really pay off, POLARIS runs one by itself at the end of a run, and it keeps only
+the moves a check proves changed nothing but where files live. A move it cannot prove is skipped and
+written down with its reason in `ops/LAYOUT.tsv`, so it is never offered again. That file is yours:
+updates never touch it, and a `keep` line in it holds any file or folder where it is.
+
+- A folder can now carry a short guide, its own `CLAUDE.md` saying what lives there. Every agent that
+  builds in a folder gets that guide handed to it at the start, without going to look for it.
+- A short map of where things live can sit in your project's `CLAUDE.md`, which every session already
+  reads. New projects and every layout pass get one, `polaris where --write` adds it to any project,
+  and it stays up to date as work finishes.
+- The knowledge base POLARIS reads before it searches now builds itself when it is missing.
+- Brand-new projects start tidy: setup builds the knowledge base and the map, and the first plan keeps
+  each feature's files together in one folder.
+- A guide that still points at a file that has moved or gone now gets a gentle warning. It never
+  stops the work.
+- A run no longer stops in the middle. Every question comes first, in one round before work starts.
+  Anything that still needs you is parked while the rest finishes, and the close says plainly what
+  waits on you, with a one-line reason beside each parked task.
+
+Good to know: a layout pass only comes up when it would cut the folders a typical change touches by
+at least 15%, or when three or more sizeable folders have no guide yet. It stays quiet on small
+projects, and after a pass it waits for 30 more changes before it can come up again. After an update
+you typed, it runs straight away if nothing else is going on, or when your next piece of work wraps
+up if something is; an automatic update only mentions that it is due. To turn it off, add `hops: off`
+to `ops/CONVENTIONS.md`. With `autonomy: standard`, POLARIS still asks each question the moment it
+comes up, as before.
+
 ## 6.11.0 — 2026-11-04
 
 **One request, one link. On a repo that needs pull requests, a whole run now finishes with a single link to approve, and the agent no longer stops to ask "continue?" in the middle.**
