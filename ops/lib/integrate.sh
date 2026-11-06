@@ -275,6 +275,21 @@ EOF
   done <<EOF
 $deltas
 EOF
+  # T-243 (ops/contracts/save-hops.md § 4): the root map in CLAUDE.md is a projection of MAP.md, so it
+  # follows the delta at this same moment and rides the SAME docs(map) commit below — zero new base
+  # commits, so the spine's QUIET MAP COUNT stays 1. Three gates, each one needed: a delta was applied;
+  # the repo already carries a root map (no marker → CLAUDE.md is never touched, because `where --write`
+  # on its own would make a first write); and nobody has uncommitted edits in CLAUDE.md — committing a
+  # person's unfinished work is never acceptable, so then MAP.md lands alone. The marker test drops a
+  # CR exactly as cmd_where's own does. `where` picks its tree by the current directory, hence the cd:
+  # run from inside a worktree it would rewrite that worktree's copy instead of the primary's.
+  local wmap=0
+  if [ "$applied" -eq 1 ] && [ -f "$PRIMARY/CLAUDE.md" ] \
+     && awk '{ sub(/\r$/, "") } $0 == "<!-- polaris:where -->" { f = 1; exit } END { exit !f }' "$PRIMARY/CLAUDE.md" 2>/dev/null \
+     && git -C "$PRIMARY" diff --quiet HEAD -- CLAUDE.md 2>/dev/null; then
+    ( cd "$PRIMARY" && "$SELF" where --write >/dev/null 2>&1 ) || true
+    git -C "$PRIMARY" diff --quiet HEAD -- CLAUDE.md 2>/dev/null || wmap=1   # changed → it joins the commit
+  fi
   # T-137 (§ 9): the rows go down beside the map delta — seed the header first (a header-only file
   # is still zero rows everywhere), then append. Plain redirects, so neither the write-time guard
   # (Edit/Write tools) nor check_rules (feat-branch diffs) ever sees this; the RULES `path` rule on
@@ -308,6 +323,7 @@ EOF
     local mi mok=0 msubj mkind="docs(map)"
     if [ "$applied" -eq 1 ]; then
       msubj="docs(map): $id $first"; set -- "$OPS/MAP.md"
+      if [ "$wmap" -eq 1 ]; then set -- "$@" "$PRIMARY/CLAUDE.md"; fi
       if [ "$sapplied" -eq 1 ]; then set -- "$@" "$SURFACES"; fi
       if [ "$gapplied" -eq 1 ]; then set -- "$@" "$PRIMARY/$gal"; fi
     elif [ "$sapplied" -eq 1 ]; then
@@ -331,6 +347,11 @@ EOF
   board_changed_touch   # freshness beacon for the brain (ops/contracts/brain.md) — best-effort
   brain_refresh_if_present  # v1.1: done mirrors seal — refresh AFTER the touch so the wave close
                             # (land → seal → run-verify → done) ends fresh; ⚠ note on failure, never a red done
+  # THE LAYOUT VERDICT (save-hops.md § 0.5): .polaris/hops-due follows the new base the way the brain
+  # does — it is the one file `next` and `triage` READ at the end of a run to learn whether the layout
+  # pass is due. Exactly heal's call, after the board commit; never a red done, and until `hops --due`
+  # ships (or where no engine is installed) it is a silent no-op.
+  "$SELF" hops --due >/dev/null 2>&1 || true
   # THE removal goes through wt_remove (ops/contracts/worktree-liveness.md, the `done` row) — this
   # is the line that killed ARC-428 back when it forced the removal. clean+idle ⇒ removed,
   # rc 0 · dirty+idle ⇒ archived to .polaris/wt-archive/<ID>-<epoch>, rc 2 · LIVE ⇒ LEFT, rc 1,
@@ -974,6 +995,9 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
   fi
   board_changed_touch   # fold succeeded (ops/contracts/brain.md): beacon first, then the brain
   brain_refresh_if_present  # follows the new base — a refresh failure notes ⚠, never fails the seal
+  # the layout verdict follows it too (save-hops.md § 0.5), now that the merge and the tag stand —
+  # done's call, word for word; never a failed seal, and a silent no-op until `hops --due` ships
+  "$SELF" hops --due >/dev/null 2>&1 || true
   [ -n "$seal_had" ] || int_off   # last mutation of the sealing pass is behind us — free the lane
   if [ -n "$oldtag" ]; then
     say "sprint $n re-sealed — integrate/$date merged into $BASE (--no-ff); sprint/$n: $old7 → $new7"
@@ -1063,6 +1087,7 @@ EOF
     || note "⚠ could not delete origin integrate/$date — by hand: git push origin :refs/heads/integrate/$date"
   board_changed_touch   # the fold completed here in pr mode (ops/contracts/brain.md)
   brain_refresh_if_present  # existing brain follows the fast-forwarded base; failure = ⚠ note only
+  "$SELF" hops --due >/dev/null 2>&1 || true   # and so does the layout verdict (save-hops.md § 0.5) — never a failed sync
   [ -n "$ss_had" ] || int_off   # fold complete — free the lane before the per-task next steps
   # 5. the [<ID>]-in-$BASE gate now passes — walk each task out
   if [ -n "$ids" ]; then

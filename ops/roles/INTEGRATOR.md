@@ -108,6 +108,8 @@ bash ops/polaris drift               # board hygiene: overlap · ready gate · c
 ```
 Orphans: `sweep --fix` removes them. Stale: flag to the human with the release command — NEVER steal silently (a fresh session can take one over with `bash ops/polaris resume <ID>`). Then promote: `bash ops/polaris next --do` does the whole pass under the board lock — every `backlog/` task whose `depends_on` are now all in `done/`, re-verifying its `files_owned` is disjoint from everything still in `ready/` + `active/` before it moves, and holding an overlap in `backlog/` with the reason. Read what it printed: a `held:` line is a planning finding, not a hiccup.
 
+Line 1 of `next --do` can be `tidy`: the layout pass is due. **Top-level?** A board-proven hop — read `ops/roles/TIDY.md`, run the pass here, then `bash ops/polaris next`. **Conductor-entered?** Put line 1 in your report unedited and let the conductor act: you carry the conductor's `CLAUDE_CODE_SESSION_ID`, so the once-per-session marker your call just set is the run's, and the conductor's own `next` will never print `tidy` again.
+
 **Drain `blocked/`.** Nobody else owns it. `bash ops/polaris status` lists each blocked task with its reason. For each: either regroom it (fix the contract or ownership, then return it to `backlog/` — or `ready/` if it now clears the gate) or, if it needs a human decision, escalate it in your report. A task in `blocked/` sits invisible forever until you do this.
 
 ## 6. Close the loop

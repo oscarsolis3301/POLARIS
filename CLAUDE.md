@@ -1,4 +1,4 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.11.0] -->
+<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.12.0] -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 Model-agnostic operating system for running N coding agents in parallel on this repo with zero merge
@@ -28,6 +28,7 @@ Your kickoff names your role. Read `ops/roles/<ROLE>.md` and execute it. Nothing
 | `solo` | `ops/roles/SOLO.md` | one context does the whole path. **This is the common case** |
 | `express` | CONDUCTOR, express path | one builder, one integrator |
 | `full` | `ops/roles/CONDUCTOR.md` (no subagent tool → `PLANNER.md`) | the full loop |
+| `tidy` | `ops/roles/TIDY.md` | the layout pass is due — one context, no subagents |
 
 - **`start` is the everyday kickoff.** It means "take the next piece of work". Empty board → the
   triage answer routes you to PLANNER instead of erroring.
@@ -52,6 +53,15 @@ Your kickoff names your role. Read `ops/roles/<ROLE>.md` and execute it. Nothing
   role — it is the next context (Invariant 5). Sole in-context exception: the INIT → PLANNER
   bootstrap. The CONDUCTOR is not a second one — it holds NO role and delegates each to a fresh
   subagent. (Why, and the SOLO cost argument: `ops/PROTOCOL.md` § LANES.)
+
+## FEWEST HOPS — the core principle
+- **Fewest hops.** Builders start with `pack` — it already prints the guides for their folders.
+  Everyone else: the root map below this block (`## Where things live`) → `.polaris/brain/INDEX.md`
+  → the folder's guide, `<dir>/CLAUDE.md` → `find`/`show` → Grep last.
+- **A layout that makes you jump is a bug.** `hops` measures it, the tidy lane fixes it — no drive-by moves.
+- **Ask first, then finish.** Every question goes in one round before work starts. After it: a safe
+  default, or park that piece and finish the rest — the close lists what waits on the human. Why, and
+  when the tidy pass runs: `ops/PROTOCOL.md` § SAVE HOPS.
 
 ## THE ONE IDEA
 All coordination is front-loaded into the Planner. Every task gets a **disjoint set of files it may
@@ -111,9 +121,9 @@ need one section or none.
     problem. **Converting a rule between `path` and `ask` is a HUMAN decision** for that same reason.
 
 ## STOP AND ASK THE HUMAN before
-Deleting any file · adding a dependency · changing DB schema or migrations · editing outside
+Deleting any file (a move proven by `hops --proof` is not a delete; a merge is) · adding a dependency · changing DB schema or migrations · editing outside
 `files_owned` · touching auth/payments/prod config not explicitly owned · any force-push · merging
-any `risk: high` task · converting a `RULES.tsv` rule between `path` and `ask` — each unless the approved plan named it.
+any `risk: high` task · converting a `RULES.tsv` rule between `path` and `ask` — each unless the approved plan named it. Ask before the run, never during: the plan names it, or it parks.
 **Not on it:** git/workspace mechanics are never ask material after plan approval — the CLI prints the next step; follow it.
 **Never offer a menu of execution strategies.** How many builders, one chat or several, board or no board, which lane — these are `triage`'s answer, never a question. The interview (0b) is about the PRODUCT. A question about how POLARIS itself will run was already answered by the CLI.
 Taken lock · busy lane · dirty tree → `ops/PROTOCOL.md` § N CHATS, ONE REPO. Real asks stay: spec ambiguity, `risk: high`, `ask` scopes.

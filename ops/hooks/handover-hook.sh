@@ -178,7 +178,9 @@ hh_stop() {
   hh_cfg run_max_tasks "$p" 0; cap="${REPLY:-0}"
   hh_state "$dir" hops; hops="${REPLY:-0}"
   case "$hops:$cap" in *[!0-9:]*) hops=0; cap=0;; esac
-  [ "$cap" != 0 ] && [ "$hops" -ge "$cap" ] && { [ -s "$dir/plan" ] && capped=1 || hh_emit allow:cap ""; }  # a recorded plan defers the cap to the verb below
+  # a recorded plan defers the cap to the verb below. Recorded = a slug, read the way hh_inplan and
+  # next_inplan read it: claim writes a bare newline for a task with no plan:, and `-s` called that a plan
+  [ "$cap" != 0 ] && [ "$hops" -ge "$cap" ] && { hh_state "$dir" plan; [ -n "${REPLY//[[:space:]]/}" ] && capped=1 || hh_emit allow:cap ""; }
   hh_subagent "$TP" "$SID" "$dir/last-event" && hh_emit allow:subagent ''
   hh_question "$TP" && { [ "$REPLY" = stop ] && hh_emit allow:question ""; q=1; }
   hh_bg_live "$p" "$CWD" && { job="$REPLY"                   # consumes nothing: the tail resumes
@@ -188,17 +190,19 @@ hh_stop() {
   l1="$(printf '%s\n' "$out" | head -1)"; l1="${l1%$'\r'}"
   verb="${l1%% *}"; id="${l1#* }"; [ "$id" = "$l1" ] && id=''
   case "$verb" in wait|stop|resume) [ "$q" = 1 ] && hh_emit allow:question ''; hh_emit "allow:$verb" '';;
-    build|integrate|promote|finish) ;;
+    build|integrate|promote|tidy|finish) ;;
     *) [ "$q" = 1 ] && hh_emit allow:question ''; hh_emit allow:no-verb '';; esac
-  # plan work (T-230): tasks of the session's recorded plan are not counted against the run caps
+  # plan work (T-230): tasks of the session's recorded plan are not counted against the run caps.
+  # The layout pass is free the same way (save-hops.md § 2.2): a run cap never skips what the owner asked for.
   case "$verb" in
     build)   hh_inplan "$p" "$dir" $id && plan=1;;
     integrate) ids="$(printf '%s\n' "$out" | sed -n 's/^   review\/: //p')"; hh_inplan "$p" "$dir" $ids && plan=1;;
     promote) ids="$(printf '%s\n' "$out" | sed -n 's/^   eligible: \(.*\) — bash.*$/\1/p')"; hh_inplan "$p" "$dir" $ids && plan=1;;
+    tidy)    plan=1;;
   esac
   [ "$capped" = 1 ] && [ "$plan" = 0 ] && hh_emit allow:cap ''
   if [ "$q" = 1 ]; then
-    [ "$verb" = finish ] && hh_emit allow:question ''
+    case "$verb" in finish|tidy) hh_emit allow:question '';; esac   # the run's end: a question there is the close
     hh_emit block:question "Work left - next says $l1. The plan approval covers it; do it. A real product/approval question? ask again and you will be let through."
   fi
   n=$((hops + 1)); [ "$plan" = 1 ] && n="$hops"; printf '%s\n' "$n" > "$dir/hops"   # plan hops are free; the writes land BEFORE the emit, so
@@ -213,6 +217,7 @@ hh_stop() {
             hh_emit block:integrate "You are the INTEGRATOR (hop $n). From the primary checkout land what waits in ops/board/review/ — $ids: bash ops/polaris land <ID> per task, then seal, run-verify + done each.$hi Read ops/roles/INTEGRATOR.md if this context no longer has it; then bash ops/polaris next.";;
     promote) ids="$(printf '%s\n' "$out" | sed -n 's/^   eligible: \(.*\) — bash.*$/\1/p')"
             hh_emit block:promote "Backlog work is unblocked ($ids). From the primary: bash ops/polaris next --do — it promotes what passes the ready gate under the board lock — then follow its line 1.";;
+    tidy)   hh_emit block:tidy "The layout pass is due. You are TIDY (hop $n): read ops/roles/TIDY.md and run it now — one context, no subagents, it lands one task. Then bash ops/polaris next.";;
     finish) hh_emit block:finish "This run's board is done. From the primary: bash ops/polaris finish — its exit code decides your close (0 opens with # 🎉 Complete!; otherwise no H1, name the one pending thing).";;
   esac
 }

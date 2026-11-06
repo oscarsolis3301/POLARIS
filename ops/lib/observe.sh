@@ -1162,6 +1162,19 @@ EOF
   done <<EOF
 $(surfaces_health || true)
 EOF
+  # 9) stale folder guides (ops/contracts/save-hops.md § 6): ADVISORY, the orphan-branch class of § 3
+  # — printed, never counted, never red under --strict, qa or finish, because a stale guide must
+  # never stop a run. What counts as a citation is hops' rule alone; drift only prints its rows.
+  # rc 1 (none) · rc 3 (no python) · an engine older than hops · `hops: off` → silence.
+  local srows sg sp
+  srows=""
+  if [ "$(cfg hops on)" != off ]; then srows="$("$SELF" hops --stale 2>/dev/null)" || srows=""; fi
+  while IFS="$POLARIS_TAB" read -r v sg sp; do
+    sp="${sp%$'\r'}"
+    if [ "$v" = STALE ] && [ -n "$sg" ] && [ -n "$sp" ]; then note "advisory: GUIDE STALE: $sg cites $sp (missing)"; fi
+  done <<EOF
+$srows
+EOF
   if [ "$n" -eq 0 ]; then say "drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry · deps)"
   else printf '%d finding(s).\n' "$n"; [ "$strict" = "--strict" ] && exit 1; fi
   return 0
@@ -2008,7 +2021,7 @@ cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output 
   say "check: $n golden(s), all green"
 }
 
-cmd_triage() { # triage [<ID…>] — print the LANE this board's work belongs in: solo | express | full.
+cmd_triage() { # triage [<ID…>] — print the LANE this board's work belongs in: solo | express | full | tidy.
   # The six conditions below were prose in CONDUCTOR.md, which meant a model re-derived them from
   # the board every run — reading task files, weighing points, re-reading CONVENTIONS — and paid
   # tokens to reach an answer the CLI already had. It is data, so it is a command.
@@ -2016,6 +2029,8 @@ cmd_triage() { # triage [<ID…>] — print the LANE this board's work belongs i
   #   solo    one context does plan+build+integrate. No subagents at all.
   #   express conductor + ONE builder + ONE integrator, landing through `land --express`.
   #   full    the ordinary loop: planner, N builders, integrator, wave gate.
+  #   tidy    the layout pass (ops/roles/TIDY.md), one context — a bare triage on an empty, quiet
+  #           board whose cached verdict says the pass is due, once per session (save-hops § 2.3).
   # With ID(s) (stay-on-request.md § 1): ONLY the named tasks count toward the lane — a leftover
   # already sitting in ready/ never drags the run into a bigger lane than the request needs. Each
   # named ID must sit in ready/ or active/, else `die` (rc 1, nothing on stdout). With a session id,
@@ -2051,6 +2066,30 @@ cmd_triage() { # triage [<ID…>] — print the LANE this board's work belongs i
   fi
 
   if [ "$n" -eq 0 ]; then
+    # tidy (save-hops.md § 2.3): an empty board that is also QUIET — board_quiescent (admin.sh):
+    # nothing in review/, no lock, no lease, no live bg job — with the layout pass due sends a bare
+    # `start` to the pass instead of to a Planner with nothing to plan, at most once per session:
+    # the § 0.6 marker is created in the same call that prints `tidy`. The verdict is READ from the
+    # cache `hops --due` writes (§ 0.5), never computed — triage opens every run and stays cheap, so
+    # the file test comes first and a repo without the cache pays nothing. Missing, stale (its sha
+    # is not $BASE's tip), not-due or `hops: off` → today's two `full` lines, byte for byte. Named
+    # IDs never reach this branch (n is then $# > 0), so a named request is never rerouted.
+    local hd="$PRIMARY/.polaris/hops-due" hsha="" hv="" hmsg="" hmk="" cr
+    if [ -f "$hd" ]; then
+      cr="$(printf '\r')"
+      IFS="$POLARIS_TAB" read -r hsha hv hmsg < "$hd" || true
+      hsha="${hsha%$cr}"; hv="${hv%$cr}"; hmsg="${hmsg%$cr}"
+      hmk="$(next_dir)/tidy"
+      if [ "$hv" = 0 ] && [ ! -e "$hmk" ] && [ "$(cfg hops on)" != off ] && [ -n "$hsha" ] \
+        && [ "$hsha" = "$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)" ] && board_quiescent; then
+        mkdir -p "${hmk%/tidy}" 2>/dev/null || true
+        date +%s 2>/dev/null > "$hmk" || true
+        printf 'tidy\n'
+        note "the board is empty and the layout pass is due: ${hmsg#layout pass due — }"
+        note "read ops/roles/TIDY.md — one context, no subagents"
+        return 0
+      fi
+    fi
     printf 'full\n'; note "nothing claimable — the board is empty, so a Planner runs first"; return 0
   fi
   if [ "$n" -gt 1 ]; then
@@ -2193,7 +2232,7 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
   elif [ -n "$role" ] && [ "$role" != "BUILDER" ]; then
     case "$role" in
       INIT|PLANNER|INTEGRATOR|EVOLVE|CONDUCTOR) tier=strong;;
-      SOLO|scout) tier=mid;;
+      SOLO|scout|TIDY) tier=mid;;
       *) tier=mid; rnote="unknown role '$role' — mid (routing never blocks work)";;
     esac
   elif [ "$role" = "BUILDER" ] && [ -z "$id" ]; then
@@ -2755,8 +2794,54 @@ EOF
   # blocked/ is NEVER a gate. CONDUCTOR.md licenses blocked "with a reason the human has been told",
   # and whether they were told is not mechanically knowable — gating here would either make runs
   # un-finishable or force finish to write board state. So: a caveat the close MUST carry.
+  # save-hops.md § 2.4: and every parked ID carries its WHY, so the close can tell the owner what
+  # each one needs without a `why <ID>` per task — the note of that ID's NEWEST "ev":"blocked"
+  # event (highest ts; a tie goes to the later line, because EVENTS.ndjson is union-merged and line
+  # order is not time order), JSON escapes undone, whitespace collapsed, cut at 80 characters with
+  # `…`; no event, or an empty note → `no reason recorded`. ONE awk pass over the file. Characters
+  # are counted by hand under LC_ALL=C: awk's own length() is bytes in some awks and characters in
+  # others, and a cut inside a UTF-8 sequence prints garbage. Still fin_ids's list shape — at most
+  # five, then "… +N more" (PROTOCOL.md § VOICE).
+  local blid="" blw
   bl=$(fin_count blocked)
-  [ "$bl" -eq 0 ] || fin_caveat "$bl blocked — $(fin_ids blocked) (name what is parked, and why, in your close)"
+  if [ "$bl" -gt 0 ]; then
+    for f in "$BOARD/blocked/"*.md; do [ -e "$f" ] || break; f="${f##*/}"; blid="$blid ${f%.md}"; done
+    blw="$(LC_ALL=C awk -v ids="$blid" -v evf="$EVENTS" '
+      function jv(s, k,   p, i, c, o) {        # string field k of the JSON line s, escapes undone
+        p = index(s, "\"" k "\":\""); if (p == 0) return ""
+        s = substr(s, p + length(k) + 4); o = ""
+        for (i = 1; i <= length(s); i++) {
+          c = substr(s, i, 1)
+          if (c == "\"") break
+          if (c == "\\") { c = substr(s, ++i, 1); if (c == "t" || c == "n" || c == "r") c = " " }
+          o = o c
+        }
+        return o
+      }
+      BEGIN {
+        n = split(ids, I, " "); for (k = 1; k <= n; k++) want[I[k]] = 1
+        while ((getline ln < evf) > 0) {
+          if (index(ln, "\"ev\":\"blocked\"") == 0) continue
+          id = jv(ln, "id"); if (!(id in want)) continue
+          t = 0; if (match(ln, /"ts":[0-9]+/)) t = substr(ln, RSTART + 5, RLENGTH - 5) + 0
+          if ((id in at) && t < at[id]) continue
+          at[id] = t; why[id] = jv(ln, "note")
+        }
+        for (k = 1; k <= n && k <= 5; k++) {
+          w = why[I[k]]; gsub(/[ \t]+/, " ", w); sub(/^ /, "", w); sub(/ $/, "", w)
+          if (w == "") w = "no reason recorded"
+          c = 0
+          for (i = 1; i <= length(w); i++) {    # a UTF-8 character starts at any non-continuation byte
+            b = substr(w, i, 1)
+            if ((b < "\200" || b >= "\300") && ++c > 80) { w = substr(w, 1, i - 1) "…"; break }
+          }
+          o = o (k > 1 ? " · " : "") I[k] " (" w ")"
+        }
+        if (n > 5) o = o " … +" (n - 5) " more"
+        printf "%s", o
+      }')"
+    fin_caveat "$bl blocked — $blw (name what is parked, and why, in your close)"
+  fi
   for f in "$PRIMARY"/.polaris/wt/*/; do
     [ -e "$f" ] || break
     n="${f%/}"; n="${n##*/}"

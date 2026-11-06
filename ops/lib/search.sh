@@ -39,9 +39,10 @@ index_engine() { # index_engine <root> — resolve the engine; the ONE seam a na
   printf '%s' "$eng"
 }
 
-index_fast() { # index_fast find|show <args…> — the WHOLE command. Always exits; never returns.
+index_fast() { # index_fast find|show|hops <args…> — the WHOLE command. Always exits; never returns.
   #   find <symbol> | -f <glob> | -t <text> | --importers <p> | --imports <p> [-n N]
   #   show <path>#<symbol> | <path>:<line>   — print JUST that symbol's body
+  #   hops <flags…>                           — the layout report (ops/contracts/save-hops.md § 1)
   # One line per hit, `path:line` first so it is click-through and cheap to read.
   # rc 0 hits · 1 none · 2 usage · 3 engine unavailable.
   local cmd="$1" root eng; shift
@@ -55,5 +56,8 @@ index_fast() { # index_fast find|show <args…> — the WHOLE command. Always ex
     printf "   no python3 — 'find' is unavailable; use Grep/Glob for this one (everything else works)\n"
     exit 3; }
   # POLARIS_ROOT is index.py's documented override (index.py:625), so it needs no git call of its own.
+  # hops alone keeps a caller's POLARIS_ROOT when it names a real folder: a tidy pass asks about its
+  # task worktree after the moves (TIDY.md step 8). The engine above stays the primary's.
+  [ "$cmd" = hops ] && [ -d "${POLARIS_ROOT:-}" ] && root="$POLARIS_ROOT"
   POLARIS_ROOT="$root" exec $eng "$cmd" "$@"
 }

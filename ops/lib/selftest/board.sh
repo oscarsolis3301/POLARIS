@@ -282,10 +282,10 @@ drill_handover() {
     # a wrong line 1 misroutes a whole session and a rung that blocks where it should allow traps a
     # chat in a loop only the human can break. This walks the contract's assertion list IN ORDER on
     # the spine's own repo, judging rc and FILE STATE — never the presence of a message.
-    # Contract v1.1 governs two of them: human-gated review work routes to `wait` (row 6's approval
-    # note is unreachable dead source and gets no case), and `--brief` is asserted only under a live
-    # lock, where the role is real and the pointer line is not in question. Contract v2 adds (8b):
-    # the promote pass honours `drain: plan`, and says out loud what it refused.
+    # Contract v1.1 governs one of them: `--brief` is asserted only under a live lock, where the role
+    # is real and the pointer line is not in question. Contract v2 adds (8b): the promote pass
+    # honours `drain: plan`, and says out loud what it refused. Contract v3 flips (14): human-gated
+    # review work alone is `finish` carrying row 6's approval note (v1.1 had it `wait`).
     # NO helper functions here: `find --api` extracts nested fns too, and this drill ships exactly
     # one name. The hook reaches the router through POLARIS_HANDOVER_CLI rather than a forwarder
     # planted at ops/polaris, because `finish` below gates on a clean `git status` and ops/ is
@@ -477,15 +477,15 @@ drill_handover() {
     [ "$(sed -n 1p "$T/ho10.out")" = "integrate" ] || { cat "$T/ho10.out"; echo "HANDOVER LEASE STALE FAIL (a stealable lease reopens the lane)"; exit 1; }
     grep -qx '   review/: T-HO5' "$T/ho10.out" || { cat "$T/ho10.out"; echo "HANDOVER INTEGRATE NOTE FAIL"; exit 1; }
     rm -rf "$ho_gcd/polaris-locks/.int-lease"
-    # (14) contract v1.1: human-gated review work ALONE is `wait` with the human named — NEVER
-    #      `finish`. A task waiting on a human is in flight, with the human; row 6's approval note
-    #      is unreachable dead source and gets no case at all.
+    # (14) contract v3 (supersedes v1.1): human-gated review work ALONE is `finish` with the approval
+    #      note — a task only a human can merge no longer holds the run open mid-way; the run closes
+    #      and names what waits on the human, whose recorded yes the merge still needs (Invariant 9).
     rm -f ops/board/review/T-HO5.md ops/board/active/T-HO4.md
     rm -rf "$ho_gcd/polaris-locks/T-HO4"
     printf -- '---\nid: T-HO6\ntitle: hand over six\ntype: feature\nscope: src\npoints: 1\nwsjf: 2\nrisk: high\nowner: null\nbranch: null\nstatus: review\ncontract: ops/contracts/ho.md\nfiles_owned:\n  - src/ho6.txt\nverify: []\n---\n## Notes\n' > ops/board/review/T-HO6.md
     "$SELF" next > "$T/ho11.out" 2>&1 || { cat "$T/ho11.out"; echo "HANDOVER HUMAN RC FAIL"; exit 1; }
-    [ "$(sed -n 1p "$T/ho11.out")" = "wait" ] || { cat "$T/ho11.out"; echo "HANDOVER HUMAN-GATED FAIL (role-handover.md v1.1: human-gated review alone is wait, never finish)"; exit 1; }
-    grep -qx '   review/ awaits a human: T-HO6' "$T/ho11.out" || { cat "$T/ho11.out"; echo "HANDOVER HUMAN NOTE FAIL"; exit 1; }
+    [ "$(sed -n 1p "$T/ho11.out")" = "finish" ] || { cat "$T/ho11.out"; echo "HANDOVER HUMAN-GATED FAIL (role-handover.md v3: human-gated review alone is finish, never wait)"; exit 1; }
+    grep -qx '   risk: high awaiting approval: T-HO6' "$T/ho11.out" || { cat "$T/ho11.out"; echo "HANDOVER HUMAN NOTE FAIL (finish must name what waits on the human)"; exit 1; }
     # (15) `handover: off` allows before any fork — the knob is the whole opt-out, and it is read
     #      from CONVENTIONS with sed, never by paying for a CLI startup on the allow path.
     printf 'handover: off\nrun_max_tasks: 3\n' > ops/CONVENTIONS.md

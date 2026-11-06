@@ -217,6 +217,8 @@ cmd_verify() {
   # lib/visual.sh and the same sentence, but mid-flight it only warns — a Builder may verify before
   # the shot is taken. The die lives in cmd_handoff.
   visual_gate "$id" warn 2 ""
+  # stale-guide ⚠ (ops/contracts/save-hops.md § 6): handoff's twin, read off this worktree's HEAD.
+  guide_stale_hint "$tf" HEAD
 }
 
 cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
@@ -256,6 +258,7 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
   visual_file_strays "$id"
   visual_caption "$id" "$saw" "$nobefore"
   map_delta_hint "$tf" "feat/$id"
+  guide_stale_hint "$tf" "feat/$id"   # a removed path some guide it does not own still cites → ⚠, never a refusal
   # publish: pr — feat branches never leave the machine; seal pushes ONE integrate branch instead
   # (ops/contracts/publish-modes.md). Everything else stays byte-identical to direct mode.
   publish_resolve
@@ -692,9 +695,10 @@ EOF
 # facts the CLI could have handed it in one — each round trip a tool call, a result, and a re-read
 # of everything above it in the transcript.
 #
-# `pack` is the same seven things as ONE call. It reads; it never writes, never touches git refs,
-# never mutates the board. Every section degrades to a one-line note rather than dying, because a
-# missing brain or an unindexed repo must still produce a usable pack.
+# `pack` is the same seven things as ONE call. It never touches git refs and never mutates the
+# board; its ONE write is a missing brain, built once (ops/contracts/save-hops.md § 3.2) — git-ignored,
+# and what three of the sections below read. Every section degrades to a one-line note rather than
+# dying, because a missing brain or an unindexed repo must still produce a usable pack.
 
 pack_section() { printf '\n=== %s ===\n' "$1"; }
 
@@ -779,6 +783,12 @@ cmd_pack() { # pack <ID> — the whole context for one task, in ONE call. Read-o
   fi
 
   # 3. house style, DETECTED. The point: match what the repo already does without re-inferring it.
+  # No brain yet → build it ONCE, quietly, right here (ops/contracts/save-hops.md § 3.2): a cold repo
+  # is the session with the least context to spare, and "run: ops/polaris brain" handed it one more
+  # hop. HOUSE STYLE, WHERE THIS LIVES and KNOWN TRAPS all read what this writes. Only a MISSING dir
+  # triggers it — refreshing an existing brain is done's and seal's job, never pack's — and a failed
+  # build changes nothing: the no-brain line below still prints.
+  [ -d "$PRIMARY/.polaris/brain" ] || "$SELF" brain >/dev/null 2>&1 || true
   pack_section "HOUSE STYLE — match this, it is what the repo already does"
   if [ -f "$PRIMARY/.polaris/brain/prefs.md" ]; then
     grep -E '^\|' "$PRIMARY/.polaris/brain/prefs.md" 2>/dev/null | head -8 || true
@@ -808,6 +818,44 @@ cmd_pack() { # pack <ID> — the whole context for one task, in ONE call. Read-o
 $dirs
 EOF
   [ -n "$any" ] || printf '(no code-map entry — run: ops/polaris brain)\n'
+
+  # 5b. FOLDER GUIDES (ops/contracts/save-hops.md § 0.1 + § 3.2): the nearest folder guide for each
+  # owned path, carried IN the pack. Claude Code loads a folder's CLAUDE.md only when a session READS
+  # a file there, so a lane that only creates files never sees it, and other agents never load it.
+  # Per owned pattern, in owned order: start at its folder (a `dir/` = that dir; a glob = the literal
+  # prefix before its first `*`, then that prefix's folder) and climb to — never including — the
+  # root; the first <d>/CLAUDE.md that holds the marker line AND is tracked wins. ≤ 3 guides,
+  # de-duplicated, ≤ 25 body lines each, CRLF read as LF, always from the PRIMARY. A folder some
+  # earlier climb already visited ends this one: everything above it is already known. OMITTED
+  # ENTIRELY when no guide exists, which keeps pack-visual's golden and every guide-less repo
+  # byte-identical (the SKILLS/SURFACES pattern). Inline on purpose: surface-frozen (no new fn).
+  local fg_p fg_d fg_b fg_seen="" fg_out="" fg_n=0 fg_nl='
+'
+  while IFS= read -r fg_p; do
+    [ "$fg_n" -lt 3 ] || break
+    fg_d="${fg_p%%\**}"                                           # a glob keeps its literal prefix,
+    case "$fg_d" in */*) fg_d="${fg_d%/*}";; *) fg_d="";; esac   # then its folder; root-level: none
+    while [ -n "$fg_d" ] && [ "$fg_d" != . ]; do
+      case "$fg_nl$fg_seen" in *"$fg_nl$fg_d$fg_nl"*) break;; esac
+      fg_seen="$fg_seen$fg_d$fg_nl"
+      if [ -f "$PRIMARY/$fg_d/CLAUDE.md" ] \
+         && fg_b="$(awk 'BEGIN { r = 1 } { sub(/\r$/, "") }
+              r && $0 == "<!-- polaris:guide -->" { r = 0; next }
+              !r && ($0 == "<!-- /polaris:guide -->" || ++n > 25) { exit }
+              !r { print }
+              END { exit r }' "$PRIMARY/$fg_d/CLAUDE.md" 2>/dev/null)" \
+         && git -C "$PRIMARY" ls-files --error-unmatch -- ":(literal)$fg_d/CLAUDE.md" >/dev/null 2>&1; then
+        fg_out="$fg_out# $fg_d/CLAUDE.md$fg_nl${fg_b:+$fg_b$fg_nl}"; fg_n=$((fg_n + 1)); break
+      fi
+      case "$fg_d" in */*) fg_d="${fg_d%/*}";; *) fg_d="";; esac
+    done
+  done <<EOF_FG
+$owned
+EOF_FG
+  if [ -n "$fg_out" ]; then
+    pack_section "FOLDER GUIDES — read the one for your folder before your first edit"
+    printf '%s' "$fg_out"
+  fi
 
   pack_section "PUBLIC SURFACE — do not break these signatures"
   # `find --api` is the same index `check --scaffold` locks goldens from, so what prints here is

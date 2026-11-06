@@ -120,6 +120,10 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  self-heals on query. No python3 → says so and you fall back to Grep
   show <path>#<symbol> | <path>:<line>
                                  print JUST that symbol's body — not the whole file
+  hops [--tsv | --stale | --due | --questions | --facts <dir>] [--score | --owned | --proof | --remap <moves.tsv>]
+                                 the layout report: how many folders one change touches, what to
+                                 move, which folders lack a guide. No LLM, never edits your code;
+                                 ops/roles/TIDY.md runs the pass that acts on it
   board-fm [<col>…]              one TAB line per task (col id pts wsjf risk deps owns contract
                                  title) — the Planner's board read without the prose bodies.
                                  Default columns: ready active backlog blocked (done/ is history,
@@ -128,6 +132,9 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  reads FIRST (INDEX + code-map/board/contracts/commands/gotchas);
                                  --refresh skips code-map when code is unchanged. seal auto-refreshes
                                  an existing brain; doctor warns when it is stale
+  where [--write | --strip]      the ≤15-line root map — where things live — from ops/MAP.md and the
+                                 folder guides; --write puts it in CLAUDE.md below the POLARIS block
+                                 (done keeps it fresh), --strip takes it out
   metrics                        opens with a plain-English summary line, then cycle · throughput ·
                                  kickbacks · build-vs-integrate split (EVENTS.ndjson)
   why <ID>                       why a task bounced/blocked: kickback + release/blocked notes from telemetry + body
@@ -148,11 +155,12 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  solo (one context, zero subagents; 1 task ≤3pts — or up to 4
                                  tasks, ≤3pts each and ≤6pts in all, worked one at a time — risk
                                  normal, express on, publish direct) · express (one task, one
-                                 builder, one integrator) · full (everything else). Reasons follow
+                                 builder, one integrator) · full (everything else) · tidy (below). Reasons follow
                                  on note lines. Decide with this, never by re-reading the board
                                  and weighing the conditions by hand. With ID(s), ONLY the named
                                  tasks count — a leftover in ready/ never widens the lane — and the
                                  first one's plan: is recorded as this run's scope.
+                                 tidy = the board is empty and the layout pass is due (ops/roles/TIDY.md)
   route [<ID> | --role <R> | --points <N> [--risk <R>]]
                                  which MODEL TIER runs a piece of work — line 1 is always one
                                  word: strong | mid | cheap (a task's model: frontmatter
@@ -162,7 +170,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  CONDUCTOR asks it before every spawn; fleet rides the max
                                  tier over ready/
   next [--do|--brief]            what this session does NEXT, read off the board — line 1 is ONE verb:
-                                 resume <ID> · build <ID> · integrate · promote · wait · stop · finish;
+                                 resume <ID> · build <ID> · integrate · promote · wait · stop · tidy · finish;
                                  --do performs a promote under the board lock · --brief re-anchors a chat
   promote                        = next --do: promote every backlog/ task that now clears the ready
                                  gate, ONE board commit, then the fresh route (line 1 is still a verb)
@@ -235,6 +243,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  own CLAUDE.md, once. install and update run it for you, so every
                                  machine self-repairs. Append-only, marker-guarded, idempotent — it
                                  never edits your prose, never deletes, never rewrites a human choice
+                                 also builds .polaris/brain/ when it is missing and refreshes the layout verdict
   interview [--pending | --set <key>=<value> …]
                                  the preferences a repo cannot derive — how to be talked to
                                  (voice), ADHD-shaped replies (adhd), one computer or several
