@@ -19,6 +19,7 @@ full suite runs once per wave (bg run); landing: integrator for this run.
 | date | done pts | remaining |
 | 2026-11-05 | 28 | 65 |
 | 2026-11-05 | 21 | 46 |
+| 2026-11-05 | 11 | 35 |
 
 # SPRINT 19 — Stay on the request (6.9.0)          capacity: 33   dates: 2026-10-27–
 
