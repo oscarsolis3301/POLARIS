@@ -1,0 +1,103 @@
+SCORE	3.25	8	0	0
+MAP	scripts/	2	-	no
+MAP	src/services/	2	-	no
+MAP	src/utils/	2	-	no
+MAP	Assets/Scripts/Data/	1	-	no
+MAP	Assets/Scripts/Net/	1	-	no
+MAP	Assets/Scripts/UI/	1	-	no
+MAP	docs/	1	-	no
+MAP	src/	1	-	no
+MAP	src/components/	1	-	no
+MAP	src/hooks/	1	-	no
+MAP	tests/	1	-	no
+SCATTER	cart	4	src/cart/	src/components/CartView.tsx,src/hooks/useCart.ts,src/services/cartApi.ts,tests/cart.test.ts
+SCATTER	coin	3	Assets/Scripts/coin/	Assets/Scripts/Data/CoinData.cs,Assets/Scripts/Net/CoinSync.cs,Assets/Scripts/UI/CoinView.cs
+MOVE	src/components/CartView.tsx	src/cart/CartView.tsx	cart
+MOVE	src/hooks/useCart.ts	src/cart/useCart.ts	cart
+MOVE	src/services/cartApi.ts	src/cart/cartApi.ts	cart
+MOVE	tests/cart.test.ts	src/cart/cart.test.ts	cart
+MOVE	Assets/Scripts/Data/CoinData.cs	Assets/Scripts/coin/CoinData.cs	coin
+MOVE	Assets/Scripts/UI/CoinView.cs	Assets/Scripts/coin/CoinView.cs	coin
+rc=0
+MOVE rows: 6 · naming published code: 0 · leaving its assembly: 0 · a .meta: 0 · published code in a SCATTER: 0
+score: 3.25 → 1.75 folders per change (46% fewer) · guides 0/0
+change cart: 4 folders → 1
+change coin: 3 folders → 2
+rc=0
+Assets/Scripts/Data/CoinData.cs
+Assets/Scripts/Data/CoinData.cs.meta
+Assets/Scripts/UI/CoinView.cs
+Assets/Scripts/UI/CoinView.cs.meta
+Assets/Scripts/coin/CoinData.cs
+Assets/Scripts/coin/CoinData.cs.meta
+Assets/Scripts/coin/CoinView.cs
+Assets/Scripts/coin/CoinView.cs.meta
+docs/cart.md
+src/App.tsx
+src/cart/CartView.tsx
+src/cart/cart.test.ts
+src/cart/cartApi.ts
+src/cart/useCart.ts
+src/components/CartView.tsx
+src/hooks/useCart.ts
+src/services/cartApi.ts
+tests/cart.test.ts
+rc=0
+--- a pure move: green
+proof: ok — 6 moved, 0 merged, 6 lines changed, every one a path
+rc=0
+--- one logic edit inside a moved file: red
+proof: RED src/cart/cartApi.ts:3 — logic changed
+rc=1
+--- landed on main: the same plan, the same verify line, still green
+proof: ok — 6 moved, 0 merged, 0 lines changed, every one a path
+rc=0
+--- a Java package line is not a path: red
+proof: RED java/src/cart/Money.java:1 — logic changed
+rc=1
+--- an unplanned deletion, a move not made, a copy git does not track: red
+proof: RED scripts/cart_report.py:1 — scripts/reports/cart_report.py missing
+proof: RED src/net/http.ts:1 — src/services/http.ts still exists
+proof: RED src/services/http.ts:1 — src/net/http.ts missing
+proof: RED src/utils/round.ts:1 — not in the moves
+rc=1
+--- a python module moved, its dotted names rewritten: green
+proof: ok — 1 moved, 0 merged, 3 lines changed, every one a path
+rc=0
+--- a merge: round.ts folded whole into money.ts, its import gone: green · a line of it dropped: red
+proof: ok — 0 moved, 1 merged, 0 lines changed, every one a path
+rc=0
+proof: RED src/utils/money.ts:5 — logic changed
+rc=1
+--- a guides-only pass (an empty plan): a new guide, a map line, LAYOUT.tsv: green · text outside a block: red
+proof: ok — 0 moved, 0 merged, 0 lines changed, every one a path
+rc=0
+proof: RED CLAUDE.md:1 — logic changed
+proof: RED src/services/CLAUDE.md:1 — not in the moves
+rc=1
+remap: 3 module names moved in .polaris/harness-baseline.json
+rc=0
+{
+  "modules": [
+    "scripts.reports.cart_report",
+    "scripts.gone",
+    "src/legacy.js"
+  ],
+  "routes": [
+    "/cart"
+  ]
+}
+remap: no .polaris/harness-baseline.json — nothing to remap
+rc=1
+src/money/round.ts
+src/utils/money.ts
+src/utils/round.ts
+no such plan: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+a folder: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+a .meta: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+moved twice: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+moved and a destination: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+not move or merge: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+two fields: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+--score alone: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+--remap with two plans: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
