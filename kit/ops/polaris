@@ -332,7 +332,7 @@ case "${1:-}" in
   _match|_rules|_guard) _mods="core ownership" ;;
   *)             _mods="core ownership workspace surfaces visual builder integrate knowledge search observe admin bg awake handover skills
                         selftest/spine selftest/board selftest/history selftest/report
-                        selftest/brain selftest/policy selftest/remote selftest/fast" ;;
+                        selftest/brain selftest/policy selftest/remote selftest/fast selftest/hops" ;;
 esac
 for _m in $_mods; do
   if [ ! -f "$OPS_DIR/lib/$_m.sh" ]; then

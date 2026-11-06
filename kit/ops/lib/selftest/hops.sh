@@ -1,5 +1,5 @@
-# lib/selftest/hops.sh — the practice shop the layout work proves itself on (ops/contracts/save-hops.md
-# § 8.2). Definitions only, nothing runs when sourced; T-252 adds this file to the loader list.
+# lib/selftest/hops.sh — the practice shop the layout work proves itself on (hops_fixture, save-hops.md
+# § 8.2) and the drill that proves it there on every push (drill_hops, § 8.3). Definitions only.
 hops_fixture() { # hops_fixture <new-dir> — build the shop there from nothing, the same commit ids on any machine
   # A storefront sorted by KIND of file (src/components hooks services utils types + tests/) whose
   # four features — checkout, profile, search, billing — each sit across 3+ of those folders and
@@ -605,4 +605,118 @@ SHOP
     printf 'done\n'
   ) | git -C "$dir" fast-import --quiet --done || return 1
   git -C "$dir" reset -q --hard
+}
+
+drill_hops() {
+    # ---- T-252 hops drill (ops/contracts/save-hops.md § 8.3) — the one place CI proves the whole
+    # layout engine, on Linux, macOS and Windows: on the practice shop hops_fixture builds (§ 8.2), in
+    # its OWN throwaway dir under $T — the spine's repo and board are never read or written. The KIT's
+    # engine runs as `python "$OPS_DIR/index.py" hops …` with POLARIS_ROOT = the shop: "$SELF" hops
+    # would resolve the shop's own installed ops/index.py, and a fixture has none (§ 8.4, the engine
+    # trap). Every assertion is an rc or a row's shape, never a sentence, and no count is pinned: how
+    # big a cluster is and what the score reads are the engine's to tune. What must never regress:
+    # SCATTER finds checkout and one more feature, each homed under src/ · no MOVE row names a guarded
+    # path (the Unity Resources asset, the published ui-kit, the RULES, SURFACES and LAYOUT keep
+    # paths, the Java file — each one changes with checkout, so only FIXED keeps it out) · --score
+    # over every MOVE row reads lower after than before · --proof is green for a move the engine
+    # proposed, made the way a tidy step makes it (git mv, its importers re-aimed — the shop's own
+    # import check agrees), red for one logic edit on top of it, and red for Money.java moved with
+    # its package line changed; each proof starts from a clean tree. Seconds, not minutes: one
+    # fast-import and six engine calls. No python → a note and a skip: hops has no engine without it.
+    hp_py=python3
+    "$hp_py" -c pass >/dev/null 2>&1 || hp_py=python
+    if ! "$hp_py" -c pass >/dev/null 2>&1; then
+      note "hops drill skipped — no python here, and polaris hops needs it"
+      return 0
+    fi
+    hp_d="$T/hops"
+    rm -rf "$hp_d"; mkdir -p "$hp_d"
+    hops_fixture "$hp_d/shop" > "$hp_d/fixture.out" 2>&1 || { cat "$hp_d/fixture.out"; echo "HOPS FIXTURE FAIL (hops_fixture must build the practice shop)"; exit 1; }
+    ( set -e
+      cd "$hp_d/shop"
+      export POLARIS_ROOT="$hp_d/shop"
+      # (1) --tsv, every row: rc 0 · the SCORE row first · after it only the kinds § 1.5 names (MERGE and
+      #     SPLIT are T-251's: allowed, never required) · a SCATTER row has 5 fields, a MOVE row 4
+      hp_rc=0; "$hp_py" "$OPS_DIR/index.py" hops --tsv > "$hp_d/raw" 2> "$hp_d/err" || hp_rc=$?
+      tr -d '\r' < "$hp_d/raw" > "$hp_d/tsv"
+      [ "$hp_rc" = 0 ] || { cat "$hp_d/tsv" "$hp_d/err"; echo "HOPS TSV RC FAIL (hops --tsv is rc 0 — got $hp_rc)"; exit 1; }
+      awk -F '\t' 'NR == 1 && !($1 == "SCORE" && NF == 5 && $2 ~ /^[0-9]+\.[0-9][0-9]$/ && $3 ~ /^[0-9]+$/ && $3 > 0) { print }
+        NR > 1 && $1 !~ /^(MAP|SCATTER|MOVE|MERGE|SPLIT|GUIDES|STALE)$/ { print }
+        ($1 == "SCATTER" && NF != 5) || ($1 == "MOVE" && NF != 4) { print }
+        END { if (NR == 0) print "(no rows at all)" }' "$hp_d/tsv" > "$hp_d/bad"
+      [ ! -s "$hp_d/bad" ] || { cat "$hp_d/bad"; echo "HOPS TSV SHAPE FAIL (SCORE <F> <N> <g> <G> first, then only the § 1.5 kinds — SCATTER 5 fields, MOVE 4)"; exit 1; }
+      # (2) SCATTER: checkout and at least one more feature, each across 3+ folders, each homed under src/
+      awk -F '\t' '$1 == "SCATTER" && $3 >= 3 && $4 ~ /^src\/.+\/$/ { if ($2 == "checkout") co = 1; else if ($2 ~ /^(profile|search|billing)$/) n++ }
+        END { exit !(co && n) }' "$hp_d/tsv" \
+        || { grep '^SCATTER' "$hp_d/tsv" || true; echo "HOPS SCATTER FAIL (checkout and one of profile, search, billing — each a SCATTER of 3+ folders homed under src/)"; exit 1; }
+      # (3) MOVE: checkout's files get rows, and no from or to is FIXED bait — a root file, ops/, the
+      #     Unity Resources asset or any .meta, the published ui-kit, the RULES path src/legacy/, the
+      #     LAYOUT keep row, the SURFACES pair, the Java file. The bait must be tracked first: a shop
+      #     that lost it would pass this check without proving anything.
+      git ls-files --error-unmatch Assets/Resources/Coin.asset Assets/Resources/Coin.asset.meta packages/ui-kit/package.json \
+        packages/ui-kit/index.js src/legacy/couponCodes.ts src/payments/gateway.ts src/utils/taxRate.ts tests/taxRate.test.ts \
+        java/src/shop/Money.java >/dev/null 2>&1 || { echo "HOPS BAIT FAIL (the shop must track every piece of FIXED bait § 8.2 plants)"; exit 1; }
+      awk -F '\t' '$1 == "MOVE" { if ($4 == "checkout") co++
+          for (i = 2; i <= 3; i++)
+            if ($i !~ /\// || $i ~ /^(ops|Assets|packages|java|src\/legacy)\// || $i ~ /\.meta$/ ||
+                $i == "src/payments/gateway.ts" || $i == "src/utils/taxRate.ts" || $i == "tests/taxRate.test.ts") print }
+        END { if (!co) print "(no MOVE row for checkout)" }' "$hp_d/tsv" > "$hp_d/bad"
+      [ ! -s "$hp_d/bad" ] || { cat "$hp_d/bad"; echo "HOPS MOVE FIXED FAIL (checkout gets MOVE rows, and FIXED bait is never a from or a to)"; exit 1; }
+      # (4) --score over every MOVE row: line 1 'score: <F> → <F′> …' reads lower after than before
+      awk -F '\t' '$1 == "MOVE" { print "move\t" $2 "\t" $3 }' "$hp_d/tsv" > "$hp_d/plan.tsv"
+      hp_rc=0; "$hp_py" "$OPS_DIR/index.py" hops --score "$hp_d/plan.tsv" > "$hp_d/raw" 2> "$hp_d/err" || hp_rc=$?
+      tr -d '\r' < "$hp_d/raw" > "$hp_d/score"
+      [ "$hp_rc" = 0 ] || { cat "$hp_d/score" "$hp_d/err"; echo "HOPS SCORE RC FAIL (hops --score is rc 0 — got $hp_rc)"; exit 1; }
+      awk 'NR == 1 { ok = ($1 == "score:" && $2 ~ /^[0-9]+\.[0-9][0-9]$/ && $4 ~ /^[0-9]+\.[0-9][0-9]$/ && $4 + 0 < $2 + 0) }
+        END { exit !ok }' "$hp_d/score" || { cat "$hp_d/score"; echo "HOPS SCORE DROP FAIL (the MOVE rows must lower folders per change — after < before)"; exit 1; }
+      # (5) --proof, each case from a clean tree. A move the engine proposed — checkout's api file into
+      #     its home — made the way a tidy step makes it: git mv, every @/ importer re-aimed → rc 0.
+      hp_from=src/services/checkoutApi.ts
+      hp_to="$(awk -F '\t' -v f="$hp_from" '$1 == "MOVE" && $2 == f { print $3 }' "$hp_d/tsv")"
+      case "$hp_to" in
+        src/?*/checkoutApi.ts) ;;
+        *) echo "HOPS PROOF SETUP FAIL (a MOVE row must take $hp_from into a home under src/ — got '$hp_to')"; exit 1 ;;
+      esac
+      printf 'move\t%s\t%s\n' "$hp_from" "$hp_to" > "$hp_d/one.tsv"
+      mkdir -p "${hp_to%/*}"
+      git mv "$hp_from" "$hp_to"
+      hp_old="${hp_from#src/}"; hp_old="@/${hp_old%.ts}"
+      hp_new="${hp_to#src/}"; hp_new="@/${hp_new%.ts}"
+      # grep, never `git grep`: Git Bash rewrites an argument that starts with @/ (quoted or not) into
+      # "@C:/Program Files/Git/…" before git.exe sees it, so git would search for a string no file holds
+      git ls-files -z > "$hp_d/files"
+      xargs -0 grep -l -F "\"$hp_old\"" < "$hp_d/files" > "$hp_d/importers" || true
+      [ -s "$hp_d/importers" ] || { echo "HOPS PROOF SETUP FAIL (nothing imports $hp_old — the move would prove no import fix)"; exit 1; }
+      while IFS= read -r hp_f; do
+        sed "s#\"$hp_old\"#\"$hp_new\"#" "$hp_f" > "$hp_d/rw"; cp "$hp_d/rw" "$hp_f"
+      done < "$hp_d/importers"
+      bash tests/run.sh > "$hp_d/run.out" 2>&1 || { cat "$hp_d/run.out"; echo "HOPS PROOF SETUP FAIL (the shop's own import check must pass after the move — an importer was missed)"; exit 1; }
+      hp_rc=0; "$hp_py" "$OPS_DIR/index.py" hops --proof "$hp_d/one.tsv" > "$hp_d/raw" 2> "$hp_d/err" || hp_rc=$?
+      tr -d '\r' < "$hp_d/raw" > "$hp_d/proof"
+      [ "$hp_rc" = 0 ] && grep -q '^proof: ok ' "$hp_d/proof" \
+        || { cat "$hp_d/proof" "$hp_d/err"; echo "HOPS PROOF MOVE FAIL (a pure move with its import fixes is rc 0 and the green line — got rc $hp_rc)"; exit 1; }
+      #     … one logic line changed on top of that same move → rc 1, a RED row naming the moved file
+      cp "$hp_to" "$hp_d/before"
+      sed 's#percent / 100#percent / 10#' "$hp_d/before" > "$hp_to"
+      cmp -s "$hp_to" "$hp_d/before" && { echo "HOPS PROOF SETUP FAIL (the logic edit changed no byte of $hp_to)"; exit 1; }
+      hp_rc=0; "$hp_py" "$OPS_DIR/index.py" hops --proof "$hp_d/one.tsv" > "$hp_d/raw" 2> "$hp_d/err" || hp_rc=$?
+      tr -d '\r' < "$hp_d/raw" > "$hp_d/proof"
+      [ "$hp_rc" = 1 ] && grep -q "^proof: RED $hp_to:[0-9]" "$hp_d/proof" \
+        || { cat "$hp_d/proof" "$hp_d/err"; echo "HOPS PROOF LOGIC FAIL (a changed logic line is rc 1, its RED row naming $hp_to — got rc $hp_rc)"; exit 1; }
+      git reset -q --hard
+      #     … and Money.java moved with its package line changed → rc 1: a package line is not a path
+      mkdir -p java/src/store
+      git mv java/src/shop/Money.java java/src/store/Money.java
+      cp java/src/store/Money.java "$hp_d/before"
+      sed 's#^package shop;#package store;#' "$hp_d/before" > java/src/store/Money.java
+      cmp -s java/src/store/Money.java "$hp_d/before" && { echo "HOPS PROOF SETUP FAIL (Money.java's package line did not change)"; exit 1; }
+      printf 'move\tjava/src/shop/Money.java\tjava/src/store/Money.java\n' > "$hp_d/java.tsv"
+      hp_rc=0; "$hp_py" "$OPS_DIR/index.py" hops --proof "$hp_d/java.tsv" > "$hp_d/raw" 2> "$hp_d/err" || hp_rc=$?
+      tr -d '\r' < "$hp_d/raw" > "$hp_d/proof"
+      [ "$hp_rc" = 1 ] && grep -q '^proof: RED java/src/store/Money.java:1 ' "$hp_d/proof" \
+        || { cat "$hp_d/proof" "$hp_d/err"; echo "HOPS PROOF JAVA FAIL (Money.java moved with its package line changed is rc 1, its RED row at line 1 — got rc $hp_rc)"; exit 1; }
+      git reset -q --hard
+      [ -z "$(git status --porcelain)" ] || { git status --porcelain; echo "HOPS RESET FAIL (the shop must be clean after the proofs)"; exit 1; }
+    ) || exit 1
+    rm -rf "$hp_d"
 }
