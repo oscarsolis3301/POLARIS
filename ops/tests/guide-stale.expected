@@ -1,0 +1,47 @@
+== 1. drift: one advisory per stale citation — printed, never counted, never red ==
+   advisory: GUIDE STALE: docs/CLAUDE.md cites checkout.md (missing)
+   advisory: GUIDE STALE: src/pricing/CLAUDE.md cites rates.ts (missing)
+✅ drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry · deps)
+strict-rc=0
+== 2. an engine that ends its lines with CR changes nothing ==
+same bytes as the LF engine: yes
+== 3. no python engine: drift says nothing about guides at all ==
+✅ drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry · deps)
+== 4. hops: off — drift prints exactly what it printed before guides were checked ==
+✅ drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry · deps)
+== 5. T-1 removes and moves paths two guides cite; with no engine its verify says nothing of it ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+rc 0
+== 6. with the engine, verify warns once per guide and path — and still returns 0 ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+   ⚠ docs/CLAUDE.md cites src/cart/cart.ts, which this task removes — own the guide and update it, or drift will report it stale
+   ⚠ docs/CLAUDE.md cites src/cart/coupon.ts, which this task removes — own the guide and update it, or drift will report it stale
+   ⚠ docs/CLAUDE.md cites src/old, which this task removes — own the guide and update it, or drift will report it stale
+   ⚠ src/pricing/CLAUDE.md cites src/cart/cart.ts, which this task removes — own the guide and update it, or drift will report it stale
+   ⚠ src/pricing/CLAUDE.md cites src/old/, which this task removes — own the guide and update it, or drift will report it stale
+rc 0
+== 7. the same verify through a CR engine: the same bytes ==
+same bytes as the LF engine: yes
+== 8. handoff warns the same, right after the map hint, and hands off: rc 0, review/ ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+   ⚠ map_delta is blank but this adds new top-level path(s): attic — if it changes the map, set map_delta on the task so MAP.md stays current (polaris done applies it)
+   ⚠ docs/CLAUDE.md cites src/cart/cart.ts, which this task removes — own the guide and update it, or drift will report it stale
+   ⚠ docs/CLAUDE.md cites src/cart/coupon.ts, which this task removes — own the guide and update it, or drift will report it stale
+   ⚠ docs/CLAUDE.md cites src/old, which this task removes — own the guide and update it, or drift will report it stale
+   ⚠ src/pricing/CLAUDE.md cites src/cart/cart.ts, which this task removes — own the guide and update it, or drift will report it stale
+   ⚠ src/pricing/CLAUDE.md cites src/old/, which this task removes — own the guide and update it, or drift will report it stale
+✅ T-1 → review/. Lock stays until the Integrator lands it. Session may close.
+   1 ready task(s) still queued — the board hands you the next step: bash ops/polaris next
+rc 0
+active:
+review: T-1.md
+== 9. T-2 owns the guide that cites what it removes: the guide IS stale there, and no warning ==
+STALE	docs/CLAUDE.md	checkout.md
+STALE	src/pricing/CLAUDE.md	tax.ts
+STALE	src/pricing/CLAUDE.md	rates.ts
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+rc 0

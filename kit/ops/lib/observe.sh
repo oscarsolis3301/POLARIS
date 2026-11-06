@@ -1162,6 +1162,19 @@ EOF
   done <<EOF
 $(surfaces_health || true)
 EOF
+  # 9) stale folder guides (ops/contracts/save-hops.md § 6): ADVISORY, the orphan-branch class of § 3
+  # — printed, never counted, never red under --strict, qa or finish, because a stale guide must
+  # never stop a run. What counts as a citation is hops' rule alone; drift only prints its rows.
+  # rc 1 (none) · rc 3 (no python) · an engine older than hops · `hops: off` → silence.
+  local srows sg sp
+  srows=""
+  if [ "$(cfg hops on)" != off ]; then srows="$("$SELF" hops --stale 2>/dev/null)" || srows=""; fi
+  while IFS="$POLARIS_TAB" read -r v sg sp; do
+    sp="${sp%$'\r'}"
+    if [ "$v" = STALE ] && [ -n "$sg" ] && [ -n "$sp" ]; then note "advisory: GUIDE STALE: $sg cites $sp (missing)"; fi
+  done <<EOF
+$srows
+EOF
   if [ "$n" -eq 0 ]; then say "drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry · deps)"
   else printf '%d finding(s).\n' "$n"; [ "$strict" = "--strict" ] && exit 1; fi
   return 0

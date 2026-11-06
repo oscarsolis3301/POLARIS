@@ -217,6 +217,8 @@ cmd_verify() {
   # lib/visual.sh and the same sentence, but mid-flight it only warns — a Builder may verify before
   # the shot is taken. The die lives in cmd_handoff.
   visual_gate "$id" warn 2 ""
+  # stale-guide ⚠ (ops/contracts/save-hops.md § 6): handoff's twin, read off this worktree's HEAD.
+  guide_stale_hint "$tf" HEAD
 }
 
 cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
@@ -256,6 +258,7 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
   visual_file_strays "$id"
   visual_caption "$id" "$saw" "$nobefore"
   map_delta_hint "$tf" "feat/$id"
+  guide_stale_hint "$tf" "feat/$id"   # a removed path some guide it does not own still cites → ⚠, never a refusal
   # publish: pr — feat branches never leave the machine; seal pushes ONE integrate branch instead
   # (ops/contracts/publish-modes.md). Everything else stays byte-identical to direct mode.
   publish_resolve

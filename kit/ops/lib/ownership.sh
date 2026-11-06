@@ -1,5 +1,5 @@
 # POLARIS lib/ownership.sh — files_owned matching + RULES policy enforcement sourced by ops/polaris
-# (the lib loader): owned_match/check_ownership, the verify: runner, map_delta hint, the RULES scanners, the stale-tests gate (check_freshness), and the guard entrypoints (_match/_rules).
+# (the lib loader): owned_match/check_ownership, the verify: runner, the map_delta and stale-guide hints, the RULES scanners, the stale-tests gate (check_freshness), and the guard entrypoints (_match/_rules).
 
 # ------------------------------------------------------------------ ownership
 match_one() { # match_one <changed-path> <pattern> — THE matcher: exact | dir/ prefix | glob.
@@ -98,6 +98,65 @@ map_delta_hint() { # map_delta_hint <taskfile> <ref> — warn (never block) when
 $added
 EOF
   [ -n "$new" ] && note "⚠ map_delta is blank but this adds new top-level path(s):$new — if it changes the map, set map_delta on the task so MAP.md stays current (polaris done applies it)"
+  return 0
+}
+guide_stale_hint() { # guide_stale_hint <taskfile> <ref> — map_delta_hint's twin (ops/contracts/save-hops.md
+  # § 6): warn (never block) when the task removes a path that a folder guide it does NOT own still
+  # cites, so the guide is fixed in the same task instead of sending the next agent hunting. What
+  # counts as a citation, and whether it still resolves, is `hops --stale`'s rule alone, run on the
+  # TASK's tree (POLARIS_ROOT = its worktree) — never the primary's, where the path still exists.
+  # This only joins those rows to the removals: a citation names <guide folder>/<c>, then <c> (a
+  # leading / dropped, . and .. folded, never above the root) — a removed file, or a folder the
+  # removals emptied; one ending in / names only a folder, as hops reads it. --no-renames, as in
+  # check_ownership: a moved path is a removed path too.
+  # Cheap first: no removal → no engine at all. No engine, one older than hops, `hops: off` → silence.
+  local tf="$1" ref="$2" gone tree eng rows pairs owned g p
+  if [ "$ref" = "HEAD" ]; then
+    gone="$(git diff --name-only --no-renames --diff-filter=D "$BASE...HEAD" 2>/dev/null)" || return 0
+    tree="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  else
+    gone="$(git -C "$PRIMARY" diff --name-only --no-renames --diff-filter=D "$BASE...$ref" 2>/dev/null)" || return 0
+    tree="$(wt_path "${ref#feat/}")"
+  fi
+  [ -n "$gone" ] && [ -d "$tree" ] || return 0
+  [ "$(cfg hops on)" = off ] && return 0
+  eng="$(index_engine "$PRIMARY")" || return 0
+  rows="$(POLARIS_ROOT="$tree" $eng hops --stale 2>/dev/null)" || return 0
+  pairs="$(printf '%s\n%s\n' "$gone" "$rows" | awk -F'\t' '
+  function norm(s,   n, a, i, k, o, r) {
+    n = split(s, a, "/"); k = 0; r = ""
+    for (i = 1; i <= n; i++) {
+      if (a[i] == "" || a[i] == ".") continue
+      if (a[i] == "..") { if (k == 0) return ""; k--; continue }
+      o[++k] = a[i]
+    }
+    for (i = 1; i <= k; i++) r = r (i > 1 ? "/" : "") o[i]
+    return r
+  }
+  { sub(/\r$/, "") }
+  NF == 3 && $1 == "STALE" { nr++; rg[nr] = $2; rc[nr] = $3; next }
+  $0 != "" { gone[$0] = 1 }
+  END {
+    for (i = 1; i <= nr; i++) {
+      d = rg[i]; sub(/\/CLAUDE\.md$/, "", d); c = rc[i]
+      for (j = 0; j < 2; j++) {
+        p = norm(j ? c : d "/" c)
+        if (p == "") continue
+        hit = (c !~ /\/$/ && (p in gone))
+        if (!hit) for (x in gone) if (index(x, p "/") == 1) { hit = 1; break }
+        if (c ~ /\/$/) p = p "/"
+        if (hit) { if (!((rg[i], p) in seen)) { seen[rg[i], p] = 1; print rg[i] "\t" p }; break }
+      }
+    }
+  }')" || pairs=""
+  owned="$(fm_list files_owned "$tf" 2>/dev/null || true)"
+  while IFS="$POLARIS_TAB" read -r g p; do
+    [ -n "$g" ] || continue
+    if printf '%s\n' "$owned" | owned_match "$g"; then continue; fi
+    note "⚠ $g cites $p, which this task removes — own the guide and update it, or drift will report it stale"
+  done <<EOF
+$pairs
+EOF
   return 0
 }
 

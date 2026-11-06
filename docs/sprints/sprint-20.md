@@ -123,7 +123,7 @@ Builders start with one command, pack, which prints their whole context, and nev
 - [ ] builder.sh gains no function (inline, the SKILLS/SURFACES pattern)
 
 ## T-241 — "polaris hops: measure how many folders one change touches and propose where scattered features should live"
-points 5 · risk normal · landed f8e197f (2026-11-05) · claimed 2026-11-05
+points 5 · risk normal · landed f8e197f (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
 files touched: kit/ops/index.py, kit/ops/lib/search.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/cli-help-parity.cmd, ops/tests/cli-help-parity.expected, ops/tests/hops-map.cmd, ops/tests/hops-map.expected
 
 ### Why
@@ -139,7 +139,7 @@ This is the measuring half of the layout work, and it lives inside index.py beca
 - [ ] api-kit.expected holds this task's index.py rows plus the four W2 sibling rows of § 0.9; the entry and search.sh add no row
 
 ## T-242 — "update says when the layout pass is due, treats LAYOUT.tsv as the owner's, and uninstall takes the root map with it"
-points 3 · risk normal · landed 4298ed6 (2026-11-05) · claimed 2026-11-05
+points 3 · risk normal · landed 4298ed6 (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
 files touched: kit/ops/lib/admin.sh, kit/ops/lib/selftest/fast.sh
 
 ### Why
@@ -155,7 +155,7 @@ The owner decided that a quiet automatic update only flags the layout pass, whil
 - [ ] admin.sh gains exactly one function, update_hops_hint; fast.sh gains none
 
 ## T-243 — "done keeps the root map fresh inside the one map commit it already makes, and done and seal refresh the layout verdict"
-points 3 · risk normal · landed 72625a0 (2026-11-05) · claimed 2026-11-05
+points 3 · risk normal · landed 72625a0 (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
 files touched: kit/ops/lib/integrate.sh, ops/tests/where-done.cmd, ops/tests/where-done.expected
 
 ### Why
@@ -170,7 +170,7 @@ The root map in CLAUDE.md is only useful while it matches MAP.md, and MAP.md cha
 - [ ] integrate.sh gains no function (inline code only)
 
 ## T-244 — "The principle, written where every agent reads it: FEWEST HOPS in CLAUDE.md and SAVE HOPS in the protocol"
-points 3 · risk normal · landed cecbfa4 (2026-11-05) · claimed 2026-11-05
+points 3 · risk normal · landed cecbfa4 (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
 files touched: kit/CLAUDE.md, kit/ops/PROTOCOL.md
 
 ### Why
@@ -185,7 +185,7 @@ The owner wants "save hops, keep going to the end, spend few tokens" to be the c
 - [ ] plain-voice stays green; the two files gain exactly the two pinned heading rows
 
 ## T-245 — "CONDUCTOR and SOLO ask everything first, park what needs the human, run the tidy lane, and close with what waits on you"
-points 3 · risk normal · landed 8694426 (2026-11-05) · claimed 2026-11-05
+points 3 · risk normal · landed 8694426 (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
 files touched: kit/ops/roles/CONDUCTOR.md, kit/ops/roles/SOLO.md
 
 ### Why
@@ -200,7 +200,7 @@ The owner may walk away once a run starts, so a run must never stop in the middl
 - [ ] no heading line added or changed in either file
 
 ## T-246 — "Brand-new repos start tidy: INIT builds the brain and the root map, and the first plan keeps features in one folder"
-points 2 · risk normal · landed c4bdf26 (2026-11-05) · claimed 2026-11-05
+points 2 · risk normal · landed c4bdf26 (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
 files touched: kit/ops/roles/INIT.md, kit/ops/roles/PLANNER.md
 
 ### Why
@@ -213,7 +213,7 @@ A repo that starts tidy never needs a big reorganizing pass later. When POLARIS 
 - [ ] INIT.md gains exactly the one Layout heading row; PLANNER.md gains none (no new line starting with #, inside code fences included)
 
 ## T-247 — "The hop benchmark: five fixed lookups on the practice shop, counted in turns, before and after a layout pass"
-points 2 · risk normal · landed 5e6e28f (2026-11-05) · claimed 2026-11-05
+points 2 · risk normal · landed 5e6e28f (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
 files touched: kit/ops/bench.sh
 
 ### Why
@@ -224,6 +224,50 @@ The plan promises a measured saving, not just a better score: the real test is w
 - [ ] each run prints q<n>, its num_turns and the first line of its answer (or - and error); then the total
 - [ ] --dry-run prints the five questions and five command lines, builds nothing, runs nothing, exits 0
 - [ ] bench.sh gains no function (inline in its dispatch) and existing modes behave as before
+
+## T-248 — "hops proves a move changed nothing but paths: --score, --owned, --proof, --remap, and published code stays put"
+points 5 · risk normal · landed 2b709d1 (2026-11-05) · claimed 2026-11-05
+files touched: kit/ops/index.py, ops/tests/api-kit.expected, ops/tests/hops-moves.cmd, ops/tests/hops-moves.expected
+
+### Why
+"Guaranteed" here means failure is safe: a move that cannot be proven never ships. This task adds the four flags that turn a list of moves into something checkable. --score shows the before and after folders-per-change and, per feature, "change checkout: 4 folders → 1". --owned lists every file a pass must own: the moved files, everything that imports them (aliases included) and every config or doc that mentions their paths. --proof is the guarantee: it compares the working tree against the base and is green only if every changed line is an import or a path mention that now points at the moved file, with nothing deleted that was not moved; any real logic change is red. --remap renames moved modules inside the harness baseline, so a genuinely lost module still fails instead of being hidden by a blind refresh. The task also stops hops from ever proposing to move published code: a package's entry points, Python packages, Go and Java files, and Unity moves across an .asmdef. It owns the api-kit golden for this wave.
+
+### Acceptance
+- [ ] --score, --owned, --proof and --remap behave exactly as § 1.6, including the pinned output lines and exit codes
+- [ ] --proof runs in the current directory's repository against the merge base, before a commit, and is red with one line per offence for a logic edit, an unplanned deletion or a missing destination
+- [ ] a relative moves path resolves against the current directory first, then the primary (§ 0.3)
+- [ ] FIXED rule 9 (published package closure, pyproject packages and scripts, .go/.java/.kt files, cross-.asmdef Unity moves) is enforced in every MOVE row
+- [ ] the new hops-moves golden covers: a pure move proves green, a logic edit and a Java package-line change prove red, --score drops after the moves, --owned lists an @/ alias importer and a doc mention, --remap renames a baseline module, published paths are never proposed
+- [ ] hops-map stays green; api-kit.expected holds this task's rows plus the W3 sibling rows of § 0.9
+
+## T-249 — "A guide that points at a path that no longer exists gets noticed: drift says so, and handoff warns the task that removed it"
+points 3 · risk normal · landed 475c047 (2026-11-05) · claimed 2026-11-05
+files touched: kit/ops/lib/builder.sh, kit/ops/lib/observe.sh, kit/ops/lib/ownership.sh, ops/tests/guide-stale.cmd, ops/tests/guide-stale.expected
+
+### Why
+Folder guides hold stable knowledge, but they still name files ("to change prices, read pricing.ts first"), and a guide that points at a file that was moved or deleted sends the next agent hunting. Two cheap warnings catch it without ever blocking anyone. drift, which the planner reads first, prints an advisory line for every guide that cites a missing path. And when a task deletes a path that some guide it does not own still cites, handoff and verify print one warning telling it to own the guide and fix it, the same way they already warn about a missing map_delta. Both use hops --stale, so the rule for what counts as a citation lives in one place. They are advisories on purpose: a stale guide must never stop a run.
+
+### Acceptance
+- [ ] drift prints advisory: GUIDE STALE: <guide> cites <path> (missing) per stale citation; never counted, never red under --strict, qa or finish; silent without a python engine (§ 6)
+- [ ] guide_stale_hint warns once per (guide, path) when the task deletes a path cited by a guide outside its files_owned, using hops --stale on the task's own tree; it never fails handoff or verify
+- [ ] handoff calls it right after map_delta_hint, and verify calls it too
+- [ ] the new guide-stale golden covers the drift advisory, the warning, and silence when the task owns the guide; drift-deps is unchanged
+- [ ] ownership.sh gains exactly guide_stale_hint; observe.sh and builder.sh gain no function
+
+## T-250 — "The TIDY role: one context that proves every move, writes the folder guides and lands one task — plus the guide template"
+points 3 · risk normal · landed 3a121d7 (2026-11-05) · claimed 2026-11-05
+files touched: kit/ops/roles/TIDY.md, kit/ops/templates/FOLDER-CLAUDE.md
+
+### Why
+This is the role that acts on what hops measures, and it is written so it can run to the end with nobody watching. It enters from four places (the end of a run, a bare start on an empty board, a conductor's subagent, a typed update), uses only answers gathered before work started, and turns everything it cannot decide into a keep row marked "unsure — left for you". Its pass: commit a pending update first, show the map, write the proposal (at most 25 moved files and 8 guides), pick a proving check (typecheck, build, test, or the generated harness; with none it writes guides only), author and claim one task whose files are exactly what hops --owned lists, move files five at a time with hops --proof and the check green before each commit, remap the harness baseline, write the guides from hops --facts, refresh the root map, run the suite once and land. The folder guide template ships beside it: at most 25 lines of plain Markdown, so a guide keeps helping any agent or person even after POLARIS is removed.
+
+### Acceptance
+- [ ] TIDY.md is at most 90 lines with exactly the four pinned headings and no other line starting with # (code fences included)
+- [ ] the Entry and The pass sections carry every rule and command of § 7.1, in order; merges only with a recorded up-front yes, via approve --plan
+- [ ] conductor-entered, TIDY returns its report and never runs next or finish
+- [ ] the Report section asks for the before/after table, the per-feature "fewer lookups" lines and what was left for the human
+- [ ] FOLDER-CLAUDE.md is at most 25 lines, starts and ends with the guide markers, has exactly the one pinned heading, plain Markdown, no POLARIS command
+- [ ] the two files add exactly the five heading rows of § 0.9 (T-248 records them)
 
 ## T-254 — "Drills tidy up after themselves: notify puts the settings file back byte for byte, and park commits only its own file"
 points 2 · risk normal · landed 1a24c7f (2026-11-05) · claimed 2026-11-05 → done 2026-11-05

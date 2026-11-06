@@ -15,14 +15,18 @@ Three tiers, all emitting byte-identical output:
   2 sqlite, no FTS5 -t uses LIKE over the body column
   3 no sqlite       live scan, no persistence — slower, never wrong
 """
+import collections
+import difflib
 import fnmatch
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
 import sys
 import time
+import types
 
 try:
     import sqlite3
@@ -619,15 +623,17 @@ def _mentions(root, path):
     return out
 
 
-def _resolver_facts(root, paths):
+def _resolver_facts(root, paths, text=None):
     """{indexed path: id} -> (bybase, aliases, pyroots): what resolve_import needs beyond the edge
     itself. One home, because build() and `hops` must resolve an import to the SAME file: the
     basename buckets, every tsconfig/jsconfig's aliases, and python's src/ root when a package or
-    module sits directly under src/ (ops/contracts/save-hops.md § 1.1)."""
+    module sits directly under src/ (ops/contracts/save-hops.md § 1.1). `text` reads a config from
+    another tree than the disk — `hops --proof` resolves the base's imports from the base's configs."""
     bybase = {}
     for p, i in paths.items():
         bybase.setdefault(os.path.basename(p), []).append((p, i))
-    aliases = _aliases({p: read(root, p) or "" for p in paths
+    text = text or (lambda p: read(root, p))
+    aliases = _aliases({p: text(p) or "" for p in paths
                         if os.path.basename(p) in ("tsconfig.json", "jsconfig.json")})
     pyroots = ["src"] if any(p.startswith("src/") and re.match(r"src/[^/]+(?:/__init__)?\.py$", p)
                              for p in paths) else []
@@ -976,6 +982,10 @@ _HOPS_STOP = frozenset((
 _HOPS_TOKEN = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+")    # words, camelCase split
 _HOPS_CITE = re.compile(r"`([^`]+)`")
 _GUIDE_OPEN, _GUIDE_CLOSE = "<!-- polaris:guide -->", "<!-- /polaris:guide -->"
+_WHERE_OPEN, _WHERE_CLOSE = "<!-- polaris:where -->", "<!-- /polaris:where -->"
+_HOPS_PLAN = ("--score", "--owned", "--proof", "--remap")     # the flags that read a <moves.tsv>
+_HOPS_ENTRY = ("main", "module", "exports", "bin")           # what makes a package.json published
+_HOPS_FROM = re.compile(r"""^\s*\}\s*from\s*['"](?P<n>[^'"]+)['"]""")   # a multi-line import's last line
 
 
 def _hops_cfg(conv, key, default=""):
@@ -1023,9 +1033,118 @@ def _hops_in_flight(root, base):
     return out
 
 
-def _hops_fixed(root, base):
-    """§ 1.4 rules 1-8 and 10 as ONE predicate: True = never proposed as a `from` or a `to`, and not
-    counted in the score. Rule 9, the public surface, is T-248's."""
+def _hops_toml(text):
+    """A pyproject.toml read just far enough for rule 9 — python 3.8 has no tomllib: (every [table]
+    header, the module of every [project.scripts] entry). `name = "pkg.mod:fn"` gives pkg.mod; the
+    inline `scripts = { … }` form inside [project] counts the same."""
+    tables, mods, cur = [], [], ""
+    for line in text.split("\n"):
+        s = line.strip()
+        if s.startswith("[["):                       # an array of tables: never project's
+            cur = ""
+            continue
+        m = re.match(r"\[\s*([^\[\]]+?)\s*\](?:\s*#.*)?$", s)
+        if m:
+            cur = re.sub(r"[\s\"']", "", m.group(1))
+            tables.append(cur)
+        elif cur == "project.scripts":
+            m = re.match(r"""[^=]+=\s*(["'])([^"']+)\1""", s)
+            mods += [m.group(2)] if m else []
+        elif cur == "project" and re.match(r"scripts\s*=\s*\{", s):
+            mods += [v for _, v in re.findall(r"""=\s*(["'])([^"']+)\1""", s[s.index("{"):])]
+    return tables, [x.split(":")[0].strip() for x in mods]
+
+
+def _hops_leaves(v):
+    """Every string inside a package.json value — `exports` nests conditions and subpaths."""
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, dict):
+        v = list(v.values())
+    return [s for x in v for s in _hops_leaves(x)] if isinstance(v, list) else []
+
+
+def _hops_public(root, files, edges):
+    """§ 1.4 rule 9 (a)-(b), the public surface: (paths, folder prefixes, globs) that another repo
+    or a runtime reaches BY NAME, so a move breaks callers this repo cannot see. (a) a published
+    package — a package.json without "private": true that has main, module, exports or bin: the
+    manifest itself, the files those name (an exports `*` stays a glob, so a file moved INTO it
+    would turn public), and everything they reach by resolved imports; (b) a pyproject.toml with a
+    [project] table: every package folder (it holds an __init__.py) directly under its own folder
+    or that folder's src/, and every module [project.scripts] names."""
+    have = set(files)
+    named, prefixes, globs = set(), [], []
+    for pj in files:
+        if pj.rpartition("/")[2] != "package.json":
+            continue
+        meta = _jsonc(read(root, pj) or "") or {}
+        if meta.get("private") is True or not any(k in meta for k in _HOPS_ENTRY):
+            continue
+        d = pj.rpartition("/")[0]
+        named.add(pj)
+        for spec in _hops_leaves([meta.get(k) for k in _HOPS_ENTRY]):
+            p = _rel(d, spec) + ("/*" if spec.endswith("/") else "")    # "./lib/": the whole folder
+            if "*" in p:
+                globs.append(p)
+                continue
+            for c in ([p] + [p + e for e in (".js", ".mjs", ".cjs", ".json", ".ts", ".tsx", ".jsx")]
+                      + [p + "/index" + e for e in (".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx")]):
+                if c in have:
+                    named.add(c)
+                    break
+    named.update(p for p in files if any(fnmatch.fnmatchcase(p, g) for g in globs))
+    out = {}
+    for a, b in edges:
+        out.setdefault(a, []).append(b)
+    todo = list(named)
+    while todo:                                  # the closure: whatever a published file imports
+        for b in out.get(todo.pop(), ()):
+            if b not in named:
+                named.add(b)
+                todo.append(b)
+    for pp in files:
+        if pp.rpartition("/")[2] != "pyproject.toml":
+            continue
+        tables, mods = _hops_toml(read(root, pp) or "")
+        if not any(t == "project" or t.startswith("project.") for t in tables):
+            continue
+        pre = pp[:-len("pyproject.toml")]
+        for p in files:
+            rest = p[len(pre):].split("/") if p.startswith(pre) and p.endswith("/__init__.py") else []
+            if len(rest) == 2 or (len(rest) == 3 and rest[0] == "src"):
+                prefixes.append(pre + "/".join(rest[:-1]) + "/")
+        for m in mods:
+            m = m.replace(".", "/")
+            named.update(pre + c for c in (m + ".py", m + "/__init__.py", "src/" + m + ".py",
+                                           "src/" + m + "/__init__.py") if pre + c in have)
+    return named, tuple(prefixes), globs
+
+
+def _hops_assembly(files):
+    """§ 1.4 rule 9 (d): path -> the nearest .asmdef or .asmref above it (None outside every Unity
+    assembly). A move whose two ends answer differently changes which assembly compiles the file —
+    its references, platforms and defines with it — so it is never proposed. An .asmref counts as
+    a boundary too: it hands its folder to another assembly, and two answers that might agree are
+    still kept apart, which is the safe side of the guess."""
+    asm = {}
+    for f in sorted(files):
+        if f.endswith((".asmdef", ".asmref")):
+            asm.setdefault(f.rpartition("/")[0], f)
+
+    def _near(p):
+        d = p.rpartition("/")[0]
+        while d not in asm:
+            if not d:
+                return None
+            d = d.rpartition("/")[0]
+        return asm[d]
+    return _near
+
+
+def _hops_fixed(root, base, files=(), edges=()):
+    """§ 1.4 rules 1-10 as ONE predicate over a path: True = never proposed as a `from` or a `to`,
+    and not counted in the score. Rule 9 (d), a move across Unity assemblies, is a property of the
+    move rather than of one path: _hops_assembly answers it where the MOVE rows are made."""
     conv = read(root, "ops/CONVENTIONS.md") or ""
     pats = _hops_cfg(conv, "generated").split()                                       # 4
     gal = _hops_cfg(conv, "gallery").strip("/")
@@ -1038,6 +1157,7 @@ def _hops_fixed(root, base):
              if len(r) > 1 and r[1] == "keep"]
     flight = _hops_in_flight(root, base)                                              # 10
     held = tuple(p for p in flight if p.endswith("/"))
+    named, pkgs, globs = _hops_public(root, files, edges)                             # 9 (a) (b)
     # 2: app/ pages/ routes/ are framework-ROUTED under a next/nuxt/svelte/remix/astro config at
     # the root and framework-LOOKING without one — nothing moves in or out of either this pass
     # (asking about the second kind is --questions, T-251's)
@@ -1049,7 +1169,10 @@ def _hops_fixed(root, base):
         return (not segs or segs[0] in ("ops", ".claude", ".github", ".polaris", "archive")  # 1
                 or bool(routed.intersection(segs)) or bool(VENDOR.search(p))               # 2, 3
                 or bool(unity.intersection(segs)) or p.endswith((".meta", ".asmdef", ".asmref"))
-                or p in flight or p.startswith(held) or any(_hops_match(p, x) for x in pats))
+                or p in flight or p.startswith(held) or any(_hops_match(p, x) for x in pats)
+                # 9 (c): a Go, Java or Kotlin file's folder IS its package name
+                or p in named or p.startswith(pkgs) or p.endswith((".go", ".java", ".kt"))
+                or any(fnmatch.fnmatchcase(p, g) for g in globs))
     return _fixed
 
 
@@ -1081,27 +1204,27 @@ def _hops_history(root, base, tracked):
     return kept
 
 
-def _hops_imports(root, movable):
-    """§ 1.3 static coupling: {(a, b), a < b} for every resolved import edge with both ends movable.
-    Each edge is resolved AFRESH from its raw spec rather than trusting the stored dst_id: build()
-    re-inserts an edited file under a new id and never re-resolves the edges still pointing at the
-    old one (the stale-edge line in IDEAS.md), so the stored graph quietly loses the edges into the
-    files that change most — the very files this report is about. Same resolver, same facts."""
+def _hops_edges(root):
+    """[(a, b)]: file a imports file b, for every import edge in the index — § 1.3's static
+    coupling, rule 9's published closure and --owned's importers all read this one list. Each edge
+    is resolved AFRESH from its raw spec rather than trusting the stored dst_id: build() re-inserts
+    an edited file under a new id and never re-resolves the edges still pointing at the old one
+    (the stale-edge line in IDEAS.md), so the stored graph quietly loses the edges into the files
+    that change most — the very files this report is about. Same resolver, same facts."""
     con, _, _, _ = build(root)
     try:
         byid = dict(con.execute("SELECT id,path FROM files").fetchall())
         paths = {p: i for i, p in byid.items()}
         bybase, aliases, pyroots = _resolver_facts(root, paths)
-        pairs = set()
+        out = []
         for sid, raw in con.execute("SELECT src_id,raw FROM edges").fetchall():
             a = byid.get(sid)
-            if a in movable:
-                b = byid.get(resolve_import(raw, a, paths, bybase, aliases=aliases, pyroots=pyroots))
-                if b in movable and b != a:
-                    pairs.add((min(a, b), max(a, b)))
+            b = a and byid.get(resolve_import(raw, a, paths, bybase, aliases=aliases, pyroots=pyroots))
+            if b and b != a:
+                out.append((a, b))
     finally:
         con.close()
-    return pairs
+    return out
 
 
 def _hops_clusters(commits, pairs):
@@ -1220,15 +1343,523 @@ def _hops_stale(root, guides):
     return out
 
 
+def _hops_mean(commits, ren=None):
+    """§ 1.3 folders per change: the mean count of distinct parent folders over the kept changes,
+    each path renamed through `ren` first when one is given (--score's after)."""
+    ren = ren or {}
+    return (sum(len({ren.get(p, p).rpartition("/")[0] for p in c}) for c in commits) / len(commits)
+            if commits else 0.0)
+
+
+def _hops_survey(root, files):
+    """Everything the report and --score stand on, measured once (§ 1.3-§ 1.5): the FIXED
+    predicate, the movable files, the kept changes as sets of movable paths, the clusters with
+    their strengths, movable files per folder, every folder, and the guides."""
+    s = types.SimpleNamespace(files=files, tracked=set(files))
+    s.base = _hops_cfg(read(root, "ops/CONVENTIONS.md") or "", "base", "main")
+    s.edges = _hops_edges(root)
+    s.fixed = _hops_fixed(root, s.base, files, s.edges)
+    s.movable = {p for p in files if not s.fixed(p)}
+    s.commits = [c for c in (k & s.movable for k in _hops_history(root, s.base, s.tracked)) if c]
+    s.clusters, s.strength = _hops_clusters(
+        s.commits, {(min(a, b), max(a, b)) for a, b in s.edges if a in s.movable and b in s.movable})
+    s.per, s.folders = {}, set()
+    for p in files:
+        segs = p.split("/")[:-1]
+        s.folders.update("/".join(segs[:i]) for i in range(1, len(segs) + 1))
+        if p in s.movable and segs:
+            d = "/".join(segs)
+            s.per[d] = s.per.get(d, 0) + 1
+    s.dirs = sorted(s.per, key=lambda d: (-s.per[d], d))
+    s.guides = _hops_guides(root, files)
+    s.big = [d for d in s.dirs if s.per[d] >= 5]
+    s.missing = [d for d in s.big if d not in s.guides]
+    return s
+
+
+def _hops_proposals(root, s):
+    """§ 1.5 -> (SCATTER rows [(name, folders, home, files)], MOVE rows [(from, to, name)]).
+    SCATTER: a cluster spanning 3+ folders, the biggest win first — (folders - 1) x the changes
+    that touched it — then by name. MOVE: each file not yet in its home goes to <home><basename>,
+    unless two would land on one name, the target exists or is FIXED, the two ends sit in
+    different Unity assemblies (rule 9 d), or the home would pass 30 files (one giant folder must
+    never win the score). A 30+ file cluster gets no MOVE rows."""
+    asm = _hops_assembly(s.files)
+    scat = []
+    for cl in s.clusters:
+        k = len({p.rpartition("/")[0] for p in cl})
+        if k >= 3:
+            name = _hops_name(cl, s.strength)
+            touched = sum(1 for c in s.commits if c.intersection(cl))
+            scat.append((-(k - 1) * touched, name, cl, k))
+    scat.sort()
+    rows, moves, claimed = [], [], set()
+    for _, name, cl, k in scat:
+        home = _hops_home(cl, name, s.folders)
+        rows.append((name, k, home, cl))
+        if len(cl) > 30 or os.path.isfile(os.path.join(root, home[:-1])):
+            continue
+        want = {}
+        for p in cl:
+            if not p.startswith(home):
+                want.setdefault(home + p.rpartition("/")[2], []).append(p)
+        mv = sorted((ps[0], t) for t, ps in want.items()
+                    if len(ps) == 1 and t not in s.tracked and t not in claimed and not s.fixed(t)
+                    and asm(ps[0]) == asm(t) and not os.path.lexists(os.path.join(root, t)))
+        inside = sum(1 for p in s.files if p.rpartition("/")[0] == home[:-1])
+        if mv and inside + len(mv) <= 30:
+            moves += [(f, t, name) for f, t in mv]
+            claimed.update(t for _, t in mv)
+    return rows, moves
+
+
+def _hops_file(p):
+    """A path a moves file may hold (§ 0.3): repo-relative, `/`-separated, a file — never a
+    folder, and never a .meta, which travels with its asset."""
+    return (bool(p) and "\\" not in p and not re.match(r"[A-Za-z]:", p) and not p.endswith(".meta")
+            and all(x not in ("", ".", "..") for x in p.split("/")))
+
+
+def _hops_plan(root, arg):
+    """§ 0.3: <moves.tsv> -> [(kind, from, to)], or None when it is missing or malformed. A relative
+    path is the current directory's first, then the primary's (root) — so the plan in the
+    primary's .polaris/ answers from a tidy task's worktree. Malformed: a row that is not
+    `move|merge<TAB><file><TAB><file>`, a path _hops_file refuses, a file moved twice, two moves
+    onto one name, or a path that is moved and is also a destination."""
+    p = arg
+    if not os.path.isabs(arg):
+        p = next((x for x in (os.path.join(os.getcwd(), arg), os.path.join(root, arg))
+                  if os.path.isfile(x)), "")
+    try:
+        with open(p, "rb") as fh:
+            text = fh.read().decode("utf-8")
+    except (OSError, ValueError):
+        return None
+    rows = []
+    for line in text.lstrip("﻿").split("\n"):
+        line = line.rstrip("\r")
+        if not line.strip() or line.startswith("#"):
+            continue
+        f = line.split("\t")
+        if len(f) != 3 or f[0] not in ("move", "merge") or f[1] == f[2] or not all(map(_hops_file, f[1:])):
+            return None
+        rows.append((f[0], f[1], f[2]))
+    froms = [f for _, f, _ in rows]
+    tos = [t for k, _, t in rows if k == "move"]
+    into = {t for k, _, t in rows if k == "merge"}
+    if (len(set(froms)) < len(froms) or len(set(tos)) < len(tos)
+            or set(froms) & (set(tos) | into) or set(tos) & into):
+        return None
+    return rows
+
+
+def _hops_score(root, rows, files):
+    """--score <moves> (§ 1.6): folders per change before and after — the same history with every
+    from renamed to its to (a merge's to its into) — then, for each cluster the moves touch, how
+    many folders one change of it spans now and how many after."""
+    s = _hops_survey(root, files)
+    ren = {f: t for _, f, t in rows}
+    f0, f1 = _hops_mean(s.commits), _hops_mean(s.commits, ren)
+    pct = int(math.floor(100 * (f0 - f1) / f0 + 0.5)) if f0 else 0
+    print("score: %.2f → %.2f folders per change (%d%% fewer) · guides %d/%d"
+          % (f0, f1, pct, len([d for d in s.big if d in s.guides]), len(s.big)))
+    hit = []
+    for cl in s.clusters:
+        if any(p in ren for p in cl):
+            k = len({p.rpartition("/")[0] for p in cl})
+            touched = sum(1 for c in s.commits if c.intersection(cl))
+            hit.append((-(k - 1) * touched, _hops_name(cl, s.strength), k,
+                        len({ren.get(p, p).rpartition("/")[0] for p in cl})))
+    for _, name, k, k2 in sorted(hit):
+        print("change %s: %d folders → %d" % (name, k, k2))
+    return 0
+
+
+def _hops_owned(root, rows, files):
+    """--owned <moves> (§ 1.6): every path a pass making these moves must own, one per line, sorted
+    and unique — each from, to and into; the tracked .meta of a Unity asset and its future name;
+    every tracked file whose resolved import names a from (aliases included); every tracked
+    non-code file naming a from by its tail (§ 1.1). Plus the guides, CLAUDE.md and ops/LAYOUT.tsv,
+    that is a tidy task's files_owned."""
+    have = set(files)
+    froms = {f for _, f, _ in rows}
+    out = set()
+    for kind, f, t in rows:
+        out.update((f, t))
+        if f + ".meta" in have:
+            out.update((f + ".meta", t + ".meta") if kind == "move" else (f + ".meta",))
+    out.update(a for a, b in (_hops_edges(root) if rows else ()) if b in froms and a in have)
+    for rel in files:
+        if _mention_src(rel) and rows:
+            text = read(root, rel) or ""
+            if any(_mentioned(f, rel, text) for f in froms):
+                out.add(rel)
+    for p in sorted(out):
+        print(p)
+    return 0
+
+
+def _hops_remap(root, rows):
+    """--remap <moves> (§ 1.6, G8): the harness baseline follows the moves. In its `modules`, an
+    entry naming a from — a python module (dotted, from the .py path, as the harness lists it) or a
+    node module (its path) — becomes its to, and a merged from's entry is dropped; `routes`,
+    `scripts` and the order stay as they are. Never a refresh: a module that truly vanished is
+    still listed, so the harness still fails on it. An unreadable baseline is none at all, exactly
+    as the harness itself reads it."""
+    rel = ".polaris/harness-baseline.json"
+    path = os.path.join(root, rel)
+    try:
+        with open(path, encoding="utf-8-sig") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        data = None
+    if not isinstance(data, dict):
+        print("remap: no %s — nothing to remap" % rel)
+        return 1
+    ren, drop = {}, set()
+    for kind, f, t in rows:
+        py = f.endswith(".py") and t.endswith(".py")
+        if kind == "merge":
+            drop.update([f] + ([_hops_dotted(f[:-3])] if f.endswith(".py") else []))
+            continue
+        ren[f] = t
+        if py:
+            ren[_hops_dotted(f[:-3])] = _hops_dotted(t[:-3])
+    mods, out, n = data.get("modules"), [], 0
+    for m in mods if isinstance(mods, list) else ():
+        hit = isinstance(m, str) and (m in drop or m in ren)
+        n += hit
+        if not (hit and m in drop):
+            out.append(ren[m] if hit else m)
+    if n:
+        data["modules"] = out
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+    print("remap: %d module names moved in %s" % (n, rel))
+    return 0
+
+
+def _hops_dotted(p):
+    """`a/b/c` -> `a.b.c`, the module a python import names; a package's `a/b/__init__` -> `a.b`."""
+    d = p.replace("/", ".")
+    return d[:-len(".__init__")] if d.endswith(".__init__") else d
+
+
+def _hops_forms(f, t):
+    """[(old name, new name)]: the ways a line can name file f, each paired with how it names t
+    once f has moved there — the path; its tail (§ 1.1: extension and one leading src/ dropped —
+    the new tail drops src/ only where the old one did, so a root-relative mention stays
+    root-relative); and for a python file the dotted module of both (`a/b/c.py` ↔ `a.b.c`). A
+    tail or a module that is one bare word names nothing: `main` is half the prose in a repo."""
+    nf, nt = os.path.splitext(f)[0], os.path.splitext(t)[0]
+    tf, tt = (nf[4:], nt[4:] if nt.startswith("src/") else nt) if f.startswith("src/") else (nf, nt)
+    out = [(f, t)] + ([(tf, tt)] if "/" in tf else [])
+    if f.endswith(".py") and t.endswith(".py"):
+        out += [(_hops_dotted(a), _hops_dotted(b)) for a, b in ((nf, nt), (tf, tt))
+                if "." in _hops_dotted(a)]
+    return out
+
+
+def _hops_sub(to):
+    """{from: its new path} -> the (a) rewrite of one line: every name _hops_forms gives a moved
+    file, longest first, in ONE left-to-right pass (a new name is never rewritten again), and
+    each bounded — no letter, digit, _ or . before it and no letter, digit or _ after — so
+    `components/CartItem` is not `components/Cart` and `x.shop.cart` is not `shop.cart`. A name
+    two moves would rewrite differently is ambiguous, and left alone."""
+    forms = {}
+    for f, t in to.items():
+        for a, b in _hops_forms(f, t):
+            forms[a] = b if forms.get(a, b) == b else None
+    forms = {a: b for a, b in forms.items() if b is not None and a != b}
+    if not forms:
+        return lambda line: line
+    rx = re.compile(r"(?<![\w.])(?:%s)(?!\w)" % "|".join(
+        re.escape(a) for a in sorted(forms, key=lambda a: (-len(a), a))))
+    return lambda line: rx.sub(lambda m: forms[m.group(0)], line)
+
+
+def _hops_spec(line, lang):
+    """(start, end) of the module an import line names, or None when the line imports nothing:
+    the index's own IMPORTS patterns (js/ts import mid-line too: `const x = require(…)`), and the
+    `} from "./x"` that closes a multi-line JS/TS import."""
+    ire = IMP_RE.get(lang)
+    m = ire and (ire[0].match(line) or (ire[0].search(line) if lang in ("js", "ts") else None))
+    if not m and lang in ("js", "ts"):
+        m = _HOPS_FROM.match(line)
+    for k, v in (m.groupdict().items() if m else ()):
+        if v and (k == "n" or k.startswith(("n_", "n2_"))):
+            return m.span(k)
+    return None
+
+
+def _hops_blobs(repo, rev, paths):
+    """{path: bytes} for every path that exists at rev — ONE `git cat-file --batch` however many."""
+    paths = sorted(set(paths))
+    try:
+        out = subprocess.run(["git", "cat-file", "--batch"], cwd=repo, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL,
+                             input="".join("%s:%s\n" % (rev, p) for p in paths).encode("utf-8")).stdout
+    except Exception:
+        return {}
+    res, i = {}, 0
+    for p in paths:
+        nl = out.find(b"\n", i)
+        if nl < 0:
+            break
+        head, i = out[i:nl].split(), nl + 1
+        if len(head) == 3 and head[2].isdigit():      # "<sha> <type> <size>", the bytes, a LF
+            if head[1] == b"blob":
+                res[p] = out[i:i + int(head[2])]
+            i += int(head[2]) + 1
+    return res
+
+
+def _hops_disk(repo, p):
+    try:
+        with open(os.path.join(repo, p), "rb") as fh:
+            return fh.read()
+    except OSError:
+        return None
+
+
+def _hops_text(b):
+    """bytes -> text, or None for no file or a binary one (a NUL early on: read()'s test)."""
+    return None if b is None or b"\0" in b[:8000] else b.decode("utf-8", "replace")
+
+
+def _hops_numbered(path, text):
+    """[(line number, line)] as --proof weighs a file: split on LF, a CR before it dropped (an
+    autocrlf checkout has CRLF on disk and LF in the repo), no line after a final newline. A
+    CLAUDE.md loses what the pass owns there — a folder's guide block, the root's map block, each
+    to its closing marker or the end — and its blank lines: whitespace round a block is the block's."""
+    ls = text.split("\n")
+    if ls and ls[-1] == "":
+        ls.pop()
+    out = [(n, x[:-1] if x.endswith("\r") else x) for n, x in enumerate(ls, 1)]
+    if path != "CLAUDE.md" and not path.endswith("/CLAUDE.md"):
+        return out
+    o, c = (_WHERE_OPEN, _WHERE_CLOSE) if path == "CLAUDE.md" else (_GUIDE_OPEN, _GUIDE_CLOSE)
+    keep, inside = [], False
+    for n, x in out:
+        if not inside and x == o:
+            inside = True
+        elif inside:
+            inside = x != c
+        elif x.strip():
+            keep.append((n, x))
+    return keep
+
+
+def _hops_fits(A, B, bodies):
+    """True when B is A with every body inserted WHOLE, in its own order, somewhere: a merge folds
+    each from in one piece. Each line of A and of a body is the versions it may take — as it was,
+    or with the moved names rewritten — so a line nobody touched passes as it does in a move. The
+    search runs over (place in B, bodies used): the place in A follows from those two, so it stays
+    small however long the files are."""
+    bodies = [b for b in bodies if b]
+    lens = [len(b) for b in bodies]
+    full, seen, todo = (1 << len(bodies)) - 1, set(), [(0, 0)]
+    while todo:
+        j, used = todo.pop()
+        if (j, used) in seen:
+            continue
+        seen.add((j, used))
+        i = j - sum(n for k, n in enumerate(lens) if used >> k & 1)
+        if j == len(B) and i == len(A) and used == full:
+            return True
+        if i < len(A) and j < len(B) and B[j] in A[i]:
+            todo.append((j + 1, used))
+        for k, b in enumerate(bodies):
+            if (not used >> k & 1 and j + lens[k] <= len(B)
+                    and all(B[j + x] in b[x] for x in range(lens[k]))):
+                todo.append((j + lens[k], used | 1 << k))
+    return False
+
+
+def _hops_proof(rows):
+    """--proof <moves> — the guarantee (§ 1.6). In the repository of the CURRENT directory (a tidy
+    task's worktree): its working tree — staged and unstaged, so a step is proven before its
+    commit — against `git merge-base <base> HEAD`. Green iff every deleted path is a planned from
+    and every added path a planned to (a Unity asset's .meta travels with it); every to exists and
+    its from does not — "exists" is what a commit of the tree would hold: tracked and on disk, so
+    an untracked copy is still missing; and every changed line pair is (a) the old line once each
+    moved file's names point at its new place (_hops_sub), or (b) an import of the moved
+    counterpart of the file it imported. A merge's into may gain only its froms' lines and import
+    edits. Guide blocks, the root-map block and ops/LAYOUT.tsv are never weighed. Only the listed
+    rows count: a partial plan proves exactly the steps it lists. One RED line per offence — per
+    path, or per changed block at its first bad line. Read-only."""
+    repo = sh(["git", "rev-parse", "--show-toplevel"], ".").strip()
+    base = _hops_cfg(read(repo, "ops/CONVENTIONS.md") or "", "base", "main") if repo else ""
+    mb = sh(["git", "merge-base", base, "HEAD"], repo).strip() if repo else ""
+    if not mb:
+        sys.stderr.write(_HOPS_USAGE)
+        return 2
+
+    def _z(*args):
+        return [p for p in sh(["git"] + list(args), repo).split("\0") if p]
+    old = set(_z("ls-tree", "-r", "-z", "--name-only", mb))
+    now = {p for p in _z("ls-files", "-z") if os.path.lexists(os.path.join(repo, p))}
+    st = _z("diff", "--no-renames", "--no-ext-diff", "--name-status", "-z", mb, "--")
+    status = dict(zip(st[1::2], (x[:1] for x in st[0::2])))
+    move = {f: t for k, f, t in rows if k == "move"}
+    merge = {f: t for k, f, t in rows if k == "merge"}
+    for f, t in list(move.items()):
+        if f + ".meta" in old:
+            move[f + ".meta"] = t + ".meta"
+    metas = {f + ".meta" for f in merge if f + ".meta" in old}     # a merged asset's .meta just goes
+    to = dict(move)
+    to.update(merge)
+    came = {t: f for f, t in move.items()}
+    bad, changed = set(), [0]
+    for f, t in sorted(move.items()) + sorted(merge.items()):
+        if t not in now:
+            bad.add((f, 1, "%s missing" % t))
+        if f in now:
+            bad.add((t, 1, "%s still exists" % f))
+    bad.update((m, 1, "%s still exists" % m) for m in metas if m in now)
+    blob = _hops_blobs(repo, mb, [p for p in old if p in status or p in to or p in merge.values()
+                                  or p.rpartition("/")[2] in ("tsconfig.json", "jsconfig.json")])
+    sides = {}
+    for side, have, text in (("old", old, lambda p: _hops_text(blob.get(p))),
+                             ("new", now, lambda p: _hops_text(_hops_disk(repo, p)))):
+        paths = {p: p for p in have}
+        _, aliases, pyroots = _resolver_facts(repo, paths, text)
+        sides[side] = (paths, aliases, pyroots)
+    sub = _hops_sub(to)
+
+    def _target(spec, src, side):
+        # no basename buckets: an import proves only when it names its file outright
+        p, aliases, pyroots = sides[side]
+        return resolve_import(spec, src, p, {}, aliases=aliases, pyroots=pyroots)
+
+    def _pair(o, n, so, sn):
+        """(a) or (b) for one changed line pair: line o of file so at the base, n of sn now."""
+        if sub(o) == n:
+            return True
+        i, j = _hops_spec(o, lang_of(so)), _hops_spec(n, lang_of(sn))
+        if not i or not j or sub(o[:i[0]]) != n[:j[0]] or sub(o[i[1]:]) != n[j[1]:]:
+            return False
+        a, b = _target(o[i[0]:i[1]], so, "old"), _target(n[j[0]:j[1]], sn, "new")
+        return bool(a and b and to.get(a, a) == b)
+
+    def _check(label, so, sn, a, b):
+        """so at the base (bytes a) -> sn now (bytes b): every changed line a path change."""
+        ta, tb = _hops_text(a), _hops_text(b)
+        if ta is None or tb is None:              # binary: only a byte-for-byte copy proves
+            if a != b:
+                bad.add((label, 1, "logic changed"))
+            return
+        A, B = _hops_numbered(so, ta), _hops_numbered(sn, tb)
+        sm = difflib.SequenceMatcher(None, [x for _, x in A], [x for _, x in B], autojunk=False)
+        for op, i1, i2, j1, j2 in sm.get_opcodes():
+            if op == "equal":
+                continue
+            if op != "replace" or i2 - i1 != j2 - j1:
+                bad.add((label, B[min(j1, len(B) - 1)][0] if B else 1, "logic changed"))
+                continue
+            for k in range(i2 - i1):
+                if not _pair(A[i1 + k][1], B[j1 + k][1], so, sn):
+                    bad.add((label, B[j1 + k][0], "logic changed"))
+                    break
+                changed[0] += 1
+
+    def _split(path, text, side):
+        # -> (body lines, import lines, the files it imports, the outside packages it imports)
+        body, imps, files, outside = [], [], set(), set()
+        for n, x in _hops_numbered(path, text):
+            sp = _hops_spec(x, lang_of(path)) if x.strip() else None
+            if x.strip() and sp is None:
+                body.append((n, x))
+            elif sp:
+                imps.append(x)
+                t = _target(x[sp[0]:sp[1]], path, side)
+                if t:
+                    files.add(to.get(t, t) if side == "old" else t)
+                else:
+                    outside.add(x[sp[0]:sp[1]])
+        return body, imps, files, outside
+
+    def _merge(i, fs):
+        """into i gains its froms: each from's body WHOLE and in order (after the rewrite), and
+        import edits that leave it importing exactly what it and its froms imported before."""
+        texts = [_hops_text(blob.get(i, b"")), _hops_text(_hops_disk(repo, i) or b"")]
+        texts += [_hops_text(blob.get(f, b"")) for f in fs]
+        if None in texts:
+            bad.add((i, 1, "logic changed"))
+            return
+        ob, oi, of, ox = _split(i, texts[0], "old")
+        nb, ni, nf, nx = _split(i, texts[1], "new")
+        bodies, orig = [], [x for _, x in ob]
+        for f, t in zip(fs, texts[2:]):
+            fb, _, ff, fx = _split(f, t, "old")
+            bodies.append([(x, sub(x)) for _, x in fb])
+            orig += [x for _, x in fb]
+            of, ox = of | ff, ox | fx
+        B = [x for _, x in nb]
+        if not _hops_fits([(x, sub(x)) for _, x in ob], B, bodies):
+            j = next((j1 for op, _, _, j1, _ in difflib.SequenceMatcher(
+                None, [x for _, x in ob], B, autojunk=False).get_opcodes() if op != "equal"), 0)
+            bad.add((i, nb[min(j, len(nb) - 1)][0] if nb else 1, "logic changed"))
+        if nf != of - {i} or nx != ox:
+            bad.add((i, 1, "logic changed"))
+        # path lines: the folded or kept lines that took their rewritten version, and the new imports
+        changed[0] += (sum((collections.Counter(B) - collections.Counter(orig)).values())
+                       + len(set(ni) - set(oi)))
+
+    into = {}
+    for f, i in merge.items():
+        if f in old:
+            into.setdefault(i, []).append(f)
+    for p in sorted(status):
+        s = status[p]
+        if p == "ops/LAYOUT.tsv":
+            continue
+        if s == "D":
+            if p not in to and p not in metas:
+                bad.add((p, 1, "not in the moves"))
+        elif s == "A" and p not in came:
+            t = _hops_text(_hops_disk(repo, p) or b"")
+            if not ((p == "CLAUDE.md" or p.endswith("/CLAUDE.md")) and t is not None
+                    and not _hops_numbered(p, t)):      # a new guide: nothing but its block
+                bad.add((p, 1, "not in the moves"))
+        elif s == "A":
+            _check(p, came[p], p, blob.get(came[p], b""), _hops_disk(repo, p) or b"")
+        elif p not in to and p not in into:               # still here: changed in place
+            _check(p, p, p, blob.get(p, b""), _hops_disk(repo, p) or b"")
+    for i, fs in sorted(into.items()):
+        _merge(i, sorted(fs))
+    if bad:
+        for p, n, why in sorted(bad):
+            print("proof: RED %s:%d — %s" % (p, n, why))
+        return 1
+    print("proof: ok — %d moved, %d merged, %d lines changed, every one a path"
+          % (sum(1 for k, _, _ in rows if k == "move"), len(merge), changed[0]))
+    return 0
+
+
 def cmd_hops(root, args):
-    """hops [--tsv | --stale] — the layout report (ops/contracts/save-hops.md § 1.2-§ 1.5).
+    """hops [--tsv | --stale] · hops --score | --owned | --proof | --remap <moves.tsv> — the layout
+    report and the four checks on a plan of moves (ops/contracts/save-hops.md § 1.2-§ 1.6).
 
     bare: the screen, at most 40 lines · --tsv: every row, TAB-separated, nothing capped · --stale:
-    only the STALE rows, rc 0 when there is one and 1 when there is none. A flag of a later task
-    (--score --owned --proof --remap --due --facts --questions), or anything else, is a usage line
-    on stderr and rc 2 — never a traceback. Read-only: the one file it writes is the index cache
-    build() keeps for `find` anyway.
+    only the STALE rows, rc 0 when there is one and 1 when there is none · --score --owned --proof
+    --remap: § 1.6, each reading ONE moves file (§ 0.3). A flag of a later task (--due --facts
+    --questions), a moves file that is missing or malformed, or anything else, is a usage line on
+    stderr and rc 2 — never a traceback. It never edits code: the files it writes are the index
+    cache build() keeps for `find` anyway and, for --remap only, the harness baseline.
     """
+    if len(args) == 2 and args[0] in _HOPS_PLAN:
+        rows = _hops_plan(root, args[1])
+        if rows is None:
+            sys.stderr.write(_HOPS_USAGE)
+            return 2
+        if args[0] == "--proof":
+            return _hops_proof(rows)
+        if args[0] == "--remap":
+            return _hops_remap(root, rows)
+        files = [p for p in sh(["git", "ls-files", "-z"], root).split("\0") if p]
+        return (_hops_owned if args[0] == "--owned" else _hops_score)(root, rows, files)
     if len(args) > 1 or (args and args[0] not in ("--tsv", "--stale")):
         sys.stderr.write(_HOPS_USAGE)
         return 2
@@ -1245,59 +1876,12 @@ def cmd_hops(root, args):
         if not mode:
             print("hops — %d tracked files: too small to measure" % len(files))
         return 0
-    base = _hops_cfg(read(root, "ops/CONVENTIONS.md") or "", "base", "main")
-    fixed = _hops_fixed(root, base)
-    tracked = set(files)
-    movable = {p for p in files if not fixed(p)}
-    commits = [c for c in (k & movable for k in _hops_history(root, base, tracked)) if c]
-    clusters, strength = _hops_clusters(commits, _hops_imports(root, movable))
-    nch = len(commits)
-    score = "%.2f" % (sum(len({p.rpartition("/")[0] for p in c}) for c in commits) / nch
-                      if nch else 0.0)
-    per, folders = {}, set()
-    for p in files:
-        segs = p.split("/")[:-1]
-        folders.update("/".join(segs[:i]) for i in range(1, len(segs) + 1))
-        if p in movable and segs:
-            d = "/".join(segs)
-            per[d] = per.get(d, 0) + 1
-    dirs = sorted(per, key=lambda d: (-per[d], d))
-    guides = _hops_guides(root, files)
-    big = [d for d in dirs if per[d] >= 5]
-    missing = [d for d in big if d not in guides]
+    s = _hops_survey(root, files)
+    rows, moves = _hops_proposals(root, s)
+    per, dirs, guides, missing = s.per, s.dirs, s.guides, s.missing
     stale = _hops_stale(root, guides)
-
-    # SCATTER: a cluster spanning 3+ folders, the biggest win first — (folders - 1) x the changes
-    # that touched it — then by name. MOVE: each file not yet in its home goes to <home><basename>,
-    # unless two would land on one name, the target exists or is FIXED, or the home would pass 30
-    # files (one giant folder must never win the score). A 30+ file cluster gets no MOVE rows.
-    scat = []
-    for cl in clusters:
-        k = len({p.rpartition("/")[0] for p in cl})
-        if k >= 3:
-            name = _hops_name(cl, strength)
-            touched = sum(1 for c in commits if c.intersection(cl))
-            scat.append((-(k - 1) * touched, name, cl, k))
-    scat.sort()
-    rows, moves, claimed = [], [], set()
-    for _, name, cl, k in scat:
-        home = _hops_home(cl, name, folders)
-        rows.append((name, k, home, cl))
-        if len(cl) > 30 or os.path.isfile(os.path.join(root, home[:-1])):
-            continue
-        want = {}
-        for p in cl:
-            if not p.startswith(home):
-                want.setdefault(home + p.rpartition("/")[2], []).append(p)
-        mv = sorted((ps[0], t) for t, ps in want.items()
-                    if len(ps) == 1 and t not in tracked and t not in claimed and not fixed(t)
-                    and not os.path.lexists(os.path.join(root, t)))
-        inside = sum(1 for p in files if p.rpartition("/")[0] == home[:-1])
-        if mv and inside + len(mv) <= 30:
-            moves += [(f, t, name) for f, t in mv]
-            claimed.update(t for _, t in mv)
-
-    head = (score, nch, len([d for d in big if d in guides]), len(big))
+    head = ("%.2f" % _hops_mean(s.commits), len(s.commits),
+            len([d for d in s.big if d in guides]), len(s.big))
     if mode == "--tsv":
         out = ["SCORE\t%s\t%d\t%d\t%d" % head]
         out += ["MAP\t%s/\t%d\t%s\t%s" % (d, per[d], _hops_purpose(root, d, guides),
@@ -1305,7 +1889,7 @@ def cmd_hops(root, args):
         out += ["SCATTER\t%s\t%d\t%s\t%s" % (n, k, h, ",".join(cl)) for n, k, h, cl in rows]
         out += ["MOVE\t%s\t%s\t%s" % m for m in moves]
         out += ["GUIDES\t%s/\t%d" % (d, per[d]) for d in missing]
-        out += ["STALE\t%s\t%s" % s for s in stale]
+        out += ["STALE\t%s\t%s" % x for x in stale]
         print("\n".join(out))
         return 0
     print("hops — %s folders per change over %d changes · guides %d/%d folders of 5+ files" % head)
@@ -1333,7 +1917,7 @@ def usage():
         "usage: index.py find <symbol>|-f <glob>|-t <text>|--importers <path>|--imports <path>\n"
         "                       |--api <glob>...   [-n N]\n"
         "       index.py show <path>#<symbol> | <path>:<line>\n"
-        "       index.py hops [--tsv | --stale]\n"
+        "       index.py hops [--tsv | --stale] | --score|--owned|--proof|--remap <moves.tsv>\n"
         "       index.py stats | refresh | rebuild | selfcheck\n")
     return 2
 

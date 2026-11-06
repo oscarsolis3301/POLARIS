@@ -502,6 +502,7 @@ kit/ops/lib/ownership.sh	fn	cmd_guard
 kit/ops/lib/ownership.sh	fn	cmd_match
 kit/ops/lib/ownership.sh	fn	cmd_rules_check
 kit/ops/lib/ownership.sh	fn	gdiff
+kit/ops/lib/ownership.sh	fn	guide_stale_hint
 kit/ops/lib/ownership.sh	fn	map_delta_hint
 kit/ops/lib/ownership.sh	fn	match_one
 kit/ops/lib/ownership.sh	fn	owned_match
@@ -701,6 +702,10 @@ kit/ops/roles/SOLO.md	heading	SOLO — one small change, one context, zero subag
 kit/ops/roles/SOLO.md	heading	The path
 kit/ops/roles/SOLO.md	heading	Under `publish: pr` — one link per run (steps 5-8)
 kit/ops/roles/SOLO.md	heading	What you must NOT skip
+kit/ops/roles/TIDY.md	heading	Entry — who sends you here
+kit/ops/roles/TIDY.md	heading	ROLE: TIDY — the layout pass: proven moves, folder guides, one context
+kit/ops/roles/TIDY.md	heading	Report
+kit/ops/roles/TIDY.md	heading	The pass
 kit/ops/selftest-dashboard.sh	fn	cleanup
 kit/ops/selftest-dashboard.sh	fn	die
 kit/ops/selftest-dashboard.sh	fn	drill
@@ -749,6 +754,7 @@ kit/ops/templates/DESIGN.md	heading	The 3-second rule
 kit/ops/templates/DESIGN.md	heading	The verdict
 kit/ops/templates/DESIGN.md	heading	What AI slop looks like
 kit/ops/templates/DESIGN.md	heading	Where to go deeper
+kit/ops/templates/FOLDER-CLAUDE.md	heading	<folder>/ — <one line: what this folder is for>
 kit/ops/templates/ROADMAP.md	heading	Outcomes (top to bottom = priority)
 kit/ops/templates/ROADMAP.md	heading	ROADMAP
 kit/ops/templates/SKILL.md	heading	<glob> — what POLARIS already knows
