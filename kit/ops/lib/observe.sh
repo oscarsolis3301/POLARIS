@@ -2232,7 +2232,7 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
   elif [ -n "$role" ] && [ "$role" != "BUILDER" ]; then
     case "$role" in
       INIT|PLANNER|INTEGRATOR|EVOLVE|CONDUCTOR) tier=strong;;
-      SOLO|scout) tier=mid;;
+      SOLO|scout|TIDY) tier=mid;;
       *) tier=mid; rnote="unknown role '$role' — mid (routing never blocks work)";;
     esac
   elif [ "$role" = "BUILDER" ] && [ -z "$id" ]; then
