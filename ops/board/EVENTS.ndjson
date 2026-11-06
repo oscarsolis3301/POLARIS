@@ -957,3 +957,4 @@
 {"ts":1793954164,"ev":"done","id":"T-257","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1793954225,"ev":"promote","id":"T-253","who":"Owner@DESKTOP","note":"deps done: T-233, T-234, T-235, T-236, T-237, T-238, T-239, T-240, T-241, T-242, T-243, T-244, T-245, T-246, T-247, T-248, T-249, T-250, T-251, T-252","pts":1}
 {"ts":1793954560,"ev":"claim","id":"T-253","who":"Owner@DESKTOP","note":"","pts":1}
+{"ts":1793954977,"ev":"handoff","id":"T-253","who":"Owner@DESKTOP","note":""}
