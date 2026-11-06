@@ -264,3 +264,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - kit/ops/index.py — polaris hops (fast path beside find/show): the layout report — folders per change from history and imports, SCATTER and MOVE proposals with a home per feature, MAP, GUIDES, STALE, FIXED paths never proposed; --tsv, --stale (ops/contracts/save-hops.md § 1)  (T-241, 2026-11-05)
 
 - kit/ops/bench.sh — bench.sh hops [--dry-run] <dir>: the hop benchmark — five fixed lookups on the hops fixture, num_turns each, run before and after a tidy pass (ops/contracts/save-hops.md § 10)  (T-247, 2026-11-05)
+
+- kit/ops/roles/ — new: TIDY.md, the layout pass (one context, proven moves only, folder guides, lands one task); kit/ops/templates/ — new: FOLDER-CLAUDE.md, the 25-line folder guide (ops/contracts/save-hops.md § 7.1–7.2)  (T-250, 2026-11-05)
