@@ -925,3 +925,6 @@
 {"ts":1793927579,"ev":"done","id":"T-245","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1793927594,"ev":"done","id":"T-246","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1793927609,"ev":"done","id":"T-247","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1793927688,"ev":"promote","id":"T-250","who":"Owner@DESKTOP","note":"deps done: T-241","pts":3}
+{"ts":1793927689,"ev":"promote","id":"T-248","who":"Owner@DESKTOP","note":"deps done: T-241","pts":5}
+{"ts":1793927694,"ev":"promote","id":"T-249","who":"Owner@DESKTOP","note":"deps done: T-241, T-237, T-240","pts":3}
