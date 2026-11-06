@@ -5,6 +5,7 @@ MAP       src/hooks/ · 3 files · Hooks — shared state for the screens · gui
 MAP       tests/ · 2 files · - · guide no
 MAP       src/utils/ · 1 files · - · guide no
 SCATTER   cart: 4 folders → src/cart/ (6 files)
+MERGE     src/components/Footer.tsx + src/components/Header.tsx (4+5 lines, together 3×)
 GUIDES    missing: src/components/ (5)
 STALE     src/services/CLAUDE.md cites basketApi.ts (missing)
 STALE     src/services/CLAUDE.md cites src/old/ (missing)
@@ -21,6 +22,7 @@ MOVE	src/components/CartView.tsx	src/cart/CartView.tsx	cart
 MOVE	src/hooks/useCart.ts	src/cart/useCart.ts	cart
 MOVE	src/services/cartApi.ts	src/cart/cartApi.ts	cart
 MOVE	tests/cart.test.ts	src/cart/cart.test.ts	cart
+MERGE	src/components/Footer.tsx	src/components/Header.tsx	3
 GUIDES	src/components/	5
 STALE	src/services/CLAUDE.md	basketApi.ts
 STALE	src/services/CLAUDE.md	src/old/
@@ -36,12 +38,88 @@ entry rc=0
 --owned p.tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
 --proof p.tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
 --remap p.tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---due: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---facts src: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---questions: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+--facts: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+--facts src/nowhere: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+--facts ../src: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+--facts src a: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+--due --tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+--questions x: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
 --bogus: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
 --tsv --stale: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
 hops — 2 tracked files: too small to measure
 rc=0
 rc=0
 rc=1
+rc=1
+Q1: merge src/components/Footer.tsx into src/components/Header.tsx? — no | yes (default: no)
+Q2: is src/pages/ routed by a framework (keep it where it is)? — keep | allow moves (default: keep)
+rc=0
+Q1: merge src/components/Footer.tsx into src/components/Header.tsx? — no | yes (default: no)
+rc=0
+facts src/services/ — 5 files · purpose: src/services/ — every call the shop makes to its API
+entry files: cartApi.ts (3 importers) · http.ts (2 importers) · authApi.ts (1 importers)
+key symbols: cart · get · signIn
+changes with: src/components/ (6×) · src/hooks/ (6×) · src/utils/ (4×) · tests/ (4×)
+tests: tests/auth.test.ts
+- cartApi.ts — 4 lines · cart
+- http.ts — 1 lines · get
+- authApi.ts — 2 lines · signIn
+- CLAUDE.md — 9 lines · -
+- index.ts — 1 lines · -
+rc=0
+facts src/cart/ — 4 files · purpose: -
+entry files: -
+key symbols: CartView · cart · useCart
+changes with: Assets/Resources/ (3×) · docs/shots/ (3×) · public/ (3×) · src/components/ (3×)
+tests: -
+- CartView.tsx — 4 lines · CartView
+- cart.test.ts — 4 lines · -
+- cartApi.ts — 4 lines · cart
+- useCart.ts — 4 lines · useCart
+rc=0
+rc=2
+hops — 1.62 folders per change over 29 changes · guides 0/3 folders of 5+ files
+MAP       src/flat/ · 41 files · - · guide no
+MAP       src/full/ · 40 files · - · guide no
+MAP       src/bits/ · 14 files · - · guide no
+MAP       src/core/ · 4 files · - · guide no
+MAP       src/a/ · 2 files · - · guide no
+MAP       src/b/ · 2 files · - · guide no
+MAP       src/c/ · 2 files · - · guide no
+MAP       src/e/ · 2 files · - · guide no
+MAP       src/ · 1 files · - · guide no
+MAP       src/d/ · 1 files · - · guide no
+MERGE     src/bits/k.ts + src/bits/l.ts (6+8 lines, together 4×)
+MERGE     src/bits/b.ts + src/bits/a.ts (5+8 lines, together 3×)
+MERGE     src/bits/i.ts + src/bits/j.ts (5+5 lines, together 3×)
+SPLIT     src/core/engine.ts (600 lines, pulls in 4 folders)
+SPLIT     src/flat/ (41 files)
+GUIDES    missing: src/flat/ (41) · src/full/ (40) · src/bits/ (14)
+next: bash ops/polaris hops --tsv lists every row · ops/roles/TIDY.md runs the pass
+rc=0
+MERGE	src/bits/k.ts	src/bits/l.ts	4
+MERGE	src/bits/b.ts	src/bits/a.ts	3
+MERGE	src/bits/i.ts	src/bits/j.ts	3
+SPLIT	src/core/engine.ts	600	4
+SPLIT	src/flat/	41	-
+rc=0
+Q1: merge src/bits/k.ts into src/bits/l.ts? — no | yes (default: no)
+Q2: merge src/bits/b.ts into src/bits/a.ts? — no | yes (default: no)
+Q3: merge src/bits/i.ts into src/bits/j.ts? — no | yes (default: no)
+rc=0
+facts src/bits/ — 14 files · purpose: -
+entry files: h.ts (1 importers)
+key symbols: h · a · b · c · d · e · f · g
+changes with: -
+tests: src/bits/h.test.ts
+- h.ts — 5 lines · h
+- e.ts — 41 lines · e
+- a.ts — 8 lines · a
+- l.ts — 8 lines · l
+- c.ts — 6 lines · c
+- d.ts — 6 lines · d
+- h.test.ts — 6 lines · -
+- k.ts — 6 lines · k
+- b.ts — 5 lines · b
+- f.ts — 5 lines · f
+rc=0
