@@ -270,7 +270,7 @@ This is the role that acts on what hops measures, and it is written so it can ru
 - [ ] the two files add exactly the five heading rows of § 0.9 (T-248 records them)
 
 ## T-251 — "hops knows when a pass is worth it: tiny-file merges, oversized files, the due verdict with its cooldown, guide facts and the up-front questions"
-points 5 · risk normal · landed 3433317 (2026-11-05) · claimed 2026-11-05
+points 5 · risk normal · landed 3433317 (2026-11-05) · claimed 2026-11-05 → done 2026-11-06
 files touched: kit/ops/index.py, ops/tests/api-kit.expected, ops/tests/hops-due.cmd, ops/tests/hops-due.expected, ops/tests/hops-map.cmd, ops/tests/hops-map.expected
 
 ### Why
@@ -284,7 +284,7 @@ A pass must be offered only when it pays, never loop, and stay silent on small o
 - [ ] hops-moves stays green; api-kit.expected holds this task's rows plus drill_hops for T-252
 
 ## T-252 — "The hops drill: the practice shop proves scatter is found, guarded paths never move, the score drops and the proof holds, in CI on three systems"
-points 5 · risk normal · landed 2a4ff35 (2026-11-05) · claimed 2026-11-05
+points 5 · risk normal · landed 2a4ff35 (2026-11-05) · claimed 2026-11-05 → done 2026-11-06
 files touched: kit/ops/lib/selftest/hops.sh, kit/ops/lib/selftest/spine.sh, kit/ops/polaris
 
 ### Why
@@ -296,6 +296,17 @@ Goldens prove each piece on this machine, but CI runs only the selftest drills, 
 - [ ] it checks: SCATTER names checkout and one more feature with homes under src/; no MOVE row touches FIXED bait; --score after is lower than before; --proof is 0 for a pure move and 1 for a logic edit and for Money.java with a changed package line
 - [ ] it runs in at most 60 seconds and is bash 3.2 safe (macOS CI)
 - [ ] hops.sh gains exactly drill_hops; spine.sh and the entry gain no function; the entry stays under 500 lines
+
+## T-253 — "Release 6.12.0 - fewer lookups, found and fixed by POLARIS itself: version and changelog (LAST)"
+points 1 · risk normal · landed 1b24054 (2026-11-06) · claimed 2026-11-06
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+Change version: in kit/ops/VERSION to 6.12.0 and leave every other line of that multi-line keyed file exactly as it is. Add a "## 6.12.0 — <the day it lands>" entry at the top of CHANGELOG.md, above 6.11.0, in the same plain-language style, saying what an owner gets: POLARIS now notices when a project's layout makes agents jump between folders, measures it, and fixes it by itself at the end of a run with moves a check proves changed nothing but paths (anything it cannot prove is skipped and recorded); folder guides now reach every builder through pack, a short root map lands in CLAUDE.md, and the knowledge base builds itself; brand-new repos start tidy; and a run no longer stops in the middle — questions come first, and the close says plainly what waits on you, including why each parked task is parked. Tagging, publishing, the dogfood and the end-to-end checks are the conductor's steps, not this task.
+
+### Acceptance
+- [ ] every verify: line passes (VERSION is multi-line: use grep, never test "$(cat kit/ops/VERSION)" = ..., the T-217 trap)
+- [ ] the CHANGELOG entry is plain language, no git or test vocabulary, and names no task IDs
 
 ## T-254 — "Drills tidy up after themselves: notify puts the settings file back byte for byte, and park commits only its own file"
 points 2 · risk normal · landed 1a24c7f (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
@@ -344,7 +355,7 @@ drill files move.
 - [ ] no file changes outside `kit/ops/lib/selftest/policy.sh` and `kit/ops/lib/selftest/remote.sh`
 
 ## T-255 — "Builders and integrators follow tidy too, a builder's question parks by default, and route knows the TIDY role"
-points 2 · risk normal · landed deb144d (2026-11-05) · claimed 2026-11-05
+points 2 · risk normal · landed deb144d (2026-11-05) · claimed 2026-11-05 → done 2026-11-06
 files touched: kit/ops/lib/observe.sh, kit/ops/roles/BUILDER.md, kit/ops/roles/INTEGRATOR.md
 
 ### Why
@@ -376,7 +387,7 @@ away.
 - [ ] no line starting with `#` added or changed in any of the three files, and no new function: the api-kit rows for all three stay as they are
 
 ## T-256 — "pr-publish cleans up the day's integration branch it made, so CI's one-by-one drill run gets past express again"
-points 2 · risk normal · landed 6846371 (2026-11-05) · claimed 2026-11-05
+points 2 · risk normal · landed 6846371 (2026-11-05) · claimed 2026-11-05 → done 2026-11-06
 files touched: kit/ops/lib/selftest/history.sh
 
 ### Why
@@ -432,7 +443,7 @@ Only this one drill file changes. No change to the CLI.
 - [ ] the diff touches only `kit/ops/lib/selftest/history.sh` (no CLI change)
 
 ## T-257 — "hops reads the tree it is pointed at, so a tidy pass can write guides for the folders its moves just made"
-points 2 · risk normal · landed 2fd7258 (2026-11-05) · claimed 2026-11-05
+points 2 · risk normal · landed 2fd7258 (2026-11-05) · claimed 2026-11-05 → done 2026-11-06
 files touched: kit/ops/lib/search.sh, kit/ops/roles/TIDY.md
 
 ### Why
