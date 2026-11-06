@@ -226,7 +226,7 @@ The plan promises a measured saving, not just a better score: the real test is w
 - [ ] bench.sh gains no function (inline in its dispatch) and existing modes behave as before
 
 ## T-248 — "hops proves a move changed nothing but paths: --score, --owned, --proof, --remap, and published code stays put"
-points 5 · risk normal · landed 2b709d1 (2026-11-05) · claimed 2026-11-05
+points 5 · risk normal · landed 2b709d1 (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
 files touched: kit/ops/index.py, ops/tests/api-kit.expected, ops/tests/hops-moves.cmd, ops/tests/hops-moves.expected
 
 ### Why
@@ -241,7 +241,7 @@ files touched: kit/ops/index.py, ops/tests/api-kit.expected, ops/tests/hops-move
 - [ ] hops-map stays green; api-kit.expected holds this task's rows plus the W3 sibling rows of § 0.9
 
 ## T-249 — "A guide that points at a path that no longer exists gets noticed: drift says so, and handoff warns the task that removed it"
-points 3 · risk normal · landed 475c047 (2026-11-05) · claimed 2026-11-05
+points 3 · risk normal · landed 475c047 (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/observe.sh, kit/ops/lib/ownership.sh, ops/tests/guide-stale.cmd, ops/tests/guide-stale.expected
 
 ### Why
@@ -255,7 +255,7 @@ Folder guides hold stable knowledge, but they still name files ("to change price
 - [ ] ownership.sh gains exactly guide_stale_hint; observe.sh and builder.sh gain no function
 
 ## T-250 — "The TIDY role: one context that proves every move, writes the folder guides and lands one task — plus the guide template"
-points 3 · risk normal · landed 3a121d7 (2026-11-05) · claimed 2026-11-05
+points 3 · risk normal · landed 3a121d7 (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
 files touched: kit/ops/roles/TIDY.md, kit/ops/templates/FOLDER-CLAUDE.md
 
 ### Why
@@ -268,6 +268,34 @@ This is the role that acts on what hops measures, and it is written so it can ru
 - [ ] the Report section asks for the before/after table, the per-feature "fewer lookups" lines and what was left for the human
 - [ ] FOLDER-CLAUDE.md is at most 25 lines, starts and ends with the guide markers, has exactly the one pinned heading, plain Markdown, no POLARIS command
 - [ ] the two files add exactly the five heading rows of § 0.9 (T-248 records them)
+
+## T-251 — "hops knows when a pass is worth it: tiny-file merges, oversized files, the due verdict with its cooldown, guide facts and the up-front questions"
+points 5 · risk normal · landed 3433317 (2026-11-05) · claimed 2026-11-05
+files touched: kit/ops/index.py, ops/tests/api-kit.expected, ops/tests/hops-due.cmd, ops/tests/hops-due.expected, ops/tests/hops-map.cmd, ops/tests/hops-map.expected
+
+### Why
+A pass must be offered only when it pays, never loop, and stay silent on small or brand-new repos. This task adds the deciding half of hops. MERGE finds tiny files that always change together (merging one away needs the human's yes, so they only become questions), and SPLIT flags files and folders grown too big. --due gives the verdict: due when one pass would cut folders-per-change by 15% or more, or when three or more sizeable folders have no guide; silent with hops: off, under 20 tracked files, and within 30 changes of the last pass, so a pass whose moves were all reverted cannot fire again and again. Every run saves the verdict to .polaris/hops-due, which is the only thing next, triage and update read. --facts prints the 15 lines a folder guide is written from, so a pass never explores the repo to write one. --questions prints at most three pick-one questions for the run's single up-front round. It owns the api-kit golden for this wave.
+
+### Acceptance
+- [ ] MERGE and SPLIT rows, the screen sections and --tsv rows follow § 1.5 and § 1.7; hops-map is re-pinned if its fixture gains rows (and only then)
+- [ ] --due follows the five ordered steps of § 1.7 (the self-hosting kit repo is never due), prints the pinned line when due and nothing otherwise, and always rewrites the cache in the § 0.5 format with LF
+- [ ] --facts prints at most 15 lines in the pinned shape; --questions at most 3 lines in the pinned shape, rc 1 when nothing to ask
+- [ ] the new hops-due golden covers: due and not-due exit codes, a keep row removing the saving, the 30-change cooldown, hops: off, the tiny-repo silence, the cache line, and a REAL next and triage in the fixture reading that cache (tidy once, then finish) after heal writes it
+- [ ] hops-moves stays green; api-kit.expected holds this task's rows plus drill_hops for T-252
+
+## T-252 — "The hops drill: the practice shop proves scatter is found, guarded paths never move, the score drops and the proof holds, in CI on three systems"
+points 5 · risk normal · landed 2a4ff35 (2026-11-05) · claimed 2026-11-05
+files touched: kit/ops/lib/selftest/hops.sh, kit/ops/lib/selftest/spine.sh, kit/ops/polaris
+
+### Why
+Goldens prove each piece on this machine, but CI runs only the selftest drills, on Linux, macOS and Windows. This drill is the one place the whole engine is proven on the realistic practice shop from T-235, on every push. It builds the fixture and checks the things that must never regress: the scattered checkout feature is found with a home under src/, nothing guarded (Unity Resources, the published package, RULES, SURFACES and keep paths, Java) ever appears in a MOVE row, applying the proposed moves lowers the score, and --proof passes a real move with its import fixes while failing a logic edit and a Java package-line change. It is registered last, so every existing --only selection keeps its meaning.
+
+### Acceptance
+- [ ] label hops is appended LAST to SELFTEST_LABELS and its gate runs last; the loader list gains selftest/hops right after selftest/fast (§ 8.3)
+- [ ] drill_hops builds the fixture in its own throwaway dir and asserts exit codes and row shapes, never prose
+- [ ] it checks: SCATTER names checkout and one more feature with homes under src/; no MOVE row touches FIXED bait; --score after is lower than before; --proof is 0 for a pure move and 1 for a logic edit and for Money.java with a changed package line
+- [ ] it runs in at most 60 seconds and is bash 3.2 safe (macOS CI)
+- [ ] hops.sh gains exactly drill_hops; spine.sh and the entry gain no function; the entry stays under 500 lines
 
 ## T-254 — "Drills tidy up after themselves: notify puts the settings file back byte for byte, and park commits only its own file"
 points 2 · risk normal · landed 1a24c7f (2026-11-05) · claimed 2026-11-05 → done 2026-11-05
@@ -314,3 +342,116 @@ drill files move.
 - [ ] drill_park's fixture commit stages only `src/pk.txt`
 - [ ] after drill_notify, `ops/CONVENTIONS.md` is byte-identical to what it was before the drill,
 - [ ] no file changes outside `kit/ops/lib/selftest/policy.sh` and `kit/ops/lib/selftest/remote.sh`
+
+## T-255 — "Builders and integrators follow tidy too, a builder's question parks by default, and route knows the TIDY role"
+points 2 · risk normal · landed deb144d (2026-11-05) · claimed 2026-11-05
+files touched: kit/ops/lib/observe.sh, kit/ops/roles/BUILDER.md, kit/ops/roles/INTEGRATOR.md
+
+### Why
+T-245 taught CONDUCTOR.md and SOLO.md the new `tidy` answer that `next` and `triage` print when the
+layout pass is due, and changed what happens to a builder's question: by default the conductor now
+parks it instead of stopping the run. Three places outside T-245's files were left behind.
+
+1. BUILDER.md. A builder in a terminal pane loops on `next`, but Loop mode lists only `build`,
+   `integrate`, `promote`, `wait`, `stop` and `finish`, so a pane whose `next` says `tidy` would not
+   know what to do. Step 3 still says the conductor asks the human and re-dispatches; that is now
+   true only under `autonomy: standard`. By default the conductor parks the question
+   (`release --to blocked`, then `notify-gate question`) and keeps the other lanes going.
+2. INTEGRATOR.md section 5 runs `next --do`, which can print `tidy` too, and the role does not say
+   what to do with it. A top-level integrator takes it as a board-proven hop. A conductor-entered one
+   must report it: it shares the conductor's session, so the once-per-session marker its call just
+   set is the run's, and the conductor's own `next` will never print `tidy` again.
+3. Routing. The conductor runs `route --role TIDY` before it spawns the TIDY subagent, and gets `mid`
+   plus an "unknown role 'TIDY'" note, because the role table in `cmd_route` has no TIDY row.
+
+The fix is wording in the two role files (no new heading line) and one more pattern in the existing
+`case`. TIDY gets `mid`, the tier it already falls back to, so no spawn changes: the note just goes
+away.
+
+### Acceptance
+- [ ] BUILDER.md Loop mode names `tidy` with the other verbs: read `ops/roles/TIDY.md` and run the pass here (a board-proven hop, as in SOLO.md step 7), then `next`
+- [ ] BUILDER.md step 3, conductor-entered: by default the conductor parks the question (`bash ops/polaris release <ID> --to blocked -m "<question>"`, then `bash ops/polaris notify-gate question <ID>`); it asks the human and re-dispatches only under `autonomy: standard` (or `builder_questions: ask`)
+- [ ] INTEGRATOR.md section 5, after the `next --do` paragraph: line 1 `tidy` → top-level: a board-proven hop (read `ops/roles/TIDY.md`, run the pass, then `next`); conductor-entered: put line 1 in the report unedited and let the conductor act, because it carries the conductor's `CLAUDE_CODE_SESSION_ID` and the marker is the run's
+- [ ] `route --role TIDY` answers `mid` with no "unknown role" note; every other role answers exactly as before
+- [ ] no line starting with `#` added or changed in any of the three files, and no new function: the api-kit rows for all three stay as they are
+
+## T-256 — "pr-publish cleans up the day's integration branch it made, so CI's one-by-one drill run gets past express again"
+points 2 · risk normal · landed 6846371 (2026-11-05) · claimed 2026-11-05
+files touched: kit/ops/lib/selftest/history.sh
+
+### Why
+CI on `main` has been red on all three systems since v6.11.0 (v6.10.1 was the last green run). The
+step that fails is `doctor --selftest (the full mechanics drill)`, which runs every drill one after
+another (serially) inside a fresh install. The conductor reproduced it the same way (pack the kit,
+install it into a scratch app, `bash ops/polaris doctor --selftest`): it fails after 1007 s with
+`EXPRESS REFUSE MUTATE FAIL (integrate branch created)` (`kit/ops/lib/selftest/history.sh:81`).
+
+What happens, step by step:
+
+1. In the serial order (the `if drill_on` gates in `kit/ops/lib/selftest/spine.sh`) pr-publish runs
+   immediately before express.
+2. pr-publish's "v2 local staging seal" (`history.sh:278-293`, new in 6.11.0 with T-228) lands `T-Q`
+   and runs `seal "$prd"` with `prd="$(date +%F)"`, under `publish: pr`. The land makes today's wave
+   branch, `integrate/<today>`. A plain `seal` merges it into local `main` and tags it, but never
+   deletes it (only `seal --sync` deletes a wave). So the drill ends with `integrate/<today>` still there.
+3. express then checks that its refusals changed nothing, and one of those checks is "no
+   `integrate/<today>` exists" (`history.sh:81`). It finds pr-publish's leftover and fails, although
+   express made nothing.
+
+busyint trips over the same leftover: its "a queued land must mutate nothing" check
+(`history.sh:344`) looks for `integrate/<today>` too. That is the open IDEAS line from the T-254 fix
+wave (`BUSYINT QUEUE MUTATE FAIL`, pr-publish the prime suspect). Of the drills in that repro,
+pr-publish is the only one that lands on today's wave, so this task closes that line as well.
+
+Why nobody saw it: the wave gate runs `doctor --selftest --parallel 3`, which spreads the drills over
+three shards, each with its own practice repo, and pr-publish and express end up in different shards.
+A sharded green is not a CI green (the sprint-13 lesson): only the serial run puts the two drills in
+one repo.
+
+The fix is hermeticity. The Hermeticity rule in `ops/contracts/selftest-sharding.md` says every drill
+leaves the shared practice repo exactly as it found it, refs included:
+
+- **pr-publish removes the local `integrate/<today>` branch it made** once its staging-seal checks are
+  done (after `done T-Q`, or at the drill's end), standing on `main`, the way drill_park already drops
+  its wave (`kit/ops/lib/selftest/policy.sh:831-833`). Then it checks the branch really is gone, the
+  way express already does for its own wave (`history.sh:179`), so a future leak fails pr-publish
+  itself instead of an innocent drill later in the run.
+- **Optional:** express's refusal check (`history.sh:81`) compares `integrate/<today>` before and after
+  the refusals (did a refusal CREATE or move it?) instead of asking whether it exists at all. This
+  alone does not fix the run: express's red-suite step still needs a fresh day (`wave: created
+  integrate/`, `history.sh:95`).
+
+Only this one drill file changes. No change to the CLI.
+
+### Acceptance
+- [ ] `bash kit/ops/polaris doctor --selftest --only pr-publish,express` is green (red before the fix: `EXPRESS REFUSE MUTATE FAIL (integrate branch created)`)
+- [ ] `bash kit/ops/polaris doctor --selftest --only pr-publish,busyint` is green (red before the fix: `BUSYINT QUEUE MUTATE FAIL`)
+- [ ] `bash kit/ops/polaris doctor --selftest --only express` is still green
+- [ ] drill_pr-publish leaves no local `integrate/<today>` branch behind, and fails with its own `PR ...` line if one is still there
+- [ ] no other drill check is loosened: express's `wave: created` (`history.sh:95`) and branch-deleted (`history.sh:179`) checks stay as they are
+- [ ] the diff touches only `kit/ops/lib/selftest/history.sh` (no CLI change)
+
+## T-257 — "hops reads the tree it is pointed at, so a tidy pass can write guides for the folders its moves just made"
+points 2 · risk normal · landed 2fd7258 (2026-11-05) · claimed 2026-11-05
+files touched: kit/ops/lib/search.sh, kit/ops/roles/TIDY.md
+
+### Why
+`polaris hops` describes a repo's layout, and it describes whichever tree POLARIS_ROOT names. The
+CLI's shim, `index_fast` in kit/ops/lib/search.sh, always sets POLARIS_ROOT to the primary checkout.
+That is right for `find` and `show`, which need the primary's index, but wrong for a tidy pass: the
+pass makes its moves in its task worktree, so when TIDY.md step 8 asks `hops --facts <dir>` for a
+folder's facts it gets the layout from before the moves, and a folder the moves just created does
+not exist there at all (rc 2). T-250 worked around that by writing guides only for folders that
+already existed, which skips exactly the feature folders a pass creates: the ones most worth a
+guide. The engine (ops/index.py) already reads any tree POLARIS_ROOT names, for every hops flag
+(T-251), so the fix is small. For `hops` only, the shim keeps a POLARIS_ROOT the caller set, when it
+names a real directory. TIDY.md step 8 then asks with `POLARIS_ROOT=<task worktree>`, and a pass can
+guide the folders it made, still at most 8 per pass.
+
+### Acceptance
+- [ ] Checked FIRST: the CLI never exports POLARIS_ROOT into its own child processes. kit/ops/polaris,
+- [ ] `index_fast`, `hops` only: a caller-set POLARIS_ROOT naming an existing directory is the root
+- [ ] The engine is still resolved from the primary (`index_engine` on what `index_root` prints);
+- [ ] TIDY.md step 8 calls `POLARIS_ROOT=<task worktree> bash ops/polaris hops --facts <dir>`, that
+- [ ] TIDY.md no longer limits guides to folders that existed before the moves: a home folder the
+- [ ] Surface-frozen: no new or changed `#` heading in TIDY.md, no new function in search.sh (both
