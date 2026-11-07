@@ -60,6 +60,28 @@ A grooming pass usually writes both board state and base-tracked seams. They go 
   (e.g. `docs(contract): <name>`, `docs(map): …`), a separate commit from the board_commit.
 Never stage a contract or MAP change into a `board_commit`, and never `board_commit` on `<base>`.
 
+**New task (any lane) — what `ops/polaris new <draft.md>…` does by hand.** From the primary checkout,
+never a `feat/*` worktree: a builder's idea goes to IDEAS.md. A draft is a file outside `ops/board/`,
+written from `ops/templates/TASK.md`; it is read, never modified, moved or deleted. (1) Check every
+draft, in order, before writing anything — the first failure refuses the whole call, nothing written:
+the first line is `---` · `title:` is set · `points:` is a whole number 1–5 · `plan:` is set on an
+uncommented line · `risk:` is `normal` or `high` · `files_owned` lists a path · a named `contract:`
+exists (blank = none) · `id:` is blank or `XXX-000` (numbered in step 2), or a `T-<n>` that no task
+on the board and no earlier draft holds (kept) · each `depends_on` names a task in any column or an
+earlier draft. (2) Number each draft left without an ID: next free = 1 + the highest `<n>` of every
+`T-<n>.md` in any `ops/board/<column>/` and every ID taken so far, written `T-%03d`. (3) Place each
+draft in order: every task in `ready/`, `active/` or `review/`, and every earlier draft, owning a
+pattern that can meet one of the draft's (exact · `dir/` prefix · glob, both directions, as in Grant
+below) joins its `depends_on`, once, in the order found; then `ready/` when every `depends_on` is in
+`done/` and no owned path hits an `ask` rule the task is not approved for, else `backlog/`. (4) Write
+`ops/board/<ready|backlog>/<ID>.md` = the draft's bytes with `id:` and `status:` set, `depends_on:` as
+one inline `[<ID>, <ID>]` line (the draft's own first, block items under it removed) when an ID was
+added, and a blank `wsjf:` = (value + time_criticality + risk_opportunity) / points, two decimals,
+when all three are numbers — nothing else changes. Append one line per task to EVENTS.ndjson,
+`{"ts":<epoch>,"ev":"new","id":"<ID>","who":"<you@host>","note":"<ready|backlog>","pts":<points>}`,
+then ONE `board_commit "chore(board): new <ID> <ID> …" <every new task file> ops/board/EVENTS.ndjson`
+and `sync_board`. `ops/SPRINT.md` is never part of it: the sprint header is the Planner's own commit.
+
 ## Claim (Builder)
 **local-lock** — atomic, shared across every worktree of this repo:
 ```bash

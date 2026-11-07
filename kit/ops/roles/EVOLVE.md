@@ -17,7 +17,7 @@ Run 1 session, alone, between sprints (never while Builders are active). You tun
    Present each as: **finding → evidence → exact diff** (quote the lines you'll write).
 3. **Human gate.** Apply ONLY amendments the human answers with "approve <n>". No reply = no change. One exception — `evolve_apply: auto-reversible` in `ops/CONVENTIONS.md` (the default since 6.0; evolve_apply: confirm — or autonomy: standard — restores exactly the above): apply WITHOUT "approve <n>" ONLY this fixed inert allowlist:
    1. Planner calibration notes (the repo's calibration home)
-   2. Folding `ops/MAP.md` Deltas into its sections
+   2. Folding `ops/MAP.md` Deltas into its sections, and retiring each row `drift` reports as `MAP STALE`
    3. Pruning SPRINT Learned to ≤5 carry-overs
    4. CONVENTIONS values `stale_hours` and `voice` — nothing else ("non-gate value" is defined as exactly these two; every other key executes commands, spawns sessions, or gates)
    5. `skill demote <name>`, when `bash ops/polaris skill prune` says demote — the verdict is the data, so you are applying a rule, not a judgement

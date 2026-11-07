@@ -24,6 +24,7 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 |---|---|
 | `ops/polaris pack <ID>` | **the whole context for one task, in ONE call** — frontmatter + Why + acceptance, the contract verbatim, the repo's detected house style, the code-map for every owned directory, the public API surface each owned path must not break, the gotchas/co-change lines that mention an owned path, and the exact `verify:` commands. Run it FIRST, before reading anything. It replaces the 6-15 exploratory round trips a cold Builder otherwise spends rediscovering its own task |
 | `ops/polaris find <symbol>` · `show <path>#<symbol>` | the 1-hop "where is X": `path:line` + signature per hit, ranked, from a generated index; `show` prints ONE symbol's body instead of the file. `--api <glob>` = the sorted public surface of a path (the shape goldens lock). Run these BEFORE Grep |
+| `ops/polaris new <draft.md>…` | file new tasks in ONE command: each draft (from `ops/templates/TASK.md`) gets the next free `T-NNN`, is checked (points 1–5, `plan:`, `risk:`, `files_owned`, a named contract exists) and placed by the ready gate — `ready/`, or `backlog/` while it waits on a task, and a task in `ready/`, `active/` or `review/` that shares a file with it joins its `depends_on`. ONE board commit for all of them; a refusal writes nothing. SOLO, TIDY and the Planner file their tasks with it; `ops/MANUAL.md` keeps the by-hand recipe |
 | `ops/polaris claim [ID]` | atomic lock + ready→active + worktree (no ID = top wsjf) |
 | `ops/polaris verify` | proves `diff ⊆ files_owned`, no `ops/RULES.tsv` hit, and the stale-tests gate (a mapped surface that changed must have changed its tests — `ops/SURFACES.tsv`) + runs the task's `verify:` commands |
 | `ops/polaris handoff` | verify + active→review; `publish: direct` pushes feat/<ID>, `publish: pr` keeps it local (seal pushes only integrate/<date>) — run inside your worktree |
@@ -216,10 +217,10 @@ close names it (Invariant 9 unchanged). `finish` names each blocked task and why
 human-gated work left, close on `⛔ waiting on you: approve <ID>` — no 🎉. `autonomy: standard` asks
 right away at both gates, as before. No hard gate gets softer.
 
-**What loads by itself is measured, not assumed.** The 6.12.0 probe (2026-11-05) answered `unknown`
-for all seven of its cases — no session could sign in — so nothing here counts on a folder guide
-loading by itself (Read, Edit, a new file, a worktree path, a subagent): open it when the ladder
-gets there. By construction, `pack` prints a builder's guides and the root map sits in `CLAUDE.md`.
+**What loads by itself is measured, not assumed.** The 6.13.0 probe (2026-11-07) answered `unknown`
+for all seven cases — a guide on Read, Edit, a new file, a subagent, a worktree path or a Bash `cat`;
+a worktree's own `CLAUDE.md` — as no session could sign in, and only a measured `yes` counts: open
+a guide when the ladder gets there. `pack` prints a builder's guides; the root map is in `CLAUDE.md`.
 
 ## TOKEN DISCIPLINE — this is how we stay cheap and fast
 The lookup ladder lives in § SAVE HOPS.
