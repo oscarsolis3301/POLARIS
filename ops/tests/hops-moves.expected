@@ -32,7 +32,9 @@ Assets/Scripts/coin/CoinData.cs
 Assets/Scripts/coin/CoinData.cs.meta
 Assets/Scripts/coin/CoinView.cs
 Assets/Scripts/coin/CoinView.cs.meta
+CLAUDE.md
 docs/cart.md
+ops/LAYOUT.tsv
 src/App.tsx
 src/cart/CartView.tsx
 src/cart/cart.test.ts
@@ -89,15 +91,47 @@ rc=0
 }
 remap: no .polaris/harness-baseline.json — nothing to remap
 rc=1
+CLAUDE.md
+ops/LAYOUT.tsv
 src/money/round.ts
 src/utils/money.ts
 src/utils/round.ts
-no such plan: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
-a folder: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
-a .meta: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
-moved twice: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
-moved and a destination: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
-not move or merge: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
-two fields: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---score alone: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---remap with two plans: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+no such plan: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+a folder: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+a .meta: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+moved twice: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+moved and a destination: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+not move or merge: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+two fields: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--score alone: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--remap with two plans: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--- an empty plan: the guides-only pass
+CLAUDE.md
+lib/a/CLAUDE.md
+lib/b/CLAUDE.md
+lib/c/CLAUDE.md
+lib/d/CLAUDE.md
+lib/e/CLAUDE.md
+lib/f/CLAUDE.md
+lib/g/CLAUDE.md
+lib/h/CLAUDE.md
+ops/LAYOUT.tsv
+rc=0
+--- a move into lib/m/, a merge inside lib/b/, a merge out of lib/d/ into lib/k/
+CLAUDE.md
+lib/a/CLAUDE.md
+lib/a/a1.ts
+lib/b/CLAUDE.md
+lib/b/b1.ts
+lib/b/b2.ts
+lib/c/CLAUDE.md
+lib/d/d1.ts
+lib/e/CLAUDE.md
+lib/f/CLAUDE.md
+lib/g/CLAUDE.md
+lib/h/CLAUDE.md
+lib/k/k1.ts
+lib/m/CLAUDE.md
+lib/m/a1.ts
+ops/LAYOUT.tsv
+rc=0

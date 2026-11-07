@@ -34,18 +34,18 @@ rc=0
 STALE	src/services/CLAUDE.md	basketApi.ts
 STALE	src/services/CLAUDE.md	src/old/
 entry rc=0
---score p.tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---owned p.tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---proof p.tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---remap p.tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---facts: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---facts src/nowhere: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---facts ../src: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---facts src a: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---due --tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---questions x: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---bogus: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
---tsv --stale: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]
+--score p.tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--owned p.tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--proof p.tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--remap p.tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--facts: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--facts src/nowhere: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--facts ../src: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--facts src a: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--due --tsv: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--questions x: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--bogus: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
+--tsv --stale: rc=2 · 1 line(s) · ⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]
 hops — 2 tracked files: too small to measure
 rc=0
 rc=0
@@ -61,6 +61,7 @@ entry files: cartApi.ts (3 importers) · http.ts (2 importers) · authApi.ts (1 
 key symbols: cart · get · signIn
 changes with: src/components/ (6×) · src/hooks/ (6×) · src/utils/ (4×) · tests/ (4×)
 tests: tests/auth.test.ts
+leave alone: -
 - cartApi.ts — 4 lines · cart
 - http.ts — 1 lines · get
 - authApi.ts — 2 lines · signIn
@@ -72,12 +73,39 @@ entry files: -
 key symbols: CartView · cart · useCart
 changes with: Assets/Resources/ (3×) · docs/shots/ (3×) · public/ (3×) · src/components/ (3×)
 tests: -
+leave alone: -
 - CartView.tsx — 4 lines · CartView
 - cart.test.ts — 4 lines · -
 - cartApi.ts — 4 lines · cart
 - useCart.ts — 4 lines · useCart
 rc=0
 rc=2
+src/gen/ · leave alone: cartSchema.ts (generated)
+docs/shots/ · leave alone: cart.txt (generated)
+vendor/ · leave alone: cartlib.js (vendored)
+src/legacy/ · leave alone: prices.ts (guarded)
+src/utils/ · leave alone: money.ts (test map)
+tests/ · leave alone: money.test.ts (test map)
+src/payments/ · leave alone: stripe.ts (kept)
+packages/coins/ · leave alone: index.js (public) · package.json (public)
+public/ · leave alone: -
+Assets/Resources/ · leave alone: -
+src/hooks/ · leave alone: -
+facts src/mixed/ — 8 files · purpose: -
+entry files: -
+key symbols: -
+changes with: -
+tests: -
+leave alone: zones.gen.ts (generated) · yaml.min.js (vendored) · xrates.ts (guarded) · wallet.ts (test map) · +2
+- notes.ts — 1 lines · -
+- tokens.asmdef — 1 lines · -
+- units.go — 1 lines · -
+- vault.ts — 1 lines · -
+- wallet.ts — 1 lines · -
+- xrates.ts — 1 lines · -
+- yaml.min.js — 1 lines · -
+- zones.gen.ts — 1 lines · -
+rc=0
 hops — 1.62 folders per change over 29 changes · guides 0/3 folders of 5+ files
 MAP       src/flat/ · 41 files · - · guide no
 MAP       src/full/ · 40 files · - · guide no
@@ -112,6 +140,7 @@ entry files: h.ts (1 importers)
 key symbols: h · a · b · c · d · e · f · g
 changes with: -
 tests: src/bits/h.test.ts
+leave alone: -
 - h.ts — 5 lines · h
 - e.ts — 41 lines · e
 - a.ts — 8 lines · a
@@ -121,5 +150,4 @@ tests: src/bits/h.test.ts
 - h.test.ts — 6 lines · -
 - k.ts — 6 lines · k
 - b.ts — 5 lines · b
-- f.ts — 5 lines · f
 rc=0

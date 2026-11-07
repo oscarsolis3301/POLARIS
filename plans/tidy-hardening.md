@@ -183,3 +183,72 @@ The CONVENTIONS ritual:
   with plain messages and no attribution.
 - The budget is 360 min. A budget stop closes cleanly and "continue" resumes it.
 - This plan is saved to `plans/tidy-hardening.md`.
+
+## Measurements
+T-263 ran § 9 of `ops/contracts/save-hops.md` again on 2026-11-07 at 02:05 local time, recipe and
+prompts unchanged as § 17.2 asks, on this machine: Claude Code 2.1.251, Windows 11, from a builder
+subagent inside the Claude desktop app. The throwaway repo sat outside this checkout, built exactly
+as § 9 says and committed before the first session: `.gitignore` (`.polaris/`) · `CLAUDE.md`
+(`SH0-ROOT-LOADED`) · `src/probe/CLAUDE.md` (`SH0-GUIDE-FIRED`) · `src/probe/hello.txt` (`hello`);
+then `git worktree add .polaris/wt/T-1 -b feat/T-1`, with that branch's root `CLAUDE.md` changed to
+`SH0-WTROOT-LOADED` and its `src/probe/CLAUDE.md` to `SH0-WTGUIDE-FIRED`, committed (set up from a
+script: the checkout guard refuses a typed `git worktree add`, as T-233 found). Nothing a session
+there would load from `~/.claude/` mentions `SH0-`, and no folder above the repo holds a
+`CLAUDE.md`. Each session: `env -u CLAUDECODE timeout 90 claude -p '<prompt>' --max-turns <n>
+--output-format text [--allowedTools <tools>] </dev/null`, cwd = the repo's primary.
+
+`claude -p` still could not sign in. The control session A stopped at sign-in after 7 s with
+`Failed to authenticate: OAuth session expired and could not be refreshed` (rc 1), the same line
+the conductor got at 02:01 and T-233 got on 2026-11-05. Every session signs in the same way, so
+B-G were not started, and every answer is an honest unknown:
+
+probe: guide-fires-on-read: unknown
+probe: guide-fires-on-edit: unknown
+probe: guide-fires-on-write-new: unknown
+probe: guide-fires-in-subagent: unknown
+probe: guide-fires-via-worktree-abspath: unknown
+probe: guide-silent-on-bash-cat: unknown
+probe: worktree-root-claudemd-reloads: unknown
+
+To get real answers: sign the command-line Claude in again (`claude` in a terminal, then `/login`)
+and run the seven sessions below in a repo built as above. A is the control: what loads before any
+tool runs, and a token A already echoed proves nothing later. B answers on-read · C on-edit · D
+on-write-new · E in-subagent (from the subagent's own list) · F via-worktree-abspath
+(`SH0-WTGUIDE-FIRED`) and worktree-root-claudemd-reloads (`SH0-WTROOT-LOADED`) · G
+silent-on-bash-cat (`yes` when G does NOT echo `SH0-GUIDE-FIRED`).
+
+Seen directly, and NOT a probe value (this builder's own context: an Agent-tool subagent whose cwd
+is this repo's primary, working by absolute paths under `.polaris/wt/T-263/`): its first file-tool
+touch of that worktree, an Edit of this plan with no Read before it, pulled in the worktree's root
+`CLAUDE.md` in full (about 12 KB), a second copy of the root file it already had at start, while
+its earlier Bash reads of the same worktree's files pulled in nothing. T-233 saw the same on a Read.
+Only a re-run of the seven sessions may record either as a value.
+
+Raw replies, verbatim stdout. A's stderr was only the two `Permission allow rule (…settings.json) …
+has a wildcard` warnings from this machine's own settings. `<TAIL>` = `Then reply with every token
+in your context that starts with SH0-, one per line, or NONE.` `<repo>` = the throwaway repo's
+absolute path.
+
+```
+A  rc 1 · 7 s · --max-turns 1 · no --allowedTools
+   prompt: Do not read any file and do not use any tool. <TAIL>
+Failed to authenticate: OAuth session expired and could not be refreshed
+
+B  not started (A could not sign in) · --max-turns 6 --allowedTools Read
+   prompt: Use the Read tool on src/probe/hello.txt and read nothing else. <TAIL>
+
+C  not started · --max-turns 6 --allowedTools Read,Edit
+   prompt: Use the Edit tool to append the line "probe" to src/probe/hello.txt, and read no other file. <TAIL>
+
+D  not started · --max-turns 6 --allowedTools Write
+   prompt: Use the Write tool to create the NEW file src/probe/new.txt containing the line "new", without reading any file first. <TAIL>
+
+E  not started · --max-turns 6 --allowedTools Agent,Task,Read
+   prompt: Do not read any file yourself. Use the Agent tool to start one subagent with exactly this prompt: "Use the Read tool on src/probe/hello.txt and read nothing else. <TAIL>" When it returns, print the line SUBAGENT REPLY: followed by its reply verbatim. <TAIL>
+
+F  not started · --max-turns 6 --allowedTools Read · cwd = the primary
+   prompt: Use the Read tool on the absolute path <repo>\.polaris\wt\T-1\src\probe\hello.txt and read nothing else. <TAIL>
+
+G  not started · --max-turns 6 --allowedTools Bash
+   prompt: Use the Bash tool to run exactly `cat src/probe/hello.txt` and nothing else; do not use the Read tool. <TAIL>
+```

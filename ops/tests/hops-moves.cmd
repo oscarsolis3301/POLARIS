@@ -13,6 +13,9 @@
 # a missing destination and a merge that drops a line each prove red; a dotted python import and a
 # clean merge prove green; and once the step lands on main the same plan still proves green — the
 # integrator re-runs verify lines there.
+# --owned is a tidy task's WHOLE files_owned (§ 12.5): beside the moves and their importers, always
+# CLAUDE.md and ops/LAYOUT.tsv, and the guides the pass will write — a shelf of twelve folders pins
+# that rule: 5+ movable files and no guide, counted AFTER the moves, the first 8, largest first.
 #
 # HERMETIC (the keys-drift pattern): a throwaway repo under mktemp -d. THE ENGINE TRAP (§ 8.4): the
 # kit's code is reached as `POLARIS_ROOT=<fixture> python kit/ops/index.py hops …`, never through a
@@ -114,7 +117,8 @@ printf '%s\n' "$TSV" | awk -F'\t' '$1 == "MOVE" { print "move\t" $2 "\t" $3 }' >
 H --score "$R/.polaris/hops-plan.tsv" | tr -d '\r'
 
 # 4. --owned: froms and tos, each Unity asset's .meta (now and after), the @/ importer src/App.tsx, the
-#    test importing the moved calls, and docs/cart.md, which names two of them by their tails.
+#    test importing the moved calls, and docs/cart.md, which names two of them by their tails — then
+#    CLAUDE.md and ops/LAYOUT.tsv, which every pass writes. No folder reaches 5 files: no guide.
 H --owned "$R/.polaris/hops-plan.tsv" | tr -d '\r'
 
 # 5. --proof from a task worktree, the plan given RELATIVE: not in the worktree, so the primary's.
@@ -200,3 +204,28 @@ for c in 'a folder|move\tsrc/utils/\tsrc/money/\n' 'a .meta|move\tAssets/Scripts
 done
 printf -- '--score alone: '; U --score
 printf -- '--remap with two plans: '; U --remap "$FIX/p.tsv" "$FIX/p.tsv"
+
+# 10. The guides --owned names (§ 12.5): <dir>/CLAUDE.md for the first 8 folders with 5+ movable files
+#     directly inside and no guide, largest first, then by name — counted AFTER the plan's moves. A
+#     shelf of twelve folders in one change: lib/j/ already has a guide, and lib/k/'s fifth file is
+#     vendored, so only four of its files are movable. An empty plan is the guides-only pass: ten
+#     folders qualify and lib/i/ and lib/m/ fall past the 8th. With a plan, a from counts in its to's
+#     folder — lib/m/ goes 5 → 6 and climbs in — and a merged from counts nowhere: lib/d/ goes 5 → 4
+#     and drops out, lib/k/ gains nothing from the file folded into it (4 movable, still out), and
+#     lib/b/ (6 → 5) stays.
+G="$FIX/shelf"
+( git init -q -b main "$G" 2>/dev/null || { git init -q "$G"; git -C "$G" symbolic-ref HEAD refs/heads/main; }
+  cd "$G" && mkdir -p lib/a lib/b lib/c lib/d lib/e lib/f lib/g lib/h lib/i lib/j lib/k lib/m
+  for x in a:7 b:6 c:6 d:5 e:5 f:5 g:5 h:5 i:5 j:5 k:4 m:5; do
+    i=0; while [ "$i" -lt "${x#*:}" ]; do i=$((i + 1)); printf 'export const v = %s;\n' "$i" > "lib/${x%%:*}/${x%%:*}$i.ts"; done
+  done
+  printf '<!-- polaris:guide -->\n# lib/j/ — the j shelf\n<!-- /polaris:guide -->\n' > lib/j/CLAUDE.md
+  printf 'var k = 5;\n' > lib/k/k5.min.js
+  git add -A && git -c user.name=Shelf -c user.email=shelf@shop.test commit -qm 'shelf: twelve folders' ) >/dev/null 2>&1
+HG() { ( POLARIS_ROOT="$G" python "$PY" hops "$@" 2>&1 ); printf 'rc=%s\n' "$?"; }
+echo '--- an empty plan: the guides-only pass'
+plan
+HG --owned "$FIX/p.tsv" | tr -d '\r'
+echo '--- a move into lib/m/, a merge inside lib/b/, a merge out of lib/d/ into lib/k/'
+plan 'move|lib/a/a1.ts|lib/m/a1.ts' 'merge|lib/b/b1.ts|lib/b/b2.ts' 'merge|lib/d/d1.ts|lib/k/k1.ts'
+HG --owned "$FIX/p.tsv" | tr -d '\r'

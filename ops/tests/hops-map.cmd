@@ -21,6 +21,8 @@
 # changes (60% is none), at 40 lines (41 is none), the smaller folding into the larger, a tie by
 # name, and never across two extensions or between a test and the code it tests; the question cap
 # of 3; and the 15-line cap of --facts.
+# T-264 (§ 12.6) adds --facts' `leave alone:` line — what a guide tells a reader never to move, and
+# why — pinned on every piece of the shop's bait, then on one folder holding all six reasons.
 #
 # HERMETIC (the keys-drift pattern): a throwaway repo under mktemp -d. THE ENGINE TRAP (§ 8.4): the
 # kit's code is reached as `POLARIS_ROOT=<fixture> python kit/ops/index.py hops`; the one call through
@@ -197,6 +199,28 @@ WT="$R/.polaris/wt/T-9"
 H "$WT" --facts src/cart | tr -d '\r'
 H "$R" --facts src/cart | tr -d '\r' | sed -n '$p'
 
+# 9c. --facts' `leave alone:` line (§ 12.6), right after `tests:`: the folder's files FIXED for good,
+#     each with the FIRST reason that holds it, in this order — generated · vendored · guarded ·
+#     test map · kept · public. Every piece of the shop's bait is asked about where it sits (and a
+#     published package joins it, the one reason the shop had no bait for): each lasting reason is
+#     named; a framework folder, a Unity asset and work in flight are no reason a guide should
+#     give, so they are not. Then src/mixed/ holds all six, named so that A-Z would put them the
+#     other way round: the reasons' order wins, four are named and the other two counted.
+( cd "$R" && mkdir -p packages/coins src/mixed \
+  && printf '{"name": "coins", "version": "1.0.0", "main": "index.js"}\n' > packages/coins/package.json \
+  && printf 'export const coins = 1;\n' > packages/coins/index.js \
+  && for f in zones.gen.ts yaml.min.js xrates.ts wallet.ts vault.ts units.go tokens.asmdef notes.ts; do
+       printf '// %s\n' "$f" > "src/mixed/$f"; done \
+  && printf 'base: main                # the shop ships from main\ngenerated: src/gen/ src/mixed/*.gen.ts\ngallery: docs/shots\n' > ops/CONVENTIONS.md \
+  && printf 'src/mixed/xrates.ts\tpath\t-\tthe exchange rates are signed off\n' >> ops/RULES.tsv \
+  && printf 'src/mixed/wallet.ts\ttests/money.test.ts\t-\tthe wallet maths\n' >> ops/SURFACES.tsv \
+  && printf 'src/mixed/vault.ts\tkeep\tframework convention\n' >> ops/LAYOUT.tsv \
+  && git add -A ) >/dev/null 2>&1
+for d in src/gen docs/shots vendor src/legacy src/utils tests src/payments packages/coins public Assets/Resources src/hooks; do
+  printf '%s/ · %s\n' "$d" "$( POLARIS_ROOT="$R" python "$PY" hops --facts "$d" 2>&1 | tr -d '\r' | grep '^leave alone:' )"
+done
+H "$R" --facts src/mixed | tr -d '\r'
+
 # 10. The monolith: every edge of MERGE and SPLIT, in a repo whose history ONE fast-import stream
 #     writes (no fork per commit). The files live in shell variables (b_<path, every other char _>);
 #     each change appends one line to every file it lists, so a file's lines = what it started with
@@ -255,6 +279,7 @@ H "$M" | tr -d '\r'
 H "$M" --tsv | tr -d '\r' | awk '/^(MERGE|SPLIT)\t|^rc=/'
 # 10c. Four things to ask — three merges and web/pages/ — and the round holds at most 3.
 H "$M" --questions | tr -d '\r'
-# 10d. --facts on a folder of 14 files: five label lines, then 10 file lines — 15, never more. Nothing
-#      outside src/bits/ ever changed with it, so `changes with` says `-`.
+# 10d. --facts on a folder of 14 files: six label lines, then 9 file lines — 15, never more. Nothing
+#      outside src/bits/ ever changed with it, so `changes with` says `-`, and nothing in it is held
+#      for good, so neither does `leave alone`.
 H "$M" --facts src/bits | tr -d '\r'
