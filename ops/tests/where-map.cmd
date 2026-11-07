@@ -6,6 +6,10 @@
 # END line, a second write that changes nothing, and a strip that gives back the exact file. CLAUDE.md is
 # the owner's file, so no byte outside the markers may ever move — LF or CRLF. guide_purpose, the pinned
 # reader, and brain_code_map are called directly, the libs sourced the way the CLI sources them.
+# v2 (§ 12.3, § 14): a guide's purpose loses its own `<dir>/ — ` lead (once, only when text follows), so
+# no reader prints the folder twice; a MAP row whose path is no longer TRACKED is no item; and drift
+# prints one MAP STALE advisory per such row off that very parse — never a finding. Every other row the
+# fixture's maps name is a real tracked file, so the older cases still test placement and the 13 cap.
 #
 # HERMETIC (the keys-drift pattern): one throwaway repo with its own tiny MAP.md, guides and CLAUDE.md —
 # never this repo's, which change every sprint. One fixture, many states: ~0.7s of CLI start-up per call.
@@ -18,9 +22,12 @@ R="$FIX/repo"
   git init -q -b main "$R" 2>/dev/null || { git init -q "$R"; git -C "$R" symbolic-ref HEAD refs/heads/main; }
   cd "$R"
   git config user.email t@t; git config user.name t; git config core.autocrlf false
-  mkdir -p ops bin lib src/api src/ui docs tools
+  mkdir -p ops bin lib src/api src/ui src/components docs tools web
   printf 'base: main\n' > ops/CONVENTIONS.md
-  for f in bin/run lib/new.sh src/main.ts src/cli.ts src/api/routes.ts src/ui/view.ts tools/gen.sh; do printf 'x\n' > "$f"; done
+  for f in bin/run lib/new.sh src/main.ts src/cli.ts src/api/routes.ts src/ui/view.ts tools/gen.sh web/index.html \
+           src/components/button.ts src/components/card.ts; do printf 'x\n' > "$f"; done
+  # Case 7's fifteen entry points are real files too: a row whose path is not tracked is no item (§ 14.2).
+  for i in 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15; do printf 'x\n' > "f$i.sh"; done
   printf '# Docs — how-tos\n' > docs/README.md
   printf '# API readme — the guide speaks first\n' > src/api/README.md
   # A guide: the marker, its heading, a body — and the owner's own line below the block, never read.
@@ -40,6 +47,7 @@ Bash and a little TypeScript.
 | Path | What it is |
 |---|---|
 | `bin/run` | the launcher — starts everything |
+| `bin/old-run` | a launcher this repo never had |
 | src/main.ts | boots the app — reads the config, opens the store, mounts every view, then greets our café — the rest is cut |
 src/cli.ts — the command-line entry, written in INIT's list form
 <path — what it is>
@@ -49,12 +57,15 @@ src/cli.ts — the command-line entry, written in INIT's list form
 |---|---|---|
 | src/api/ |  | a guided folder with no purpose of its own takes the guide's |
 | docs/ | how-tos and decisions | |
+| src/components/ | the widgets | every file in it has since moved to src/ui/ |
 | bin/run | a second row for the launcher — the first occurrence wins | |
 
 ## Danger zones — agents NEVER edit these
 - `vendor/` — third-party code, never a map item
 
 ## Deltas
+
+- src/components/ — new: the widgets, before they moved  (T-0, 2026-10-31)
 
 - lib/new.sh — new: the helper the first task added  (T-1, 2026-11-01)
 
@@ -68,12 +79,19 @@ src/cli.ts — the command-line entry, written in INIT's list form
 EOF
   printf '<!-- POLARIS:BEGIN — managed block [kit fixture] -->\n# POLARIS fixture protocol\n<!-- POLARIS:END -->\n\n<!-- POLARIS:EFFICIENCY -->\n## Your own rules\nKeep it kind.\n' > CLAUDE.md
   git add -A; git commit -qm fixture
+  # The widgets move into src/ui/: src/components/ holds no tracked file any more — only a leftover
+  # nobody committed, so the folder is still on disk and still gone from the map.
+  git mv src/components/button.ts src/ui/button.ts; git mv src/components/card.ts src/ui/card.ts
+  git commit -qm 'the widgets move into src/ui/'
+  printf 'cache\n' > src/components/.cache
   # An UNTRACKED guide is no guide (§ 0.1: a guide is a tracked file).
   mkdir -p scratch
   printf '<!-- polaris:guide -->\n# scratch/ — never committed\n<!-- /polaris:guide -->\n' > scratch/CLAUDE.md
 ) >/dev/null 2>&1
 W() { ( cd "$R" && bash "$KIT" where "$@" ); printf 'rc=%s\n' "$?"; }
 GP() { ( cd "$R"; PRIMARY="$R"; . "$LIB/core.sh"; . "$LIB/knowledge.sh"; guide_purpose "$1" ); printf 'rc=%s\n' "$?"; }
+# GQ: guide_purpose bracketed, so a purpose that ends in a blank shows it (a golden holds no trailing blank).
+GQ() { o="$( cd "$R"; PRIMARY="$R"; . "$LIB/core.sh"; . "$LIB/knowledge.sh"; guide_purpose "$1" )"; printf '[%s] rc=%s\n' "$o" "$?"; }
 same() { if cmp -s "$R/CLAUDE.md" "$1"; then printf '%s: identical\n' "$2"; else printf '%s: DIFFERS\n' "$2"; fi; }
 
 # 1. Preview: the block, markers included, rc 0, nothing written. Entry points (a backticked cell, the
@@ -81,8 +99,16 @@ same() { if cmp -s "$R/CLAUDE.md" "$1"; then printf '%s: identical\n' "$2"; else
 #    skipped) → Modules (an empty purpose on a guided folder takes the guide's; the repeat of bin/run
 #    dropped) → Deltas (the trailer dropped; a quoted line and a repeat skipped; a Delta below a later
 #    heading still counts) → the guided folder MAP.md never names. Danger zones, the untracked guide and
-#    the CLAUDE.md with no marker are not items.
+#    the CLAUDE.md with no marker are not items. Nor are two rows whose paths are not tracked (§ 14.2):
+#    bin/old-run never existed, and src/components/ is still on disk but every file in it moved away.
+#    A guide's own `src/api/ — ` lead is gone from its purpose (§ 12.3): the folder is never said twice.
 W
+
+# 1b. drift reads that SAME parse: one advisory per row the map just dropped, MAP order, once each
+#     (src/components/ is listed twice), the path as MAP writes it. Never a finding: ONE --strict run
+#     shows it all — the advisories print, the verdict stays "board clean" and the rc stays 0. No guide
+#     here cites a missing path, so there is no GUIDE STALE line.
+( cd "$R" && bash "$KIT" drift --strict 2>/dev/null ); printf 'strict-rc=%s\n' "$?"
 
 # 2. The first --write lands directly below the POLARIS END line, after ONE blank line, and counts its items.
 cp "$R/CLAUDE.md" "$FIX/before.md"
@@ -95,6 +121,7 @@ W --write
 same "$FIX/first.md" 'second write'
 
 # 4. The map follows MAP.md: `done` appends a Delta, and the next --write replaces the block where it sits.
+#    (web/ holds a tracked file, as a landed task's new folder does.)
 printf -- '- web/ — the new front end  (T-5, 2026-11-05)\n' >> "$R/ops/MAP.md"
 W --write
 grep -n -e '^<!-- polaris:where -->$' -e 'web/' -e '^<!-- /polaris:where -->$' "$R/CLAUDE.md"
@@ -107,6 +134,7 @@ same "$FIX/before.md" 'after strip'
 W --strip
 
 # 7. More than 13 items: the 13th line becomes the overflow line, so the body stays at 15 lines.
+#    (f01.sh…f15.sh are tracked files: the cap counts the items that survive, and all of these do.)
 { printf '## Entry points\n'; for i in 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15; do printf -- '- f%s.sh — file %s\n' "$i" "$i"; done; } > "$R/ops/MAP.md"
 P="$( cd "$R" && bash "$KIT" where )"
 printf '%s\n' "$P" | awk 'END { print NR " lines" }'
@@ -136,8 +164,8 @@ rm -f "$R/CLAUDE.md"
 W --write
 W --strip
 
-# 11. guide_purpose: a guide's purpose line, rc 0 — and rc 1 with nothing printed for no marker, an
-#     untracked file, the root and a folder with no CLAUDE.md at all.
+# 11. guide_purpose: a guide's purpose line, its own `<dir>/ — ` lead dropped, rc 0 — and rc 1 with
+#     nothing printed for no marker, an untracked file, the root and a folder with no CLAUDE.md at all.
 GP src/api
 GP src/ui
 GP tools
@@ -149,3 +177,18 @@ GP docs
 #     brain_code_map is called directly: a whole `brain` build costs ~9s here for nothing this golden asks.
 ( cd "$R"; PRIMARY="$R"; OPS="$R/ops"; . "$LIB/core.sh"; . "$LIB/knowledge.sh"; brain_code_map ) 2>/dev/null \
   | awk '/^## / { d = $2 } /^- purpose: / { print d " " substr($0, 3) }'
+
+# 13. The lead goes ONCE, byte-exact, and only when something non-blank follows it — a guide headed with
+#     its folder alone, or with nothing after the dash, keeps its line as is — and only the guide's OWN
+#     folder is a lead: naming another folder is the guide's own words (§ 12.3). Four tracked guides,
+#     added last so no case above sees them.
+( cd "$R" && mkdir -p g/bare g/twice g/blank g/other \
+  && printf '<!-- polaris:guide -->\n# g/bare/\n<!-- /polaris:guide -->\n' > g/bare/CLAUDE.md \
+  && printf '<!-- polaris:guide -->\n# g/twice/ — g/twice/ — said twice\n<!-- /polaris:guide -->\n' > g/twice/CLAUDE.md \
+  && printf '<!-- polaris:guide -->\n## g/blank/ —  \nThe body.\n<!-- /polaris:guide -->\n' > g/blank/CLAUDE.md \
+  && printf '<!-- polaris:guide -->\n# src/api/ — not this folder\n<!-- /polaris:guide -->\n' > g/other/CLAUDE.md \
+  && git add g && git commit -qm 'four more guides' ) >/dev/null 2>&1
+GQ g/bare
+GQ g/twice
+GQ g/blank
+GQ g/other

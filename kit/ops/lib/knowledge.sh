@@ -329,16 +329,21 @@ guide_purpose() { # guide_purpose <dir> [<root>] — the purpose line of <dir>/C
   # spaces removed. A guide is a TRACKED <dir>/CLAUDE.md holding a line that is exactly the marker;
   # the root `.` never is one. rc 1 and nothing when there is none. <root> = the tree to read
   # (default the primary; `where` passes the worktree it runs in). CRLF reads like LF.
+  # § 12.3: a line that opens with the guide's own folder — `<dir>/ — `, the template's lead — loses
+  # that prefix ONCE, byte-exact (LC_ALL=C, ENVIRON: no -v escapes), and only when something non-blank
+  # follows, so no reader prints the folder twice. index.py's _hops_purpose applies the same rule.
   local d="${1:-}" root="${2:-$PRIMARY}"
   d="${d%/}"
   case "$d" in ''|.) return 1;; esac
   [ -f "$root/$d/CLAUDE.md" ] || return 1
   git -C "$root" ls-files --error-unmatch -- "$d/CLAUDE.md" >/dev/null 2>&1 || return 1
-  awk 'BEGIN { r = 1 }
+  POLARIS_GUIDE_LEAD="$d/ — " LC_ALL=C awk 'BEGIN { r = 1; lead = ENVIRON["POLARIS_GUIDE_LEAD"] }
     { sub(/\r$/, "") }
     !g && $0 == "<!-- polaris:guide -->" { g = 1; next }
     g && $0 == "<!-- /polaris:guide -->" { exit }
-    g { s = $0; sub(/^[# ]+/, "", s); if (s ~ /[^ \t]/) { print s; r = 0; exit } }
+    g { s = $0; sub(/^[# ]+/, "", s)
+        if (index(s, lead) == 1 && substr(s, length(lead) + 1) ~ /[^ \t]/) s = substr(s, length(lead) + 1)
+        if (s ~ /[^ \t]/) { print s; r = 0; exit } }
     END { exit r }' "$root/$d/CLAUDE.md"
 }
 
@@ -667,36 +672,39 @@ cmd_brain() { # brain [--refresh] — generate .polaris/brain/ (ops/contracts/br
 # the folder guides; edit those and the next `where --write` follows (`done` runs it beside a map_delta).
 # Writes go through a temp file + mv, as install.sh does for the managed block, and never touch a byte
 # outside the markers: head/tail copy the rest of the file, CRLF lines and a missing last newline kept.
-cmd_where() { # where [--write | --strip] — print the root map · write it below the POLARIS block · take it out
-  local mode="${1:-}"
-  case "$#:$mode" in 0:|1:--write|1:--strip) ;; *) die "usage: polaris where [--write | --strip]";; esac
-  # WHICH tree — check's test: inside a task worktree it is THAT tree (the layout pass writes its map
-  # on its own branch); anywhere else, the primary.
-  local root="$PRIMARY" wt
-  case "$PWD" in */.polaris/wt/*) wt="${PWD##*/.polaris/wt/}"; wt="${wt%%/*}"
-    [ -n "$wt" ] && [ -d "$PRIMARY/.polaris/wt/$wt" ] && root="$PRIMARY/.polaris/wt/$wt";; esac
-  local cm="$root/CLAUDE.md" om='<!-- polaris:where -->' cmk='<!-- /polaris:where -->' block="" k=0 nl='
+_where_items() { # _where_items <root> block|stale [<open> <close>] — the ONE parse of <root>/ops/MAP.md
+  # (§ 0.2), shared by `where` and drift's MAP STALE advisory (§ 14.3) so the two never disagree. An
+  # item survives only when its path, trailing / dropped, is a TRACKED file of <root> or a folder that
+  # holds one (§ 14.2). block → line 1 the survivor count, then the block between <open> and <close>
+  # (the 13 cap counts survivors) · stale → each MAP item that rule drops, as MAP writes it (backticks
+  # stripped), MAP order, once. The tracked list is ONE `git ls-files` into a temp file the awk reads,
+  # never the environment (Windows caps it at ~32 KB); the guided folders come off that same list.
+  local root="$1" want="$2" map="$1/ops/MAP.md" trk f p g="" rc=0 nl='
 '
-  if [ "$mode" = "--write" ] && [ ! -f "$cm" ]; then note "where: no CLAUDE.md here — nothing to write"; return 1; fi
-  if [ "$mode" != "--strip" ]; then
+  if [ ! -f "$map" ]; then
+    if [ "$want" = stale ]; then return 0; fi                # no MAP.md: it lists nothing, so nothing is stale
+    map=/dev/null
+  fi
+  trk="$(mktemp)" || return 1
+  git -C "$root" -c core.quotepath=off ls-files > "$trk" 2>/dev/null || true
+  if [ "$want" = block ]; then
     # the guided folders (§ 0.1): every tracked <dir>/CLAUDE.md holding the marker → "dir NL purpose NL"
-    local f g="" p map="$root/ops/MAP.md"
     while IFS= read -r f; do
       [ -n "$f" ] || continue
       p="$(guide_purpose "${f%/CLAUDE.md}" "$root")" || continue
       g="$g${f%/CLAUDE.md}$nl$p$nl"
     done <<EOF
-$(git -C "$root" -c core.quotepath=off ls-files 2>/dev/null | grep '/CLAUDE\.md$' || true)
+$(grep '/CLAUDE\.md$' "$trk" || true)
 EOF
-    [ -f "$map" ] || map=/dev/null
-    # ONE awk over MAP.md, in bytes (LC_ALL=C) so every awk counts alike: the 90-character cut walks
-    # UTF-8 by hand and never splits a character. Line 1 out is the item count, then the block.
-    block="$(G="$g" LC_ALL=C awk -v om="$om" -v cmk="$cmk" '
+  fi
+  # ONE awk over MAP.md, in bytes (LC_ALL=C) so every awk counts alike: the 90-character cut walks
+  # UTF-8 by hand and never splits a character.
+  G="$g" LC_ALL=C awk -v want="$want" -v om="${3:-}" -v cmk="${4:-}" '
       function cut(s,   i, n, c) {   # the first 90 characters, then "…" — continuation bytes do not count
         for (i = 1; i <= length(s); i++) { c = substr(s, i, 1); if ((c < "\200" || c > "\277") && ++n > 90) return substr(s, 1, i - 1) "…" }
         return s
       }
-      function keep(b, p, q) { if (p != "" && substr(p, 1, 1) != "<") { nb[b]++; P[b, nb[b]] = p; Q[b, nb[b]] = q } }
+      function keep(b, p, q) { if (p != "" && substr(p, 1, 1) != "<") { nb[b]++; P[b, nb[b]] = p; Q[b, nb[b]] = q; O[++no] = b SUBSEP nb[b] } }
       function trow(b, row,   f) {   # | <c1> | <c2> | … → path = c1 minus backticks and spaces, purpose = c2
         split(row, f, "|"); gsub(/[` \t]/, "", f[2]); sub(/^[ \t]+/, "", f[3]); sub(/[ \t]+$/, "", f[3]); keep(b, f[2], f[3])
       }
@@ -710,6 +718,13 @@ EOF
       BEGIN {
         DASH = " — "; TRAILER = "[ \t]+\\([A-Za-z0-9._-]+, [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\\)$"
         n = split(ENVIRON["G"], gl, "\n"); for (i = 1; i < n; i += 2) { gd[++gn] = gl[i]; gp[gl[i]] = gl[i + 1] }
+        # the tracked tree (§ 14.2): every tracked file and every folder above one. ARGV[1] is read
+        # here, then struck from the operands, so the rules below only ever see MAP.md.
+        while ((getline t < ARGV[1]) > 0) {
+          sub(/\r$/, "", t); if (t == "") continue
+          T[t] = 1; nt++; while (sub("/[^/]*$", "", t) && !(t in T)) T[t] = 1
+        }
+        close(ARGV[1]); ARGV[1] = ""; if (nt) T["."] = 1
       }
       { sub(/\r$/, "") }
       /^## / { endtable(); h = tolower(substr($0, 4)); sec = ""
@@ -726,22 +741,47 @@ EOF
       sec == "D" || $0 ~ TRAILER { lrow("D", $0) }   # a Delta done appended below a later heading counts too
       END {
         endtable()
-        for (bi = 1; bi <= 3; bi++) {
-          b = substr("EMD", bi, 1)
-          for (j = 1; j <= nb[b]; j++) {
-            p = P[b, j]; key = p; sub(/\/$/, "", key); if (key in seen) continue
-            seen[key] = 1; q = Q[b, j]; if (q == "" && (key in gp)) q = gp[key]
-            out[++k] = item(p, q, key in gp)
+        if (want == "stale") {                                 # MAP order (O), once per path
+          for (i = 1; i <= no; i++) {
+            p = P[O[i]]; key = p; sub(/\/$/, "", key)
+            if (!(key in T) && !(key in told)) { told[key] = 1; print p }
           }
+        } else {
+          for (bi = 1; bi <= 3; bi++) {
+            b = substr("EMD", bi, 1)
+            for (j = 1; j <= nb[b]; j++) {
+              p = P[b, j]; key = p; sub(/\/$/, "", key); if (key in seen) continue
+              seen[key] = 1; if (!(key in T)) continue          # gone from the tree: no item (§ 14.2)
+              q = Q[b, j]; if (q == "" && (key in gp)) q = gp[key]
+              out[++k] = item(p, q, key in gp)
+            }
+          }
+          for (i = 1; i <= gn; i++) if (!(gd[i] in seen)) { seen[gd[i]] = 1; out[++k] = item(gd[i] "/", gp[gd[i]], 1) }
+          print k + 0; print om; print "## Where things live"
+          print "_Generated by `ops/polaris where` from ops/MAP.md and the folder guides — edit those, not this._"
+          for (i = 1; i <= k && i <= 13; i++) {
+            if (k > 13 && i == 13) print "- … " (k - 12) " more in ops/MAP.md"; else print out[i]
+          }
+          print cmk
         }
-        for (i = 1; i <= gn; i++) if (!(gd[i] in seen)) { seen[gd[i]] = 1; out[++k] = item(gd[i] "/", gp[gd[i]], 1) }
-        print k + 0; print om; print "## Where things live"
-        print "_Generated by `ops/polaris where` from ops/MAP.md and the folder guides — edit those, not this._"
-        for (i = 1; i <= k && i <= 13; i++) {
-          if (k > 13 && i == 13) print "- … " (k - 12) " more in ops/MAP.md"; else print out[i]
-        }
-        print cmk
-      }' "$map")" || { note "where: cannot read ops/MAP.md"; return 1; }
+      }' "$trk" "$map" || rc=$?
+  rm -f "$trk"
+  return "$rc"
+}
+
+cmd_where() { # where [--write | --strip] — print the root map · write it below the POLARIS block · take it out
+  local mode="${1:-}"
+  case "$#:$mode" in 0:|1:--write|1:--strip) ;; *) die "usage: polaris where [--write | --strip]";; esac
+  # WHICH tree — check's test: inside a task worktree it is THAT tree (the layout pass writes its map
+  # on its own branch); anywhere else, the primary.
+  local root="$PRIMARY" wt
+  case "$PWD" in */.polaris/wt/*) wt="${PWD##*/.polaris/wt/}"; wt="${wt%%/*}"
+    [ -n "$wt" ] && [ -d "$PRIMARY/.polaris/wt/$wt" ] && root="$PRIMARY/.polaris/wt/$wt";; esac
+  local cm="$root/CLAUDE.md" om='<!-- polaris:where -->' cmk='<!-- /polaris:where -->' block="" k=0
+  if [ "$mode" = "--write" ] && [ ! -f "$cm" ]; then note "where: no CLAUDE.md here — nothing to write"; return 1; fi
+  if [ "$mode" != "--strip" ]; then
+    # Line 1 out is the item count, then the block.
+    block="$(_where_items "$root" block "$om" "$cmk")" || { note "where: cannot read ops/MAP.md"; return 1; }
     k="${block%%[!0-9]*}"; block="${block#$k}"; block="${block#?}"
     if [ -z "$mode" ]; then printf '%s\n' "$block"; return 0; fi
   fi
