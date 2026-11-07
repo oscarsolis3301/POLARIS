@@ -979,3 +979,4 @@
 {"ts":1794045469,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"INTEGRATOR.md section 3 still tells the integrator to run gi"}
 {"ts":1794045474,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"bg wait --max N returns about 27s after N on this machine (s"}
 {"ts":1794045543,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"done's docs(map) commit lands on main AFTER the seal, so mai"}
+{"ts":1794045652,"ev":"new","id":"T-269","who":"Owner@DESKTOP","note":"ready","pts":2}
