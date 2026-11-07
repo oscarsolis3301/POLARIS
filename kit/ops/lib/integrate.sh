@@ -886,9 +886,9 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
   # shared-checkout v1 (T-058): the sealing pass runs under the integration lease (int_on first,
   # statement-level; busy lane → `queued: ` + rc 3), a dirty tree parks instead of dying, and a
   # wave with only board noise closes idempotently — `nothing new to seal`, rc 0.
-  local sync=""
+  local sync="" typed=1
   if [ "${1:-}" = "--sync" ]; then sync=1; shift; fi
-  local date="${1:-}"; [ -n "$date" ] || date="$(date +%F)"
+  local date="${1:-}"; [ -n "$date" ] || { date="$(date +%F)"; typed=""; }
   publish_resolve
   if [ -n "$sync" ]; then
     [ "$PUB" = "pr" ] || die "publish: direct seals locally — nothing to sync"
@@ -907,8 +907,27 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
       die "working tree not clean — commit or stash first"
     fi
   fi
-  git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null \
-    || { int_off; die "no branch integrate/$date — land tasks on it first (a different day's branch? seal <date>)"; }
+  # save-hops.md § 15.1 — a wave that crosses midnight still closes: with no date typed and no wave
+  # started today, the ONE open wave (a local integrate/* whose tip is not yet in $BASE) is the one
+  # to seal — the self-landing tail never types a date. None → today's die, word for word; two or
+  # more → a die naming them, oldest first, because picking one would be a guess.
+  if ! git rev-parse -q --verify "refs/heads/integrate/$date" >/dev/null; then
+    local open="" k=0 ref
+    if [ -z "$typed" ]; then
+      for ref in $(git for-each-ref --sort=refname --format='%(refname)' 'refs/heads/integrate/' 2>/dev/null); do
+        git merge-base --is-ancestor "$ref" "$BASE" 2>/dev/null && continue
+        open="$open${open:+ · }${ref#refs/heads/}"; k=$((k+1))
+      done
+    fi
+    if [ "$k" -eq 1 ]; then
+      date="${open#integrate/}"
+      note "no wave was started today — sealing integrate/$date"
+    elif [ "$k" -ge 2 ]; then
+      int_off; die "no branch integrate/$date — $k waves are open ($open); name one: bash ops/polaris seal <date>"
+    else
+      int_off; die "no branch integrate/$date — land tasks on it first (a different day's branch? seal <date>)"
+    fi
+  fi
   local subjects
   subjects="$(git log --reverse --format=%s "$BASE..integrate/$date" | grep -v '^chore(board):' || true)"
   # idempotent close (shared-checkout): an already-sealed or board-noise-only wave costs nothing —
@@ -923,7 +942,13 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
   local hdr n goal
   hdr="$(sed -n 's/^# SPRINT //p' "$OPS/SPRINT.md" 2>/dev/null | head -1 | tr -d '\r')"
   n="${hdr%%[!0-9]*}"
-  [ -n "$n" ] || { int_off; die "cannot read the sprint number — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header"; }
+  # save-hops.md § 15.2 — the two refusals below strand nobody: `land` leaves the primary ON the wave
+  # on purpose and only a seal moves it back, so a seal that refuses moves it back first (best-effort)
+  # and then dies word for word. A good seal is unchanged — it checks the wave out itself.
+  local onwave=""
+  [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)" = "integrate/$date" ] && onwave=1
+  [ -n "$n" ] || { [ -z "$onwave" ] || git checkout -q "$BASE" 2>/dev/null || true
+    int_off; die "cannot read the sprint number — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header"; }
   goal="$(printf '%s' "${hdr#"$n"}" | sed -e 's/^[[:space:]]*//' -e 's/^—[[:space:]]*//' -e 's/^-[[:space:]]*//' \
       -e 's/[[:space:]][[:space:]].*$//' -e 's/[[:space:]]*capacity:.*$//' -e 's/[[:space:]]*$//')"
   # tag gate (contract v2): absent → first wave of sprint n. Present AND an ancestor of $BASE →
@@ -932,6 +957,7 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
   local oldtag
   oldtag="$(git rev-parse -q --verify "refs/tags/sprint/$n" || true)"
   if [ -n "$oldtag" ] && ! git merge-base --is-ancestor "$oldtag" "$BASE" 2>/dev/null; then
+    [ -z "$onwave" ] || git checkout -q "$BASE" 2>/dev/null || true
     int_off
     die "sprint/$n exists and is not in $BASE history — reused sprint number; bump the ops/SPRINT.md header"
   fi

@@ -1,0 +1,36 @@
+== 1. a wave begun on an earlier day: seal with no date takes the one open wave, and says so first ==
+   no wave was started today — sealing integrate/2001-01-01
+✅ sprint 1 sealed — integrate/2001-01-01 merged into main (--no-ff), tagged sprint/1
+rc=0
+main is now: Sprint 1 — midnight waves
+the wave is inside main: yes
+sprint/1 tags main: yes
+checkout on: main
+== 2. two waves open: seal with no date names both, oldest first, and nothing moves ==
+⛔ no branch integrate/<today> — 2 waves are open (integrate/2001-01-02 · integrate/2001-01-03); name one: bash ops/polaris seal <date>
+rc=1
+main unmoved: yes
+✅ sprint 1 re-sealed — integrate/2001-01-02 merged into main (--no-ff); sprint/1: <old> → <new>
+rc=0
+== 3. no sprint line, the checkout on the wave: the refusal puts it back on main, then stops ==
+   no wave was started today — sealing integrate/2001-01-03
+⛔ cannot read the sprint number — ops/SPRINT.md needs a '# SPRINT <n> — <goal>' header
+rc=1
+main unmoved: yes
+checkout on: main
+== 4. a reused sprint number, the checkout on the wave: the same, by its date ==
+⛔ sprint/2 exists and is not in main history — reused sprint number; bump the ops/SPRINT.md header
+rc=1
+main unmoved: yes
+checkout on: main
+== 5. landing: self with no sprint line: the handoff stays green, lands nothing, says what to add ==
+✅ ownership clean: diff ⊆ files_owned
+   no verify: commands on task (acceptance is manual)
+✅ T-5 → review/. Lock stays until the Integrator lands it. Session may close.
+✅ all lanes done — nothing left building. Integrate now: "You are the INTEGRATOR. Land everything in ops/board/review/."
+   ⚠ T-5 waits in review/: ops/SPRINT.md has no "# SPRINT <n> — <goal>" line, so its wave could not close — add one (ops/MANUAL.md § Board commit by hand), then: bash ops/polaris next
+handoff rc=0
+the ⚠ line, times printed: 1
+T-5 sits in: review
+[T-5] commits on any integrate/*: 0
+checkout on: main
