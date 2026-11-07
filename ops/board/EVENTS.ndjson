@@ -983,3 +983,4 @@
 {"ts":1794045758,"ev":"claim","id":"T-269","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1794045763,"ev":"claim","id":"T-263","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1794045768,"ev":"claim","id":"T-264","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1794046171,"ev":"handoff","id":"T-263","who":"Owner@DESKTOP","note":""}
