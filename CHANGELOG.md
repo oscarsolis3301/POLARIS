@@ -4,6 +4,51 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.13.0 — 2026-11-07
+
+**The layout pass, hardened. It now runs start to finish on its own, moves whole features only, and reports its true before-and-after. And `polaris new` files new tasks in one command.**
+
+The first real layout pass did its job, but it needed seventeen workarounds along the way. This
+release fixes each one where it started, so the pass now runs from start to finish by itself:
+
+- It picks the guides for the folders it creates, and writes every guide it picks.
+- The before-and-after it reports is the real one, the same your project shows once its work is in.
+- It moves whole features only, at most 25 files at a time. A feature that does not fit waits whole
+  for the next pass, and it really does come up then: the pass's own moves no longer count as one
+  big change that ties every feature together.
+- With nobody there to answer its questions, it takes the safe choice for each one: it leaves that
+  item where it is and writes it down as left for you.
+- A run that goes past midnight still wraps up. And a wrap-up that is refused no longer leaves your
+  project stuck halfway: it goes back to its main version and says what to fix.
+
+On the practice shop POLARIS uses to rehearse the pass, one pass now gathers checkout, billing and
+profile into a folder each, and cuts the folders an average change touches from 2.80 to 1.33.
+Search's eight files wait, whole, for the next pass.
+
+`polaris new` files new tasks in one command, where each part of POLARIS that files tasks used to
+write them out by hand. Each one gets the next free number and is checked before it goes on the
+board, and if anything is wrong, nothing is written at all. A task that shares a file with work
+still open, including work that is done but still waiting to be folded in, now waits for it instead
+of being built beside it. Small one-off changes, the planner and the layout pass all file their
+tasks this way, and `ops/MANUAL.md` keeps the by-hand steps for tools that cannot run commands.
+
+- The first update from an older POLARIS now tells you when the layout pass is due, as later updates
+  do. Before, that first update never mentioned it. Updates also stop telling you to finish a step
+  they already took care of themselves.
+- An update no longer rewrites your project's `.claude/settings.json` when nothing in it changed.
+  When something does change, the file keeps its own line endings, instead of every line being
+  rewritten on Windows.
+- The short map of where things live in your `CLAUDE.md` no longer lists folders that are gone, and
+  a guided folder's name no longer shows up in it twice. `polaris drift` now points out each line of
+  `ops/MAP.md` that names something that is gone, and the review between sprints can clear those
+  lines on its own.
+- A task written from the task template no longer picks up the template's own guidance notes as if
+  they were its files or its contract.
+
+Good to know: before every release, the whole pass is now rehearsed on that practice shop on
+Windows, macOS and Linux, so these fixes stay fixed. Tasks already on your board need nothing:
+`polaris new` only changes how new ones are filed.
+
 ## 6.12.0 — 2026-11-06
 
 **Fewer lookups, found and fixed by POLARIS itself. POLARIS now notices when a project's layout makes agents jump between folders, measures it, and tidies it up on its own at the end of a run. And a run no longer stops in the middle to ask you something.**

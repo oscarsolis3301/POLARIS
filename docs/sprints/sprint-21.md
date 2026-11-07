@@ -130,7 +130,7 @@ nothing at all. It lives in a new module, kit/ops/lib/author.sh.
 - [ ] The entry stays under 500 lines, author.sh at most 250, startup-budget green
 
 ## T-263 — "Measure, don't assume: do folder guides load by themselves? Seven headless sessions, the answers written into the plan"
-points 1 · risk normal · landed 5f5e889 (2026-11-07) · claimed 2026-11-07
+points 1 · risk normal · landed 5f5e889 (2026-11-07) · claimed 2026-11-07 → done 2026-11-07
 files touched: plans/tidy-hardening.md
 
 ### Why
@@ -153,7 +153,7 @@ answers is corrected afterwards by T-266.
 - [ ] The handoff report names `worktree-root-claudemd-reloads: yes` when it is (the conductor files ONE IDEAS line); nothing else in the plan file changes
 
 ## T-264 — "hops proposes whole features, names a tidy task's whole file list, and says what a guide should tell you to leave alone"
-points 5 · risk normal · landed 1907d93 (2026-11-07) · claimed 2026-11-07
+points 5 · risk normal · landed 1907d93 (2026-11-07) · claimed 2026-11-07 → done 2026-11-07
 files touched: kit/ops/index.py, kit/ops/polaris, ops/tests/hops-due.cmd, ops/tests/hops-due.expected, ops/tests/hops-map.cmd, ops/tests/hops-map.expected, ops/tests/hops-moves.cmd, ops/tests/hops-moves.expected, ops/tests/hops-pass.cmd, ops/tests/hops-pass.expected
 
 ### Why
@@ -177,8 +177,83 @@ that must stay put (generated, vendored, guarded, test-mapped, kept, or public) 
 - [ ] Goldens: hops-pass gains `--propose` and the in-worktree `--owned` (importers at their post-move paths); hops-moves re-pins `--owned`; hops-map re-pins `--facts`; hops-due green with the new cut (re-pinned only where it moved)
 - [ ] No new public name in index.py; the entry's only change is the hops help line; cli-help-parity stays 12
 
+## T-265 — "The tidy role says only what works: whole-feature proposals, a task filed by one command, guides from the file list, nobody stranded"
+points 3 · risk normal · landed 2555304 (2026-11-07) · claimed 2026-11-07
+files touched: kit/ops/roles/TIDY.md
+
+### Why
+`ops/roles/TIDY.md` is the whole instruction set for the layout pass, and the first live pass had to
+work around it 17 times. It said "tests" where it meant `ops/tests/`, never mentioned that an update
+already ran `upgrade`, gave no safe path when the run had no answers, cut the proposal mid-feature,
+had the agent hand-write the board files for its task, guessed which folder guides the task would
+own, asked for a `verify:` line the tool refuses, sent the agent to an importer lookup that answers
+from the wrong copy of the code, and left the after-score and the suite run ambiguous.
+
+This task rewrites the step list so every command in it is one that works as written: the questions
+read safely with no answers, `hops --propose` for the proposal, `polaris new` to file the one task
+with `hops --owned` as its exact file list, importers taken from the worktree mid-pass, guides taken
+from that same list with their "leave alone" line from `--facts`, the true after-score from the
+worktree, and the suite run from the worktree. Still at most 90 lines, the same four headings.
+
+### Acceptance
+- [ ] Every step change in ops/contracts/save-hops.md § 13 is made, steps 0–8, in the role's own plain voice
+- [ ] ≤ 90 lines; exactly the four heading lines of § 7.1 and no other line starting with `#`; the api rows of kit/ops/roles/ unchanged
+- [ ] Every command the file names was run once, as written, on a copy of `hops_fixture` with the kit's code before handoff (say so in Notes) — `POLARIS_ROOT=<copy> python kit/ops/index.py hops …` stands in for `bash ops/polaris hops …` until the dogfood
+- [ ] Entry and Report keep their substance; no POLARIS command is added to the guide template
+
+## T-266 — "SOLO, the Planner and the manual file tasks with polaris new; EVOLVE retires stale map rows; the protocol states what the probe measured"
+points 3 · risk normal · landed 7f386f4 (2026-11-07) · claimed 2026-11-07
+files touched: kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/roles/EVOLVE.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md
+
+### Why
+`polaris new` only helps if the people who file tasks are told to use it. Today SOLO's first step, the
+Planner's placing step and the manual each describe writing board files and a board commit by hand.
+This task points all three at the one command — the manual keeps a by-hand version for tools that
+cannot run commands — and adds `new` to the protocol's command table.
+
+Two smaller follow-ups ride along, each one line. EVOLVE's list of changes it may make on its own
+gains "retire each map row drift reports as stale", so the new MAP STALE advisory actually leads
+somewhere. And the protocol's paragraph about what loads by itself is rewritten to state exactly
+what this sprint's probe measured — a measured yes may be relied on, anything else is not.
+
+### Acceptance
+- [ ] ops/contracts/task-author.md § 8: SOLO step 1, PLANNER step 13, the MANUAL paragraph (no new heading) and the PROTOCOL § THE TOOL row, byte-exact where pinned
+- [ ] save-hops.md § 14.4: EVOLVE's auto-reversible item 2 reads exactly the pinned line; nothing else in EVOLVE.md changes
+- [ ] save-hops.md § 17.2: PROTOCOL § SAVE HOPS's "What loads by itself" paragraph states the seven values recorded under `## Measurements` in plans/tidy-hardening.md, and claims a guide loads by itself only where a value is `yes`
+- [ ] No new heading line in any file (fenced `#` lines count); plain-voice green; kit/CLAUDE.md untouched
+
+## T-267 — "The hops drill proves a whole pass on the practice shop, on every system the checks run on"
+points 3 · risk normal · landed 0e29d88 (2026-11-07) · claimed 2026-11-07
+files touched: kit/ops/lib/selftest/hops.sh
+
+### Why
+The goldens prove the new layout behaviour here, on one machine. The automatic checks that guard
+every release run the drills instead, serially, on three operating systems — and the hops drill
+does not yet know any of this sprint's fixes. This task teaches it six cases on the practice shop the
+benchmark uses: a pass on its own task branch gets guides offered for the folders it creates; its
+landed work ties nothing together, so the features it left behind are still proposed; a proposal
+never splits a feature and stays at 25 files; the task's file list names its guides; a guide's
+heading no longer repeats the folder name; and mid-pass, the files to fix are named where they now live.
+
+### Acceptance
+- [ ] drill_hops gains the six cases of ops/contracts/save-hops.md § 17.1, each failing with its pinned label, asserting rc and row shapes, never prose
+- [ ] hops_fixture is unchanged (bench.sh reads its pinned facts); no new public fn (api rows of the file unchanged)
+- [ ] `bash kit/ops/polaris doctor --selftest --only hops` passes, run by hand once before handoff, and the whole hops drill stays ≤ 120 s on this machine (say the time in Notes)
+- [ ] Each new case was seen to fail once by a deliberate break of the code it guards, and the break's diff was read before the green counted
+
+## T-268 — "Release 6.13.0 - the tidy pass, hardened, and tasks filed in one command: version and changelog (LAST)"
+points 1 · risk normal · landed 22c4d17 (2026-11-07) · claimed 2026-11-07
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+Change version: in kit/ops/VERSION to 6.13.0 and leave every other line of that multi-line keyed file exactly as it is. Add a "## 6.13.0 — <the day it lands>" entry at the top of CHANGELOG.md, above 6.12.0, in the same plain-language style, saying what an owner gets: the layout pass now reads its own work correctly — guides are offered for the folders it creates, its before-and-after numbers are true, and it never ties features together by its own move — and it proposes whole features, never half of one; folder guides and the short map of where things live stop repeating folder names and stop listing folders that are gone, and the project check names the map lines that went stale; a run that crosses midnight still closes, and a refused close never leaves the project stranded; the first update from an older POLARIS offers the layout pass, and an update never rewrites settings it did not change; and `polaris new` files new tasks in one command, keeping work that shares a file in line behind it. No task IDs, no git or test words. Tagging, publishing, the dogfood and the end-to-end checks are the conductor's steps, not this task.
+
+### Acceptance
+- [ ] every verify: line passes (VERSION is multi-line: use grep, never test "$(cat kit/ops/VERSION)" = ..., the T-217 trap)
+- [ ] the CHANGELOG entry is plain language, no git or test vocabulary, and names no task IDs
+
 ## T-269 — "The board's field reader ignores the task template's own guidance comments, so a task filed from TASK.md never owns a comment"
-points 2 · risk normal · landed 78e67a9 (2026-11-07) · claimed 2026-11-07
+points 2 · risk normal · landed 78e67a9 (2026-11-07) · claimed 2026-11-07 → done 2026-11-07
 files touched: kit/ops/lib/core.sh, ops/tests/fm-comments.cmd, ops/tests/fm-comments.expected
 
 ### Why

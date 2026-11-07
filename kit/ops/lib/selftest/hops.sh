@@ -1,5 +1,5 @@
 # lib/selftest/hops.sh — the practice shop the layout work proves itself on (hops_fixture, save-hops.md
-# § 8.2) and the drill that proves it there on every push (drill_hops, § 8.3). Definitions only.
+# § 8.2) and the drill that proves it there on every push (drill_hops, § 8.3, § 17.1). Definitions only.
 hops_fixture() { # hops_fixture <new-dir> — build the shop there from nothing, the same commit ids on any machine
   # A storefront sorted by KIND of file (src/components hooks services utils types + tests/) whose
   # four features — checkout, profile, search, billing — each sit across 3+ of those folders and
@@ -621,8 +621,15 @@ drill_hops() {
     # over every MOVE row reads lower after than before · --proof is green for a move the engine
     # proposed, made the way a tidy step makes it (git mv, its importers re-aimed — the shop's own
     # import check agrees), red for one logic edit on top of it, and red for Money.java moved with
-    # its package line changed; each proof starts from a clean tree. Seconds, not minutes: one
-    # fast-import and six engine calls. No python → a note and a skip: hops has no engine without it.
+    # its package line changed; each proof starts from a clean tree. Then one whole pass, walked
+    # the way the tidy lane runs it (T-267, § 17.1): --propose takes at most 25 rows and each
+    # cluster whole or not at all · --owned names the guides, CLAUDE.md and ops/LAYOUT.tsv · in
+    # the pass's own worktree (.polaris/wt/T-1 on feat/T-1) --owned for the next step names each
+    # importer where the first step put it, and a cluster once moved gets a GUIDES row for its new
+    # folder counting every file moved in · after the land (one squash commit carrying LAYOUT.tsv
+    # rows, T-1 done on a board ref, feat/T-1 kept) main still proposes each cluster left behind
+    # and none of T-1's files, and a guide headed `# <dir>/ — <text>` reads <text>. Seconds, not
+    # minutes: two fast-imports and ten engine calls. No python → a note and a skip.
     hp_py=python3
     "$hp_py" -c pass >/dev/null 2>&1 || hp_py=python
     if ! "$hp_py" -c pass >/dev/null 2>&1; then
@@ -717,6 +724,154 @@ drill_hops() {
         || { cat "$hp_d/proof" "$hp_d/err"; echo "HOPS PROOF JAVA FAIL (Money.java moved with its package line changed is rc 1, its RED row at line 1 — got rc $hp_rc)"; exit 1; }
       git reset -q --hard
       [ -z "$(git status --porcelain)" ] || { git status --porcelain; echo "HOPS RESET FAIL (the shop must be clean after the proofs)"; exit 1; }
+      # ---- T-267 (save-hops.md § 17.1): one whole pass, walked the way the tidy lane runs it — the
+      #      cut it is handed, its own worktree, its land — so every system CI runs on proves what
+      #      the hops-pass golden pins on one machine. Rows and rcs again, and still no count pinned.
+      # (6) --propose, the cut a pass is handed: plan rows only, at most 25, each one a MOVE row, and
+      #     each cluster (a MOVE row's 4th field) all in or all out — a cut mid-feature would leave
+      #     a feature in two places, findable in neither
+      hp_rc=0; "$hp_py" "$OPS_DIR/index.py" hops --propose > "$hp_d/raw" 2> "$hp_d/err" || hp_rc=$?
+      tr -d '\r' < "$hp_d/raw" > "$hp_d/cut.tsv"
+      [ "$hp_rc" = 0 ] || { cat "$hp_d/cut.tsv" "$hp_d/err"; echo "HOPS PROPOSE CUT FAIL (hops --propose is rc 0 — got $hp_rc)"; exit 1; }
+      awk -F '\t' 'FILENAME == ARGV[1] { if ($1 == "MOVE") { of[$2 "\t" $3] = $4; all[$4]++ } next }
+        { k = $2 "\t" $3
+          if (NF != 3 || $1 != "move" || !(k in of)) { print "not one of the MOVE rows: " $0; next }
+          took[of[k]]++; n++ }
+        END { if (!n) print "(no rows at all)"
+              if (n > 25) print n " rows — one pass moves at most 25"
+              for (c in took) if (took[c] != all[c]) print c ": " took[c] " of its " all[c] " MOVE rows" }' \
+        "$hp_d/tsv" "$hp_d/cut.tsv" > "$hp_d/bad"
+      [ ! -s "$hp_d/bad" ] || { cat "$hp_d/bad"; echo "HOPS PROPOSE CUT FAIL (--propose prints at most 25 move rows, each a MOVE row, and takes each cluster whole or not at all)"; exit 1; }
+      # (7) --owned on that cut, a tidy task's whole files_owned: every from and to, a guide for each
+      #     folder the cut fills with 5+ files, and CLAUDE.md and ops/LAYOUT.tsv, which every pass writes
+      hp_rc=0; "$hp_py" "$OPS_DIR/index.py" hops --owned "$hp_d/cut.tsv" > "$hp_d/raw" 2> "$hp_d/err" || hp_rc=$?
+      tr -d '\r' < "$hp_d/raw" > "$hp_d/owned"
+      [ "$hp_rc" = 0 ] || { cat "$hp_d/owned" "$hp_d/err"; echo "HOPS OWNED GUIDES FAIL (hops --owned is rc 0 — got $hp_rc)"; exit 1; }
+      awk -F '\t' 'FILENAME == ARGV[1] { want[$2]; want[$3]; d = $3; sub("[^/]*$", "", d); into[d]++; next }
+        { have[$0] }
+        END { want["CLAUDE.md"]; want["ops/LAYOUT.tsv"]
+              for (d in into) if (into[d] >= 5) { g++; want[d "CLAUDE.md"] }
+              if (!g) print "(the cut fills no folder with 5+ files — no guide to ask for)"
+              for (p in want) if (!(p in have)) print "not named: " p }' "$hp_d/cut.tsv" "$hp_d/owned" > "$hp_d/bad"
+      [ ! -s "$hp_d/bad" ] || { cat "$hp_d/bad"; echo "HOPS OWNED GUIDES FAIL (--owned names every from and to, <dir>/CLAUDE.md for each folder the cut fills with 5+ files, CLAUDE.md and ops/LAYOUT.tsv)"; exit 1; }
+      # (8) the pass's own worktree, where claim puts one — .polaris/wt/T-1 on feat/T-1 — and the
+      #     cut in three steps there: the first cluster's first five rows, the rest of it, then
+      #     every other cluster. A step is what a tidy step does — the files moved, each @/ import
+      #     of them following, a LAYOUT.tsv row apiece — done by ONE python call (a fork per file
+      #     costs seconds on Git Bash), then committed.
+      hp_wt="$hp_d/shop/.polaris/wt/T-1"
+      git worktree add -b feat/T-1 "$hp_wt" > "$hp_d/out" 2>&1 || { cat "$hp_d/out"; echo "HOPS PASS SETUP FAIL (git worktree add .polaris/wt/T-1 on feat/T-1)"; exit 1; }
+      cat > "$hp_d/step.py" <<'STEP'
+import os, sys
+with open(sys.argv[1], encoding="utf-8") as fh:
+    rows = [r.split("\t") for r in fh.read().split("\n") if r]
+spec = lambda p: '"@/' + p[len("src/"):].rsplit(".", 1)[0] + '"'
+subs = [(spec(f), spec(t)) for _, f, t in rows if f.startswith("src/")]
+for _, f, t in rows:
+    os.makedirs(os.path.dirname(t), exist_ok=True)
+    os.replace(f, t)
+for top in ("src", "tests"):
+    for d, _, names in os.walk(top):
+        for p in [os.path.join(d, n) for n in names if n.endswith((".ts", ".tsx"))]:
+            with open(p, encoding="utf-8", newline="") as fh:
+                old = new = fh.read()
+            for a, b in subs:
+                new = new.replace(a, b)
+            if new != old:
+                with open(p, "w", encoding="utf-8", newline="") as fh:
+                    fh.write(new)
+with open("ops/LAYOUT.tsv", "a", encoding="utf-8", newline="") as fh:
+    fh.writelines("%s\tmoved\t→ %s · hops-drill\n" % (f, t) for _, f, t in rows)
+STEP
+      : > "$hp_d/step1.tsv"; : > "$hp_d/step2.tsv"; : > "$hp_d/step3.tsv"
+      awk -F '\t' -v d="$hp_d" 'FILENAME == ARGV[1] { if ($1 == "MOVE") c[$2] = $4; next }
+        FNR == 1 { k = c[$2] }
+        { s = (c[$2] != k) ? "step3" : ((++n <= 5) ? "step1" : "step2"); print > (d "/" s ".tsv") }' "$hp_d/tsv" "$hp_d/cut.tsv"
+      [ -s "$hp_d/step2.tsv" ] || { echo "HOPS PASS SETUP FAIL (the cut's first cluster must hold more than five rows, so a second step is left)"; exit 1; }
+      cat "$hp_d/step1.tsv" "$hp_d/step2.tsv" > "$hp_d/first.tsv"
+      cd "$hp_wt"
+      "$hp_py" "$hp_d/step.py" "$hp_d/step1.tsv" && git add -A && git commit -qm 'layout: a first step, five files' \
+        || { echo "HOPS PASS SETUP FAIL (the first step must move its files and commit in the worktree)"; exit 1; }
+      # (9) mid-pass, --owned for the NEXT step, asked of the worktree with the plan's absolute path
+      #     (TIDY passes the primary's): each importer of the next step's files is named where it
+      #     lives NOW — the first step moved some of them — and none where it used to be (F7). The
+      #     importers are found the shop's own way: every file whose "@/…" spec names one of them.
+      awk -F '\t' '$2 ~ /^src\// { s = substr($2, 5); sub("[.][^./]*$", "", s); print "\"@/" s "\"" }' "$hp_d/step2.tsv" > "$hp_d/specs"
+      [ -s "$hp_d/specs" ] || { echo "HOPS PASS SETUP FAIL (the second step must move a file under src/ for anything to import)"; exit 1; }
+      git ls-files -z > "$hp_d/files"
+      xargs -0 grep -l -F -f "$hp_d/specs" < "$hp_d/files" > "$hp_d/importers" || true
+      hp_rc=0; POLARIS_ROOT="$hp_wt" "$hp_py" "$OPS_DIR/index.py" hops --owned "$hp_d/step2.tsv" > "$hp_d/raw" 2> "$hp_d/err" || hp_rc=$?
+      tr -d '\r' < "$hp_d/raw" > "$hp_d/owned"
+      [ "$hp_rc" = 0 ] || { cat "$hp_d/owned" "$hp_d/err"; echo "HOPS OWNED POSTMOVE FAIL (hops --owned from the worktree is rc 0 — got $hp_rc)"; exit 1; }
+      awk -F '\t' 'FILENAME == ARGV[1] { was[$3] = $2; next }
+        FILENAME == ARGV[2] { imp[$0]; next }
+        { have[$0] }
+        END { for (p in imp) { if (p in was) moved++; if (!(p in have)) print "importer not named: " p }
+              for (p in was) if (was[p] in have) print "named where it used to be: " was[p]
+              if (!moved) print "(no importer of the next step moved in the first — nothing to prove)" }' \
+        "$hp_d/step1.tsv" "$hp_d/importers" "$hp_d/owned" > "$hp_d/bad"
+      [ ! -s "$hp_d/bad" ] || { cat "$hp_d/bad"; echo "HOPS OWNED POSTMOVE FAIL (from the worktree, --owned names each importer of the next step at its post-move path)"; exit 1; }
+      # (10) the second step: now the first cluster's cut rows are all moved and committed. Seen from
+      #      the worktree (POLARIS_ROOT = it, HEAD feat/T-1) the pass's own branch is nobody else's
+      #      work in flight, so each new folder of 5+ moved files gets a GUIDES row, and that row
+      #      counts every file moved in — a moved file held in flight would not count
+      "$hp_py" "$hp_d/step.py" "$hp_d/step2.tsv" && git add -A && git commit -qm 'layout: the rest of the first feature' \
+        || { echo "HOPS PASS SETUP FAIL (the second step must move its files and commit in the worktree)"; exit 1; }
+      hp_rc=0; POLARIS_ROOT="$hp_wt" "$hp_py" "$OPS_DIR/index.py" hops --tsv > "$hp_d/raw" 2> "$hp_d/err" || hp_rc=$?
+      tr -d '\r' < "$hp_d/raw" > "$hp_d/wt.tsv"
+      [ "$hp_rc" = 0 ] || { cat "$hp_d/wt.tsv" "$hp_d/err"; echo "HOPS WORKTREE GUIDES FAIL (hops --tsv from the worktree is rc 0 — got $hp_rc)"; exit 1; }
+      awk -F '\t' 'FILENAME == ARGV[1] { d = $3; sub("[^/]*$", "", d); n[d]++; next }
+        $1 == "GUIDES" { g[$2] = $3 }
+        END { for (d in n) if (n[d] >= 5) { k++
+                if (!(d in g)) print d ": " n[d] " files moved in, and no GUIDES row"
+                else if (g[d] + 0 < n[d]) print d ": its GUIDES row counts " g[d] " of the " n[d] " files moved in" }
+              if (!k) print "(no new folder of 5+ moved files — nothing for a GUIDES row to prove)" }' \
+        "$hp_d/first.tsv" "$hp_d/wt.tsv" > "$hp_d/bad"
+      [ ! -s "$hp_d/bad" ] || { grep '^GUIDES' "$hp_d/wt.tsv" || true; cat "$hp_d/bad"; echo "HOPS WORKTREE GUIDES FAIL (from its worktree, the pass gets a GUIDES row for each new folder of 5+ files, counting every file it moved in)"; exit 1; }
+      # (11) the third step — every other cluster of the cut — and a guide for the first new
+      #      folder, headed the template's way, `# <dir>/ — <text>`. The shop's own import check
+      #      must agree. Then the land: ONE squash commit on main that carries the LAYOUT.tsv rows,
+      #      T-1 in done/ on the board ref, feat/T-1 kept here and on origin (done keeps a live
+      #      worktree's branch for sweep).
+      IFS=$'\t' read -r hp_k hp_from hp_to < "$hp_d/first.tsv"
+      hp_home="${hp_to%/*}/"
+      hp_text='everything one feature needs, in one folder'
+      "$hp_py" "$hp_d/step.py" "$hp_d/step3.tsv" \
+        && printf '<!-- polaris:guide -->\n# %s — %s\n<!-- /polaris:guide -->\n' "$hp_home" "$hp_text" > "${hp_home}CLAUDE.md" \
+        && git add -A && git commit -qm 'layout: every other feature of the cut, and a guide' \
+        || { echo "HOPS PASS SETUP FAIL (the third step must move its files, write the guide and commit in the worktree)"; exit 1; }
+      bash tests/run.sh > "$hp_d/run.out" 2>&1 || { cat "$hp_d/run.out"; echo "HOPS PASS SETUP FAIL (the shop's own import check must pass in the worktree — a step missed an importer)"; exit 1; }
+      cd "$hp_d/shop"
+      { git merge -q --squash feat/T-1 && git commit -qm 'T-1: one layout pass'; } > "$hp_d/out" 2>&1 \
+        || { cat "$hp_d/out"; echo "HOPS PASS SETUP FAIL (feat/T-1 must squash onto main as one commit)"; exit 1; }
+      git diff --quiet HEAD~1 HEAD -- ops/LAYOUT.tsv && { echo "HOPS PASS SETUP FAIL (the land commit must carry the pass's ops/LAYOUT.tsv rows)"; exit 1; }
+      printf 'commit refs/heads/polaris/board\ncommitter Board <board@fixture-shop.test> 1767225600 +0000\ndata <<EOF\nboard: T-1 done\nEOF\nM 100644 inline ops/board/done/T-1.md\ndata <<EOF\n# T-1 one layout pass\nEOF\n\n' \
+        | git fast-import --quiet && git update-ref refs/remotes/origin/feat/T-1 refs/heads/feat/T-1 \
+        || { echo "HOPS PASS SETUP FAIL (the board ref listing T-1 in done/ and origin/feat/T-1 must be planted)"; exit 1; }
+      # (12) main after the land. Its land commit carries LAYOUT.tsv rows, so it is never counted as
+      #      one ordinary change — one that would weld every feature it moved to the App page
+      #      importing them all (F4) — and the done task's kept branch, here and on origin, holds
+      #      nothing: each cluster the pass left behind keeps MOVE rows, none of T-1's files gets
+      #      one, and every file T-1 moved still counts where it now lives
+      hp_rc=0; "$hp_py" "$OPS_DIR/index.py" hops --tsv > "$hp_d/raw" 2> "$hp_d/err" || hp_rc=$?
+      tr -d '\r' < "$hp_d/raw" > "$hp_d/land.tsv"
+      [ "$hp_rc" = 0 ] || { cat "$hp_d/land.tsv" "$hp_d/err"; echo "HOPS LAND WELD FAIL (hops --tsv on main after the land is rc 0 — got $hp_rc)"; exit 1; }
+      awk -F '\t' 'FILENAME == ARGV[1] { if ($1 == "MOVE") of[$2] = $4; next }
+        FILENAME == ARGV[2] { t1[$3]; out[of[$2]]; d = $3; sub("[^/]*$", "", d); n[d]++; next }
+        $1 == "MOVE" { if ($2 in t1) print "a MOVE row for a file T-1 moved: " $0; if ($2 in of) kept[of[$2]] }
+        $1 == "MAP" { m[$2] = $3 }
+        END { for (f in of) { c = of[f]
+                if (!(c in out) && !(c in left)) { left[c]; nl++; if (!(c in kept)) print "left behind, and no MOVE row left: " c } }
+              if (!nl) print "(the cut took every cluster — none left behind to prove)"
+              for (d in n) if (!(d in m)) print d ": no MAP row — T-1 moved " n[d] " files in"
+                           else if (m[d] + 0 < n[d]) print d ": MAP counts " m[d] " of the " n[d] " files T-1 moved in" }' \
+        "$hp_d/tsv" "$hp_d/cut.tsv" "$hp_d/land.tsv" > "$hp_d/bad"
+      [ ! -s "$hp_d/bad" ] || { cat "$hp_d/bad"; echo "HOPS LAND WELD FAIL (on main after the land: MOVE rows for each cluster left behind, none for T-1's files, and each file T-1 moved counted where it now lives)"; exit 1; }
+      # (13) the guide headed `# <dir>/ — <text>` gives MAP purpose <text>: the folder's own name
+      #      goes, so no report says it twice (§ 12.3)
+      awk -F '\t' -v d="$hp_home" -v t="$hp_text" '$1 == "MAP" && $2 == d { n++; if ($4 != t || $5 != "yes") print }
+        END { if (n != 1) print "(" n + 0 " MAP rows for " d ")" }' "$hp_d/land.tsv" > "$hp_d/bad"
+      [ ! -s "$hp_d/bad" ] || { cat "$hp_d/bad"; echo "HOPS PURPOSE PREFIX FAIL (a guide headed '# $hp_home — $hp_text' gives MAP purpose '$hp_text', guide yes)"; exit 1; }
     ) || exit 1
     rm -rf "$hp_d"
 }
