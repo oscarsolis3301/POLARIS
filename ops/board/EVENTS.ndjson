@@ -989,3 +989,7 @@
 {"ts":1794051636,"ev":"done","id":"T-263","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1794051724,"ev":"done","id":"T-269","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1794051841,"ev":"done","id":"T-264","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1794051938,"ev":"promote","id":"T-268","who":"Owner@DESKTOP","note":"deps done: T-258, T-259, T-260, T-261, T-262, T-263, T-264, T-269","pts":1}
+{"ts":1794051940,"ev":"promote","id":"T-265","who":"Owner@DESKTOP","note":"deps done: T-258, T-262, T-264","pts":3}
+{"ts":1794051941,"ev":"promote","id":"T-267","who":"Owner@DESKTOP","note":"deps done: T-264","pts":3}
+{"ts":1794051945,"ev":"promote","id":"T-266","who":"Owner@DESKTOP","note":"deps done: T-261, T-262, T-263","pts":3}
