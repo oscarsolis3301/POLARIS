@@ -29,5 +29,12 @@ flow lists. Commas inside an item are not representable inline — use block for
 depends_on: [T-001, T-002]   →  two items: "T-001", "T-002"   (today: ONE literal "[T-001, T-002]")
 ```
 
+## v1.1 (2026-11-07) — a comment alone is no value
+`fm_get` and `fm_list` read a value or a list item that is ONLY a comment (`key:   # note`, `  -   # note`)
+as empty, the way YAML does, so the task template's own guidance comments never become an owned path, a
+contract or a verify line. A `#` that does not start the value is unchanged (`title: Fix #12` keeps it), and
+every v1 shape above parses exactly as before. Executable check: the `fm-comments` golden.
+
 ## Changelog
 - v1 2026-07-14: created for T-004, from the 5.6.0 field report (bug 1).
+- v1.1 2026-11-07: comment-only values and items read as empty (sprint 21; found by T-262's `polaris new`).
