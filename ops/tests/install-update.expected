@@ -1,0 +1,39 @@
+--- 1. a never-set-up repo, updated: setup comes first, the pass waits
+rc 0 · fresh · save-hops lines 0 · upgrade lines 0 · ▶ NEXT lines 1
+settings.json: the kit's own, copied as it ships
+--- 2. a zip or skill install (no POLARIS_SHA): the upgrade lines stay; LF settings, nothing to merge
+rc 0 · live-board · save-hops lines 0 · upgrade lines 3 · ▶ NEXT lines 0
+live board: finish it with these two lines (never re-run INIT):
+cd <the repo>
+bash ops/polaris upgrade
+.claude/settings.json: hooks + permissions + output style merged (idempotent)
+settings.json: byte-identical
+--- 3. an updater older than 6.12.0 (POLARIS_SHA set, here empty), due, a quiet board: the first jump
+rc 0 · live-board · save-hops lines 1 · upgrade lines 0 · ▶ NEXT lines 1
+POLARIS <version> installed · live-board
+
+▶ NEXT — save hops: read ops/roles/TIDY.md and run it now
+.claude/settings.json: hooks + permissions + output style merged (idempotent) — 1 permission rule(s)
+.claude/settings.json: AI commit attribution disabled ("includeCoAuthoredBy": false)
+every line ends CRLF
+the object: the kit's own
+--- 4. the current updater passes POLARIS_UPDATE_HINTS=1 and prints the line itself: none here
+rc 0 · live-board · save-hops lines 0 · upgrade lines 0 · ▶ NEXT lines 0
+settings.json: byte-identical
+--- 5. a 6.12.0 updater: its admin.sh defines update_hops_hint() and prints its own line: none here
+admin.sh defines update_hops_hint(): yes
+rc 0 · live-board · save-hops lines 0 · upgrade lines 0 · ▶ NEXT lines 0
+.claude/settings.json: hooks + permissions + output style merged (idempotent) — 1 permission rule(s)
+every line ends LF, no CR anywhere
+the object: the kit's own
+--- 6. not due: no line
+rc 0 · live-board · save-hops lines 0 · upgrade lines 0 · ▶ NEXT lines 0
+--- 7. a due verdict about another commit (not main's sha now): no line
+rc 0 · live-board · save-hops lines 0 · upgrade lines 0 · ▶ NEXT lines 0
+--- 8. hops: off, whatever the cache says: no line
+rc 0 · live-board · save-hops lines 0 · upgrade lines 0 · ▶ NEXT lines 0
+--- 9. due on a busy board (a task waits in ready/): the other pinned line, once, last
+rc 0 · live-board · save-hops lines 1 · upgrade lines 0 · ▶ NEXT lines 1
+POLARIS <version> installed · live-board
+
+▶ NEXT — save hops: the layout pass is due — it runs when your next piece of work wraps up

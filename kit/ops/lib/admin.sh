@@ -569,7 +569,10 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   sha=""
   [ -n "$repo" ] && sha="$(git ls-remote "$repo" HEAD 2>/dev/null | cut -c1-7 || true)"
 
-  POLARIS_SHA="$sha" bash "$K/ops/install.sh" "$PRIMARY" || die "install failed — repo untouched except where noted above"
+  # POLARIS_UPDATE_HINTS=1 tells install.sh "this updater prints the layout-pass line itself" (the
+  # update_hops_hint call at the end of this function), so the installer stays quiet about it. Without
+  # the marker, a new install.sh run by an updater older than 6.12.0 says it instead (save-hops.md § 16).
+  POLARIS_SHA="$sha" POLARIS_UPDATE_HINTS=1 bash "$K/ops/install.sh" "$PRIMARY" || die "install failed — repo untouched except where noted above"
 
   # AFTER the install, so `ver` reads the NEW VERSION (and its zip: URL), and before $T is gone.
   if [ "$repo_only" = 1 ]; then

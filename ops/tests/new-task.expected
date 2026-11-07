@@ -1,0 +1,82 @@
+== 1. one call, four drafts
+T-011 ready — nothing to wait for
+T-012 backlog — waits on T-009 (review, shares src/shared.txt)
+T-013 ready — nothing to wait for
+T-014 backlog — waits on T-011 (ready, shares src/a.txt)
+rc=0 stderr=[]
+board commits: 1 -> 2
+chore(board): new T-011 T-012 T-013 T-014
+ops/board/backlog/T-012.md
+ops/board/backlog/T-014.md
+ops/board/ready/T-011.md
+ops/board/ready/T-013.md
+ready/T-011: id: T-011|status: ready|depends_on: []|
+backlog/T-012: id: T-012|status: backlog|depends_on: [T-007, T-009]|
+ready/T-013: depends_on: [T-007]|id: T-013|status: ready|
+backlog/T-014: id: T-014|status: backlog|depends_on: [T-011]|
+-- a.md -> T-011
+2c2
+< id:
+---
+> id: T-011
+10c10
+< wsjf:
+---
+> wsjf: 8.00
+12c12
+< status: backlog
+---
+> status: ready
+-- b.md -> T-012
+2c2
+< id: XXX-000
+---
+> id: T-012
+10,11c10
+< depends_on:
+<   - T-007
+---
+> depends_on: [T-007, T-009]
+-- c.md -> T-013
+8a9,10
+> id: T-013
+> status: ready
+event new T-011 ready 2
+event new T-012 backlog 1
+event new T-013 ready 3
+event new T-014 backlog 1
+✅ drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry · deps)
+== 2. the ask gate
+T-015 backlog — needs a human's yes for src/db/ first
+T-016 backlog — waits on T-009 (review, shares src/shared.txt); needs a human's yes for src/db/ first
+T-017 ready — nothing to wait for
+rc=0 stderr=[]
+  - src/db/ — the owner, 2026-11-07: fixture
+== 3. ids
+T-051 ready — nothing to wait for
+T-050 ready — nothing to wait for
+T-052 backlog — waits on T-050 (ready)
+rc=0 stderr=[]
+chore(board): new T-051 T-050 T-052
+== 4. refusals
+no-argument: rc=1 ⛔ usage: polaris new <draft.md> [<draft.md>…] | stdout empty | ref unmoved
+no-such-file: rc=1 ⛔ new: .polaris/drafts/missing.md: no such file | stdout empty | ref unmoved
+in-the-board: rc=1 ⛔ new: ops/board/ready/T-010.md: is inside ops/board/ — a draft lives outside the board | stdout empty | ref unmoved
+no-frontmatter: rc=1 ⛔ new: .polaris/drafts/nofm.md: no frontmatter — the first line must be --- | stdout empty | ref unmoved
+no-title: rc=1 ⛔ new: .polaris/drafts/notitle.md: title: is empty | stdout empty | ref unmoved
+points-8: rc=1 ⛔ new: .polaris/drafts/p8.md: points: must be 1-5 (got 8) — split anything bigger | stdout empty | ref unmoved
+no-plan: rc=1 ⛔ new: .polaris/drafts/noplan.md: plan: is empty — every task names the plan it belongs to | stdout empty | ref unmoved
+odd-risk: rc=1 ⛔ new: .polaris/drafts/risk.md: risk: must be normal or high (got medium) | stdout empty | ref unmoved
+owns-nothing: rc=1 ⛔ new: .polaris/drafts/noown.md: files_owned: lists nothing | stdout empty | ref unmoved
+missing-contract: rc=1 ⛔ new: .polaris/drafts/nocontract.md: contract: ops/contracts/nope.md does not exist | stdout empty | ref unmoved
+bad-id: rc=1 ⛔ new: .polaris/drafts/badid.md: id: X-1 is not T-<number> | stdout empty | ref unmoved
+taken-id: rc=1 ⛔ new: .polaris/drafts/taken.md: id: T-009 is taken | stdout empty | ref unmoved
+taken-in-call: rc=1 ⛔ new: .polaris/drafts/p60b.md: id: T-060 is taken | stdout empty | ref unmoved
+unknown-dep: rc=1 ⛔ new: .polaris/drafts/nodep.md: depends_on: T-404 is no task on the board | stdout empty | ref unmoved
+feat-worktree: rc=1 ⛔ new: run it from the primary checkout — a builder never files work for itself | stdout empty | ref unmoved
+board files after the refusals: identical
+== over every call
+drafts changed: 0
+SPRINT.md untouched
+main untouched
+trade words in the success lines: 0

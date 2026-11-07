@@ -305,6 +305,7 @@ kit/ops/lib/admin.sh	fn	update_dirt_overlaps_kit
 kit/ops/lib/admin.sh	fn	update_hops_hint
 kit/ops/lib/admin.sh	fn	update_latest
 kit/ops/lib/admin.sh	fn	ver
+kit/ops/lib/author.sh	fn	cmd_new
 kit/ops/lib/awake.sh	fn	awake_conf
 kit/ops/lib/awake.sh	fn	awake_ensure
 kit/ops/lib/awake.sh	fn	awake_home
