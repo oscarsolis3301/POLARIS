@@ -324,9 +324,10 @@ def selfcheck():
 
 
 # ---------------------------------------------------------------- repo / db
-def sh(args, cwd):
+def sh(args, cwd, stdin=None):
     try:
-        p = subprocess.run(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        p = subprocess.run(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                           input=None if stdin is None else stdin.encode("utf-8"))
         return p.stdout.decode("utf-8", "replace")
     except Exception:
         return ""
@@ -1014,12 +1015,23 @@ def _hops_match(path, pat):
     return path.startswith(pat) if pat.endswith("/") else fnmatch.fnmatchcase(path, pat)
 
 
-def _hops_in_flight(root, base):
-    """§ 1.4 rule 10: the paths somebody has unmerged work on, FIXED for this pass only — every path
-    git status names (`dir/` for an untracked folder it reports whole), and every path a local or
-    remote branch changed in commits <base> lacks: an open ship PR counts, the board ref does not."""
+def _hops_task(root):
+    """§ 12.1: the <ID> when the tree at root is a task worktree — its HEAD is the branch
+    feat/<ID> — else "". What such a tree changes is the pass's own work, never somebody else's."""
+    b = sh(["git", "symbolic-ref", "-q", "--short", "HEAD"], root).strip()
+    return b[len("feat/"):] if b.startswith("feat/") else ""
+
+
+def _hops_in_flight(root, base, task=""):
+    """§ 1.4 rule 10 as § 12.1 amends it: the paths somebody ELSE has unmerged work on, FIXED for
+    this pass only — every path git status names (`dir/` for an untracked folder it reports whole),
+    unless the tree is task <task>'s own worktree; and every path a local or remote branch changed
+    in commits <base> lacks: an open ship PR counts. Never the board ref, the task's own feat/<ID>,
+    or the feat/<ID> of a task already in done/ on the board (done keeps a live worktree's branch
+    for sweep) — local or on any remote. The refs are filtered HERE and handed to git log on stdin:
+    one --exclude per finished task would pass Windows' 32 KB command line on a board this old."""
     out = set()
-    st = sh(["git", "status", "--porcelain", "-z"], root).split("\0")
+    st = [] if task else sh(["git", "status", "--porcelain", "-z"], root).split("\0")
     i = 0
     while i < len(st):
         e, i = st[i], i + 1
@@ -1028,10 +1040,21 @@ def _hops_in_flight(root, base):
             if "R" in e[:2] or "C" in e[:2]:       # -z puts a rename's source in the next field
                 out.add(st[i] if i < len(st) else "")
                 i += 1
-    log = sh(["git", "-c", "core.quotePath=false", "log", "--name-only", "--format=",
-              "--exclude=polaris/*", "--branches", "--exclude=*/polaris/*", "--remotes",
-              "--not", base, "--"], root)
-    out.update(log.split("\n"))
+    done = sh(["git", "ls-tree", "--name-only", "refs/heads/polaris/board", "--", "ops/board/done/"],
+              root).split("\n")
+    mine = {"feat/" + p.rpartition("/")[2][:-3] for p in done if p.endswith(".md")}
+    mine.update(["feat/" + task] if task else [])
+    refs = []
+    for r in sh(["git", "for-each-ref", "--format=%(refname)", "refs/heads/", "refs/remotes/"],
+                root).split("\n"):
+        kind, _, name = r[len("refs/"):].partition("/")      # heads|remotes, then the branch
+        if ((kind == "heads" and not fnmatch.fnmatchcase(name, "polaris/*") and name not in mine)
+                or (kind == "remotes" and not fnmatch.fnmatchcase(name, "*/polaris/*")
+                    and name.partition("/")[2] not in mine)):    # <remote>/<branch>
+            refs.append(r)
+    if refs:
+        out.update(sh(["git", "-c", "core.quotePath=false", "log", "--name-only", "--format=",
+                       "--stdin", "^" + base, "--"], root, "\n".join(refs) + "\n").split("\n"))
     out.discard("")
     return out
 
@@ -1144,10 +1167,11 @@ def _hops_assembly(files):
     return _near
 
 
-def _hops_fixed(root, base, files=(), edges=()):
+def _hops_fixed(root, base, files=(), edges=(), task=""):
     """§ 1.4 rules 1-10 as ONE predicate over a path: True = never proposed as a `from` or a `to`,
     and not counted in the score. Rule 9 (d), a move across Unity assemblies, is a property of the
-    move rather than of one path: _hops_assembly answers it where the MOVE rows are made."""
+    move rather than of one path: _hops_assembly answers it where the MOVE rows are made. <task> =
+    the tree's own task (_hops_task), whose work rule 10 never holds."""
     conv = read(root, "ops/CONVENTIONS.md") or ""
     pats = _hops_cfg(conv, "generated").split()                                       # 4
     gal = _hops_cfg(conv, "gallery").strip("/")
@@ -1158,7 +1182,7 @@ def _hops_fixed(root, base, files=(), edges=()):
              for g in r[:2] if g not in ("", "-")]
     pats += [r[0] for r in _hops_rows(root, "ops/LAYOUT.tsv")                         # 7
              if len(r) > 1 and r[1] == "keep"]
-    flight = _hops_in_flight(root, base)                                              # 10
+    flight = _hops_in_flight(root, base, task)                                        # 10
     held = tuple(p for p in flight if p.endswith("/"))
     named, pkgs, globs = _hops_public(root, files, edges)                             # 9 (a) (b)
     # 2: app/ pages/ routes/ are framework-ROUTED under a next/nuxt/svelte/remix/astro config at
@@ -1182,29 +1206,35 @@ def _hops_fixed(root, base, files=(), edges=()):
     return _fixed
 
 
-def _hops_history(root, base, tracked):
-    """§ 1.3: the last 300 non-merge changes on <base>, each as the set of TODAY's tracked paths it
-    touched. Renames map old names onto today's — chains too: the log runs newest first, so every
-    rename is seen before the older changes that still use the old name — and a path gone since
-    drops out. A change of more than 40 paths (a mass rename, a vendored drop) or one only under
-    ops/ says nothing about how the features are laid out, so it is skipped."""
+def _hops_history(root, base, tracked, head=False):
+    """§ 1.3 + § 12.2: the last 300 non-merge changes on <base> — on HEAD when <head> (a task
+    worktree, --facts) — each as the set of TODAY's tracked paths it touched. Renames map old
+    names onto today's — chains too: the log runs newest first, so every rename is seen before the
+    older changes that still use the old name — and a path gone since drops out. A change of more
+    than 40 paths (a mass rename, a vendored drop) or one only under ops/ says nothing about how
+    the features are laid out, so it is skipped. So is a layout pass's own work: a commit in
+    <base>..HEAD (the task's own) and any commit touching ops/LAYOUT.tsv (a pass's land) map their
+    renames and are never a change — a pass that counted itself would weld every feature it moved
+    through the one file that imports them all."""
+    own = set(sh(["git", "rev-list", base + "..HEAD", "--"], root).split()) if head else set()
     out = sh(["git", "-c", "core.quotePath=false", "log", "-n", "300", "--no-merges", "-M",
-              "--name-status", "--format=%x1e%H", base, "--"], root)
+              "--name-status", "--format=%x1e%H", "HEAD" if head else base, "--"], root)
     commits = []
     for line in out.split("\n"):
         if line.startswith("\x1e"):
-            commits.append([])
+            commits.append((line[1:].strip(), []))
         elif commits and "\t" in line:
             f = line.split("\t")
-            commits[-1].append((f[0][:1], f[1], f[2] if len(f) > 2 else ""))
+            commits[-1][1].append((f[0][:1], f[1], f[2] if len(f) > 2 else ""))
     alias, kept = {}, []
-    for rows in commits:
+    for sha, rows in commits:
         raw = [new or old for _, old, new in rows]
         names = {alias.get(p, p) for p in raw}
         for st, old, new in rows:
             if st == "R" and new:
                 alias[old] = alias.get(new, new)
-        if len(rows) > 40 or all(p.startswith("ops/") for p in raw):
+        if (len(rows) > 40 or all(p.startswith("ops/") for p in raw) or sha in own
+                or any("ops/LAYOUT.tsv" in (old, new) for _, old, new in rows)):
             continue
         kept.append(names & tracked)
     return kept
@@ -1316,11 +1346,16 @@ def _hops_guides(root, files):
 
 
 def _hops_purpose(root, d, guides):
-    """A folder's purpose for MAP: its guide's purpose line (§ 0.1), else the first heading of its
-    README.md, else `-`. Never a TAB: the --tsv rows are TAB-separated."""
+    """A folder's purpose for MAP and --facts: its guide's purpose line (§ 0.1), else the first
+    heading of its README.md, else `-`. A guide headed `# <d>/ — <text>` (the template's shape)
+    gives <text>: the folder's own name goes, once and only when text follows (§ 12.3 — the rule
+    guide_purpose keeps too), so no report says it twice. Never a TAB: --tsv is TAB-separated."""
     for line in guides.get(d, ()):
         s = re.sub(r"^[# ]+", "", line)
         if s.strip(" \t"):
+            pre = d + "/ — "
+            if s.startswith(pre) and s[len(pre):].strip(" \t"):
+                s = s[len(pre):]
             return s.replace("\t", " ")
     for line in (read(root, d + "/README.md") or "").split("\n"):
         m = re.match(r"#+\s+(\S.*)", line.rstrip("\r"))
@@ -1360,13 +1395,17 @@ def _hops_mean(commits, ren=None):
 def _hops_survey(root, files):
     """Everything the report and --score stand on, measured once (§ 1.3-§ 1.5): the FIXED
     predicate, the movable files, the kept changes as sets of movable paths, the clusters with
-    their strengths, movable files per folder, every folder, and the guides."""
+    their strengths, movable files per folder, every folder, and the guides. In a task worktree
+    (§ 12.1-§ 12.2) the history is HEAD's and the task's own work is never in flight, so a pass
+    measures the layout it has made so far exactly as <base> will once it lands."""
     s = types.SimpleNamespace(files=files, tracked=set(files))
     s.base = _hops_cfg(read(root, "ops/CONVENTIONS.md") or "", "base", "main")
+    s.task = _hops_task(root)
     s.edges = _hops_edges(root)
-    s.fixed = _hops_fixed(root, s.base, files, s.edges)
+    s.fixed = _hops_fixed(root, s.base, files, s.edges, s.task)
     s.movable = {p for p in files if not s.fixed(p)}
-    s.commits = [c for c in (k & s.movable for k in _hops_history(root, s.base, s.tracked)) if c]
+    hist = _hops_history(root, s.base, s.tracked, bool(s.task))
+    s.commits = [c for c in (k & s.movable for k in hist) if c]
     s.clusters, s.strength = _hops_clusters(
         s.commits, {(min(a, b), max(a, b)) for a, b in s.edges if a in s.movable and b in s.movable})
     s.per, s.folders = {}, set()
@@ -1958,7 +1997,8 @@ def _hops_facts(root, files, arg):
     MAP counts one; a label with nothing to show says `-`. A path that is no folder of tracked
     files is a usage error, rc 2. Everything is read from the tree POLARIS_ROOT names, its history
     from that tree's HEAD: pointed at a tidy task's worktree, the facts describe the layout AFTER its
-    moves — a brand-new home included, its files' past followed through the renames."""
+    moves — a brand-new home included, its files' past followed through the renames, and the
+    pass's own commits counted as renames only (§ 12.2)."""
     d = arg.strip()
     while d.startswith("./"):
         d = d[2:]
@@ -1986,7 +2026,8 @@ def _hops_facts(root, files, arg):
         t = top.setdefault(p, [])
         t += [] if n in t or len(t) >= 3 else [n]
     co = collections.Counter()
-    for c in _hops_history(root, "HEAD", set(files)):
+    base = _hops_cfg(read(root, "ops/CONVENTIONS.md") or "", "base", "main")
+    for c in _hops_history(root, base, set(files), True):
         if here.intersection(c):
             co.update({p.rpartition("/")[0] for p in c}.difference((d, "")))
     loc = {p: _hops_loc(root, p) for p in here}

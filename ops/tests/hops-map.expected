@@ -1,6 +1,6 @@
 hops — 2.89 folders per change over 9 changes · guides 1/2 folders of 5+ files
 MAP       src/components/ · 5 files · - · guide no
-MAP       src/services/ · 5 files · src/services/ — every call the shop makes to its API · guide yes
+MAP       src/services/ · 5 files · every call the shop makes to its API · guide yes
 MAP       src/hooks/ · 3 files · Hooks — shared state for the screens · guide no
 MAP       tests/ · 2 files · - · guide no
 MAP       src/utils/ · 1 files · - · guide no
@@ -13,7 +13,7 @@ next: bash ops/polaris hops --tsv lists every row · ops/roles/TIDY.md runs the 
 rc=0
 SCORE	2.89	9	1	2
 MAP	src/components/	5	-	no
-MAP	src/services/	5	src/services/ — every call the shop makes to its API	yes
+MAP	src/services/	5	every call the shop makes to its API	yes
 MAP	src/hooks/	3	Hooks — shared state for the screens	no
 MAP	tests/	2	-	no
 MAP	src/utils/	1	-	no
@@ -56,7 +56,7 @@ Q2: is src/pages/ routed by a framework (keep it where it is)? — keep | allow 
 rc=0
 Q1: merge src/components/Footer.tsx into src/components/Header.tsx? — no | yes (default: no)
 rc=0
-facts src/services/ — 5 files · purpose: src/services/ — every call the shop makes to its API
+facts src/services/ — 5 files · purpose: every call the shop makes to its API
 entry files: cartApi.ts (3 importers) · http.ts (2 importers) · authApi.ts (1 importers)
 key symbols: cart · get · signIn
 changes with: src/components/ (6×) · src/hooks/ (6×) · src/utils/ (4×) · tests/ (4×)

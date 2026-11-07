@@ -1,0 +1,55 @@
+--- 1. main before the pass: the plan is the first 25 MOVE rows
+score: 2.80 → 1.31 folders per change (53% fewer) · guides 0/4
+change checkout: 6 folders → 1
+change billing: 6 folders → 1
+change profile: 5 folders → 1
+change search: 6 folders → 6
+--- 2. the worktree: moves committed, importers fixed and staged
+SCORE	1.31	117	0	3
+MAP	src/billing/	8	-	no
+MAP	src/checkout/	8	-	no
+MAP	src/profile/	6	-	no
+MAP	src/search/	3	-	no
+MAP	tests/	2	-	no
+MAP	src/	1	-	no
+MAP	src/hooks/	1	-	no
+MAP	src/services/	1	-	no
+MAP	src/types/	1	-	no
+MAP	src/utils/	1	-	no
+SCATTER	search	6	src/search/	src/hooks/useSearch.ts,src/search/SearchBar.tsx,src/search/SearchResults.tsx,src/search/useRecentSearches.ts,src/services/searchApi.ts,src/types/search.ts,src/utils/searchHighlight.ts,tests/search.test.ts
+MOVE	src/hooks/useSearch.ts	src/search/useSearch.ts	search
+MOVE	src/services/searchApi.ts	src/search/searchApi.ts	search
+MOVE	src/types/search.ts	src/search/search.ts	search
+MOVE	src/utils/searchHighlight.ts	src/search/searchHighlight.ts	search
+MOVE	tests/search.test.ts	src/search/search.test.ts	search
+GUIDES	src/billing/	8
+GUIDES	src/checkout/	8
+GUIDES	src/profile/	6
+moved files counted where they now live: 25 of 25
+--- 3. the pass commits, writes the guides --tsv asked for, commits: bare hops, line 1
+hops — 1.31 folders per change over 117 changes · guides 3/3 folders of 5+ files
+--- 4. the land: one commit on main, T-1 done on the board, its branch kept
+land: one commit of 30 paths, ops/LAYOUT.tsv among them
+board: ops/board/done/T-1.md · kept: feat/T-1 origin/feat/T-1
+--- 5. main after the land: the same line 1, and the cluster left behind keeps its MOVE rows
+hops — 1.31 folders per change over 117 changes · guides 3/3 folders of 5+ files
+line 1 on main = line 1 in the worktree
+SCORE	1.31	117	3	3
+MAP	src/billing/	9	src/billing/ — invoices and the card on file	yes
+MAP	src/checkout/	9	the cart, its coupons and tax, and the pay button	yes
+MAP	src/profile/	7	src/profile/ — 	yes
+MAP	src/search/	3	-	no
+MAP	tests/	2	-	no
+MAP	src/	1	-	no
+MAP	src/hooks/	1	-	no
+MAP	src/services/	1	-	no
+MAP	src/types/	1	-	no
+MAP	src/utils/	1	-	no
+SCATTER	search	6	src/search/	src/hooks/useSearch.ts,src/search/SearchBar.tsx,src/search/SearchResults.tsx,src/search/useRecentSearches.ts,src/services/searchApi.ts,src/types/search.ts,src/utils/searchHighlight.ts,tests/search.test.ts
+MOVE	src/hooks/useSearch.ts	src/search/useSearch.ts	search
+MOVE	src/services/searchApi.ts	src/search/searchApi.ts	search
+MOVE	src/types/search.ts	src/search/search.ts	search
+MOVE	src/utils/searchHighlight.ts	src/search/searchHighlight.ts	search
+MOVE	tests/search.test.ts	src/search/search.test.ts	search
+--- 6. an unfinished task holds what it changes, even seen from the worktree
+MOVE rows: 4 · src/hooks/useSearch.ts among them: no
