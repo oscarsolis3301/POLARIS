@@ -17,6 +17,7 @@ goldens 15–25 s each; the full suite runs once per wave (bg run); landing: int
 ## Burndown
 | date | done pts | remaining |
 | 2026-11-07 | 19 | 38 |
+| 2026-11-07 | 8 | 32 |
 
 # SPRINT 20 — Save hops (6.12.0)          capacity: 69   dates: 2026-11-05–
 
