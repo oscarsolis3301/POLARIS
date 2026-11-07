@@ -244,6 +244,20 @@ never runs on the guard path, and before any command, so every CLI call from ins
 handover.sh ≤ 300 · workspace.sh ≤ 350 stays (T-092 adds ≈90 to today's ≈210) · new fns land in the module
 this census names, never in the entry script.
 
+## v6 — lib/author.sh joins the census (2026-11-06, plan tidy-hardening, 6.13.0)
+
+New module `kit/ops/lib/author.sh` (T-262, ≤ 250 lines): `cmd_new`, the one public fn, plus private
+`_new_…` helpers — semantics in `ops/contracts/task-author.md`. THIS contract stays the authority on
+where code lives and the loader's shape.
+
+**The loader, v6:** the FULL-load `_mods` list gains `author` immediately after `skills`
+(`… handover skills author selftest/spine …`). The `_match|_rules|_guard` guard path stays EXACTLY
+`core ownership`. Both lists stay LITERAL, never a glob. `install.sh` copies `lib/` recursively, so the
+module ships with no manifest change.
+
+**Budgets, binding:** entry `kit/ops/polaris` < 500 lines (466 before this sprint; `new` adds ≈ 8) ·
+author.sh ≤ 250 · every other budget above unchanged.
+
 ## Changelog
 - v4 2026-08-03: bg.sh joins the census (≤300 lines, fn census in bg-jobs.md); loader full-load
   list gains `bg` after `admin` (guard path unchanged).
@@ -351,3 +365,4 @@ executes at source time, bash 3.2 only — no `mapfile`, no associative arrays, 
 - v8 2026-09-17: visual.sh (10 fns, 450 lines or fewer) joins the census; loader gains `visual`
   between `surfaces` and `builder`; the three inline visual blocks move out of builder.sh
   (T-166..T-169, plan gallery-and-bar).
+- v6 2026-11-06: lib/author.sh (`cmd_new`, ≤ 250 lines) joins the census; loader `+author` after `skills` (T-262; plan tidy-hardening).

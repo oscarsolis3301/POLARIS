@@ -2,6 +2,8 @@
 plan: `save-hops` · brief: `plans/save-hops.md` (owner-approved 2026-11-04; its "Your decisions" bind)
 · tasks T-233…T-253 · v1 written 2026-11-05 by the PLANNER. `pack` prints only the first 120 lines of
 this file: read § 0 and your own section (the table below) before your first edit.
+**v2 (6.13.0, plan `tidy-hardening`, T-258…T-268) — § 12–§ 17 at the END of this file amend § 0.1,
+§ 0.2, § 1.3, § 1.4 rule 10, § 1.6, § 1.7, § 3.4, § 4, § 5, § 7.1 and § 9; where they disagree, v2 wins.**
 
 ## Purpose
 Every repo POLARIS runs in gets fewer lookups without anyone pasting "reorganize this" again.
@@ -732,6 +734,243 @@ what kit/CLAUDE.md and PROTOCOL claim (T-244).
 `index-selfcheck`, `cli-help-parity`) · `bash kit/ops/polaris doctor --fast` · at the wave gate only:
 `check --only api-kit` (strict) and `doctor --selftest --only hops`.
 
+## v2 — the tidy pass, hardened (6.13.0) · plan `tidy-hardening` · brief `plans/tidy-hardening.md`
+The first live pass (a practice shop, 2.80 → 1.34 folders per change, 25 proven moves, tests green)
+needed 17 workarounds (F1–F17 in the brief, the seven CONDUCTOR/INTEGRATOR lines of 2026-11-06 in
+`ops/board/backlog/IDEAS.md`). v2 fixes each at its root. `polaris new` has its own contract,
+`ops/contracts/task-author.md`.
+
+| task | wave | builds | section |
+|---|---|---|---|
+| T-258 | W1 | engine A: in flight, history, the purpose line (index.py) + golden `hops-pass` | § 12.1–§ 12.3 |
+| T-259 | W1 | seal's midnight fallback · early refusals go back to base · self_land's header check | § 15 |
+| T-260 | W1 | settings.json kept byte-true · the updater marker · the save-hops line for old updaters | § 16 |
+| T-261 | W1 | guide_purpose's prefix · `where` drops vanished items · drift `MAP STALE` | § 14 |
+| T-262 | W1 | `polaris new` | task-author.md |
+| T-263 | overflow | the probe, recorded in plans/tidy-hardening.md | § 17.2 |
+| T-264 | W2 | engine B: `--propose`, `--due`'s cut, `--owned`, `--facts` leave alone, usage + help | § 12.4–§ 12.7 |
+| T-266 | W2 | SOLO · PLANNER · MANUAL · EVOLVE · PROTOCOL adopt it all | task-author.md § 8, § 14.4, § 17.2 |
+| T-265 | W3 | `kit/ops/roles/TIDY.md` | § 13 |
+| T-267 | W3 | the hops drill | § 17.1 |
+| T-268 | W4 | Release 6.13.0, LAST | § 17.3 |
+
+### § 12.0 Surface — api-kit.expected gains ONE row this sprint
+Private names are not api-kit rows (`find --api` skips a leading `_`). So: every new python def or
+constant in index.py starts with `_`; every new bash fn outside author.sh starts with `_`; no kit/
+markdown gains a heading line (a fenced line starting with `#` counts); no KEYS.tsv row. The only new
+row is `kit/ops/lib/author.sh<TAB>fn<TAB>cmd_new`, recorded by T-262, the file's one owner. Every other
+task's verify proves its own files' rows unchanged:
+`POLARIS_ROOT="$PWD" python ops/index.py find --api '<file>' | tr -d '\r' | diff - <(grep "^<file, dots escaped>$(printf '\t')" ops/tests/api-kit.expected)`.
+
+### § 12.1 In flight (T-258) — supersedes § 1.4 rule 10
+- A **task worktree** is a root whose HEAD is the branch `feat/<ID>` (`git symbolic-ref -q --short HEAD`).
+  There, `git status` is NOT read (its changes are the pass's own work) and `feat/<ID>` is not in flight.
+- A **finished task** is every `<ID>` with a file `ops/board/done/<ID>.md` on the board ref
+  (`git ls-tree --name-only refs/heads/polaris/board -- ops/board/done/`; no ref → none). Its
+  `feat/<ID>` is not in flight — `done` keeps a live worktree's branch for `sweep`, and until then
+  v1 held every file it touched FIXED.
+- "Not in flight" covers the local branch AND every remote's `<remote>/feat/<ID>`.
+- Everything else counts exactly as in v1: the status paths of a root that is not a task worktree,
+  and every local or remote branch's commits that `<base>` lacks (the board ref excluded).
+- Drop the excluded refs BEFORE the log — e.g. `git for-each-ref` the `feat/` refs, filter in python,
+  pass the survivors on stdin (`git log --stdin`). Never one `--exclude` per task on the command line:
+  this repo already has 245 finished tasks and Windows caps a command line at 32 KB.
+
+### § 12.2 History (T-258) — amends § 1.3
+- In a task worktree the log starts at HEAD, not `<base>`.
+- A commit in `<base>..HEAD` (the task's own) and any commit with `ops/LAYOUT.tsv` among its paths (a
+  pass's land commit) map their renames and are NEVER a kept change. Every other § 1.3 rule holds:
+  300, `--no-merges`, `-M`, chains, > 40 paths skipped, `ops/`-only skipped.
+- Consequences the tests pin: under `POLARIS_ROOT=<task worktree>`, line 1 of `hops` equals what a
+  fresh clone of `<base>` reports once that task has landed; and on `<base>` after the land, every
+  cluster the pass left behind keeps its MOVE rows — the land commit welds nothing (F4).
+- `--facts` already reads HEAD; the same two rules apply to it. `--due`'s cooldown is unchanged.
+
+### § 12.3 The purpose line (T-258 in index.py · T-261 in knowledge.sh) — amends § 0.1
+- After the leading `#`s and spaces go: a line starting with `<dir>/ — ` (the guide's own folder,
+  repo-relative, then `/`, a space, an em dash, a space) loses that prefix, ONCE, byte-exact — only
+  when something non-blank follows. `_hops_purpose` (MAP rows, `--facts`) and `guide_purpose` (the
+  root map, the brain's code map) apply the same rule, so the two outputs agree.
+- `# src/billing/ — invoices and payment runs` → `invoices and payment runs`. `# src/billing/` → as is.
+
+### § 12.4 `--propose` (T-264) — new
+- `hops --propose` prints the next pass's moves as plan-file rows (§ 0.3) `move<TAB><from><TAB><to>`,
+  nothing else, rc 0; under 20 tracked files it prints nothing. The cut: the MOVE rows in `--tsv`
+  order, grouped by cluster (their 4th field); a cluster goes in WHOLE while the total stays ≤ 25,
+  a cluster that would pass 25 waits whole for the next pass, and the walk goes on to the next one.
+- `--due` step 5's F′ applies exactly the `--propose` rows (today's `[:25]` slice goes).
+- Usage and help, byte-exact. index.py `_HOPS_USAGE`:
+  `⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>] [--score | --owned | --proof | --remap <moves.tsv>]`
+  `usage()`'s hops line: `       index.py hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]`.
+  The kit/ops/polaris help line (T-264 owns the entry in W2, after T-262):
+  `  hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>] [--score | --owned | --proof | --remap <moves.tsv>]`
+  — its three description lines unchanged. § 1.8: `--propose` rc 0.
+
+### § 12.5 `--owned` (T-264) — supersedes § 1.6's `--owned` bullet
+- Prints a tidy task's WHOLE `files_owned`, `LC_ALL=C` sorted, unique: v1's list (every from · to ·
+  into, the `.meta` pairs, every importer — aliases included — and every path-tail mentioner) + the
+  guides the pass will write + `CLAUDE.md` + `ops/LAYOUT.tsv`.
+- The guides: `<dir>/CLAUDE.md` for the first 8 folders of the GUIDES rule (≥ 5 movable files directly
+  inside, no guide; largest first, then name), counted AFTER the plan's moves (a `from` counts in its
+  `to`'s folder; a merged `from` counts nowhere). An empty plan → those guides + `CLAUDE.md` +
+  `ops/LAYOUT.tsv` (the guides-only pass).
+- Importers come from the index of the tree `POLARIS_ROOT` names (`_hops_edges` re-indexes it), so in a
+  task worktree after earlier steps each importer is named at its current path (F7). TIDY passes the
+  primary's plan by absolute path.
+
+### § 12.6 `--facts`: what to leave alone (T-264) — amends § 1.7
+- A new line right after `tests:`: `leave alone: <file> (<why>) · …` — files directly inside the folder
+  that FIXED holds for a lasting reason, ≤ 4, then ` · +<k>`; `<why>` is exactly one of, first match in
+  this order: `generated` (rule 4) · `vendored` (rule 3) · `guarded` (rule 5) · `test map` (rule 6) ·
+  `kept` (rule 7) · `public` (rule 9). In-flight, framework and Unity reasons are not listed. None →
+  `leave alone: -`. The per-file lines cap at 9, so the output stays ≤ 15 lines (F17).
+
+### § 12.7 Everything else in `hops` is byte-identical to 6.12.0.
+
+### § 13 `kit/ops/roles/TIDY.md` (T-265) — supersedes § 7.1's step list; its four headings stay
+≤ 90 lines; exactly the four heading lines of § 7.1 and no other line starting with `#`. Each step:
+- **0** — the repo's own records list names `ops/tests/`; an update's `upgrade` already ran — never again.
+- **1** — entered with no answers (a conductor kickoff saying `none`, `next`, the Stop hook): run
+  `bash ops/polaris hops --questions` read-only; everything it prints is unanswered → the safe default
+  (skip the item, keep row `unsure — left for you`) (F16).
+- **3** — `bash ops/polaris hops --propose > .polaris/hops-proposal.tsv`: whole clusters, ≤ 25 files; an
+  approved merge appended as a `merge` row; then `--score .polaris/hops-proposal.tsv`.
+- **5** — the ONE task is filed with `bash ops/polaris new <draft.md>` (task-author.md), never a board
+  file by hand: `files_owned` = what `bash ops/polaris hops --owned .polaris/hops-proposal.tsv` prints,
+  exactly (F12) · `verify:` = `bash ops/polaris hops --proof .polaris/hops-plan.tsv`, plus the proving
+  check ONLY when it is `typecheck:` or the harness line — `verify` refuses a bare `test:`/`build:`, and
+  step 8's suite proves those (F2) · one `map_delta` line per folder the moves create,
+  `<dir>/ — <what it holds>` (F11) · claim the ID `new` printed.
+- **6** — a step is ≤ 5 plan rows; its importer and mention edits ride along and are not counted (F8).
+  Before its `git mv`: add its rows to `.polaris/hops-plan.tsv`, then take the files to fix from
+  `POLARIS_ROOT=<task worktree> bash ops/polaris hops --owned <primary>/.polaris/hops-plan.tsv` —
+  never `find --importers`, which answers from the primary's index (F7).
+- **7** — `--remap` rc 1 with `nothing to remap` means there is no harness: fine, go on (F14).
+- **8** — guides = exactly the `<dir>/CLAUDE.md` lines `--owned` printed; a guide's **Leave alone:** is
+  filled from `--facts`' `leave alone:` line; the after-score = line 1 of
+  `POLARIS_ROOT=<task worktree> bash ops/polaris hops` (§ 12.2); the suite = `bash ops/polaris bg run test`
+  run FROM the task worktree, then `bg wait test` (F9).
+- Entry and Report keep their substance. Verify greps these exact strings: `hops --propose` ·
+  `bash ops/polaris new` · `POLARIS_ROOT=<task worktree> bash ops/polaris hops --owned` · `hops --questions` ·
+  `nothing to remap` · `ops/tests/` · `bg run test` · `leave alone` — and that `find --importers` is gone.
+
+### § 14 Guides, the root map, drift (T-261)
+- **14.1** `guide_purpose` strips the prefix — § 12.3.
+- **14.2** `where`: after § 0.2's parse (unchanged), an item survives only when its path — trailing `/`
+  dropped — is a TRACKED file of the tree `where` reads, or a folder holding at least one tracked file.
+  The tracked list comes from ONE `git ls-files` into a temp file the awk reads, never an environment
+  variable (Windows caps the environment block at 32 KB). Guided folders hold a tracked guide, so they
+  always survive. The 13-item cap counts survivors. Everything else in § 0.2 and § 3.4 is unchanged.
+- **14.3** `drift`: one more ADVISORY pass, directly after the GUIDE STALE lines — the speed.md § 3 v1.1
+  class (`note`, never counted, never red under `--strict`, `qa` or `finish`): every item § 0.2's parse
+  reads from `ops/MAP.md` that 14.2 drops, MAP order, once each:
+  `advisory: MAP STALE: ops/MAP.md lists <path> (missing)` (`<path>` as MAP writes it, backticks
+  stripped). No `ops/MAP.md` → silence. `where` and drift share ONE parse: factor the awk into a private
+  helper (e.g. `_where_items`) — no copy, no new public fn. Builders never edit MAP.md (Invariant 1).
+- **14.4** EVOLVE.md (T-266): the text of its auto-reversible item 2 becomes, byte-exact (the line keeps
+  its `   2. ` lead), the line below — nothing else in EVOLVE.md changes; the allowlist stays five items.
+```
+Folding `ops/MAP.md` Deltas into its sections, and retiring each row `drift` reports as `MAP STALE`
+```
+- **14.5** Tests: `where-map` re-pinned — the doubled purpose gone, a MAP row for a path that never
+  existed and one for a folder whose files all moved away are absent from the block, every older case
+  still tests what it meant (the fixture creates the files its rows name, `web/` and `f01.sh…f15.sh`
+  included), and `drift` in the fixture prints exactly those two `MAP STALE` lines with no finding
+  added. `where-done` re-pinned only if its delta's path does not exist in its fixture.
+
+### § 15 A seal that refuses strands nothing (T-259) — amends § 4
+- **15.1** `seal` with no date (not `--sync`): `integrate/<today>` exists → today's, unchanged. Else the
+  open waves = local `integrate/*` branches whose tip is NOT an ancestor of `<base>`. Exactly one → seal
+  it, first printing `   no wave was started today — sealing integrate/<date>`. None → today's die,
+  byte-identical. Two or more → die
+  `no branch integrate/<today> — <k> waves are open (integrate/<d1> · integrate/<d2>); name one: bash ops/polaris seal <date>`
+  (dates ascending). `seal <date>` and `seal --sync` are unchanged.
+- **15.2** The two refusals after the branch check — the unreadable sprint number and the reused sprint
+  number — first put the primary back on `<base>` when it sits on `integrate/<date>`
+  (`git checkout -q "$BASE"`, best-effort), then die with today's text, byte-identical (the spine greps
+  `reused sprint number`). A good seal is unchanged; `land` still leaves the primary on the wave.
+- **15.3** `self_land`, when it is about to land (after its risk/plan gates, before `land`, whatever the
+  notice), reads the sprint number exactly as `seal` does. None → no land, the task stays in review/,
+  handoff stays green (rc 0), and ONE line (F3):
+  `   ⚠ <ID> waits in review/: ops/SPRINT.md has no "# SPRINT <n> — <goal>" line, so its wave could not close — add one (ops/MANUAL.md § Board commit by hand), then: bash ops/polaris next`
+- **15.4** Tests: new golden `seal-fallback` — (1) a wave begun on an earlier date, `seal` with no date:
+  merged, the note line, `sprint/<n>` tagged; (2) two open waves: the die naming both, base unmoved;
+  (3) no header with the primary on the wave: the die, primary on `main`, base unmoved; (4) a reused
+  sprint number with the primary on the wave: the die, primary on `main`; (5) `landing: self`, no
+  header: handoff rc 0, the ⚠ line once, the task still in review/, no `[<ID>]` commit on any
+  `integrate/*`, primary on `main`. The spine's SECOND-SEAL path stays green: after its reused-number
+  refusal the primary is on `main`, and its next `seal 2026-01-01` checks the wave out itself.
+
+### § 16 Updates: the first jump offers the pass, with no churn (T-260) — amends § 5
+- **16.1** Both python blocks in install.sh that write `.claude/settings.json` (the merge, the attribution
+  heal): when the merged object equals the parsed original, the file is NOT written — byte-identical,
+  whatever its formatting. Otherwise it is written as today (`json.dumps(…, indent=2) + "\n"`) with the
+  original's line ending: CRLF when the original bytes held `\r\n`, else LF — never the platform's
+  translation (F15). The fresh-install `cp` and every printed line are unchanged.
+- **16.2** `cmd_update` runs install.sh as
+  `POLARIS_SHA="$sha" POLARIS_UPDATE_HINTS=1 bash "$K/ops/install.sh" "$PRIMARY"` — the marker means "this
+  updater prints the layout-pass line itself". Nothing else reads it.
+- **16.3** install.sh prints its three `live board: finish it with these two lines (never re-run INIT):`
+  notes only when `POLARIS_SHA` is UNSET (`[ -z "${POLARIS_SHA+x}" ]`). Every updater sets it, maybe
+  empty, and runs `upgrade` itself; a zip or skill install leaves it unset and keeps the lines (ci.yml
+  asserts `polaris upgrade` in .polaris/install.log on that path).
+- **16.4** Before it copies any kit file, install.sh notes whether the target's `ops/lib/admin.sh`
+  defines `update_hops_hint()` (an updater from 6.12.0 on prints the line itself). As its LAST output,
+  after the routing line, install.sh prints `printf '\n%s\n' "<line>"` iff ALL hold: live board
+  (`UPGRADE=1`) · `POLARIS_SHA` set · `POLARIS_UPDATE_HINTS` unset · the pre-install admin.sh had no
+  `update_hops_hint()` · the verdict is due, read exactly as § 0.5 (`.polaris/hops-due` after heal's
+  refresh; field 2 `0`; field 1 = `git -C "$TARGET" rev-parse --verify -q <base>`, `<base>` from
+  CONVENTIONS `base:`, default `main`; no `hops: off` line; `\r` stripped). `<line>` =
+  `▶ NEXT — save hops: read ops/roles/TIDY.md and run it now` when ops/board/ready/, active/ and review/
+  hold no task file, else `▶ NEXT — save hops: the layout pass is due — it runs when your next piece of work wraps up`
+  — the two strings `update_hops_hint explicit` prints. A fresh install never prints it.
+- **16.5** Boundaries: an old `--auto` writes all install output to `.polaris/update.log`, so its
+  one-line contract holds; a 6.12.0 updater prints its own line, and 16.4's test keeps the line single.
+  A jump FROM 6.12.0 (Verification 3.2) therefore shows 6.12's own line; install.sh's line is for ≤ 6.11
+  updaters, which the golden stands in for.
+- **16.6** Tests: new golden `install-update`, hermetic (HOME, USERPROFILE and POLARIS_AWAKE_HOME inside
+  its temp dir; `.polaris/brain/` pre-created so heal never builds one; `POLARIS_INDEX_BIN` may point at
+  a stub that writes the verdict): fresh → no save-hops line · LF re-install with nothing to merge →
+  `cmp` identical · CRLF file + a merge that adds a rule → every line CRLF, a second install identical ·
+  updater, no marker, old admin.sh, due → the line once, no upgrade lines · marker → no line · an
+  admin.sh with `update_hops_hint()` → no line · not due → no line · no `POLARIS_SHA` → the upgrade
+  lines, no save-hops line.
+
+### § 17 Tests, the probe, the release
+- **17.1** The hops drill (T-267): `drill_hops` gains six cases on `hops_fixture` (unchanged — bench.sh
+  reads its facts), asserting rc and row shapes, never prose; each failure line starts with its label:
+  `HOPS WORKTREE GUIDES FAIL` — one cluster's `--propose` rows moved and committed in
+  `.polaris/wt/T-1` on `feat/T-1`: `POLARIS_ROOT=<wt>` `--tsv` has a GUIDES row for each new folder of
+  5+ files, and no moved file is held in flight · `HOPS LAND WELD FAIL` — that work squashed onto main
+  in ONE commit that also adds `ops/LAYOUT.tsv` rows, the board ref listing T-1 in done/, feat/T-1
+  kept: `--tsv` on main still has MOVE rows for every cluster left behind and none for T-1's files ·
+  `HOPS PROPOSE CUT FAIL` — ≤ 25 rows, and each cluster is all in or all out · `HOPS OWNED GUIDES FAIL` —
+  `--owned` names the guides, `CLAUDE.md` and `ops/LAYOUT.tsv` · `HOPS PURPOSE PREFIX FAIL` — a guide
+  headed `# <dir>/ — <text>` gives MAP purpose `<text>` · `HOPS OWNED POSTMOVE FAIL` — after a first
+  step in the worktree, `POLARIS_ROOT=<wt>` `--owned <absolute plan>` names each importer at its
+  post-move path. The whole drill stays ≤ 120 s.
+- **17.2** The probe (T-263): § 9's recipe, prompts and seven keys, unchanged — recorded under a
+  `## Measurements` heading at the END of `plans/tidy-hardening.md` (not plans/save-hops.md), with the
+  harness version, the date and the seven raw replies beneath. `claude -p` still signed out → every
+  value `unknown`, one line saying so, handoff green: never a blocker. T-266 then rewrites PROTOCOL
+  § SAVE HOPS's paragraph that opens `**What loads by itself is measured, not assumed.**` to state
+  exactly the recorded values — a `yes` may be claimed, `no`/`unknown` count on nothing — opening
+  `**What loads by itself is measured, not assumed.** The 6.13.0 probe (`. A
+  `worktree-root-claudemd-reloads: yes` goes in the probe's handoff report (the conductor files ONE
+  IDEAS line); kit/CLAUDE.md is not touched.
+- **17.3** Release (T-268): `kit/ops/VERSION` → `version: 6.13.0` (that line only); CHANGELOG
+  `## 6.13.0 — <the day it lands>` on top, above 6.12.0, plain language, no task IDs, no git or test
+  words: what an owner gets. After it lands the conductor runs the rest of the ritual (not tasks): CI
+  green on the commit, tag, publish, `pack.py --dogfood`, `polaris version`, the cli-help re-pin, the
+  goldens that read the installed `ops/`, and the brief's Verification 1–5.
+- **Executable check (v2):** `python kit/ops/index.py selfcheck` · `bash kit/ops/polaris check --only 'hops-*'`
+  (and `where-*`, `seal-fallback`, `install-update`, `new-task`, `cli-help-parity`, `plain-voice`,
+  `startup-budget`) · `bash kit/ops/polaris doctor --fast` · at the wave gate: `check` whole, and
+  `bash kit/ops/polaris doctor --selftest --only hops`. Until the dogfood, new verbs and flags run as
+  `POLARIS_ROOT="$PWD" python kit/ops/index.py hops …` and `bash kit/ops/polaris …`, never `ops/polaris`.
+
 ## Changelog
 - v1 2026-11-05 · PLANNER · carved from plans/save-hops.md (owner-approved 2026-11-04); amends
   role-handover.md (v3), hands-free-knobs.md (v3) and auto-update.md (v3) in the same commit.
+- v2 2026-11-06 · PLANNER · plan `tidy-hardening` (plans/tidy-hardening.md, owner-approved): § 12–§ 17
+  for T-258…T-268; `polaris new` in ops/contracts/task-author.md; module-layout.md v6 (lib/author.sh).
