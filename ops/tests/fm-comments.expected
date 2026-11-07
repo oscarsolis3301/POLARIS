@@ -1,0 +1,23 @@
+== 1. fm_get
+fm_get note: []
+fm_get tabnote: []
+fm_get value: [value]
+== 2. fm_list
+fm_list note: []
+fm_list notes_only: []
+fm_list owns: [src/a.txt|src/b.txt|src/issue#12.txt|src/c.txt]
+fm_list flow: [a|b]
+fm_list value: [value]
+fm_list empty: []
+== 3. a # that does not start the value
+fm_get title: [Fix]
+fm_get tight: [Fix#12]
+== 4. CRLF
+the CRLF copy reads the same: yes
+== 5. the real TASK.md, untouched
+fm_list files_owned: []
+fm_list surface: []
+fm_list verify: []
+fm_list approved: []
+fm_list context_files: []
+fm_get contract: []

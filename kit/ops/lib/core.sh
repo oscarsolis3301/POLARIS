@@ -526,16 +526,20 @@ suite_stamp_scope() { # suite_stamp_scope [<file>] — field 3 of the suite stam
 
 # ------------------------------------------------------- frontmatter parsing
 fm_get() { # fm_get <key> <file> — scalar value; strips trailing " # comment" and \r
+  # The " #" comment goes BEFORE the leading blanks, so a value that is only a comment (TASK.md's
+  # `contract:   # ops/contracts/<name>.md …`) reads empty, as YAML means it (frontmatter-lists.md v1.1).
   awk -v k="$1" '
     /^---[\r]?$/ { fs++; next }
     fs==1 && index($0, k":")==1 {
       s=substr($0, length(k)+2)
-      sub(/^[ \t]*/,"",s); sub(/[ \t]#.*$/,"",s); sub(/[ \t\r]*$/,"",s)
+      sub(/[ \t]#.*$/,"",s); sub(/^[ \t]*/,"",s); sub(/[ \t\r]*$/,"",s)
       print s; exit
     }' "$2"
 }
 fm_list() { # fm_list <key> <file> — items of a "- x" block list, an inline "[a, b]" flow list, "[]",
   # or an inline scalar; comment/\r stripped. Shapes + edge cases: ops/contracts/frontmatter-lists.md
+  # The comment goes first here too, so a scalar or an item that is only a comment (`  -   # exact path …`)
+  # is no item. The dash strip needs no blank after the dash: in `- # note` the comment already took it.
   awk -v k="$1" '
     function emit(s,   n, i, parts, item) {
       if (s == "") return
@@ -555,12 +559,12 @@ fm_list() { # fm_list <key> <file> — items of a "- x" block list, an inline "[
     fs!=1 { next }
     index($0, k":")==1 {
       on=1; s=substr($0, length(k)+2)
-      sub(/^[ \t]*/,"",s); sub(/[ \t]#.*$/,"",s); sub(/[ \t\r]*$/,"",s)
+      sub(/[ \t]#.*$/,"",s); sub(/^[ \t]*/,"",s); sub(/[ \t\r]*$/,"",s)
       emit(s)
       next
     }
     on && /^[ \t]*-[ \t]/ {
-      s=$0; sub(/^[ \t]*-[ \t]+/,"",s); sub(/[ \t]#.*$/,"",s); sub(/[ \t\r]*$/,"",s)
+      s=$0; sub(/[ \t]#.*$/,"",s); sub(/^[ \t]*-[ \t]*/,"",s); sub(/[ \t\r]*$/,"",s)
       if (s!="") print s
       next
     }
