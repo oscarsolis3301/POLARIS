@@ -684,3 +684,4 @@ exercises but a Builder cannot.
   notify/park/busyint composition leaks (T-254). Before a seal you trust or any tag: CI green on
   that commit (`gh run list --branch main --limit 1`), or one SERIAL `doctor --selftest`.
 - 2026-11-07 · INTEGRATOR.md section 3 still tells the integrator to run git checkout -b integrate/<date> <base> by hand, but the primary's checkout guard refuses that for every session. land run from base already creates the wave branch (wave_on), so the role text should say: skip the checkout, just land.
+- 2026-11-07 · bg wait --max N returns about 27s after N on this machine (script start-up), so --max 150 ends near 177s, right at the ~180s point where a subagent's foreground call is pushed to the background. --max 140 is the safe chunk; briefings that say 150 should say 140.

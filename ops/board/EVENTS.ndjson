@@ -977,3 +977,4 @@
 {"ts":1794045410,"ev":"promote","id":"T-263","who":"Owner@DESKTOP","note":"deps done: none","pts":1}
 {"ts":1794045413,"ev":"promote","id":"T-264","who":"Owner@DESKTOP","note":"deps done: T-258, T-262","pts":5}
 {"ts":1794045469,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"INTEGRATOR.md section 3 still tells the integrator to run gi"}
+{"ts":1794045474,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"bg wait --max N returns about 27s after N on this machine (s"}
