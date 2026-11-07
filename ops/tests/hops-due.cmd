@@ -1,10 +1,11 @@
 # hops-due: `polaris hops --due` — is ONE layout pass worth running now? (ops/contracts/save-hops.md
 # § 1.7, § 0.5). Five steps in order, each final: `hops: off` · under 20 tracked files · POLARIS's own
 # source (kit/ops/pack.py tracked) · under 30 changes since the last pass (the newest commit on main
-# touching ops/LAYOUT.tsv) · else due when the first 25 MOVE rows cut folders per change by 15% or
-# more, or 3+ folders of 5+ files have no guide. Due prints ONE line, rc 0; not due is silent, rc 1;
-# and EVERY run rewrites .polaris/hops-due — the only thing `next`, `triage` and the update hint ever
-# read, because `next` runs on the anchor hook's 10 s clock and can never afford hops itself.
+# touching ops/LAYOUT.tsv) · else due when the moves `--propose` prints (whole features, at most 25
+# files — § 12.4) cut folders per change by 15% or more, or 3+ folders of 5+ files have no guide.
+# Due prints ONE line, rc 0; not due is silent, rc 1; and EVERY run rewrites .polaris/hops-due —
+# the only thing `next`, `triage` and the update hint ever read, because `next` runs on the anchor
+# hook's 10 s clock and can never afford hops itself.
 #
 # The ground is the practice shop (hops_fixture, § 8.2): four features scattered over five folders
 # each, four folders of 5+ files without a guide — due for both reasons. Then each reason is taken

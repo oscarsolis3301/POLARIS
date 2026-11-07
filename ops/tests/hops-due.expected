@@ -1,9 +1,9 @@
 --- 1. the practice shop as built
---due rc=0 · layout pass due — ~53% fewer folders per change · 4 folders of 5+ files have no guide
+--due rc=0 · layout pass due — ~52% fewer folders per change · 4 folders of 5+ files have no guide
 cache: one LF line — main sha · verdict · that line
-<main sha>	0	layout pass due — ~53% fewer folders per change · 4 folders of 5+ files have no guide
+<main sha>	0	layout pass due — ~52% fewer folders per change · 4 folders of 5+ files have no guide
 --- 2. every folder of 5+ files guided
---due rc=0 · layout pass due — ~53% fewer folders per change
+--due rc=0 · layout pass due — ~52% fewer folders per change
 cache: one LF line — main sha · verdict · that line
 --- 3. a keep row for every file a MOVE row would move
 keep rows: 30
@@ -17,7 +17,7 @@ changes since the last pass: 29
 --due rc=1 · (silent)
 cache: one LF line — main sha · verdict · that line
 changes since the last pass: 30
---due rc=0 · layout pass due — ~53% fewer folders per change · 4 folders of 5+ files have no guide
+--due rc=0 · layout pass due — ~52% fewer folders per change · 4 folders of 5+ files have no guide
 cache: one LF line — main sha · verdict · that line
 after the cooldown: the line of case 1
 --- 5. hops: off
@@ -35,11 +35,11 @@ questions rc=1
 --- 9. heal writes the cache; the real next and triage read it
 heal's cache: one LF line — main sha · 0 · the line of case 1
 tidy
-   layout pass due: ~53% fewer folders per change · 4 folders of 5+ files have no guide
+   layout pass due: ~52% fewer folders per change · 4 folders of 5+ files have no guide
    read ops/roles/TIDY.md — one context, it lands one task; then bash ops/polaris next
 finish
 tidy
-   the board is empty and the layout pass is due: ~53% fewer folders per change · 4 folders of 5+ files have no guide
+   the board is empty and the layout pass is due: ~52% fewer folders per change · 4 folders of 5+ files have no guide
    read ops/roles/TIDY.md — one context, no subagents
 full
    nothing claimable — the board is empty, so a Planner runs first

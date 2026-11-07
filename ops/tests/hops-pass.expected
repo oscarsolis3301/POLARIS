@@ -4,7 +4,55 @@ change checkout: 6 folders → 1
 change billing: 6 folders → 1
 change profile: 5 folders → 1
 change search: 6 folders → 6
---- 2. the worktree: moves committed, importers fixed and staged
+--- 2. the cut a pass takes now: --propose, whole features only — search waits whole
+move	src/components/CartLine.tsx	src/checkout/CartLine.tsx
+move	src/components/CheckoutForm.tsx	src/checkout/CheckoutForm.tsx
+move	src/hooks/useCheckout.ts	src/checkout/useCheckout.ts
+move	src/services/checkoutApi.ts	src/checkout/checkoutApi.ts
+move	src/types/checkout.ts	src/checkout/checkout.ts
+move	src/utils/cartTotal.ts	src/checkout/cartTotal.ts
+move	tests/cartTotal.test.ts	src/checkout/cartTotal.test.ts
+move	tests/checkout.test.ts	src/checkout/checkout.test.ts
+move	src/components/BillingSummary.tsx	src/billing/BillingSummary.tsx
+move	src/components/InvoiceList.tsx	src/billing/InvoiceList.tsx
+move	src/hooks/useBilling.ts	src/billing/useBilling.ts
+move	src/services/billingApi.ts	src/billing/billingApi.ts
+move	src/services/paymentMethods.ts	src/billing/paymentMethods.ts
+move	src/types/billing.ts	src/billing/billing.ts
+move	src/utils/invoiceFormat.ts	src/billing/invoiceFormat.ts
+move	tests/billing.test.ts	src/billing/billing.test.ts
+move	src/components/AvatarImage.tsx	src/profile/AvatarImage.tsx
+move	src/components/ProfileCard.tsx	src/profile/ProfileCard.tsx
+move	src/hooks/useProfile.ts	src/profile/useProfile.ts
+move	src/services/profileApi.ts	src/profile/profileApi.ts
+move	src/types/profile.ts	src/profile/profile.ts
+move	tests/profile.test.ts	src/profile/profile.test.ts
+score: 2.80 → 1.33 folders per change (52% fewer) · guides 0/4
+change checkout: 6 folders → 1
+change billing: 6 folders → 1
+change profile: 5 folders → 1
+layout pass due — ~52% fewer folders per change · 4 folders of 5+ files have no guide
+--owned: 44 of the plan's 44 paths, and CLAUDE.md · ops/LAYOUT.tsv · src/App.tsx · src/billing/CLAUDE.md · src/checkout/CLAUDE.md · src/profile/CLAUDE.md
+--- 3. the worktree, a first step: five rows moved, their imports fixed, committed
+CLAUDE.md
+ops/LAYOUT.tsv
+src/App.tsx
+src/billing/BillingSummary.tsx
+src/billing/InvoiceList.tsx
+src/checkout/CLAUDE.md
+src/checkout/cartTotal.test.ts
+src/checkout/cartTotal.ts
+src/checkout/checkout.test.ts
+src/checkout/checkoutApi.ts
+src/checkout/useCheckout.ts
+src/components/BillingSummary.tsx
+src/components/InvoiceList.tsx
+src/utils/cartTotal.ts
+tests/cartTotal.test.ts
+tests/checkout.test.ts
+only main's answer: src/components/CLAUDE.md src/hooks/CLAUDE.md src/hooks/useCheckout.ts src/services/CLAUDE.md src/services/checkoutApi.ts
+only the worktree's: src/checkout/CLAUDE.md src/checkout/checkoutApi.ts src/checkout/useCheckout.ts
+--- 4. the worktree: the other 20 moves committed, importers fixed and staged
 SCORE	1.31	117	0	3
 MAP	src/billing/	8	-	no
 MAP	src/checkout/	8	-	no
@@ -26,12 +74,12 @@ GUIDES	src/billing/	8
 GUIDES	src/checkout/	8
 GUIDES	src/profile/	6
 moved files counted where they now live: 25 of 25
---- 3. the pass commits, writes the guides --tsv asked for, commits: bare hops, line 1
+--- 5. the pass commits, writes the guides --tsv asked for, commits: bare hops, line 1
 hops — 1.31 folders per change over 117 changes · guides 3/3 folders of 5+ files
---- 4. the land: one commit on main, T-1 done on the board, its branch kept
+--- 6. the land: one commit on main, T-1 done on the board, its branch kept
 land: one commit of 30 paths, ops/LAYOUT.tsv among them
 board: ops/board/done/T-1.md · kept: feat/T-1 origin/feat/T-1
---- 5. main after the land: the same line 1, and the cluster left behind keeps its MOVE rows
+--- 7. main after the land: the same line 1, and the cluster left behind keeps its MOVE rows
 hops — 1.31 folders per change over 117 changes · guides 3/3 folders of 5+ files
 line 1 on main = line 1 in the worktree
 SCORE	1.31	117	3	3
@@ -51,5 +99,18 @@ MOVE	src/services/searchApi.ts	src/search/searchApi.ts	search
 MOVE	src/types/search.ts	src/search/search.ts	search
 MOVE	src/utils/searchHighlight.ts	src/search/searchHighlight.ts	search
 MOVE	tests/search.test.ts	src/search/search.test.ts	search
---- 6. an unfinished task holds what it changes, even seen from the worktree
+the next pass: --propose
+move	src/hooks/useSearch.ts	src/search/useSearch.ts
+move	src/services/searchApi.ts	src/search/searchApi.ts
+move	src/types/search.ts	src/search/search.ts
+move	src/utils/searchHighlight.ts	src/search/searchHighlight.ts
+move	tests/search.test.ts	src/search/search.test.ts
+--- 8. an unfinished task holds what it changes, even seen from the worktree
 MOVE rows: 4 · src/hooks/useSearch.ts among them: no
+--- 9. a feature too big for what is left of the pass waits whole, and the walk goes on
+alpha 10 files · bravo 16 files · charlie 15 files
+--propose: 25 rows — src/alpha/ 10 · src/charlie/ 15
+score: 3.00 → 1.67 folders per change (44% fewer) · guides 0/3
+change alpha: 3 folders → 1
+change charlie: 3 folders → 1
+layout pass due — ~44% fewer folders per change · 3 folders of 5+ files have no guide
