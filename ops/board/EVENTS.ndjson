@@ -974,3 +974,5 @@
 {"ts":1794045085,"ev":"done","id":"T-260","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794045193,"ev":"done","id":"T-261","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794045276,"ev":"done","id":"T-262","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1794045410,"ev":"promote","id":"T-263","who":"Owner@DESKTOP","note":"deps done: none","pts":1}
+{"ts":1794045413,"ev":"promote","id":"T-264","who":"Owner@DESKTOP","note":"deps done: T-258, T-262","pts":5}
