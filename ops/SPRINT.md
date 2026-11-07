@@ -683,3 +683,4 @@ exercises but a Builder cannot.
   pr-publish left integrate/<today> behind, so express failed (T-256). Same run, same family: the
   notify/park/busyint composition leaks (T-254). Before a seal you trust or any tag: CI green on
   that commit (`gh run list --branch main --limit 1`), or one SERIAL `doctor --selftest`.
+- 2026-11-07 · INTEGRATOR.md section 3 still tells the integrator to run git checkout -b integrate/<date> <base> by hand, but the primary's checkout guard refuses that for every session. land run from base already creates the wave branch (wave_on), so the role text should say: skip the checkout, just land.
