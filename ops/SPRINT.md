@@ -677,6 +677,8 @@ exercises but a Builder cannot.
   integrate/2026-11-05 until the human ran `git reset --hard main`. Only `land --express` unwinds
   inside the CLI. Until a verb drops one land, a red batch land needs the human's one paste-ready
   line (🚩) — never route around the guard.
+  2026-11-07: § 3's hand-typed `git checkout -b integrate/<date> <base>` is refused the same way —
+  `land` run from base already creates the wave branch (`wave_on`); say that, never the raw command.
 - A SHARDED GREEN IS NOT A CI GREEN — TWICE NOW. `test:` runs `doctor --selftest --parallel 3`; CI
   runs the same drills serially on three systems, and a drill that leaks state passes in one order
   and fails in the other. Sprint 13 shipped a dead v6.3.0 tag this way. From 2026-11-03 23:09Z
@@ -685,7 +687,3 @@ exercises but a Builder cannot.
   pr-publish left integrate/<today> behind, so express failed (T-256). Same run, same family: the
   notify/park/busyint composition leaks (T-254). Before a seal you trust or any tag: CI green on
   that commit (`gh run list --branch main --limit 1`), or one SERIAL `doctor --selftest`.
-- 2026-11-07 · INTEGRATOR.md section 3 still tells the integrator to run git checkout -b integrate/<date> <base> by hand, but the primary's checkout guard refuses that for every session. land run from base already creates the wave branch (wave_on), so the role text should say: skip the checkout, just land.
-- 2026-11-07 · bg wait --max N returns about 27s after N on this machine (script start-up), so --max 150 ends near 177s, right at the ~180s point where a subagent's foreground call is pushed to the background. --max 140 is the safe chunk; briefings that say 150 should say 140.
-- 2026-11-07 · done's docs(map) commit lands on main AFTER the seal, so main's tip never matches the qa stamp: depth --commit rates 3 lines of ops/MAP.md + ops/SURFACES.tsv as full (no test_skip set), and finish re-runs the whole ~45 min suite. A test_skip for those two files, or a stamp that ignores done's doc-only commits, saves one suite per wave.
-- 2026-11-07 · Polling a full qa from a subagent: bg wait --max 140 overran the ~180 s foreground cap once while the suite's three shards were running and got moved to background; --max 120 came back in about 146 s on every later poll. Use 120 while a full qa runs (sprint 21, wave 3).
