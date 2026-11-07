@@ -1,3 +1,22 @@
+# SPRINT 21 — The tidy pass, hardened (6.13.0)          capacity: 35   dates: 2026-11-06–
+
+Owner ask of 2026-11-06 (plan `tidy-hardening`, plans/tidy-hardening.md, approved in plan mode). The first
+live tidy pass did the job (2.80 → 1.34 folders per change) but needed 17 workarounds; this sprint fixes
+each at its root. hops reads the pass's own work correctly and proposes whole features; the TIDY role says
+only what works; guides and the root map stay true; a refused seal strands nothing; the first update from
+an older kit offers the pass without settings churn; and `polaris new` files tasks in one command.
+Contracts `ops/contracts/save-hops.md` v2 (§ 12–§ 17) and `ops/contracts/task-author.md` (new), module-layout v6.
+
+11 tasks / 35 pts in four waves. W1 (ready): engine A T-258 (index.py + the hops goldens), seal T-259,
+update T-260, where/drift T-261, `new` T-262 — the only api-kit.expected owner this sprint (one row; every
+other lane adds only `_` names). The probe T-263 waits in backlog as overflow. W2: engine B T-264 (after
+T-258 + T-262: index.py and the entry), docs T-266 (after T-261/T-262/T-263). W3: TIDY.md T-265 (after
+T-264), the hops drill T-267 (after T-264). T-268 releases 6.13.0 LAST. Verify lines are seconds, the
+goldens 15–25 s each; the full suite runs once per wave (bg run); landing: integrator for this run.
+
+## Burndown
+| date | done pts | remaining |
+
 # SPRINT 20 — Save hops (6.12.0)          capacity: 69   dates: 2026-11-05–
 
 Owner ask of 2026-11-04 (plan `save-hops`, plans/save-hops.md, approved in plan mode). Every project
