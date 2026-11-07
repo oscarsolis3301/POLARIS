@@ -981,3 +981,4 @@
 {"ts":1794045543,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"done's docs(map) commit lands on main AFTER the seal, so mai"}
 {"ts":1794045652,"ev":"new","id":"T-269","who":"Owner@DESKTOP","note":"ready","pts":2}
 {"ts":1794045758,"ev":"claim","id":"T-269","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1794045763,"ev":"claim","id":"T-263","who":"Owner@DESKTOP","note":"","pts":1}
