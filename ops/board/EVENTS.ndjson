@@ -1035,3 +1035,4 @@
 {"ts":1794268222,"ev":"claim","id":"T-275","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1794268227,"ev":"claim","id":"T-273","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1794268239,"ev":"claim","id":"T-274","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1794268527,"ev":"grant","id":"T-275","who":"Owner@DESKTOP","note":"ops/tests/heal-design.expected"}
