@@ -71,6 +71,39 @@ Haiku" yet: every Haiku request is unmarked and denied. The D6 carve-out arrives
   (`SessionStart`, `PreModelSwitch`, `PostModelSwitch`, `PostToolUse` matcher `Agent`) beside the
   existing PreToolUse `*` entry — idempotent, merged, never clobbering a user's own hooks.
 
+## 2b. Fable is the owner's to pick (v1.2, 2026-11-09 — owner decision; T-270)
+The owner lifted the Fable ban for sessions and explicit picks. Haiku stays refused exactly as § 2 says, and
+ROUTING still never names Fable or Haiku. Everything in § 2 not named here is unchanged.
+- **`mg_denied` matches Haiku only** (`*haiku*|*Haiku*|*HAIKU*`). Layers 2–5 never refuse Fable: a Fable
+  session, a switch to Fable, a spawn requesting `fable` and a subagent that ran on Fable all exit 0 and print
+  nothing. The claude-code-guide refusal is unchanged (that agent runs Haiku). Exact texts, Haiku only:
+  - PreModelSwitch: `polaris: switching to '<m>' is FORBIDDEN (owner, 2026-09-15) — stay on Opus, Sonnet or Fable.`
+  - spawn: today's text, byte-identical (`polaris: a subagent on '<m>' is FORBIDDEN …`).
+  - session: `polaris: this session is running '<m>', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.`
+  - PostToolUse caveat: today's text, byte-identical.
+- **Layer 1 becomes a one-time restore.** `merge_model_guard` never adds to, removes from or creates
+  `availableModels` again, except once: when `~/.claude/polaris/fable-restored` is absent and the key holds a
+  LIST with no `fable*` entry, append `"fable"` (written only if the list changed, same tmp-and-replace as
+  today). It then writes the marker, whatever the key held (missing, a list, a string, null), so every later
+  arm leaves the value alone. A missing key stays missing. Unreadable settings are never rewritten and get no
+  marker. `register=False` writes NOTHING, neither the list nor the marker. The one ✅ line, only when the list
+  changed: `✅ availableModels:       <json> in <path> — Fable restored`.
+- **Layer 6 is UNCHANGED**: `model_denied` in core.sh, plus the RULES.tsv content rule on `model_*` keys, so
+  `route` and `model_strong/mid/cheap` still never name Fable or Haiku.
+- **Heal migrates ONE line.** In the root CLAUDE.md, the exact line
+  `- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.`
+  (LF or CRLF) becomes
+  `- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.`
+  — at most once per heal. Its line ending is kept, every other byte of the file is unchanged, and a file without
+  that line is not written at all. The note when it fires:
+  `healed: CLAUDE.md — the model line now says Fable is the owner's to pick (your prose untouched)`.
+- **Text:** PROTOCOL.md § MODEL ROUTING's "forbidden outright" sentence states the split instead: routing never
+  picks Fable or Haiku, and a Fable session is the owner's choice. The 6.13.0 CHANGELOG entry gains one bullet.
+- **Executable check:**
+  - model-guard-v2: Fable allowed on every event; Haiku and claude-code-guide still refused, with the texts above.
+  - machine-armed: the restore runs once, then the list is untouched.
+  - the new heal-model-line golden: old line rewritten; a hand-edited line left alone; a second heal is a no-op.
+
 ## 3. drift and check (T-177)
 - **Every existing `drift` finding line stays byte-identical**, in the same section order, still
   printed as `⚠ [<n>] <text>`; so does the clean line. Pinned today, among the rest:
@@ -160,3 +193,4 @@ Headings, exactly: `## Verdict` · `## Latency` · `## Probes` · `## Zero-shot 
 ## Changelog
 - v1 2026-09-24: created for T-173..T-183 (plan `v4-fast`).
 - v1.1 2026-09-24 (conductor, during T-177): § 3's orphan-branch line changed from a CRUFT-class finding to an advisory, with the exact text above. Nothing else changed.
+- v1.2 2026-11-09 (conductor, owner decision): § 2b — Fable is the owner's to pick again; Haiku and the routing layer unchanged (T-270).
