@@ -1021,3 +1021,4 @@
 {"ts":1794265159,"ev":"handoff","id":"T-270","who":"Owner@DESKTOP","note":""}
 {"ts":1794265190,"ev":"amend","id":"T-270","who":"Owner@DESKTOP","note":"verify[+]"}
 {"ts":1794265387,"ev":"handoff","id":"T-271","who":"Owner@DESKTOP","note":""}
+{"ts":1794265755,"ev":"done","id":"T-270","who":"Owner@DESKTOP","note":"","pts":5}
