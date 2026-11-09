@@ -1,3 +1,20 @@
+# SPRINT 22 — The speed release (6.14.0)          capacity: 30   dates: 2026-11-09–
+
+Owner ask of 2026-11-09 (plan `minutes`, plans/minutes.md Phase 2, approved in plan mode): minutes, not
+hours, in this project and every other. Measured first: the waits were landing, a serial suite on the
+slow machine, helpers all on the biggest model at max effort, a brain rebuild per seal, ten commands per
+small change, housekeeping that turned the end of a run red, and stale installs elsewhere on this PC.
+Contracts `ops/contracts/minutes.md` v2 (§ 3–§ 10), module-layout v9, model-routing v4, auto-update v4, brain v3.
+
+8 tasks / 30 pts in three waves. W1 (ready): observe.sh split move-only T-273 (the only W1 api-kit owner),
+one-pass brain T-274, update commits itself and fans out T-275. W2 (after T-273): parallel check T-276,
+end-of-run T-277, sized helpers T-278, begin/wrap T-279 (the only W2 api-kit and kit/ops/polaris owner; it
+writes the help lines for T-276 and T-278). T-280 releases 6.14.0 LAST. Verify lines are the real gate
+(seconds each, narrowest golden); the full proof runs in the background after each seal; landing:
+integrator for this run.
+
+## Burndown
+
 # SPRINT 21 — The tidy pass, hardened (6.13.0)          capacity: 35   dates: 2026-11-06–
 
 Owner ask of 2026-11-06 (plan `tidy-hardening`, plans/tidy-hardening.md, approved in plan mode). The first

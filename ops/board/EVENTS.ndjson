@@ -1024,3 +1024,11 @@
 {"ts":1794265755,"ev":"done","id":"T-270","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1794265769,"ev":"done","id":"T-271","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1794265784,"ev":"done","id":"T-272","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1794268006,"ev":"new","id":"T-273","who":"Owner@DESKTOP","note":"ready","pts":5}
+{"ts":1794268007,"ev":"new","id":"T-274","who":"Owner@DESKTOP","note":"ready","pts":3}
+{"ts":1794268008,"ev":"new","id":"T-275","who":"Owner@DESKTOP","note":"ready","pts":5}
+{"ts":1794268009,"ev":"new","id":"T-276","who":"Owner@DESKTOP","note":"backlog","pts":3}
+{"ts":1794268010,"ev":"new","id":"T-277","who":"Owner@DESKTOP","note":"backlog","pts":5}
+{"ts":1794268010,"ev":"new","id":"T-278","who":"Owner@DESKTOP","note":"backlog","pts":5}
+{"ts":1794268011,"ev":"new","id":"T-279","who":"Owner@DESKTOP","note":"backlog","pts":3}
+{"ts":1794268012,"ev":"new","id":"T-280","who":"Owner@DESKTOP","note":"backlog","pts":1}
