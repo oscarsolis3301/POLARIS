@@ -111,8 +111,8 @@ ROUTING still never names Fable or Haiku. Everything in § 2 not named here is u
      copy the new one over it and `chmod +x`. No guard file → nothing is created.
   2. `$HOME/.claude/settings.json` contains `model-guard.sh` (the guard is registered), a python is
      available and `$KIT/ops/bootstrap.py` exists → run
-     `"$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import bootstrap; bootstrap.restore_fable_once()' "$KIT/ops"`.
-  `bootstrap.restore_fable_once()` is the ONE home of the one-time restore above: module-level, no
+     `"$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import bootstrap; bootstrap._restore_fable_once()' "$KIT/ops"`.
+  `bootstrap._restore_fable_once()` (private: no new public name, so api-kit does not move) is the ONE home of the one-time restore above: module-level, no
   arguments, returns True when it changed the list, never raises, prints nothing; `merge_model_guard`
   calls it and prints its ✅ line on True. `bootstrap.py` stays import-safe.
   Executable check: golden `update-arms` (fake HOME and USERPROFILE): old guard + registered + a list

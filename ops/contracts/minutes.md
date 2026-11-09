@@ -9,12 +9,12 @@ contract moves the self-test's verdict to CI, keeps the goldens local and parall
 release check's self-test with a byte comparison. Phase 1 = § 1 and § 2. Later phases append.
 
 ## 1. The release check proves bytes — `kit/ops/pack.py`
-### 1.1 `build_entries()`
+### 1.1 `_build_entries()` (private: no new public name, so api-kit does not move)
 The loop that builds `entries` in the packer (the `git ls-files -s` walk, the `archive/` skip, the LF
 normalisation of text, the `commit:`/`built:` stamp appended to `ops/VERSION`, and the root
 `__main__.py` taken from `kit/ops/bootstrap.py`) moves into ONE function:
 ```
-build_entries() -> (entries, execs)      # entries: [(path, blob, is_exec)], execs: [path]
+_build_entries() -> (entries, execs)      # entries: [(path, blob, is_exec)], execs: [path]
 ```
 The packer calls it and writes the zip exactly as today: for the same commit the output zip is
 byte-identical to today's (the golden pins that with a sha256 before/after the refactor, taken in the
@@ -26,7 +26,7 @@ unchanged, same texts) → **byte check** → install (unchanged) → **quick ch
 - The url: `POLARIS_DOGFOOD_ZIP` when that environment variable is set and non-empty (a test seam:
   any url `urllib` opens, e.g. `file:///…`), otherwise the `zip:` field as today.
 - **Byte check.** `got` = every member of the downloaded zip as `{name: bytes}`. `exp` = from
-  `build_entries()`: `__main__.py` keeps its name, every other path becomes `polaris-v5/<path>`.
+  `_build_entries()`: `__main__.py` keeps its name, every other path becomes `polaris-v5/<path>`.
   Compare the two name sets, then the bytes of each name in sorted order. One exemption:
   `polaris-v5/ops/VERSION` is compared after removing, on both sides, every line that starts with
   `commit: ` or `built: `. First difference → `sys.exit` with exactly:
