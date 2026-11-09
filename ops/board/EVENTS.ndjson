@@ -1019,3 +1019,4 @@
 {"ts":1794264618,"ev":"claim","id":"T-271","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1794265014,"ev":"handoff","id":"T-272","who":"Owner@DESKTOP","note":""}
 {"ts":1794265159,"ev":"handoff","id":"T-270","who":"Owner@DESKTOP","note":""}
+{"ts":1794265190,"ev":"amend","id":"T-270","who":"Owner@DESKTOP","note":"verify[+]"}
