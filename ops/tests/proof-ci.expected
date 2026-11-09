@@ -1,0 +1,63 @@
+== 1. a run for this commit already exists: reused, goldens green, linux green after one poll ==
+proof: <s7> — CI run 111 (found)
+proof: goldens — 2 green
+proof: linux — green
+✅ proof: <s7> green
+rc=0
+ci-proof: <sha> 111
+dispatches: 0
+polls of run 111: 2
+== 2. no run yet: older proof/* deleted, proof/<sha12> pushed, CI dispatched, the id found on a later poll ==
+proof branches before: proof/000000000000 
+proof: <s7> — CI run 222 (started)
+proof: goldens — 2 green
+proof: linux — green
+✅ proof: <s7> green
+rc=0
+proof branches after: proof/<sha12> 
+workflow run ci.yml --ref proof/<sha12>
+ci-proof: <sha> 222
+== 3. the linux job is red: rc 1, the last 40 lines of the failed log ==
+proof: <s7> — CI run 333 (found)
+proof: goldens — 2 green
+proof: linux — RED
+⛔ proof: <s7> red
+rc=1
+log lines printed: 40 — from log 11 to log 50
+== 4. a golden is red: rc 1, its name and its output ==
+proof: <s7> — CI run 444 (found)
+proof: goldens — 1 red: b
+golden b output: it differs
+proof: linux — green
+⛔ proof: <s7> red
+rc=1
+== 5. --await macos-latest on the recorded run: green, then red ==
+proof: macos-latest — green
+rc=0
+polls of run 444: 2
+proof: macos-latest — RED
+rc=1
+== 6. --report: one line per job of the recorded run ==
+ubuntu-latest: completed success
+macos-latest: completed failure
+windows-latest: in_progress 
+one version, everywhere: completed failure
+rc=0
+== 7. no gh: the self-test runs here instead, and nothing is recorded ==
+proof: no CI here (gh not found) — running the self-test on this machine
+proof: goldens — 2 green
+proof: self-test — green
+✅ proof: <s7> green
+rc=0
+ci-proof written: no
+-- gh not signed in, and the self-test red --
+proof: no CI here (gh not signed in) — running the self-test on this machine
+proof: goldens — 2 green
+proof: self-test — RED
+self-test broke
+⛔ proof: <s7> red
+rc=1
+ci-proof written: no
+== 8. --await with no recorded run ==
+⛔ proof: no recorded run for <s7> — run tools/proof.sh first
+rc=1
