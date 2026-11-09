@@ -72,6 +72,13 @@ fi
 # `-c pass` proves a REAL interpreter (the Windows Store python3 stub passes command -v).
 PY=""; python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
 
+# Who prints the layout-pass line (save-hops.md § 16.4)? Asked HERE, before the copy below overwrites
+# the answer: the target's own ops/lib/admin.sh is the code of the updater running us, if one is.
+# From 6.12.0 on it defines update_hops_hint() and prints that line itself once we return; an older
+# one has never heard of the layout pass, so the end of this file says it instead.
+PRE_HINT_FN=0
+if grep -q '^update_hops_hint()' "$TARGET/ops/lib/admin.sh" 2>/dev/null; then PRE_HINT_FN=1; fi
+
 # --- ops/ ---------------------------------------------------------------------
 KIT_CODE="polaris dashboard.py index.py bench.sh PROTOCOL.md MANUAL.md PROMPTS.md VISUAL.md install.sh VERSION KEYS.tsv"  # + roles/ templates/ hooks/ ci/
                                                                    # (pack.py stays in the kit — never shipped)
@@ -319,7 +326,9 @@ import json, re, sys
 tgt_p, kit_p = sys.argv[1], sys.argv[2]
 report_p = sys.argv[3] if len(sys.argv) > 3 else ""
 try:
-    tgt = json.load(open(tgt_p, encoding="utf-8"))
+    raw = open(tgt_p, "rb").read()              # the bytes: they say which line ending to keep
+    tgt = json.loads(raw.decode("utf-8"))
+    orig = json.loads(raw.decode("utf-8"))      # an untouched twin — the merge below edits tgt in place
     kit = json.load(open(kit_p, encoding="utf-8"))
 except (OSError, ValueError) as exc:
     sys.exit(f"unreadable settings: {exc}")     # never rewrite what we cannot parse
@@ -384,7 +393,14 @@ if isinstance(perms, dict):
 # comes back on the next update. The remedy is to set a different value, not to delete it.
 tgt.setdefault("outputStyle", "polaris")
 
-open(tgt_p, "w", encoding="utf-8").write(json.dumps(tgt, indent=2) + "\n")
+# Written ONLY when the merge changed something (save-hops.md § 16.1). This file is tracked, and an
+# update that rewrites it unchanged hands the owner a diff to review that says nothing — on Windows
+# on every line, because text mode turned each LF into CRLF (F15). So: equal → not one byte
+# touched, whatever its formatting; changed → the original's own line ending, CRLF if its bytes held
+# one, else LF — newline="" writes exactly what is built here, never the platform's translation.
+if tgt != orig:
+    nl = "\r\n" if b"\r\n" in raw else "\n"
+    open(tgt_p, "w", encoding="utf-8", newline="").write((json.dumps(tgt, indent=2) + "\n").replace("\n", nl))
 # Deliberately silent on STDOUT: installer stdout is a contract (CI counts the quiet lines above
 # the ▶ NEXT epilogue), so a diagnostic here would be a tripwire failure, not a nicety. What
 # changed goes to a file the caller folds into its one ✅ line (and therefore into install.log),
@@ -429,14 +445,18 @@ if [ -f "$SJ" ] && ! grep -q '"includeCoAuthoredBy"' "$SJ"; then
 import json, sys
 p = sys.argv[1]
 try:
-    s = json.load(open(p))
+    raw = open(p, "rb").read()
+    s = json.loads(raw.decode("utf-8"))
+    orig = json.loads(raw.decode("utf-8"))
 except Exception:
     sys.exit(1)                    # unreadable settings are never rewritten (same stance as bootstrap)
 if not isinstance(s, dict):
     sys.exit(1)
 s.setdefault("includeCoAuthoredBy", False)
 s.setdefault("attribution", {"commit": "", "pr": ""})
-open(p, "w").write(json.dumps(s, indent=2) + "\n")
+if s != orig:                      # same rule as the merge above: unchanged → untouched, else its own ending
+    nl = "\r\n" if b"\r\n" in raw else "\n"
+    open(p, "w", encoding="utf-8", newline="").write((json.dumps(s, indent=2) + "\n").replace("\n", nl))
 EOF
   then
     say '.claude/settings.json: AI commit attribution disabled ("includeCoAuthoredBy": false)'
@@ -509,7 +529,11 @@ done
 # second chat. The caller (see .claude/skills/polaris-install/SKILL.md) continues straight
 # into INIT in the same session.
 note "target: $TARGET"
-if [ "$UPGRADE" = 1 ]; then
+# Only when POLARIS_SHA is UNSET (save-hops.md § 16.3). Every updater sets it — maybe empty, when
+# ls-remote could not answer — and runs `upgrade` itself straight after we return, so telling it to
+# is noise in the middle of its own output. A zip or skill install leaves it unset and keeps these
+# lines: ci.yml greps `polaris upgrade` in .polaris/install.log on exactly that path.
+if [ "$UPGRADE" = 1 ] && [ -z "${POLARIS_SHA+x}" ]; then
   # ONE command per line, never `&&`: this line is pasted by a HUMAN, and on Windows their terminal
   # is PowerShell, which has no pipeline chain operators (5.1 dies with a parser error). The universal
   # subset runs identically in PowerShell, cmd, bash and zsh. See the 🚩 rule in the output style.
@@ -530,6 +554,24 @@ case "$KIT" in
     fi;;
 esac
 note "Claude Code will ask to trust the project hook on first use — that is the write-guard (read ops/hooks/ownership-guard.sh first)."
+
+# An update re-arms what this machine already armed (ops/contracts/speed.md § 2b v1.3). The OLD
+# updater's code runs an update, so a guard it copied once stays that old guard forever, and the
+# one-time Fable restore lives in a bootstrap.py the updater never calls. This installer is always
+# the NEW code, so on the updater path only (POLARIS_SHA set, maybe empty) it refreshes a guard that
+# is already there and differs, and runs the restore when the guard is registered. Silent and
+# fail-open: it creates no guard, registers nothing, and prints no line (CI counts them).
+if [ -n "${POLARIS_SHA+x}" ] && [ -n "${HOME:-}" ]; then
+  _MG="$HOME/.claude/polaris/model-guard.sh"; _KG="$KIT/ops/hooks/model-guard.sh"
+  if [ -f "$_MG" ] && [ -f "$_KG" ] && ! cmp -s "$_MG" "$_KG"; then
+    cp "$_KG" "$_MG" 2>/dev/null && chmod +x "$_MG" 2>/dev/null || true
+  fi
+  _SJ="$HOME/.claude/settings.json"
+  if [ -n "$PY" ] && [ -f "$KIT/ops/bootstrap.py" ] && grep -q 'model-guard.sh' "$_SJ" 2>/dev/null; then
+    "$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import bootstrap; bootstrap._restore_fable_once()' "$KIT/ops" >/dev/null 2>&1 || true
+  fi
+  unset _MG _KG _SJ
+fi
 
 # Self-repair on install too, not just on update (owner, 2026-09-15). On a FRESH repo there is no
 # CONVENTIONS.md yet, so heal no-ops and INIT writes a correct one moments later; the case this
@@ -568,4 +610,39 @@ if [ "$STATE" = fresh ]; then
   printf '  This holds whatever the human asked for — install, update, or reinstall: an unconfigured\n'
   printf '  POLARIS is not delivered. Running setup now IS the request.\n'
   printf '  (No AI reading this? Open your AI chat in this repo and ask it to set up POLARIS.)\n'
+fi
+
+# The layout pass, for an updater too old to mention it (save-hops.md § 16.4). The first update onto
+# the layout tooling is run by the OLD updater, and before 6.12.0 that updater knew nothing of the
+# pass — so the one line saying "it is due, here is how" never appeared on that jump. This installer
+# is always the NEW code, so it says it: once, LAST, after the routing line, and only when all hold —
+# a live board · an updater ran us (POLARIS_SHA set, maybe empty) · that updater did not claim the
+# line (the current one passes POLARIS_UPDATE_HINTS=1) · the admin.sh it ran from had no
+# update_hops_hint() (6.12.0 prints its own) · and the verdict heal refreshed above says due, read
+# the way save-hops.md § 0.5 reads it: field 2 is 0, field 1 is <base>'s sha now, `hops:` is not
+# off, every \r dropped. A fresh install never gets here — it ends with the setup epilogue above.
+# Plain printf, like the routing line: `note` is quiet-swallowed. The two strings are byte for byte
+# the ones `update_hops_hint explicit` prints, so a reader meets ONE sentence whichever kit said it.
+if [ "$UPGRADE" = 1 ] && [ -n "${POLARIS_SHA+x}" ] && [ -z "${POLARIS_UPDATE_HINTS+x}" ] \
+   && [ "$PRE_HINT_FN" = 0 ] && [ -f "$TARGET/.polaris/hops-due" ]; then
+  _vs=""; _vv=""; _vm=""
+  IFS=$'\t' read -r _vs _vv _vm 2>/dev/null < "$TARGET/.polaris/hops-due" || true
+  _vs="${_vs%$'\r'}"; _vv="${_vv%$'\r'}"
+  # base: and hops: exactly as core.sh's cfg reads a key — first line wins, a comment and \r dropped
+  _CFG='index($0, k":")==1 { s=substr($0, length(k)+2); sub(/\r$/,"",s); sub(/^[ \t]*/,"",s); if (s ~ /^#/) s=""; else sub(/[ \t]#.*$/,"",s); sub(/[ \t]*$/,"",s); print s; exit }'
+  _base="$(awk -v k=base "$_CFG" "$TARGET/ops/CONVENTIONS.md" 2>/dev/null || true)"; [ -n "$_base" ] || _base=main
+  _hops="$(awk -v k=hops "$_CFG" "$TARGET/ops/CONVENTIONS.md" 2>/dev/null || true)"
+  if [ "$_vv" = 0 ] && [ -n "$_vs" ] && [ "$_hops" != off ] \
+     && [ "$_vs" = "$(git -C "$TARGET" rev-parse --verify -q "$_base" 2>/dev/null || true)" ]; then
+    # Quiet = no task file in ready/, active/ or review/: then the pass can run right now.
+    _busy=0
+    for _col in ready active review; do
+      for _f in "$TARGET/ops/board/$_col"/*.md; do
+        if [ -f "$_f" ]; then _busy=1; fi
+      done
+    done
+    if [ "$_busy" = 0 ]; then printf '\n%s\n' '▶ NEXT — save hops: read ops/roles/TIDY.md and run it now'
+    else printf '\n%s\n' '▶ NEXT — save hops: the layout pass is due — it runs when your next piece of work wraps up'; fi
+  fi
+  unset _vs _vv _vm _CFG _base _hops _busy _col _f
 fi

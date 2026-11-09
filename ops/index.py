@@ -324,9 +324,10 @@ def selfcheck():
 
 
 # ---------------------------------------------------------------- repo / db
-def sh(args, cwd):
+def sh(args, cwd, stdin=None):
     try:
-        p = subprocess.run(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        p = subprocess.run(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                           input=None if stdin is None else stdin.encode("utf-8"))
         return p.stdout.decode("utf-8", "replace")
     except Exception:
         return ""
@@ -972,7 +973,7 @@ def cmd_stats(root):
 # feature scattered across components/, hooks/ and utils/ should live instead. Read-only and no LLM —
 # git history and the import graph in, a report out; it never edits code. It lives in this file
 # because index.py already ships to every installed repo, and a new file would not.
-_HOPS_USAGE = ("⛔ usage: polaris hops [--tsv | --stale | --due | --questions | --facts <dir>]"
+_HOPS_USAGE = ("⛔ usage: polaris hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]"
                " [--score | --owned | --proof | --remap <moves.tsv>]\n")
 # words too generic to name a feature: a cluster called "utils" tells nobody where to look
 _HOPS_STOP = frozenset((
@@ -989,6 +990,8 @@ _HOPS_FROM = re.compile(r"""^\s*\}\s*from\s*['"](?P<n>[^'"]+)['"]""")   # a mult
 _HOPS_LOOKS = ("app", "pages", "routes")                     # framework-ROUTED only under a config
 _HOPS_FRAMEWORK = ("next.config.*", "nuxt.config.*", "svelte.config.*", "remix.config.*",
                    "astro.config.*")                         # the configs that route by folder
+_HOPS_WHY = ("generated", "vendored", "guarded", "test map", "kept", "public")   # § 12.6, first wins
+_HOPS_CAP = 25                                               # one pass moves at most this many files
 
 
 def _hops_cfg(conv, key, default=""):
@@ -1014,12 +1017,23 @@ def _hops_match(path, pat):
     return path.startswith(pat) if pat.endswith("/") else fnmatch.fnmatchcase(path, pat)
 
 
-def _hops_in_flight(root, base):
-    """§ 1.4 rule 10: the paths somebody has unmerged work on, FIXED for this pass only — every path
-    git status names (`dir/` for an untracked folder it reports whole), and every path a local or
-    remote branch changed in commits <base> lacks: an open ship PR counts, the board ref does not."""
+def _hops_task(root):
+    """§ 12.1: the <ID> when the tree at root is a task worktree — its HEAD is the branch
+    feat/<ID> — else "". What such a tree changes is the pass's own work, never somebody else's."""
+    b = sh(["git", "symbolic-ref", "-q", "--short", "HEAD"], root).strip()
+    return b[len("feat/"):] if b.startswith("feat/") else ""
+
+
+def _hops_in_flight(root, base, task=""):
+    """§ 1.4 rule 10 as § 12.1 amends it: the paths somebody ELSE has unmerged work on, FIXED for
+    this pass only — every path git status names (`dir/` for an untracked folder it reports whole),
+    unless the tree is task <task>'s own worktree; and every path a local or remote branch changed
+    in commits <base> lacks: an open ship PR counts. Never the board ref, the task's own feat/<ID>,
+    or the feat/<ID> of a task already in done/ on the board (done keeps a live worktree's branch
+    for sweep) — local or on any remote. The refs are filtered HERE and handed to git log on stdin:
+    one --exclude per finished task would pass Windows' 32 KB command line on a board this old."""
     out = set()
-    st = sh(["git", "status", "--porcelain", "-z"], root).split("\0")
+    st = [] if task else sh(["git", "status", "--porcelain", "-z"], root).split("\0")
     i = 0
     while i < len(st):
         e, i = st[i], i + 1
@@ -1028,10 +1042,21 @@ def _hops_in_flight(root, base):
             if "R" in e[:2] or "C" in e[:2]:       # -z puts a rename's source in the next field
                 out.add(st[i] if i < len(st) else "")
                 i += 1
-    log = sh(["git", "-c", "core.quotePath=false", "log", "--name-only", "--format=",
-              "--exclude=polaris/*", "--branches", "--exclude=*/polaris/*", "--remotes",
-              "--not", base, "--"], root)
-    out.update(log.split("\n"))
+    done = sh(["git", "ls-tree", "--name-only", "refs/heads/polaris/board", "--", "ops/board/done/"],
+              root).split("\n")
+    mine = {"feat/" + p.rpartition("/")[2][:-3] for p in done if p.endswith(".md")}
+    mine.update(["feat/" + task] if task else [])
+    refs = []
+    for r in sh(["git", "for-each-ref", "--format=%(refname)", "refs/heads/", "refs/remotes/"],
+                root).split("\n"):
+        kind, _, name = r[len("refs/"):].partition("/")      # heads|remotes, then the branch
+        if ((kind == "heads" and not fnmatch.fnmatchcase(name, "polaris/*") and name not in mine)
+                or (kind == "remotes" and not fnmatch.fnmatchcase(name, "*/polaris/*")
+                    and name.partition("/")[2] not in mine)):    # <remote>/<branch>
+            refs.append(r)
+    if refs:
+        out.update(sh(["git", "-c", "core.quotePath=false", "log", "--name-only", "--format=",
+                       "--stdin", "^" + base, "--"], root, "\n".join(refs) + "\n").split("\n"))
     out.discard("")
     return out
 
@@ -1144,23 +1169,45 @@ def _hops_assembly(files):
     return _near
 
 
-def _hops_fixed(root, base, files=(), edges=()):
+def _hops_lasting(root, files=(), edges=()):
+    """The § 1.4 rules that hold a path for good, as ONE answer per path: the first of `generated`
+    (rule 4) · `vendored` (3) · `guarded` (5) · `test map` (6) · `kept` (7) · `public` (9 a-c), in
+    _HOPS_WHY's order, or "" for none. FIXED is these plus where a path sits (rules 1, 2, 8) and
+    somebody's unmerged work (10); --facts' `leave alone:` line names these alone (§ 12.6) — a
+    guide says why a file stays put for good, never that a branch happens to touch it today."""
+    conv = read(root, "ops/CONVENTIONS.md") or ""
+    gen = _hops_cfg(conv, "generated").split()                                         # 4
+    gal = _hops_cfg(conv, "gallery").strip("/")
+    gen += [gal + "/"] if gal else []
+    guard = [r[0] for r in _hops_rows(root, "ops/RULES.tsv")                           # 5
+             if len(r) > 1 and r[1] in ("path", "ask")]
+    tmap = [g for r in _hops_rows(root, "ops/SURFACES.tsv")                            # 6
+            for g in r[:2] if g not in ("", "-")]
+    keep = [r[0] for r in _hops_rows(root, "ops/LAYOUT.tsv")                           # 7
+            if len(r) > 1 and r[1] == "keep"]
+    named, pkgs, globs = _hops_public(root, files, edges)                              # 9 (a) (b)
+    rules = (lambda p: any(_hops_match(p, x) for x in gen),
+             lambda p: bool(VENDOR.search(p)),
+             lambda p: any(_hops_match(p, x) for x in guard),
+             lambda p: any(_hops_match(p, x) for x in tmap),
+             lambda p: any(_hops_match(p, x) for x in keep),
+             # 9 (c): a Go, Java or Kotlin file's folder IS its package name
+             lambda p: (p in named or p.startswith(pkgs) or p.endswith((".go", ".java", ".kt"))
+                        or any(fnmatch.fnmatchcase(p, g) for g in globs)))
+
+    def _why(p):
+        return next((w for w, hit in zip(_HOPS_WHY, rules) if hit(p)), "")
+    return _why
+
+
+def _hops_fixed(root, base, files=(), edges=(), task=""):
     """§ 1.4 rules 1-10 as ONE predicate over a path: True = never proposed as a `from` or a `to`,
     and not counted in the score. Rule 9 (d), a move across Unity assemblies, is a property of the
-    move rather than of one path: _hops_assembly answers it where the MOVE rows are made."""
-    conv = read(root, "ops/CONVENTIONS.md") or ""
-    pats = _hops_cfg(conv, "generated").split()                                       # 4
-    gal = _hops_cfg(conv, "gallery").strip("/")
-    pats += [gal + "/"] if gal else []
-    pats += [r[0] for r in _hops_rows(root, "ops/RULES.tsv")                          # 5
-             if len(r) > 1 and r[1] in ("path", "ask")]
-    pats += [g for r in _hops_rows(root, "ops/SURFACES.tsv")                          # 6
-             for g in r[:2] if g not in ("", "-")]
-    pats += [r[0] for r in _hops_rows(root, "ops/LAYOUT.tsv")                         # 7
-             if len(r) > 1 and r[1] == "keep"]
-    flight = _hops_in_flight(root, base)                                              # 10
+    move rather than of one path: _hops_assembly answers it where the MOVE rows are made. <task> =
+    the tree's own task (_hops_task), whose work rule 10 never holds."""
+    lasting = _hops_lasting(root, files, edges)                                        # 3-7, 9
+    flight = _hops_in_flight(root, base, task)                                         # 10
     held = tuple(p for p in flight if p.endswith("/"))
-    named, pkgs, globs = _hops_public(root, files, edges)                             # 9 (a) (b)
     # 2: app/ pages/ routes/ are framework-ROUTED under a next/nuxt/svelte/remix/astro config at
     # the root and framework-LOOKING without one — nothing moves in or out of either this pass.
     # `loose` answers as if that one clause were gone: --questions asks about a framework-looking
@@ -1173,38 +1220,40 @@ def _hops_fixed(root, base, files=(), edges=()):
         segs = p.split("/")[:-1]
         return (not segs or segs[0] in ("ops", ".claude", ".github", ".polaris", "archive")  # 1
                 or bool((relaxed if loose else routed).intersection(segs))                  # 2
-                or bool(VENDOR.search(p))                                                   # 3
                 or bool(unity.intersection(segs)) or p.endswith((".meta", ".asmdef", ".asmref"))
-                or p in flight or p.startswith(held) or any(_hops_match(p, x) for x in pats)
-                # 9 (c): a Go, Java or Kotlin file's folder IS its package name
-                or p in named or p.startswith(pkgs) or p.endswith((".go", ".java", ".kt"))
-                or any(fnmatch.fnmatchcase(p, g) for g in globs))
+                or p in flight or p.startswith(held) or bool(lasting(p)))
     return _fixed
 
 
-def _hops_history(root, base, tracked):
-    """§ 1.3: the last 300 non-merge changes on <base>, each as the set of TODAY's tracked paths it
-    touched. Renames map old names onto today's — chains too: the log runs newest first, so every
-    rename is seen before the older changes that still use the old name — and a path gone since
-    drops out. A change of more than 40 paths (a mass rename, a vendored drop) or one only under
-    ops/ says nothing about how the features are laid out, so it is skipped."""
+def _hops_history(root, base, tracked, head=False):
+    """§ 1.3 + § 12.2: the last 300 non-merge changes on <base> — on HEAD when <head> (a task
+    worktree, --facts) — each as the set of TODAY's tracked paths it touched. Renames map old
+    names onto today's — chains too: the log runs newest first, so every rename is seen before the
+    older changes that still use the old name — and a path gone since drops out. A change of more
+    than 40 paths (a mass rename, a vendored drop) or one only under ops/ says nothing about how
+    the features are laid out, so it is skipped. So is a layout pass's own work: a commit in
+    <base>..HEAD (the task's own) and any commit touching ops/LAYOUT.tsv (a pass's land) map their
+    renames and are never a change — a pass that counted itself would weld every feature it moved
+    through the one file that imports them all."""
+    own = set(sh(["git", "rev-list", base + "..HEAD", "--"], root).split()) if head else set()
     out = sh(["git", "-c", "core.quotePath=false", "log", "-n", "300", "--no-merges", "-M",
-              "--name-status", "--format=%x1e%H", base, "--"], root)
+              "--name-status", "--format=%x1e%H", "HEAD" if head else base, "--"], root)
     commits = []
     for line in out.split("\n"):
         if line.startswith("\x1e"):
-            commits.append([])
+            commits.append((line[1:].strip(), []))
         elif commits and "\t" in line:
             f = line.split("\t")
-            commits[-1].append((f[0][:1], f[1], f[2] if len(f) > 2 else ""))
+            commits[-1][1].append((f[0][:1], f[1], f[2] if len(f) > 2 else ""))
     alias, kept = {}, []
-    for rows in commits:
+    for sha, rows in commits:
         raw = [new or old for _, old, new in rows]
         names = {alias.get(p, p) for p in raw}
         for st, old, new in rows:
             if st == "R" and new:
                 alias[old] = alias.get(new, new)
-        if len(rows) > 40 or all(p.startswith("ops/") for p in raw):
+        if (len(rows) > 40 or all(p.startswith("ops/") for p in raw) or sha in own
+                or any("ops/LAYOUT.tsv" in (old, new) for _, old, new in rows)):
             continue
         kept.append(names & tracked)
     return kept
@@ -1316,11 +1365,16 @@ def _hops_guides(root, files):
 
 
 def _hops_purpose(root, d, guides):
-    """A folder's purpose for MAP: its guide's purpose line (§ 0.1), else the first heading of its
-    README.md, else `-`. Never a TAB: the --tsv rows are TAB-separated."""
+    """A folder's purpose for MAP and --facts: its guide's purpose line (§ 0.1), else the first
+    heading of its README.md, else `-`. A guide headed `# <d>/ — <text>` (the template's shape)
+    gives <text>: the folder's own name goes, once and only when text follows (§ 12.3 — the rule
+    guide_purpose keeps too), so no report says it twice. Never a TAB: --tsv is TAB-separated."""
     for line in guides.get(d, ()):
         s = re.sub(r"^[# ]+", "", line)
         if s.strip(" \t"):
+            pre = d + "/ — "
+            if s.startswith(pre) and s[len(pre):].strip(" \t"):
+                s = s[len(pre):]
             return s.replace("\t", " ")
     for line in (read(root, d + "/README.md") or "").split("\n"):
         m = re.match(r"#+\s+(\S.*)", line.rstrip("\r"))
@@ -1360,13 +1414,17 @@ def _hops_mean(commits, ren=None):
 def _hops_survey(root, files):
     """Everything the report and --score stand on, measured once (§ 1.3-§ 1.5): the FIXED
     predicate, the movable files, the kept changes as sets of movable paths, the clusters with
-    their strengths, movable files per folder, every folder, and the guides."""
+    their strengths, movable files per folder, every folder, and the guides. In a task worktree
+    (§ 12.1-§ 12.2) the history is HEAD's and the task's own work is never in flight, so a pass
+    measures the layout it has made so far exactly as <base> will once it lands."""
     s = types.SimpleNamespace(files=files, tracked=set(files))
     s.base = _hops_cfg(read(root, "ops/CONVENTIONS.md") or "", "base", "main")
+    s.task = _hops_task(root)
     s.edges = _hops_edges(root)
-    s.fixed = _hops_fixed(root, s.base, files, s.edges)
+    s.fixed = _hops_fixed(root, s.base, files, s.edges, s.task)
     s.movable = {p for p in files if not s.fixed(p)}
-    s.commits = [c for c in (k & s.movable for k in _hops_history(root, s.base, s.tracked)) if c]
+    hist = _hops_history(root, s.base, s.tracked, bool(s.task))
+    s.commits = [c for c in (k & s.movable for k in hist) if c]
     s.clusters, s.strength = _hops_clusters(
         s.commits, {(min(a, b), max(a, b)) for a, b in s.edges if a in s.movable and b in s.movable})
     s.per, s.folders = {}, set()
@@ -1417,6 +1475,24 @@ def _hops_proposals(root, s):
             moves += [(f, t, name) for f, t in mv]
             claimed.update(t for _, t in mv)
     return rows, moves
+
+
+def _hops_cut(moves):
+    """§ 12.4, the next pass's moves (--propose, and the after-score --due weighs): the MOVE rows
+    in their order, a cluster at a time — a run of rows with one name, the 4th --tsv field — taken
+    WHOLE while the total stays within _HOPS_CAP. A cluster that would pass it waits whole for the
+    next pass and the walk goes on, so a smaller one behind it still fits: cut mid-feature, a
+    pass leaves a feature in two places, findable in neither."""
+    runs = []
+    for m in moves:
+        if runs and runs[-1][-1][2] == m[2]:
+            runs[-1].append(m)
+        else:
+            runs.append([m])
+    out = []
+    for r in runs:
+        out += r if len(out) + len(r) <= _HOPS_CAP else []
+    return out
 
 
 def _hops_loc(root, p):
@@ -1543,24 +1619,38 @@ def _hops_score(root, rows, files):
 
 
 def _hops_owned(root, rows, files):
-    """--owned <moves> (§ 1.6): every path a pass making these moves must own, one per line, sorted
-    and unique — each from, to and into; the tracked .meta of a Unity asset and its future name;
-    every tracked file whose resolved import names a from (aliases included); every tracked
-    non-code file naming a from by its tail (§ 1.1). Plus the guides, CLAUDE.md and ops/LAYOUT.tsv,
-    that is a tidy task's files_owned."""
+    """--owned <moves> (§ 12.5): a tidy task's WHOLE files_owned, one path per line, sorted and
+    unique — each from, to and into; the tracked .meta of a Unity asset and its future name; every
+    tracked file whose resolved import names a from (aliases included); every tracked non-code file
+    naming a from by its tail (§ 1.1); the guides the pass will write, <dir>/CLAUDE.md for the
+    first 8 folders the GUIDES rule names once the moves are made (5+ movable files directly
+    inside and no guide, largest first — a from counted in its to's folder, a merged from in
+    none); and CLAUDE.md and ops/LAYOUT.tsv, which every pass writes. An empty plan is the
+    guides-only pass. All of it is read from the tree POLARIS_ROOT names, its index rebuilt for
+    it: asked from a task worktree halfway through a pass, every importer is named where it lives
+    NOW — the primary's index still names it where it used to be (F7)."""
     have = set(files)
     froms = {f for _, f, _ in rows}
-    out = set()
+    edges = _hops_edges(root)
+    fixed = _hops_fixed(root, _hops_cfg(read(root, "ops/CONVENTIONS.md") or "", "base", "main"),
+                        files, edges, _hops_task(root))
+    out = {"CLAUDE.md", "ops/LAYOUT.tsv"}
     for kind, f, t in rows:
         out.update((f, t))
         if f + ".meta" in have:
             out.update((f + ".meta", t + ".meta") if kind == "move" else (f + ".meta",))
-    out.update(a for a, b in (_hops_edges(root) if rows else ()) if b in froms and a in have)
+    out.update(a for a, b in edges if b in froms and a in have)
     for rel in files:
         if _mention_src(rel) and rows:
             text = read(root, rel) or ""
             if any(_mentioned(f, rel, text) for f in froms):
                 out.add(rel)
+    ren = {f: (t if kind == "move" else "") for kind, f, t in rows}      # a merged from: nowhere
+    after = {ren.get(p, p) for p in files if not fixed(p)}               # each movable file, once
+    per = collections.Counter(p.rpartition("/")[0] for p in after)
+    guides = _hops_guides(root, files)
+    out.update(d + "/CLAUDE.md" for d in sorted(
+        (d for d in per if d and per[d] >= 5 and d not in guides), key=lambda d: (-per[d], d))[:8])
     for p in sorted(out):
         print(p)
     return 0
@@ -1910,11 +2000,11 @@ def _hops_due(root, files):
     final: `hops: off` → no · under 20 tracked files → no · POLARIS's own source (kit/ops/pack.py
     tracked, the tell `update --auto` skips itself on) → no · under 30 changes on <base> since the
     last pass, its newest commit touching ops/LAYOUT.tsv → no, so a pass whose every move was
-    reverted cannot fire again and again · else due when the first 25 MOVE rows (one pass's cap;
-    keep rows and FIXED are out already) cut folders per change by 15%+, or 3+ folders of 5+
-    files have no guide. Due: ONE line, rc 0. Not due: silence, rc 1. EVERY run rewrites the
-    verdict cache (§ 0.5) — `next`, `triage` and the update hint read that file and never run hops,
-    so a verdict that went stale must be overwritten, never left behind."""
+    reverted cannot fire again and again · else due when the moves --propose prints (§ 12.4: whole
+    features, one pass's cap; keep rows and FIXED are out already) cut folders per change by 15%+,
+    or 3+ folders of 5+ files have no guide. Due: ONE line, rc 0. Not due: silence, rc 1. EVERY
+    run rewrites the verdict cache (§ 0.5) — `next`, `triage` and the update hint read that file
+    and never run hops, so a verdict that went stale must be overwritten, never left behind."""
     conv = read(root, "ops/CONVENTIONS.md") or ""
     base = _hops_cfg(conv, "base", "main")
     sha = sh(["git", "rev-parse", "--verify", "-q", base], root).strip()
@@ -1926,7 +2016,7 @@ def _hops_due(root, files):
                    root).strip() if last else ""
         if not (since.isdigit() and int(since) < 30):
             s = _hops_survey(root, files)
-            ren = {f: t for f, t, _ in _hops_proposals(root, s)[1][:25]}
+            ren = {f: t for f, t, _ in _hops_cut(_hops_proposals(root, s)[1])}
             # folders summed over every kept change, before and after: the mean's numerators, so
             # the 15% line is decided in whole numbers, never by a float landing a hair under it
             a, b = (sum(len({r.get(p, p).rpartition("/")[0] for p in c}) for c in s.commits)
@@ -1951,14 +2041,17 @@ def _hops_due(root, files):
 def _hops_facts(root, files, arg):
     """--facts <dir> (§ 1.7, G16): at most 15 lines a folder's guide is written from, so a pass never
     explores a folder to describe it — its files and purpose, the files the most others import, its
-    symbols in find's own ranking, the folders that change with it, the tests that import it, then
-    one line per file, the most imported first. Symbols leave out private `_` names and the
-    folder's own CLAUDE.md: the guide is what these facts write, and outside its block that file is
-    the owner's text, which hops never reads (§ 0.1). The folder is the files DIRECTLY inside it, as
-    MAP counts one; a label with nothing to show says `-`. A path that is no folder of tracked
-    files is a usage error, rc 2. Everything is read from the tree POLARIS_ROOT names, its history
-    from that tree's HEAD: pointed at a tidy task's worktree, the facts describe the layout AFTER its
-    moves — a brand-new home included, its files' past followed through the renames."""
+    symbols in find's own ranking, the folders that change with it, the tests that import it, what
+    to leave alone (§ 12.6: its files FIXED for good, each with the first of _HOPS_WHY's reasons,
+    in that order, then by name), then one line per file, the most imported first, at most 9.
+    Symbols leave out private `_` names and the folder's own CLAUDE.md: the guide is what these
+    facts write, and outside its block that file is the owner's text, which hops never reads
+    (§ 0.1). The folder is the files DIRECTLY inside it, as MAP counts one; a label with nothing to
+    show says `-`. A path that is no folder of tracked files is a usage error, rc 2. Everything is
+    read from the tree POLARIS_ROOT names, its history from that tree's HEAD: pointed at a tidy
+    task's worktree, the facts describe the layout AFTER its moves — a brand-new home included,
+    its files' past followed through the renames, and the pass's own commits counted as renames
+    only (§ 12.2)."""
     d = arg.strip()
     while d.startswith("./"):
         d = d[2:]
@@ -1986,7 +2079,8 @@ def _hops_facts(root, files, arg):
         t = top.setdefault(p, [])
         t += [] if n in t or len(t) >= 3 else [n]
     co = collections.Counter()
-    for c in _hops_history(root, "HEAD", set(files)):
+    base = _hops_cfg(read(root, "ops/CONVENTIONS.md") or "", "base", "main")
+    for c in _hops_history(root, base, set(files), True):
         if here.intersection(c):
             co.update({p.rpartition("/")[0] for p in c}.difference((d, "")))
     loc = {p: _hops_loc(root, p) for p in here}
@@ -2001,7 +2095,11 @@ def _hops_facts(root, files, arg):
     print("changes with: " + (" · ".join("%s/ (%d×)" % (x, co[x]) for x in sorted(
         co, key=lambda x: (-co[x], x))[:4]) or "-"))
     print("tests: " + (" · ".join(sorted(tests, key=lambda x: (-tests[x], x))[:4]) or "-"))
-    for p in sorted((p for p in here if loc[p] is not None), key=lambda p: (-fan[p], -loc[p], p))[:10]:
+    why = _hops_lasting(root, files, edges)
+    left = sorted((_HOPS_WHY.index(w), _name(p), w) for p, w in ((p, why(p)) for p in here) if w)
+    print("leave alone: " + (" · ".join("%s (%s)" % (n, w) for _, n, w in left[:4]) or "-")
+          + (" · +%d" % (len(left) - 4) if len(left) > 4 else ""))
+    for p in sorted((p for p in here if loc[p] is not None), key=lambda p: (-fan[p], -loc[p], p))[:9]:
         print("- %s — %d lines · %s" % (_name(p), loc[p], ", ".join(top.get(p, ())) or "-"))
     return 0
 
@@ -2029,11 +2127,13 @@ def _hops_questions(root, s, moves):
 
 
 def cmd_hops(root, args):
-    """hops [--tsv | --stale | --due | --questions | --facts <dir>] · hops --score | --owned |
-    --proof | --remap <moves.tsv> — the layout report, when a pass is worth it, and the four checks
-    on a plan of moves (ops/contracts/save-hops.md § 1.2-§ 1.7).
+    """hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>] · hops --score |
+    --owned | --proof | --remap <moves.tsv> — the layout report, the next pass's moves, when a pass
+    is worth it, and the four checks on a plan of moves (ops/contracts/save-hops.md § 1.2-§ 1.7,
+    § 12.4-§ 12.6).
 
-    bare: the screen, at most 40 lines · --tsv: every row, TAB-separated, nothing capped · --stale:
+    bare: the screen, at most 40 lines · --tsv: every row, TAB-separated, nothing capped ·
+    --propose: the next pass's moves as plan rows, whole features only, at most 25 · --stale:
     only the STALE rows, rc 0 when there is one and 1 when there is none · --due: the verdict, rc 0
     due / 1 not, always rewriting .polaris/hops-due · --questions: at most 3, rc 1 with none ·
     --facts <dir>: the 15 lines a guide is written from · --score --owned --proof --remap: § 1.6,
@@ -2053,7 +2153,8 @@ def cmd_hops(root, args):
             return _hops_remap(root, rows)
         files = [p for p in sh(["git", "ls-files", "-z"], root).split("\0") if p]
         return (_hops_owned if args[0] == "--owned" else _hops_score)(root, rows, files)
-    if not (not args or (len(args) == 1 and args[0] in ("--tsv", "--stale", "--due", "--questions"))
+    if not (not args or (len(args) == 1 and args[0] in ("--tsv", "--propose", "--stale", "--due",
+                                                        "--questions"))
             or (len(args) == 2 and args[0] == "--facts")):
         sys.stderr.write(_HOPS_USAGE)
         return 2
@@ -2071,7 +2172,7 @@ def cmd_hops(root, args):
     if len(files) < 20:
         # Too small to measure, and cheap to say so: no git log, no index build. --tsv prints no
         # rows at all — a SCORE over a handful of files would be a number nobody should act on —
-        # and --questions has nothing to ask.
+        # --propose no move, and --questions has nothing to ask.
         if not mode:
             print("hops — %d tracked files: too small to measure" % len(files))
         return 1 if mode == "--questions" else 0
@@ -2079,6 +2180,10 @@ def cmd_hops(root, args):
     rows, moves = _hops_proposals(root, s)
     if mode == "--questions":
         return _hops_questions(root, s, moves)
+    if mode == "--propose":
+        for f, t, _ in _hops_cut(moves):
+            print("move\t%s\t%s" % (f, t))
+        return 0
     merges, splits = _hops_merges(root, s, moves), _hops_splits(root, s)
     per, dirs, guides, missing = s.per, s.dirs, s.guides, s.missing
     stale = _hops_stale(root, guides)
@@ -2126,7 +2231,7 @@ def usage():
         "usage: index.py find <symbol>|-f <glob>|-t <text>|--importers <path>|--imports <path>\n"
         "                       |--api <glob>...   [-n N]\n"
         "       index.py show <path>#<symbol> | <path>:<line>\n"
-        "       index.py hops [--tsv | --stale | --due | --questions | --facts <dir>]\n"
+        "       index.py hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>]\n"
         "                       | --score|--owned|--proof|--remap <moves.tsv>\n"
         "       index.py stats | refresh | rebuild | selfcheck\n")
     return 2

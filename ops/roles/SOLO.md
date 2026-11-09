@@ -43,8 +43,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 
 ## The path
 1. **Always author the request's own task** — never pick up a leftover already sitting in `ready/`
-   just because it is there. From `ops/templates/TASK.md`, into `ops/board/ready/<ID>.md`. Keep it
-   honest and small:
+   just because it is there. From `ops/templates/TASK.md`, into a draft outside the board (e.g.
+   `.polaris/drafts/<slug>.md`). Keep it honest and small:
    - `plan:` a short slug for this request · `points:` small — `bash ops/polaris triage <ID>` holds
      the budget, so run it right after authoring and let it confirm `solo` for THIS task ·
      `risk: normal` · `files_owned:` the exact paths you will touch, nothing speculative ·
@@ -59,7 +59,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    - A leftover already in `ready/` whose `files_owned` overlaps this task is never run first: park
      it — `bash ops/polaris release <leftover-ID> --to backlog -m "parked: not part of <plan>"` —
      and name it in ONE line of your step-8 close.
-   - Commit it to the board ref (`ops/MANUAL.md` § board-commit recipe), never to `<base>`.
+   - Then file it: `bash ops/polaris new <draft>` — one board commit, never on `<base>`. The ID it
+     prints is what `triage <ID>` and `claim <ID>` take.
 2. **Claim** — `bash ops/polaris claim <ID>`. This locks it and builds a worktree on `feat/<ID>`.
 2b. **Enter that worktree** — a step, not a suggestion, and the one step every collision so far
    skipped. You share this checkout; work only inside `files_owned`, and only in there. Two callers,

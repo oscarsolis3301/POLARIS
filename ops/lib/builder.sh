@@ -358,6 +358,14 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
     return 0
   fi
   [ -n "$rk" ] || return 0           # no risk: frontmatter → unclassified → integrator path
+  # save-hops.md § 15.3 (F3): about to land — whatever the notice — read the sprint number exactly as
+  # seal does. None → no land: the land would go onto a wave no seal can close, which is how the
+  # first live tidy pass got stranded. The task waits in review/ and the handoff stays green.
+  local sl_hdr; sl_hdr="$(sed -n 's/^# SPRINT //p' "$OPS/SPRINT.md" 2>/dev/null | head -1 | tr -d '\r')"
+  if [ -z "${sl_hdr%%[!0-9]*}" ]; then
+    note "⚠ $id waits in review/: ops/SPRINT.md has no \"# SPRINT <n> — <goal>\" line, so its wave could not close — add one (ops/MANUAL.md § Board commit by hand), then: bash ops/polaris next"
+    return 0
+  fi
   note "landing: self — continuing into land $id (the lease is the integration lane: this waits its turn)"
   local lrc=0
   ( cd "$PRIMARY" && "$SELF" land "$id" ) || lrc=$?

@@ -1175,6 +1175,15 @@ EOF
   done <<EOF
 $srows
 EOF
+  # 10) stale MAP rows (save-hops.md § 14.3): ADVISORY, as 9) — each item the root map reads from
+  # ops/MAP.md that `where` drops because its path is no longer tracked, MAP order, once each. The
+  # parse is where's own (_where_items, knowledge.sh), never a copy. Builders never edit MAP.md
+  # (Invariant 1); the next EVOLVE pass retires the row. No ops/MAP.md → silence.
+  while IFS= read -r sp; do
+    if [ -n "$sp" ]; then note "advisory: MAP STALE: ops/MAP.md lists $sp (missing)"; fi
+  done <<EOF
+$(_where_items "$PRIMARY" stale 2>/dev/null || true)
+EOF
   if [ "$n" -eq 0 ]; then say "drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry · deps)"
   else printf '%d finding(s).\n' "$n"; [ "$strict" = "--strict" ] && exit 1; fi
   return 0

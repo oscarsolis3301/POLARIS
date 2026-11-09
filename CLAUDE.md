@@ -1,4 +1,4 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.12.0] -->
+<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.13.0] -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 Model-agnostic operating system for running N coding agents in parallel on this repo with zero merge
@@ -144,7 +144,7 @@ little as possible.
 
 - **Prefer ONE context over three.** Twenty-five subagents in a day is a failure, not diligence.
 - **Run the smallest check that proves the change** — never a full suite for a small diff.
-- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.
+- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.
 - **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:
   one command per line, never `&&` (PowerShell has no chain operators), no placeholders.
 - **Ask early** rather than burning tokens guessing.

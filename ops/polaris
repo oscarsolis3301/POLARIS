@@ -35,6 +35,13 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  exact paths, and the verify: commands that will be run. Read-only.
                                  No ID inside a feat/<ID> worktree = that task. Replaces the 6-15
                                  exploratory round trips a cold session otherwise spends
+  new <draft.md>…                FILE NEW TASKS in one command: each draft, written from
+                                 ops/templates/TASK.md, gets the next free T-NNN and is checked
+                                 (points 1-5 · plan: · risk: · files_owned · a named contract
+                                 exists), then placed by the ready gate: ready/, or backlog/ while
+                                 it waits on another task — a task in ready/, active/ or review/
+                                 that shares a file with it joins its depends_on. ONE board commit
+                                 for all of them; any refusal writes nothing. Refuses on feat/*
   claim [ID]                     lock + ready→active + worktree  (no ID = top wsjf; skips locked)
   resume [ID]                    re-enter an already-claimed active task (crash/kickback/new session)
   verify [ID]                    diff ⊆ files_owned + run verify: commands (in worktree)
@@ -146,7 +153,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  self-heals on query. No python3 → says so and you fall back to Grep
   show <path>#<symbol> | <path>:<line>
                                  print JUST that symbol's body — not the whole file
-  hops [--tsv | --stale | --due | --questions | --facts <dir>] [--score | --owned | --proof | --remap <moves.tsv>]
+  hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>] [--score | --owned | --proof | --remap <moves.tsv>]
                                  the layout report: how many folders one change touches, what to
                                  move, which folders lack a guide. No LLM, never edits your code;
                                  ops/roles/TIDY.md runs the pass that acts on it
@@ -330,7 +337,7 @@ esac
 # (ops/contracts/module-layout.md v2 — both lists stay LITERAL, never a glob.)
 case "${1:-}" in
   _match|_rules|_guard) _mods="core ownership" ;;
-  *)             _mods="core ownership workspace surfaces visual builder integrate knowledge search observe admin bg awake handover skills
+  *)             _mods="core ownership workspace surfaces visual builder integrate knowledge search observe admin bg awake handover skills author
                         selftest/spine selftest/board selftest/history selftest/report
                         selftest/brain selftest/policy selftest/remote selftest/fast selftest/hops" ;;
 esac
@@ -392,6 +399,7 @@ case "$PWD" in */.polaris/wt/*) _w="${PWD##*/.polaris/wt/}"; _w="${_w%%/*}"; : 2
 # into _match/_rules, which the write-guard fires on every single edit.
 case "${1:-}" in
   init-board) cmd_init_board;;
+  new)        shift; cmd_new "$@";;
   claim)      shift; awake_ensure || true; update_check_maybe || true; cmd_claim "$@";;
   pack)       shift 2>/dev/null || true; cmd_pack "${1:-}";;
   resume)     shift; cmd_resume "$@";;
