@@ -922,14 +922,41 @@ heal_models() { # neutralise any forbidden model_* value in CONVENTIONS. rc 0 al
 }
 
 heal_claudemd() { # append the marked efficiency section to the repo's OWN CLAUDE.md, once.
-  # APPEND-ONLY and marker-guarded. If the marker is present we do nothing at all — we do not
-  # rewrite it, because a human may have edited the text and their copy is not ours to overwrite.
+  # APPEND-ONLY and marker-guarded. If the marker is present we append nothing — we do not rewrite
+  # the section, because a human may have edited the text and their copy is not ours to overwrite.
+  # The one exception is THE ONE REWRITE below: a single exact line the kit itself wrote.
   # 6.12.0 (ops/contracts/save-hops.md § 3.1, E5): what a repo that never had the section receives is
   # SHORTER. The lookup ladder and the ask-first rule now live once, in the managed block's FEWEST HOPS
   # section, so this text points there instead of saying it twice — every byte here is injected into
   # every session. A section an older kit appended keeps its old text: the marker guard above.
   local f="$PRIMARY/CLAUDE.md"
   [ -f "$f" ] || return 0
+  # THE ONE REWRITE (ops/contracts/speed.md § 2b). Older kits appended a model line saying Fable and
+  # Haiku are forbidden outright; since 2026-11-09 Fable is the owner's to pick. Only that EXACT line
+  # changes, the first time it appears — a line its owner has edited is theirs and stays. Its line
+  # ending is kept and every other byte with it; a file without the line is never written. Builtins
+  # only past the one grep, so a CLAUDE.md that never had the line costs that grep and nothing more.
+  local mo='- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.'
+  local mn='- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.'
+  local ml='' me='' mt='' mhit=0
+  if grep -qF -- "$mo" "$f" 2>/dev/null; then
+    # `|| mhit=0`: under the CLI's set -e a failed write must neither kill heal nor leave a half copy.
+    {
+      while :; do
+        mt=$'\n'
+        IFS= read -r ml || { [ -n "$ml" ] || break; mt=''; }
+        me=''
+        case "$ml" in *$'\r') me=$'\r'; ml="${ml%$'\r'}";; esac
+        if [ "$mhit" = 0 ] && [ "$ml" = "$mo" ]; then ml="$mn"; mhit=1; fi
+        printf '%s%s%s' "$ml" "$me" "$mt"
+      done < "$f" > "$f.heal-tmp"
+    } 2>/dev/null || mhit=0
+    if [ "$mhit" = 1 ] && mv -f "$f.heal-tmp" "$f" 2>/dev/null; then
+      note "healed: CLAUDE.md — the model line now says Fable is the owner's to pick (your prose untouched)"
+    else
+      rm -f "$f.heal-tmp" 2>/dev/null || true
+    fi
+  fi
   grep -qF "$HEAL_MARK" "$f" 2>/dev/null && return 0
   {
     printf '\n%s\n' "$HEAL_MARK"

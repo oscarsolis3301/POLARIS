@@ -1,0 +1,34 @@
+== 1. the line an older kit appended (LF): rewritten, every other byte kept ==
+  heal rc: 0
+healed: CLAUDE.md — the model line now says Fable is the owner's to pick (your prose untouched)
+  file: written
+  bytes: the old file with only that line changed
+9:- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.
+== 2. a second heal is a no-op: no note, and the file is not even rewritten ==
+  heal rc: 0
+  file: not written
+  bytes: unchanged since the first heal
+== 3. the same file with CRLF line ends: the new line keeps its CRLF ==
+  heal rc: 0
+healed: CLAUDE.md — the model line now says Fable is the owner's to pick (your prose untouched)
+  file: written
+  bytes: the CRLF file with only that line changed
+== 4. a line its owner has edited is theirs: left exactly as found ==
+  heal rc: 0
+  file: not written
+  bytes: as its owner left it
+== 5. a file without the line (the section a newer kit appends) is never written ==
+  heal rc: 0
+  file: not written
+  bytes: as found
+== 6. one line per heal at most, and a last line with no line end still has none after ==
+  heal rc: 0
+healed: CLAUDE.md — the model line now says Fable is the owner's to pick (your prose untouched)
+  file: written
+  bytes: the first copy changed, the second kept
+  heal rc: 0
+healed: CLAUDE.md — the model line now says Fable is the owner's to pick (your prose untouched)
+  bytes: the second copy changed too, still with no line end
+== nothing left behind ==
+  temp files beside CLAUDE.md: 0
+  files under the fake home: 0

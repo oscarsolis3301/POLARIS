@@ -1,0 +1,31 @@
+--- 1. an old guard, registered, a list without Fable: refreshed, Fable back once, marker
+rc 0
+guard: the kit's own bytes
+availableModels: ["opus", "sonnet", "haiku", "fable"]
+marker: written
+guard: executable
+--- 2. the same machine, updated again: nothing changes
+rc 0
+settings.json: byte-identical
+guard: byte-identical
+availableModels: ["opus", "sonnet", "haiku", "fable"]
+--- 3. a machine the guard never reached (no file, no hook): nothing is created
+rc 0
+guard: none on disk
+availableModels: ["opus", "sonnet", "haiku"]
+marker: none
+on disk: settings.json 
+--- 4. a guard on disk but not registered: the script is refreshed, the list is untouched
+rc 0
+guard: the kit's own bytes
+availableModels: ["opus", "sonnet", "haiku"]
+marker: none
+--- 5. no POLARIS_SHA (a zip or skill install): nothing happens
+rc 0
+guard: NOT the kit copy
+availableModels: ["opus", "sonnet", "haiku"]
+marker: none
+--- the install output gains no line
+guard refreshed vs nothing armed: same line count
+no updater vs updater: same line count
+no output line names the guard or the list

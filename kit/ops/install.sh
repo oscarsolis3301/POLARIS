@@ -555,6 +555,24 @@ case "$KIT" in
 esac
 note "Claude Code will ask to trust the project hook on first use — that is the write-guard (read ops/hooks/ownership-guard.sh first)."
 
+# An update re-arms what this machine already armed (ops/contracts/speed.md § 2b v1.3). The OLD
+# updater's code runs an update, so a guard it copied once stays that old guard forever, and the
+# one-time Fable restore lives in a bootstrap.py the updater never calls. This installer is always
+# the NEW code, so on the updater path only (POLARIS_SHA set, maybe empty) it refreshes a guard that
+# is already there and differs, and runs the restore when the guard is registered. Silent and
+# fail-open: it creates no guard, registers nothing, and prints no line (CI counts them).
+if [ -n "${POLARIS_SHA+x}" ] && [ -n "${HOME:-}" ]; then
+  _MG="$HOME/.claude/polaris/model-guard.sh"; _KG="$KIT/ops/hooks/model-guard.sh"
+  if [ -f "$_MG" ] && [ -f "$_KG" ] && ! cmp -s "$_MG" "$_KG"; then
+    cp "$_KG" "$_MG" 2>/dev/null && chmod +x "$_MG" 2>/dev/null || true
+  fi
+  _SJ="$HOME/.claude/settings.json"
+  if [ -n "$PY" ] && [ -f "$KIT/ops/bootstrap.py" ] && grep -q 'model-guard.sh' "$_SJ" 2>/dev/null; then
+    "$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import bootstrap; bootstrap._restore_fable_once()' "$KIT/ops" >/dev/null 2>&1 || true
+  fi
+  unset _MG _KG _SJ
+fi
+
 # Self-repair on install too, not just on update (owner, 2026-09-15). On a FRESH repo there is no
 # CONVENTIONS.md yet, so heal no-ops and INIT writes a correct one moments later; the case this
 # catches is an install OVER a live board carrying a stale config — a forbidden model_* value, or a

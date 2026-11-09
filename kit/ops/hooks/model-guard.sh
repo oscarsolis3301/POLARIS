@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# kit/ops/hooks/model-guard.sh — the machine-wide model ban. Fable and Haiku are FORBIDDEN (owner
-# decision 2026-09-15, absolute, on every machine). v2 (ops/contracts/speed.md § 2) is ONE script
-# that branches on the hook's `hook_event_name`:
+# kit/ops/hooks/model-guard.sh — the machine-wide model ban. Haiku is FORBIDDEN (owner decision
+# 2026-09-15, on every machine). Fable is the owner's to pick again (owner, 2026-11-09 — speed.md
+# § 2b): a Fable session, a switch to Fable, a spawn asking for it and a subagent that ran on it all
+# pass in silence. Routing still never names either one (core.sh model_denied, unchanged). v2
+# (ops/contracts/speed.md § 2) is ONE script that branches on the hook's `hook_event_name`:
 #   SessionStart · PostModelSwitch  record the session's model in a one-line state file (always exit 0)
 #   PreModelSwitch                   refuse a switch TO a forbidden model
 #   PreToolUse (matcher "*")         refuse a forbidden spawn at the door, then refuse EVERY call while
@@ -17,9 +19,10 @@
 #
 # WHY THIS EXISTS. `model_strong: fable` plus `route` returning `strong` for every planner/integrator/
 # evolve role sent ~12 subagents to Fable in ONE day, several over 300k tokens. Fable bills a
-# SEPARATE, much smaller weekly limit and reached 87% on work nobody asked to run there. core.sh's
-# model_denied stops POLARIS ever NAMING those models; this stops a session that is already ON one
-# from spending anything. A blocked session can still talk — it just cannot read, write, run or spawn.
+# SEPARATE, much smaller weekly limit and reached 87% on work nobody asked to run there. That was
+# ROUTING picking it, and core.sh's model_denied still stops POLARIS ever NAMING Fable or Haiku. This
+# script stops a session that is already ON Haiku from spending anything; a Fable session is the
+# owner's own pick, so it runs. A blocked session can still talk — it cannot read, write, run or spawn.
 #
 # ===== IT MUST FAIL OPEN. =====
 # No stdin · no transcript_path · unreadable file · no "model" line · anything unexpected ⇒ exit 0.
@@ -39,13 +42,15 @@
 #     field is read by a linear `=~` from the HEAD of the payload (everything before tool_input), and
 #     the one cut that makes that head sits a few hundred bytes in.
 
-# --- the ban, mirrored from kit/ops/lib/core.sh model_denied ------------------
-# DUPLICATED ON PURPOSE: sourcing core.sh would drag its whole env setup into every tool call. The
-# selftest asserts these two lists stay identical — if you edit one, edit both.
+# --- the ban: Haiku only (speed.md § 2b) -------------------------------------
+# NOT a copy of kit/ops/lib/core.sh model_denied any more, and on purpose. That list is ROUTING's and
+# still holds Fable AND Haiku (POLARIS never picks either); this one is the SESSION guard's, and the
+# owner lifted Fable here on 2026-11-09. Never source core.sh: it would drag its whole env setup into
+# every tool call.
 mg_denied() {
   case "${1:-}" in
     '') return 1;;
-    *fable*|*Fable*|*FABLE*|*haiku*|*Haiku*|*HAIKU*) return 0;;
+    *haiku*|*Haiku*|*HAIKU*) return 0;;
   esac
   return 1
 }
@@ -211,7 +216,7 @@ case "$MG_EV" in
     [[ $MG_H =~ $mg_re ]] || exit 0
     MG_M="${BASH_REMATCH[1]}"
     mg_denied "$MG_M" || exit 0
-    printf '%s\n' "polaris: switching to '$MG_M' is FORBIDDEN (owner, 2026-09-15) — stay on Opus or Sonnet." >&2
+    printf '%s\n' "polaris: switching to '$MG_M' is FORBIDDEN (owner, 2026-09-15) — stay on Opus, Sonnet or Fable." >&2
     exit 2;;
 
   # --- PostToolUse (Agent): the last line of defence — the result is flagged -
@@ -384,5 +389,5 @@ mg_denied "$MG_M" || exit 0                    # an allowed model → allow, sil
 # --- block -------------------------------------------------------------------
 # One line, plain, actionable. It repeats on every tool call by design: the session cannot proceed
 # until the human switches, and a single missable warning is what let this cost 87% of a weekly limit.
-printf '%s\n' "polaris: this session is running '$MG_M', which is FORBIDDEN (owner, 2026-09-15). Fable bills a separate weekly limit and Haiku is too weak for this work — neither may be used in any project. Switch with /model (Opus or Sonnet), then retry. Nothing has been read, written or run." >&2
+printf '%s\n' "polaris: this session is running '$MG_M', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run." >&2
 exit 2
