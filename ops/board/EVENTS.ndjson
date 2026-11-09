@@ -1012,3 +1012,4 @@
 {"ts":1794264530,"ev":"new","id":"T-271","who":"Owner@DESKTOP","note":"ready","pts":2}
 {"ts":1794264531,"ev":"new","id":"T-272","who":"Owner@DESKTOP","note":"ready","pts":2}
 {"ts":1794264534,"ev":"kickback","id":"T-270","who":"Owner@DESKTOP","note":"update-only machines would keep blocking Fable: the guard refresh and the one-time restore must also run from install.sh under an updater (ops/contracts/speed.md § 2b v1.3); the restore becomes the private helper _restore_fable_once"}
+{"ts":1794264538,"ev":"grant","id":"T-270","who":"Owner@DESKTOP","note":"kit/ops/install.sh"}
