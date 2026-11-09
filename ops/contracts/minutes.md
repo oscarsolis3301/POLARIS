@@ -350,6 +350,39 @@ rebuilds in one pass, one update covers the PC and commits itself, `begin` and `
 never blocks the end of a run. The ritual after it (tag, publish, dogfood, `update --all`) is the
 conductor's.
 
+## 11. Riders from the 6.13.0 live proof and the carve (conductor, 2026-11-09)
+Three small additions, each inside files its task already owns or was given here.
+### 11.1 T-275 (F) — heal's model line follows the sizing (`kit/ops/lib/admin.sh`, golden `heal-model-line`)
+Why: once `route` names a model and an effort (§ 8), a project CLAUDE.md that still says "never name a
+model" overrides CONDUCTOR.md there and silently switches the sizing off.
+- ONE target line, `T`:
+  `- **Size every helper** — pass the model and effort \`route\` prints on each spawn; Haiku is blocked, and Fable runs only when the owner picks it.`
+- THREE source lines. Each is replaced by `T` when it is a whole line of the root CLAUDE.md (LF or CRLF,
+  its line ending kept, the first occurrence only, every other byte unchanged; a file holding none of
+  them is not written):
+  - A `- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.`
+  - B `- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.`
+  - C `- **Never name a model** — every spawn inherits the session.`
+- The block heal appends on a first heal prints `T` where it printed C.
+- The note, once per heal that changed the file:
+  `healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)`
+- T-275 owns and re-pins `ops/tests/heal-model-line.cmd` and `.expected`: A, B and C each become `T` · a
+  hand-edited line is left alone · a second heal changes nothing.
+### 11.2 T-277 (D) — `finish` clears merged wave branches itself (`kit/ops/lib/qa.sh`)
+Where `cmd_finish` printed the caveat `<branch> is merged but the branch is still here — git branch -d <branch>`,
+it now deletes that branch (`git -C "$PRIMARY" branch -d <branch>`, which refuses an unmerged one) and
+prints `   cleaned: <branch> (merged)`. Only when the delete fails does today's caveat print, unchanged.
+The `self-land-finish` golden asserts that no `integrate/*` branch is left after `finish`.
+INTEGRATOR.md § 4 loses its by-hand `git branch -d` step.
+### 11.3 T-279 (G) — three wording fixes in `kit/ops/roles/TIDY.md` (now one of T-279's files; ≤ 90 lines, same four headings)
+- Step 8, the layout record: APPEND to `ops/LAYOUT.tsv`; create it, with exactly that first line, only
+  when it is missing — never overwrite it (the 6.13.0 proof overwrote an existing keep row).
+- Steps 5–6: say once that `.polaris/hops-plan.tsv`, named by that relative path from the task
+  worktree, is the primary's file.
+- Report: the guides figure is `<guided>/<busy folders>` before and after, each with its own denominator.
+No command in the role file changes.
+
 ## Changelog
 - v1 2026-11-09: created for the Phase 1 tasks of plans/minutes.md.
 - v2 2026-11-09: § 3–§ 10 added for Phase 2 (sprint 22, plan minutes, 6.14.0).
+- v2.1 2026-11-09 (conductor): § 11 — three riders (heal's model line, finish clears merged wave branches, TIDY.md wording).
