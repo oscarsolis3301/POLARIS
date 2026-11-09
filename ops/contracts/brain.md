@@ -124,3 +124,14 @@ domain files; `prefs.md` names an indent row; `learned.md` carries its co-change
   gains seal's auto-refresh so a completed wave ends fresh — `cmd_done` touched `board-changed`
   AFTER seal's refresh, guaranteeing a stale warn; drill 7 asserts the real order. (c) pinned count
   phrasing "7 entries — 6 `.md` files + `.stamp`" reconciles MANUAL's 7-vs-6 contradiction.
+
+## v3 — the code map is one pass, every write is atomic (2026-11-09, plan minutes, 6.14.0)
+Full rules: `ops/contracts/minutes.md` § 4. `brain_code_map` keeps its line shapes (`## <dir>/`,
+`- files:`, `- purpose:`, `- symbols:`, `- hotspot:`) but is built from ONE `git ls-files -z`, ONE
+symbol grep over all tracked files and ONE `LC_ALL=C` awk. Ordering is pinned: folders in C byte
+order; top three extensions by count, ties by extension ascending; first twelve symbols in C byte
+order, unique. Every brain file is written to `<name>.tmp.$$` beside it and moved into place, so a
+reader never sees half a file. Golden `brain-codemap` pins the output on the practice shop.
+
+### Changelog
+- v3 2026-11-09: single-pass code map and atomic writes (plan minutes).

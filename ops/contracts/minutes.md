@@ -1,4 +1,4 @@
-# CONTRACT: minutes — proof runs where it is fast, and a release check proves bytes   (v1 — 2026-11-09)
+# CONTRACT: minutes — proof runs where it is fast, and a release check proves bytes   (v2 — 2026-11-09)
 Owned by the Planner. Builders code against this and never invent beyond it.
 Append-only once any dependent task is claimed: breaking changes = new `## v2` section + a migration task.
 
@@ -103,5 +103,253 @@ branch deleted) · red Linux job (rc 1, the log tail printed) · red goldens (rc
 fallback line; `PROOF_SELFTEST` stubs the self-test command) · `--await macos-latest` green and red ·
 `--await` with no state file · `--report`.
 
+## Phase 2 — the speed release, 6.14.0 (sprint 22, plan `minutes`)
+Every section below is one task. **Rules for all of them** (plans/minutes.md "Rules every builder…"):
+bash 3.2 (no `case` inside `$(...)`, no `${v,,}`, no `wait -n`, no arrays, no `mapfile`); one awk
+beats a loop, never fork per line or per item; tests fake HOME **and** USERPROFILE and never touch the
+real `~/.claude`; verify lines use `bash kit/ops/polaris …` (the installed `ops/` is 6.13.0 until the
+dogfood); never edit `kit/ops/polaris` or `kit/ops/lib/*.sh` in the primary while a suite runs.
+**Names.** In wave 2 only § 9 (G) adds public function names and only G re-pins
+`ops/tests/api-kit.expected`; § 6, § 7 and § 8 add `_private` names only and change NO markdown
+heading text in `kit/` (api-kit pins headings too). **Voice.** Every new user-facing line below is
+plain: no task IDs, and no "suite", "merge", "branch", "worktree", "seal" or "repo" unless the line
+already had the word.
+
+## 3. M — `observe.sh` becomes five modules, move-only (wave 1)
+### 3.1 What moves where (top-level functions, each with the comment block directly above it)
+| new file `kit/ops/lib/…` | functions, in this order |
+|---|---|
+| `drift.sh` | `pat_overlap` `rules_gate` `dep_ids` `dep_reaches` `cmd_drift` `cmd_rules` `surfaces_health` `cmd_surfaces` `surfaces_apply` |
+| `check.sh` | `scaffold_try` `scaffold_dirs` `harness_testdir` `harness_stack` `harness_write_python` `harness_write_node` `harness_baseline` `cmd_harness` `cmd_scaffold` `cmd_check` |
+| `route.sh` | `cmd_triage` `cmd_route` `depth_line_say` `uat_deferred_say` `cmd_depth` |
+| `qa.sh` | `cmd_qa` `cmd_finish` |
+| `observe.sh` keeps | `cmd_notify_gate` `status_brief` `cmd_status` `cmd_board_fm` `feat_tip_landed` `cruft_clear` `cmd_sweep` `cmd_doctor` `cmd_metrics` `metrics_depth_lines` `cmd_why` `cmd_dash` `find_claude` `find_claude_windows` `cmd_fleet` |
+
+Each new file opens with a 2–4 line `#` header naming what it holds and pointing here; nothing else is
+new. Bodies are untouched byte for byte; nothing executes at source time.
+### 3.2 The loader (`kit/ops/polaris`)
+The FULL-load list becomes, literally (words added on the existing lines — the entry gains no line):
+`core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg awake handover skills author`
+followed by the selftest words, unchanged. `_match|_rules|_guard` stays EXACTLY `core ownership`. Both
+lists stay LITERAL, never a glob. The header comment that counts modules ("source all 15 lib modules")
+says 19.
+### 3.3 The move proof — `tools/fnmove.sh` (this repo's own tool, new, never shipped)
+`bash tools/fnmove.sh <rev>:<path>… -- <path>…` — the left side is read with `git show`, the right
+side from disk. A **function** is a column-0 line matching `^[A-Za-z_][A-Za-z0-9_]*\(\) *\{`; its
+**body** runs from that line through the first later column-0 line that is exactly `}` — or is that
+line alone when it matches `; *\} *$` (a one-liner, e.g. `uat_deferred_say`). Comments above a
+function are not part of it. ONE `LC_ALL=C awk` per side emits `name<TAB>body` (newlines in the body
+written as the two characters `\n`), then `LC_ALL=C sort`, then the two sorted lists are compared.
+- equal → `fnmove: <n> functions, same names and bodies (list <first 7 of git hash-object of the sorted list>)`, rc 0
+- not equal → `fnmove: DIFFERS`, then one line per difference — `- <name>` (left only, or body
+  changed) and `+ <name>` (right only, or body changed) — sorted, rc 1.
+
+bash 3.2-safe; temp files only inside one `mktemp -d`, removed on exit.
+### 3.4 Golden `lib-census` (new, M's)
+Prints, for `kit/ops/lib/` `observe.sh drift.sh check.sh route.sh qa.sh` in that order, one line
+`<basename> <name>` per top-level function (the § 3.3 definition) whose name does not start with `_`,
+in file order. It pins which public function lives in which module from now on; a later task that adds
+a `_private` helper never moves it.
+### 3.5 What else moves with the code
+`ops/tests/api-kit.expected`: rows change file only (same row count, same names, re-sorted as the
+indexer sorts). `ops/tests/triage-lane.cmd` line 41 greps `kit/ops/lib/route.sh` instead of
+`observe.sh` (its .expected unchanged). `ops/contracts/module-layout.md` v9 is the placement authority.
+
+## 4. C — the knowledge base rebuilds in one pass (wave 1, `kit/ops/lib/knowledge.sh`)
+### 4.1 `brain_code_map` — same line shapes, one pass
+Header line unchanged. Then per folder: a blank line, `## <dir>/`, `- files: <n> (<ext> <ext> <ext>)`
+(no parenthesis when no file has an extension), `- purpose: <text>` (only when found),
+`- symbols: <names>` (only when any), `- hotspot: <path> — chain edits, never parallel-own (ops/MAP.md)`
+(only when MAP lists one). The root folder prints as `## ./`.
+- **Inputs:** ONE `git -C "$PRIMARY" ls-files -z`; ONE symbol grep over all of those files
+  (`xargs -0 grep -HIE` with today's pattern, run from `$PRIMARY`); ONE `LC_ALL=C` awk that reads the
+  file list, the grep output and the MAP hotspot list and prints every folder. Purposes still come
+  from `guide_purpose` (folder has a `CLAUDE.md`), then the first README heading — read only for
+  folders that have one, computed before the awk (one call per such folder, never per file).
+- **Ordering, pinned:** folders in C byte order; extensions: top three by count, ties by extension
+  ascending (C order); symbols: today's name rule (the sed chain), unique, C byte order, first twelve;
+  hotspot: the first MAP hotspot path directly in that folder, in MAP order.
+### 4.2 Atomic writes
+Every file the brain writes under `.polaris/brain/` goes to `<name>.tmp.$$` in the same folder, then
+`mv -f` onto `<name>`; a failed write removes the temp file and leaves the old file in place.
+### 4.3 Executable check — golden `brain-codemap`
+Hermetic scratch repo (fake HOME and USERPROFILE) built by `hops_fixture` from
+`kit/ops/lib/selftest/hops.sh` (sourced, read-only — the practice shop `hops-pass` uses), plus one
+folder with a `CLAUDE.md` guide, one with a `README.md`, one with two extensions tied and one with more
+than twelve symbols. It runs `bash "$KIT" brain --refresh` and prints `.polaris/brain/code-map.md`
+verbatim, then `brain files: <n>` (`*.md` count there) and `temp files left: <n>` (must be 0).
+The `brain` drill (`kit/ops/lib/selftest/brain.sh`) stays green, edited only where it pinned the old
+tie order. Targets (acceptance, timed by hand and noted): under 3 s on the shop, under 10 s here.
+
+## 5. F — one update covers the PC (wave 1, `kit/ops/lib/admin.sh`)
+### 5.1 Self-commit
+After `update` (typed) or `update --auto` applies a new version in a project, it commits when ALL hold:
+HEAD is on `<base>` (a branch, not detached); no merge, rebase, cherry-pick or revert in progress
+(`MERGE_HEAD`, `rebase-merge/`, `rebase-apply/`, `CHERRY_PICK_HEAD`, `REVERT_HEAD` in the git dir);
+`git diff --cached --quiet` was true BEFORE the update ran; `cfg publish` is not `pr`.
+- It stages exactly the paths the update changed that were clean before it (`git status --porcelain`
+  read once before and once after; a path dirty before is never staged — it is parked or left alone
+  exactly as today) and commits with subject `chore(polaris): POLARIS <old> → <new>`, no body, no
+  attribution. Never pushes. Nothing changed → no commit, no line.
+- On commit, the note `review the diff, then commit ops/ — nothing was committed for you` is replaced by
+  `committed for you: chore(polaris): POLARIS <old> → <new> — <k> files, not pushed`.
+- Any condition false → today's note, unchanged, then one note naming the first false condition:
+  `not committed: <reason>`, `<reason>` one of `not on <base>` · `a merge or rebase is in progress` ·
+  `something was already staged` · `publish: pr — the change goes through a pull request`.
+- `--auto`'s one pinned line is unchanged; its commit adds no line.
+### 5.2 Fan-out
+A typed `update` with none of `--auto`, `--all`, `--repo-only` ends — after its own output and its
+self-commit — by counting the machine registry's other projects (the `repos/*` entries `--all` walks,
+minus this one). `<n>` = 0 → nothing. Otherwise it starts `bash "$SELF" update --all` detached, the way
+`bg run` detaches (a background subshell, stdin from /dev/null, no nohup/setsid), appending to
+`<awake_home>/update-all.log` (`~/.claude/polaris/update-all.log` by default), and prints one note:
+`updating <n> other projects on this PC in the background — see <log>`. `POLARIS_UPDATE_NO_FANOUT=1`
+skips it silently (test seam). `--all` keeps its rules (quiet boards only, one line per project) and
+each project it updates self-commits by § 5.1. `--auto` never fans out.
+### 5.3 `speed` shows landing time
+From `EVENTS.ndjson`: the last 20 tasks (by `done` time) that have a `claim`, a `handoff` and a `done`.
+build = the last `handoff` ts before the `done` − the last `claim` ts before that handoff; built → done
+= `done` ts − that `handoff` ts. Median of each (sorted ascending, element `int((n-1)/2)`, zero-based),
+in whole minutes rounded to nearest. Two lines, printed directly after the `Of your last …` line and
+before any `→` line: `build: median <m> min` and `built → done: median <m> min`. No such task →
+neither line. ONE awk.
+### 5.4 Homes and checks
+`ops/contracts/auto-update.md` v4 restates § 5.1–5.2. No new CONVENTIONS key. Drill `autoupdate`
+(`kit/ops/lib/selftest/remote.sh`) gains: self-commit on base (one commit, that subject, clean tree
+after); refused on a feature branch, with staged work, and under `publish: pr` (the `not committed:`
+note, no new commit); the fan-out line with a 2-entry fake registry and the launched command stubbed;
+`--auto` never fans out. Golden `speed-report` re-pinned for the two lines (a fixture EVENTS log with
+known times). `install-update` stays green (re-pinned only if its fixture's update now commits).
+
+## 6. A — goldens run side by side (wave 2, `kit/ops/lib/check.sh`, `tools/proof.sh`)
+- `check [--only <glob>] [--update] [--jobs <N>]`. N: the `--jobs` value, else `POLARIS_CHECK_JOBS`,
+  else cores (first non-empty of `getconf _NPROCESSORS_ONLN`, `nproc`, `sysctl -n hw.ncpu`, else 4);
+  capped at 12, floored at 1. Not a number → `check: --jobs takes a number` via `die`.
+- `--update`, N = 1, or one selected golden → today's serial loop, byte for byte, no new line.
+- Otherwise N workers, each a background subshell running its share one after another. Shares are
+  dealt longest-first from `.polaris/check-times` (`<name> <seconds>` per line; unknown = 20) by ONE
+  awk call (round-robin over the descending list). Then `wait` for all — no `wait -n`, no arrays.
+- Each golden's stdout and rc go to files in one `mktemp -d`; after `wait`, results print in today's
+  order with today's exact lines, and the closing summary and rc are today's.
+- A golden red beside others is re-run once alone (after all workers end) before it counts. Green
+  alone → it counts green, and directly after its result line comes:
+  `   note: <name> passed alone but not beside others — it shares state with another golden`
+- `.polaris/check-times` is rewritten after every run, parallel or serial, for each golden that ran.
+- `tools/proof.sh` § 2.1 step 3's default becomes ONE `bash kit/ops/polaris check` call, its output
+  read for the green/red names exactly as the per-name loop's was; `PROOF_GOLDENS` stays as the seam.
+- Golden `check-parallel`: scratch repo, six tiny goldens (one red, one with a `.rc`, two that append
+  start/end epoch times to a log and sleep 1 s); `--jobs 3` and `--jobs 1` print identical output
+  (`same output: yes`); the logged intervals overlap under 3 (`overlap at 3: yes`) and never under 1
+  (`overlap at 1: no`); a seventh golden, red only while another is running, shows the note line.
+  The help text for `--jobs` is G's (§ 9.4).
+
+## 7. D — the end of a run never stalls or pays twice (wave 2)
+- **Housekeeping is advice.** In `cmd_drift` the two doc-overflow findings become notes, same
+  thresholds, never counted, exactly like `advisory: MAP STALE:`:
+  `   advisory: MAP: <n> delta lines — fold them into the sections (EVOLVE target)` and
+  `   advisory: LEARNED: <n> bullets — prune to ≤5 carry-overs (EVOLVE target)`.
+  They never turn `drift --strict`, `qa` or `finish` red and never withhold `.polaris/suite-stamp`.
+  Golden `qa-stamp` is re-pinned (its two hard-gate cases become green with the advisory line).
+- **Verify once.** A green `verify` writes `.polaris/verify-stamp/<ID>` (under the PRIMARY's
+  `.polaris/`) = the worktree's HEAD sha. `handoff` skips re-running the verify COMMANDS when that stamp
+  equals HEAD and `git status --porcelain` in the worktree is empty, printing
+  `verify: proven at <sha7> — not re-run`; ownership, rules, surfaces and freshness gates still run.
+  `run-verify <ID>` skips when `git rev-parse HEAD^{tree}` equals `git rev-parse feat/<ID>^{tree}`,
+  printing `run-verify: same tree the builder proved — not re-run` (rc 0).
+- **A self-landed lane ends clean.** Golden `self-land-finish`: scratch repo, `landing: self`,
+  claim → edit → handoff → `finish` exits 0 with no manual `sweep`. Fix whatever makes it red.
+- **The route drill, carried for § 8.** `kit/ops/lib/selftest/policy.sh`'s "ROUTE QUIET FAIL" check
+  becomes: `route --points 5 --risk normal` with no knobs prints exactly 3 lines (tier, model, effort),
+  message `ROUTE NOTES FAIL (the default route prints the tier, then model, then effort)`. D owns that
+  file this wave; § 8 never touches it; both land in the same wave.
+- **INTEGRATOR.md:** section 3 no longer tells anyone to type `git checkout -b` (`land` creates the
+  wave branch); every wait says `bg wait --max 120`; the wave gate is the tasks' verify lines, and the
+  full proof (`bg run` of CONVENTIONS `test:`) runs in the background after the seal and never blocks
+  the next wave; a red background proof becomes a fix task before `finish`. No heading text changes.
+
+## 8. E — helpers are sized by the kit (wave 2)
+- `route` line 1 unchanged. Then, unless dropped, always `   model: <name>` then `   effort: <level>`,
+  then the existing REFUSED / role notes in today's order.
+- **Defaults in code** (`route.sh`, a `_private` helper): cheap → `sonnet` / `low`; mid → `opus` /
+  `medium`; strong → `opus` / `high`. `model_<tier>` (existing keys) and `effort_<tier>` (new keys) in
+  CONVENTIONS override; the value `inherit` drops that note. A task's literal `model:` still wins for the
+  model note. `model_denied` is untouched: a forbidden name is never printed — the REFUSED note runs as
+  today and the model note is dropped (never swapped for the default). Defaults never name Fable or
+  Haiku. `model_for_tier` (core.sh) is not edited; `fleet` is unchanged.
+- **Effort clamp.** When `CLAUDE_CODE_SESSION_ID` is set and
+  `$HOME/.claude/polaris/model-state/$CLAUDE_CODE_SESSION_ID.effort` holds a known level, the effort
+  note is the lower of the two in `low < medium < high < xhigh < max`. An unknown value is ignored.
+- **KEYS.tsv:** rows `effort_strong`, `effort_mid`, `effort_cheap` (since `6.14.0`, defaults `high`,
+  `medium`, `low`); the three `model_*` rows' default column becomes `opus`, `opus`, `sonnet`, with
+  plain cost text. Goldens `route-tier` and `keys-drift` re-pinned; `route-tier` fakes HOME and
+  USERPROFILE and unsets `CLAUDE_CODE_SESSION_ID` except in its clamp case.
+- **CONDUCTOR.md:** every spawn passes route's two notes as the spawn's `model` and `effort` (a dropped
+  note → that parameter omitted). A kicked-back task is retried one effort level higher (cap `max`).
+  EVOLVE is spawned only when the run had a kickback, a blocked task, a red proof or more than five
+  Learned bullets; otherwise one line: `EVOLVE skipped — nothing to learn from this run`.
+- **PLANNER.md (kit):** verify lines name the narrowest proof; `doctor --fast` only for tasks that change
+  the CLI entry or its lib (`kit/ops/polaris`, `kit/ops/lib/` here); never a check `handoff` already runs.
+- **EVOLVE.md:** states the skip rule in one sentence.
+- **PROTOCOL.md:** § MODEL ROUTING states the defaults and the two notes; § LONG COMMANDS says
+  `bg wait --max 120`. `plain-voice` stays green. No heading text changes.
+- `ops/contracts/model-routing.md` v4 restates this section. The help text for the notes is G's (§ 9.4).
+
+## 9. G — one call in, one call out (wave 2, new `kit/ops/lib/flow.sh`)
+### 9.1 `polaris begin <draft.md>` — `cmd_begin`
+`cmd_new <draft>` (output printed as is) → the new ID read from it → `cmd_triage <ID>` → line 1 must be
+`solo`; otherwise print triage's whole answer, then
+`begin: <ID> is a <lane> lane, not solo — it waits in ready/ for the conductor` and exit 3 (the task
+stays in ready/). Then `cmd_claim <ID>` → `cmd_pack <ID>`. Any step's failure exits with its rc.
+### 9.2 `polaris wrap [<ID>]` — `cmd_wrap`
+From the task's worktree (the ID defaults as `handoff`'s does): `cmd_handoff <ID>` → when
+`cfg landing` is `integrator` and the task triages `solo`, `land --express <ID>` run from the primary →
+`cmd_next`. When next's line 1 is `finish`, run `cmd_finish` and exit with its code; otherwise print
+next's answer and exit 0. Both only call existing commands in order; no gate changes.
+### 9.3 Wiring
+Loader: `flow` after `author` (`… skills author flow`, then the selftest words). Dispatch arms `begin)`
+and `wrap)` beside `new)`. `kit/ops/polaris` stays under 500 lines. SOLO.md uses `begin` and `wrap`;
+BUILDER.md drops the separate `verify` before `handoff` (handoff runs it). api-kit gains the rows for
+`cmd_begin` and `cmd_wrap` (and for any heading G changes); `cli-help-parity` adds `begin` and `wrap`
+to its list (expected `14`). `module-layout.md` v9 lists flow.sh.
+### 9.4 Help lines, byte-exact (G writes all of them)
+Directly after the `new <draft.md>…` block:
+```
+  begin <draft.md>               ONE CALL IN: new → triage → claim → pack. A task whose lane is
+                                 not solo stays in ready/ and triage's answer is printed (rc 3)
+  wrap [ID]                      ONE CALL OUT, from the task's worktree: handoff → land --express
+                                 (landing: integrator, solo task) → next; runs finish when next
+                                 says finish, and exits with its code
+```
+The `check` usage line becomes `  check [--only <glob>] [--update] [--jobs <N>]`, and after its last
+description line (the one ending `in ops/CONVENTIONS.md`) two lines follow:
+```
+                                 side by side: --jobs <N> goldens at once (default = this PC's
+                                 cores, at most 12; POLARIS_CHECK_JOBS overrides), same output as --jobs 1
+```
+The `route` block becomes:
+```
+  route [<ID> | --role <R> | --points <N> [--risk <R>]]
+                                 which MODEL TIER runs a piece of work — line 1 is always one
+                                 word: strong | mid | cheap (a task's model: frontmatter
+                                 overrides; unknown role → mid, routing never blocks work). Then
+                                 `   model: <name>` and `   effort: <level>` for the spawn (cheap
+                                 sonnet/low · mid opus/medium · strong opus/high; model_<tier> and
+                                 effort_<tier> in ops/CONVENTIONS.md override, inherit drops the
+                                 note). Read-only: the CONDUCTOR asks it before every spawn; fleet
+                                 rides the max tier over ready/
+```
+### 9.5 Golden `flow-solo`
+Scratch repo (fake HOME and USERPROFILE, `landing: integrator`): `begin <draft>` (a 1-point draft),
+then from the worktree `pack` printed an edit and `wrap` → the task is in `done/` and `finish` exited 0;
+a 5-point draft → rc 3, the `begin:` line, the task still in ready/.
+
+## 10. R — release 6.14.0 (wave 3, `kit/ops/VERSION`, `CHANGELOG.md`)
+`version: 6.14.0` and a plain-language CHANGELOG entry at the top, no task IDs: the goldens run side by
+side, a wave no longer waits on the full proof, helpers are sized to the task, the knowledge base
+rebuilds in one pass, one update covers the PC and commits itself, `begin` and `wrap`, housekeeping
+never blocks the end of a run. The ritual after it (tag, publish, dogfood, `update --all`) is the
+conductor's.
+
 ## Changelog
 - v1 2026-11-09: created for the Phase 1 tasks of plans/minutes.md.
+- v2 2026-11-09: § 3–§ 10 added for Phase 2 (sprint 22, plan minutes, 6.14.0).

@@ -126,3 +126,23 @@ legal name still gets its `   model:` line and its `--model` token.
 
 `ops/tests/route-tier.expected` is the executable authority on all of this and pins both directions
 (T-172). Never re-pin it back to a `   model: fable` line.
+
+## v4 — helpers are sized by the kit (2026-11-09, plan minutes, 6.14.0)
+Owner decision 2026-11-09: small mechanical work on Sonnet at low effort, normal tasks on Opus at
+medium, big or risky tasks plus planning and landing on Opus at high. Full rules:
+`ops/contracts/minutes.md` § 8. In short:
+- **Defaults in code** (an update never rewrites a project's config): cheap → `sonnet` / `low`;
+  mid → `opus` / `medium`; strong → `opus` / `high`.
+- `route` line 1 is unchanged; two notes now always follow: `   model: <name>` then
+  `   effort: <level>`. `model_<tier>` / `effort_<tier>` in CONVENTIONS override; the value `inherit`
+  drops that note. The effort note is clamped to the chat's own level when
+  `~/.claude/polaris/model-state/$CLAUDE_CODE_SESSION_ID.effort` exists.
+- **Note 1 — the ban stands.** `model_denied` (Fable, Haiku) is untouched: routing never names either.
+  A denied value drops the model note and prints the REFUSED note, as in v2. Fable stays the owner's to
+  pick for the chat itself.
+- **Note 2 — this repo.** `ops/CONVENTIONS.md` here already sets `model_strong: opus`,
+  `model_mid: opus`, `model_cheap: sonnet`; the RULES.tsv content rule on those keys stays as it is.
+- Supersedes v1's "a note follows ONLY when the knob is set" and v2's "no model unless mapped".
+
+### Changelog
+- v4 2026-11-09: defaults in code, the effort note and its keys, the clamp (plan minutes).

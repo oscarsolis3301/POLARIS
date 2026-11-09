@@ -366,3 +366,27 @@ executes at source time, bash 3.2 only — no `mapfile`, no associative arrays, 
   between `surfaces` and `builder`; the three inline visual blocks move out of builder.sh
   (T-166..T-169, plan gallery-and-bar).
 - v6 2026-11-06: lib/author.sh (`cmd_new`, ≤ 250 lines) joins the census; loader `+author` after `skills` (T-262; plan tidy-hardening).
+
+## v9 — observe.sh splits in five, flow.sh joins (2026-11-09, plan minutes, 6.14.0)
+(v7 and v8 above are older sections numbered out of order; this is the next free number.)
+
+`kit/ops/lib/observe.sh` (3,267 lines) splits, move-only, into five modules — the exact function lists
+are `ops/contracts/minutes.md` § 3.1: **`drift.sh`** (drift, rules, surfaces health), **`check.sh`**
+(goldens, scaffold, harness), **`route.sh`** (triage, route, depth), **`qa.sh`** (qa, finish), and
+**`observe.sh`** keeps status, sweep, doctor, metrics, why, dash and fleet. In wave 2 of the same plan,
+**`flow.sh`** (new) holds `cmd_begin` and `cmd_wrap` (§ 9). THIS contract stays the authority on where
+code lives and the loader's shape.
+
+**The loader, v9:** the FULL-load `_mods` list is, literally,
+`core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg awake handover skills author flow`
+followed by the selftest words, unchanged. (`flow` is added by its own task, in the SAME commit as
+`flow.sh` — a loader naming a missing module kills every CLI call.) `_match|_rules|_guard` stays
+EXACTLY `core ownership`. Both lists stay LITERAL, never a glob.
+
+**Placement from now on:** new drift/rules/surfaces-health code → drift.sh; check/scaffold/harness →
+check.sh; triage/route/depth → route.sh; qa/finish → qa.sh. Golden `lib-census` pins the public
+functions of those five files (minutes.md § 3.4). Entry `kit/ops/polaris` < 500 lines stands.
+
+### Changelog
+- v9 2026-11-09: observe.sh → observe/drift/check/route/qa (move-only, proven by tools/fnmove.sh);
+  flow.sh joins; loader gains `drift check route qa` after `observe` and `flow` after `author`.

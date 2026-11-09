@@ -239,3 +239,19 @@ Interface: `ops/contracts/save-hops.md` § 0.5, § 3.1, § 5. What changes here:
 
 ### Changelog
 - v3 2026-11-05: heal is the update path's verdict writer; the `--auto` suffix and the explicit `▶ NEXT` hint (T-238 · T-242, plan save-hops).
+
+## v4 — an update commits itself and fans out (2026-11-09, plan minutes, 6.14.0)
+Full rules and pinned lines: `ops/contracts/minutes.md` § 5.1–5.2.
+- **Self-commit.** After `update` or `update --auto` applies, it commits exactly the paths it changed
+  that were clean before it, subject `chore(polaris): POLARIS <old> → <new>`, never pushed — only when
+  HEAD is on `<base>`, no merge/rebase/cherry-pick/revert is in progress, nothing was staged before,
+  and `publish:` is not `pr`. Otherwise today's "nothing was committed for you" note plus one
+  `not committed: <reason>` note. Files dirty before the update never enter the commit.
+- **Fan-out.** A typed `update` (none of `--auto`, `--all`, `--repo-only`) ends by starting
+  `update --all` detached, logging to `~/.claude/polaris/update-all.log`, with one note:
+  `updating <n> other projects on this PC in the background — see <log>`. `--all` keeps its rules and
+  each project it updates self-commits. `--auto` never fans out. `POLARIS_UPDATE_NO_FANOUT=1` is the
+  test seam. No new CONVENTIONS key.
+
+### Changelog
+- v4 2026-11-09: self-commit and fan-out (plan minutes).
