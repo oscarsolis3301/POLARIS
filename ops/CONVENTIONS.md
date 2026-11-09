@@ -14,6 +14,12 @@ autolaunch: wt              # Planner opens a Builder pane per ready task in Win
 # model_strong: fable         # owner decision 2026-08-02: fable carries planning, integration and every hard task (5pts or risk≠normal)
 # model_mid: opus             # opus carries ordinary execution — the everyday builder tier (2-3pts)
 # model_cheap: sonnet         # sonnet carries the cheap tier (1pt). NEVER haiku — 2026-08-02; now enforced in kit code, not prose
+# --- model_* BACK 2026-11-09 (owner, plans/minutes.md): helpers are SIZED TO THE TASK, and none may
+# inherit a chat the owner chose to run on another model. `route` names these; the conductor passes
+# them on every spawn. Effort follows the same tiers (low / medium / high) by hand until 6.14.0.
+model_strong: opus          # big or risky tasks, planning and landing
+model_mid: opus             # ordinary 2-3 point tasks
+model_cheap: sonnet         # small mechanical 1-point tasks
 stale_hours: 1              # sweep warns on active locks older than this — build avg 0.2h (n=28); an hour-idle lock is a dead lane, not a slow one (sprint 4: 2 subagent stalls + 1 API-error death)
 test: bash kit/ops/polaris doctor --selftest --parallel 3
 test_fast: bash kit/ops/polaris doctor --fast

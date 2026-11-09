@@ -104,6 +104,22 @@ ROUTING still never names Fable or Haiku. Everything in § 2 not named here is u
   - machine-armed: the restore runs once, then the list is untouched.
   - the new heal-model-line golden: old line rewritten; a hand-edited line left alone; a second heal is a no-op.
 
+- **An update re-arms what is already armed (v1.3).** The OLD updater's code runs during an update, so
+  the only new code is `install.sh`. In its updater path only (`POLARIS_SHA` is set), after the kit
+  files are copied and before `heal` — silent, fail-open, registering nothing new:
+  1. `$HOME/.claude/polaris/model-guard.sh` exists and differs from `$KIT/ops/hooks/model-guard.sh` →
+     copy the new one over it and `chmod +x`. No guard file → nothing is created.
+  2. `$HOME/.claude/settings.json` contains `model-guard.sh` (the guard is registered), a python is
+     available and `$KIT/ops/bootstrap.py` exists → run
+     `"$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import bootstrap; bootstrap.restore_fable_once()' "$KIT/ops"`.
+  `bootstrap.restore_fable_once()` is the ONE home of the one-time restore above: module-level, no
+  arguments, returns True when it changed the list, never raises, prints nothing; `merge_model_guard`
+  calls it and prints its ✅ line on True. `bootstrap.py` stays import-safe.
+  Executable check: golden `update-arms` (fake HOME and USERPROFILE): old guard + registered + a list
+  without Fable → guard bytes equal the kit's, list gains `fable` once, marker written · a second run
+  changes nothing · no guard file → nothing created · guard present but unregistered → script
+  refreshed, list untouched · no `POLARIS_SHA` → nothing happens. Install output gains no line.
+
 ## 3. drift and check (T-177)
 - **Every existing `drift` finding line stays byte-identical**, in the same section order, still
   printed as `⚠ [<n>] <text>`; so does the clean line. Pinned today, among the rest:
@@ -194,3 +210,4 @@ Headings, exactly: `## Verdict` · `## Latency` · `## Probes` · `## Zero-shot 
 - v1 2026-09-24: created for T-173..T-183 (plan `v4-fast`).
 - v1.1 2026-09-24 (conductor, during T-177): § 3's orphan-branch line changed from a CRUFT-class finding to an advisory, with the exact text above. Nothing else changed.
 - v1.2 2026-11-09 (conductor, owner decision): § 2b — Fable is the owner's to pick again; Haiku and the routing layer unchanged (T-270).
+- v1.3 2026-11-09 (conductor): § 2b — an update re-arms an armed guard and runs the one-time restore, from install.sh (T-270).
