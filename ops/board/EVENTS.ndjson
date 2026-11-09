@@ -1009,3 +1009,5 @@
 {"ts":1794259582,"ev":"new","id":"T-270","who":"Owner@DESKTOP","note":"ready","pts":5}
 {"ts":1794259638,"ev":"claim","id":"T-270","who":"Owner@DESKTOP","note":"","pts":5}
 {"ts":1794261238,"ev":"handoff","id":"T-270","who":"Owner@DESKTOP","note":""}
+{"ts":1794264530,"ev":"new","id":"T-271","who":"Owner@DESKTOP","note":"ready","pts":2}
+{"ts":1794264531,"ev":"new","id":"T-272","who":"Owner@DESKTOP","note":"ready","pts":2}
