@@ -44,6 +44,8 @@ tasks this way, and `ops/MANUAL.md` keeps the by-hand steps for tools that canno
   lines on its own.
 - A task written from the task template no longer picks up the template's own guidance notes as if
   they were its files or its contract.
+- Fable is yours to pick again in any project. It is back in the model picker, and a session you
+  start on it is never stopped. POLARIS itself still never picks Fable, and Haiku stays blocked.
 
 Good to know: before every release, the whole pass is now rehearsed on that practice shop on
 Windows, macOS and Linux, so these fixes stay fixed. Tasks already on your board need nothing:

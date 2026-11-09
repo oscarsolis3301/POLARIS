@@ -178,7 +178,7 @@ that must stay put (generated, vendored, guarded, test-mapped, kept, or public) 
 - [ ] No new public name in index.py; the entry's only change is the hops help line; cli-help-parity stays 12
 
 ## T-265 — "The tidy role says only what works: whole-feature proposals, a task filed by one command, guides from the file list, nobody stranded"
-points 3 · risk normal · landed 2555304 (2026-11-07) · claimed 2026-11-07
+points 3 · risk normal · landed 2555304 (2026-11-07) · claimed 2026-11-07 → done 2026-11-07
 files touched: kit/ops/roles/TIDY.md
 
 ### Why
@@ -202,7 +202,7 @@ worktree, and the suite run from the worktree. Still at most 90 lines, the same 
 - [ ] Entry and Report keep their substance; no POLARIS command is added to the guide template
 
 ## T-266 — "SOLO, the Planner and the manual file tasks with polaris new; EVOLVE retires stale map rows; the protocol states what the probe measured"
-points 3 · risk normal · landed 7f386f4 (2026-11-07) · claimed 2026-11-07
+points 3 · risk normal · landed 7f386f4 (2026-11-07) · claimed 2026-11-07 → done 2026-11-07
 files touched: kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/roles/EVOLVE.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md
 
 ### Why
@@ -223,7 +223,7 @@ what this sprint's probe measured — a measured yes may be relied on, anything 
 - [ ] No new heading line in any file (fenced `#` lines count); plain-voice green; kit/CLAUDE.md untouched
 
 ## T-267 — "The hops drill proves a whole pass on the practice shop, on every system the checks run on"
-points 3 · risk normal · landed 0e29d88 (2026-11-07) · claimed 2026-11-07
+points 3 · risk normal · landed 0e29d88 (2026-11-07) · claimed 2026-11-07 → done 2026-11-07
 files touched: kit/ops/lib/selftest/hops.sh
 
 ### Why
@@ -242,7 +242,7 @@ heading no longer repeats the folder name; and mid-pass, the files to fix are na
 - [ ] Each new case was seen to fail once by a deliberate break of the code it guards, and the break's diff was read before the green counted
 
 ## T-268 — "Release 6.13.0 - the tidy pass, hardened, and tasks filed in one command: version and changelog (LAST)"
-points 1 · risk normal · landed 22c4d17 (2026-11-07) · claimed 2026-11-07
+points 1 · risk normal · landed 22c4d17 (2026-11-07) · claimed 2026-11-07 → done 2026-11-07
 files touched: CHANGELOG.md, kit/ops/VERSION
 
 ### Why
@@ -265,3 +265,44 @@ A task filed straight from the task template kept the template's own guidance co
 - [ ] a copy of the real kit/ops/templates/TASK.md, untouched, yields no files_owned, surface, verify, approved or context_files items and an empty contract
 - [ ] a value with `#` inside it but not at its start (`title: Fix #12`) reads exactly as before
 - [ ] the new-task and api-kit goldens are byte-identical, and `bash kit/ops/polaris doctor --selftest --only fmlist` passes, run once by hand through `bg run`
+
+## T-270 — "Fable is the owner's to pick again in any project: the session guard and the installer stop blocking it, while routing still never picks it"
+points 5 · risk normal · landed 490915e (2026-11-09) · claimed 2026-11-09
+files touched: CHANGELOG.md, kit/ops/PROTOCOL.md, kit/ops/bootstrap.py, kit/ops/hooks/model-guard.sh, kit/ops/install.sh, kit/ops/lib/admin.sh, ops/tests/heal-model-line.cmd, ops/tests/heal-model-line.expected, ops/tests/machine-armed.cmd, ops/tests/machine-armed.expected, ops/tests/model-guard-v2.cmd, ops/tests/model-guard-v2.expected, ops/tests/update-arms.cmd, ops/tests/update-arms.expected
+
+### Why
+The owner lifted the Fable ban on 2026-11-09. Fable is theirs to pick again in any project: it shows in the model picker, a Fable session is never stopped, and an agent may name Fable when the owner asks. POLARIS's own routing still never picks Fable by itself, and Haiku stays blocked exactly as before. Today three machine-wide layers still block it. The session guard refuses every Fable session and switch. The installer strips Fable from the model picker on every install and update, so a hand fix lasts only until the next install anywhere. And every project's appended efficiency note tells agents "Fable and Haiku are forbidden outright". This change lifts all three and leaves routing untouched.
+
+### Acceptance
+- [ ] model-guard.sh refuses Haiku only, on every event. A Fable session, a switch to Fable, a spawn requesting fable and a subagent that ran on Fable pass silently. claude-code-guide is still refused. Every message is exactly the text in ops/contracts/speed.md § 2b.
+- [ ] bootstrap.py's merge_model_guard never creates, strips or adds to availableModels again, except the ONE marked restore in § 2b. register=False writes neither the list nor the marker.
+- [ ] Heal rewrites exactly the old model line in a root CLAUDE.md, once. A file without it is never written, and a second heal changes nothing.
+- [ ] PROTOCOL.md § MODEL ROUTING states the split: routing never picks Fable or Haiku, and a Fable session is the owner's choice. The 6.13.0 CHANGELOG entry gains one plain-language bullet saying Fable is yours to pick again in any project, with no task IDs.
+- [ ] route-tier and api-kit are byte-identical (routing and the public API do not move), and `bash kit/ops/polaris doctor --selftest --only hops` still passes, run once by hand through `bg run`.
+
+## T-271 — "The release check proves the published kit is this commit's kit, byte for byte, then runs the quick check"
+points 2 · risk normal · landed 8effd32 (2026-11-09) · claimed 2026-11-09
+files touched: kit/ops/pack.py, ops/tests/dogfood-bytes.cmd, ops/tests/dogfood-bytes.expected
+
+### Why
+Every release ended by re-running the whole self-test one drill at a time on this machine, 37 minutes, after CI had already run that same test on Windows, macOS and Linux. And nothing ever checked that the kit people download is the code that was proven. The release check now compares the published kit with this commit's kit byte for byte, installs it, and runs the 20-second health check: about a minute, and a stronger promise than before. The old full run stays available on request.
+
+### Acceptance
+- [ ] the packer builds its file list through one private helper and, for the same commit, writes a zip with the same sha256 as before the change
+- [ ] the release check refuses, before installing anything, a kit that differs from this commit's in any file, and names the first file that differs
+- [ ] the two stamped lines of the version file never fail the comparison
+- [ ] a matching kit installs and passes the quick check, and the closing line is the contract's, byte for byte
+- [ ] the `--full` form behaves exactly as the release check did before
+
+## T-272 — "One command proves a commit: CI judges the self-test on Linux while the goldens run here side by side"
+points 2 · risk normal · landed b09b2c6 (2026-11-09) · claimed 2026-11-09
+files touched: ops/tests/proof-ci.cmd, ops/tests/proof-ci.expected, tools/proof.sh
+
+### Why
+The full suite blocked every wave for about 50 minutes on this machine, yet the very same self-test takes under 3 minutes on CI's Linux runner, and CI runs it one drill at a time, which is the stricter test. So the proof moves to where it is fast: one command starts (or finds) the CI run for a commit, runs all the goldens here twelve at a time while CI works, and answers green only when both are green. With no CI in reach it falls back to the self-test on this machine.
+
+### Acceptance
+- [ ] `bash tools/proof.sh` follows ops/contracts/minutes.md § 2.1 step by step and prints its lines byte for byte
+- [ ] with no CI in reach it says so in one line and runs the self-test here instead (§ 2.2)
+- [ ] `--await <job>` and `--report` behave as § 2.3 says
+- [ ] the golden covers every case of § 2.5 with a stub in place of `gh`, and never runs the real goldens

@@ -1,0 +1,12 @@
+case 1 · the kit as built: rc 0
+   bytes line: 1
+   quick-check line: 1
+   ✅ POLARIS <version> installed from the published release — same bytes CI proved, and the quick check passes.
+   ops/VERSION now = kit/ops/VERSION: yes
+case 2 · one byte changed in ops/install.sh: rc 1
+   ⛔ the published kit is not this commit's kit — polaris-v5/ops/install.sh differs. Repo untouched.
+      Dogfood from the commit the tag points at, or publish again.
+   install lines: 0
+   repo untouched: yes
+case 3 · one more commit outside kit/: rc 0
+   ✅ POLARIS <version> installed from the published release — same bytes CI proved, and the quick check passes.

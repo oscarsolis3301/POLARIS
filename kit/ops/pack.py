@@ -5,6 +5,7 @@
     python kit/ops/pack.py --bump minor  bump kit/ops/VERSION, then commit + re-run
     python kit/ops/pack.py --allow-dirty build from a dirty worktree (escape hatch)
     python kit/ops/pack.py --dogfood     install the PUBLISHED release into this repo (see below)
+    python kit/ops/pack.py --dogfood --full   ...proven by the full selftest, not the quick check
 
 Why this exists as Python and not `zip`:
   * Git Bash ships no `zip` binary, and PowerShell's Compress-Archive cannot store
@@ -28,6 +29,7 @@ otherwise poison the archive.
 
 Kit-repo tool only: ops/install.sh's copy list is explicit, so this never ships to a target.
 """
+import os
 import shutil
 import subprocess
 import sys
@@ -109,31 +111,15 @@ def bump(part):
     print("   CI builds and attaches the zip; installed kits see the bump on their next daily check.")
 
 
-def build(allow_dirty):
-    if git("status", "--porcelain") and not allow_dirty:
-        sys.exit(
-            "⛔ worktree is dirty — commit first, so the zip maps to a real commit.\n"
-            "   (escape hatch: python ops/pack.py --allow-dirty)"
-        )
+def _build_entries():
+    """Every file the kit ships, as `(entries, execs)` — entries: [(path, blob, is_exec)].
 
-    # `git ls-files` reads the INDEX, so an uncommitted new file is silently absent from the
-    # archive. Only --allow-dirty can reach this, and a zip quietly missing a file is worse
-    # than no zip — say so loudly.
-    untracked = git("ls-files", "--others", "--exclude-standard").splitlines()
-    if untracked:
-        print("⚠ NOT in the zip — untracked (git add them first):")
-        for path in untracked:
-            print(f"   ?? {path}")
-
+    ONE walk, shared by the packer and by --dogfood's byte check, so the bytes a release is
+    compared against are made by exactly the code that made the release.
+    """
     sha = git("rev-parse", "--short", "HEAD")
     # Commit date, not wall-clock: the same commit always packs to the same bytes.
     built = git("show", "-s", "--format=%cs", "HEAD")
-    stamp = tuple(int(n) for n in git("show", "-s", "--format=%cd",
-                                      "--date=format:%Y %m %d %H %M %S", "HEAD").split())
-
-    version = read_version(VERSION_FILE.read_text(encoding="utf-8"))
-    if not version:
-        sys.exit("no `version:` line in ops/VERSION")
 
     entries, execs = [], []
     for line in git("ls-files", "-s").splitlines():
@@ -171,6 +157,34 @@ def build(allow_dirty):
     # It must sit at the root, not under the prefix — that's the whole contract.
     entries.append(("__main__.py", (KIT / "ops" / "bootstrap.py").read_bytes()
                     .replace(b"\r\n", b"\n"), False))
+    return entries, execs
+
+
+def build(allow_dirty):
+    if git("status", "--porcelain") and not allow_dirty:
+        sys.exit(
+            "⛔ worktree is dirty — commit first, so the zip maps to a real commit.\n"
+            "   (escape hatch: python ops/pack.py --allow-dirty)"
+        )
+
+    # `git ls-files` reads the INDEX, so an uncommitted new file is silently absent from the
+    # archive. Only --allow-dirty can reach this, and a zip quietly missing a file is worse
+    # than no zip — say so loudly.
+    untracked = git("ls-files", "--others", "--exclude-standard").splitlines()
+    if untracked:
+        print("⚠ NOT in the zip — untracked (git add them first):")
+        for path in untracked:
+            print(f"   ?? {path}")
+
+    sha = git("rev-parse", "--short", "HEAD")
+    stamp = tuple(int(n) for n in git("show", "-s", "--format=%cd",
+                                      "--date=format:%Y %m %d %H %M %S", "HEAD").split())
+
+    version = read_version(VERSION_FILE.read_text(encoding="utf-8"))
+    if not version:
+        sys.exit("no `version:` line in ops/VERSION")
+
+    entries, execs = _build_entries()
 
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
         # Archive comment: `unzip -z polaris-v5.zip` prints this. It's the zero-setup fallback
@@ -207,7 +221,32 @@ def zip_version(path):
         return None
 
 
-def dogfood():
+def _stampless(blob):
+    """ops/VERSION minus its `commit: ` / `built: ` lines — the two that name the build, not the kit."""
+    return b"".join(line for line in blob.splitlines(keepends=True)
+                    if not line.startswith((b"commit: ", b"built: ")))
+
+
+def _first_difference(archive):
+    """The first member, sorted, where the downloaded zip and this commit's kit disagree; else None."""
+    with zipfile.ZipFile(archive) as z:
+        got = {info.filename: z.read(info) for info in z.infolist()}
+    entries, _ = _build_entries()
+    exp = {(path if path == "__main__.py" else f"{PREFIX}/{path}"): blob
+           for path, blob, _ in entries}
+    one_sided = sorted(set(got) ^ set(exp))
+    if one_sided:
+        return one_sided[0]
+    for name in sorted(exp):
+        a, b = got[name], exp[name]
+        if name == f"{PREFIX}/ops/VERSION":
+            a, b = _stampless(a), _stampless(b)
+        if a != b:
+            return name
+    return None
+
+
+def dogfood(full=False):
     """Install the PUBLISHED release into this repo, exactly as a stranger would.
 
     This repo self-hosts POLARIS: kit/ is the product, and the root ops/ is a real installation
@@ -226,6 +265,7 @@ def dogfood():
 
     text = VERSION_FILE.read_text(encoding="utf-8")
     want, url = read_version(text), read_field(text, "zip")
+    url = os.environ.get("POLARIS_DOGFOOD_ZIP") or url     # test seam: any url urllib opens
     if not url:
         sys.exit("no `zip:` line in kit/ops/VERSION — that is the published-release URL")
 
@@ -254,6 +294,14 @@ def dogfood():
                 f"   publish {want}, then re-run."
             )
 
+        # The version line says WHICH release; only the bytes say it is this commit's kit — the
+        # code CI proved. Checked before install, so a mismatch leaves the repo untouched.
+        print("   proving the bytes:  the published kit against this commit")
+        differs = _first_difference(archive)
+        if differs:
+            sys.exit(f"⛔ the published kit is not this commit's kit — {differs} differs. Repo untouched.\n"
+                     "   Dogfood from the commit the tag points at, or publish again.")
+
         print(f"   installing {got} into {REPO}")
         rc = subprocess.run([sys.executable, str(archive), str(REPO)]).returncode
         if rc != 0:
@@ -261,17 +309,28 @@ def dogfood():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
-    print("   proving the board still works:  ops/polaris doctor --selftest")
+    # The bytes are the ones CI already proved on three systems, so the default is the 20-second
+    # health check; --full keeps the old full selftest run, texts unchanged.
+    check = "--selftest" if full else "--fast"
+    print(f"   proving the board still works:  ops/polaris doctor {check}")
     sys.path.insert(0, str(KIT / "ops"))
+    sys.dont_write_bytecode = True                     # never leave a __pycache__ in kit/ops
     from bootstrap import find_bash                    # the Windows-safe resolver, not PATH's `bash`
     bash = find_bash()
     if not bash:
         sys.exit("⛔ no working bash — cannot run the selftest. Install Git for Windows (ships Git Bash).")
-    if subprocess.run([bash, "ops/polaris", "doctor", "--selftest"], cwd=str(REPO)).returncode != 0:
-        sys.exit(f"⛔ {got} installs, but FAILS its own selftest here. Do not ship it — this is\n"
+    if subprocess.run([bash, "ops/polaris", "doctor", check], cwd=str(REPO)).returncode != 0:
+        if full:
+            sys.exit(f"⛔ {got} installs, but FAILS its own selftest here. Do not ship it — this is\n"
+                     "   exactly the bug --dogfood exists to catch. Undo with: git checkout -- .")
+        sys.exit(f"⛔ {got} installs, but FAILS its quick check here. Do not ship it — this is\n"
                  "   exactly the bug --dogfood exists to catch. Undo with: git checkout -- .")
 
-    print(f"\n✅ POLARIS {got} installed from the published release, and it runs our board.")
+    if full:
+        print(f"\n✅ POLARIS {got} installed from the published release, and it runs our board.")
+    else:
+        print(f"\n✅ POLARIS {got} installed from the published release — "
+              "same bytes CI proved, and the quick check passes.")
     changed = git("status", "--porcelain")
     if changed:
         print("   review, then commit the refreshed instance:\n")
@@ -287,8 +346,10 @@ if __name__ == "__main__":
         bump(args[1] if len(args) > 1 else "")
     elif args and args[0] == "--allow-dirty":
         build(allow_dirty=True)
-    elif args and args[0] == "--dogfood":
+    elif args == ["--dogfood"]:
         dogfood()
+    elif args == ["--dogfood", "--full"]:
+        dogfood(full=True)
     elif args:
         sys.exit(__doc__)
     else:

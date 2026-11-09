@@ -3,12 +3,16 @@
 # forbidden model — and every fail-open path still exits 0. Each verdict is printed as its rc plus the
 # exact words the hook sent back, so a reworded refusal reds this golden as surely as a wrong rc.
 #
-# HERMETIC: HOME and POLARIS_AWAKE_HOME point into this run's mktemp -d, so the real
+# § 2b (owner, 2026-11-09): the ban is Haiku only. Fable is the owner's to pick, so every Fable case
+# below — the session, the fallback read, a spawn, a switch, a subagent, the caveat — passes silently,
+# and each has a Haiku twin that is still refused. claude-code-guide stays refused (it runs Haiku).
+#
+# HERMETIC: HOME, USERPROFILE and POLARIS_AWAKE_HOME point into this run's mktemp -d, so the real
 # ~/.claude/polaris/model-state is never read or written, and no real transcript is ever opened.
 H="$(pwd)/kit/ops/hooks/model-guard.sh"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
-export HOME="$FIX/home" POLARIS_AWAKE_HOME="$FIX/awake"
+export HOME="$FIX/home" USERPROFILE="$FIX/home" POLARIS_AWAKE_HOME="$FIX/awake"
 # The running session's own effort must never leak in: every effort case below sets CLAUDE_EFFORT on
 # its own call (E= on R), and the cases above the effort section run with none at all.
 unset CLAUDE_EFFORT
@@ -41,14 +45,14 @@ printf '%s\n' "$FABLE" > "$ST/s1"
 J s1 "$FIX/tx/s1.jsonl" PreToolUse Read "$READ"; R 'state says fable'
 rm -f "$ST/s1"
 
-echo '== the fallback: five transcript tail shapes, v1 last-model loop vs v2 grep =='
+echo '== the fallback: six transcript tail shapes, v1 last-model loop vs v2 grep =='
 # The v1 algorithm, kept here as the reference the grep must agree with: the LAST "model":" value in
-# the 64 KB tail, found by a pure-bash loop.
+# the 64 KB tail, found by a pure-bash loop — judged by today's ban, Haiku only (speed.md § 2b).
 v1() {
   local t m='' r
   t="$(tail -c 65536 "$1")"; r="$t"
   while :; do case "$r" in *'"model":"'*) r="${r#*\"model\":\"}"; m="${r%%\"*}";; *) break;; esac; done
-  case "$m" in *fable*|*Fable*|*FABLE*|*haiku*|*Haiku*|*HAIKU*) echo refuse;; *) echo allow;; esac
+  case "$m" in *haiku*|*Haiku*|*HAIKU*) echo refuse;; *) echo allow;; esac
 }
 PAD="$(head -c 61440 /dev/zero | tr '\0' 'x')"
 { user hi; line "$OPUS"; }                                    > "$FIX/tx/a.jsonl"
@@ -58,7 +62,8 @@ PAD="$(head -c 61440 /dev/zero | tr '\0' 'x')"
   printf '{"type":"assistant","message":{"model":"%s","content":[{"type":"tool_use","name":"Workflow","input":{"script":"%s"}}]}}\n' "$HAIKU" "$PAD"
 } > "$FIX/tx/d.jsonl"
 { line "$HAIKU"; for i in 1 2 3 4 5 6 7 8 9; do user "$PAD"; done; } > "$FIX/tx/e.jsonl"
-for s in a:plain-allowed b:switched-away-from-haiku c:switched-to-fable d:64KB-Workflow-line-model-60KB-back e:model-only-beyond-the-64KB-tail; do
+{ line "$FABLE"; user switched; line "$HAIKU"; }               > "$FIX/tx/f.jsonl"
+for s in a:plain-allowed b:switched-away-from-haiku c:switched-to-fable d:64KB-Workflow-line-model-60KB-back e:model-only-beyond-the-64KB-tail f:switched-from-fable-to-haiku; do
   f="$FIX/tx/${s%%:*}.jsonl"
   J nostate "$f" PreToolUse Read "$READ"; printf '%s' "$IJ" > "$FIX/in"; bash "$H" < "$FIX/in" 2>/dev/null; rc=$?
   case "$rc" in 0) v2=allow;; 2) v2=refuse;; *) v2="rc$rc";; esac
@@ -102,6 +107,9 @@ MS sw SessionStart ',"source":"startup","model":"claude-opus-5-5"'; R 'SessionSt
 printf '    state sw: %s\n' "$(cat "$ST/sw")"
 MS sw PostModelSwitch ',"from_model":"claude-opus-5-5","to_model":"claude-sonnet-4-6"'; R 'PostModelSwitch to sonnet'
 printf '    state sw: %s\n' "$(cat "$ST/sw")"
+MS sw PostModelSwitch ',"from_model":"claude-sonnet-4-6","to_model":"claude-fable-1"'; R 'PostModelSwitch to fable'
+printf '    state sw: %s\n' "$(cat "$ST/sw")"
+J sw "$FIX/tx/a.jsonl" PreToolUse Read "$READ"; R 'the next call, on fable'
 MS ss SessionStart ',"source":"startup"'; R 'SessionStart with no model field'
 MS 'a/b' SessionStart ',"model":"x-slash"'; R 'SessionStart, session_id with /'
 MS 'a\\b' PostModelSwitch ',"to_model":"x-backslash"'; R 'PostModelSwitch, session_id with \'
@@ -112,6 +120,8 @@ printf 'anything written outside model-state: %s\n' "$( (cd "$HOME" && find . -t
 echo '== PostToolUse on Agent: a forbidden resolved model is flagged, never blocked =='
 PT() { printf -v IJ '{"session_id":"s1","transcript_path":"%s","hook_event_name":"PostToolUse","tool_name":"%s","tool_input":{"prompt":"p"},"tool_response":%s}' "$FIX/tx/a.jsonl" "$1" "$2"; }
 PT Agent '{"status":"completed","resolvedModel":"claude-haiku-4-5","content":[{"type":"text","text":"done"}]}'; R 'resolvedModel haiku'
+PT Agent '{"status":"completed","resolvedModel":"claude-fable-1","content":[{"type":"text","text":"done"}]}'; R 'resolvedModel fable'
+PT Agent '{"status":"completed","usage":{"model":"claude-opus-5-5"},"meta":{"model":"claude-haiku-4-5"}}'; R 'no resolvedModel, last "model" is haiku'
 PT Agent '{"status":"completed","usage":{"model":"claude-opus-5-5"},"meta":{"model":"claude-fable-1"}}'; R 'no resolvedModel, last "model" is fable'
 PT Agent '{"status":"completed","resolvedModel":"claude-opus-5-5"}'; R 'resolvedModel opus'
 PT Agent '{"status":"completed","content":"no model anywhere"}'; R 'nothing found'

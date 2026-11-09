@@ -7,19 +7,33 @@ armed skills/i-have-adhd/SOURCE.md
 the style is the POLARIS one
 machine copy stays opt-in
 no machine settings.json written
+no Fable marker written
 a second run rewrites nothing
-== a fresh machine, armed: the key was missing, so it gets exactly the list ==
-  availableModels: ["opus", "sonnet", "haiku"]
+== a fresh machine, armed: no list is created, and the restore is marked done ==
+  availableModels: (no key: every model is offered)
   PreToolUse       model-guard x1 ['*'] · 0 other entries
   SessionStart     model-guard x1 ['-'] · 1 other entry
   PreModelSwitch   model-guard x1 ['-'] · 0 other entries
   PostModelSwitch  model-guard x1 ['-'] · 0 other entries
   PostToolUse      model-guard x1 ['Agent'] · 0 other entries
-== a human's settings: Fable leaves their list, everything else of theirs stays ==
-  availableModels: ["opus", "sonnet"]
+  fable-restored marker: written
+== a machine an older kit armed: --no-permissions writes nothing, a real arm gives Fable back ==
+  --no-permissions: settings.json byte-identical
+  fable-restored marker: none
+✅ availableModels:       ["opus", "sonnet", "haiku", "fable"] in <settings> — Fable restored
+  availableModels: ["opus", "sonnet", "haiku", "fable"]
   PreToolUse       model-guard x1 ['*'] · 1 other entry
   SessionStart     model-guard x1 ['-'] · 1 other entry
   PreModelSwitch   model-guard x1 ['-'] · 0 other entries
   PostModelSwitch  model-guard x1 ['-'] · 0 other entries
   PostToolUse      model-guard x1 ['Agent'] · 1 other entry
-re-armed: settings.json byte-identical — their Fable-free list kept as found
+  fable-restored marker: written
+== the owner takes Fable out again: every later arm leaves their list alone ==
+  re-armed: settings.json byte-identical — their Fable-free list kept as found
+== no marker yet and nothing to restore: each value is left as found, and the marker is written ==
+  ["opus", "claude-fable-5"] left as found · fable-restored marker: written
+  "opus"                     left as found · fable-restored marker: written
+  null                       left as found · fable-restored marker: written
+== unreadable settings: never rewritten, and no marker, so the restore waits for a readable file ==
+  settings.json: left as found
+  fable-restored marker: none

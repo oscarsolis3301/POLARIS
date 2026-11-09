@@ -234,8 +234,8 @@ The lookup ladder lives in § SAVE HOPS.
 >
 > This is not an aspiration. On 2026-09-15 a single day's work took a weekly model limit to 87% and
 > the main limit to 53%, on one project, in one chat — because routing sent a dozen agents to the
-> most expensive model available and nobody checked. Fable and Haiku are now forbidden outright
-> (`core.sh model_denied`); the habits below are the other half of the same lesson.
+> most expensive model available and nobody checked. Routing now never picks Fable or Haiku
+> (`core.sh model_denied`, § MODEL ROUTING); the habits below are the other half of the same lesson.
 
 - **`pack` first, everything else second.** Working a task? `ops/polaris pack <ID>` returns its
   contract, house style, owned-directory map, public API surface and gotchas in ONE call. Reading
@@ -270,8 +270,12 @@ The lookup ladder lives in § SAVE HOPS.
 - **Tier words become model names in exactly ONE place** — `model_strong:` / `model_mid:` /
   `model_cheap:` in `ops/CONVENTIONS.md`. Unset knobs change NOTHING: the CLI speaks tier words only
   and every command stays byte-identical to an unconfigured repo. Naming models is a per-repo
-  decision and never a kit default — THIS repo pins strong=fable · mid=opus · cheap=sonnet; yours
-  pins whatever it wants, or nothing.
+  decision and never a kit default — THIS repo pins none; yours pins whatever it wants (never Fable
+  or Haiku, below), or nothing.
+- **Fable and Haiku: routing never picks them, and only Haiku is blocked.** `route` never names
+  either, whatever a knob or a task's `model:` says (`core.sh model_denied`, a kit constant no repo
+  can switch off). A Fable session is the owner's choice: they pick it with `/model`, and the
+  machine's session guard lets it run. A Haiku session, switch or spawn is refused there.
 - **Consumers, so nobody re-derives it:** the CONDUCTOR runs `route` before EVERY spawn and passes
   line 2's name as the Agent-tool `model` param (no line 2 → omit the param, let the platform default
   run) · `fleet` injects `--model <name>` at the MAX tier over ready tasks, because panes claim

@@ -314,63 +314,85 @@ def merge_awake_hooks(archive, bash_path):
         out(f"   {line}")
 
 
-def merge_model_guard(archive, bash_path, register=True):
-    """Land model-guard.sh under ~/.claude/polaris/, register its five hooks, and set availableModels.
+def _restore_fable_once():
+    """The ONE-TIME Fable restore to availableModels. True when it changed the list; never raises.
 
-    Owner decision 2026-09-15, absolute: Fable and Haiku are forbidden in every project. core.sh's
-    model_denied stops POLARIS ever NAMING them; this stops a session that is already RUNNING one
-    from spending anything — it refuses every tool call with a reason until the human switches.
+    availableModels is the HUMAN's list. Kit code never adds to it, removes from it or creates it —
+    with ONE exception, run once per machine: older kits stripped Fable from it on every arm, so the
+    first run that finds no marker gives "fable" back to a LIST that has no Fable entry, then writes
+    the marker whatever the key held. Every later run leaves the value alone, so an owner who takes
+    Fable out again keeps it out. A missing key stays missing (no list means every model).
+    Unreadable settings are never rewritten and get no marker, so the restore waits for a file it
+    can read (merge_permissions reports that file on an install). Written only when the list
+    changed, through tmp + os.replace.
 
-    Machine-level for the same reason keep-awake is: the hooks live in ~/.claude/settings.json and no
-    repo setting can gate them. That is also the only way this reaches projects which have never had
-    POLARIS installed, which is where most of the Fable spend actually happened.
-
-    ops/contracts/speed.md § 2 puts the ban on six layers so it never rests on one mechanism. Two of
-    them are written here: layer 1, `availableModels` (below — the harness itself then offers no Fable),
-    and the script's own `install`, which registers PreToolUse "*" plus the four v2 events —
-    SessionStart, PreModelSwitch, PostModelSwitch and PostToolUse "Agent" — merged by script identity,
-    so this function and a hand-run `model-guard.sh install` can never disagree about what is armed.
-
-    The SCRIPT is copied even when register=False, so `--no-permissions` still leaves a machine one
-    command away from armed rather than empty-handed. register=False writes NOTHING to settings.json —
-    not the hooks and not availableModels: that flag is a promise about the file, and CI asserts it.
-
-    Fails OPEN with one ⚠ line, exactly like keep-awake: an install that died over a machine-level
-    extra is worse than the extra being missing, and the kit-code ban applies either way.
+    Private and argument-free on purpose (ops/contracts/speed.md § 2b v1.3): merge_model_guard calls
+    it on an install, and install.sh calls it on an UPDATE — where the OLD updater's code runs, so a
+    machine that only ever updates still gets Fable back. It prints nothing; callers report.
     """
-    if register:
-        # Layer 1 — availableModels, merged on every arm: a MISSING key gets exactly the list below; an
-        # existing LIST keeps every entry of the human's EXCEPT any Fable one (the ban is absolute, so
-        # that is the one value we do override); anything else — a string, a null — is left exactly as
-        # found. Haiku stays listed: the harness runs its own background calls on it, and the per-call
-        # guard refuses it for work. The only place kit code names a model outside a deny list, and it
-        # is the contract's list verbatim. Unreadable settings are never rewritten, same as
-        # merge_permissions; written only when the value changes, so a re-arm touches nothing.
+    changed = False
+    try:
         settings = os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
-        try:
-            data = {}
-            if os.path.isfile(settings):
-                with open(settings, encoding="utf-8") as fh:
-                    data = json.load(fh)
-            if not isinstance(data, dict):
-                raise ValueError("it is not a JSON object")
+        marker = os.path.join(os.path.expanduser("~"), ".claude", "polaris", "fable-restored")
+        if os.path.exists(marker):
+            return False
+        data = {}
+        if os.path.isfile(settings):
+            with open(settings, encoding="utf-8") as fh:
+                data = json.load(fh)
+        if isinstance(data, dict):
             have = data.get("availableModels")
-            want = have
-            if "availableModels" not in data:
-                want = ["opus", "sonnet", "haiku"]
-            elif isinstance(have, list):
-                want = [m for m in have if "fable" not in str(m).lower()]
-            if want != have:
-                data["availableModels"] = want
-                os.makedirs(os.path.dirname(settings), exist_ok=True)
+            if isinstance(have, list) and not any("fable" in str(m).lower() for m in have):
+                data["availableModels"] = have + ["fable"]
                 tmp = settings + ".polaris-tmp"
                 with open(tmp, "w", encoding="utf-8") as fh:
                     fh.write(json.dumps(data, indent=2) + "\n")
                 os.replace(tmp, settings)
-                out(f"✅ availableModels:       {json.dumps(want)} in {settings}")
-        except (OSError, ValueError) as exc:
-            print(f"⚠ availableModels not set in {settings} ({exc}) — Fable is still refused per call; "
-                  f'add "availableModels": ["opus", "sonnet", "haiku"] by hand')
+                changed = True
+            os.makedirs(os.path.dirname(marker), exist_ok=True)
+            with open(marker, "w", encoding="utf-8") as fh:
+                fh.write("Fable went back into availableModels once; POLARIS never touches "
+                         "that list again (ops/contracts/speed.md § 2b).\n")
+    except Exception:
+        pass
+    return changed
+
+
+def merge_model_guard(archive, bash_path, register=True):
+    """Land model-guard.sh under ~/.claude/polaris/, register its five hooks, and give Fable back once.
+
+    Owner decision 2026-09-15: Haiku is forbidden in every project. core.sh's model_denied stops
+    POLARIS ever NAMING it; this stops a session that is already RUNNING it from spending anything —
+    it refuses every tool call with a reason until the human switches. Fable was banned the same day
+    and is the owner's to pick again since 2026-11-09 (ops/contracts/speed.md § 2b): routing still
+    never names it, but a session the owner starts on it runs, and the guard leaves it alone.
+
+    Machine-level for the same reason keep-awake is: the hooks live in ~/.claude/settings.json and no
+    repo setting can gate them. That is also the only way this reaches projects which have never had
+    POLARIS installed.
+
+    Two things are written here: the ONE-TIME Fable restore to `availableModels`
+    (_restore_fable_once, which install.sh also runs on an update), and the script's own `install`,
+    which registers PreToolUse "*" plus the four v2 events — SessionStart, PreModelSwitch,
+    PostModelSwitch and PostToolUse "Agent" — merged by script identity, so this function and a
+    hand-run `model-guard.sh install` can never disagree about what is armed.
+
+    The SCRIPT is copied even when register=False, so `--no-permissions` still leaves a machine one
+    command away from armed rather than empty-handed. register=False writes NOTHING — not the hooks,
+    not availableModels and not the restore's marker: that flag is a promise, and CI asserts it.
+
+    Fails OPEN with one ⚠ line, exactly like keep-awake: an install that died over a machine-level
+    extra is worse than the extra being missing, and the kit-code ban applies either way.
+    """
+    if register and _restore_fable_once():
+        settings = os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
+        try:
+            with open(settings, encoding="utf-8") as fh:
+                have = json.load(fh).get("availableModels")
+            out(f"✅ availableModels:       {json.dumps(have)} in {settings}"
+                " — Fable restored")
+        except (OSError, ValueError, AttributeError):
+            pass
 
     dest_dir = os.path.join(os.path.expanduser("~"), ".claude", "polaris")
     hook = os.path.join(dest_dir, "model-guard.sh")
@@ -390,7 +412,7 @@ def merge_model_guard(archive, bash_path, register=True):
         if done.returncode != 0:
             raise OSError(f"model-guard.sh install exited {done.returncode}")
     except (KeyError, OSError, ValueError, subprocess.SubprocessError) as exc:
-        print(f"⚠ Fable/Haiku session guard not armed ({exc}) — arm it later: "
+        print(f"⚠ Haiku session guard not armed ({exc}) — arm it later: "
               f"bash ~/.claude/polaris/model-guard.sh install")
         return
     out(f"✅ model guard armed:     {hook}")
@@ -537,13 +559,13 @@ def arm_machine(archive, permissions=True):
             changed = True
     else:
         out("   --no-permissions: ~/.claude/settings.json not touched (keep-awake included).")
-        # The Fable/Haiku ban is the owner's absolute rule, but --no-permissions is a documented
-        # promise about THIS file that CI asserts, and quietly breaking it would be its own mistake.
-        # So: copy the script, skip the registration, and say plainly what is and is not in force.
-        # The kit-code half (core.sh model_denied) is unaffected — POLARIS still never NAMES either
-        # model here; only the guard against a session already running one is missing.
+        # The Haiku ban is the owner's rule, but --no-permissions is a documented promise about
+        # THIS file that CI asserts, and quietly breaking it would be its own mistake. So: copy the
+        # script, skip the registration (and the one-time Fable restore), and say plainly what is
+        # and is not in force. The kit-code half (core.sh model_denied) is unaffected — POLARIS
+        # still never NAMES Fable or Haiku here; only the guard against a Haiku session is missing.
         merge_model_guard(archive, find_bash(), register=False)
-        out("   ⚠ Fable/Haiku SESSION guard + availableModels not armed (both write settings.json). One command arms the guard:")
+        out("   ⚠ Haiku SESSION guard not armed (it writes settings.json). One command arms it:")
         out("     bash ~/.claude/polaris/model-guard.sh install")
         perm_snippet()
 
