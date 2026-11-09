@@ -21,7 +21,11 @@ model_strong: opus          # big or risky tasks, planning and landing
 model_mid: opus             # ordinary 2-3 point tasks
 model_cheap: sonnet         # small mechanical 1-point tasks
 stale_hours: 1              # sweep warns on active locks older than this — build avg 0.2h (n=28); an hour-idle lock is a dead lane, not a slow one (sprint 4: 2 subagent stalls + 1 API-error death)
-test: bash kit/ops/polaris doctor --selftest --parallel 3
+# test: was `bash kit/ops/polaris doctor --selftest --parallel 3` until 2026-11-09 (owner, plans/minutes.md):
+# the same self-test takes 166 s on CI's Linux runner and 13-37 min here, and CI runs it one drill at
+# a time, the stricter test. tools/proof.sh finds or starts the CI run for HEAD, runs every golden here
+# 12 at a time meanwhile, and is green only when both are. No CI in reach -> it runs the self-test here.
+test: bash tools/proof.sh
 test_fast: bash kit/ops/polaris doctor --fast
 # ^ TWO tiers, and the split is the whole point ("check what changed often, prove everything once",
 # ops/contracts/verification-tiering.md). MEASURED 2026-09-08 on this machine (Windows/Git Bash):
@@ -56,7 +60,7 @@ test_fast: bash kit/ops/polaris doctor --fast
 build: python kit/ops/pack.py --allow-dirty
 lint:                       # none — bash + python, no package manager
 typecheck:                  # none
-uat: bash kit/ops/polaris check
+# uat: was `bash kit/ops/polaris check` until 2026-11-09 — the goldens now run inside test: (tools/proof.sh), side by side
 # ^ golden-output acceptance (ops/tests/<name>.cmd vs <name>.expected). Rides the EXISTING uat:
 # slot that `qa` already loops over, so qa needs no change and verification-tiering.md needs no
 # amendment. This is the tier that replaces an agent re-checking behavior by hand every wave:
@@ -115,10 +119,16 @@ never tags them, never publishes them, and never touches their config — it doe
 role files describe and nothing more. Do not port this to the kit; there is nothing here to ship.
 1. bump `kit/ops/VERSION` — it is what tells every installed kit a new POLARIS exists
 2. CHANGELOG entry, same version
-3. commit · `git tag vX.Y.Z && git push --tags` — CI builds and publishes the zip
-4. **`python kit/ops/pack.py --dogfood`** — downloads the PUBLISHED zip, installs it here, runs the
-   board's selftest. This is the only test that walks the path a stranger walks.
-5. commit the refreshed `ops/`
+3. commit · `bash ops/polaris finish` exits 0 on that commit (its proof is tools/proof.sh: CI's Linux run of
+   the full self-test plus every golden here) · `bash tools/proof.sh --await macos-latest` is green (the
+   bash 3.2 leg) · THEN `git tag vX.Y.Z` and push the tag — CI builds and publishes the zip. Windows CI
+   keeps running; read it with `bash tools/proof.sh --report` before step 5's push. A red there is a
+   patch release, never a reason to skip the tag gate above. (owner decision 2026-11-09)
+4. **`python kit/ops/pack.py --dogfood`** — downloads the PUBLISHED zip, proves it is this commit's kit
+   byte for byte, installs it here and runs the quick check. About a minute, and the only step that
+   checks what a stranger actually downloads. (`--dogfood --full` runs the old serial self-test; CI
+   already ran that one on three systems — owner decision 2026-11-09.)
+5. re-pin the help golden (`bash ops/polaris check --update --only cli-help`) · commit the refreshed `ops/` · push
 
 The daily CI job fails if `ops/VERSION` ≠ the latest published release — i.e. if we shipped something
 we never ran. Skipping step 4 also leaves `main`'s tarball and the raw channel URL serving the OLD
