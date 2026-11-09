@@ -1015,3 +1015,4 @@
 {"ts":1794264538,"ev":"grant","id":"T-270","who":"Owner@DESKTOP","note":"kit/ops/install.sh"}
 {"ts":1794264542,"ev":"grant","id":"T-270","who":"Owner@DESKTOP","note":"ops/tests/update-arms.cmd"}
 {"ts":1794264546,"ev":"grant","id":"T-270","who":"Owner@DESKTOP","note":"ops/tests/update-arms.expected"}
+{"ts":1794264613,"ev":"claim","id":"T-272","who":"Owner@DESKTOP","note":"","pts":2}
