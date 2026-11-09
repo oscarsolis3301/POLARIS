@@ -1006,3 +1006,4 @@
 {"ts":1794058376,"ev":"done","id":"T-267","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794058392,"ev":"done","id":"T-268","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1794058567,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"Polling a full qa from a subagent: bg wait --max 140 overran"}
+{"ts":1794259582,"ev":"new","id":"T-270","who":"Owner@DESKTOP","note":"ready","pts":5}
