@@ -1008,3 +1008,4 @@
 {"ts":1794058567,"ev":"learned","id":"","who":"Owner@DESKTOP","note":"Polling a full qa from a subagent: bg wait --max 140 overran"}
 {"ts":1794259582,"ev":"new","id":"T-270","who":"Owner@DESKTOP","note":"ready","pts":5}
 {"ts":1794259638,"ev":"claim","id":"T-270","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1794261238,"ev":"handoff","id":"T-270","who":"Owner@DESKTOP","note":""}
