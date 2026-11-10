@@ -16,3 +16,4 @@ T-295 also on macOS).
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-11-10 | 13 | 7 |
