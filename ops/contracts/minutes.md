@@ -382,8 +382,35 @@ INTEGRATOR.md § 4 loses its by-hand `git branch -d` step.
 - Report: the guides figure is `<guided>/<busy folders>` before and after, each with its own denominator.
 No command in the role file changes.
 
+## 12. The verify stamp proves what was proven (conductor, 2026-11-09 — corrects § 7)
+§ 7 let `run-verify` skip on tree equality alone. That is unsound: the same tree says nothing about
+whether a green verify ever ran on it, or whether the verify list is still the one that ran. CI caught
+it at the `express` drill, which edits the list to a failing line and requires `land --express` to die
+(`EXPRESS VERIFY RED FAIL`). The stamp now carries both facts, and both skips require both.
+- **The stamp.** `.polaris/verify-stamp/<ID>` in the primary, ONE line: `<sha> <listsum>`.
+  `<sha>` = the worktree HEAD a green `verify` ran on (unchanged: only a clean tree is stamped, and a
+  dirty run removes the stamp). `<listsum>` = `cksum` of the task's verify list exactly as
+  `fm_list verify <taskfile>` prints it, written `<crc>-<bytes>` (cksum's two numbers joined by `-`).
+- **`handoff`** skips the verify commands only when ALL hold: the stamp's sha equals HEAD · the stamp's
+  listsum equals the listsum of the task file's verify list NOW · the worktree is clean. Its line is
+  unchanged: `verify: proven at <sha7> — not re-run`.
+- **`run-verify <ID>`** skips only when ALL hold: `HEAD^{tree}` equals `feat/<ID>^{tree}` ·
+  `git diff --quiet HEAD` · a stamp exists whose sha equals `git rev-parse feat/<ID>` · its listsum
+  equals the listsum of the task file's verify list NOW. Its line is unchanged. Anything missing — no
+  stamp, a one-field stamp, a changed list, a moved branch — and the commands run.
+- `amend` keeps deleting the stamp. `done` now deletes it too (best-effort) once the task is in done/.
+- **Executable check.** Golden `verify-stamp` (new): (1) a green verify → the stamp is
+  `<HEAD sha> <crc>-<bytes>` · (2) handoff after it prints the proven line · (3) the verify list edited
+  by hand after the stamp → handoff runs the commands again (no proven line) and refuses when the new
+  line fails · (4) run-verify on a same-tree land with a matching stamp → the skip line · (5) same
+  tree, NO stamp → the commands run · (6) same tree and stamp, the list edited to a failing line →
+  run-verify exits non-zero and prints the failing output · (7) `done` removes the stamp.
+  `self-land-finish` is re-pinned for the two-field stamp (its "stamp names the commit" check reads
+  field 1). The `express` drill passes again, run once by hand through `bg run`.
+
 ## Changelog
 - v1 2026-11-09: created for the Phase 1 tasks of plans/minutes.md.
 - v2 2026-11-09: § 3–§ 10 added for Phase 2 (sprint 22, plan minutes, 6.14.0).
 - v2.1 2026-11-09 (conductor): § 11 — three riders (heal's model line, finish clears merged wave branches, TIDY.md wording).
 - v2.2 2026-11-09 (conductor): § 9 — the `begin:` refusal line reads "needs the <lane> lane" ("is a express lane" was not English).
+- v2.3 2026-11-09 (conductor): § 12 — the verify stamp carries the verify list's checksum, and run-verify needs the stamp; § 7's tree-only skip was unsound (CI: EXPRESS VERIFY RED FAIL).
