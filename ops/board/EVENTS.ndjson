@@ -1154,3 +1154,4 @@
 {"ts":1794329246,"ev":"done","id":"T-227","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1794329283,"ev":"grant","id":"T-291","who":"Owner@DESKTOP","note":"ops/tests/api-kit.expected"}
 {"ts":1794329289,"ev":"amend","id":"T-291","who":"Owner@DESKTOP","note":"verify[+]"}
+{"ts":1794329656,"ev":"grant","id":"T-289","who":"Owner@DESKTOP","note":"ops/tests/perm-tools.cmd"}
