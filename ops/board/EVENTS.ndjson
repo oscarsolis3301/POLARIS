@@ -1084,3 +1084,10 @@
 {"ts":1794276679,"ev":"handoff","id":"T-283","who":"Owner@DESKTOP","note":""}
 {"ts":1794277453,"ev":"done","id":"T-283","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1794277474,"ev":"done","id":"T-284","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1794279257,"ev":"plan","id":"T-221","who":"planner","note":"regroom for Phase 3: pointers, riders, verify lists"}
+{"ts":1794279257,"ev":"plan","id":"T-222","who":"planner","note":"regroom for Phase 3: pointers, riders, verify lists"}
+{"ts":1794279257,"ev":"plan","id":"T-223","who":"planner","note":"regroom for Phase 3: pointers, riders, verify lists"}
+{"ts":1794279257,"ev":"plan","id":"T-224","who":"planner","note":"regroom for Phase 3: pointers, riders, verify lists"}
+{"ts":1794279257,"ev":"plan","id":"T-225","who":"planner","note":"regroom for Phase 3: pointers, riders, verify lists"}
+{"ts":1794279257,"ev":"plan","id":"T-227","who":"planner","note":"regroom for Phase 3: pointers, riders, verify lists"}
+{"ts":1794279257,"ev":"promote","id":"T-226","who":"planner","note":"regroom: no deps, disjoint from T-221","pts":2}
