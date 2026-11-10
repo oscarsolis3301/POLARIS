@@ -1,0 +1,73 @@
+--- no approval on record: here, whatever the mode
+allow:here
+  rc=0 stderr=0
+  s1.approved: absent
+--- ExitPlanMode went through (PostToolUse): the approval is on record
+allow:not-question
+  rc=0 stderr=0
+  s1.approved: present
+--- approved + auto, the question tool: refused
+deny:away
+  rc=0 stderr=0
+--- approved + bypassPermissions: refused
+deny:away
+  rc=0 stderr=0
+--- approved + dontAsk: refused
+deny:away
+  rc=0 stderr=0
+--- approved + default: here
+allow:here
+  rc=0 stderr=0
+  s1.mode: default
+--- a Bash call in auto: no opinion, the mode is recorded
+allow:not-question
+  rc=0 stderr=0
+  s1.mode: auto
+--- no permission_mode after a recorded auto: the recorded one counts, refused
+deny:away
+  rc=0 stderr=0
+--- mode plan: here, and the old approval is gone
+allow:here
+  rc=0 stderr=0
+  s1.approved: absent
+  s1.mode: plan
+--- plan -> auto (the plan was approved by the mode change): on record again, refused
+allow:not-question
+  rc=0 stderr=0
+  s1.approved: present
+  s1.mode: auto
+deny:away
+  rc=0 stderr=0
+--- a second approval keeps the first one and its slugs
+allow:not-question
+  rc=0 stderr=0
+  s1.approved line 2: away
+--- garbage, empty, no event: allow:error, rc 0
+allow:error
+  rc=0
+allow:error
+  rc=0
+allow:error
+  rc=0
+--- session id ../x: nothing written
+allow:error
+  rc=0 stderr=0
+  files under home named x: 0
+--- HOME unset: allow:error
+allow:error
+  rc=0 stderr=0
+--- the real output: the pinned deny line, and nothing at all when here
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"The owner approved the plan and left. Do not ask. Take the recommended option and write it down as an assumed: line; if there is no safe default, park that one piece and finish the rest."}}
+rc=0
+0
+--- lib/presence.sh under set -eu: bind appends once, only to an approval on record; covers needs away + the slug
+  s1.approved slugs: away ui-kit 
+  _presence_covers ui-kit rc=0
+  _presence_covers nope rc=1
+  _presence_away rc=0
+  s3.approved: absent
+  _presence_covers away rc=1
+  _presence_covers ui-kit rc=1
+  _presence_away rc=1
+  no sid: here / no session id
+  subshell rc=0
