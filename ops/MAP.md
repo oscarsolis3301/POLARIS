@@ -274,3 +274,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - kit/ops/lib/observe.sh split: drift.sh (drift, rules, surfaces health) · check.sh (goldens, scaffold, harness) · route.sh (triage, route, depth) · qa.sh (qa, finish) — module-layout v9 (minutes, 2026-11-09)  (T-273, 2026-11-09)
 
 - kit/ops/lib/flow.sh (new): cmd_begin, cmd_wrap — one call in, one call out (minutes, 2026-11-09)  (T-279, 2026-11-09)
+
+- "kit/ops/hooks/presence-guard.sh + kit/ops/lib/presence.sh — away/here: the session's mode and plan approval under ~/.claude/polaris/model-state/<sid>.{mode,approved}; `polaris presence` (ops/contracts/away.md)"  (T-289, 2026-11-10)
