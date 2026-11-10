@@ -162,3 +162,18 @@ kit/ops/lib/admin.sh (`cmd_speed` only; no new function, so api-kit.expected is 
   "Of your last N changes (stopped early at the time limit): ..." plus " M not checked." Fully evaluated
   output grammar is unchanged. `update` calls the same function, so the same budget; `|| true` stays.
 - Not done: memoizing the pytest import graph (it lives in core.sh/observe.sh, not owned here).
+
+## v1.1 — a task without the `approved:` line gains it (conductor, 2026-11-10, T-299, ships as 6.16.1)
+§ 1 said: "A task with … no `approved:` field is skipped with a `⚠` line naming it." Measured the day
+6.16.0 shipped, in the owner's four other projects: 13 of 15 open high-risk tasks have no `approved:`
+line (the template calls it optional). Skipped, each of them would wait in review for a yes, which is
+the stall away.md exists to end; a live test of the published 6.16.0 showed exactly that.
+- `_approve_plan_entries` first makes sure the task has the line: when no `approved:` key exists in
+  the front matter, an empty `approved:` line is inserted directly above the closing `---`. Then the
+  entries are written as § 1 says. Nothing else in the file changes; line endings are kept.
+- The `⚠ <ID> skipped — no approved: front-matter field` line remains only for a file that cannot be
+  written. The skip for an unknown `needs:` value is unchanged.
+- `approve --plan` counts such a task like any other. The hand-recorded form `approve <ID> <scope>`
+  is unchanged (it still tells a human to add the line: a hand approval is never a surprise edit).
+- Checks: `plan-approval` pins the gained line and the entry where it pinned the skip; `away-yes`
+  gains the high-risk task with no `approved:` line that merges while the owner is away.
