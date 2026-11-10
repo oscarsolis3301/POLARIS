@@ -270,3 +270,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - kit/ops/lib/selftest/hops.sh — drill_hops, selftest label hops (appended last): scatter, FIXED bait, --score and --proof on the scripted fixture (ops/contracts/save-hops.md § 8.3)  (T-252, 2026-11-06)
 
 - kit/ops/lib/author.sh — `polaris new`: files task drafts with IDs, checks and the ready gate (review/ counted), in ONE board commit (ops/contracts/task-author.md)  (T-262, 2026-11-07)
+
+- kit/ops/lib/observe.sh split: drift.sh (drift, rules, surfaces health) · check.sh (goldens, scaffold, harness) · route.sh (triage, route, depth) · qa.sh (qa, finish) — module-layout v9 (minutes, 2026-11-09)  (T-273, 2026-11-09)
