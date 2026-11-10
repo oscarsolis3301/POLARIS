@@ -4,6 +4,37 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.14.0 — 2026-11-09
+
+**Work now takes minutes, not hours. On this project, a wave of finished work used to wait about 80 minutes to land and another 50 for its checks; it now lands in about 5.**
+
+The slow parts of a run were not the thinking, they were the waiting. This release removes the waits
+and sizes the helpers to the job:
+
+- Helper agents are sized to the task instead of all running at full effort. Small mechanical jobs
+  use a lighter model at low effort, ordinary tasks use medium, and big or risky ones use high.
+  Before, a one-line change could burn 73,000 tokens of thinking. Nothing to set up: it applies when
+  you update.
+- The acceptance checks run side by side, 12 at a time. On this project that took them from about
+  25 minutes down to about 7.
+- Sealing finished work no longer rebuilds the knowledge base slowly. It does it in one pass, which
+  went from 40 seconds to 9 here.
+- An update now saves its own files as one tidy commit, then brings your other idle projects on the
+  same PC up to date in the background. It never publishes anything, and it only saves when that is
+  safe: you are on your main version, nothing is waiting to be saved, and you are not in
+  pull-request mode.
+- Two new commands for a small change: `polaris begin <draft>` files, routes, claims and briefs it in
+  one call, and `polaris wrap` proves, lands and finishes it in one call.
+- The end of a run no longer stalls on housekeeping. An over-long lessons list or map is now advice,
+  not a failed check. A task's own checks are not repeated when nothing has changed. Leftover merged
+  branches are cleaned up for you.
+- The line in each project's CLAUDE.md that said "never name a model" updates itself, so the sizing
+  above works everywhere.
+
+Good to know: POLARIS never picks Fable by itself. The `effort_*` and `model_*` keys in
+`ops/CONVENTIONS.md` change the sizing, and setting any of them to `inherit` goes back to "same as
+the chat".
+
 ## 6.13.0 — 2026-11-07
 
 **The layout pass, hardened. It now runs start to finish on its own, moves whole features only, and reports its true before-and-after. And `polaris new` files new tasks in one command.**
