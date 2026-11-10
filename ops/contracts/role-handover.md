@@ -419,3 +419,13 @@ section records what it supersedes here.
 
 ### Changelog
 - v3 2026-11-05: human-gated review alone → `finish`; row 5.5 `tidy` + its marker; `block:tidy` (T-236 · T-245, plan save-hops).
+
+## v4 — away: a closing question is bounced every time (2026-11-10, plan away, 6.16.0 — B2)
+Owner decision 2026-11-09 (plans/away.md): approved plan + auto mode = the owner has left; a run never
+ends on a question then. Full rules: ops/contracts/away.md § 3.
+- New rung word `block:away`. Away (away.md § 2.3) AND a closing question (`hh_question` → `REPLY=q`) AND
+  `next` names `build`|`integrate`|`promote` ⇒ `block:away`, reason `<AWAY_SAY> Work left - next says <l1>; do it.`
+- The `allow:harness-cap` rung (`stop_hook_active: true`) is skipped for exactly that case; the
+  harness's own cap on consecutive Stop blocks stays the backstop.
+- The fn list ("Fns, EXACTLY") gains at most ONE private fn, `_hh_away`.
+- Here ⇒ every rung of v1–v3 byte for byte (stop-question.expected and handover-stop.expected unchanged).

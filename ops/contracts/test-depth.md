@@ -108,3 +108,62 @@ PROTOCOL.md testing-tiers table gains a depth row · templates/TASK.md documents
 
 ## Changelog
 - v1 2026-10-27: created for T-197, T-198, T-199, T-200 (plan stay-on-request).
+
+## v2 — depth `ui`, keys `test_ui` and `qa_parallel` (2026-11-10, plan away, 6.16.0 — B4 code · B5 qa)
+Owner decision 2026-11-09 (plans/away.md "Your decisions"): a small UI change (1–2 points) gets lint and
+type checks side by side plus a before/after look, and no test suite. Code now lives in
+kit/ops/lib/core.sh (`depth_for`), kit/ops/lib/route.sh (`cmd_depth`, `depth_line_say`) and
+kit/ops/lib/qa.sh (`cmd_qa`); § 3's "observe.sh" is historical.
+
+### v2.1 Keys (kit/ops/KEYS.tsv, two new rows, since `6.16.0`)
+Defaults are composed in code (`cfg <key> '<default>'`), never written into a repo's CONVENTIONS by
+install, update, heal or adopt.
+- `test_ui` — default `*.tsx *.jsx *.vue *.svelte *.html *.astro` PLUS the effective `test_look` list
+  (whatever `test_look` resolves to, its default or the repo's value). `-` ⇒ depth `ui` never happens.
+  Absent-cost line: `a small component or page edit in a 1-2 point task already runs lint + typecheck + a look under this default, no suite; widen or narrow the glob list, or set - to always run the suite`.
+- `qa_parallel` — default `on`; `off` restores the one-after-another order. Any other value ⇒ `on`.
+  Absent-cost line: `qa already runs test, lint and typecheck side by side under this default; set off to run them one after another`.
+
+### v2.2 `depth_for` — one new verdict, between `look` and `scoped`
+Order: `test_depth: full` on any task ⇒ `full` (as today) → `none` → `look` → **`ui`** → today's
+scoped/full logic. `ui` iff ALL hold:
+1. at least one taskfile was passed (no taskfile = an unbounded change set ⇒ never `ui`);
+2. every path left after test_skip and test_look matches the `test_ui` list (and there is at least one);
+3. every taskfile has `risk: normal` exactly;
+4. every taskfile has `points:` 1 or 2 — OR carries `test_depth: ui` (honoured only when 1–3 hold).
+Output line, byte-exact: `ui<TAB>only ui paths (<n>) in 1-2 point work` or, when rule 4 held through
+`test_depth: ui` on at least one task, `ui<TAB>only ui paths (<n>), test_depth: ui on <ID>`
+(`<n>` = the paths counted in rule 2; `<ID>` = the first such task). Any rule failing ⇒ today's verdict,
+byte-identical. `test_depth:` values other than `full` and `ui` stay no-ops.
+
+### v2.3 `polaris depth` (route.sh)
+Line 1 can be `ui`. `--commit <sha>` at `ui`: `   would run: <cmd>` for `lint` then `typecheck` (each only
+when set), then `   would skip: <key>` for each of `test`, `build`, `uat` that is set, in that order.
+`depth_line_say ui <why>` prints `depth: ui — <why>` (no suite time). The help wording is in
+ops/contracts/away.md § 5.1.
+
+### v2.4 `cmd_qa` (B5)
+- At `ui`: `lint` and `typecheck` run at the same moment; `test`, `build`, `uat` do not run, and qa says
+  so once, byte-exact: `   ui — test, build and uat skipped: lint and typecheck plus the before/after look`.
+  The before/after capture is the existing `visual:` rule at handoff — unchanged, nothing new in qa.
+  The stamp records scope `ui`.
+- At `scoped` and `full` with `qa_parallel` on: `test`, `lint`, `typecheck` start together; when all
+  three are collected, `build` runs, then `uat` (build can write where tests read, so it stays in line).
+  The scoped uat deferral, test selection, and the carry/`break` paths are decided BEFORE anything
+  starts, exactly as today.
+- Output replayed in today's key order with today's wording; the failure reported is the first red key
+  in that order; rc as today. `qa_parallel: off` ⇒ today's serial loop, byte for byte.
+- `none`/`look` unchanged. Every other reader of depth words outside qa.sh (`land --express` in
+  integrate.sh, the speed and metrics counts in admin.sh and observe.sh) treats `ui` like `scoped` until
+  a later task says otherwise — the safe direction (more checking, never less).
+
+### v2.5 Executable check — `ops/tests/depth-ui.cmd/.expected` (B4, hermetic)
+A 1-point `risk: normal` task changing one `.tsx` ⇒ `ui` · the same in a 3-point task ⇒ today's verdict ·
+3 points + `test_depth: ui` ⇒ `ui` with the `test_depth` why · `.tsx` beside a `.py` ⇒ today's verdict ·
+`risk: high` ⇒ today's verdict · no taskfile ⇒ today's verdict · `test_ui: -` ⇒ today's verdict ·
+`.css` alone ⇒ `look` (unchanged) · `depth --commit` at `ui` prints the v2.3 lines · a fixture with the
+kit installed into it runs its own `ops/polaris depth` and agrees. Every existing depth golden keeps its
+verdict (a fixture that would now qualify is made to keep its original intent, e.g. points 3).
+
+### v2 Changelog
+- v2 2026-11-10: depth `ui`, keys `test_ui` and `qa_parallel` (plan away; ops/contracts/away.md § 5–6).
