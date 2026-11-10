@@ -62,6 +62,7 @@ kit/ops/KEYS.tsv	key	notify
 kit/ops/KEYS.tsv	key	plan_gate
 kit/ops/KEYS.tsv	key	port_base
 kit/ops/KEYS.tsv	key	publish
+kit/ops/KEYS.tsv	key	qa_parallel
 kit/ops/KEYS.tsv	key	qa_scout
 kit/ops/KEYS.tsv	key	reports
 kit/ops/KEYS.tsv	key	run_fix_waves
@@ -78,6 +79,7 @@ kit/ops/KEYS.tsv	key	test_look
 kit/ops/KEYS.tsv	key	test_related
 kit/ops/KEYS.tsv	key	test_select
 kit/ops/KEYS.tsv	key	test_skip
+kit/ops/KEYS.tsv	key	test_ui
 kit/ops/KEYS.tsv	key	typecheck
 kit/ops/KEYS.tsv	key	uat
 kit/ops/KEYS.tsv	key	visual
