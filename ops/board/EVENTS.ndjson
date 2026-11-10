@@ -1072,3 +1072,4 @@
 {"ts":1794272352,"ev":"done","id":"T-232","who":"conductor","note":"retired: shipped by hand"}
 {"ts":1794272528,"ev":"new","id":"T-282","who":"Owner@DESKTOP","note":"ready","pts":3}
 {"ts":1794272568,"ev":"claim","id":"T-282","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1794272603,"ev":"handoff","id":"T-281","who":"Owner@DESKTOP","note":""}
