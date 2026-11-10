@@ -81,7 +81,7 @@ The rules being built in this sprint only work if every role reads the same thin
 - [ ] PLANNER.md: carve for side-by-side lanes; a chain longer than two tasks carries a one-line reason; the plan shown names lanes, waves and an estimated time
 
 ## T-294 — "Away, your approval of the plan is the approval: a high-risk task of the approved plan records the plan's yes at handoff and merges with no question"
-points 3 · risk normal · landed 8477cd6 (2026-11-10) · claimed 2026-11-10
+points 3 · risk normal · landed 8477cd6 (2026-11-10) · claimed 2026-11-10 → done 2026-11-10
 files touched: kit/ops/lib/builder.sh, ops/tests/away-yes.cmd, ops/tests/away-yes.expected
 
 ### Why
@@ -94,4 +94,20 @@ The owner decided: away, a high-risk task that belongs to the approved plan merg
 - [ ] the byte-exact `away: <ID> merges on the approved plan's yes (plan <slug>, risk: high) — the close names it` line and the `away-yes <ID>` event, once per task that gained a `merge` entry
 - [ ] kit/ops/lib/ownership.sh is not edited; `plan_covers` passes on the recorded entries
 - [ ] away-yes golden: every B3 case of away.md § Executable checks, in a fixture with the kit installed into it running its own `ops/polaris`
+- [ ] CI's Linux and macOS runs of the full self-test are green on this task's own commit (see Notes; never in verify)
+
+## T-295 — "Quick checks side by side: qa runs lint and typecheck together at ui, and test, lint and typecheck together at scoped and full"
+points 3 · risk normal · landed 0db6ca4 (2026-11-10) · claimed 2026-11-10
+files touched: kit/ops/lib/qa.sh, ops/tests/qa-parallel.cmd, ops/tests/qa-parallel.expected
+
+### Why
+A project's checks run one after another (`for k in test lint typecheck build uat` in `cmd_qa`), so a change waits for the sum of every check instead of the longest one. The owner wants small UI changes fast and big ones still fully proven: at the new depth `ui` (T-291) qa runs only lint and typecheck, at the same moment; at `scoped` and `full` it starts test, lint and typecheck together, then build, then uat. Output stays in today's order and wording, and `qa_parallel: off` restores today's order exactly. Contract: ops/contracts/test-depth.md § v2.4.
+
+### Acceptance
+- [ ] at `ui`: lint and typecheck overlap; test, build and uat never start; the one byte-exact `ui —` line of § v2.4; the stamp records scope `ui`
+- [ ] at `scoped`/`full` with `qa_parallel` on: test, lint and typecheck overlap, then build, then uat; selection, carry, skip and the uat deferral are decided before anything starts, exactly as today
+- [ ] output replayed in today's key order and wording; the first red key in that order is the reported failure; rc as today
+- [ ] `qa_parallel: off` ⇒ today's serial loop byte for byte; `none`/`look` unchanged
+- [ ] qa-parallel golden: two keys log start/end to one file ⇒ overlapped at `scoped` and at `ui`, strictly ordered with `off`, the test key's marker never created at `ui`, printed text identical between on and off; the fixture has the kit installed into it and runs its own `ops/polaris qa`
+- [ ] every existing qa golden in verify stays green unchanged
 - [ ] CI's Linux and macOS runs of the full self-test are green on this task's own commit (see Notes; never in verify)
