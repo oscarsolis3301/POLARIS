@@ -298,7 +298,7 @@ known times). `install-update` stays green (re-pinned only if its fixture's upda
 ### 9.1 `polaris begin <draft.md>` — `cmd_begin`
 `cmd_new <draft>` (output printed as is) → the new ID read from it → `cmd_triage <ID>` → line 1 must be
 `solo`; otherwise print triage's whole answer, then
-`begin: <ID> is a <lane> lane, not solo — it waits in ready/ for the conductor` and exit 3 (the task
+`begin: <ID> needs the <lane> lane, not solo — it waits in ready/ for the conductor` and exit 3 (the task
 stays in ready/). Then `cmd_claim <ID>` → `cmd_pack <ID>`. Any step's failure exits with its rc.
 ### 9.2 `polaris wrap [<ID>]` — `cmd_wrap`
 From the task's worktree (the ID defaults as `handoff`'s does): `cmd_handoff <ID>` → when
@@ -386,3 +386,4 @@ No command in the role file changes.
 - v1 2026-11-09: created for the Phase 1 tasks of plans/minutes.md.
 - v2 2026-11-09: § 3–§ 10 added for Phase 2 (sprint 22, plan minutes, 6.14.0).
 - v2.1 2026-11-09 (conductor): § 11 — three riders (heal's model line, finish clears merged wave branches, TIDY.md wording).
+- v2.2 2026-11-09 (conductor): § 9 — the `begin:` refusal line reads "needs the <lane> lane" ("is a express lane" was not English).
