@@ -1,0 +1,28 @@
+== 1. claim, edit, verify: a green verify stamps the commit ==
+claim rc=0
+verify rc=0
+stamp names the commit: yes
+== 2. handoff: the checks are not re-run, and the lane lands itself ==
+handoff rc=0
+said proven, not re-run: 1
+verify lines re-run: 0
+T-1 is in: done
+== 3. run-verify on the very tree the builder proved runs nothing; another tree runs the lines ==
+✅ run-verify: same tree the builder proved — not re-run
+run-verify rc=0
+   verify[1]: grep -q y src/a.txt
+✅ all 1 verify commands green
+run-verify rc=0
+== 4. a Learned list over the limit is advice, never a red finding ==
+drift --strict rc=0
+   advisory: LEARNED: 9 bullets — prune to ≤5 carry-overs (EVOLVE target)
+counted findings: 0
+== 5. finish: green, and the lane left nothing behind for anyone to clear ==
+finish rc=0
+   cleaned: integrate/<date> (merged)
+pending: 0
+caveats: 0
+finish: run complete
+integrate branches left: 0
+task worktrees left: 0
+feat branches left: 0

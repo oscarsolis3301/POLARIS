@@ -268,11 +268,12 @@ EOF
   done <<EOF
 $refs
 EOF
-  # 5) doc overflow: MAP Deltas tail + Learned log
+  # 5) doc overflow: MAP Deltas tail + Learned log — ADVISORY (minutes.md § 7), the class of 9)/10):
+  # printed, never counted, never red under --strict, qa or finish, never withholding the suite stamp.
   v="$(grep -Ec ' \([A-Za-z0-9._-]+, [0-9]{4}-[0-9]{2}-[0-9]{2}\)$' "$OPS/MAP.md" 2>/dev/null || true)"
-  [ "${v:-0}" -gt 20 ] && finding "MAP: $v delta lines — fold them into the sections (EVOLVE target)"
+  if [ "${v:-0}" -gt 20 ]; then note "advisory: MAP: $v delta lines — fold them into the sections (EVOLVE target)"; fi
   v="$(awk '/^##[ \t]*Learned/{on=1;next} on&&/^## /{exit} on&&/^[ \t]*[-*]/{c++} END{print c+0}' "$OPS/SPRINT.md" 2>/dev/null || true)"
-  [ "${v:-0}" -gt 8 ] && finding "LEARNED: $v bullets — prune to ≤5 carry-overs (EVOLVE target)"
+  if [ "${v:-0}" -gt 8 ]; then note "advisory: LEARNED: $v bullets — prune to ≤5 carry-overs (EVOLVE target)"; fi
   # 6) telemetry safety
   [ -f "$EVENTS" ] && ! grep -q 'EVENTS\.ndjson merge=union' "$PRIMARY/.gitattributes" 2>/dev/null \
     && finding "TELEMETRY: EVENTS.ndjson without union-merge gitattribute — run: ops/polaris upgrade"

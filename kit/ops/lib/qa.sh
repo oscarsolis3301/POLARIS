@@ -204,10 +204,13 @@ EOF
     red=1
     # speed.md § 4: a finding whose text starts CRUFT (a leftover branch) is still red, but it says
     # nothing about the code the suite just proved, so it alone never withholds the stamp. Any other
-    # finding — MAP Deltas > 20 and LEARNED > 8 included — is a hard red, and so is a red drift that
-    # printed no finding at all (it died on something we cannot classify).
+    # finding is a hard red, and so is a red drift that printed no finding at all (it died on
+    # something we cannot classify). MAP Deltas and LEARNED are advisory since minutes.md § 7.
     if ! grep -q '^⚠' "$out" || grep '^⚠' "$out" | grep -qv '^⚠ \[[0-9]*\] CRUFT'; then hred=1; fi
   fi
+  # minutes.md § 7: the doc-overflow notes (MAP deltas, LEARNED bullets) are advice — drift never
+  # counts them, so they can never red qa or withhold the stamp; qa only passes them on.
+  grep -E '^   advisory: (MAP|LEARNED): ' "$out" || true
   if ( cmd_doctor ) >"$out" 2>&1; then
     say "doctor — env OK"
   else
@@ -330,11 +333,14 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
     esac
   fi
   # An unmerged integrate/<date> is a whole wave that never reached <base> — the single most
-  # expensive thing to mistake for done. Merged-but-undeleted is just cruft: a caveat.
+  # expensive thing to mistake for done. Merged-but-undeleted is just cruft, and finish clears it
+  # itself (minutes.md § 11.2): `branch -d` refuses an unmerged branch (and one checked out
+  # anywhere), so it can never lose work. Only a refused delete leaves the old caveat.
   while IFS= read -r ib; do
     [ -n "$ib" ] || continue
     if git -C "$PRIMARY" merge-base --is-ancestor "$ib" "$BASE" 2>/dev/null; then
-      fin_caveat "$ib is merged but the branch is still here — git branch -d $ib"
+      if git -C "$PRIMARY" branch -q -d "$ib" >/dev/null 2>&1; then note "cleaned: $ib (merged)"
+      else fin_caveat "$ib is merged but the branch is still here — git branch -d $ib"; fi
     else
       n=$(git -C "$PRIMARY" rev-list --count "$BASE..$ib" 2>/dev/null || echo 0)
       publish_resolve
@@ -439,6 +445,23 @@ EOF
         printf "%s", o
       }')"
     fin_caveat "$bl blocked — $blw (name what is parked, and why, in your close)"
+  fi
+  # A self-landed lane leaves its own worktree and branch behind by design (it cannot remove the
+  # ground it stands on), and any later command run from inside it beats it fresh again. Once
+  # nothing is building and nothing waits to land (PEND still 0 here), a CLEAN worktree of a done
+  # task is a finished lane: its beat goes quiet and the same lossless pass qa makes (cruft_clear)
+  # takes it — the branch only once proven landed, never a worktree holding anything uncommitted,
+  # never one the caller stands in — so it never shows up below as a sweep for somebody to run
+  # by hand (minutes.md § 7). Anything it leaves keeps today's caveat.
+  if [ "$PEND" -eq 0 ]; then
+    for f in "$PRIMARY"/.polaris/wt/*/; do
+      [ -e "$f" ] || break
+      n="${f%/}"; n="${n##*/}"
+      if [ -f "$BOARD/done/$n.md" ] && [ -d "$GCD/worktrees/$n" ] && [ -z "$(git -C "$f" status --porcelain 2>/dev/null | head -1)" ]; then
+        printf '1\n' 2>/dev/null > "$GCD/worktrees/$n/polaris-beat" || true
+      fi
+    done
+    cruft_clear
   fi
   for f in "$PRIMARY"/.polaris/wt/*/; do
     [ -e "$f" ] || break
