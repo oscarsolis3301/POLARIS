@@ -92,6 +92,10 @@ else
   for ref in $(git ls-remote --heads origin 'proof/*' 2>/dev/null | awk '{print $2}'); do
     name="${ref#refs/heads/}"
     [ "$name" = "$br" ] && continue
+    # Another lane may be proving right now: a proof branch goes only once ITS run has finished.
+    # Deleted earlier, that lane's CI jobs fail at checkout and its proof reads red for nothing.
+    ost="$("$GH" run list --workflow ci.yml --branch "$name" --limit 1 --json status --jq '.[0].status' 2>/dev/null || true)"
+    [ "$ost" = "completed" ] || continue
     git push -q origin --delete "$name" >/dev/null 2>&1 || true
   done
   if ! git push -q origin "$sha:refs/heads/$br" >/dev/null 2>&1; then why="the push failed"

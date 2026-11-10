@@ -17,6 +17,10 @@ rc=0
 proof branches after: proof/<sha12> 
 workflow run ci.yml --ref proof/<sha12>
 ci-proof: <sha> 222
+== 2b. another lane is still proving: its branch is left alone, a finished one would go ==
+✅ proof: <s7> green
+rc=0
+proof branches after: proof/111111111111 proof/<sha12> 
 == 3. the linux job is red: rc 1, the last 40 lines of the failed log ==
 proof: <s7> — CI run 333 (found)
 proof: goldens — 2 green

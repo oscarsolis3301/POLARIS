@@ -17,7 +17,7 @@ pop() { f="$STUB/$1"; [ -f "$f" ] || return 0; head -n 1 "$f"
   if [ "$(wc -l < "$f" | tr -d ' ')" -gt 1 ]; then tail -n +2 "$f" > "$f.n"; mv "$f.n" "$f"; fi; }
 case "$1 $2" in
   "auth status") exit "$(cat "$STUB/auth_rc" 2>/dev/null || echo 0)";;
-  "run list") pop list;;
+  "run list") case "$*" in *--branch*) pop branch;; *) pop list;; esac;;
   "workflow run") exit 0;;
   "run view")
     case "$*" in
@@ -57,12 +57,20 @@ echo "dispatches: $(grep -c '^workflow run' "$STUB/calls")"
 echo "polls of run 111: $(grep -c "^run view 111 " "$STUB/calls")"
 
 echo '== 2. no run yet: older proof/* deleted, proof/<sha12> pushed, CI dispatched, the id found on a later poll =='
-fresh; printf '\n\n222\n' > "$STUB/list"; echo 'completed success' > "$STUB/job-ubuntu-latest"
+fresh; printf '\n\n222\n' > "$STUB/list"; echo 'completed success' > "$STUB/job-ubuntu-latest"; echo completed > "$STUB/branch"
 echo "proof branches before: $(heads)"
 P
 echo "proof branches after: $(heads)"
 grep '^workflow run' "$STUB/calls" | M
 echo "ci-proof: $(M < .polaris/ci-proof)"
+
+echo '== 2b. another lane is still proving: its branch is left alone, a finished one would go =='
+git push -q origin HEAD:refs/heads/proof/111111111111 >/dev/null 2>&1
+git push -q origin --delete "proof/${SHA:0:12}" >/dev/null 2>&1
+fresh; printf '\n\n223\n' > "$STUB/list"; echo 'completed success' > "$STUB/job-ubuntu-latest"; echo in_progress > "$STUB/branch"
+P | tail -n 2
+echo "proof branches after: $(heads)"
+git push -q origin --delete proof/111111111111 >/dev/null 2>&1
 
 echo '== 3. the linux job is red: rc 1, the last 40 lines of the failed log =='
 fresh; echo 333 > "$STUB/list"; echo 'completed failure' > "$STUB/job-ubuntu-latest"
