@@ -154,6 +154,20 @@ hh_bg_live() {
   done
   return 1
 }
+# Has the owner left? (ops/contracts/away.md § 2.3) rc 0 = away: a valid session id, an approval on
+# record in <state dir>/<sid>.approved, and an away mode — the Stop payload's permission_mode, else line
+# 1 of <sid>.mode. Anything unknown or unreadable is "here" (rc 1). Builtins and one small read.
+_hh_away() {
+  local d m=''
+  case "$SID" in ''|*[!A-Za-z0-9_-]*) return 1;; esac
+  [ -n "${HOME:-}" ] || return 1
+  d="$HOME/.claude/polaris/model-state"
+  [ -f "$d/$SID.approved" ] || return 1
+  hh_jstr permission_mode "$IN" && m="$REPLY"
+  [ -n "$m" ] || { hh_state "$d" "$SID.mode" || return 1; m="$REPLY"; }
+  case "$m" in auto|bypassPermissions|dontAsk) return 0;; esac
+  return 1
+}
 # THE one emitter: $1 = the --test word, $2 = the reason ('' means allow). Never returns.
 hh_emit() {
   local r="${2:-}"
@@ -165,7 +179,7 @@ hh_emit() {
 }
 # The gate ladder, in the pinned order.
 hh_stop() {
-  local p dir ev hop cap hops n out l1 n2 verb id ids hi job q=0 capped=0 plan=0
+  local p dir ev hop cap hops n out l1 n2 verb id ids hi job q=0 capped=0 plan=0 away=0
   hh_primary "$CWD" || hh_emit allow:no-state ''
   p="$REPLY"; dir="$p/.polaris/handover/$SID"
   [ -n "$SID" ] && [ -f "$dir/last-event" ] || hh_emit allow:no-state ''
@@ -174,7 +188,8 @@ hh_stop() {
   hh_state "$dir" hopped-event; hop="$REPLY"
   hh_licensed "$ev" "$hop" || case $? in 1) hh_emit allow:no-event '';; 2) hh_emit allow:consumed '';; esac
   [ -f "$dir/finished" ] && [ "$dir/finished" -nt "$dir/last-event" ] && hh_emit allow:finished ''
-  [ "$SHA" = true ] && hh_emit allow:harness-cap ''
+  # away + a closing question is bounced on EVERY stop (away.md § 3): the harness's own cap is the backstop
+  [ "$SHA" = true ] && { _hh_away && hh_question "$TP" && [ "$REPLY" = q ] && away=1 || hh_emit allow:harness-cap ''; }
   hh_cfg run_max_tasks "$p" 0; cap="${REPLY:-0}"
   hh_state "$dir" hops; hops="${REPLY:-0}"
   case "$hops:$cap" in *[!0-9:]*) hops=0; cap=0;; esac
@@ -203,6 +218,8 @@ hh_stop() {
   [ "$capped" = 1 ] && [ "$plan" = 0 ] && hh_emit allow:cap ''
   if [ "$q" = 1 ]; then
     case "$verb" in finish|tidy) hh_emit allow:question '';; esac   # the run's end: a question there is the close
+    [ "$away" = 1 ] || { _hh_away && away=1; }
+    [ "$away" = 1 ] && hh_emit block:away "The owner approved the plan and left. Do not ask. Take the recommended option and write it down as an assumed: line; if there is no safe default, park that one piece and finish the rest. Work left - next says $l1; do it."
     hh_emit block:question "Work left - next says $l1. The plan approval covers it; do it. A real product/approval question? ask again and you will be let through."
   fi
   n=$((hops + 1)); [ "$plan" = 1 ] && n="$hops"; printf '%s\n' "$n" > "$dir/hops"   # plan hops are free; the writes land BEFORE the emit, so

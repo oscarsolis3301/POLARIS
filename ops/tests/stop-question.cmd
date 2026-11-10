@@ -4,6 +4,8 @@ KIT="$(pwd)/kit/ops/polaris"
 HOOK="$(pwd)/kit/ops/hooks/handover-hook.sh"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
+# hermetic: the away read (ops/contracts/away.md § 2.3) looks under $HOME — never the real ~/.claude
+export HOME="$FIX/home" USERPROFILE="$FIX/home" POLARIS_AWAKE_HOME="$FIX/awake"; mkdir -p "$FIX/home"
 ( set -e
   git init -q -b main "$FIX/repo" 2>/dev/null || { git init -q "$FIX/repo"; git -C "$FIX/repo" symbolic-ref HEAD refs/heads/main; }
   cd "$FIX/repo"

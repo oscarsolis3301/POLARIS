@@ -1,0 +1,33 @@
+installed: yes
+--- away: approved + auto
+block:away
+block:away
+block:away
+block:away
+block:away
+hop consumed: no
+allow:question
+allow:question
+allow:question
+allow:question
+--- away: the mode from <sid>.mode when the payload has none
+block:away
+block:away
+block:question
+--- away: a stop mark and an unlicensed stop keep today's rung
+allow:harness-cap
+allow:question
+allow:no-event
+--- here: today's ladder
+block:question
+allow:harness-cap
+block:question
+allow:harness-cap
+block:question
+block:question
+allow:harness-cap
+block:question
+--- the real output
+{"decision":"block","reason":"The owner approved the plan and left. Do not ask. Take the recommended option and write it down as an assumed: line; if there is no safe default, park that one piece and finish the rest. Work left - next says build T-1; do it."}
+let through: 0
+here let through: 1
