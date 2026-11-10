@@ -224,7 +224,26 @@ in `active/` with its lock held, so no lane is ever the last one out and nobody 
   `waves: 2`, `leftover-unsealed: 1`). T-222 runs `ops/tests/land-race.cmd` twice by hand through
   `bg run` and reports the two outputs; it is never in T-222's verify list.
 
+### J. § 7 corrected — what "missing" means at finish (T-225; conductor, 2026-11-10)
+Asked by T-225's builder before writing a line, with evidence: tasks that build on each other share
+files (v1.1 § C), so a later task rightly changes a path an earlier one landed. Compared against main's
+tip, `feat/T-222` differs today on builder.sh, core.sh and api-kit.expected, and `feat/T-223` on
+integrate.sh — nothing is missing, yet § 7 as written would make `finish` refuse this very run.
+- **At `finish` only**, a path of a done task counts as missing when main's blob differs from the feat
+  tip's AND no commit on main AFTER the task's own landed commit (subject ending `[<ID>]`, the newest
+  one — a re-land counts) touched that path with a subject ending in another task's `[<other ID>]`.
+- A done task with NO landed commit in main's history counts every differing path (that is the
+  reported failure: done on the board, never on main).
+- Cost: nothing on the healthy path; one `git log` per task that already differs.
+- `seal` (§ 6) and `done` (§ 5) are unchanged: they run right after the landing, when nothing else can
+  have touched the paths, so the plain comparison against main is exact there.
+- The gate's one line and exit are as § 7 pins them. Golden `finish-qa-red` is unaffected; golden
+  `landed-seal` gains nothing from this; a case for the rule goes where T-225 tests the finish gate:
+  task A landed, task B later changed the same file → finish passes; task C done with no landed
+  commit → finish refuses and names C and its paths.
+
 ## Changelog
 - v1 2026-10-28: created for tasks of plan `safe-landing`.
 - v1.1 2026-11-09: pointers re-derived after T-259, T-273, T-277, T-282, T-284; section 8 driver corrected; riders a-d (Phase 3 groom).
 - v1.2 2026-11-09 (conductor): rider e — the wait for the board mutex no longer kills the command when the holder releases mid-read (found by T-221; folded into T-222, which owns core.sh).
+- v1.3 2026-11-10 (conductor): § J — at finish a path is missing only when no later landed task commit touched it; a done task with no landed commit counts every differing path (asked by T-225's builder, with the false alarms it measured on this run).
