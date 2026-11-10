@@ -1111,3 +1111,4 @@
 {"ts":1794285761,"ev":"done","id":"T-287","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1794285779,"ev":"done","id":"T-226","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1794285798,"ev":"done","id":"T-221","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1794285963,"ev":"promote","id":"T-222","who":"Owner@DESKTOP","note":"deps done: T-221","pts":4}
