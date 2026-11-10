@@ -123,6 +123,26 @@ beat_live() { # beat_live <ID> — rc 0 iff the beat is younger than wt_live_min
   [ "$(beat_age "$1")" -lt $(( m * 60 )) ]
 }
 
+_wt_stood_in() { # _wt_stood_in <ID> — rc 0 when the running command stands in .polaris/wt/<ID>:
+  # $SELF (the script executing) inside it, or $PWD inside it — wt_remove's first guard, its two tests
+  # moved here unchanged (minutes.md § 14) so `drift` and `finish` can ask the same question. Sets
+  # _WT_STOOD to `self` (the $SELF test held — it wins when both do), `pwd`, or empty (rc 1).
+  local id="$1" wt; wt="$(wt_path "$id")"
+  local wtn sn pn self_in=0 pwd_in=0
+  wtn="$(cd "$wt" 2>/dev/null && pwd)"; [ -n "$wtn" ] || wtn="$wt"
+  wtn="$(printf '%s' "$wtn" | tr 'A-Z\\' 'a-z/')"
+  sn="$(printf '%s' "${SELF:-}" | tr 'A-Z\\' 'a-z/')"
+  pn="$(printf '%s' "$PWD" | tr 'A-Z\\' 'a-z/')"
+  case "$sn" in "$wtn"/*) self_in=1;; esac
+  case "${SELF:-}" in */.polaris/wt/"$id"/*) self_in=1;; esac
+  case "$pn" in "$wtn"|"$wtn"/*) pwd_in=1;; esac
+  case "$PWD" in */.polaris/wt/"$id"|*/.polaris/wt/"$id"/*) pwd_in=1;; esac
+  _WT_STOOD=""
+  if [ "$self_in" -eq 1 ]; then _WT_STOOD=self; return 0; fi
+  if [ "$pwd_in" -eq 1 ]; then _WT_STOOD=pwd; return 0; fi
+  return 1
+}
+
 wt_remove() { # wt_remove <ID> <done|release|sweep> — THE removal primitive (ops/contracts/
   # worktree-liveness.md, the caller × dirty × live table). rc 0 removed · 1 LEFT · 2 archived.
   # dirty = `git status --porcelain` prints anything (untracked included) · live = beat_live.
@@ -148,20 +168,12 @@ wt_remove() { # wt_remove <ID> <done|release|sweep> — THE removal primitive (o
   # of those are `/c/…`), case- and separator-folded exactly as next_route folds bg-job cwds; and
   # the `*/.polaris/wt/<ID>` suffix shape, which is what the pre-v1.2 own-lane test used and which
   # holds whatever prefix form a path arrives in. Either shape matching is a refusal.
-  local wtn sn pn self_in=0 pwd_in=0
-  wtn="$(cd "$wt" 2>/dev/null && pwd)"; [ -n "$wtn" ] || wtn="$wt"
-  wtn="$(printf '%s' "$wtn" | tr 'A-Z\\' 'a-z/')"
-  sn="$(printf '%s' "${SELF:-}" | tr 'A-Z\\' 'a-z/')"
-  pn="$(printf '%s' "$PWD" | tr 'A-Z\\' 'a-z/')"
-  case "$sn" in "$wtn"/*) self_in=1;; esac
-  case "${SELF:-}" in */.polaris/wt/"$id"/*) self_in=1;; esac
-  case "$pn" in "$wtn"|"$wtn"/*) pwd_in=1;; esac
-  case "$PWD" in */.polaris/wt/"$id"|*/.polaris/wt/"$id"/*) pwd_in=1;; esac
-  if [ "$self_in" -eq 1 ]; then                    # the $SELF note wins when both conditions hold
+  _wt_stood_in "$id" || true
+  if [ "$_WT_STOOD" = self ]; then                 # the $SELF note wins when both conditions hold
     note "worktree LEFT: .polaris/wt/$id holds the running script — never remove the ground you are standing on; a later sweep --fix finishes it once the session is gone"
     return 1
   fi
-  if [ "$pwd_in" -eq 1 ]; then
+  if [ "$_WT_STOOD" = pwd ]; then
     note "worktree LEFT: .polaris/wt/$id is your current directory — cd out and run: bash ops/polaris sweep --fix"
     return 1
   fi

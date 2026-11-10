@@ -136,7 +136,7 @@ This release let a landing skip a task's checks when the landed code was identic
 - [ ] `bash kit/ops/polaris doctor --selftest --only express` passes, run once by hand through `bg run` (not in verify: it takes 2-4 minutes)
 
 ## T-283 — "The update drill checks that nothing was pushed by comparing before and after, so it passes in any drill order"
-points 1 · risk normal · landed b169382 (2026-11-09) · claimed 2026-11-09
+points 1 · risk normal · landed b169382 (2026-11-09) · claimed 2026-11-09 → done 2026-11-09
 files touched: kit/ops/lib/selftest/remote.sh
 
 ### Why
@@ -149,7 +149,7 @@ The update drill's new "it commits, and never pushes" case proved "never pushed"
 - [ ] nothing outside `drill_autoupdate` changes
 
 ## T-284 — "A task with no checks is never called proven: handoff says acceptance is manual, as it always did"
-points 2 · risk normal · landed 449e62f (2026-11-09) · claimed 2026-11-09
+points 2 · risk normal · landed 449e62f (2026-11-09) · claimed 2026-11-09 → done 2026-11-09
 files touched: kit/ops/lib/builder.sh, ops/tests/verify-stamp.cmd, ops/tests/verify-stamp.expected
 
 ### Why
@@ -160,3 +160,37 @@ This release lets a handoff skip a task's checks when a stamp shows they already
 - [ ] the goldens `guide-stale`, `pack-visual` and `shots-gallery` pass with their .expected files UNCHANGED
 - [ ] golden `verify-stamp` gains case (8) for the empty list; its other cases and `self-land-finish` stay green
 - [ ] api-kit does not move (private names only)
+
+## T-285 — "An update commits itself every time: it lists the files first, then stages them, and says why if it cannot"
+points 3 · risk normal · landed 50df2aa (2026-11-09) · claimed 2026-11-09
+files touched: kit/ops/lib/admin.sh, kit/ops/lib/selftest/remote.sh
+
+### Why
+After an update, POLARIS commits the files it changed so the project is left clean (minutes.md § 5.1). On macOS that commit did not happen in three CI runs out of three, and the update gave no reason. The cause is in how the files are staged: one pipeline runs `git status`, a filter and `git add` at the same moment, and the two git commands both want the same lock. When `status` gets there first, `add` gives up before reading anything. The safe fallback kicked in each time (nothing committed, nothing lost), but 6.14.0 cannot be released while macOS is red, and the same collision can happen on any machine. Contract: minutes.md § 13.
+
+### Acceptance
+- [ ] the staging in `cmd_update` (kit/ops/lib/admin.sh, the block headed "THE SELF-COMMIT") computes the list of paths first, into a variable, and only then runs `git add --pathspec-from-file=-` with it; the status + awk that builds the list is unchanged
+- [ ] an empty list still means no `add`, no commit and no extra line
+- [ ] when the `add` or the `commit` fails and git's message names `index.lock`, it waits 1 second and tries again, 3 tries in all; any other failure is not retried
+- [ ] when it still cannot stage or commit, the index is left empty, today's note prints, and one more note gives the reason in the exact shapes of minutes.md § 13 ("Never silent")
+- [ ] `update --auto` still prints exactly one line in every case
+- [ ] in `drill_autoupdate` (kit/ops/lib/selftest/remote.sh), each case that expects the update to commit first checks that HEAD is exactly one new commit on top of where the case started, with the pinned subject, and fails with `AUTOUPDATE (<n>) COMMIT FAIL (…)` when it is not: at least (5), (5b), (7), (9), and (1) if its fixture meets every condition of § 5.1
+- [ ] two new drill cases, (10) and (10b), as minutes.md § 13 "Executable checks" describes, using a `git` stand-in on PATH
+- [ ] `bash kit/ops/polaris doctor --selftest --only autoupdate` passes here, run once by hand through `bg run`
+- [ ] the drill is green on CI's Linux run AND its macOS run of this task's own commit: `PROOF_GOLDENS=true bash tools/proof.sh`, then `bash tools/proof.sh --await macos-latest`, each run once by hand through `bg run` (never in verify)
+
+## T-286 — "wrap ends green when it is typed from the task's own folder, and says the leftover folder clears itself"
+points 3 · risk normal · landed d90a23f (2026-11-09) · claimed 2026-11-09
+files touched: kit/ops/lib/drift.sh, kit/ops/lib/qa.sh, kit/ops/lib/workspace.sh, ops/tests/wrap-own-folder.cmd, ops/tests/wrap-own-folder.expected
+
+### Why
+`wrap` is the one command that finishes a small change: it hands the work off, lands it, and runs `finish`. The role files tell every agent to type it from the task's own folder. Typed that way it always ends red: the folder cannot be removed while the command is running out of it, its branch stays with it, and the board check then calls that branch a leftover (`CRUFT: feat/<ID> still exists though <ID> is done`), so `finish` exits 1. The work itself is fine (landed, sealed, done). Found by installing 6.14.0 into a brand-new project and running one change start to finish. Contract: minutes.md § 14.
+
+### Acceptance
+- [ ] one private helper `_wt_stood_in <ID>` in kit/ops/lib/workspace.sh holds the two tests of `wt_remove`'s first guard (the running script inside that worktree, or the current directory inside it), moved without change; `wt_remove` uses it and prints exactly what it prints today in every case
+- [ ] `drift`'s leftover-branch check (kit/ops/lib/drift.sh, the block commented "3) cruft") treats a done task's worktree that the running command stands in like a live beat: no finding
+- [ ] `finish` (kit/ops/lib/qa.sh, the loop that prints `worktree .polaris/wt/<n> has no active task …`) prints the § 14 caveat instead for such a worktree, and today's line for every other one
+- [ ] new golden `wrap-own-folder`, exactly as minutes.md § 14 describes: the kit installed inside the fixture, default landing, `wrap` typed from inside the worktree ends rc 0 with finish complete; then a `finish` from the project folder removes the folder and the branch
+- [ ] the golden fails on today's code (run it once before the fix and report what it printed) and passes after
+- [ ] `flow-solo`, `self-land-finish`, `finish-blocked` and `drift-deps` still match without being re-pinned
+- [ ] CI's Linux run of the full self-test is green on this task's own commit: `PROOF_GOLDENS=true bash tools/proof.sh`, once, by hand, through `bg run` (never in verify)
