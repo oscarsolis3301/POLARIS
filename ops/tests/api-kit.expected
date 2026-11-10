@@ -226,6 +226,8 @@ kit/ops/hooks/ownership-guard.sh	fn	jstr
 kit/ops/hooks/ownership-guard.sh	fn	lc
 kit/ops/hooks/ownership-guard.sh	fn	norm
 kit/ops/hooks/ownership-guard.sh	fn	primary_gate
+kit/ops/hooks/presence-guard.sh	fn	pg_approve
+kit/ops/hooks/presence-guard.sh	fn	pg_end
 kit/ops/hooks/readonly-allow.sh	fn	awk_ok
 kit/ops/hooks/readonly-allow.sh	fn	check_segment
 kit/ops/hooks/readonly-allow.sh	fn	find_ok
