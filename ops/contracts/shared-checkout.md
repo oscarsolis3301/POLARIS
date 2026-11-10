@@ -408,3 +408,12 @@ never message presence alone.
   (claim/handoff/resume), T-060 (finish/status/doctor/update), T-062 (drills), T-063 (docs
   pinned phrases). plan: n-chats-one-repo.
 - v2.5 2026-09-01: checkout-guard learns worktree remove/prune/move, clean, push --delete, rm/Remove-Item on .polaris and broad process kills (`mutating_other`, 3 pinned messages); the EnterWorktree entry is settled by permission-rules.md (T-093, T-096; plan cant-eat-itself).
+
+## Note 2026-11-09 — the lease token (safe-landing v1 § 1, T-226)
+Additive; every section above stands. The integration lease now carries a token: the taking frame
+writes it and exports `POLARIS_INT_TOKEN`, and a child process whose token matches re-enters the lease
+without waiting (no rewrite); a missing, stale or different token never grants entry, so any other
+session queues exactly as before. Only the frame that took the lease releases it (`int_off` in a
+re-entering frame is a silent no-op, and on_die releases only for a taking frame). `done` now runs
+under the lease too (taken before its base commit, released only if it took it). Lock ordering is
+unchanged: lease outermost, board mutex inside.

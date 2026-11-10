@@ -379,3 +379,10 @@ qa's rc alone: the T-131 lesson). `sweep --fix` on the diverged one: kept. Asser
 
 ### Changelog
 - v2 2026-09-14: `feat_tip_landed` · `cruft_clear`; three cruft classes in `drift`; `qa` clears before `drift`; `sweep` reuses it (T-152, plan sprint-c).
+
+## Note 2026-11-09 — done under the lease (safe-landing v1 §§ 1, 3, T-226)
+Additive; every section above stands. `done` now takes the (re-entrant) integration lease before its
+base commit, the worktree removal and the branch deletion, and releases it only if it took it. Inside a
+self-landing tail the lease is inherited through `POLARIS_INT_TOKEN`: a child of the holder re-enters,
+only the taking frame releases, and Guard 1 / Guard 2 above are unchanged. Before it deletes a branch,
+`done` proves the task's files are on main (`landed_content_ok`) and re-lands them if not.

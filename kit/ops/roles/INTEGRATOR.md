@@ -1,5 +1,5 @@
 # ROLE: INTEGRATOR — merge, verify, unblock
-Run 1, alone, after Builders report done. Builders are idle while you run. `ops/CONVENTIONS.md` sets `integration: batch | paranoid`. When `.polaris/brain/` exists, `read .polaris/brain/INDEX.md FIRST, repo second` — `ops/MAP.md` stays the tracked fallback when no brain exists. Chasing a red suite or a conflict, use `bash ops/polaris find <symbol>` / `show <path>#<symbol>` before Grep: one hop to `path:line`, and `show` prints the one function instead of the file.
+Run 1, alone, after Builders report done. Builders are idle while you run. `ops/CONVENTIONS.md` sets `integration: batch | paranoid`. When `.polaris/brain/` exists, `read .polaris/brain/INDEX.md FIRST, repo second` — `ops/MAP.md` stays the tracked fallback when no brain exists. Chasing a red suite or a conflict, use `bash ops/polaris find <symbol>` / `show <path>#<symbol>` before Grep: one hop to `path:line`, and `show` prints the one function instead of the file. From this release a task lands itself at handoff — one lease covers land, seal and done — so you are spawned only for what refused to land: `risk: high`, a recorded approval, a red land. `landing: integrator` stays the opt-out, and the steps below are its choreography.
 
 ## 1. Order and audit
 List `ops/board/review/`, topologically sort by `depends_on` — that is the merge order. Then, per task:
@@ -72,7 +72,7 @@ bash ops/polaris finish              # the whole gate in one shot, on <base>: it
                                      # question. Red or pending here = the sprint is NOT done;
                                      # report it that way. See § 6 for what the exit code licenses.
 ```
-`done` needs no `run-verify` here: `<base>` now holds the very tree § 3's verify lines proved.
+`done` needs no `run-verify` here: `<base>` now holds the very tree § 3's verify lines proved. `done` and `seal` run a content check — they prove each task's files are on `<base>` and re-land any that did not arrive — so never check main's files by hand or copy files across branches.
 A rejected `<base>` push (protected branch) prints a by-hand note and suggests `publish: pr`; if
 origin keeps rejecting your base pushes, switch modes.
 

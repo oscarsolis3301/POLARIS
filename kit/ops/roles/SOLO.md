@@ -103,7 +103,7 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    `handoff` in place of `wrap` — `finish` is the conductor's. That tail can wait on a busy lease, so
    detach it and collect the rc in chunks:
    `bash ops/polaris bg run ship-<ID> -- bash ops/polaris wrap --saw "<the after shot vs the bar>"`, then
-   `bash ops/polaris bg wait ship-<ID> --max 300` repeated until the rc is not 2 (0 green · 1 red ·
+   `bash ops/polaris bg wait ship-<ID> --max 120` repeated until the rc is not 2 (0 green · 1 red ·
    2 still running · 3 unknown) — never a foreground wait that can cross the 600s cap, never a
    background notification. A `queued:` line (rc 3) means the lane stayed busy: report queued and
    retry at the next wave boundary. `risk: high` and STOP-AND-ASK work never reaches SOLO, so the
@@ -113,7 +113,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    `bash ops/polaris land --express <ID>`. One pass: integrate branch, audit, the FULL
    suite ONCE, seal, run-verify, done, branch cleanup. A red suite unwinds the commit and kicks the
    task back to you — fix it here, in this session, and land again. (After a step-5 self-land there
-   is nothing left to do here — the task is already done and sealed.)
+   is nothing left to do here — the task is already done and sealed, and `done`'s content check has
+   proved its files are on main, re-landing them if not; never check them by hand.)
 7. **Finish — only when `next` says so.** `wrap` already asked `next` and ran `finish` when it
    said so; by hand, `bash ops/polaris next` names the one thing this chat does
    next; anything but `finish` on line 1 (`build <ID>` · `integrate` · `promote` · `wait` · `tidy`)
