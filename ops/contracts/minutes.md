@@ -1,4 +1,4 @@
-# CONTRACT: minutes — proof runs where it is fast, and a release check proves bytes   (v2.5 — 2026-11-09)
+# CONTRACT: minutes — proof runs where it is fast, and a release check proves bytes   (v2.6 — 2026-11-09)
 Owned by the Planner. Builders code against this and never invent beyond it.
 Append-only once any dependent task is claimed: breaking changes = new `## v2` section + a migration task.
 
@@ -452,6 +452,37 @@ no repo was harmed: the update simply did not commit, and said nothing about why
   tools/proof.sh`, then `bash tools/proof.sh --await macos-latest`), each started once by hand through
   `bg run`. One green macOS run is the bar: three of three were red before.
 
+## 14. `wrap` ends green from the task's own folder (conductor, 2026-11-09 — corrects § 7 and § 9.2)
+Found by a fresh-install test of 6.14.0 before its release. § 9.2 has `wrap` run from the task's
+worktree, and there the command that is running IS the worktree's own copy of `ops/polaris`. § 7 quiets
+a landed lane's beat so the next clear-up may take its worktree — but a worktree is never removed from
+under the command standing in it (worktree-liveness v1.2), so it is LEFT, its branch stays with it,
+`drift` then counts that branch as a leftover, and the `finish` that `wrap` runs exits 1 with
+`CRUFT: feat/<ID> still exists though <ID> is done`. Every `wrap` typed the documented way ended red
+(golden `flow-solo` did not see it: it runs the kit by an absolute path from outside its fixture).
+- **Standing in it = still here.** A done task's worktree that the running command stands in — the two
+  tests of `wt_remove`'s first guard, `$SELF` inside it or `$PWD` inside it — is treated exactly like a
+  live beat: `drift` says nothing about its branch, so `qa` and `finish` are not red for it.
+  The two tests move, unchanged, into ONE private helper in `workspace.sh`, `_wt_stood_in <ID>`
+  (rc 0 = the running command stands in it; it also tells `wt_remove` which of its two notes applies),
+  used by `wt_remove` and by `drift`'s leftover check. `wt_remove`'s output does not change by a byte.
+- **finish says what is left, and that there is nothing to do.** For such a worktree, finish's caveat
+  `worktree .polaris/wt/<ID> has no active task — bash ops/polaris sweep --fix` reads instead
+  `worktree .polaris/wt/<ID> is where this command ran from — the next finish from the project folder clears it`.
+  It stays a caveat (rc 0; something was left behind), never a pending item.
+- **It does clear.** The next `finish`, `qa` or `sweep --fix` run from anywhere else removes the
+  worktree and its branch (today's `cruft_clear`, unchanged).
+- **Golden `wrap-own-folder`** (new): a throwaway repo with the kit INSTALLED in it, so the fixture runs
+  its own `ops/polaris` and never a path outside itself; default landing (no `landing:` line).
+  `begin` a 1-point draft → one commit in the worktree → `bash ops/polaris wrap` typed from inside that
+  worktree → rc 0, finish's `✅ finish: run complete` line, the task in done/, its file on main, the new
+  caveat exactly once, and no line starting `⛔`. Then `bash ops/polaris finish` from the project
+  folder → rc 0, the worktree folder gone, `feat/<ID>` gone, no caveat about it. HOME and USERPROFILE
+  faked together; nothing printed carries a sha, a time, or a path outside the fixture.
+- Unchanged and still green: `flow-solo`, `self-land-finish`, `finish-blocked`, `drift-deps`, and the
+  drills that cover drift, finish, self-landing and worktree liveness (CI's Linux run of the task's own
+  commit, once, by hand: `PROOF_GOLDENS=true bash tools/proof.sh`).
+
 ## Changelog
 - v1 2026-11-09: created for the Phase 1 tasks of plans/minutes.md.
 - v2 2026-11-09: § 3–§ 10 added for Phase 2 (sprint 22, plan minutes, 6.14.0).
@@ -460,3 +491,4 @@ no repo was harmed: the update simply did not commit, and said nothing about why
 - v2.3 2026-11-09 (conductor): § 12 — the verify stamp carries the verify list's checksum, and run-verify needs the stamp; § 7's tree-only skip was unsound (CI: EXPRESS VERIFY RED FAIL).
 - v2.4 2026-11-09 (conductor): § 12 — an empty verify list is never "proven" (goldens guide-stale, pack-visual, shots-gallery caught it).
 - v2.5 2026-11-09 (conductor): § 13 — the update's commit stages one step at a time, retries a held index lock, and says why when it cannot commit (macOS CI: the status and the add in one pipeline raced for the index lock).
+- v2.6 2026-11-09 (conductor): § 14 — `wrap` typed from the task's own folder ends green: a worktree the running command stands in counts as still in use, and finish says the next finish clears it (found by a fresh-install test).
