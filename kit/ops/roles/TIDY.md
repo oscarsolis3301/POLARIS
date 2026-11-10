@@ -51,8 +51,8 @@ else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a 
    printed (`backlog`: open work holds some of those files — stop, and report it), then work in the
    worktree, as the current directory (SOLO.md step 2b).
 6. **Steps of ≤ 5 plan rows**, in proposal order; importer and mention edits ride along, uncounted.
-   Each: add its rows to `<primary>/.polaris/hops-plan.tsv` (empty it before the first step) · BEFORE
-   the `git mv`, the files to fix, each where it is now:
+   `.polaris/hops-plan.tsv` is the primary's file, even named by that relative path from the task
+   worktree. Each: add its rows to it (empty it first) · BEFORE `git mv`, the files to fix, where they are now:
    `POLARIS_ROOT=<task worktree> bash ops/polaris hops --owned <primary>/.polaris/hops-plan.tsv`
    (never `find`'s importer lookup: it reads the primary's index) · `git mv` (+ each `.meta`) · fix
    the imports (aliases too) and path tails in each listed file that exists ·
@@ -69,8 +69,8 @@ else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a 
      POLARIS command, no file inventories or symbols. A folder `CLAUDE.md` without the
      `<!-- polaris:guide -->` line gets the block appended after one blank line, its text untouched.
    - `git add` the guides, THEN `bash ops/polaris where --write` (it lists tracked guides only).
-   - `ops/LAYOUT.tsv`: a new file's first line is exactly
-     `# path<TAB>verdict<TAB>why — the layout record; polaris hops never proposes a keep row`; then
+   - `ops/LAYOUT.tsv`: APPEND, never overwrite. Only when it is missing, create it with exactly
+     `# path<TAB>verdict<TAB>why — the layout record; polaris hops never proposes a keep row`; append
      `<old path><TAB>moved<TAB>→ <new path> · hops-<version>` per move (`merged` for a merge) and
      `<path><TAB>keep<TAB><why>` per noted keep row — in-flight paths get none. Commit.
    - The full suite once, when `test:` is set: `bash ops/polaris bg run test` FROM the task worktree,
@@ -83,7 +83,7 @@ else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a 
 ## Report
 In the repo's `voice:` — outcomes, not tooling. Conductor-entered, this is your whole result.
 - **Before → after**, a small table: folders per change (step 2's line 1 → the after-score) and
-  guides (`<g>/<G>` → with yours added); then what moved, each `from → to`.
+  guides (`<guided>/<busy folders>` before → after, each with its own denominator); then what moved, each `from → to`.
 - **These tasks now take fewer lookups** — step 3's `change <name>: <k> folders → <k2>` lines, one
   per feature moved (one a red step cut short: say so).
 - **Left for you** — every keep row `unsure — left for you`, each merge not made, and the IDEAS line

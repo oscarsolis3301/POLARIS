@@ -255,8 +255,12 @@ The lookup ladder lives in § SAVE HOPS.
 ## MODEL ROUTING (auto — polaris route decides)
 - **Ask, never guess.** `ops/polaris route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>]` is the
   one oracle. Line 1 is always exactly one of `strong` · `mid` · `cheap` — bare, machine-parseable,
-  parse it blind. Line 2 is `   model: <name>`, and appears ONLY when that tier's mapping knob is
-  set. Read-only: no lock, no board write, no hook.
+  parse it blind. Two notes follow it: `   model: <name>` then `   effort: <level>` — the model and
+  the effort a spawn of that work should use. Read-only: no lock, no board write, no hook.
+- **Sized by default** (owner, 2026-11-09): `cheap` → `sonnet` at `low` · `mid` → `opus` at `medium` ·
+  `strong` → `opus` at `high`. The defaults live in the kit's code, so every project gets them on
+  update with no config change. The effort note is never above the chat's own level when the
+  machine guard has recorded it (`~/.claude/polaris/model-state/<session>.effort`).
 - **The derivation**, which `route` runs whenever nothing overrides it: `risk:` ≠ `normal` → `strong`
   (risk dominates points) · points ≥5 → `strong` · points ≤1 → `cheap` · everything else → `mid`.
   Missing or non-numeric points → `mid`, the safe middle. Routing NEVER blocks work — an unknown role
@@ -265,20 +269,20 @@ The lookup ladder lives in § SAVE HOPS.
   `strong`, because their mistakes multiply · SOLO and the qa scout → `mid` · BUILDER → whatever its
   task derives, so ask `route <ID>`, never `route --role BUILDER`.
 - **A task may override.** Optional `model:` frontmatter: `strong`/`mid`/`cheap` names that tier; any
-  other value is a LITERAL model name, echoed verbatim on line 2 with the derived tier still on
-  line 1 for information.
-- **Tier words become model names in exactly ONE place** — `model_strong:` / `model_mid:` /
-  `model_cheap:` in `ops/CONVENTIONS.md`. Unset knobs change NOTHING: the CLI speaks tier words only
-  and every command stays byte-identical to an unconfigured repo. Naming models is a per-repo
-  decision and never a kit default — THIS repo pins none; yours pins whatever it wants (never Fable
-  or Haiku, below), or nothing.
+  other value is a LITERAL model name, echoed verbatim in the model note with the derived tier still
+  on line 1 for information.
+- **A project may override** — `model_strong:` / `model_mid:` / `model_cheap:` and `effort_strong:` /
+  `effort_mid:` / `effort_cheap:` in `ops/CONVENTIONS.md`. Unset → the default above. The value
+  `inherit` drops that note, so the spawn uses the chat's own model or effort. A task's literal
+  `model:` still wins for the model note.
 - **Fable and Haiku: routing never picks them, and only Haiku is blocked.** `route` never names
   either, whatever a knob or a task's `model:` says (`core.sh model_denied`, a kit constant no repo
-  can switch off). A Fable session is the owner's choice: they pick it with `/model`, and the
-  machine's session guard lets it run. A Haiku session, switch or spawn is refused there.
+  can switch off); a forbidden name drops the model note and prints a REFUSED note instead. A Fable
+  session is the owner's choice: they pick it with `/model`, and the machine's session guard lets it
+  run. A Haiku session, switch or spawn is refused there.
 - **Consumers, so nobody re-derives it:** the CONDUCTOR runs `route` before EVERY spawn and passes
-  line 2's name as the Agent-tool `model` param (no line 2 → omit the param, let the platform default
-  run) · `fleet` injects `--model <name>` at the MAX tier over ready tasks, because panes claim
+  the two notes as the spawn's `model` and `effort` (a missing note → leave that setting out, and the
+  spawn uses the chat's own) · `fleet` injects `--model <name>` at the MAX tier over ready tasks, because panes claim
   racily and any pane may end up holding any task · `pack` prints `· tier <t>` in its header line.
 - **The honest boundary.** A RUNNING session cannot switch its own model. Routing governs what gets
   SPAWNED (subagents) and LAUNCHED (panes); for the session already reading this, `triage` and
@@ -316,7 +320,7 @@ Three bands, and the band is a property of the MEASURED time, not of how importa
    anything near the top of the range). A defaulted timeout is how suites die at 120s.
 3. **Past the cap** — `ops/polaris bg run <key>` (a bare CONVENTIONS suite key: `test` · `test_fast` ·
    `lint` · `typecheck` · `build` · `uat` · `qa`), keep working, then collect in bounded chunks with
-   `bg wait <key> --max 300`. Exit 2 means still running: call it again. `bg tail` reads the log
+   `bg wait <key> --max 120`. Exit 2 means still running: call it again. `bg tail` reads the log
    without waiting.
 
 - **SUBAGENT rule — never end a turn with a job still running.** Your existence ends with your turn,

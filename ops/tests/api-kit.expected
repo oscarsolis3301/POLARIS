@@ -41,6 +41,9 @@ kit/ops/KEYS.tsv	key	builders
 kit/ops/KEYS.tsv	key	claim
 kit/ops/KEYS.tsv	key	drain
 kit/ops/KEYS.tsv	key	drain_slices
+kit/ops/KEYS.tsv	key	effort_cheap
+kit/ops/KEYS.tsv	key	effort_mid
+kit/ops/KEYS.tsv	key	effort_strong
 kit/ops/KEYS.tsv	key	evolve_apply
 kit/ops/KEYS.tsv	key	express
 kit/ops/KEYS.tsv	key	gallery
@@ -407,6 +410,8 @@ kit/ops/lib/drift.sh	fn	pat_overlap
 kit/ops/lib/drift.sh	fn	rules_gate
 kit/ops/lib/drift.sh	fn	surfaces_apply
 kit/ops/lib/drift.sh	fn	surfaces_health
+kit/ops/lib/flow.sh	fn	cmd_begin
+kit/ops/lib/flow.sh	fn	cmd_wrap
 kit/ops/lib/handover.sh	fn	cmd_next
 kit/ops/lib/handover.sh	fn	next_brief
 kit/ops/lib/handover.sh	fn	next_budget

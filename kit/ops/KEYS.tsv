@@ -24,9 +24,12 @@ voice	5.2.0	standard	agents talk to you in plain friendly English; technical mak
 adhd	6.4.0	off	replies are not shaped for ADHD unless you type /i-have-adhd — on makes that skill fire on its own in every session here	Want replies shaped for ADHD — next action first, numbered steps, wins made visible?|Not needed=off|Yes, always=on
 autolaunch	5.7.0	ask	the Planner offers Builder panes once; wt opens them for you, off only prints kickoffs
 builders	5.9.0	subagents	a work request runs the whole loop in one chat; panes stops the conductor after planning
-model_strong	5.24.0	<name>	polaris route answers in bare tier words — no real model name reaches a spawn or a pane
-model_mid	5.24.0	<name>	same for the mid tier — ordinary tasks run on whatever the platform defaults to
-model_cheap	5.24.0	<name>	same for the cheap tier — small tasks are never routed to a cheaper model
+model_strong	5.24.0	opus	big or risky tasks, planning and landing run on Opus; name another model to change it, or inherit to use the chat's own
+model_mid	5.24.0	opus	ordinary tasks run on Opus; name another model to change it, or inherit to use the chat's own
+model_cheap	5.24.0	sonnet	small tasks run on Sonnet; name another model to change it, or inherit to use the chat's own
+effort_strong	6.14.0	high	big or risky tasks run at high effort, never above the chat's own; inherit uses the chat's own effort
+effort_mid	6.14.0	medium	ordinary tasks run at medium effort, never above the chat's own; inherit uses the chat's own effort
+effort_cheap	6.14.0	low	small tasks run at low effort, never above the chat's own; inherit uses the chat's own effort
 autonomy	5.13.0	trusted	unset composes the hands-free trio since 6.0; autonomy: standard is the one-line opt-out
 plan_gate	5.13.0	auto	unset proceeds past a clean plan since 6.0; confirm waits for your go every time
 builder_questions	5.13.0	default-safe	unset lets Builders default reversible spec details since 6.0; ask returns every question

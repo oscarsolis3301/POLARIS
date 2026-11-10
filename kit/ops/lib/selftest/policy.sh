@@ -488,14 +488,16 @@ drill_qa() {
     git branch -D feat/T-QD >/dev/null 2>&1 || true
     rm -f ops/board/done/T-QC.md ops/board/done/T-QD.md ops/board/done/T-QW.md
     "$SELF" qa > "$T/qaclean.out" 2>&1 || { cat "$T/qaclean.out"; echo "QA CRUFT HERMETIC FAIL (the fixture must leave qa green again)"; exit 1; }
-    # T-179: MAP Deltas > 20 stays a HARD gate — the suite runs green, qa is rc 1, and NO stamp.
+    # minutes.md § 7: MAP Deltas > 20 is ADVICE — the suite runs green, qa is rc 0, the stamp is
+    # written, and the advisory line still says what to fold (it was a hard gate until 6.14.0).
     qm=0; while [ "$qm" -lt 21 ]; do qm=$((qm+1)); printf -- '- qa drill delta %s (T-QM, 2026-09-24)\n' "$qm" >> ops/MAP.md; done
     git add -A; git commit -qm 'drill: qa map overflow'
     rm -f .polaris/suite-stamp
-    "$SELF" qa > "$T/qamap.out" 2>&1 && { cat "$T/qamap.out"; echo "QA MAP RC FAIL (MAP Deltas > 20 must red qa)"; exit 1; }
-    grep -q 'MAP: ' "$T/qamap.out" || { cat "$T/qamap.out"; echo "QA MAP REASON FAIL (qa must be red for the MAP overflow)"; exit 1; }
-    grep -q 'test — green' "$T/qamap.out" || { cat "$T/qamap.out"; echo "QA MAP SUITE FAIL (the suite must have run green, or the no-stamp proves nothing)"; exit 1; }
-    [ -f .polaris/suite-stamp ] && { cat "$T/qamap.out"; echo "QA MAP STAMP FAIL (a MAP overflow is a hard gate — no stamp)"; exit 1; }
+    "$SELF" qa > "$T/qamap.out" 2>&1 || { cat "$T/qamap.out"; echo "QA MAP RC FAIL (a MAP overflow is advice — it must never red qa)"; exit 1; }
+    grep -q '^   advisory: MAP: [0-9]* delta lines' "$T/qamap.out" || { cat "$T/qamap.out"; echo "QA MAP ADVISORY FAIL (qa must pass the MAP overflow on as an advisory: line)"; exit 1; }
+    grep -q 'test — green' "$T/qamap.out" || { cat "$T/qamap.out"; echo "QA MAP SUITE FAIL (the suite must have run green, or the stamp proves nothing)"; exit 1; }
+    [ "$(cut -d' ' -f1 < .polaris/suite-stamp 2>/dev/null)" = "$(git rev-parse HEAD)" ] || { cat "$T/qamap.out"; echo "QA MAP STAMP FAIL (a MAP overflow never withholds the stamp)"; exit 1; }
+    rm -f .polaris/suite-stamp
     git reset -q --hard HEAD~1
     printf 'test: false\n' > ops/CONVENTIONS.md
     "$SELF" qa >/dev/null 2>&1 && { echo "QA RED FAIL (red suite must rc 1)"; exit 1; }
@@ -854,7 +856,11 @@ drill_route() {
     [ "$("$SELF" route --points 1 --risk normal | head -1)" = cheap ]  || { echo "ROUTE TIER FAIL (<=1 point is cheap)"; exit 1; }
     [ "$("$SELF" route --points 2 --risk high   | head -1)" = strong ] || { echo "ROUTE TIER FAIL (risk must dominate points)"; exit 1; }
     [ "$("$SELF" route --points x --risk normal | head -1)" = mid ]    || { echo "ROUTE TIER FAIL (non-numeric points is the safe middle, NEVER an error)"; exit 1; }
-    [ "$("$SELF" route --points 5 --risk normal | wc -l | tr -d ' ')" = 1 ] || { echo "ROUTE QUIET FAIL (an unset knob must print NOTHING but the tier word)"; exit 1; }
+    # minutes.md § 7/§ 8: with no knobs the route prints the tier, then the model note, then the effort note.
+    rtn="$("$SELF" route --points 5 --risk normal)"
+    { [ "$(printf '%s\n' "$rtn" | wc -l | tr -d ' ')" = 3 ] && printf '%s\n' "$rtn" | sed -n 2p | grep -q '^   model: ' \
+      && printf '%s\n' "$rtn" | sed -n 3p | grep -q '^   effort: '; } \
+      || { printf '%s\n' "$rtn"; echo "ROUTE NOTES FAIL (the default route prints the tier, then model, then effort)"; exit 1; }
     # 2) the role table, and the only two things route is allowed to refuse. An unknown role is mid
     #    at rc 0 on purpose — routing must never be the reason a piece of work cannot start.
     [ "$("$SELF" route --role PLANNER | head -1)" = strong ] || { echo "ROUTE ROLE FAIL (PLANNER is strong)"; exit 1; }

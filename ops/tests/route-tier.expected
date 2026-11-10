@@ -1,63 +1,93 @@
-== knobs UNSET: tier words only ==
+== knobs UNSET: the defaults in code ==
 route --points 5 --risk normal
 strong
+   model: opus
+   effort: high
+rc 0
+route --points 3 --risk normal
+mid
+   model: opus
+   effort: medium
+rc 0
+route --points 1 --risk normal
+cheap
+   model: sonnet
+   effort: low
 rc 0
 route T-3
 cheap
    model: some-model-9
+   effort: low
+rc 0
+route T-4
+cheap
+   effort: low
+   model REFUSED: 'claude-haiku-9' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
 rc 0
 == knobs SET: the tier_for table, board-free ==
 route --points 5 --risk normal
 strong
+   effort: high
    model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
 rc 0
 route --points 3 --risk normal
 mid
    model: opus
+   effort: medium
 rc 0
 route --points 1 --risk normal
 cheap
    model: sonnet
+   effort: low
 rc 0
 route --points 2 --risk high
 strong
+   effort: high
    model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
 rc 0
 route --points x --risk normal
 mid
    model: opus
+   effort: medium
 rc 0
 == roles ==
 route --role PLANNER
 strong
+   effort: high
    model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
 rc 0
 route --role SOLO
 mid
    model: opus
+   effort: medium
 rc 0
 route --role BUILDER
 mid
    model: opus
+   effort: medium
    BUILDER routes per task — bash ops/polaris route <ID>
 rc 0
 route --role WIZARD
 mid
    model: opus
+   effort: medium
    unknown role 'WIZARD' — mid (routing never blocks work)
 rc 0
 == by ID: derived · tier-word override · literal name ==
 route T-1
 strong
+   effort: high
    model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
 rc 0
 route T-2
 cheap
    model: sonnet
+   effort: low
 rc 0
 route T-3
 cheap
    model: some-model-9
+   effort: low
 rc 0
 == refusals ==
 route <no args>
@@ -66,6 +96,41 @@ rc 1
 route T-404
 ⛔ route: no task T-404 on the board — check: ops/polaris board-fm
 rc 1
+== effort knobs: an override, inherit drops a note, an unknown word reads as unset ==
+route --points 5 --risk normal
+strong
+   effort: max
+   model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
+rc 0
+route --points 3 --risk normal
+mid
+rc 0
+route --points 1 --risk normal
+cheap
+   model: sonnet
+   effort: low
+rc 0
+== the clamp: never above the chat own level ==
+chat medium · route --points 5
+strong
+   effort: medium
+   model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
+rc 0
+chat high · route --points 1
+cheap
+   model: sonnet
+   effort: low
+rc 0
+chat nonsense · route --points 5
+strong
+   effort: high
+   model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
+rc 0
+chat none · route --points 5
+strong
+   effort: high
+   model REFUSED: 'fable' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
+rc 0
 == fleet carries the ready queue max tier ==
 token: none
 == fleet with a LEGAL strong: the token still goes in ==

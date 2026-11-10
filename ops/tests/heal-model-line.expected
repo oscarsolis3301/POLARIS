@@ -1,33 +1,48 @@
 == 1. the line an older kit appended (LF): rewritten, every other byte kept ==
   heal rc: 0
-healed: CLAUDE.md — the model line now says Fable is the owner's to pick (your prose untouched)
+healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)
   file: written
   bytes: the old file with only that line changed
-9:- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.
+9:- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku is blocked, and Fable runs only when the owner picks it.
 == 2. a second heal is a no-op: no note, and the file is not even rewritten ==
   heal rc: 0
   file: not written
   bytes: unchanged since the first heal
 == 3. the same file with CRLF line ends: the new line keeps its CRLF ==
   heal rc: 0
-healed: CLAUDE.md — the model line now says Fable is the owner's to pick (your prose untouched)
+healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)
   file: written
   bytes: the CRLF file with only that line changed
 == 4. a line its owner has edited is theirs: left exactly as found ==
   heal rc: 0
   file: not written
   bytes: as its owner left it
-== 5. a file without the line (the section a newer kit appends) is never written ==
+== 5. the line B (Fable only when the owner picks it): rewritten ==
+  heal rc: 0
+healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)
+  file: written
+  bytes: the old file with only that line changed
+== 5b. the line C (the short one heal used to append): rewritten ==
+  heal rc: 0
+healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)
+  file: written
+  bytes: the old file with only that line changed
+== 5c. a file already holding the new line (what a first heal appends now) is never written ==
   heal rc: 0
   file: not written
   bytes: as found
+== 5d. a first heal appends the section with the new line, and only that model line ==
+  heal rc: 0
+healed: CLAUDE.md — appended the efficiency section (once; your prose untouched)
+  new line: 1
+  old lines: 0
 == 6. one line per heal at most, and a last line with no line end still has none after ==
   heal rc: 0
-healed: CLAUDE.md — the model line now says Fable is the owner's to pick (your prose untouched)
+healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)
   file: written
   bytes: the first copy changed, the second kept
   heal rc: 0
-healed: CLAUDE.md — the model line now says Fable is the owner's to pick (your prose untouched)
+healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)
   bytes: the second copy changed too, still with no line end
 == nothing left behind ==
   temp files beside CLAUDE.md: 0

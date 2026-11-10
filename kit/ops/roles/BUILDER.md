@@ -56,11 +56,10 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
 
 ## 5. Prove and hand off
 ```bash
-bash ops/polaris verify                                        # optional mid-flight check: diff ⊆ files_owned + verify: commands
 bash ops/polaris bg run ship-<ID> -- bash ops/polaris handoff --saw "<the after shot vs the bar>"   # gate + landing tail, detached; --saw only when pack asked for captures
 bash ops/polaris bg wait ship-<ID> --max 300                   # collect in chunks: rc 0 green · 1 red · 2 still running → wait again · 3 unknown
 ```
-`handoff` is still the all-or-nothing gate: it refuses dirty trees, re-proves ownership, re-runs `verify:`, pushes `feat/<ID>` under `publish: direct` (`publish: pr` keeps it local; seal pushes only `integrate/<date>`) and moves the task to `review/`. Since 6.1.0 it then keeps going by default — `landing: self` (unset composes to `self`): the same command takes the integration lease (wait-your-turn behind every other session), squashes your branch onto the wave, and when yours is the last lane out it seals the wave and finishes the landed tasks. No full suite runs here — `land` is squash + audit; the suite stays per-wave.
+`handoff` is still the all-or-nothing gate and runs `verify` itself, so there is no separate verify step: it refuses dirty trees, re-proves ownership, re-runs `verify:`, pushes `feat/<ID>` under `publish: direct` (`publish: pr` keeps it local; seal pushes only `integrate/<date>`) and moves the task to `review/`. Since 6.1.0 it then keeps going by default — `landing: self` (unset composes to `self`): the same command takes the integration lease (wait-your-turn behind every other session), squashes your branch onto the wave, and when yours is the last lane out it seals the wave and finishes the landed tasks. No full suite runs here — `land` is squash + audit; the suite stays per-wave.
 
 That tail can WAIT (a busy lease polls up to 10 minutes — deliberately exactly the harness's 600s tool cap), which is why the recipe above detaches it: `bg run ship-<ID>` + chunked `bg wait --max 300` (half the cap), repeating `bg wait` until the rc is not 2 — never a foreground wait that can cross the cap, never a background notification — and why `--saw` rides that line inline: a detached job has nobody at a keyboard to prompt. Parse the rc, not the prose. A `queued:` line (rc 3) means the lane stayed busy, not broken:
 integration lane busy → wait; rc 3 with a queued: line means report queued and retry at the next wave boundary

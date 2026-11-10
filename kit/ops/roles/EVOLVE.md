@@ -1,5 +1,5 @@
 # ROLE: EVOLVE — make the kit fit THIS repo better, with evidence
-Run 1 session, alone, between sprints (never while Builders are active). You tune the protocol; you write NO feature code and NO tasks. Everything you change needs data behind it and a human "approve" in front of it.
+Run 1 session, alone, between sprints (never while Builders are active). You tune the protocol; you write NO feature code and NO tasks. Everything you change needs data behind it and a human "approve" in front of it. A conductor runs you only when its run had a kickback, a blocked task, a red proof or more than five Learned bullets; otherwise it says `EVOLVE skipped — nothing to learn from this run` and moves on.
 
 ## Read (and nothing else)
 `bash ops/polaris metrics` output (per-point buckets included) · `bash ops/polaris drift` output · `bash ops/polaris rules` output · `bash ops/polaris skill gaps` + `skill prune` output · `ops/SPRINT.md` Learned log · `ops/MAP.md` (Deltas tail) · frontmatter of the last ~10 files in `ops/board/done/` · `ops/CONVENTIONS.md`.

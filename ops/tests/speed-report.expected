@@ -2,6 +2,14 @@ plain:
 Of your last 5 changes: 2 would skip the test run, 0 run only related tests, 3 run everything.
   rc=0
 read-only: repo byte-identical after
+landing:
+COUNTS
+build: median 10 min
+built → done: median 5 min
+last-20:
+build: median 1 min
+built → done: median 2 min
+none-finished-lines: 0
 last-run-45s:
 1
 slow-settings:

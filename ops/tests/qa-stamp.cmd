@@ -2,7 +2,8 @@
 #
 # A green suite is a fact about a COMMIT. A leftover branch (CRUFT) says nothing about that commit,
 # so it keeps the stamp — qa still exits 1 on it, but the next qa at the same HEAD runs no suite key.
-# MAP Deltas > 20 and LEARNED > 8 stay HARD gates: rc 1 and no stamp, exactly like a red suite.
+# MAP Deltas > 20 and LEARNED > 8 are ADVICE since 6.14.0 (minutes.md § 7): qa passes the advisory
+# line on, stays green and stamps — they were hard gates, and they stalled the end of two sprints.
 #
 # HERMETIC: a throwaway repo under mktemp -d, the CLI run from INSIDE it — polaris anchors to the
 # fixture's own primary — so no live-board write can ever red this golden. Every qa below runs on a
@@ -27,7 +28,8 @@ trap 'rm -rf "$FIX"' EXIT
 ) >/dev/null 2>&1
 cd "$FIX/repo"
 qa() { # qa <label> — ONE qa run, reported as facts: rc · stamp (HEAD | none | other) · how many
-  # suite keys ran · whether the suite was skipped · the tree clean · then the ⚠ findings verbatim.
+  # suite keys ran · whether the suite was skipped · the tree clean · then the ⚠ findings and the
+  # doc-overflow advisory lines verbatim.
   OUT="$(bash "$KIT" qa 2>&1)"; RC=$?
   if [ ! -f .polaris/suite-stamp ]; then ST=none
   elif [ "$(cut -d' ' -f1 < .polaris/suite-stamp)" = "$(git rev-parse HEAD)" ]; then ST=HEAD
@@ -36,14 +38,16 @@ qa() { # qa <label> — ONE qa run, reported as facts: rc · stamp (HEAD | none 
     "$(printf '%s\n' "$OUT" | grep -cE '(test|lint|typecheck|build|uat) — (green|RED)')" \
     "$(printf '%s\n' "$OUT" | grep -c 'suite already green at')" \
     "$( [ -z "$(git status --porcelain)" ] && echo yes || echo no)"
-  printf '%s\n' "$OUT" | sed -n 's/^ *\(⚠ \[[0-9]*\] .*\)$/  \1/p' | sed -E 's/[0-9]+ (delta lines|bullets)/N \1/'
+  printf '%s\n' "$OUT" | sed -n -e 's/^ *\(⚠ \[[0-9]*\] .*\)$/  \1/p' \
+    -e 's/^ *\(advisory: MAP: .*\)$/  \1/p' -e 's/^ *\(advisory: LEARNED: .*\)$/  \1/p' \
+    | sed -E 's/[0-9]+ (delta lines|bullets)/N \1/'
 }
 # 1) suite green, the only other red CRUFT-class → stamp = HEAD, still rc 1.
 qa cruft-only
 # 2) same HEAD, same CRUFT red → the suite is skipped: no suite key runs at all.
 qa cruft-again
-# 3) MAP Deltas > 20 is a hard gate: suite green, rc 1, NO stamp. (The CRUFT goes first, so MAP is
-#    the only non-suite red.)
+# 3) MAP Deltas > 20 is advice: suite green, rc 0, the stamp written, the advisory line printed.
+#    (The CRUFT goes first, so nothing else is red.)
 git branch -q -D feat/T-9; rm -f ops/board/done/T-9.md .polaris/suite-stamp
 i=0; while [ "$i" -lt 21 ]; do i=$((i+1)); printf -- '- delta %s (T-M, 2026-09-24)\n' "$i" >> ops/MAP.md; done
 git add -A >/dev/null 2>&1; git commit -qm map >/dev/null 2>&1
@@ -52,7 +56,8 @@ qa map-overflow
 git reset -q --hard HEAD~1; rm -f .polaris/suite-stamp
 { printf '# SPRINT 1 — fixture\n\n## Learned\n'; i=0; while [ "$i" -lt 9 ]; do i=$((i+1)); printf -- '- lesson %s\n' "$i"; done; } > ops/SPRINT.md
 qa learned-overflow
-# 5) a red suite is never stamped — the one red that no other verdict can outweigh.
-rm -f ops/SPRINT.md
+# 5) a red suite is never stamped — the one red that no other verdict can outweigh. (Case 4 now
+#    stamps, so that stamp goes first: with it as a baseline, a CONVENTIONS-only commit carries.)
+rm -f ops/SPRINT.md .polaris/suite-stamp
 printf 'test: false\n' > ops/CONVENTIONS.md; git add -A >/dev/null 2>&1; git commit -qm red >/dev/null 2>&1
 qa suite-red

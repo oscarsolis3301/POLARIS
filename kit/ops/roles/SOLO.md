@@ -59,9 +59,11 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    - A leftover already in `ready/` whose `files_owned` overlaps this task is never run first: park
      it — `bash ops/polaris release <leftover-ID> --to backlog -m "parked: not part of <plan>"` —
      and name it in ONE line of your step-8 close.
-   - Then file it: `bash ops/polaris new <draft>` — one board commit, never on `<base>`. The ID it
-     prints is what `triage <ID>` and `claim <ID>` take.
-2. **Claim** — `bash ops/polaris claim <ID>`. This locks it and builds a worktree on `feat/<ID>`.
+   - Then file it, check it and take it in ONE call: `bash ops/polaris begin <draft>`. It runs
+     `new` (one board commit, never on `<base>`) → `triage <ID>` → `claim <ID>` → `pack <ID>`, in
+     that order, and its output is your whole context. A lane other than `solo` → rc 3, triage's
+     answer and one `begin:` line; the task waits in `ready/` — STOP, as in Entry.
+2. **Claim** — done by `begin`: the task is locked and its worktree is `.polaris/wt/<ID>` on `feat/<ID>`.
 2b. **Enter that worktree** — a step, not a suggestion, and the one step every collision so far
    skipped. You share this checkout; work only inside `files_owned`, and only in there. Two callers,
    one of which is you:
@@ -72,7 +74,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    guard denies writes to shared source while any task lock is live.
 3. **Build.** Match the surrounding code: `.polaris/brain/prefs.md` records the repo's real
    conventions, so you do not have to infer them.
-4. **Verify** — `bash ops/polaris verify`. Proves diff ⊆ `files_owned` and runs your `verify:` list.
+4. **Verify** — `wrap` runs it for you (step 5, through `handoff`); a separate `bash ops/polaris
+   verify` is an optional mid-flight check. Proves diff ⊆ `files_owned` and runs your `verify:` list.
    It also refuses a change to a mapped surface whose tests did not change — `⛔ SURFACES stale`
    (`ops/SURFACES.tsv` maps which tests cover which source paths; `pack` printed the rows that
    cover what you own). Update the tests; a genuine exception is a human's recorded decision,
@@ -90,24 +93,29 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    READ both against `ops/DESIGN.md` — the bar this screen must clear — and close with
    `--saw "<the after shot vs that bar — PASS / WEAK / FAIL>"` (`--no-before "<why>"` for a
    brand-new screen); `handoff` refuses without two fresh captures, or without `--saw`.
-5. **Handoff — and, by default, the landing.** Under `landing: self` (since 6.1.0 unset composes to
-   `self`) `bash ops/polaris handoff` continues into the land in this same session: it takes the
-   integration lease (wait-your-turn behind every other session), squashes `feat/<ID>` onto the
-   wave, and — you being the only lane — seals the wave and finishes the task. That tail can wait
-   on a busy lease, so detach it and collect the rc in chunks:
-   `bash ops/polaris bg run ship-<ID> -- bash ops/polaris handoff --saw "<the after shot vs the bar>"`, then
+5. **Wrap — handoff, the landing, `next`, and `finish` when it is time, in ONE call.** From the
+   worktree, `bash ops/polaris wrap` runs `handoff` → `land --express <ID>` (only under `landing:
+   integrator`, for a solo task) → `next`, and runs `finish` when `next` says `finish`, exiting with
+   its code (steps 6-7 in one call). Under `landing: self` (since 6.1.0 unset composes to `self`)
+   `handoff` itself continues into the land in this same session: it takes the integration lease
+   (wait-your-turn behind every other session), squashes `feat/<ID>` onto the wave, and — you being
+   the only lane — seals the wave and finishes the task. Entered as a conductor's subagent? Run
+   `handoff` in place of `wrap` — `finish` is the conductor's. That tail can wait on a busy lease, so
+   detach it and collect the rc in chunks:
+   `bash ops/polaris bg run ship-<ID> -- bash ops/polaris wrap --saw "<the after shot vs the bar>"`, then
    `bash ops/polaris bg wait ship-<ID> --max 300` repeated until the rc is not 2 (0 green · 1 red ·
    2 still running · 3 unknown) — never a foreground wait that can cross the 600s cap, never a
    background notification. A `queued:` line (rc 3) means the lane stayed busy: report queued and
    retry at the next wave boundary. `risk: high` and STOP-AND-ASK work never reaches SOLO, so the
-   self-land refusals should never fire here; `landing: integrator` restores the classic two-step
-   below.
-6. **Land** — only under `landing: integrator`, or when step 5's tail queued or refused:
+   self-land refusals should never fire here; under `landing: integrator` `wrap` runs step 6's
+   land itself.
+6. **Land** — by hand only when step 5's tail queued or refused, or you ran `handoff` alone:
    `bash ops/polaris land --express <ID>`. One pass: integrate branch, audit, the FULL
    suite ONCE, seal, run-verify, done, branch cleanup. A red suite unwinds the commit and kicks the
    task back to you — fix it here, in this session, and land again. (After a step-5 self-land there
    is nothing left to do here — the task is already done and sealed.)
-7. **Finish — only when `next` says so.** `bash ops/polaris next` names the one thing this chat does
+7. **Finish — only when `next` says so.** `wrap` already asked `next` and ran `finish` when it
+   said so; by hand, `bash ops/polaris next` names the one thing this chat does
    next; anything but `finish` on line 1 (`build <ID>` · `integrate` · `promote` · `wait` · `tidy`)
    is more work, so follow it — that hop is the next context, not a second role. `tidy` → read
    `ops/roles/TIDY.md` and run the pass here (a board-proven hop), then `next`. Line 1 `finish` →

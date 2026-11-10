@@ -1,11 +1,12 @@
-# heal migrates ONE line of a repo's own CLAUDE.md (ops/contracts/speed.md § 2b, owner 2026-11-09).
-# Older kits appended "- **Never name a model.** Fable and Haiku are forbidden outright; every spawn
-# inherits the session." to every project's efficiency section, so every agent in every project was
-# still told Fable is off limits after the owner made it theirs to pick again. heal now rewrites that
-# EXACT line to the new wording — the first copy only, its line ending kept, every other byte of the
-# file untouched. A line its owner has edited is theirs and stays; a file without the line is never
-# written at all; and a second heal changes nothing. "Written" is read off the file's mtime, so "not
-# written" means not even rewritten with the same bytes.
+# heal migrates ONE line of a repo's own CLAUDE.md (ops/contracts/minutes.md § 11.1, after speed.md § 2b).
+# Older kits wrote one of three model lines into every project's efficiency section, all saying "never
+# name a model": A (Fable and Haiku forbidden outright), B (Fable only when the owner picks it), and C
+# (the short line heal itself appended). Once `route` names a model and an effort for every helper, a
+# project CLAUDE.md still saying that overrides CONDUCTOR.md there and switches the sizing off. heal now
+# rewrites each EXACT line to the one new line — the first copy only, its line ending kept, every other
+# byte of the file untouched. A line its owner has edited is theirs and stays; a file without any of
+# them is never written at all; and a second heal changes nothing. "Written" is read off the file's
+# mtime, so "not written" means not even rewritten with the same bytes.
 #
 # HERMETIC (the heal-design pattern): a throwaway repo, and HOME and USERPROFILE point into this
 # run's mktemp -d, so the real ~/.claude can never be read or written. A ready-made .polaris/brain/
@@ -29,7 +30,9 @@ R="$FIX/repo"
 printf 'base: main\nvoice: standard\n' > "$R/ops/CONVENTIONS.md"
 mkdir -p "$R/.polaris/brain"
 OLD='- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.'
-NEW='- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.'
+OLDB='- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.'
+OLDC='- **Never name a model** — every spawn inherits the session.'
+NEW='- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku is blocked, and Fable runs only when the owner picks it.'
 # doc <eol> <model line> — the owner's prose, then the section an older kit appended around <model
 # line>, every line ended by <eol>.
 doc() {
@@ -56,7 +59,7 @@ C() { if cmp -s "$R/CLAUDE.md" "$FIX/want"; then echo "  bytes: $1"; else echo "
 echo '== 1. the line an older kit appended (LF): rewritten, every other byte kept =='
 doc $'\n' "$OLD" > "$R/CLAUDE.md"; doc $'\n' "$NEW" > "$FIX/want"; old
 H; W; C 'the old file with only that line changed'
-grep -n 'Never name a model' "$R/CLAUDE.md"
+grep -n -e 'Never name a model' -e 'Size every helper' "$R/CLAUDE.md"
 
 echo '== 2. a second heal is a no-op: no note, and the file is not even rewritten =='
 old; H; W; C 'unchanged since the first heal'
@@ -69,9 +72,23 @@ echo '== 4. a line its owner has edited is theirs: left exactly as found =='
 doc $'\n' "$OLD We mean it." > "$R/CLAUDE.md"; cp "$R/CLAUDE.md" "$FIX/want"; old
 H; W; C 'as its owner left it'
 
-echo '== 5. a file without the line (the section a newer kit appends) is never written =='
-doc $'\n' '- **Never name a model** — every spawn inherits the session.' > "$R/CLAUDE.md"; cp "$R/CLAUDE.md" "$FIX/want"; old
+echo '== 5. the line B (Fable only when the owner picks it): rewritten =='
+doc $'\n' "$OLDB" > "$R/CLAUDE.md"; doc $'\n' "$NEW" > "$FIX/want"; old
+H; W; C 'the old file with only that line changed'
+
+echo '== 5b. the line C (the short one heal used to append): rewritten =='
+doc $'\n' "$OLDC" > "$R/CLAUDE.md"; doc $'\n' "$NEW" > "$FIX/want"; old
+H; W; C 'the old file with only that line changed'
+
+echo '== 5c. a file already holding the new line (what a first heal appends now) is never written =='
+doc $'\n' "$NEW" > "$R/CLAUDE.md"; cp "$R/CLAUDE.md" "$FIX/want"; old
 H; W; C 'as found'
+
+echo '== 5d. a first heal appends the section with the new line, and only that model line =='
+printf '# Fixture project\n\nOur own words.\n' > "$R/CLAUDE.md"
+H
+grep -c -x -F -e "$NEW" "$R/CLAUDE.md" | sed 's/^/  new line: /'
+grep -c -e 'Never name a model' "$R/CLAUDE.md" | sed 's/^/  old lines: /'
 
 echo '== 6. one line per heal at most, and a last line with no line end still has none after =='
 { doc $'\n' "$OLD"; printf '%s' "$OLD"; } > "$R/CLAUDE.md"
