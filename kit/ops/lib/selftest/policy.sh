@@ -841,11 +841,12 @@ drill_route() {
     # ---- T-071 route drill (ops/contracts/model-routing.md § Executable check) ----
     # `triage` answers "which lane"; `route` answers "which MODEL", and the CONDUCTOR calls it
     # before EVERY spawn while `fleet` injects its answer into every pane it opens. So line 1 is
-    # parsed BLIND — always exactly one of three words — and the note is the other half of the
-    # contract: it appears when, and ONLY when, a mapping knob or a task's literal `model:` names a
-    # model, because a repo that sets no knobs must behave byte-identically to one with no routing
-    # in it at all. That silence is the invariant a knob-shaped feature loses first, so it is
-    # asserted here in both directions rather than assumed.
+    # parsed BLIND — always exactly one of three words — and the notes are the other half of the
+    # contract (minutes.md § 8): line 2 is ALWAYS `   model: <name>` and line 3 `   effort: <level>`.
+    # The model is a task's literal `model:` first, then the tier's `model_<tier>` knob, then the
+    # kit's own default (cheap sonnet/low, mid opus/medium, strong opus/high) — so a repo that sets
+    # no knobs still gets sized spawns. `fleet` is NOT sized by route: with no knobs its pane
+    # command carries no --model token at all, and that silence is asserted in section 5.
     # HERMETIC (T-046): CONVENTIONS.md is saved and restored byte-exactly, the fixture tasks and the
     # stub PATH bin are removed, and nothing here claims, locks, commits or touches the board branch.
     [ -f ops/CONVENTIONS.md ] && cp ops/CONVENTIONS.md "$T/rt-conv.bak" || rm -f "$T/rt-conv.bak"
@@ -869,24 +870,30 @@ drill_route() {
     [ "$("$SELF" route --role NO-SUCH-ROLE | head -1)" = mid ] || { echo "ROUTE ROLE FAIL (an unknown role falls back to mid)"; exit 1; }
     "$SELF" route >/dev/null 2>&1 && { echo "ROUTE USAGE FAIL (no args must rc 1)"; exit 1; }
     "$SELF" route T-NOPE >/dev/null 2>&1 && { echo "ROUTE ID FAIL (an unknown ID must rc 1)"; exit 1; }
-    # 3) the note, via a FIXTURE CONVENTIONS: three-space indent (triage's shape), the knob's value
+    # 3) the notes, via a FIXTURE CONVENTIONS: three-space indent (triage's shape), the knob's value
     #    with its owner comment stripped, and strictly per-tier — model_mid is left unset here, so
-    #    mid must stay a bare word while its neighbours note.
+    #    mid's line 2 is the kit default (opus) while its neighbours carry their knob. Every tier
+    #    prints three lines: tier, model, effort. Only cheap's effort is pinned exactly (low is the
+    #    floor, so the chat-level clamp can never move it); mid's is pinned by shape.
     printf 'model_strong: drill-strong-9   # owner comment, stripped by cfg\nmodel_cheap: drill-cheap-2\n' > ops/CONVENTIONS.md
     "$SELF" route --points 5 --risk normal | awk 'NR==2 && $0 == "   model: drill-strong-9" { ok=1 } END { exit !ok }' \
       || { "$SELF" route --points 5 --risk normal; echo "ROUTE NOTE FAIL (want line 2 = three spaces + 'model: <knob value>')"; exit 1; }
-    [ "$("$SELF" route --points 1 --risk normal | wc -l | tr -d ' ')" = 2 ] || { echo "ROUTE NOTE FAIL (the cheap knob must note too)"; exit 1; }
-    [ "$("$SELF" route --points 3 --risk normal | wc -l | tr -d ' ')" = 1 ] || { echo "ROUTE NOTE FAIL (model_mid is unset — mid must stay a bare word)"; exit 1; }
+    [ "$("$SELF" route --points 5 --risk normal | wc -l | tr -d ' ')" = 3 ] || { "$SELF" route --points 5 --risk normal; echo "ROUTE NOTE FAIL (strong prints tier, model, effort)"; exit 1; }
+    "$SELF" route --points 1 --risk normal | awk 'NR==2 && $0 == "   model: drill-cheap-2" { m=1 } NR==3 && $0 == "   effort: low" { e=1 } END { exit !(m && e && NR==3) }' \
+      || { "$SELF" route --points 1 --risk normal; echo "ROUTE NOTE FAIL (the cheap knob must note too — tier, model: <knob>, effort: low)"; exit 1; }
+    "$SELF" route --points 3 --risk normal | awk 'NR==1 && $0 == "mid" { t=1 } NR==2 && $0 == "   model: opus" { m=1 } NR==3 && /^   effort: [a-z]+$/ { e=1 } END { exit !(t && m && e && NR==3) }' \
+      || { "$SELF" route --points 3 --risk normal; echo "ROUTE NOTE FAIL (model_mid is unset — mid notes the kit default: model: opus, then effort)"; exit 1; }
     # 4) the task override, both shapes. A tier WORD wins outright and the OVERRIDDEN tier's knob is
     #    the one that speaks; any other value is a literal model name, and then line 1 stays the
-    #    DERIVED tier (informational) while the note carries the name verbatim, knob or no knob.
+    #    DERIVED tier (informational) while line 2 carries the name verbatim, knob or no knob.
+    #    Either way the effort note follows on line 3.
     printf -- '---\nid: T-RTW\npoints: 5\nwsjf: 1\nrisk: normal\nmodel: cheap\nstatus: ready\nfiles_owned:\n  - src/rtw.txt\n---\n' > ops/board/ready/T-RTW.md
     printf -- '---\nid: T-RTL\npoints: 5\nwsjf: 1\nrisk: normal\nmodel: drill-literal-7\nstatus: ready\nfiles_owned:\n  - src/rtl.txt\n---\n' > ops/board/ready/T-RTL.md
     [ "$("$SELF" route T-RTW | head -1)" = cheap ] || { echo "ROUTE OVERRIDE FAIL (a tier-word model: must beat the derived tier)"; exit 1; }
-    "$SELF" route T-RTW | awk 'NR==2 && $0 == "   model: drill-cheap-2" { ok=1 } END { exit !ok }' \
+    "$SELF" route T-RTW | awk 'NR==2 && $0 == "   model: drill-cheap-2" { ok=1 } NR==3 && $0 == "   effort: low" { e=1 } END { exit !(ok && e && NR==3) }' \
       || { "$SELF" route T-RTW; echo "ROUTE OVERRIDE FAIL (the overridden tier's knob is the one that notes)"; exit 1; }
     [ "$("$SELF" route T-RTL | head -1)" = strong ] || { echo "ROUTE LITERAL FAIL (line 1 stays the DERIVED tier)"; exit 1; }
-    "$SELF" route T-RTL | awk 'NR==2 && $0 == "   model: drill-literal-7" { ok=1 } END { exit !ok }' \
+    "$SELF" route T-RTL | awk 'NR==2 && $0 == "   model: drill-literal-7" { ok=1 } NR==3 && /^   effort: [a-z]+$/ { e=1 } END { exit !(ok && e && NR==3) }' \
       || { "$SELF" route T-RTL; echo "ROUTE LITERAL FAIL (a literal model: name must reach the note verbatim)"; exit 1; }
     # 5) fleet carries the ready queue's MAX tier: panes claim RACILY, so every pane must be able to
     #    afford the hardest task on the board. T-RTL is 5 points, so strong is the max whatever else
