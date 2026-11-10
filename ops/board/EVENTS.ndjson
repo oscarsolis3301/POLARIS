@@ -1174,3 +1174,4 @@
 {"ts":1794334650,"ev":"done","id":"T-294","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794334674,"ev":"new","id":"T-297","who":"Owner@DESKTOP","note":"ready","pts":2}
 {"ts":1794334708,"ev":"claim","id":"T-297","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1794335378,"ev":"handoff","id":"T-295","who":"Owner@DESKTOP","note":""}
