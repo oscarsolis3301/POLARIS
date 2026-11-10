@@ -769,7 +769,8 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
           ( cd "$PRIMARY" && printf '\n--- %s · update --all, started by the update in %s\n' "$(date '+%Y-%m-%d %H:%M')" "$PRIMARY" \
               && POLARIS_UPDATE_REEXEC=1 exec bash -c 'bash "$1/polaris" update --all; rm -rf "$1"' polaris-fanout "$fo_d"
           ) </dev/null >>"$fo_log" 2>&1 &
-          note "updating $fo_n other projects on this PC in the background — see $fo_log"
+          if [ "$fo_n" = 1 ]; then note "updating 1 other project on this PC in the background — see $fo_log"
+          else note "updating $fo_n other projects on this PC in the background — see $fo_log"; fi
         else
           rm -rf "$fo_d" 2>/dev/null || true
         fi
@@ -812,14 +813,17 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
 # stale while `update_check_maybe` printed a notice nobody acted on. These make the check ACT — at
 # session start, only when it is safe, and never with a stash or a question.
 
-board_quiescent() { # board_quiescent — rc 0 quiet · rc 1 busy; QUIET_WHY = the FIRST reason found.
+board_quiescent() { # board_quiescent [inflight] — rc 0 quiet · rc 1 busy; QUIET_WHY = the FIRST reason found.
+  # No argument: v1's answer, ready/ counts (the layout pass moves the files waiting tasks name).
+  # `inflight` (auto-update.md v5): ready/ is skipped — a waiting task is nobody's work in flight.
   # Reads ONLY $BOARD, $LOCKS and $PRIMARY/.polaris/bg — all overridable, so the fast tier tests it
   # in a subshell over temp dirs. A dirty tree is NOT a reason (owner decision, 2026-09-08). A bg
   # job is judged rc-file-FIRST, exactly bg-jobs.md's rule: a dead pid with no rc is crashed, not
   # running, and Windows reuses pids so the pid alone is never a verdict.
   QUIET_WHY=""
-  local col n d f p
-  for col in ready active review; do
+  local col n d f p cols="ready active review"
+  [ "${1:-}" = inflight ] && cols="active review"
+  for col in $cols; do
     n=0
     for f in "$BOARD/$col"/*.md; do [ -f "$f" ] && n=$((n + 1)); done
     if [ "$n" -gt 0 ]; then QUIET_WHY="$col: $n"; return 1; fi
@@ -923,8 +927,8 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionS
     printf '⬆ POLARIS %s is a MAJOR update (you have %s) — it will not apply itself; when you want it: bash ops/polaris update\n' "$latest" "$cur"
     return 0
   fi
-  # 5. a busy board is normal
-  if ! board_quiescent; then
+  # 5. a busy board is normal — work in flight only; a task waiting in ready/ never holds it back (v5)
+  if ! board_quiescent inflight; then
     [ "$say_" = 1 ] && printf 'skipped: %s\n' "$QUIET_WHY"; return 0
   fi
   # 6. dirt inside the kit's footprint — the explicit form parks it; a stash appearing at session

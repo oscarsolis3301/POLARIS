@@ -216,28 +216,45 @@ EOF
     BOARD="$FT_TMP/q/empty/board"; LOCKS="$FT_TMP/q/empty/locks"; PRIMARY="$FT_TMP/q/empty"; QUIET_WHY=x
     ft_assert 'empty dirs → quiet, rc 0'          board_quiescent
     ft_assert 'quiet → QUIET_WHY empty'           test -z "$QUIET_WHY"
+    QUIET_WHY=x
+    ft_assert 'inflight: empty dirs → quiet'      board_quiescent inflight
+    ft_assert 'inflight: QUIET_WHY empty'         test -z "$QUIET_WHY"
     BOARD="$FT_TMP/q/ready/board"
     ft_assert 'a .md in ready/ → busy'            ! board_quiescent
     ft_assert 'QUIET_WHY = ready: 1'              test "$QUIET_WHY" = 'ready: 1'
+    ft_assert 'inflight: a .md in ready/ → quiet (v5)' board_quiescent inflight
+    ft_assert 'inflight: ready/ alone → QUIET_WHY empty' test -z "$QUIET_WHY"
     BOARD="$FT_TMP/q/active/board"
     ft_assert 'a .md in active/ → busy'           ! board_quiescent
     ft_assert 'QUIET_WHY = active: 1'             test "$QUIET_WHY" = 'active: 1'
+    ft_assert 'inflight: a .md in active/ → busy' ! board_quiescent inflight
+    ft_assert 'inflight: QUIET_WHY = active: 1'   test "$QUIET_WHY" = 'active: 1'
     BOARD="$FT_TMP/q/review/board"
     ft_assert 'two .md in review/ → busy'         ! board_quiescent
     ft_assert 'QUIET_WHY = review: 2 (.txt not counted)' test "$QUIET_WHY" = 'review: 2'
+    ft_assert 'inflight: two .md in review/ → busy' ! board_quiescent inflight
+    ft_assert 'inflight: QUIET_WHY = review: 2'   test "$QUIET_WHY" = 'review: 2'
     BOARD="$FT_TMP/q/empty/board"; LOCKS="$FT_TMP/q/lock/locks"
     ft_assert 'a task lock dir → busy'            ! board_quiescent
     ft_assert 'QUIET_WHY = lock: T-7'             test "$QUIET_WHY" = 'lock: T-7'
+    ft_assert 'inflight: a task lock dir → busy'  ! board_quiescent inflight
+    ft_assert 'inflight: QUIET_WHY = lock: T-7'   test "$QUIET_WHY" = 'lock: T-7'
     LOCKS="$FT_TMP/q/lease/locks"
     ft_assert '.int-lease alone → busy'           ! board_quiescent
     ft_assert 'QUIET_WHY = integration lease held' test "$QUIET_WHY" = 'integration lease held'
+    ft_assert 'inflight: .int-lease alone → busy' ! board_quiescent inflight
+    ft_assert 'inflight: QUIET_WHY = integration lease held' test "$QUIET_WHY" = 'integration lease held'
     LOCKS="$FT_TMP/q/empty/locks"; PRIMARY="$FT_TMP/q/bgrun"
     ft_assert 'bg job: live pid, no rc → busy'    ! board_quiescent
     ft_assert 'QUIET_WHY = bg job running: j1'    test "$QUIET_WHY" = 'bg job running: j1'
+    ft_assert 'inflight: bg job: live pid, no rc → busy' ! board_quiescent inflight
+    ft_assert 'inflight: QUIET_WHY = bg job running: j1' test "$QUIET_WHY" = 'bg job running: j1'
     PRIMARY="$FT_TMP/q/bgrc"
     ft_assert 'bg job: rc file present → not running (rc first)' board_quiescent
+    ft_assert 'inflight: bg job: rc file present → not running' board_quiescent inflight
     PRIMARY="$FT_TMP/q/bgprev"
     ft_assert 'bg job: a .prev dir is never running' board_quiescent
+    ft_assert 'inflight: bg job: a .prev dir is never running' board_quiescent inflight
     ft_section quiescent ) || ft_red=1
 
   # ---- dirt (auto-update.md § update_dirt_overlaps_kit) — stdin is `git status --porcelain`;

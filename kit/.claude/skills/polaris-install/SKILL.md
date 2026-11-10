@@ -149,8 +149,9 @@ bash ops/polaris update
 One command. It fetches the latest kit, refreshes **kit code only** (board, `RULES.tsv`,
 `CONVENTIONS.md`, `MAP.md` and `SPRINT.md` are never touched), **and re-caches the new kit into
 `~/.claude/`** — with its output style and the `/i-have-adhd` skill — so the next repo you install
-into on this machine gets it too. It refuses on a dirty worktree and commits nothing — the user
-reviews the diff. Never update mid-sprint.
+into on this machine gets it too. When it is safe, it saves its own files as one commit; when it
+is not, it says why and leaves them for the user. A repo also updates itself when a session starts:
+work being built or landed holds that back, tasks only waiting do not. `auto_update: off` stops it.
 
 Report the result in **one line** (`updated 5.3.0 → 5.4.0`). Do not paste the changelog, list the
 refreshed files, or explain the managed block. If they want to know what changed, they'll ask.

@@ -507,6 +507,26 @@ drill_autoupdate() {
     [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.1" ] || { echo "AUTOUPDATE (2b) APPLY FAIL (kit dirt must leave ops/VERSION at 0.0.1)"; exit 1; }
     [ "$(cat "$T/au2b.out")" = "skipped: uncommitted changes inside the kit's paths" ] || { cat "$T/au2b.out"; echo "AUTOUPDATE (2b) SAY FAIL"; exit 1; }
     [ "$(git stash list)" = "$au_k0" ] || { echo "AUTOUPDATE (2b) STASH FAIL (--auto never parks)"; exit 1; }
+    # (11) a task only WAITING in ready/, nothing else (auto-update.md v5) → applies: the ✅ line,
+    # VERSION 0.0.2, one new commit with the pinned subject, and the waiting task never enters it
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache .polaris/update.log
+    printf -- '---
+id: T-AU
+title: planned, nobody on it yet
+type: feature
+points: 1
+status: ready
+files_owned:
+  - src/au.txt
+---
+' > ops/board/ready/T-AU.md
+    "$SELF" update --auto --say --repo-only > "$T/au11.out" 2> "$T/au11.err" || { rm -f ops/board/ready/T-AU.md; cat "$T/au11.out" "$T/au11.err"; echo "AUTOUPDATE (11) RC FAIL"; exit 1; }
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' ')" = "0.0.2" ] || { rm -f ops/board/ready/T-AU.md; cat "$T/au11.out" "$T/au11.err"; echo "AUTOUPDATE (11) APPLY FAIL (a task waiting in ready/ must not hold the update back)"; exit 1; }
+    grep -qx '✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting' "$T/au11.out"       || { rm -f ops/board/ready/T-AU.md; cat "$T/au11.out"; echo "AUTOUPDATE (11) SAY FAIL (the pinned ✅ line)"; exit 1; }
+    [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] && [ "$(git log -1 --format=%s)" = "$au_sub" ]       || { rm -f ops/board/ready/T-AU.md; cat .polaris/update.log; git log --oneline -3; echo "AUTOUPDATE (11) COMMIT FAIL (exactly one new commit on top of where the update started, the pinned subject)"; exit 1; }
+    git diff-tree --no-commit-id --name-only -r HEAD | grep -qx 'ops/board/ready/T-AU.md' && { rm -f ops/board/ready/T-AU.md; echo "AUTOUPDATE (11) COMMIT BOARD FAIL (the waiting task must never enter the update's commit)"; exit 1; }
+    [ -f ops/board/ready/T-AU.md ] || { echo "AUTOUPDATE (11) BOARD FAIL (the waiting task must still be there)"; exit 1; }
+    rm -f ops/board/ready/T-AU.md
     # (3) auto_update: off → unchanged, `skipped: auto_update: off`
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache
     printf 'auto_update: off\n' >> ops/CONVENTIONS.md
@@ -608,6 +628,20 @@ drill_autoupdate() {
       || { cat "$au_fo/update-all.log" 2>/dev/null; echo "AUTOUPDATE (8) WALK FAIL (the detached update --all must walk the registry into the log)"; exit 1; }
     sleep 1
     [ -z "$(find "$au_fh" -type f)" ] || { find "$au_fh" -type f; echo "AUTOUPDATE (8) HOME FAIL (nothing may be written under the home)"; exit 1; }
+    # (8b) ONE other project → the line counts one right (auto-update.md v5): "1 other project"
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache
+    rm -rf "$T/au-fo1"; mkdir -p "$T/au-fo1/repos"
+    printf '%s
+' "$au_mp"       > "$T/au-fo1/repos/0-me"
+    printf '%s
+' "$T/au-fo-s1"  > "$T/au-fo1/repos/a-self1"
+    HOME="$au_fh" USERPROFILE="$au_fh" POLARIS_AWAKE_HOME="$T/au-fo1" "$SELF" update > "$T/au8b.out" 2>&1 || { cat "$T/au8b.out"; echo "AUTOUPDATE (8b) RC FAIL"; exit 1; }
+    grep -qxF "   updating 1 other project on this PC in the background — see $T/au-fo1/update-all.log" "$T/au8b.out"       || { cat "$T/au8b.out"; echo "AUTOUPDATE (8b) FAN-OUT LINE FAIL (one other project: '1 other project', singular)"; exit 1; }
+    au_w=0
+    while [ "$au_w" -lt 180 ] && ! grep -qxF "$T/au-fo-s1: self-hosting — skipped" "$T/au-fo1/update-all.log" 2>/dev/null; do sleep 0.5; au_w=$((au_w + 1)); done
+    grep -qxF "$T/au-fo-s1: self-hosting — skipped" "$T/au-fo1/update-all.log" || { cat "$T/au-fo1/update-all.log" 2>/dev/null; echo "AUTOUPDATE (8b) WALK FAIL"; exit 1; }
+    sleep 1
+    [ -z "$(find "$au_fh" -type f)" ] || { find "$au_fh" -type f; echo "AUTOUPDATE (8b) HOME FAIL (nothing may be written under the home)"; exit 1; }
     # (9) --auto never fans out — same registry, same fake home, no seam, no --repo-only — and its own
     # self-commit adds no line: still exactly the ✅ line, one commit on top of au_base.
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache .polaris/update.log "$au_fo/update-all.log"
@@ -715,7 +749,7 @@ AUGIT
       fi
     done
     rm -f .polaris/update-cache .polaris/update.log .polaris/install.log .polaris/CLAUDE.md.pre-heal
-    rm -rf "$T/polaris-v5" "$T/chan" "$T/kit.tgz" "$au_home" "$T/au-self" "$T/au-ver.bak" "$T/au-conv.bak" "$au_fh" "$au_fo" "$T/au-fo-s1" "$T/au-fo-s2" "$T/au-git"
+    rm -rf "$T/polaris-v5" "$T/chan" "$T/kit.tgz" "$au_home" "$T/au-self" "$T/au-ver.bak" "$T/au-conv.bak" "$au_fh" "$au_fo" "$T/au-fo-s1" "$T/au-fo-s2" "$T/au-fo1" "$T/au-git"
     [ "$(git rev-parse HEAD)" = "$au_pre" ] || { echo "AUTOUPDATE HERMETIC FAIL (HEAD must return to where the drill found it)"; exit 1; }
     [ "$(git status --porcelain)" = "$au_st" ] || { echo "entry:"; printf '%s
 ' "$au_st"; echo "now:"; git status --porcelain; echo "AUTOUPDATE HERMETIC FAIL (the drill must leave the tree exactly as it found it)"; exit 1; }
