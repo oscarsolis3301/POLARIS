@@ -184,17 +184,53 @@ EOF
   return 0
 }
 
+_route_default() { # _route_default <tier> — the kit's own sizing for a spawn (minutes.md § 8, owner
+  # 2026-11-09): small work on Sonnet at low effort, normal work on Opus at medium, big or risky work
+  # on Opus at high. DEFAULTS IN CODE on purpose: `update` never rewrites a project's config, so a
+  # default that lived in CONVENTIONS would reach no repo that already exists. Sets RD_MODEL and
+  # RD_EFFORT (globals, never a subshell — bash 3.2 keeps them). Never names Fable or Haiku.
+  case "${1:-}" in
+    cheap)  RD_MODEL=sonnet; RD_EFFORT=low;;
+    strong) RD_MODEL=opus;   RD_EFFORT=high;;
+    *)      RD_MODEL=opus;   RD_EFFORT=medium;;
+  esac
+}
+_route_rank() { # _route_rank <level> — sets RR to the level's place in low < medium < high < xhigh <
+  # max (1..5), or 0 for anything else. A case, not a lookup table: zero forks, no arrays.
+  case "${1:-}" in
+    low) RR=1;; medium) RR=2;; high) RR=3;; xhigh) RR=4;; max) RR=5;; *) RR=0;;
+  esac
+}
+_route_chat_effort() { # sets RC_EFFORT to the chat's own effort level, or empty when it is unknown.
+  # The machine guard writes it, one word on one line, to
+  # $HOME/.claude/polaris/model-state/$CLAUDE_CODE_SESSION_ID.effort. No session id, no file, or a
+  # word that is not a known level → empty, and route does not clamp. Builtins only: no fork.
+  local f="" v=""
+  RC_EFFORT=""
+  [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || return 0
+  f="$HOME/.claude/polaris/model-state/$CLAUDE_CODE_SESSION_ID.effort"
+  [ -f "$f" ] || return 0
+  read -r v < "$f" || [ -n "$v" ] || return 0
+  v="${v%$'\r'}"
+  _route_rank "$v"
+  [ "$RR" -gt 0 ] && RC_EFFORT="$v"
+  return 0
+}
+
 cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — which model TIER runs a
-  # piece of work (ops/contracts/model-routing.md). triage answers "which lane"; this answers
-  # "which model", with the same shape: line 1 is ALWAYS exactly one bare word — strong | mid |
-  # cheap — so callers branch on it blind, and a `   model: <name>` note follows ONLY when the
-  # winning tier's CONVENTIONS knob (model_strong/mid/cheap) is set, or the task pins a literal
-  # model: name in frontmatter. Precedence: explicit --points/--risk (pure, board-free) → --role →
-  # <ID>. Routing never blocks work — malformed points and unknown roles fall back to mid, rc 0;
-  # only no-args and an unknown ID are errors. Read-only by contract: touches no lock, writes no
-  # board file, fires no hook.
+  # piece of work, and what a spawn of it should be sized as (ops/contracts/model-routing.md v4,
+  # minutes.md § 8). triage answers "which lane"; this answers "which model", with the same shape:
+  # line 1 is ALWAYS exactly one bare word — strong | mid | cheap — so callers branch on it blind.
+  # Then two notes, `   model: <name>` and `   effort: <level>`, which the CONDUCTOR passes as the
+  # spawn's model and effort. Defaults live in _route_default; model_<tier> / effort_<tier> in
+  # CONVENTIONS override them, the value `inherit` drops that note (the spawn inherits the chat's),
+  # and a task's literal model: name wins for the model note. The effort note is never above the
+  # chat's own level (_route_chat_effort). Precedence: explicit --points/--risk (pure, board-free) →
+  # --role → <ID>. Routing never blocks work — malformed points and unknown roles fall back to mid,
+  # rc 0; only no-args and an unknown ID are errors. Read-only by contract: touches no lock, writes
+  # no board file, fires no hook.
   local id="" role="" pts="" rsk="" pts_set="" rsk_set=""
-  local tier="" mdl="" ov="" f="" rnote="" rdeny="" rraw=""
+  local tier="" mdl="" ov="" f="" rnote="" rdeny="" rraw="" lit="" eff="" cr=""
   local u="usage: polaris route <ID> | --role <ROLE> | --points <N> [--risk <R>]"
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -225,31 +261,42 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
     case "$ov" in
       strong|mid|cheap) tier="$ov";;                # tier-word override: that tier wins outright
       "") :;;
-      *) mdl="$ov";;                                # literal model name — line 1 stays the derived
+      *) lit=1; mdl="$ov";;                         # literal model name — line 1 stays the derived
     esac                                            # tier (informational); the note carries it
   else
     die "$u"
   fi
   printf '%s\n' "$tier"
+  _route_default "$tier"
+  # The model note. Source, in order: the task's literal name → model_<tier> → the kit default.
   # FORBIDDEN models are NEVER named (core.sh model_denied — owner, 2026-09-15: Fable and Haiku, in
-  # any repo, on any machine). Two sources, both refused here: a task's literal `model:` is checked
-  # directly, and a CONVENTIONS model_* value was already refused inside model_for_tier, which hands
-  # the name back via MODEL_DENIED. Either way the `model:` note is WITHHELD — which is not a new
-  # code path: the contract's existing rule is absent ⇒ the caller omits the spawn's model param and
-  # the platform default runs. Line 1 is untouched, so every caller still branches on the bare tier.
+  # any repo, on any machine): a denied name from either source drops the note and prints the
+  # REFUSED note instead — it is never swapped for the default, so the spawn names no model and
+  # inherits the chat's, exactly as before. model_for_tier is not used here: it withholds a denied
+  # name inside a command substitution, where its MODEL_DENIED never reaches this scope.
+  if [ -z "$lit" ]; then
+    rraw="$(cfg "model_$tier" "")"
+    if [ -n "$rraw" ]; then mdl="$rraw"; else mdl="$RD_MODEL"; fi
+  fi
+  [ "$mdl" = inherit ] && mdl=""
   if model_denied "$mdl"; then rdeny="$mdl"; mdl=""; fi
-  if [ -z "$mdl" ]; then
-    mdl="$(model_for_tier "$tier")"
-    # Nothing came back — either the knob is unset (ordinary) or it named a forbidden model and
-    # model_for_tier withheld it. Those must read differently to a human, so re-read the raw key to
-    # tell them apart. model_for_tier's MODEL_DENIED cannot be used here: it runs in a command
-    # substitution, so the assignment happens in a SUBSHELL and never reaches this scope.
-    if [ -z "$mdl" ]; then
-      rraw="$(cfg "model_$tier" "")"
-      model_denied "$rraw" && rdeny="$rraw"
+  # The effort note: effort_<tier> → the kit default; `inherit` drops it; a word that is not a known
+  # level reads as unset. Then the clamp: never above the chat's own level, when that is known.
+  eff="$(cfg "effort_$tier" "")"
+  if [ "$eff" != inherit ]; then
+    _route_rank "$eff"
+    [ "$RR" -gt 0 ] || eff="$RD_EFFORT"
+    _route_chat_effort
+    if [ -n "$RC_EFFORT" ]; then
+      _route_rank "$RC_EFFORT"; cr="$RR"
+      _route_rank "$eff"
+      [ "$cr" -lt "$RR" ] && eff="$RC_EFFORT"
     fi
+  else
+    eff=""
   fi
   [ -n "$mdl" ] && note "model: $mdl"
+  [ -n "$eff" ] && note "effort: $eff"
   [ -n "$rdeny" ] && note "model REFUSED: '$rdeny' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's"
   [ -n "$rnote" ] && note "$rnote"
   return 0

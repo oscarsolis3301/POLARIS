@@ -4,3 +4,10 @@
 ⚠ CONVENTIONS.md lacks 5 of 8 known keys (k_two · k_four · k_five · k_seven · k_eight) — see what each unlocks: ops/polaris adopt
 0
 0
+registry lacks: nothing
+model_strong: opus
+model_mid: opus
+model_cheap: sonnet
+effort_strong: high
+effort_mid: medium
+effort_cheap: low

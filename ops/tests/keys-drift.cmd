@@ -65,3 +65,22 @@ printf '%s\n' "$(D | grep -c .)"
 printf 'voice: standard\n' > "$R/ops/CONVENTIONS.md"
 rm -f "$R/ops/KEYS.tsv"
 printf '%s\n' "$(D | grep -c .)"
+
+# 5. The other direction, against the REAL kit: every key the kit's code reads with `$(cfg <key>`
+#    has a row in the shipped registry, or doctor can never name it and adopt can never stub it. A
+#    key ending in `_` is a family read with a tier on the end (`cfg "model_$tier"`), covered only
+#    when all three tiers have rows. Prints names, never versions, so a release cannot red it; the
+#    only thing that moves it is a key the code reads that the registry forgot.
+awk 'FNR==NR { if ($0 !~ /^#/ && split($0, f, "\t") >= 3) have[f[1]]=1; next }
+  { s=$0
+    while (match(s, /\$\(cfg "?[a-z][a-z_]*/)) {
+      k=substr(s, RSTART+6, RLENGTH-6); sub(/^"/, "", k); s=substr(s, RSTART+RLENGTH)
+      if (k ~ /_$/) { if (!((k "strong") in have && (k "mid") in have && (k "cheap") in have)) miss[k]=1 }
+      else if (!(k in have)) miss[k]=1
+    } }
+  END { n=0; for (k in miss) { print "registry lacks: " k; n++ } if (!n) print "registry lacks: nothing" }' \
+  kit/ops/KEYS.tsv kit/ops/polaris kit/ops/lib/*.sh | sort
+
+# 6. The sizing rows as shipped (minutes.md § 8): what a project that never set them gets — the
+#    model and the effort route names for each tier. Key and default only, in registry order.
+awk -F'\t' '$1 ~ /^(model|effort)_(strong|mid|cheap)$/ { print $1 ": " $3 }' kit/ops/KEYS.tsv
