@@ -1093,3 +1093,4 @@
 {"ts":1794279257,"ev":"promote","id":"T-226","who":"planner","note":"regroom: no deps, disjoint from T-221","pts":2}
 {"ts":1794279399,"ev":"claim","id":"T-221","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794279405,"ev":"claim","id":"T-226","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1794279687,"ev":"handoff","id":"T-226","who":"Owner@DESKTOP","note":""}
