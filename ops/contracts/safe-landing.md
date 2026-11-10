@@ -207,6 +207,24 @@ handoff from this release and an integrator is spawned only for what refused to;
 that changed kit/ops/lib/ runs the CI proof once before handoff. After T-221 + T-226 land, the conductor
 deletes `landing: integrator` from ops/CONVENTIONS.md before the chain starts.
 
+### I. Rider e — waiting for the board never kills the command (T-222, core.sh `mutex_on`, today :619)
+Found by T-221's golden on today's code, five runs of five. While a command waits for the board,
+`mutex_on` reads the holder's start time with `e="$(cat "$MUTEX/epoch" 2>/dev/null)"`. The CLI runs under
+`set -eu`, so when the holder lets go between the `[ -f "$MUTEX/epoch" ]` test and the `cat`, the `cat`
+fails and the whole command dies there: rc 1, no message. A `handoff` that dies this way leaves its task
+in `active/` with its lock held, so no lane is ever the last one out and nobody seals.
+- The read never fails the command: `e="$(cat "$MUTEX/epoch" 2>/dev/null || true)"`. An empty value
+  already falls back to "now" on the same line (age 0 → keep waiting), which is the right answer for a
+  board that was just released. Nothing else in `mutex_on` changes; no output changes.
+- T-222 reads the rest of the wait loop (and `mutex_off`, `int_on`'s wait) for the same shape — a bare
+  `x="$(cmd)"` on a file another process may remove — and gives each the same guard. It reports what it
+  found; it changes no behaviour beyond not dying.
+- Check: with this rider and nothing else, T-221's `land-race` no longer leaves a task in `active/`.
+  It is still RED by design until T-223 (one lane seals early, a later lane's land is left unsealed:
+  `waves: 2`, `leftover-unsealed: 1`). T-222 runs `ops/tests/land-race.cmd` twice by hand through
+  `bg run` and reports the two outputs; it is never in T-222's verify list.
+
 ## Changelog
 - v1 2026-10-28: created for tasks of plan `safe-landing`.
 - v1.1 2026-11-09: pointers re-derived after T-259, T-273, T-277, T-282, T-284; section 8 driver corrected; riders a-d (Phase 3 groom).
+- v1.2 2026-11-09 (conductor): rider e — the wait for the board mutex no longer kills the command when the holder releases mid-read (found by T-221; folded into T-222, which owns core.sh).
