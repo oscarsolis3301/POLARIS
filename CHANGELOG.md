@@ -4,6 +4,37 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.15.0 — 2026-11-10
+
+**Several pieces of work can now finish at the same moment, and every one of them lands. On a real project, four tasks handed in together used to leave one stuck and three marked done without their work arriving; now all four land, and the new race check passed five runs out of five.**
+
+On a busy project, finished work used to trip over itself. This release makes each piece of work
+take its turn, and double-checks that nothing goes missing:
+
+- Each piece of work now takes one "my turn" ticket when it lands and keeps it through the whole
+  landing, the final seal and the bookkeeping. Others can no longer slip in between the steps.
+  Who does the sealing is decided inside that turn, from the board itself.
+- A command that was waiting for its turn could quietly die when the other one let go at just the
+  wrong moment. It no longer can.
+- Before a finished task's branch is cleaned up, POLARIS now proves its files really are on your
+  main version. If any are missing, it puts back only those. It never deletes the only copy.
+- Sealing a wave checks what it just merged. A run is no longer called complete while a finished
+  task's files are missing, and when a check is red, you are told which one and shown the last 20
+  lines of it.
+- A new acceptance check hands in four tasks at once. It failed before this fix and passes now.
+- A task's own checks now run side by side: one line names several and runs them together. Twelve
+  that took about 12 minutes one after another now take a few.
+- Tasks that are only waiting no longer hold an update back. Projects with planned work waiting had
+  stopped updating themselves, and one was stuck on a two-month-old version. Now only work that is
+  actually being built or landed holds an automatic update back.
+- The guides the helpers follow now say all of this: work lands itself, an integrator is only called
+  for what refused to land, and the waits in the examples are shorter.
+
+Good to know: `landing: integrator` in `ops/CONVENTIONS.md` is still there if you want every landing
+to go through one integrator. If another piece of work fails to land, the last one out may leave the
+wave open instead of sealing around it. Nothing is lost, and the end-of-run message names it. The
+first update from an older version is still done by the old updater, same as before.
+
 ## 6.14.0 — 2026-11-09
 
 **Work now takes minutes, not hours. On this project, a wave of finished work used to wait about 80 minutes to land and another 50 for its checks; it now lands in about 5.**
