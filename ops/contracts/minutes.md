@@ -399,6 +399,13 @@ it at the `express` drill, which edits the list to a failing line and requires `
   equals the listsum of the task file's verify list NOW. Its line is unchanged. Anything missing — no
   stamp, a one-field stamp, a changed list, a moved branch — and the commands run.
 - `amend` keeps deleting the stamp. `done` now deletes it too (best-effort) once the task is in done/.
+- **An empty verify list is never "proven" (v2.4).** A task with no verify commands behaves exactly as
+  it did before this release, in `verify`, `handoff` and `run-verify` alike: `run_verify_cmds` runs and
+  prints its `   no verify: commands on task (acceptance is manual)` line, NO stamp is written (an
+  existing one is removed), and neither "not re-run" line is ever printed. Three goldens that pin
+  `handoff`'s output for such tasks caught the regression: `guide-stale`, `pack-visual`,
+  `shots-gallery` — they must pass UNCHANGED. Golden `verify-stamp` gains case (8): an empty list →
+  the manual-acceptance line, no stamp file, no proven line, for handoff and for run-verify.
 - **Executable check.** Golden `verify-stamp` (new): (1) a green verify → the stamp is
   `<HEAD sha> <crc>-<bytes>` · (2) handoff after it prints the proven line · (3) the verify list edited
   by hand after the stamp → handoff runs the commands again (no proven line) and refuses when the new
@@ -414,3 +421,4 @@ it at the `express` drill, which edits the list to a failing line and requires `
 - v2.1 2026-11-09 (conductor): § 11 — three riders (heal's model line, finish clears merged wave branches, TIDY.md wording).
 - v2.2 2026-11-09 (conductor): § 9 — the `begin:` refusal line reads "needs the <lane> lane" ("is a express lane" was not English).
 - v2.3 2026-11-09 (conductor): § 12 — the verify stamp carries the verify list's checksum, and run-verify needs the stamp; § 7's tree-only skip was unsound (CI: EXPRESS VERIFY RED FAIL).
+- v2.4 2026-11-09 (conductor): § 12 — an empty verify list is never "proven" (goldens guide-stale, pack-visual, shots-gallery caught it).
