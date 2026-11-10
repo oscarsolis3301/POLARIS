@@ -195,6 +195,29 @@ EOF
   return 1
 }
 
+_brain_wait_landed() { # _brain_wait_landed [<skip-ID>] — away.md § 7: rc 0 when a task in review/
+  # (other than <skip-ID>) already has its [<ID>] commit on $BASE, i.e. a `done` is still to come
+  # under this lease, so the brain refresh can wait for it. ONE git call for the whole column.
+  local skip="${1:-}" f id ids="" subj
+  for f in "$BOARD/review/"*.md; do
+    [ -f "$f" ] || continue
+    id="${f##*/}"; id="${id%.md}"
+    [ "$id" = "$skip" ] && continue
+    ids="$ids $id"
+  done
+  [ -n "$ids" ] || return 1
+  set --
+  for id in $ids; do set -- "$@" --grep "[$id]"; done
+  while IFS= read -r subj; do
+    for id in $ids; do
+      case "$subj" in *"[$id]") return 0;; esac
+    done
+  done <<EOF
+$(git -C "$PRIMARY" log --fixed-strings "$@" --format='%s' "$BASE" -- 2>/dev/null)
+EOF
+  return 1
+}
+
 _done_reland() { # _done_reland <ID> <task-file> <paths> — safe-landing.md § 5.2, PRIVATE to cmd_done.
   # Runs in a subshell cd'd to the primary, under the lease cmd_done holds: wave_on and cmd_seal both
   # re-enter it, and INT_TOOK=0 here means nothing in this subshell can ever release it. Restores each
@@ -439,8 +462,14 @@ EOF
   [ -n "$done_had" ] || trap on_die EXIT    # we took the lease: a die from here still frees it
   rm -f "$PRIMARY/.polaris/verify-stamp/$id" 2>/dev/null || true   # in done/: nothing left to skip (minutes.md § 12)
   board_changed_touch   # freshness beacon for the brain (ops/contracts/brain.md) — best-effort
-  brain_refresh_if_present  # v1.1: done mirrors seal — refresh AFTER the touch so the wave close
-                            # (land → seal → run-verify → done) ends fresh; ⚠ note on failure, never a red done
+  # away.md § 7: under an inherited lease (the self-land tail) with another landed task still
+  # waiting for its done, the LAST done refreshes — this one only keeps the marker.
+  if [ -n "$done_had" ] && _brain_wait_landed "$id"; then
+    touch "$PRIMARY/.polaris/brain-due" 2>/dev/null || true
+  else
+    brain_refresh_if_present  # v1.1: done mirrors seal — refresh AFTER the touch so the wave close
+                              # (land → seal → run-verify → done) ends fresh; ⚠ note on failure, never a red done
+  fi
   # THE LAYOUT VERDICT (save-hops.md § 0.5): .polaris/hops-due follows the new base the way the brain
   # does — it is the one file `next` and `triage` READ at the end of a run to learn whether the layout
   # pass is due. Exactly heal's call, after the board commit; never a red done, and until `hops --due`
@@ -1121,7 +1150,13 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
     fi
   fi
   board_changed_touch   # fold succeeded (ops/contracts/brain.md): beacon first, then the brain
-  brain_refresh_if_present  # follows the new base — a refresh failure notes ⚠, never fails the seal
+  # away.md § 7: a seal inside the self-land tail, with sealed tasks still waiting for their done,
+  # leaves the refresh to the last done of that tail and marks it due.
+  if [ -n "$seal_had" ] && _brain_wait_landed; then
+    touch "$PRIMARY/.polaris/brain-due" 2>/dev/null || true
+  else
+    brain_refresh_if_present  # follows the new base — a refresh failure notes ⚠, never fails the seal
+  fi
   # the layout verdict follows it too (save-hops.md § 0.5), now that the merge and the tag stand —
   # done's call, word for word; never a failed seal, and a silent no-op until `hops --due` ships
   "$SELF" hops --due >/dev/null 2>&1 || true

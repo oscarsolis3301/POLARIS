@@ -77,13 +77,13 @@ tier_for() { # tier_for <points> <risk> — echo exactly ONE tier word (ops/cont
 }
 # --------------------------------------------------------------- test depth
 depth_for() { # depth_for [<taskfile>…] < <paths, one per line> — ONE line "<depth><TAB><why>" on
-  # stdout (ops/contracts/test-depth.md § 2); depth ∈ none | look | scoped | full. rc 0 ALWAYS —
+  # stdout (ops/contracts/test-depth.md § 2, § v2.2); depth ∈ none | look | ui | scoped | full. rc 0 ALWAYS —
   # never dies, callers pass board data as-is. PURE: no writes to the repo, no git — stdin + the
   # (read-only) task files are the whole input; the one temp file below is scratch for
   # surface_select_cmd's paths-file argument and never touches tracked state.
   # `risk: high` no longer forces depth (one-yes.md § 3). A taskfile's `test_depth:` can only RAISE depth — anything but `full` is a
-  # no-op here, same as unset.
-  local tf id td skip_raw look_raw p nl nonskip="" nonlook="" lookn=0 csf sel rc
+  # no-op here, same as unset — except `ui`, which lets a bigger task qualify for ui (§ v2.2 rule 4).
+  local tf id td skip_raw look_raw p nl nonskip="" nonlook="" lookn=0 csf sel rc ui_raw uin uiok uinf uitf uiid
   nl=$'\n'
   for tf in "$@"; do
     [ -f "$tf" ] || continue
@@ -111,6 +111,42 @@ depth_for() { # depth_for [<taskfile>…] < <paths, one per line> — ONE line "
 $nonskip
 EOF
   [ -n "$nonlook" ] || { printf 'look\t%s\n' "only look paths ($lookn)"; return 0; }
+  # depth ui (test-depth.md § v2.2): every remaining path is a UI file AND every task is 1-2 points
+  # (or carries test_depth: ui) with risk: normal. No taskfile = unbounded ⇒ never ui. Task fields
+  # are read only once the paths qualify, so every other verdict costs exactly what it did.
+  ui_raw="$(cfg test_ui "*.tsx *.jsx *.vue *.svelte *.html *.astro${look_raw:+ $look_raw}")"
+  [ "$ui_raw" = "-" ] && ui_raw=""
+  if [ -n "$ui_raw" ]; then
+    uin=0; uiok=1; uinf=0
+    # the glob list is word-split unexpanded: a root index.html must not turn `*.html` into itself
+    case $- in *f*) uinf=1;; *) set -f;; esac
+    while IFS= read -r p; do
+      [ -z "$p" ] && continue
+      if owned_match "$p" $ui_raw; then uin=$((uin+1)); else uiok=0; break; fi
+    done <<EOF
+$nonlook
+EOF
+    [ "$uinf" -eq 1 ] || set +f
+    if [ "$uiok" -eq 1 ] && [ "$uin" -gt 0 ]; then
+      uitf=0; uiid=""
+      for tf in "$@"; do
+        [ -f "$tf" ] || continue
+        uitf=$((uitf+1))
+        [ "$(fm_get risk "$tf")" = normal ] || { uiok=0; break; }
+        case "$(fm_get points "$tf")" in
+          1|2) ;;
+          *) if [ "$(fm_get test_depth "$tf")" = ui ]; then
+               if [ -z "$uiid" ]; then uiid="$(fm_get id "$tf")"; [ -n "$uiid" ] || uiid="$(basename "$tf" .md)"; fi
+             else uiok=0; break; fi;;
+        esac
+      done
+      if [ "$uiok" -eq 1 ] && [ "$uitf" -gt 0 ]; then
+        if [ -n "$uiid" ]; then printf 'ui\t%s\n' "only ui paths ($uin), test_depth: ui on $uiid"
+        else printf 'ui\t%s\n' "only ui paths ($uin) in 1-2 point work"; fi
+        return 0
+      fi
+    fi
+  fi
   csf="$(mktemp)"
   printf '%s\n' "$nonlook" > "$csf"
   if sel="$(test_select_for "$csf")"; then rc=0; else rc=1; fi

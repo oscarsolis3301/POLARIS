@@ -47,6 +47,8 @@ test_select	6.4.0	<cmd or omit>	every change runs the whole test: suite — set 
 test_skip	6.9.0	*.md docs/** *.txt LICENSE*	a docs/text-only change already skips the suite outright under this default; widen or narrow the glob list if your repo's doc/text paths differ, or set `-` to skip none
 test_related	6.9.0	(on)	a change confined to a package whose test script is vitest or jest (runner installed), or to python files a pytest test reaches (the repo's own pytest command, narrowed to the related test files; node and python together run both), runs only the tests the runner itself relates to the changed files; set `-` to turn that off (node and python) and run the whole suite (or the SURFACES-selected subset) instead
 test_look	6.9.0	*.css *.scss *.less *.svg *.png *.jpg *.jpeg *.gif *.webp *.ico	a style/image-only change already runs the lighter look depth under this default (same visual: + --saw capture, no suite key); widen or narrow the glob list if other file types should count as look-only
+test_ui	6.16.0	*.tsx *.jsx *.vue *.svelte *.html *.astro + test_look	a small component or page edit in a 1-2 point task already runs lint + typecheck + a look under this default, no suite; widen or narrow the glob list, or set - to always run the suite
+qa_parallel	6.16.0	on	qa already runs test, lint and typecheck side by side under this default; set off to run them one after another
 stale_hours	5.0.0	4	sweep warns on active locks older than 4 hours
 uat	5.0.0	<cmd or omit>	no end-to-end command runs on the integrate branch; only test/lint/typecheck/build gate it
 notify	5.0.0	<cmd or omit>	board events and gates reach nothing outside the terminal you happen to be watching

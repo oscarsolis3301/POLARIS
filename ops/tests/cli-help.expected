@@ -154,12 +154,14 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   why <ID>                       why a task bounced/blocked: kickback + release/blocked notes from telemetry + body
   depth [<ID> | --commit <sha>]  how much testing this change needs — line 1 is one word: none
                                  (only test_skip paths, e.g. docs) · look (only test_look paths,
-                                 e.g. css/images) · scoped (every code path mapped in
-                                 ops/SURFACES.tsv) · full (anything else, risk: high, or
+                                 e.g. css/images) · ui (only test_ui paths, in 1-2 point risk:
+                                 normal tasks: lint + typecheck + a look) · scoped (every code path
+                                 mapped in ops/SURFACES.tsv) · full (anything else, risk: high, or
                                  test_depth: full on the task). `   why:` + `   paths:` note lines
                                  follow. With <ID>: the task's own diff off $BASE. No ID: the
                                  board's current unbounded/bounded change set. --commit <sha>: that commit's paths, and
                                  the exact commands qa would run (and the uat it would skip). Read-only
+  presence                       away or here: away = a plan approved in this session AND auto mode; then a why: line
   speed                          how your last 30 changes would be tested (skip / related tests / everything),
                                  your last full run time, and one line per slowing setting. Read-only
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:

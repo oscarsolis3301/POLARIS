@@ -370,6 +370,12 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
     evt push-fail "$id" "feat/$id local-only after 3 push attempts"
   fi
   evt handoff "$id"
+  # away.md § 4: the owner approved the plan and left — the plan's yes is the yes. Recorded here,
+  # inside this mutex and this board commit, as the very entries `approve --plan` writes; plan_covers
+  # (unedited) then passes for every caller downstream. Here, an unbound slug, a hand entry on the
+  # task or autonomy: standard ⇒ nothing is written and the handoff is today's, byte for byte.
+  local awayl=""
+  _handoff_away_yes "$id" "$BOARD/review/$id.md"
   # Last lane landed? Count inside the mutex (post-mv, pre-commit) so the all-review event
   # rides this same board commit. Without this notice, a fleet of one-task pane sessions
   # ends and the board sits in review/ silently — nobody integrates.
@@ -386,6 +392,7 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
   sync_board
   mutex_off; trap - EXIT
   say "$id → review/. Lock stays until the Integrator lands it. Session may close."
+  [ -z "$awayl" ] || printf '%s\n' "$awayl"
   [ "$pushed" -eq 0 ] && note "⚠ push failed ×3 — feat/$id is local-only; the board moved anyway and land merges the local branch"
   case "$notice" in
     integrate) say "all lanes done — nothing left building. Integrate now: \"You are the INTEGRATOR. Land everything in ops/board/review/.\"";;
@@ -394,6 +401,28 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
   # T-088 (shared-checkout v2 §5): under landing: self the handoff CONTINUES into the landing —
   # the last statement on purpose, so its rc (0, or 3 for a queued lane) is the handoff's rc.
   self_land "$id" "$notice"
+}
+
+_handoff_away_yes() { # _handoff_away_yes <ID> <taskfile> — away.md § 4, called by cmd_handoff INSIDE its
+  # board mutex (no second mutex_on). Sets handoff's awayl to the § 4 `away:` line when a merge entry
+  # was gained, and appends the away-yes event to the same commit. Cheapest test first: the presence
+  # read is builtins only, so a here session pays no fork for this.
+  local id="$1" tf="$2" slug ent
+  _presence_away || return 0
+  slug="$(fm_get plan "$tf" 2>/dev/null || true)"
+  [ -n "$slug" ] && _presence_covers "$slug" || return 0
+  [ "$(cfg autonomy trusted)" = "standard" ] && return 0
+  while IFS= read -r ent; do
+    case "$ent" in *"|-") return 0;; esac   # a hand-recorded approval: the human lane, unchanged
+  done <<EOF
+$(approved_entries "$tf")
+EOF
+  who
+  _approve_plan_entries "$tf" "$slug" "approved plan, owner away"
+  [ -n "$_APE_MERGE" ] || return 0
+  awayl="away: $id merges on the approved plan's yes (plan $slug, risk: high) — the close names it"
+  evt away-yes "$id"
+  return 0
 }
 
 self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout.md v2 §5): under
@@ -751,55 +780,17 @@ cmd_approve_plan() { # approve --plan <slug> -m "why" — ONE yes for every scop
     done
   done
   [ -n "$any" ] || die "approve --plan refused: no task carries plan: $slug"
+  _presence_bind "$slug"   # away.md § 4: a slug approved in this session is bound to the approval on record
   who
-  local day; day="$(date +%F)"
-  local n=0 m=0 tid want sc v ok kind rs pat rmsg rk existing entry wrote nl='
-'
+  _APE_DAY="$(date +%F)"
+  local n=0 m=0
   mutex_on
   for col in active ready review blocked backlog done; do
     for f in "$BOARD/$col/"*.md; do
       [ -f "$f" ] || continue
       [ "$(fm_get plan "$f" 2>/dev/null || true)" = "$slug" ] || continue
-      tid="$(fm_get id "$f" 2>/dev/null || true)"; [ -n "$tid" ] || { tid="${f##*/}"; tid="${tid%.md}"; }
-      want=""; ok=1
-      rk="$(fm_get risk "$f" 2>/dev/null || true)"
-      [ "$rk" = "high" ] && want="merge"
-      while IFS= read -r v; do
-        [ -n "$v" ] || continue
-        case "$v" in
-          schema|dependency|delete) want="$want${nl}need:$v";;
-          *) note "⚠ $tid skipped — unknown needs: value '$v'"; ok=""; break;;
-        esac
-      done <<EOF
-$(fm_list needs "$f" 2>/dev/null || true)
-EOF
-      [ -n "$ok" ] || continue
-      while IFS="$POLARIS_TAB" read -r rs kind pat rmsg; do
-        [ "$kind" = "ask" ] || continue
-        while IFS= read -r pat; do
-          [ -n "$pat" ] || continue
-          if owned_match "$pat" "$rs"; then want="$want$nl$rs"; break; fi
-        done <<EOF
-$(fm_list files_owned "$f" 2>/dev/null || true)
-EOF
-      done <<EOF
-$(rules_lines)
-EOF
-      existing="$(approved_entries "$f")"
-      wrote=""
-      while IFS= read -r sc; do
-        [ -n "$sc" ] || continue
-        case "$nl$existing$nl" in *"$nl$sc|$slug$nl"*) continue;; esac
-        entry="$sc — $WHO, $day: plan $slug: $msg"
-        if fm_append_item approved "$entry" "$f"; then
-          existing="$existing$nl$sc|$slug"; n=$((n+1)); wrote=1
-        else
-          note "⚠ $tid skipped — no approved: front-matter field"; break
-        fi
-      done <<EOF
-$(printf '%s\n' "$want" | awk 'NF && !seen[$0]++')
-EOF
-      [ -z "$wrote" ] || m=$((m+1))
+      _approve_plan_entries "$f" "$slug" "$msg"
+      n=$((n+_APE_N)); [ "$_APE_N" -eq 0 ] || m=$((m+1))
     done
   done
   if [ "$n" -gt 0 ]; then
@@ -809,6 +800,58 @@ EOF
   fi
   mutex_off; trap - EXIT
   say "approved plan $slug: $n scope(s) on $m task(s)"
+}
+
+_approve_plan_entries() { # _approve_plan_entries <taskfile> <slug> <msg> — the per-task half of
+  # approve --plan (one-yes.md § 1), shared with handoff's away record (away.md § 4): append every
+  # scope the plan covers on this ONE task — `merge` for risk: high, need:<v> per needs:, every ask
+  # scope its files_owned meet — skipping a scope that already carries this plan's entry. The caller
+  # holds the board mutex and has run `who`; the day is read once per call site into _APE_DAY.
+  # Sets _APE_N (entries written) and _APE_MERGE (1 when a merge entry was written). rc 0 always.
+  local f="$1" slug="$2" msg="$3" tid want sc v ok kind rs pat rmsg rk existing entry nl='
+'
+  _APE_N=0; _APE_MERGE=""
+  [ -n "${_APE_DAY:-}" ] || _APE_DAY="$(date +%F)"
+  tid="$(fm_get id "$f" 2>/dev/null || true)"; [ -n "$tid" ] || { tid="${f##*/}"; tid="${tid%.md}"; }
+  want=""; ok=1
+  rk="$(fm_get risk "$f" 2>/dev/null || true)"
+  [ "$rk" = "high" ] && want="merge"
+  while IFS= read -r v; do
+    [ -n "$v" ] || continue
+    case "$v" in
+      schema|dependency|delete) want="$want${nl}need:$v";;
+      *) note "⚠ $tid skipped — unknown needs: value '$v'"; ok=""; break;;
+    esac
+  done <<EOF
+$(fm_list needs "$f" 2>/dev/null || true)
+EOF
+  [ -n "$ok" ] || return 0
+  while IFS="$POLARIS_TAB" read -r rs kind pat rmsg; do
+    [ "$kind" = "ask" ] || continue
+    while IFS= read -r pat; do
+      [ -n "$pat" ] || continue
+      if owned_match "$pat" "$rs"; then want="$want$nl$rs"; break; fi
+    done <<EOF
+$(fm_list files_owned "$f" 2>/dev/null || true)
+EOF
+  done <<EOF
+$(rules_lines)
+EOF
+  existing="$(approved_entries "$f")"
+  while IFS= read -r sc; do
+    [ -n "$sc" ] || continue
+    case "$nl$existing$nl" in *"$nl$sc|$slug$nl"*) continue;; esac
+    entry="$sc — $WHO, $_APE_DAY: plan $slug: $msg"
+    if fm_append_item approved "$entry" "$f"; then
+      existing="$existing$nl$sc|$slug"; _APE_N=$((_APE_N+1))
+      [ "$sc" = "merge" ] && _APE_MERGE=1
+    else
+      note "⚠ $tid skipped — no approved: front-matter field"; break
+    fi
+  done <<EOF
+$(printf '%s\n' "$want" | awk 'NF && !seen[$0]++')
+EOF
+  return 0
 }
 
 # ------------------------------------------------------------------ pack (5.21.0)
