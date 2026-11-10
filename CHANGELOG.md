@@ -4,6 +4,46 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.16.0 — 2026-11-10
+
+**Once you approve a plan and switch to auto mode, nothing in the run waits on you any more. And a small screen tweak no longer pays for the whole test suite.**
+
+On real projects a task took about an hour from start to done, most of it waiting, and a helper
+could stop on a question and sit idle for half an hour. This release treats you as gone once you
+have said yes:
+
+- POLARIS now knows whether you are here. A plan you approved plus a hands-off chat (auto mode)
+  means away. `polaris presence` says `away` or `here` and why. In plan mode, or any mode where you
+  click through things yourself, you are here and asked as before.
+- While you are away, the question tool is refused before it can stall the run. The helper is told
+  to take the recommended option and write it down, or, if there is no safe default, to park that
+  one piece and finish the rest.
+- A turn that ends on a question while work is left is now sent back to work every time while you
+  are away. Before, the second try slipped through.
+- Your approval of the plan counts as the approval. A high-risk task that belongs to the plan you
+  approved merges without a second yes, and the close lists every task that merged that way.
+  Anything outside the plan still waits for you.
+- Filing the plan's tasks after your approval is what ties them to it. Typing
+  `polaris approve --plan` does the same.
+- A new, lighter level of checking called `ui` is for small look-and-feel changes: one or two
+  points, and every changed file is a component, page or style file. The new settings `test_ui`
+  (which files count) and `qa_parallel` control it.
+- At `ui`, the project's lint and type checks run at the same moment and the test suite does not run.
+  For everything else, tests, lint and type checks run side by side, then the build, then the live
+  tests. `qa_parallel: off` brings back one after another.
+- A landing now refreshes the project's knowledge notes once instead of twice. On a fresh project the
+  one-call finish went from 55 seconds to 44.
+- The guides the helpers follow now say all of this: ask everything while you are here and never once
+  you have left, a pull-request project ends with the one pull-request link as its last line, every
+  close says how long the run took and where the time went, and the planner cuts work into lanes
+  that can run side by side and shows the lanes, waves and an estimated time in the plan.
+
+Good to know: "approved" means a plan approved in plan mode in that session, or recorded with
+`polaris approve --plan`. Going back into plan mode makes you "here" again. `autonomy: standard` in
+`ops/CONVENTIONS.md` keeps the old ask-every-time behaviour. The run still parks what has no safe
+default, such as a paid service or deleting data, and says so at the end. For now the express lane
+and the speed counts treat `ui` like the level above it: more checking, never less.
+
 ## 6.15.0 — 2026-11-10
 
 **Several pieces of work can now finish at the same moment, and every one of them lands. On a real project, four tasks handed in together used to leave one stuck and three marked done without their work arriving; now all four land, and the new race check passed five runs out of five.**

@@ -2,12 +2,14 @@
 # HERMETIC: a throwaway repo under mktemp -d with the kit INSTALLED in it, so every command runs the
 # fixture's own ops/polaris; default landing (self). HOME, USERPROFILE and POLARIS_AWAKE_HOME are faked
 # together and the golden writes the two state files itself to play "away" and "here". A plan is bound
-# the one way this task ships: `approve --plan <slug>` in the session, after the approval; a task filed
-# later under that plan is the plan's. Pinned: away + a bound risk: high task ⇒ its handoff writes the
+# two ways: `approve --plan <slug>` in the session after the approval, and `new` filing a task of the
+# plan in the session after the approval (§ 4). The first cases file their tasks from ANOTHER session,
+# so `approve --plan` alone binds there. Pinned: away + a bound risk: high task ⇒ its handoff writes the
 # `merge` entry ending `approved plan, owner away`, prints the `away:` line, records one away-yes event
 # and self-lands (plan_covers passed) · `default` mode ⇒ no entry, today's refusal · a slug never bound
 # ⇒ no entry · a hand entry on the task ⇒ no entry · `autonomy: standard` ⇒ no entry · `claim` never
-# binds. (Binding at `new` moved to a follow-up task, together with the new-task golden it must move.)
+# binds · `new` binds: a task filed after the approval with no `approve --plan` at all is covered, one
+# filed before the approval is not.
 # No sha, path or time is printed: the entry's actor and date are masked.
 KIT_DIR="$(pwd)/kit"
 FIX="$(mktemp -d)"
@@ -62,10 +64,10 @@ echo "installed: $([ -f ops/polaris ] && echo yes || echo no)"
 echo "== the plan is approved in this session, and approve --plan a binds its slug"
 printf 'auto\n' > "$ST.mode"
 printf '1\n' > "$ST.approved"
-bash ops/polaris new .polaris/drafts/seed.md 2>&1 | sed 's/^/  /'
+CLAUDE_CODE_SESSION_ID=away-yes-other bash ops/polaris new .polaris/drafts/seed.md 2>&1 | sed 's/^/  /'
 bash ops/polaris approve --plan a -m "the plan, approved" 2>&1 | sed 's/^/  /'
 echo "== a c d e (plan a) and b (plan b, never approved) filed after it"
-bash ops/polaris new .polaris/drafts/a.md .polaris/drafts/b.md .polaris/drafts/c.md .polaris/drafts/d.md .polaris/drafts/e.md 2>&1 | sed 's/^/  /'
+CLAUDE_CODE_SESSION_ID=away-yes-other bash ops/polaris new .polaris/drafts/a.md .polaris/drafts/b.md .polaris/drafts/c.md .polaris/drafts/d.md .polaris/drafts/e.md 2>&1 | sed 's/^/  /'
 echo "bound slugs:"; sed -n '2,$p' "$ST.approved" | sed 's/^/  /'
 echo "presence: $(bash ops/polaris presence | head -1)"
 echo "== away, plan a bound: the plan's yes is the yes"
@@ -85,3 +87,19 @@ ship T-006 e
 echo "events: $(grep -c '"away-yes"' ops/board/EVENTS.ndjson 2>/dev/null)"
 echo "== claim never binds: still only the approved plan"
 echo "bound slugs:"; sed -n '2,$p' "$ST.approved" | sed 's/^/  /'
+echo "== new binds: f filed before the approval, g after it, no approve --plan at all"
+printf 'test: true\n' > ops/CONVENTIONS.md
+rm -f "$ST.approved"
+for s in f g; do
+  printf -- '---\ntitle: change %s\nplan: %s\npoints: 1\nrisk: high\nfiles_owned:\n  - src/%s.txt\ndepends_on: []\ncontract: ops/contracts/fix.md\napproved: []\nverify: []\n---\n## Why\nfixture\n' "$s" "$s" "$s" > ".polaris/drafts/$s.md"
+done
+bash ops/polaris new .polaris/drafts/f.md 2>&1 | sed 's/^/  /'
+printf '1\n' > "$ST.approved"
+bash ops/polaris new .polaris/drafts/g.md 2>&1 | sed 's/^/  /'
+echo "bound slugs:"; sed -n '2,$p' "$ST.approved" | sed 's/^/  /'
+echo "presence: $(bash ops/polaris presence | head -1)"
+echo "== away, g bound by new: the plan's yes is the yes"
+ship T-008 g
+echo "events: $(grep -c '"away-yes"' ops/board/EVENTS.ndjson 2>/dev/null)"
+echo "== away, f filed before the approval: today's refusal"
+ship T-007 f

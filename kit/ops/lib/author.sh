@@ -11,7 +11,7 @@ cmd_new() { # new <draft.md> [<draft.md>…] — every check first (a refusal wr
   local n=0 i=0 top=0 nb=0 a f v ids=""
   # per-draft and per-board-task arrays, plus the helpers' out-values — the _new_* helpers fill these
   # by dynamic scope, so nothing outlives the call
-  local _np _nid _npts _nown _ndep _ncol _nout _bid _bcol _bown _NV _NO _NM
+  local _np _nid _npts _nown _ndep _ncol _nout _nplan _bid _bcol _bown _NV _NO _NM
   # The checks read the board and § 4 numbers it, so both run under the mutex, after the pull: a second
   # `new` racing this one can neither take a preset id between our check and our write, nor hand out
   # the same next number.
@@ -48,6 +48,10 @@ cmd_new() { # new <draft.md> [<draft.md>…] — every check first (a refusal wr
   # caller still learns the IDs it filed — re-running `new` on the same drafts would file them twice.
   i=0
   while [ "$i" -lt "$n" ]; do printf '%s\n' "${_nout[$i]}"; i=$((i+1)); done
+  # away.md § 4: a task filed in this session after the plan's approval is that plan's — bind its slug
+  # to the approval on record (none on record ⇒ nothing; builtins only, no output).
+  i=0
+  while [ "$i" -lt "$n" ]; do _presence_bind "${_nplan[$i]}"; i=$((i+1)); done
   sync_board
   mutex_off; trap - EXIT
 }
@@ -69,6 +73,7 @@ _new_check() { # _new_check <i> <arg> — § 3 for ONE draft, in the contract's 
   case "$_NV" in [1-5]) ;; *) die "new: $a: points: must be 1-5 (got $_NV) — split anything bigger";; esac
   _npts[$1]="$_NV"
   _new_val plan "$p"; [ -n "$_NV" ] || die "new: $a: plan: is empty — every task names the plan it belongs to"
+  _nplan[$1]="$_NV"
   _new_val risk "$p"
   case "$_NV" in normal|high) ;; *) die "new: $a: risk: must be normal or high (got $_NV)";; esac
   _new_own "$p"; [ -n "$_NO" ] || die "new: $a: files_owned: lists nothing"

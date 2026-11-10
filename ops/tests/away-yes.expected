@@ -57,3 +57,27 @@ events: 1
 == claim never binds: still only the approved plan
 bound slugs:
   a
+== new binds: f filed before the approval, g after it, no approve --plan at all
+  T-007 ready — nothing to wait for
+  T-008 ready — nothing to wait for
+bound slugs:
+  g
+presence: away
+== away, g bound by new: the plan's yes is the yes
+handoff rc=0
+away line: 1
+  away: T-008 merges on the approved plan's yes (plan g, risk: high) — the close names it
+refusal: 0
+self-land: 1
+landed: 1
+entries:
+  [merge — WHO, DATE: plan g: approved plan, owner away]
+events: 2
+== away, f filed before the approval: today's refusal
+handoff rc=0
+away line: 0
+refusal: 1
+self-land: 0
+landed: 0
+entries:
+  []
