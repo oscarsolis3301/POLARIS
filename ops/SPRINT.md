@@ -14,6 +14,7 @@ releases 6.15.0 LAST.
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-11-09 | 7 | 19 |
 
 # SPRINT 22 — The speed release (6.14.0)          capacity: 30   dates: 2026-11-09–
 
