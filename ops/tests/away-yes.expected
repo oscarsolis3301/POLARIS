@@ -1,0 +1,59 @@
+installed: yes
+== the plan is approved in this session, and approve --plan a binds its slug
+  T-001 ready — nothing to wait for
+  ✅ approved plan a: 0 scope(s) on 0 task(s)
+== a c d e (plan a) and b (plan b, never approved) filed after it
+  T-002 ready — nothing to wait for
+  T-003 ready — nothing to wait for
+  T-004 ready — nothing to wait for
+  T-005 ready — nothing to wait for
+  T-006 ready — nothing to wait for
+bound slugs:
+  a
+presence: away
+== away, plan a bound: the plan's yes is the yes
+handoff rc=0
+away line: 1
+  away: T-002 merges on the approved plan's yes (plan a, risk: high) — the close names it
+refusal: 0
+self-land: 1
+landed: 1
+entries:
+  [merge — WHO, DATE: plan a: approved plan, owner away]
+events: 1
+== here (default mode), plan a bound: today's refusal
+handoff rc=0
+away line: 0
+refusal: 1
+self-land: 0
+landed: 0
+entries:
+  []
+== away, plan b never bound: today's refusal
+handoff rc=0
+away line: 0
+refusal: 1
+self-land: 0
+landed: 0
+entries:
+  []
+== away, d carries a hand entry: today's refusal
+handoff rc=0
+away line: 0
+refusal: 1
+self-land: 0
+landed: 0
+entries:
+    - merge — WHO, DATE: I decide this one myself
+== away, autonomy: standard: today's refusal
+handoff rc=0
+away line: 0
+refusal: 1
+self-land: 0
+landed: 0
+entries:
+  []
+events: 1
+== claim never binds: still only the approved plan
+bound slugs:
+  a

@@ -1,7 +1,7 @@
 # Sprint 24 — Away means away, small means fast (6.16.0) (2026-11-10–)
 
 ## T-289 — "POLARIS knows whether you are here: a hook records the session's mode and approval, refuses the question tool while you are away, and `polaris presence` says away or here"
-points 3 · risk normal · landed 5cd2847 (2026-11-10) · claimed 2026-11-10
+points 3 · risk normal · landed 5cd2847 (2026-11-10) · claimed 2026-11-10 → done 2026-11-10
 files touched: kit/.claude/settings.json, kit/ops/hooks/presence-guard.sh, kit/ops/install.sh, kit/ops/lib/presence.sh, kit/ops/polaris, ops/tests/perm-tools.cmd, ops/tests/presence-guard.cmd, ops/tests/presence-guard.expected, ops/tests/presence-installed.cmd, ops/tests/presence-installed.expected
 
 ### Why
@@ -19,7 +19,7 @@ The owner's rule (plans/away.md): once they approve a plan and switch the chat t
 - [ ] CI's Linux and macOS runs of the full self-test are green on this task's own commit (see Notes; never in verify)
 
 ## T-290 — "A closing question never ends an away run: while the owner is away the stop hook bounces it every time, with no \"ask again\" escape"
-points 2 · risk normal · landed cda6b16 (2026-11-10) · claimed 2026-11-10
+points 2 · risk normal · landed cda6b16 (2026-11-10) · claimed 2026-11-10 → done 2026-11-10
 files touched: kit/ops/hooks/handover-hook.sh, ops/tests/stop-away.cmd, ops/tests/stop-away.expected, ops/tests/stop-question.cmd
 
 ### Why
@@ -34,7 +34,7 @@ Today the stop hook bounces a closing question once and then lets it through ("a
 - [ ] stop-away golden covers every B2 case in away.md § Executable checks; stop-question.cmd now fakes HOME and USERPROFILE (its expected file unchanged)
 
 ## T-291 — "A small UI change gets quick checks: new depth `ui` for 1-2 point component and page edits, plus the keys test_ui and qa_parallel"
-points 3 · risk normal · landed 9d4dca2 (2026-11-10) · claimed 2026-11-10
+points 3 · risk normal · landed 9d4dca2 (2026-11-10) · claimed 2026-11-10 → done 2026-11-10
 files touched: kit/ops/KEYS.tsv, kit/ops/lib/core.sh, kit/ops/lib/route.sh, ops/tests/api-kit.expected, ops/tests/depth-ui.cmd, ops/tests/depth-ui.expected
 
 ### Why
@@ -50,7 +50,7 @@ The owner wants a small UI tweak to be fast: today only style and image files ge
 - [ ] CI's Linux run of the full self-test is green on this task's own commit (see Notes; never in verify)
 
 ## T-292 — "The landing does its bookkeeping once: seal and the dones that follow under one lease refresh the brain once, after the last done"
-points 2 · risk normal · landed ee87e4e (2026-11-10) · claimed 2026-11-10
+points 2 · risk normal · landed ee87e4e (2026-11-10) · claimed 2026-11-10 → done 2026-11-10
 files touched: kit/ops/lib/integrate.sh, kit/ops/lib/knowledge.sh, ops/tests/brain-once.cmd, ops/tests/brain-once.expected
 
 ### Why
@@ -66,7 +66,7 @@ One change costs about 60 seconds of command time on a fresh project, and 34 of 
 - [ ] CI's Linux run of the full self-test is green on this task's own commit (see Notes; never in verify)
 
 ## T-293 — "The words match: here you are asked until nothing is left, away you are never asked, and every close says how long it took and ends with the pull-request link"
-points 3 · risk normal · landed 7e699f9 (2026-11-10) · claimed 2026-11-10
+points 3 · risk normal · landed 7e699f9 (2026-11-10) · claimed 2026-11-10 → done 2026-11-10
 files touched: kit/.claude/output-styles/polaris.md, kit/CLAUDE.md, kit/ops/PROTOCOL.md, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md
 
 ### Why
@@ -79,3 +79,19 @@ The rules being built in this sprint only work if every role reads the same thin
 - [ ] PROTOCOL.md § VOICE and the output style's voice rows stay byte-identical with each other (plain-voice green)
 - [ ] the output style's close rules: the pull-request link is the last line of a pull-request project's close; every close names the run's time and where it went (`bash ops/polaris speed`) and each task an `away:` line reported
 - [ ] PLANNER.md: carve for side-by-side lanes; a chain longer than two tasks carries a one-line reason; the plan shown names lanes, waves and an estimated time
+
+## T-294 — "Away, your approval of the plan is the approval: a high-risk task of the approved plan records the plan's yes at handoff and merges with no question"
+points 3 · risk normal · landed 8477cd6 (2026-11-10) · claimed 2026-11-10
+files touched: kit/ops/lib/builder.sh, ops/tests/away-yes.cmd, ops/tests/away-yes.expected
+
+### Why
+The owner decided: away, a high-risk task that belongs to the approved plan merges, and the close says which. "One yes covers the plan" already exists (`plan_covers`), but only if an agent remembers to type `approve --plan`, and a run whose owner has left stops on it. This task makes the kit record the plan's yes itself, at handoff, for a task whose plan was filed in this session after the approval, while the session is away, using the very same entry `approve --plan` writes (marked "approved plan, owner away"). Everything else stays as today: here, a task outside the plan, a hand-recorded approval, `autonomy: standard`. Contract: ops/contracts/away.md § 4.
+
+### Acceptance
+- [ ] `new` binds every filed task's `plan:` slug through `_presence_bind`; `approve --plan <slug>` binds `<slug>`; `claim` never binds
+- [ ] `cmd_handoff` writes the plan entries of away.md § 4 for THIS task only, in its own board mutation and commit, when `_presence_covers <slug>` AND autonomy is not `standard` AND the task has no hand entry; the entry ends `plan <slug>: approved plan, owner away`
+- [ ] the per-task writer is ONE private fn `_approve_plan_entries <taskfile> <slug> <msg>` shared with `cmd_approve_plan`, whose output stays byte-identical (plan-approval, plan-approval-gates green unchanged)
+- [ ] the byte-exact `away: <ID> merges on the approved plan's yes (plan <slug>, risk: high) — the close names it` line and the `away-yes <ID>` event, once per task that gained a `merge` entry
+- [ ] kit/ops/lib/ownership.sh is not edited; `plan_covers` passes on the recorded entries
+- [ ] away-yes golden: every B3 case of away.md § Executable checks, in a fixture with the kit installed into it running its own `ops/polaris`
+- [ ] CI's Linux and macOS runs of the full self-test are green on this task's own commit (see Notes; never in verify)
