@@ -14,6 +14,9 @@ writes the help lines for T-276 and T-278). T-280 releases 6.14.0 LAST. Verify l
 integrator for this run.
 
 ## Burndown
+| date | done pts | remaining |
+|---|---|---|
+| 2026-11-09 | 5 | 47 |
 
 # SPRINT 21 — The tidy pass, hardened (6.13.0)          capacity: 35   dates: 2026-11-06–
 
