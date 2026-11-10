@@ -33,13 +33,17 @@ cmd_audit() { # Integrator: ownership check of a review branch, from anywhere
 cmd_run_verify() { # Integrator: re-run a task's verify commands in CWD (e.g. on integrate branch)
   local id="${1:?usage: polaris run-verify <ID>}"
   local tf; tf="$(task_file "$id")" || die "no task file for $id"
-  # minutes.md § 7: the very tree the builder's handoff proved → nothing new to prove. Trees, not
-  # commits — a squash-land makes a new commit over the same tree. Uncommitted edits to tracked
-  # files here would make the tree on disk differ, so they always re-run.
+  # minutes.md § 12 (corrects § 7): skip only when this is the very tree of the task branch, nothing
+  # here is modified, AND a green verify stamped that branch's tip with the list the task file holds
+  # NOW. Trees, not commits, for the first test — a squash-land makes a new commit over the same
+  # tree — but the same tree alone proves nothing: it says neither that a green verify ran on it nor
+  # that the list is still the one that ran. No stamp, a one-field stamp, a moved branch or an
+  # edited list → the commands run.
   local rvh rvf
   rvh="$(git rev-parse -q --verify 'HEAD^{tree}' 2>/dev/null || true)"
   rvf="$(git rev-parse -q --verify "feat/$id^{tree}" 2>/dev/null || true)"
-  if [ -n "$rvh" ] && [ "$rvh" = "$rvf" ] && git diff --quiet HEAD 2>/dev/null; then
+  if [ -n "$rvh" ] && [ "$rvh" = "$rvf" ] && git diff --quiet HEAD 2>/dev/null \
+     && _verify_stamp_ok "$id" "$(git rev-parse -q --verify "feat/$id^{commit}" 2>/dev/null || true)" "$tf"; then
     say "run-verify: same tree the builder proved — not re-run"
     return 0
   fi
@@ -165,7 +169,7 @@ cmd_amend() { # amend <ID> --verify <n> -m "why" -- <cmd…> — the SANCTIONED 
     printf -- '- amend: verify[%s] "%s" → "%s" — %s\n' "$tok" "$old" "$newcmd" "$msg" >> "$tf"
   fi
   evt amend "$id" "verify[$tok]"
-  rm -f "$PRIMARY/.polaris/verify-stamp/$id" 2>/dev/null || true   # a changed list was never proven (minutes.md § 7)
+  rm -f "$PRIMARY/.polaris/verify-stamp/$id" 2>/dev/null || true   # a changed list was never proven (minutes.md § 7, § 12)
   board_commit "chore(board): amend $id verify"
   sync_board
   mutex_off; trap - EXIT
@@ -355,6 +359,7 @@ EOF
   board_commit "chore(board): done $id"
   sync_board
   mutex_off; trap - EXIT
+  rm -f "$PRIMARY/.polaris/verify-stamp/$id" 2>/dev/null || true   # in done/: nothing left to skip (minutes.md § 12)
   board_changed_touch   # freshness beacon for the brain (ops/contracts/brain.md) — best-effort
   brain_refresh_if_present  # v1.1: done mirrors seal — refresh AFTER the touch so the wave close
                             # (land → seal → run-verify → done) ends fresh; ⚠ note on failure, never a red done

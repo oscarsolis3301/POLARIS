@@ -6,8 +6,10 @@
 # the lease, lands, seals and finishes the task — then `finish`, with no `sweep` and no git by hand.
 # Pinned: verify stamps the commit and handoff says it did not re-run the checks · the task is in
 # done/ · `finish` exits 0, says it cleaned the merged wave branch, and no integrate/* is left ·
-# a Learned list over the limit is an advisory line and never a red finish · run-verify on the very
-# tree the builder proved says so and runs nothing.
+# a Learned list over the limit is an advisory line and never a red finish · once the lane is done its
+# verify stamp is gone (minutes.md § 12), so run-verify runs the lines even on the tree the builder
+# proved — the skip itself is pinned by the verify-stamp golden. The stamp is `<sha> <listsum>`; the
+# "stamp names the commit" check reads field 1.
 #
 # HERMETIC (the seal-fallback pattern): ONE throwaway repo under mktemp -d, no remote, no session id,
 # HOME and USERPROFILE faked together, the CLI run from INSIDE the fixture so polaris anchors to it.
@@ -41,7 +43,7 @@ bash "$KIT" claim T-1 >/dev/null 2>&1; echo "claim rc=$?"
 W="$R/.polaris/wt/T-1"
 ( cd "$W" && echo y > src/a.txt && git commit -qam 'feat: T-1 the edit' ) >/dev/null 2>&1
 ( cd "$W" && bash "$KIT" verify T-1 >/dev/null 2>&1 ); echo "verify rc=$?"
-[ "$(tr -d ' \r\n' < .polaris/verify-stamp/T-1 2>/dev/null)" = "$(git -C "$W" rev-parse HEAD)" ] && echo 'stamp names the commit: yes' || echo 'stamp names the commit: NO'
+[ "$(cut -d' ' -f1 .polaris/verify-stamp/T-1 2>/dev/null)" = "$(git -C "$W" rev-parse HEAD)" ] && echo 'stamp names the commit: yes' || echo 'stamp names the commit: NO'
 
 echo '== 2. handoff: the checks are not re-run, and the lane lands itself =='
 OUT="$(cd "$W" && bash "$KIT" handoff T-1 2>&1)"; echo "handoff rc=$?"
@@ -49,7 +51,7 @@ echo "said proven, not re-run: $(printf '%s\n' "$OUT" | grep -c '^✅ verify: pr
 echo "verify lines re-run: $(printf '%s\n' "$OUT" | grep -c 'verify\[1\]: ' || true)"
 echo "T-1 is in: $(col T-1)"
 
-echo '== 3. run-verify on the very tree the builder proved runs nothing; another tree runs the lines =='
+echo '== 3. the lane is done, so its stamp is gone: run-verify runs the lines, on any tree =='
 ( cd "$W" && bash "$KIT" run-verify T-1 2>&1 ); echo "run-verify rc=$?"
 bash "$KIT" run-verify T-1 2>&1; echo "run-verify rc=$?"
 

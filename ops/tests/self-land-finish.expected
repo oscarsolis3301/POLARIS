@@ -7,8 +7,9 @@ handoff rc=0
 said proven, not re-run: 1
 verify lines re-run: 0
 T-1 is in: done
-== 3. run-verify on the very tree the builder proved runs nothing; another tree runs the lines ==
-✅ run-verify: same tree the builder proved — not re-run
+== 3. the lane is done, so its stamp is gone: run-verify runs the lines, on any tree ==
+   verify[1]: grep -q y src/a.txt
+✅ all 1 verify commands green
 run-verify rc=0
    verify[1]: grep -q y src/a.txt
 ✅ all 1 verify commands green
