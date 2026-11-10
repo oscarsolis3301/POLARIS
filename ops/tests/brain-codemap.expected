@@ -1,0 +1,62 @@
+# code map — per-directory digest (files: count · symbols: grepped defs · hotspot: from ops/MAP.md)
+
+## ./
+- files: 4 (.json .gitignore .md)
+- hotspot: package.json — chain edits, never parallel-own (ops/MAP.md)
+
+## Assets/Resources/
+- files: 2 (.asset .meta)
+
+## docs/guide/
+- files: 2 (.md .txt)
+- purpose: how the shop is laid out
+
+## docs/readme/
+- files: 1 (.md)
+- purpose: The shop readme folder
+
+## java/src/shop/
+- files: 1 (.java)
+
+## lib/many/
+- files: 2 (.py .sh)
+- symbols: Yankee alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo
+- hotspot: lib/many/funcs.sh — chain edits, never parallel-own (ops/MAP.md)
+
+## ops/
+- files: 5 (.tsv .md)
+
+## packages/ui-kit/
+- files: 2 (.js .json)
+
+## src/
+- files: 1 (.tsx)
+
+## src/components/
+- files: 8 (.tsx)
+
+## src/hooks/
+- files: 5 (.ts)
+
+## src/legacy/
+- files: 1 (.ts)
+
+## src/payments/
+- files: 1 (.ts)
+
+## src/services/
+- files: 5 (.ts)
+
+## src/types/
+- files: 4 (.ts)
+
+## src/utils/
+- files: 4 (.ts)
+
+## tests/
+- files: 7 (.ts .sh)
+
+## tools/tied/
+- files: 4 (.cfg .yml)
+brain files: 8
+temp files left: 0
