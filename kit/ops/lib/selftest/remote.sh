@@ -442,12 +442,14 @@ drill_autoupdate() {
     # resets away; ops/VERSION, CONVENTIONS.md and src/a.txt come back exactly as found.
     # Windows: curl is a native binary and cannot open `file:///tmp/…` — cygpath -m turns $T into
     # `C:/Users/…`, and `file:///C:/…` reads; POSIX hosts use file://$T verbatim.
-    local au_pre au_st au_base au_url au_mp au_home au_v au_d au_br au_s0 au_fh au_fo au_w
+    local au_pre au_st au_base au_url au_mp au_home au_v au_d au_br au_s0 au_fh au_fo au_w au_r0 au_k0 au_kn
     au_pre="$(git rev-parse HEAD)"
     au_st="$(git status --porcelain)"
     [ -f ops/VERSION ] && cp ops/VERSION "$T/au-ver.bak" || rm -f "$T/au-ver.bak"
     [ -f ops/CONVENTIONS.md ] && cp ops/CONVENTIONS.md "$T/au-conv.bak" || rm -f "$T/au-conv.bak"
-    [ -z "$(git stash list)" ] || { echo "AUTOUPDATE PRECONDITION FAIL (a stash is already present — assertion 5 needs an empty list)"; exit 1; }
+    # earlier drills may leave stashes behind: every stash check below compares against this entry
+    # listing (and count), so it holds in any drill order and still catches a stash the update made.
+    au_k0="$(git stash list)"; au_kn="$(git stash list | wc -l | tr -d " ")"
     for au_d in ready active review; do
       for au_v in ops/board/$au_d/*.md; do [ -f "$au_v" ] && { echo "AUTOUPDATE PRECONDITION FAIL ($au_v — the board must be quiet here)"; exit 1; }; done
     done
@@ -487,7 +489,7 @@ drill_autoupdate() {
     [ "$(wc -l < "$T/au1.out" | tr -d ' ')" = "1" ] || { cat "$T/au1.out"; echo "AUTOUPDATE (1) ONE-LINE FAIL (--auto prints exactly one line)"; exit 1; }
     grep -q '^✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting$' "$T/au1.out" \
       || { cat "$T/au1.out"; echo "AUTOUPDATE (1) SAY FAIL (the pinned ✅ line)"; exit 1; }
-    [ -z "$(git stash list)" ] || { echo "AUTOUPDATE (1) STASH FAIL (--auto never parks)"; exit 1; }
+    [ "$(git stash list)" = "$au_k0" ] || { echo "AUTOUPDATE (1) STASH FAIL (--auto never parks)"; exit 1; }
     # (2) a task in active/ → unchanged, `skipped: active: 1`
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache .polaris/update.log
     printf -- '---\nid: T-AU\ntitle: someone is mid-task\ntype: feature\npoints: 1\nstatus: active\nfiles_owned:\n  - src/au.txt\n---\n' > ops/board/active/T-AU.md
@@ -501,7 +503,7 @@ drill_autoupdate() {
     "$SELF" update --auto --say --repo-only > "$T/au2b.out" 2> "$T/au2b.err" || { cat "$T/au2b.out" "$T/au2b.err"; echo "AUTOUPDATE (2b) RC FAIL"; exit 1; }
     [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.1" ] || { echo "AUTOUPDATE (2b) APPLY FAIL (kit dirt must leave ops/VERSION at 0.0.1)"; exit 1; }
     [ "$(cat "$T/au2b.out")" = "skipped: uncommitted changes inside the kit's paths" ] || { cat "$T/au2b.out"; echo "AUTOUPDATE (2b) SAY FAIL"; exit 1; }
-    [ -z "$(git stash list)" ] || { echo "AUTOUPDATE (2b) STASH FAIL (--auto never parks)"; exit 1; }
+    [ "$(git stash list)" = "$au_k0" ] || { echo "AUTOUPDATE (2b) STASH FAIL (--auto never parks)"; exit 1; }
     # (3) auto_update: off → unchanged, `skipped: auto_update: off`
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache
     printf 'auto_update: off\n' >> ops/CONVENTIONS.md
@@ -521,7 +523,7 @@ drill_autoupdate() {
     echo dirt >> src/a.txt
     POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au5.out" 2>&1 || { cat "$T/au5.out"; echo "AUTOUPDATE (5) RC FAIL (app-only dirt must not stop an explicit update)"; exit 1; }
     [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au5.out"; echo "AUTOUPDATE (5) APPLY FAIL (ops/VERSION must read 0.0.2)"; exit 1; }
-    [ -z "$(git stash list)" ] || { echo "AUTOUPDATE (5) STASH FAIL (app-only dirt is never parked)"; exit 1; }
+    [ "$(git stash list)" = "$au_k0" ] || { echo "AUTOUPDATE (5) STASH FAIL (app-only dirt is never parked)"; exit 1; }
     grep -q "outside the kit's paths — left alone" "$T/au5.out" || { cat "$T/au5.out"; echo "AUTOUPDATE (5) NOTE FAIL (the left-alone note)"; exit 1; }
     [ "$(tail -1 src/a.txt | tr -d '\r')" = "dirt" ] || { echo "AUTOUPDATE (5) DIRT FAIL (src/a.txt must keep its uncommitted line)"; exit 1; }
     git diff-tree --no-commit-id --name-only -r HEAD | grep -qx 'src/a.txt' && { echo "AUTOUPDATE (5) COMMIT DIRT FAIL (a file dirty before the update must never enter its commit)"; exit 1; }
@@ -530,9 +532,9 @@ drill_autoupdate() {
     echo dirt >> ops/PROTOCOL.md
     POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au5b.out" 2>&1 || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) RC FAIL (kit dirt parks, then proceeds)"; exit 1; }
     [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) APPLY FAIL"; exit 1; }
-    [ "$(git stash list | wc -l | tr -d ' ')" = "1" ] || { echo "AUTOUPDATE (5b) PARK FAIL (kit dirt must be parked in exactly one stash)"; exit 1; }
+    [ "$(git stash list | wc -l | tr -d ' ')" = "$((au_kn + 1))" ] || { echo "AUTOUPDATE (5b) PARK FAIL (kit dirt must be parked in exactly one NEW stash)"; exit 1; }
     grep -q '^✅ parked as polaris/park-' "$T/au5b.out" || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) PARK SAY FAIL (the park must announce itself)"; exit 1; }
-    git stash list | grep -q 'dirty tree at update' || { git stash list; echo "AUTOUPDATE (5b) PARK NAME FAIL (the stash must carry the why)"; exit 1; }
+    git stash list -1 | grep -q 'dirty tree at update' || { git stash list; echo "AUTOUPDATE (5b) PARK NAME FAIL (the stash must carry the why)"; exit 1; }
     tail -1 ops/PROTOCOL.md | grep -qx 'dirt' && { echo "AUTOUPDATE (5b) DIRT FAIL (the parked line must have left the file)"; exit 1; }
     git diff-tree --no-commit-id --name-only -r HEAD | grep -qx 'ops/PROTOCOL.md' && { echo "AUTOUPDATE (5b) COMMIT DIRT FAIL (a parked path must never enter the update's commit)"; exit 1; }
     git stash drop -q
@@ -542,6 +544,7 @@ drill_autoupdate() {
     au_br="$(git symbolic-ref -q --short HEAD)"
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache
     au_s0="$(git status --porcelain)"
+    au_r0="$(git for-each-ref refs/remotes)"   # earlier drills leave remote refs: "never pushed" = this listing unchanged
     POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au7.out" 2>&1 || { cat "$T/au7.out"; echo "AUTOUPDATE (7) RC FAIL"; exit 1; }
     [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] || { git log --oneline -3; echo "AUTOUPDATE (7) COMMIT FAIL (exactly one new commit, on top of where the update started)"; exit 1; }
     [ "$(git log -1 --format=%s)" = "chore(polaris): POLARIS 0.0.1 → 0.0.2" ] || { git log -1 --format=%s; echo "AUTOUPDATE (7) SUBJECT FAIL"; exit 1; }
@@ -550,7 +553,8 @@ drill_autoupdate() {
     au_v="$(git diff-tree --no-commit-id --name-only -r HEAD | wc -l | tr -d ' ')"
     grep -qxF "   committed for you: chore(polaris): POLARIS 0.0.1 → 0.0.2 — $au_v files, not pushed" "$T/au7.out" || { cat "$T/au7.out"; echo "AUTOUPDATE (7) NOTE FAIL (the committed-for-you note, with the file count)"; exit 1; }
     grep -q -e 'nothing was committed for you' -e 'not committed:' "$T/au7.out" && { cat "$T/au7.out"; echo "AUTOUPDATE (7) OLD NOTE FAIL (a commit replaces today's note)"; exit 1; }
-    [ -z "$(git for-each-ref refs/remotes)" ] || { git for-each-ref refs/remotes; echo "AUTOUPDATE (7) PUSH FAIL (no remote ref may appear)"; exit 1; }
+    [ "$(git for-each-ref refs/remotes)" = "$au_r0" ] || { echo "before:"; printf '%s
+' "$au_r0"; echo "after:"; git for-each-ref refs/remotes; echo "AUTOUPDATE (7) PUSH FAIL (a remote ref moved or appeared — the update must never push)"; exit 1; }
     # (7b) a feature branch · (7c) staged work · (7d) publish: pr · (7e) a merge in progress → today's
     # note, then ONE `not committed:` note naming the reason, and no new commit.
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache
@@ -649,7 +653,7 @@ drill_autoupdate() {
     [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au6c2.out" "$T/au6c2.err"; echo "AUTOUPDATE (6c) MAJOR APPLY FAIL (--all --major must apply the MAJOR: ops/VERSION reads the tarball's 0.0.2)"; exit 1; }
     grep -qxF "$au_mp: ✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting" "$T/au6c2.out" \
       || { cat "$T/au6c2.out"; echo "AUTOUPDATE (6c) MAJOR SAY FAIL (the usual ✅ line under the prefix — the human typed --major, so it is not a surprise)"; exit 1; }
-    [ -z "$(git stash list)" ] || { echo "AUTOUPDATE (6c) STASH FAIL (--all --major never parks)"; exit 1; }
+    [ "$(git stash list)" = "$au_k0" ] || { echo "AUTOUPDATE (6c) STASH FAIL (--all --major never parks)"; exit 1; }
     # hermetic teardown: the installed tree and the pin commit reset away, the three files as found,
     # the fixture's temp state gone, and the tree byte-identical to the way we found it.
     git reset -q --hard "$au_pre"
