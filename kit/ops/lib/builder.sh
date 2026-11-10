@@ -206,22 +206,34 @@ EOF_SKGLOB
   note "top-level session: EnterWorktree({path: \".polaris/wt/<ID>\"}) · pinned-cwd subagent or any other CLI: run everything via absolute paths under .polaris/wt/<ID> (or cd there in the SAME call — a subagent's Bash resets its working folder between calls)"
 }
 
-_verify_stamp_write() { # _verify_stamp_write <ID> — after a GREEN verify run in the task's worktree:
-  # record that worktree's HEAD in the PRIMARY's .polaris/verify-stamp/<ID> (minutes.md § 7), so
-  # handoff can skip proving the same commit twice. Only a clean tree is stamped — with uncommitted
-  # edits the thing proven is not the commit — and a dirty run drops any older stamp. Best-effort.
+_verify_listsum() { # _verify_listsum <taskfile> — the task's verify list as `fm_list verify` prints it,
+  # fingerprinted: cksum's two numbers joined by `-` (minutes.md § 12). One pipeline, no per-line fork.
+  set -- $(fm_list verify "$1" 2>/dev/null | cksum)
+  printf '%s-%s' "${1:-}" "${2:-}"
+}
+_verify_stamp_write() { # _verify_stamp_write <ID> <taskfile> — after a GREEN verify run in the task's
+  # worktree: record `<HEAD sha> <listsum>` in the PRIMARY's .polaris/verify-stamp/<ID> (minutes.md
+  # § 12, correcting § 7), so a skip later rests on both facts — this commit was proven, and by this
+  # very list. Only a clean tree is stamped — with uncommitted edits the thing proven is not the
+  # commit — and a dirty run drops any older stamp. Best-effort.
   local vs="$PRIMARY/.polaris/verify-stamp" vh
   vh="$(git rev-parse HEAD 2>/dev/null || true)"
   if [ -n "$vh" ] && [ -z "$(git status --porcelain 2>/dev/null | head -1)" ]; then
     mkdir -p "$vs" 2>/dev/null || true
-    printf '%s\n' "$vh" 2>/dev/null > "$vs/$1" || true
+    printf '%s %s\n' "$vh" "$(_verify_listsum "$2")" 2>/dev/null > "$vs/$1" || true
   else
     rm -f "$vs/$1" 2>/dev/null || true
   fi
 }
-_verify_stamp_read() { # _verify_stamp_read <ID> — the sha a green verify stamped, or nothing
-  [ -f "$PRIMARY/.polaris/verify-stamp/$1" ] || return 0
-  tr -d ' \r\n' < "$PRIMARY/.polaris/verify-stamp/$1" 2>/dev/null || true
+_verify_stamp_ok() { # _verify_stamp_ok <ID> <sha> <taskfile> — rc 0 only when the stamp is exactly
+  # `<sha> <listsum of the task file NOW>`. No stamp, an old one-field stamp, another commit or an
+  # edited list → rc 1, and the caller runs the commands. The list is fingerprinted only once a
+  # stamp exists, so the common no-stamp path costs no process at all.
+  local vf="$PRIMARY/.polaris/verify-stamp/$1" vl=""
+  [ -n "$2" ] && [ -f "$vf" ] || return 1
+  IFS= read -r vl < "$vf" || [ -n "$vl" ] || return 1
+  vl="${vl%$'\r'}"
+  [ "$vl" = "$2 $(_verify_listsum "$3")" ]
 }
 
 cmd_verify() {
@@ -231,7 +243,7 @@ cmd_verify() {
   check_ownership "$tf" HEAD
   check_rules HEAD "$id"           # ID threaded: an `ask` rule cleared by <ID>'s approved: list
   run_verify_cmds "$tf"
-  _verify_stamp_write "$id"
+  _verify_stamp_write "$id" "$tf"
   # capture check, the ⚠ twin of handoff's gate (ops/contracts/visual-check.md): the same body in
   # lib/visual.sh and the same sentence, but mid-flight it only warns — a Builder may verify before
   # the shot is taken. The die lives in cmd_handoff.
@@ -266,16 +278,17 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
   git diff --quiet && git diff --cached --quiet || die "uncommitted changes — commit on feat/$id first"
   check_ownership "$tf" "feat/$id"
   check_rules "feat/$id" "$id"     # ID threaded: an `ask` rule cleared by <ID>'s approved: list
-  # Verify once (minutes.md § 7): the verify COMMANDS are skipped only when the stamp names this
-  # exact HEAD and the tree is clean — the same code, provably. Ownership and rules (which carries
-  # the surfaces and freshness gates) ran above regardless.
+  # Verify once (minutes.md § 12): the verify COMMANDS are skipped only when the stamp names this
+  # exact HEAD, its list fingerprint matches the task file's verify list now, and the tree is clean
+  # — the same code, proven by the same list. Ownership and rules (which carries the surfaces and
+  # freshness gates) ran above regardless.
   local vsha
   vsha="$(git rev-parse HEAD 2>/dev/null || true)"
-  if [ -n "$vsha" ] && [ "$(_verify_stamp_read "$id")" = "$vsha" ] && [ -z "$(git status --porcelain 2>/dev/null | head -1)" ]; then
+  if _verify_stamp_ok "$id" "$vsha" "$tf" && [ -z "$(git status --porcelain 2>/dev/null | head -1)" ]; then
     say "verify: proven at $(printf '%.7s' "$vsha") — not re-run"
   else
     run_verify_cmds "$tf"
-    _verify_stamp_write "$id"
+    _verify_stamp_write "$id" "$tf"
   fi
   # capture gate (ops/contracts/visual-check.md § v2.6) — body in lib/visual.sh: a diff that touches
   # a visual: path ships with its pictures and a word about them, or not at all, and it dies HERE,
