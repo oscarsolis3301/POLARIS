@@ -57,7 +57,7 @@ Nothing today checks that a done task's files really reached main before done de
 - [ ] api-kit.expected regenerated and matches
 
 ## T-225 — "seal checks the tasks it just merged; finish refuses a done task whose files are missing from main and names the red qa key"
-points 4 · risk normal · landed 27de28c (2026-11-10) · claimed 2026-11-10
+points 4 · risk normal · landed 27de28c (2026-11-10) · claimed 2026-11-10 → done 2026-11-10
 files touched: kit/ops/lib/integrate.sh, kit/ops/lib/qa.sh, ops/tests/finish-qa-red.cmd, ops/tests/finish-qa-red.expected, ops/tests/landed-seal.cmd, ops/tests/landed-seal.expected
 
 ### Why
@@ -81,6 +81,16 @@ Words only, describing the behavior in ops/contracts/safe-landing.md (T-222..T-2
 - [ ] each file gets the described words and nothing else changes
 - [ ] contracts are append-only (earlier sections byte-identical)
 - [ ] verify: lines pass
+
+## T-227 — "Release 6.15.0 - nothing waits to land, nothing gets lost: version and changelog (LAST)"
+points 1 · risk normal · landed da639ca (2026-11-10) · claimed 2026-11-10
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+Change version: in kit/ops/VERSION to 6.15.0 and leave every other line of that multi-line keyed file exactly as is. Add a '## 6.15.0 — <today's date>' entry at the top of CHANGELOG.md (above 6.14.0) in the same plain-language style: tasks now land themselves the moment they are handed off, and parallel lanes can no longer lose each other's work (one lease now covers a lane's whole land, seal and done); POLARIS checks that a finished task's files are really on main, re-lands them by itself if not (including a fix made after a task was sent back), and keeps the branch until they match; finish refuses a done task whose files are missing and, when the checks are red, names which one and shows its last lines; a second plan in the same chat is no longer mistaken for someone else's work. Tag, publish and update are the owner's and conductor's steps, not this task.
+
+### Acceptance
+- [ ] every verify: line passes (VERSION is multi-line: use grep, never test "$(cat kit/ops/VERSION)" = ..., the T-217 trap)
 
 ## T-287 — "check --only takes a list, so a task's own checks run side by side instead of one by one"
 points 2 · risk normal · landed c56c3b8 (2026-11-09) · claimed 2026-11-09 → done 2026-11-09
