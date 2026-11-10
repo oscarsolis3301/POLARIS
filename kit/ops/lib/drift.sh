@@ -252,6 +252,8 @@ EOF
         finding "CRUFT diverged: feat/$id carries commits not in $BASE — inspect: git log $BASE..feat/$id (never auto-deleted)"
       elif [ -d "$GCD/worktrees/$id" ] && beat_live "$id"; then
         : # waiting — the lane that landed it is still inside its own worktree; `sweep` lists the LIVE worktree and drift says nothing
+      elif [ -d "$GCD/worktrees/$id" ] && _wt_stood_in "$id"; then
+        : # standing in it counts like a live beat (minutes.md § 14): the running command is inside that worktree, so it cannot go yet — the next finish from elsewhere clears it
       else
         finding "CRUFT: feat/$id still exists though $id is done — bash ops/polaris qa or sweep --fix clears it"
       fi

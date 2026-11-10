@@ -1,0 +1,12 @@
+installed: yes
+begin rc=0
+wrap rc=0
+finish ran: 1
+done: yes
+file on main: 1
+caveat: 1
+stop lines: 0
+finish rc=0
+folder: gone
+branch: gone
+caveat about it: 0

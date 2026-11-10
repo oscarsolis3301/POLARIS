@@ -466,8 +466,12 @@ EOF
   for f in "$PRIMARY"/.polaris/wt/*/; do
     [ -e "$f" ] || break
     n="${f%/}"; n="${n##*/}"
-    task_file "$n" active >/dev/null || task_file "$n" review >/dev/null \
-      || fin_caveat "worktree .polaris/wt/$n has no active task — bash ops/polaris sweep --fix"
+    { task_file "$n" active >/dev/null || task_file "$n" review >/dev/null; } && continue
+    if [ -f "$BOARD/done/$n.md" ] && _wt_stood_in "$n"; then   # minutes.md § 14: it clears from elsewhere
+      fin_caveat "worktree .polaris/wt/$n is where this command ran from — the next finish from the project folder clears it"
+    else
+      fin_caveat "worktree .polaris/wt/$n has no active task — bash ops/polaris sweep --fix"
+    fi
   done
   # Parked dirt is NEVER a gate. park exists precisely so a shared checkout never has to ask a git
   # question, so gating on its own remedy would close the loop on itself — but a stash somebody
