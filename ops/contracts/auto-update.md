@@ -255,3 +255,35 @@ Full rules and pinned lines: `ops/contracts/minutes.md` § 5.1–5.2.
 
 ### Changelog
 - v4 2026-11-09: self-commit and fan-out (plan minutes).
+
+## v5 — tasks that are only waiting never hold an update back (2026-11-09, plan safe-landing, 6.15.0 — T-288)
+Measured the day 6.14.0 shipped: `update --all` skipped all four of the owner's other projects with
+`skipped: ready: <n>`. Each has planned tasks waiting in `ready/`, so by v1's rule its board is never
+"quiet", and it never updates itself — The Director has been on 6.7.1 since September. That is the
+staleness this seam was written to end. A task waiting in `ready/` is nobody's work in flight: an update
+never touches the board, and nothing is running that the new files could pull out from under.
+- **Two questions, one function.** `board_quiescent` keeps v1's answer when called with no argument
+  (`ready/` counts): the layout pass still needs a board with nothing planned, because it moves the
+  files those tasks name (`update_hops_hint`, `route.sh` — unchanged). Called as
+  `board_quiescent inflight` it skips the `ready` column and judges only work in flight:
+  `active/`, `review/`, a task lock, the integration lease, a running bg job. Same `QUIET_WHY` shapes,
+  same order, minus `ready: <n>`.
+- **The update asks the second question.** `update --auto` (and so the session-start hook and
+  `update --all`) calls `board_quiescent inflight`. Everything else in v1–v4 stands: `auto_update: off`,
+  a MAJOR only asks, dirt inside the kit's paths skips, `--auto` never parks, the self-commit rules.
+- **The fan-out line counts one right.** `updating 1 other project on this PC in the background — see
+  <log>` for one, `updating <n> other projects …` for any other number (v4 printed "1 other projects").
+- **The install skill says what is true now.** `kit/.claude/skills/polaris-install/SKILL.md`'s update
+  paragraph loses "It refuses on a dirty worktree and commits nothing — the user reviews the diff.
+  Never update mid-sprint." and says instead, in plain words: an update saves its own files as one
+  commit when that is safe and says why when it is not; work that is being built or landed holds an
+  automatic update back, tasks that are only waiting do not; `auto_update: off` stops it.
+- **Executable checks.** Fast tier (`kit/ops/lib/selftest/fast.sh`, the quiescent block): every v1
+  assertion stays as it is for the no-argument call, and each is repeated for `inflight` with ONE
+  difference: a `.md` in `ready/` → quiet, `QUIET_WHY` empty. Drill `autoupdate`
+  (`kit/ops/lib/selftest/remote.sh`): a new case — a board with one task in `ready/` and nothing else →
+  `update --auto --say` APPLIES (the pinned ✅ line, version moved, the commit made); case (2) keeps
+  proving that `active: 1` skips; the fan-out case gains the one-project wording.
+
+### Changelog
+- v5 2026-11-09: waiting tasks no longer hold an update back; the fan-out line counts one right; the install skill's update paragraph is brought up to date (T-288, plan safe-landing).
