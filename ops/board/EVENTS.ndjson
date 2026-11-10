@@ -1054,3 +1054,4 @@
 {"ts":1794269990,"ev":"handoff","id":"T-276","who":"Owner@DESKTOP","note":""}
 {"ts":1794270160,"ev":"handoff","id":"T-279","who":"Owner@DESKTOP","note":""}
 {"ts":1794270169,"ev":"handoff","id":"T-278","who":"Owner@DESKTOP","note":""}
+{"ts":1794270206,"ev":"kickback","id":"T-279","who":"Owner@DESKTOP","note":"one wording fix: the begin refusal line must read 'begin: <ID> needs the <lane> lane, not solo — it waits in ready/ for the conductor' (minutes.md § 9, v2.2); change the one printf in flow.sh and the one line in flow-solo.expected, nothing else"}
