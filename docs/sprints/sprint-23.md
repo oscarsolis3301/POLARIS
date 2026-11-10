@@ -15,7 +15,7 @@ An agent elsewhere found tasks marked done whose code never reached main after a
 - [ ] the verify: lines pass (they check shape only; red-on-today is proven by your manual runs)
 
 ## T-222 — "Lease token: a lease holder's child processes inherit the lease, only the taking frame releases; a new plan's first claim re-marks the session"
-points 4 · risk normal · landed 6ff502e (2026-11-09) · claimed 2026-11-09
+points 4 · risk normal · landed 6ff502e (2026-11-09) · claimed 2026-11-09 → done 2026-11-09
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/core.sh, kit/ops/lib/workspace.sh, ops/tests/api-kit.expected, ops/tests/lease-token.cmd, ops/tests/lease-token.expected, ops/tests/plan-marker.cmd, ops/tests/plan-marker.expected
 
 ### Why
@@ -27,6 +27,20 @@ Two small fixes, both first in the chain. (1) The integration lease today only r
 - [ ] no output text of int_on / int_off / claim changes; self-land-finish still matches
 - [ ] api-kit.expected regenerated and matches
 - [ ] selftest history.sh and board.sh edited only if busyint / handover assert on what this changes
+
+## T-223 — "Self-land holds ONE lease from land through seal and done, and unwinds to the exact sha"
+points 5 · risk normal · landed c3cd9de (2026-11-09) · claimed 2026-11-09
+files touched: kit/ops/lib/builder.sh, kit/ops/lib/integrate.sh
+
+### Why
+This is the fix itself (contract safe-landing sections 2-3, pointers in its v1.1 section). self_land (builder.sh:375) takes the lease ONCE (int_on "self-land <ID>"; rc 3 returns 3 with the queued line last) and holds it through land, seal and the done fan-out, releasing in its own frame on every exit path. Take it AFTER the sprint-header check T-259 added (that check returns 0 with nothing taken, as today). "Am I the last lane out" is re-read from the board (active/ and ready/ both empty) INSIDE the lease; the handoff-time notice stops deciding the seal. cmd_done (integrate.sh:198) takes the now re-entrant lease around its base commit, worktree removal and branch deletion, releasing only if it took it; replace the "would DEADLOCK" comment (about integrate.sh:323) with a pointer to safe-landing § 1. The two `git reset -q --hard HEAD~1` unwinds in cmd_land_express (integrate.sh:730 and :787) record pre=$(git rev-parse HEAD) before the squash and unwind with `git reset -q --hard "$pre"`; cmd_land's conflict unwind (:589) is already a bare reset and stays; the printed recovery hint (:608) may keep HEAD~1. Switch land_had (:540), ex_had (:644) and seal_had (:915) to T-222's int_mine. Lease stays outermost over the board mutex. Every normal-path output and the commit graph stay byte-identical, which is what the long verify list proves: each of those goldens runs a self-landing handoff, a land, a seal or a done.
+
+### Acceptance
+- [ ] land-race matches its .expected (green) with land-race.expected untouched; it was red on main before this task
+- [ ] no `reset -q --hard HEAD~1` left in integrate.sh
+- [ ] self_land decides the seal from the board inside the lease
+- [ ] api-kit.expected regenerated and matches
+- [ ] every golden in verify: still matches, unchanged; ownership, rc 3 queued-line-last and the risk: high refusal text are unchanged
 
 ## T-226 — "Prose: tasks land themselves, the run trusts the content check, lease inheritance, and bg wait --max 120"
 points 2 · risk normal · landed 075c033 (2026-11-09) · claimed 2026-11-09 → done 2026-11-09
@@ -58,7 +72,7 @@ A task's own checks are now the whole gate, at handoff and again at landing. A l
 - [ ] CI's Linux run of the full self-test is green on this task's own commit: `PROOF_GOLDENS=true bash tools/proof.sh`, once, by hand, through `bg run` (never in verify)
 
 ## T-288 — "Tasks that are only waiting no longer hold an update back, so projects stop going stale"
-points 3 · risk normal · landed 11cea23 (2026-11-09) · claimed 2026-11-09
+points 3 · risk normal · landed 11cea23 (2026-11-09) · claimed 2026-11-09 → done 2026-11-09
 files touched: kit/.claude/skills/polaris-install/SKILL.md, kit/ops/lib/admin.sh, kit/ops/lib/selftest/fast.sh, kit/ops/lib/selftest/remote.sh
 
 ### Why

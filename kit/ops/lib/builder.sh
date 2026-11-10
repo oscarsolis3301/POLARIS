@@ -437,16 +437,28 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
     return 0
   fi
   note "landing: self — continuing into land $id (the lease is the integration lane: this waits its turn)"
+  # ONE lease for the whole tail (ops/contracts/safe-landing.md § 2): taken HERE, once, and held
+  # through land, seal and the done fan-out. Each of those runs as a child that re-enters by the
+  # exported token (§ 1), so no other lane can slip into a gap between them — the reported failure
+  # was exactly that gap. Busy past the bounded wait → int_on's `queued: ` line is the last thing
+  # printed and the rc is 3, nothing taken. Every return below releases in THIS frame (int_off is
+  # a no-op unless we took it); a die on the way releases through on_die, armed by int_on.
+  int_on "self-land $id" || return $?
   local lrc=0
   ( cd "$PRIMARY" && "$SELF" land "$id" ) || lrc=$?
   if [ "$lrc" -eq 3 ]; then
+    int_off
     return 3                         # int_on printed the final `queued: ` line — nothing after it
   fi
   if [ "$lrc" -ne 0 ]; then
+    int_off
     note "⚠ self-land failed (rc $lrc) — the work is safe on feat/$id and $id stays in review/ for the integration lane"
     return 0
   fi
-  if [ "$notice" != "integrate" ]; then
+  # "Am I the last lane out" is read from the board NOW, inside the lease — never from the
+  # handoff-time notice, which another lane's later land could make stale (§ 2.2).
+  if ! _sl_last_out "$id"; then
+    int_off
     note "$id landed on the wave — mid-wave lands never seal; the last lane out seals"
     return 0
   fi
@@ -455,6 +467,7 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
   local src=0
   ( cd "$PRIMARY" && "$SELF" seal ) || src=$?
   if [ "$src" -ne 0 ]; then
+    int_off
     note "⚠ wave not sealed (rc $src) — $id is landed and safe; close the wave with: bash ops/polaris seal"
     return 0
   fi
@@ -498,6 +511,32 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
       note "⚠ done $own_last failed — finish it by hand: bash ops/polaris done $own_last"
     fi
   fi
+  int_off                            # the tail is over — the lane is free for the next one
+  return 0
+}
+
+_sl_last_out() { # _sl_last_out <ID> — rc 0 when this lane is the last one out, read from the board
+  # by self_land INSIDE its lease (safe-landing.md § 2.2): ready/ and active/ hold nothing (the two
+  # counts handoff uses), AND no other review/ task is still on its way to this wave. Without the
+  # second half every lane that landed after the last handoff would see an empty board and seal its
+  # own wave. "On its way" = not landed (on $BASE or on the checked-out wave), a task self_land would
+  # land (plan_covers: classified and covered), and a lane still beating — so a task the integrator
+  # owns, or one whose lane has gone quiet, never holds a seal back. Columns are read in the order
+  # tasks move (ready → active → review), so a task moving while we read is seen in one of them.
+  local id="$1" nrdy nact f tid
+  nrdy="$(ls "$BOARD/ready" 2>/dev/null | grep -c '\.md$' || true)"
+  nact="$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)"
+  [ "${nrdy:-0}" -eq 0 ] && [ "${nact:-0}" -eq 0 ] || return 1
+  for f in "$BOARD/review/"*.md; do
+    [ -f "$f" ] || continue
+    tid="$(fm_get id "$f" 2>/dev/null || true)"
+    [ -n "$tid" ] && [ "$tid" != "$id" ] || continue
+    landed_sha "$tid" HEAD >/dev/null 2>&1 && continue
+    landed_sha "$tid" >/dev/null 2>&1 && continue
+    plan_covers "$f" >/dev/null 2>&1 || continue
+    beat_live "$tid" || continue
+    return 1
+  done
   return 0
 }
 
