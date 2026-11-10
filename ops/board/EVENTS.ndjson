@@ -1077,3 +1077,4 @@
 {"ts":1794273935,"ev":"done","id":"T-281","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1794273950,"ev":"done","id":"T-282","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794274780,"ev":"new","id":"T-283","who":"Owner@DESKTOP","note":"ready","pts":1}
+{"ts":1794274849,"ev":"claim","id":"T-283","who":"Owner@DESKTOP","note":"","pts":1}
