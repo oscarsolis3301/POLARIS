@@ -1,20 +1,3 @@
-# SPRINT 23 — Nothing waits to land (6.15.0)          capacity: 24   dates: 2026-11-09–
-
-Owner ask of 2026-11-09 (plans/minutes.md Phase 3, approved in plan mode): every task lands itself at
-handoff and parallel self-landing can never lose work. Plan `safe-landing`, contract
-`ops/contracts/safe-landing.md` v1 + v1.1 (pointers re-derived after T-259/T-273/T-277/T-282/T-284,
-riders a-d).
-
-7 tasks / 24 pts. First, side by side, one integrator pass: the race golden T-221 (lands RED on
-purpose, green from T-223) and prose T-226. Then the conductor deletes `landing: integrator` and the
-chain T-222 → T-223 → T-224 → T-225 runs one lane at a time, each landing itself; each verify list is
-its whole gate, and CI's one-by-one self-test is run once per kit/ops/lib task before handoff. T-227
-releases 6.15.0 LAST.
-
-## Burndown
-| date | done pts | remaining |
-|---|---|---|
-
 # SPRINT 22 — The speed release (6.14.0)          capacity: 30   dates: 2026-11-09–
 
 Owner ask of 2026-11-09 (plan `minutes`, plans/minutes.md Phase 2, approved in plan mode): minutes, not
