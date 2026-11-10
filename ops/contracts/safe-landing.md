@@ -110,5 +110,103 @@ prints ONE line `⛔ <ID> is done but its files are not on main: <paths>` and ex
 - No new config key, no new dependency, no RULES.tsv change, nothing touches `.github/`.
 - Quiet when healthy: the normal path's stdout/stderr and commit graph are byte-identical to 6.10.1.
 
+## v1.1 (2026-11-09) — pointers and riders
+Planner groom for Phase 3 of plans/minutes.md (owner-approved). v1 above is unchanged and still binds;
+this section only re-points it at today's code, corrects how § 8's race golden is driven, and adds four
+riders. Line numbers are as of main 32e15e7; builders re-find them with `ops/polaris find <symbol>`.
+
+### A. § 8 land-race, corrected (T-221)
+- Driver: NOT separate land / seal / done processes. Four tasks T-1..T-4 (risk: normal, disjoint
+  files_owned, one trivial verify line each) are claimed one by one, each gets one commit in its
+  worktree, then all four `handoff` calls start together in the background under `landing: self`.
+  That is self_land's real tail (the reported failure), so the .cmd never changes when T-223 fixes it.
+  Fixture as self-land-finish.cmd, plus a `# SPRINT 1 — race` header, test_select unset and an ancestor
+  suite stamp. Budget about 3 minutes.
+- Output, exactly: one line per task `<ID> <column> OK|LOST` (OK = main's file byte-equals the feat
+  tip's, the tip recorded before any done can delete the branch), then `waves: <n>`, then
+  `leftover-unsealed: <n>`. No sha, path, time or user.
+- What `.expected` pins at each step: the GREEN output (`T-1 done OK`..`T-4 done OK`, `waves: 1`,
+  `leftover-unsealed: 0`) from the day T-221 lands. Actual output on main: RED after T-221 and after
+  T-222; GREEN from T-223 on (the lease alone must make it green; § 5's re-land is the net), and it stays
+  in T-224's and T-225's verify lists. Nobody edits land-race.expected after T-221. No full proof runs
+  between T-221 and T-223; if one does, land-race is the one expected red and is never weakened.
+
+### B. File moves and pointers
+- § 1: `int_on` kit/ops/lib/workspace.sh:213, `int_off` :276, `wave_on` :286; `on_die` core.sh:597.
+- § 2: `self_land` builder.sh:375. Since v1 (T-259) it reads the sprint header and returns 0 BEFORE
+  landing; the lease is taken after that check, so a header-less sprint still takes nothing.
+- § 3: `cmd_done` integrate.sh:198; the "would DEADLOCK" comment is near :323; the board move, docs(map)
+  commit and `board_commit` sit inside `mutex_on` (about :278-:361); the verify stamp is removed at :362
+  (T-284). The § 5 check and re-land run before the board move, so the stamp goes only when the task
+  does. `cmd_land` :518 (land_had :540; skip gate 1 :543 "already landed — skipped ($id is in $BASE
+  history)"; gate 2 :567 "already landed — skipped ($id is on $br)"; its conflict unwind :589 is a bare
+  `git reset -q --hard`, already exact, and stays). The two `HEAD~1` unwinds are in `cmd_land_express`
+  :730 and :787 (ex_had :644); the printed hint :608 may keep naming HEAD~1. `cmd_seal` :894 (seal_had
+  :915, release :1043; T-259's one-open-wave fallback and return-to-base on a refused seal stay).
+  `landed_sha` :183.
+- § 7: `cmd_finish` is now kit/ops/lib/qa.sh:272 (T-273 split observe.sh: `cmd_qa` qa.sh:4,
+  `cmd_drift` drift.sh, `cmd_check` check.sh, `cmd_route` / `cmd_triage` route.sh). The gate runs in
+  PHASE A, before qa and before finish clears merged wave branches and idle finished worktrees (T-282),
+  so every branch it needs still exists.
+- New public names: `int_mine` (T-222), `landed_content_ok` (T-224); each owner regenerates
+  ops/tests/api-kit.expected.
+
+### C. Ownership changes since v1
+- T-222 also owns builder.sh, selftest/board.sh and the plan-marker golden (rider a), so T-223 stays at
+  5 points. T-225 owns qa.sh instead of observe.sh, plus the finish-qa-red golden (rider c).
+- T-226 adds kit/ops/roles/BUILDER.md (rider d). T-221 and T-226 share no file and run together; the
+  chain T-222 → T-223 → T-224 → T-225 runs one lane at a time and each task lands itself at handoff,
+  so chain tasks may share files.
+
+### D. Rider a — the session plan marker (T-222, builder.sh `cmd_claim`, today :179)
+- At claim, with a session id: no marker → write the task's plan (today). Marker names plan A, the
+  claimed task is plan B, and no task with `plan: A` is in active/ or review/ (the task being claimed
+  excluded) → overwrite with B. A still has a task there → keep A. Same plan → untouched. Claim prints
+  nothing new.
+- Golden ops/tests/plan-marker.cmd pins one line each, `marker: <plan>`, after: (1) the first claim of
+  an alpha task → `marker: alpha`; (2) a claim of a beta task while an alpha task is still active →
+  `marker: alpha`; (3) the alpha tasks moved to done/, a claim of another beta task → `marker: beta`.
+
+### E. Rider b — healed after a kickback (T-224, landed-content case e)
+- Case: T-x is landed and sealed (its [T-x] squash is on main), then kicked back, given one more commit
+  on feat/T-x that changes one owned file, and returned to review/. `land T-x` still skips by gate 1
+  (unchanged). `done T-x` then prints `⚠ T-x did not fully arrive — re-landing`, makes exactly ONE
+  extra commit on main through a wave (subject ends `[T-x]`, body line `re-land: 1 path(s) did not
+  arrive`), and ends with main's file byte-equal to the feat tip, the task in done/, and the branch
+  deleted only after the match. The golden prints those facts as counts and yes/no, no shas.
+- No `land --drop` verb: done is the healer.
+
+### F. Rider c — finish names the red qa key (T-225, qa.sh)
+- qa's red block for a suite key (full or scoped, `⛔ <k> — RED: <cmd>`) prints `tail -20` of that
+  key's output (today 15), each line indented 5 spaces; doctor's red block prints `tail -20` (today 5).
+  The drift block is unchanged.
+- finish, when qa is red, prints instead of today's `tail -6`:
+  `⛔ pending: qa is red on <base> — <k1>[, <k2>…]` (the keys in qa's order, read from qa's
+  `⛔ <key> — ` header lines), then each red key's whole block from qa's output, verbatim, every line
+  indented 5 more spaces. A green qa prints what it prints today.
+- Golden ops/tests/finish-qa-red.cmd: a fixture whose `test:` prints `line 1`..`line 30` and exits 1;
+  finish exits non-zero; pinned: the pending line naming `test`, the red header, `line 11`..`line 30`,
+  and no `line 10`.
+
+### G. Tests that pin each changed verb (the chain's verify lists)
+Every chain task lands itself, so its verify list is its whole gate; drills are judged by CI through
+`PROOF_GOLDENS=true bash tools/proof.sh`, run once before handoff (Notes, never verify).
+- handoff and the self-land tail: self-land-finish, guide-stale, pack-visual, shots-gallery,
+  verify-stamp, seal-fallback, pr-one-link, express-pr (T-223).
+- land / land --express: express-pr, plan-approval-gates (T-223). seal: seal-fallback, express-pr
+  (T-223, T-224, T-225). done: where-done, verify-stamp, shots-gallery (T-223, T-224). finish:
+  self-land-finish, finish-blocked, drain-default, pr-one-link (T-225). Lease messages: unchanged,
+  pinned by the busyint drill (CI) and self-land-finish (T-222).
+- No golden or drill pins qa's `— RED` block or finish's red-qa lines today (grepped), so rider c moves
+  nothing already pinned.
+
+### H. Rider d — prose (T-226)
+`bg wait … --max 300` → `--max 120` in BUILDER.md, the builder kickoff in CONDUCTOR.md, SOLO.md and
+PROTOCOL.md § LANES ("half the cap" goes); CONDUCTOR.md and INTEGRATOR.md say a task lands itself at
+handoff from this release and an integrator is spawned only for what refused to; BUILDER.md says a task
+that changed kit/ops/lib/ runs the CI proof once before handoff. After T-221 + T-226 land, the conductor
+deletes `landing: integrator` from ops/CONVENTIONS.md before the chain starts.
+
 ## Changelog
 - v1 2026-10-28: created for tasks of plan `safe-landing`.
+- v1.1 2026-11-09: pointers re-derived after T-259, T-273, T-277, T-282, T-284; section 8 driver corrected; riders a-d (Phase 3 groom).
