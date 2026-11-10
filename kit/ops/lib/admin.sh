@@ -687,23 +687,45 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   # staged, so a parked or app-only change stays exactly where it was. Nothing was staged before, so
   # if anything goes wrong an empty index (`git reset -q`) is exactly as found, and the note falls
   # back to today's. Under `--auto` this runs in the child whose output is the log: no stdout line.
+  # ONE STEP AT A TIME (minutes.md § 13). The list is computed FIRST, into a variable, and only then
+  # handed to `git add`: a `status` piped straight into the `add` raced it for .git/index.lock, and on
+  # macOS the add lost every time (it dies before reading a path). Another program holding the lock (an
+  # editor's git view, a second terminal) gets 3 tries, 1 s apart; any other refusal is not retried.
+  # Whatever still fails is said, from git's own first line — never a silent "nothing was committed".
+  local sc_list sc_out sc_err="" sc_try
   sc_k=0
   if [ -z "$sc_why" ]; then
     sc_new="$(ver version)"
-    if git -C "$PRIMARY" -c core.quotePath=false status --porcelain 2>/dev/null \
+    sc_list="$(git -C "$PRIMARY" -c core.quotePath=false status --porcelain 2>/dev/null \
          | SC_PRE="$sc_pre" awk '
              function path(l) { l = substr(l, 4); sub(/\r$/, "", l); sub(/^.* -> /, "", l)
                                 if (l ~ /^".*"$/) l = substr(l, 2, length(l) - 2); return l }
              BEGIN { n = split(ENVIRON["SC_PRE"], a, "\n"); for (i = 1; i <= n; i++) if (a[i] != "") was[path(a[i])] = 1 }
-             $0 != "" && !(path($0) in was) { print path($0) }' \
-         | git -C "$PRIMARY" --literal-pathspecs add --pathspec-from-file=- >/dev/null 2>&1; then
-      sc_k="$(git -C "$PRIMARY" diff --cached --name-only 2>/dev/null | awk 'END { print NR }')"
-      case "$sc_k" in ''|*[!0-9]*) sc_k=0;; esac
+             $0 != "" && !(path($0) in was) { print path($0) }' || true)"
+    if [ -n "$sc_list" ]; then
+      sc_try=1
+      while :; do
+        if sc_out="$(printf '%s\n' "$sc_list" | git -C "$PRIMARY" --literal-pathspecs add --pathspec-from-file=- 2>&1 >/dev/null)"; then
+          sc_k="$(git -C "$PRIMARY" diff --cached --name-only 2>/dev/null | awk 'END { print NR }')"
+          case "$sc_k" in ''|*[!0-9]*) sc_k=0;; esac
+          break
+        fi
+        case "$sc_out" in *index.lock*) if [ "$sc_try" -lt 3 ]; then sc_try=$((sc_try + 1)); sleep 1; continue; fi;; esac
+        sc_err="git could not stage the update's files — $(printf '%s\n' "$sc_out" | awk '{ sub(/\r$/, "") } NF { print; exit }')"
+        break
+      done
     fi
-    if [ "$sc_k" -gt 0 ] && git -C "$PRIMARY" commit -q -m "chore(polaris): POLARIS $cur → $sc_new" >/dev/null; then
-      :
-    else
-      sc_k=0
+    if [ "$sc_k" -gt 0 ]; then
+      sc_try=1
+      while :; do
+        if sc_out="$(git -C "$PRIMARY" commit -q -m "chore(polaris): POLARIS $cur → $sc_new" 2>&1)"; then break; fi
+        case "$sc_out" in *index.lock*) if [ "$sc_try" -lt 3 ]; then sc_try=$((sc_try + 1)); sleep 1; continue; fi;; esac
+        sc_err="git refused the commit — $(printf '%s\n' "$sc_out" | awk '{ sub(/\r$/, "") } NF { print; exit }')"
+        sc_k=0
+        break
+      done
+    fi
+    if [ "$sc_k" -eq 0 ]; then
       git -C "$PRIMARY" diff --cached --quiet 2>/dev/null || git -C "$PRIMARY" reset -q >/dev/null 2>&1 || true
     fi
   fi
@@ -711,7 +733,8 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
     note "committed for you: chore(polaris): POLARIS $cur → $sc_new — $sc_k files, not pushed"
   else
     note "review the diff, then commit ops/ — nothing was committed for you"
-    if [ -n "$sc_why" ]; then note "not committed: $sc_why"; fi
+    if [ -n "$sc_why" ]; then note "not committed: $sc_why"
+    elif [ -n "$sc_err" ]; then note "not committed: $sc_err"; fi
   fi
   # Reprinted LAST for the same reason the INIT epilogue below is: the park happened ~40 lines of
   # install output ago, and an agent reads the END of the output as "what is left". Somebody's

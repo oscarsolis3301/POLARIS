@@ -442,7 +442,8 @@ drill_autoupdate() {
     # resets away; ops/VERSION, CONVENTIONS.md and src/a.txt come back exactly as found.
     # Windows: curl is a native binary and cannot open `file:///tmp/…` — cygpath -m turns $T into
     # `C:/Users/…`, and `file:///C:/…` reads; POSIX hosts use file://$T verbatim.
-    local au_pre au_st au_base au_url au_mp au_home au_v au_d au_br au_s0 au_fh au_fo au_w au_r0 au_k0 au_kn
+    local au_pre au_st au_base au_url au_mp au_home au_v au_d au_br au_s0 au_fh au_fo au_w au_r0 au_k0 au_kn au_sub au_rg au_gd
+    au_sub="chore(polaris): POLARIS 0.0.1 → 0.0.2"
     au_pre="$(git rev-parse HEAD)"
     au_st="$(git status --porcelain)"
     [ -f ops/VERSION ] && cp ops/VERSION "$T/au-ver.bak" || rm -f "$T/au-ver.bak"
@@ -489,6 +490,8 @@ drill_autoupdate() {
     [ "$(wc -l < "$T/au1.out" | tr -d ' ')" = "1" ] || { cat "$T/au1.out"; echo "AUTOUPDATE (1) ONE-LINE FAIL (--auto prints exactly one line)"; exit 1; }
     grep -q '^✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting$' "$T/au1.out" \
       || { cat "$T/au1.out"; echo "AUTOUPDATE (1) SAY FAIL (the pinned ✅ line)"; exit 1; }
+    [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] && [ "$(git log -1 --format=%s)" = "$au_sub" ] \
+      || { cat .polaris/update.log; git log --oneline -3; echo "AUTOUPDATE (1) COMMIT FAIL (exactly one new commit on top of where the update started, the pinned subject)"; exit 1; }
     [ "$(git stash list)" = "$au_k0" ] || { echo "AUTOUPDATE (1) STASH FAIL (--auto never parks)"; exit 1; }
     # (2) a task in active/ → unchanged, `skipped: active: 1`
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache .polaris/update.log
@@ -523,6 +526,8 @@ drill_autoupdate() {
     echo dirt >> src/a.txt
     POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au5.out" 2>&1 || { cat "$T/au5.out"; echo "AUTOUPDATE (5) RC FAIL (app-only dirt must not stop an explicit update)"; exit 1; }
     [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au5.out"; echo "AUTOUPDATE (5) APPLY FAIL (ops/VERSION must read 0.0.2)"; exit 1; }
+    [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] && [ "$(git log -1 --format=%s)" = "$au_sub" ] \
+      || { cat "$T/au5.out"; git log --oneline -3; echo "AUTOUPDATE (5) COMMIT FAIL (exactly one new commit on top of where the update started, the pinned subject)"; exit 1; }
     [ "$(git stash list)" = "$au_k0" ] || { echo "AUTOUPDATE (5) STASH FAIL (app-only dirt is never parked)"; exit 1; }
     grep -q "outside the kit's paths — left alone" "$T/au5.out" || { cat "$T/au5.out"; echo "AUTOUPDATE (5) NOTE FAIL (the left-alone note)"; exit 1; }
     [ "$(tail -1 src/a.txt | tr -d '\r')" = "dirt" ] || { echo "AUTOUPDATE (5) DIRT FAIL (src/a.txt must keep its uncommitted line)"; exit 1; }
@@ -532,6 +537,8 @@ drill_autoupdate() {
     echo dirt >> ops/PROTOCOL.md
     POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au5b.out" 2>&1 || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) RC FAIL (kit dirt parks, then proceeds)"; exit 1; }
     [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) APPLY FAIL"; exit 1; }
+    [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] && [ "$(git log -1 --format=%s)" = "$au_sub" ] \
+      || { cat "$T/au5b.out"; git log --oneline -3; echo "AUTOUPDATE (5b) COMMIT FAIL (exactly one new commit on top of where the update started, the pinned subject)"; exit 1; }
     [ "$(git stash list | wc -l | tr -d ' ')" = "$((au_kn + 1))" ] || { echo "AUTOUPDATE (5b) PARK FAIL (kit dirt must be parked in exactly one NEW stash)"; exit 1; }
     grep -q '^✅ parked as polaris/park-' "$T/au5b.out" || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) PARK SAY FAIL (the park must announce itself)"; exit 1; }
     git stash list -1 | grep -q 'dirty tree at update' || { git stash list; echo "AUTOUPDATE (5b) PARK NAME FAIL (the stash must carry the why)"; exit 1; }
@@ -546,8 +553,8 @@ drill_autoupdate() {
     au_s0="$(git status --porcelain)"
     au_r0="$(git for-each-ref refs/remotes)"   # earlier drills leave remote refs: "never pushed" = this listing unchanged
     POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au7.out" 2>&1 || { cat "$T/au7.out"; echo "AUTOUPDATE (7) RC FAIL"; exit 1; }
-    [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] || { git log --oneline -3; echo "AUTOUPDATE (7) COMMIT FAIL (exactly one new commit, on top of where the update started)"; exit 1; }
-    [ "$(git log -1 --format=%s)" = "chore(polaris): POLARIS 0.0.1 → 0.0.2" ] || { git log -1 --format=%s; echo "AUTOUPDATE (7) SUBJECT FAIL"; exit 1; }
+    [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] && [ "$(git log -1 --format=%s)" = "$au_sub" ] \
+      || { cat "$T/au7.out"; git log --oneline -3; echo "AUTOUPDATE (7) COMMIT FAIL (exactly one new commit on top of where the update started, the pinned subject)"; exit 1; }
     [ -z "$(git log -1 --format=%b | tr -d '\r\n')" ] || { git log -1 --format=%B; echo "AUTOUPDATE (7) BODY FAIL (the subject and nothing else)"; exit 1; }
     [ "$(git status --porcelain)" = "$au_s0" ] || { git status --porcelain; echo "AUTOUPDATE (7) CLEAN FAIL (everything the update changed is in its commit)"; exit 1; }
     au_v="$(git diff-tree --no-commit-id --name-only -r HEAD | wc -l | tr -d ' ')"
@@ -607,7 +614,46 @@ drill_autoupdate() {
     HOME="$au_fh" USERPROFILE="$au_fh" POLARIS_AWAKE_HOME="$au_fo" "$SELF" update --auto --say > "$T/au9.out" 2> "$T/au9.err" || { cat "$T/au9.out" "$T/au9.err"; echo "AUTOUPDATE (9) RC FAIL"; exit 1; }
     [ "$(wc -l < "$T/au9.out" | tr -d ' ')" = "1" ] && grep -q '^✅ POLARIS updated 0.0.1 → 0.0.2 at session start' "$T/au9.out" || { cat "$T/au9.out"; echo "AUTOUPDATE (9) ONE-LINE FAIL (--auto stays one line, its commit included)"; exit 1; }
     [ ! -e "$au_fo/update-all.log" ] || { cat "$au_fo/update-all.log"; echo "AUTOUPDATE (9) FAN-OUT FAIL (--auto must never start the walk)"; exit 1; }
-    [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] && [ "$(git log -1 --format=%s)" = "chore(polaris): POLARIS 0.0.1 → 0.0.2" ] || { git log --oneline -3; echo "AUTOUPDATE (9) COMMIT FAIL (--auto commits itself too)"; exit 1; }
+    [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] && [ "$(git log -1 --format=%s)" = "$au_sub" ] || { git log --oneline -3; echo "AUTOUPDATE (9) COMMIT FAIL (--auto commits itself too)"; exit 1; }
+    # (10) · (10b) another program holds the index lock (minutes.md § 13): a `git` stand-in first on PATH
+    # passes everything to the real git except an `add` reading --pathspec-from-file=-, which it refuses
+    # with git's own lock message and exit 128, without reading its input, and counts in a file beside
+    # it. (10) refuses only the FIRST such add → the retry commits. (10b) refuses EVERY one → three
+    # tries, no commit, nothing staged, the update's files still changed, and the reason said. The real
+    # git is resolved BEFORE PATH changes, and PATH changes for the one update call only.
+    au_rg="$(command -v git)"; au_gd="$T/au-git"; rm -rf "$au_gd"; mkdir -p "$au_gd"
+    printf '%s\n' "$au_rg" > "$au_gd/real"
+    cat > "$au_gd/git" <<'AUGIT'
+#!/bin/sh
+d="$(dirname "$0")"; a=0; p=0
+for x in "$@"; do [ "$x" = add ] && a=1; [ "$x" = --pathspec-from-file=- ] && p=1; done
+if [ "$a$p" = 11 ]; then
+  n="$(cat "$d/count" 2>/dev/null || echo 0)"
+  if [ "$(cat "$d/mode")" = every ] || [ "$n" = 0 ]; then
+    echo $((n + 1)) > "$d/count"
+    echo "fatal: Unable to create '/stand-in/.git/index.lock': File exists." >&2
+    exit 128
+  fi
+fi
+exec "$(cat "$d/real")" "$@"
+AUGIT
+    chmod +x "$au_gd/git"
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache; echo first > "$au_gd/mode"; rm -f "$au_gd/count"
+    PATH="$au_gd:$PATH" POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au10.out" 2>&1 || { cat "$T/au10.out"; echo "AUTOUPDATE (10) RC FAIL"; exit 1; }
+    [ "$(cat "$au_gd/count" 2>/dev/null)" = 1 ] || { cat "$T/au10.out"; echo "AUTOUPDATE (10) STAND-IN FAIL (the stand-in must refuse exactly one add)"; exit 1; }
+    [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] && [ "$(git log -1 --format=%s)" = "$au_sub" ] \
+      || { cat "$T/au10.out"; git log --oneline -3; echo "AUTOUPDATE (10) COMMIT FAIL (a lock held once is retried into one new commit, the pinned subject)"; exit 1; }
+    grep -q '   committed for you: ' "$T/au10.out" || { cat "$T/au10.out"; echo "AUTOUPDATE (10) NOTE FAIL (the committed-for-you note)"; exit 1; }
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache; echo every > "$au_gd/mode"; rm -f "$au_gd/count"
+    PATH="$au_gd:$PATH" POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au10b.out" 2>&1 || { cat "$T/au10b.out"; echo "AUTOUPDATE (10b) RC FAIL (a lock that never frees still exits 0)"; exit 1; }
+    [ "$(cat "$au_gd/count" 2>/dev/null)" = 3 ] || { cat "$T/au10b.out"; echo "AUTOUPDATE (10b) RETRY FAIL (3 tries in all)"; exit 1; }
+    [ "$(git rev-parse HEAD)" = "$au_base" ] || { cat "$T/au10b.out"; git log --oneline -3; echo "AUTOUPDATE (10b) COMMIT FAIL (no commit when staging never succeeds)"; exit 1; }
+    git diff --cached --quiet || { git diff --cached --name-only; echo "AUTOUPDATE (10b) INDEX FAIL (nothing may be left staged)"; exit 1; }
+    [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au10b.out"; echo "AUTOUPDATE (10b) APPLY FAIL (the update's files stay changed in the tree)"; exit 1; }
+    grep -q 'nothing was committed for you' "$T/au10b.out" \
+      && grep -qxF "   not committed: git could not stage the update's files — fatal: Unable to create '/stand-in/.git/index.lock': File exists." "$T/au10b.out" \
+      || { cat "$T/au10b.out"; echo "AUTOUPDATE (10b) NOTE FAIL (today's note, then the reason from git's first line)"; exit 1; }
+    rm -rf "$au_gd"
     # (6) --all over a temp registry holding this fixture, a gone path and a self-hosting repo
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache
     au_home="$T/au-awake"; rm -rf "$au_home" "$T/au-self" "$T/au-gone"
@@ -669,7 +715,7 @@ drill_autoupdate() {
       fi
     done
     rm -f .polaris/update-cache .polaris/update.log .polaris/install.log .polaris/CLAUDE.md.pre-heal
-    rm -rf "$T/polaris-v5" "$T/chan" "$T/kit.tgz" "$au_home" "$T/au-self" "$T/au-ver.bak" "$T/au-conv.bak" "$au_fh" "$au_fo" "$T/au-fo-s1" "$T/au-fo-s2"
+    rm -rf "$T/polaris-v5" "$T/chan" "$T/kit.tgz" "$au_home" "$T/au-self" "$T/au-ver.bak" "$T/au-conv.bak" "$au_fh" "$au_fo" "$T/au-fo-s1" "$T/au-fo-s2" "$T/au-git"
     [ "$(git rev-parse HEAD)" = "$au_pre" ] || { echo "AUTOUPDATE HERMETIC FAIL (HEAD must return to where the drill found it)"; exit 1; }
     [ "$(git status --porcelain)" = "$au_st" ] || { echo "entry:"; printf '%s
 ' "$au_st"; echo "now:"; git status --porcelain; echo "AUTOUPDATE HERMETIC FAIL (the drill must leave the tree exactly as it found it)"; exit 1; }
