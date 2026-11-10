@@ -168,7 +168,7 @@ EOF_SKGLOB
   # that never runs another command is still provably live for wt_live_minutes. Best-effort, rc 0.
   beat_touch "$id"
   # session state (ops/contracts/role-handover.md § session state): `task` on every claim, `plan`
-  # on the FIRST claim only (the task's plan: slug, may be empty) — `next` reads `plan` to tell a
+  # on the first claim (the task's plan: slug, may be empty), re-marked by rider a below — `next` reads `plan` to tell a
   # foreign task from this run's under drain: plan. Per checkout, gitignored, every line best-effort,
   # and nothing without a session id (a plain shell, CI) — the same shape evt() uses for last-event.
   local hs
@@ -176,7 +176,31 @@ EOF_SKGLOB
     hs="$PRIMARY/.polaris/handover/$CLAUDE_CODE_SESSION_ID"
     mkdir -p "$hs" 2>/dev/null || true
     printf '%s\n' "$id" 2>/dev/null > "$hs/task" || true
-    [ -e "$hs/plan" ] || printf '%s\n' "$(fm_get plan "$BOARD/active/$id.md" 2>/dev/null || true)" 2>/dev/null > "$hs/plan" || true
+    # Rider a (safe-landing v1.1 § D): a marker naming ANOTHER plan is overwritten with this task's
+    # plan once no task of the marked plan is left in active/ or review/ (this task excluded) — so a
+    # second plan run in the same session is not held as foreign. Same plan → untouched. One awk; an
+    # empty column leaves its glob unexpanded, and BEGIN drops it (active/ always holds this task).
+    local hp_new hp_old hp_live
+    hp_new="$(fm_get plan "$BOARD/active/$id.md" 2>/dev/null || true)"
+    if [ ! -e "$hs/plan" ]; then
+      printf '%s\n' "$hp_new" 2>/dev/null > "$hs/plan" || true
+    else
+      hp_old="$(tr -d '\r\n' < "$hs/plan" 2>/dev/null || true)"
+      if [ "$hp_old" != "$hp_new" ]; then
+        hp_live="$(awk -v k="$hp_old" -v me="$id.md" '
+          BEGIN { for (i = 1; i < ARGC; i++) if (index(ARGV[i], "*")) delete ARGV[i] }
+          FNR==1 { fs=0; seen=0; n=split(FILENAME, a, "/"); skip=(a[n]==me) }
+          skip { next }
+          /^---[\r]?$/ { fs++; if (fs==2 && !seen && k=="") c++; next }
+          fs==1 && index($0, "plan:")==1 && !seen {
+            seen=1; s=substr($0, 6)
+            sub(/[ \t]#.*$/,"",s); sub(/^[ \t]*/,"",s); sub(/[ \t\r]*$/,"",s)
+            if (s==k) c++
+          }
+          END { print c+0 }' "$BOARD/active/"*.md "$BOARD/review/"*.md 2>/dev/null || true)"
+        [ "$hp_live" = 0 ] && { printf '%s\n' "$hp_new" 2>/dev/null > "$hs/plan" || true; }
+      fi
+    fi
   fi
   say "claimed $id → cd \"$wt\""
   # bootstrap: a fresh worktree is a bare checkout — node_modules/.venv/target are gitignored and
@@ -413,16 +437,28 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
     return 0
   fi
   note "landing: self — continuing into land $id (the lease is the integration lane: this waits its turn)"
+  # ONE lease for the whole tail (ops/contracts/safe-landing.md § 2): taken HERE, once, and held
+  # through land, seal and the done fan-out. Each of those runs as a child that re-enters by the
+  # exported token (§ 1), so no other lane can slip into a gap between them — the reported failure
+  # was exactly that gap. Busy past the bounded wait → int_on's `queued: ` line is the last thing
+  # printed and the rc is 3, nothing taken. Every return below releases in THIS frame (int_off is
+  # a no-op unless we took it); a die on the way releases through on_die, armed by int_on.
+  int_on "self-land $id" || return $?
   local lrc=0
   ( cd "$PRIMARY" && "$SELF" land "$id" ) || lrc=$?
   if [ "$lrc" -eq 3 ]; then
+    int_off
     return 3                         # int_on printed the final `queued: ` line — nothing after it
   fi
   if [ "$lrc" -ne 0 ]; then
+    int_off
     note "⚠ self-land failed (rc $lrc) — the work is safe on feat/$id and $id stays in review/ for the integration lane"
     return 0
   fi
-  if [ "$notice" != "integrate" ]; then
+  # "Am I the last lane out" is read from the board NOW, inside the lease — never from the
+  # handoff-time notice, which another lane's later land could make stale (§ 2.2).
+  if ! _sl_last_out "$id"; then
+    int_off
     note "$id landed on the wave — mid-wave lands never seal; the last lane out seals"
     return 0
   fi
@@ -431,6 +467,7 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
   local src=0
   ( cd "$PRIMARY" && "$SELF" seal ) || src=$?
   if [ "$src" -ne 0 ]; then
+    int_off
     note "⚠ wave not sealed (rc $src) — $id is landed and safe; close the wave with: bash ops/polaris seal"
     return 0
   fi
@@ -474,6 +511,32 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
       note "⚠ done $own_last failed — finish it by hand: bash ops/polaris done $own_last"
     fi
   fi
+  int_off                            # the tail is over — the lane is free for the next one
+  return 0
+}
+
+_sl_last_out() { # _sl_last_out <ID> — rc 0 when this lane is the last one out, read from the board
+  # by self_land INSIDE its lease (safe-landing.md § 2.2): ready/ and active/ hold nothing (the two
+  # counts handoff uses), AND no other review/ task is still on its way to this wave. Without the
+  # second half every lane that landed after the last handoff would see an empty board and seal its
+  # own wave. "On its way" = not landed (on $BASE or on the checked-out wave), a task self_land would
+  # land (plan_covers: classified and covered), and a lane still beating — so a task the integrator
+  # owns, or one whose lane has gone quiet, never holds a seal back. Columns are read in the order
+  # tasks move (ready → active → review), so a task moving while we read is seen in one of them.
+  local id="$1" nrdy nact f tid
+  nrdy="$(ls "$BOARD/ready" 2>/dev/null | grep -c '\.md$' || true)"
+  nact="$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)"
+  [ "${nrdy:-0}" -eq 0 ] && [ "${nact:-0}" -eq 0 ] || return 1
+  for f in "$BOARD/review/"*.md; do
+    [ -f "$f" ] || continue
+    tid="$(fm_get id "$f" 2>/dev/null || true)"
+    [ -n "$tid" ] && [ "$tid" != "$id" ] || continue
+    landed_sha "$tid" HEAD >/dev/null 2>&1 && continue
+    landed_sha "$tid" >/dev/null 2>&1 && continue
+    plan_covers "$f" >/dev/null 2>&1 || continue
+    beat_live "$tid" || continue
+    return 1
+  done
   return 0
 }
 

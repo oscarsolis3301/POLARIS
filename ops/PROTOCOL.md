@@ -134,7 +134,7 @@ taking it is what makes a session one. No check moves: verify/ownership/RULES st
 handoff, `land` is still squash + audit, the full suite still runs once per wave, and the hard
 stops keep the classic path — risk: high never self-lands — a human must approve the merge; task stays in review/ (unless the approved plan covered it: `approve --plan`).
 The landing tail can wait on a busy lease, so a session detaches it (`bg run ship-<ID>` + chunked
-`bg wait --max 300` — § LONG COMMANDS) and polls the rc; `landing: integrator` restores the classic
+`bg wait --max 120` — § LONG COMMANDS) and polls the rc; `landing: integrator` restores the classic
 handoff byte-for-byte.
 
 **Handover is that chain's last link** (`handover:` in `ops/CONVENTIONS.md`, since 6.2.0; default
@@ -176,6 +176,12 @@ nothing. (Ending a turn with your OWN suite still running is the opposite mistak
 suite — foreground it, or poll its log.) Two optional `ops/CONVENTIONS.md` knobs tune the wait:
 `integration_wait_minutes` (10) before rc 3 · `integration_stale_minutes` (45), past which an
 abandoned lease is stolen with a note.
+
+**The lease passes to the holder's own helpers** (`POLARIS_INT_TOKEN`). Taking the lease records a
+token and hands it down, so a child process of the holder — the `land`, `seal` and `done` a
+self-landing tail runs — steps back in without waiting; any other session has no token and queues as
+above. Only the frame that took the lease lets it go, and the lease stays outermost: take it before
+the board mutex, never while holding it.
 
 **Plan and build as if you were alone.** Disjoint ownership is still the Planner's guarantee — but a
 second planner can file a task between your board read and your claim, and the claim-time

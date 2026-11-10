@@ -597,9 +597,10 @@ mutex_off() { # release the board mutex if OURS (the $MUTEX/pid mutex_on wrote m
 on_die() {  # EXIT trap while a claim/board op is in flight
   mutex_off
   # T-057: release the integration lease when this process holds it — a crashed holder must not
-  # cost integration_stale_minutes of staleness. ${INT_HELD:-}-guarded on purpose: the 2-module
-  # guard path (core+ownership — no workspace.sh, so no int_off) never sets it and never notices.
-  [ -n "${INT_HELD:-}" ] && int_off || true
+  # cost integration_stale_minutes of staleness. Only the TAKING frame releases (safe-landing § 1):
+  # ${INT_TOOK:-}-guarded, so a child that re-entered by token never drops its parent's lease, and
+  # the 2-module guard path (core+ownership — no workspace.sh, so no int_off) never sets it.
+  [ "${INT_TOOK:-0}" = 1 ] && int_off || true
   if [ -n "$FAIL_LOCK_ID" ]; then
     lock_drop "$FAIL_LOCK_ID"
     [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$FAIL_LOCK_ID" || true
@@ -616,7 +617,7 @@ mutex_on() {
       # network outlives 120s — and two sessions then mutated the board at once. A holder whose pid
       # still answers keeps it until the 20-minute backstop; a dead or pid-less one goes at 120s,
       # so a crashed holder is still recovered without anyone reaching for rm -rf.
-      local e age hp; e="$(cat "$MUTEX/epoch" 2>/dev/null)"; e="${e:-$(date +%s)}"
+      local e age hp; e="$(cat "$MUTEX/epoch" 2>/dev/null || true)"; e="${e:-$(date +%s)}"
       age=$(( $(date +%s) - e ))
       hp="$(cat "$MUTEX/pid" 2>/dev/null || true)"; case "$hp" in ''|*[!0-9]*) hp="";; esac
       if [ "$age" -gt 1200 ] || { [ "$age" -gt 120 ] && { [ -z "$hp" ] || ! kill -0 "$hp" 2>/dev/null; }; }; then
@@ -633,6 +634,31 @@ mutex_on() {
   trap on_die EXIT
 }
 has_remote() { git -C "$PRIMARY" remote get-url origin >/dev/null 2>&1; }
+landed_content_ok() { # landed_content_ok <ID> [<ref>] — did the task's files really arrive on <ref>
+  # (default $BASE)? ops/contracts/safe-landing.md § 4. PURE READ: no write, no lease (callers hold
+  # it). The task's paths are `git diff --name-only --no-renames <merge-base> feat/<ID>` (a rename is
+  # a delete + an add); each must be byte- and mode-equal between <ref> and the feat tip, and a path
+  # the tip deleted must be absent from <ref>. ONE tree-to-tree diff answers all of that at once, and
+  # one awk keeps only the task's own paths from it — never a git call per path.
+  # stdout: the mismatching paths, one per line. rc 0 every path arrived (an empty diff is rc 0) ·
+  # rc 1 at least one mismatch · rc 2 cannot check (no feat/<ID> locally or on origin, no merge-base
+  # — no base is recorded on the task) — callers proceed silently, exactly as before this existed.
+  local id="${1:?usage: landed_content_ok <ID> [<ref>]}" ref="${2:-$BASE}" feat mb own diff bad
+  feat="$(git -C "$PRIMARY" rev-parse -q --verify "refs/heads/feat/$id^{commit}" 2>/dev/null)" \
+    || feat="$(git -C "$PRIMARY" rev-parse -q --verify "refs/remotes/origin/feat/$id^{commit}" 2>/dev/null)" \
+    || return 2
+  git -C "$PRIMARY" rev-parse -q --verify "$ref^{commit}" >/dev/null 2>&1 || return 2
+  mb="$(git -C "$PRIMARY" merge-base "$ref" "$feat" 2>/dev/null)" || return 2
+  own="$(git -C "$PRIMARY" -c core.quotepath=off diff --name-only --no-renames "$mb" "$feat" -- 2>/dev/null)" || return 2
+  [ -n "$own" ] || return 0
+  diff="$(git -C "$PRIMARY" -c core.quotepath=off diff --name-only --no-renames "$ref" "$feat" -- 2>/dev/null)" || return 2
+  [ -n "$diff" ] || return 0
+  # one stream, the two lists split by an empty line (git never prints an empty path)
+  bad="$(printf '%s\n\n%s\n' "$own" "$diff" | awk 'p == 0 && $0 == "" { p = 1; next } p == 0 { o[$0] = 1; next } ($0 in o)')"
+  [ -n "$bad" ] || return 0
+  printf '%s\n' "$bad"
+  return 1
+}
 # publish: direct | pr (ops/contracts/publish-modes.md) — HOW a sealed wave reaches origin's $BASE.
 # Read via cfg at command runtime, never cached; unknown value warns ONCE per invocation (stderr,
 # so command substitutions never swallow it) and behaves as direct. Sets $PUB — no command

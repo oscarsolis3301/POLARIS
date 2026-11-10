@@ -195,6 +195,61 @@ EOF
   return 1
 }
 
+_done_reland() { # _done_reland <ID> <task-file> <paths> — safe-landing.md § 5.2, PRIVATE to cmd_done.
+  # Runs in a subshell cd'd to the primary, under the lease cmd_done holds: wave_on and cmd_seal both
+  # re-enter it, and INT_TOOK=0 here means nothing in this subshell can ever release it. Restores each
+  # mismatching path from the feat tip on today's wave (git rm for a path the tip deleted), makes ONE
+  # commit whose subject ends [<ID>] (so landed_sha still finds it; the first squash stays in history)
+  # with a `re-land:` body line, then seals. Runs NO suite. rc ≠ 0 → the caller's re-check decides;
+  # every failure after wave_on puts the wave back where it stood and returns to $BASE. The seal is a
+  # child (`$SELF seal`, re-entering by the exported token) exactly as self_land runs it: this body
+  # sits in cmd_done's `( … ) || rc`, where bash ignores set -e for anything run in-process.
+  local id="$1" tf="$2" bad="$3" feat subj n keep gone pre nl oifs
+  INT_TOOK=0
+  nl='
+'
+  feat="$(git rev-parse -q --verify "refs/heads/feat/$id^{commit}" 2>/dev/null)" \
+    || feat="$(git rev-parse -q --verify "refs/remotes/origin/feat/$id^{commit}" 2>/dev/null)" || return 1
+  # dirty tree → park + caveat, exactly as land does (the wave checkout needs the dirt gone)
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    park "re-land $id" || return 1
+    note "⚠ parked your dirt — bash ops/polaris unpark returns it"
+  fi
+  oifs="$IFS"; IFS="$nl"; set -f
+  # shellcheck disable=SC2086 # one path per line, split on newlines only, globbing off
+  set -- $bad
+  IFS="$oifs"; set +f
+  n=$#
+  # ONE ls-tree splits the list: what the tip still has is restored, the rest is removed
+  keep="$(git --literal-pathspecs -c core.quotepath=off ls-tree -r --name-only "$feat" -- "$@" 2>/dev/null)" || return 1
+  gone="$(printf '%s\n\n%s\n' "$keep" "$bad" | awk 'p == 0 && $0 == "" { p = 1; next } p == 0 { k[$0] = 1; next } $0 != "" && !($0 in k)')"
+  subj="$(cmd_task_commit_msg "$tf" | sed -n 1p)"
+  wave_on
+  pre="$(git rev-parse HEAD)"
+  if [ -n "$keep" ]; then
+    IFS="$nl"; set -f
+    # shellcheck disable=SC2086
+    set -- $keep
+    IFS="$oifs"; set +f
+    git --literal-pathspecs checkout -q "$feat" -- "$@" || { git reset -q --hard "$pre"; git checkout -q "$BASE" 2>/dev/null || true; return 1; }
+  fi
+  if [ -n "$gone" ]; then
+    IFS="$nl"; set -f
+    # shellcheck disable=SC2086
+    set -- $gone
+    IFS="$oifs"; set +f
+    git --literal-pathspecs rm -q --ignore-unmatch -- "$@" >/dev/null || { git reset -q --hard "$pre"; git checkout -q "$BASE" 2>/dev/null || true; return 1; }
+  fi
+  if git diff --cached --quiet \
+     || ! git commit -q -m "$subj" -m "re-land: $n path(s) did not arrive"; then
+    git reset -q --hard "$pre"; git checkout -q "$BASE" 2>/dev/null || true
+    return 1
+  fi
+  # POLARIS_SEAL_NOCHECK: this seal must not run § 6's check again — the caller re-checks itself,
+  # and a second mismatch there is the caller's one ⛔ line, never another re-land.
+  POLARIS_SEAL_NOCHECK=1 "$SELF" seal
+}
+
 cmd_done() { # Integrator only, after the task is landed (squash) or merged (legacy) into BASE
   local id="${1:?usage: polaris done <ID>}"
   local tf; tf="$(task_file "$id" review)" || die "$id is not in review/"
@@ -275,6 +330,30 @@ EOF
       die "done: $id carries $carries — they land as ONE docs commit on $BASE; check out $BASE in the primary first (currently on ${br:-?})"
     fi
   fi
+  # The lease covers the base commit below, the worktree removal and the branch deletion
+  # (ops/contracts/safe-landing.md § 3) — OUTERMOST, before the board mutex. The self-land tail's
+  # child `done` re-enters it by token (§ 1); a standalone `done` queues for the lane exactly as
+  # `land` does (busy past the bounded wait → the `queued: ` line + rc 3, nothing touched).
+  local done_had=""
+  if int_mine; then done_had=1; fi
+  int_on "done $id" || return $?
+  # THE NET (safe-landing.md § 5): inside the lease and BEFORE anything moves or is deleted — the
+  # task, the verify stamp, the worktree, the branch — prove the task's files are on $BASE. rc 0 or
+  # 2 (nothing to prove) → nothing printed, nothing committed: the normal path, byte for byte. A
+  # mismatch re-lands only the missing paths through a wave + seal, then re-checks; still missing →
+  # ONE ⛔ line and rc 1, with the task left in review/ and feat/$id kept, because it is the only copy.
+  local lc_bad lc_rc=0
+  lc_bad="$(landed_content_ok "$id")" || lc_rc=$?
+  if [ "$lc_rc" -eq 1 ]; then
+    printf '⚠ %s did not fully arrive — re-landing
+' "$id"
+    ( cd "$PRIMARY" && _done_reland "$id" "$tf" "$lc_bad" ) || true
+    lc_rc=0; lc_bad="$(landed_content_ok "$id")" || lc_rc=$?
+    if [ "$lc_rc" -eq 1 ]; then
+      die "$id still missing from $BASE: $(printf '%s
+' "$lc_bad" | awk 'NR <= 5 { printf "%s%s", (NR > 1 ? " " : ""), $0 } END { if (NR > 5) printf " +%d more", NR - 5 }') — branch feat/$id kept"
+    fi
+  fi
   mutex_on
   mv "$BOARD/review/$id.md" "$BOARD/done/$id.md"
   set_fm status done "$BOARD/done/$id.md"
@@ -321,11 +400,9 @@ EOF
     _SURFACES_CACHED=""            # a batch close calls done per task — the next dup test re-reads
   fi
   # T-169 (visual-check.md § v2.11): the curated gallery is published HERE — inside the mutex this
-  # function ALREADY holds, and behind no integration lease. cmd_done does not hold that lease (only
-  # land, land --express and seal ever take it), and taking it here would DEADLOCK the default
-  # `landing: self` path: the self-land tail runs `done` as a SUBPROCESS with a different $$, so the
-  # re-entrancy check fails, it waits out integration_wait_minutes and returns rc 3. The mutex this
-  # block runs under is the serialisation it needs, and visual_publish writes through a temp name in
+  # function ALREADY holds, under the integration lease cmd_done took above. The self-land tail runs
+  # `done` as a SUBPROCESS with a different $$, and it re-enters that lease by token instead of
+  # waiting on it: ops/contracts/safe-landing.md § 1. visual_publish writes through a temp name in
   # the same directory so a half-copied PNG is never stageable. Its paths ride the commit below.
   local gapplied=0
   if [ -n "$gal" ]; then
@@ -359,6 +436,7 @@ EOF
   board_commit "chore(board): done $id"
   sync_board
   mutex_off; trap - EXIT
+  [ -n "$done_had" ] || trap on_die EXIT    # we took the lease: a die from here still frees it
   rm -f "$PRIMARY/.polaris/verify-stamp/$id" 2>/dev/null || true   # in done/: nothing left to skip (minutes.md § 12)
   board_changed_touch   # freshness beacon for the brain (ops/contracts/brain.md) — best-effort
   brain_refresh_if_present  # v1.1: done mirrors seal — refresh AFTER the touch so the wave close
@@ -407,6 +485,7 @@ EOF
     fi
   fi
   lock_drop "$id"; [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$id"
+  [ -n "$done_had" ] || int_off     # the lane work is over — release only what we took
   # the closing line tells the truth about the two outcomes — under landing: self a builder's own
   # worktree is live by definition, so "cleaned" would be a lie on the commonest path of all.
   local swept="lock, worktree, branch$remote_note cleaned"
@@ -537,7 +616,8 @@ cmd_land() { # land <ID> — Integrator, primary checkout, ON the integrate bran
   # only the frame that took it releases on success paths — a die releases regardless, because
   # the process is over either way. STATEMENT-LEVEL call, never $( ): the EXIT trap it arms
   # would self-release inside a subshell.
-  local land_had="${INT_HELD:-}"
+  local land_had=""
+  if int_mine; then land_had=1; fi
   int_on "land $id" || return $?
   # idempotence gate 1: already in $BASE (a sealed earlier wave — the task may even be done/) →
   # skip BEFORE the review/ gate can die on another integrator's completed work. Nothing mutated.
@@ -641,7 +721,8 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   # step 0 (express-lane v2, shared-checkout): the integration lease. The four refusals above
   # stay BEFORE it on purpose — a doomed express must refuse instantly, never queue on a busy
   # lane. Busy past the bounded wait → int_on's `queued: ` line + rc 3, nothing mutated.
-  local ex_had="${INT_HELD:-}"
+  local ex_had=""
+  if int_mine; then ex_had=1; fi
   int_on "land --express $id" || return $?
   # dirty tree → park + caveat + proceed; park refused → v1's die verbatim, tree untouched
   if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -658,6 +739,9 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   wave_on
   # step 2: audit + land — existing cmd_land semantics, unchanged (re-enters the lease, rc 0;
   # an already-landed <ID> skips there and express continues to the still-pending steps)
+  # The wave tip BEFORE the land is what a red unwinds to (safe-landing.md § 3) — never HEAD~1, which
+  # drops someone else's commit when the land was skipped as already landed.
+  local pre; pre="$(git rev-parse HEAD)"
   cmd_land "$id"
   # step 3: the CONVENTIONS suite, ONCE (same set as qa). Red → unwind the land, kick the
   # task back carrying the failing tail, die — the board never keeps a green it didn't earn.
@@ -727,7 +811,7 @@ EOF
         tail -15 "$out" | sed 's/^/     /' >&2
         tailtxt="$(tail -3 "$out" | tr '\n' ' ' | cut -c1-200)"
         rm -f "$out" "$ex_paths"
-        git reset -q --hard HEAD~1        # unwind the land — integrate/<date> back at $BASE state
+        git reset -q --hard "$pre"        # unwind the land — integrate/<date> back where it stood
         cmd_kickback "$id" -m "express suite red on $k: $tailtxt"
         int_off    # kickback's `trap - EXIT` disarmed the on_die net — release the lease by hand
         die "express: $k red — land unwound on integrate/$date, $id kicked back with the failing tail"
@@ -784,7 +868,7 @@ EOF
     tail -15 "$out" | sed 's/^/     /' >&2
     tailtxt="$(tail -3 "$out" | tr '\n' ' ' | cut -c1-200)"
     rm -f "$out"
-    git reset -q --hard HEAD~1        # unwind the land — integrate/<date> back at $BASE state
+    git reset -q --hard "$pre"        # unwind the land — integrate/<date> back where it stood
     cmd_kickback "$id" -m "express verify red: $tailtxt"
     int_off    # kickback's `trap - EXIT` disarmed the on_die net — release the lease by hand
     die "express: verify red — land unwound on integrate/$date, $id kicked back with the failing tail"
@@ -912,7 +996,8 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
     return 0
   fi
   in_primary || die "seal runs in the primary checkout — cd \"$PRIMARY\" first"
-  local seal_had="${INT_HELD:-}"
+  local seal_had=""
+  if int_mine; then seal_had=1; fi
   int_on "seal $date" || return $?
   # dirty tree → park + caveat + proceed; park refused → the old die verbatim, tree untouched
   if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -1040,12 +1125,26 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
   # the layout verdict follows it too (save-hops.md § 0.5), now that the merge and the tag stand —
   # done's call, word for word; never a failed seal, and a silent no-op until `hops --due` ships
   "$SELF" hops --due >/dev/null 2>&1 || true
-  [ -n "$seal_had" ] || int_off   # last mutation of the sealing pass is behind us — free the lane
   if [ -n "$oldtag" ]; then
     say "sprint $n re-sealed — integrate/$date merged into $BASE (--no-ff); sprint/$n: $old7 → $new7"
   else
     say "sprint $n sealed — integrate/$date merged into $BASE (--no-ff), tagged sprint/$n"
   fi
+  # THE SEAL CHECK (safe-landing.md § 6): every task whose [<ID>] commit this seal just merged must
+  # have its files on $BASE now. Still under the lease, so a mismatch re-lands in the same lane
+  # (done's _done_reland: a wave, one [<ID>] commit, a child seal that skips this check), then the
+  # next task. All green prints nothing. rc 2 (no feat branch left) is nothing to prove.
+  if [ -z "${POLARIS_SEAL_NOCHECK:-}" ]; then
+    local sid stf sbad src
+    for sid in $(printf '%s\n' "$subjects" | sed -n 's/.*\[\([^][]*\)\]$/\1/p'); do
+      src=0; sbad="$(landed_content_ok "$sid")" || src=$?
+      [ "$src" -eq 1 ] || continue
+      stf="$(task_file "$sid")" || continue
+      printf '⚠ %s did not fully arrive — re-landing\n' "$sid"
+      ( cd "$PRIMARY" && _done_reland "$sid" "$stf" "$sbad" ) || true
+    done
+  fi
+  [ -n "$seal_had" ] || int_off   # last mutation of the sealing pass is behind us — free the lane
   # A wave is not a run: a sprint may seal several times (INTEGRATOR.md § 4). So this POINTS at the
   # run-level verdict rather than calling it — an auto-called finish would print `⛔ pending:` inside
   # two successful seals out of three, and would put the whole suite between the merge and the push.

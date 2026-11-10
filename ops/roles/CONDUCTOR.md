@@ -196,7 +196,7 @@ work.
    > complete it end to end. A spec ambiguity → return the question as your result instead of asking
    > the human. Ship per BUILDER.md step 5: `bash ops/polaris bg run ship-<ID> -- bash ops/polaris
    > handoff --saw "<the after shot vs the bar>"`, then `bash ops/polaris bg wait ship-<ID> --max
-   > 300` repeated until the rc is not 2 — under `landing: self` (the default) that handoff lands
+   > 120` repeated until the rc is not 2 — under `landing: self` (the default) that handoff lands
    > your task through the integration lease and, last lane out, seals the wave. Stop after the
    > collect; return: ID · branch · one-line summary · test results · landed / queued / in review.
    > FIRST run `bash ops/polaris pack <ID>` — that output IS your context: the task, its contract,
@@ -230,10 +230,12 @@ work.
      `git status` in its worktree to see how far it got, then release the task back to `ready/` and
      respawn one fresh builder per the retry path above.
 6. **Integrate (subagent) — pipelined, from the FIRST handoff.** Under `landing: self` (the default
-   since 6.1.0) lanes land their own tasks through the lease and the last lane out seals, so this
-   subagent's job narrows to the leftovers: `risk: high` and other refused tasks, `queued:` tails,
-   and any wave the lanes could not seal — spawn it only when `review/` is non-empty after the lanes
-   close. Under `landing: integrator` the classic choreography below applies unchanged: spawn the
+   since 6.1.0) a task lands itself at handoff — one lease covers land, seal and done, and the last
+   lane out seals — so spawn an integrator only for what refused to land: `risk: high`, a task waiting
+   on a recorded approval, a red land, `queued:` tails, and any wave the lanes could not seal — that
+   is, only when `review/` is non-empty after the lanes close. Trust the content check: `done` and
+   `seal` prove each task's files are on main and re-land them if not, so no agent checks main's
+   files by hand or copies files across branches. Under `landing: integrator` the classic choreography below applies unchanged: spawn the
    integrator the moment the
    FIRST lane reports its handoff, not after the last one. It audits and lands tasks
    `as they arrive in review/, in dependency order`: a task whose `depends_on` has not yet arrived

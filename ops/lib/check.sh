@@ -730,22 +730,39 @@ cmd_check() { # check [--only <glob>] [--update] [--jobs <N>] [--scaffold] — g
     [ -n "$wt" ] && [ -d "$PRIMARY/.polaris/wt/$wt" ] && root="$PRIMARY/.polaris/wt/$wt";; esac
   local dir="$root/ops/tests" f name exp rcf want got grc red=0 n=0
   [ -d "$dir" ] || { note "no ops/tests/ yet — add <name>.cmd + <name>.expected (polaris check --update writes the golden)"; return 0; }
-  # Side by side (minutes.md § 6) unless --update, one job, or one golden: those keep the loop below.
-  local sel="" cnt=0 t0 times=""
-  if [ "$upd" -eq 0 ] && [ "$jobs" -gt 1 ]; then
-    for f in "$dir"/*.cmd; do
-      [ -e "$f" ] || break
-      name="${f##*/}"; name="${name%.cmd}"
-      case "$name" in $only) ;; *) continue;; esac
-      cnt=$((cnt+1)); sel="$sel$name
-"
-    done
-    [ "$cnt" -gt 1 ] && { [ "$jobs" -gt "$cnt" ] && jobs=$cnt; _check_parallel "$root" "$jobs" "$sel"; return $?; }
-  fi
+  # The selection, computed ONCE (minutes.md § 15): --only takes globs separated by commas, a golden
+  # is in when it matches ANY of them, in directory order whatever the order of the globs. A list
+  # whose glob matches nothing is red before anything runs; one glob keeps today's lines exactly.
+  local sel="" cnt=0 t0 times="" rest g k take hit="," miss=""
+  case ",$only," in *,,*) die "usage: polaris check --only <glob>[,<glob>…] — an empty entry in '$only'";; esac
   for f in "$dir"/*.cmd; do
     [ -e "$f" ] || break
     name="${f##*/}"; name="${name%.cmd}"
-    case "$name" in $only) ;; *) continue;; esac
+    rest="$only,"; k=0; take=0
+    while [ -n "$rest" ]; do
+      g="${rest%%,*}"; rest="${rest#*,}"; k=$((k+1))
+      case "$name" in $g) take=1; case "$hit" in *",$k,"*) ;; *) hit="$hit$k,";; esac;; esac
+    done
+    [ "$take" -eq 1 ] && { cnt=$((cnt+1)); sel="$sel$name
+"; }
+  done
+  case "$only" in *,*)
+    rest="$only,"; k=0
+    while [ -n "$rest" ]; do
+      g="${rest%%,*}"; rest="${rest#*,}"; k=$((k+1))
+      case "$hit" in *",$k,"*) ;; *) miss="$miss$g
+";; esac
+    done
+    if [ -n "$miss" ]; then
+      printf '%s' "$miss" | LC_ALL=C sort -u | while IFS= read -r g; do note "no goldens matched '$g'"; done
+      return 1
+    fi;; esac
+  # Side by side (minutes.md § 6) unless --update, one job, or one golden: those keep the loop below.
+  if [ "$upd" -eq 0 ] && [ "$jobs" -gt 1 ] && [ "$cnt" -gt 1 ]; then
+    [ "$jobs" -gt "$cnt" ] && jobs=$cnt; _check_parallel "$root" "$jobs" "$sel"; return $?
+  fi
+  for name in $sel; do
+    f="$dir/$name.cmd"
     n=$((n+1)); exp="$dir/$name.expected"; rcf="$dir/$name.rc"
     t0=$SECONDS
     got="$( cd "$root" && bash -c "$(cat "$f")" 2>/dev/null )" && grc=0 || grc=$?
