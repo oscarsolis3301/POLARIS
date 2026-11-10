@@ -75,6 +75,17 @@ taken-in-call: rc=1 ⛔ new: .polaris/drafts/p60b.md: id: T-060 is taken | stdou
 unknown-dep: rc=1 ⛔ new: .polaris/drafts/nodep.md: depends_on: T-404 is no task on the board | stdout empty | ref unmoved
 feat-worktree: rc=1 ⛔ new: run it from the primary checkout — a builder never files work for itself | stdout empty | ref unmoved
 board files after the refusals: identical
+== 5. the plan bind
+no approval on record: no state file
+T-053 ready — nothing to wait for
+T-054 ready — nothing to wait for
+rc=0 stderr=[]
+T-055 ready — nothing to wait for
+rc=0 stderr=[]
+approval file:
+  1
+  p
+  q
 == over every call
 drafts changed: 0
 SPRINT.md untouched

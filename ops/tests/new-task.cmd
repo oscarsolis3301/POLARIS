@@ -15,13 +15,20 @@
 #      each and the board's files identical after all of them. Three stand behind a valid draft (the
 #      first check a whole draft passes, a preset taken earlier in the call, the last check), so what
 #      is proven is all or nothing — a refusal files none of the drafts, not just the bad one.
+#   5. the plan bind (ops/contracts/away.md § 4): HOME, USERPROFILE and POLARIS_AWAKE_HOME are faked
+#      from the first line, so no call can reach the real ~/.claude. Cases 1-4 run with a session id and
+#      no approval on record: no state file appears. Then an approval on record: the plan: slug of every
+#      task filed is appended once to <sid>.approved, and a second task of a plan already bound adds nothing.
 # Then, over every call: the drafts byte-identical, SPRINT.md and main untouched, and every success
 # line held to the plain-voice bar with plain-voice.cmd's own alternation.
+FIX="$(mktemp -d)"
+trap 'rm -rf "$FIX"' EXIT
+export HOME="$FIX/home" USERPROFILE="$FIX/home" POLARIS_AWAKE_HOME="$FIX/awake"; mkdir -p "$HOME"
+export CLAUDE_CODE_SESSION_ID=new-task-sid
+ST="$HOME/.claude/polaris/model-state/$CLAUDE_CODE_SESSION_ID"
 KIT="$(pwd)/kit/ops/polaris"
 TPL="$(pwd)/kit/ops/templates/TASK.md"
 ALT="$(sed -n "s/.*grep -ciE '\([^']*\)'.*/\1/p" ops/tests/plain-voice.cmd)"
-FIX="$(mktemp -d)"
-trap 'rm -rf "$FIX"' EXIT
 R="$FIX/repo"
 ( set -e
   git init -q -b main "$R" 2>/dev/null || { git init -q "$R"; git -C "$R" symbolic-ref HEAD refs/heads/main; }
@@ -67,6 +74,9 @@ R="$FIX/repo"
   dr '' 'odd risk' 1 medium '  - src/rk.txt\n' '[]' '' '' > "$D/risk.md"
   dr '' '' 1 normal '  - src/nt.txt\n' '[]' '' '' > "$D/notitle.md"
   printf 'title: no frontmatter\n' > "$D/nofm.md"
+  dr '' 'bound one' 1 normal '  - src/b1.txt\n' '[]' '' '' > "$D/b1.md"
+  dr '' 'bound two' 1 normal '  - src/b2.txt\n' '[]' '' '' > "$D/b2.md"
+  printf -- '---\ntitle: another plan\nplan: q\npoints: 1\nrisk: normal\nfiles_owned:\n  - src/q1.txt\n---\n' > "$D/q1.md"
   mkdir -p "$FIX/orig"; cp "$D"/*.md "$FIX/orig/"
 ) >/dev/null 2>&1
 cd "$R"
@@ -127,6 +137,12 @@ printf 'feat-worktree: rc=%s %s| stdout %s | ref %s\n' "$rc" "$(tr '\n' ' ' < "$
   "$([ -s "$FIX/out" ] && echo PRINTED || echo empty)" \
   "$([ "$REF0" = "$(git rev-parse refs/heads/polaris/board)" ] && echo unmoved || echo MOVED)"
 [ "$B0" = "$(snap)" ] && echo "board files after the refusals: identical" || echo "board files after the refusals: CHANGED"
+echo "== 5. the plan bind"
+[ -e "$HOME/.claude" ] && echo "no approval on record: STATE WRITTEN" || echo "no approval on record: no state file"
+mkdir -p "${ST%/*}"; printf '1\n' > "$ST.approved"
+run "$D/b1.md" "$D/q1.md"
+run "$D/b2.md"
+echo "approval file:"; sed 's/^/  /' "$ST.approved"
 echo "== over every call"
 n=0; for f in "$FIX"/orig/*.md; do cmp -s "$f" "$D/${f##*/}" || n=$((n+1)); done; echo "drafts changed: $n"
 printf '# Sprint 1 — fixture\n' | cmp -s - ops/SPRINT.md && echo "SPRINT.md untouched" || echo "SPRINT.md CHANGED"
