@@ -113,7 +113,7 @@ A project's checks run one after another (`for k in test lint typecheck build ua
 - [ ] CI's Linux and macOS runs of the full self-test are green on this task's own commit (see Notes; never in verify)
 
 ## T-296 — "Release 6.16.0 - away means away, small means fast: version and changelog (LAST)"
-points 1 · risk normal · landed e991641 (2026-11-10) · claimed 2026-11-10
+points 1 · risk normal · landed e991641 (2026-11-10) · claimed 2026-11-10 → done 2026-11-10
 files touched: CHANGELOG.md, kit/ops/VERSION
 
 ### Why
@@ -125,7 +125,7 @@ files touched: CHANGELOG.md, kit/ops/VERSION
 - [ ] nothing else changes
 
 ## T-297 — "Filing a task binds its plan to your approval, so a plan approved before you left covers its tasks with no extra command"
-points 2 · risk normal · landed 068f2b1 (2026-11-10) · claimed 2026-11-10
+points 2 · risk normal · landed 068f2b1 (2026-11-10) · claimed 2026-11-10 → done 2026-11-10
 files touched: kit/ops/lib/author.sh, ops/tests/away-yes.cmd, ops/tests/away-yes.expected, ops/tests/new-task.cmd, ops/tests/new-task.expected
 
 ### Why
@@ -137,3 +137,14 @@ While the owner is away, a high-risk task of the approved plan merges on the pla
 - [ ] golden `away-yes` gains the case that left T-294: a plan whose tasks were filed with `new` AFTER the approval, with no `approve --plan` at all, is covered at handoff (the merge entry, the `away:` line, the self-landing); a task filed BEFORE the approval is not
 - [ ] every other case of both goldens is unchanged
 - [ ] CI's Linux run of the full self-test is green on this task's own commit: `PROOF_GOLDENS=true bash tools/proof.sh`, once, by hand, through `bg run` (never in verify)
+
+## T-298 — "The kit's list of names knows the presence hook's two helpers"
+points 1 · risk normal · landed 6358aa4 (2026-11-10) · claimed 2026-11-10
+files touched: ops/tests/api-kit.expected
+
+### Why
+The release proof for 6.16.0 is red on one golden, `api-kit`, which lists every function the kit's scripts define. The new presence hook (kit/ops/hooks/presence-guard.sh, landed with T-289) defines two helpers, `pg_approve` and `pg_end`, and the list does not have them yet. Every other hook's helpers are in that list under their plain names (for example `lc`, `norm`, `primary_gate` for the ownership guard), so the list gains two rows; the hook is not changed.
+
+### Acceptance
+- [ ] `bash kit/ops/polaris check --update --only api-kit` is run from the worktree, and the diff of ops/tests/api-kit.expected is EXACTLY two added rows: `kit/ops/hooks/presence-guard.sh	fn	pg_approve` and `kit/ops/hooks/presence-guard.sh	fn	pg_end` (tab-separated, like the rows around them). Any other difference → stop and report it instead of committing.
+- [ ] `bash kit/ops/polaris check --only api-kit` is green
