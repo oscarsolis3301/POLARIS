@@ -1,0 +1,44 @@
+== a. a landed file clobbered on main: done re-lands it ==
+done rc=0
+⚠ T-1 did not fully arrive — re-landing
+T-1 is in: done
+main has the feat text: yes
+[T-1] commits on main: 2
+its re-land line: 1
+branch feat/T-1 left: no
+on: main
+== c. the normal path: the same output, no extra commit ==
+   worktree removed: .polaris/wt/T-3
+✅ T-3 → done/ · lock, worktree, branch cleaned
+done rc=0
+extra commits: 0
+T-3 is in: done
+== d. a dirty tree, an ancestor suite stamp, test_select unset: the same again ==
+   worktree removed: .polaris/wt/T-4
+✅ T-4 → done/ · lock, worktree, branch cleaned
+done rc=0
+extra commits: 0
+T-4 is in: done
+dirt still there: yes
+suite stamp untouched: yes
+== e. kicked back after it landed, fixed, handed off again: done heals it ==
+T-5 is in: review
+✅ already landed — skipped (T-5 is in main history)
+done rc=0
+⚠ T-5 did not fully arrive — re-landing
+T-5 is in: done
+main has the fix: yes
+[T-5] commits on main: 2
+[T-5] commits added by done: 1
+its re-land line: 1
+branch feat/T-5 left: no
+== b. unfixable: one line, rc 1, the branch and the task stay ==
+done rc=1
+⚠ T-2 did not fully arrive — re-landing
+⛔ T-2 still missing from main: src/2.txt — branch feat/T-2 kept
+T-2 is in: review
+branch feat/T-2 left: yes
+[T-2] commits on main: 1
+lease free: yes
+on: main
+tree clean: yes

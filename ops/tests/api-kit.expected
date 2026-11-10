@@ -369,6 +369,7 @@ kit/ops/lib/core.sh	fn	fm_list
 kit/ops/lib/core.sh	fn	fm_stamp
 kit/ops/lib/core.sh	fn	has_remote
 kit/ops/lib/core.sh	fn	jesc
+kit/ops/lib/core.sh	fn	landed_content_ok
 kit/ops/lib/core.sh	fn	lock_age
 kit/ops/lib/core.sh	fn	lock_drop
 kit/ops/lib/core.sh	fn	lock_take

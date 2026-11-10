@@ -634,6 +634,31 @@ mutex_on() {
   trap on_die EXIT
 }
 has_remote() { git -C "$PRIMARY" remote get-url origin >/dev/null 2>&1; }
+landed_content_ok() { # landed_content_ok <ID> [<ref>] — did the task's files really arrive on <ref>
+  # (default $BASE)? ops/contracts/safe-landing.md § 4. PURE READ: no write, no lease (callers hold
+  # it). The task's paths are `git diff --name-only --no-renames <merge-base> feat/<ID>` (a rename is
+  # a delete + an add); each must be byte- and mode-equal between <ref> and the feat tip, and a path
+  # the tip deleted must be absent from <ref>. ONE tree-to-tree diff answers all of that at once, and
+  # one awk keeps only the task's own paths from it — never a git call per path.
+  # stdout: the mismatching paths, one per line. rc 0 every path arrived (an empty diff is rc 0) ·
+  # rc 1 at least one mismatch · rc 2 cannot check (no feat/<ID> locally or on origin, no merge-base
+  # — no base is recorded on the task) — callers proceed silently, exactly as before this existed.
+  local id="${1:?usage: landed_content_ok <ID> [<ref>]}" ref="${2:-$BASE}" feat mb own diff bad
+  feat="$(git -C "$PRIMARY" rev-parse -q --verify "refs/heads/feat/$id^{commit}" 2>/dev/null)" \
+    || feat="$(git -C "$PRIMARY" rev-parse -q --verify "refs/remotes/origin/feat/$id^{commit}" 2>/dev/null)" \
+    || return 2
+  git -C "$PRIMARY" rev-parse -q --verify "$ref^{commit}" >/dev/null 2>&1 || return 2
+  mb="$(git -C "$PRIMARY" merge-base "$ref" "$feat" 2>/dev/null)" || return 2
+  own="$(git -C "$PRIMARY" -c core.quotepath=off diff --name-only --no-renames "$mb" "$feat" -- 2>/dev/null)" || return 2
+  [ -n "$own" ] || return 0
+  diff="$(git -C "$PRIMARY" -c core.quotepath=off diff --name-only --no-renames "$ref" "$feat" -- 2>/dev/null)" || return 2
+  [ -n "$diff" ] || return 0
+  # one stream, the two lists split by an empty line (git never prints an empty path)
+  bad="$(printf '%s\n\n%s\n' "$own" "$diff" | awk 'p == 0 && $0 == "" { p = 1; next } p == 0 { o[$0] = 1; next } ($0 in o)')"
+  [ -n "$bad" ] || return 0
+  printf '%s\n' "$bad"
+  return 1
+}
 # publish: direct | pr (ops/contracts/publish-modes.md) — HOW a sealed wave reaches origin's $BASE.
 # Read via cfg at command runtime, never cached; unknown value warns ONCE per invocation (stderr,
 # so command substitutions never swallow it) and behaves as direct. Sets $PUB — no command
