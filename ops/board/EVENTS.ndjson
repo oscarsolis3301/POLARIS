@@ -1043,3 +1043,4 @@
 {"ts":1794269201,"ev":"promote","id":"T-279","who":"Owner@DESKTOP","note":"deps done: T-273","pts":3}
 {"ts":1794269206,"ev":"promote","id":"T-278","who":"Owner@DESKTOP","note":"deps done: T-273","pts":5}
 {"ts":1794269211,"ev":"promote","id":"T-277","who":"Owner@DESKTOP","note":"deps done: T-273","pts":5}
+{"ts":1794269295,"ev":"claim","id":"T-277","who":"Owner@DESKTOP","note":"","pts":5}
