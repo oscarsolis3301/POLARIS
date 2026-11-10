@@ -41,6 +41,9 @@ kit/ops/KEYS.tsv	key	builders
 kit/ops/KEYS.tsv	key	claim
 kit/ops/KEYS.tsv	key	drain
 kit/ops/KEYS.tsv	key	drain_slices
+kit/ops/KEYS.tsv	key	effort_cheap
+kit/ops/KEYS.tsv	key	effort_mid
+kit/ops/KEYS.tsv	key	effort_strong
 kit/ops/KEYS.tsv	key	evolve_apply
 kit/ops/KEYS.tsv	key	express
 kit/ops/KEYS.tsv	key	gallery
