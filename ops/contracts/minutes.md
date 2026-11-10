@@ -1,4 +1,4 @@
-# CONTRACT: minutes — proof runs where it is fast, and a release check proves bytes   (v2 — 2026-11-09)
+# CONTRACT: minutes — proof runs where it is fast, and a release check proves bytes   (v2.5 — 2026-11-09)
 Owned by the Planner. Builders code against this and never invent beyond it.
 Append-only once any dependent task is claimed: breaking changes = new `## v2` section + a migration task.
 
@@ -415,6 +415,43 @@ it at the `express` drill, which edits the list to a failing line and requires `
   `self-land-finish` is re-pinned for the two-field stamp (its "stamp names the commit" check reads
   field 1). The `express` drill passes again, run once by hand through `bg run`.
 
+## 13. The update's commit stages one step at a time (conductor, 2026-11-09 — corrects § 5.1)
+§ 5.1's staging ran `git status --porcelain | awk … | git add --pathspec-from-file=-` as ONE pipeline. All
+three run at the same moment, and both git commands want `.git/index.lock`: `status` holds it while it
+looks for changes, and `add` takes it first thing and dies if it is held, before it reads one path.
+Whichever starts faster wins. macOS CI lost it in three runs of three (`AUTOUPDATE (5b) COMMIT DIRT FAIL`
+twice, `AUTOUPDATE (9) COMMIT FAIL` once; the log shows awk's "i/o error occurred while closing
+/dev/stdout", its reader already gone, then `nothing was committed for you`). The fallback was safe, so
+no repo was harmed: the update simply did not commit, and said nothing about why.
+- **One after the other.** The list is computed FIRST into a variable (the same status + awk, byte for
+  byte), and only then handed to `git add` (`printf '%s\n' "$list" | git … add --pathspec-from-file=-`).
+  An empty list → no `add`, no commit, no line (unchanged). No pipeline in the kit may have a
+  `git status` feeding a command that writes the index.
+- **Another program holding the lock** (an editor's git view, a second terminal): when the `add` or the
+  `commit` fails and git's message names `index.lock`, wait 1 second and try again, 3 tries in all.
+  Any other failure is not retried.
+- **Never silent.** When staging or the commit still fails: the index is left empty as found
+  (unchanged), today's note prints, then one more note says why, from git's own first line:
+  `not committed: git could not stage the update's files — <first line of git's message>` or
+  `not committed: git refused the commit — <first line of git's message>`. `--auto` stays one line.
+- **The drill asserts the commit where it expects one.** In `drill_autoupdate`, every case whose update
+  applies with all § 5.1 conditions true — at least (5), (5b), (7), (9); (1) too when its fixture meets
+  them — FIRST checks that HEAD is exactly one new commit on top of where that case started and that
+  its subject is `chore(polaris): POLARIS <old> → <new>` (`AUTOUPDATE (<n>) COMMIT FAIL (…)`), and only
+  then checks what is in it. (5) and (5b) used to check only that a dirty path was absent from HEAD's
+  commit, which fails for the wrong reason when no commit was made.
+- **Executable checks** (same drill, two new cases; a `git` stand-in placed first on PATH that passes
+  everything to the real git except `add` with `--pathspec-from-file=-`): **(10)** the stand-in refuses
+  the FIRST such add with git's lock message on stderr and exit 128, without reading its input → the
+  update still commits (one new commit, the `committed for you` note). **(10b)** it refuses EVERY such
+  add → no commit, HEAD unchanged, nothing staged, the update's files still changed in the tree, both
+  notes printed (`nothing was committed for you`, then `not committed: git could not stage the update's
+  files — …`), rc 0. The stand-in is a plain `sh` script found by name; it never touches the real git
+  or any config, and the real git's path is resolved before PATH is changed.
+- Proof: the drill green on CI's Linux AND macOS runs of the task's own commit (`PROOF_GOLDENS=true bash
+  tools/proof.sh`, then `bash tools/proof.sh --await macos-latest`), each started once by hand through
+  `bg run`. One green macOS run is the bar: three of three were red before.
+
 ## Changelog
 - v1 2026-11-09: created for the Phase 1 tasks of plans/minutes.md.
 - v2 2026-11-09: § 3–§ 10 added for Phase 2 (sprint 22, plan minutes, 6.14.0).
@@ -422,3 +459,4 @@ it at the `express` drill, which edits the list to a failing line and requires `
 - v2.2 2026-11-09 (conductor): § 9 — the `begin:` refusal line reads "needs the <lane> lane" ("is a express lane" was not English).
 - v2.3 2026-11-09 (conductor): § 12 — the verify stamp carries the verify list's checksum, and run-verify needs the stamp; § 7's tree-only skip was unsound (CI: EXPRESS VERIFY RED FAIL).
 - v2.4 2026-11-09 (conductor): § 12 — an empty verify list is never "proven" (goldens guide-stale, pack-visual, shots-gallery caught it).
+- v2.5 2026-11-09 (conductor): § 13 — the update's commit stages one step at a time, retries a held index lock, and says why when it cannot commit (macOS CI: the status and the add in one pipeline raced for the index lock).
