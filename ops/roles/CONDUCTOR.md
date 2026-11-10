@@ -82,9 +82,10 @@ in your context? `bash ops/polaris next --brief` prints it again.)
 ## Protocol
 **Route every spawn.** Before you spawn ANY subagent, ask the oracle which model it gets: `bash
 ops/polaris route --role <ROLE>` for a role subagent, `bash ops/polaris route <ID>` for a builder
-(its own task's points and risk decide). Line 2 — `   model: <name>` — present → pass that name as
-the spawn's `model` param; absent → omit the param and let the platform default run. One read-only
-call per spawn; routing never blocks work.
+(its own task's points and risk decide). Pass its two notes to the spawn: `   model: <name>` as the
+spawn's `model` and `   effort: <level>` as its `effort`. A note that is missing → leave that
+setting out, and the spawn uses the chat's own. One read-only call per spawn; routing never blocks
+work.
 1. **Interview + brief.** Run PLANNER.md steps 0b and 0c yourself — subagents can't talk to the
    human, so the questions and the "what I understood" brief (WILL change · WON'T touch · DONE looks
    like · assumptions) happen here, in `voice:`. Scaled to vagueness: a concrete request gets zero
@@ -218,7 +219,8 @@ call per spawn; routing never blocks work.
      builder on that task with the answer appended to its kickoff.
    - Builder returns RED (tests failing, handoff refused) → ONE automatic retry: append the failure
      to the task's Notes, spawn a fresh builder on it ("Resume <ID>: read its Notes for the failure,
-     fix, hand off"). Still red → `bash ops/polaris release <ID> --to blocked -m "<why>"`, tell the
+     fix, hand off") one effort level above the one `route` named (low → medium → high → xhigh →
+     max; max stays max). Still red → `bash ops/polaris release <ID> --to blocked -m "<why>"`, tell the
      human plainly what's parked and why, keep the other lanes going.
    - Builder dies without reporting → a lane gone silent past `stale_hours` is a DEAD lane, not a
      slow one. **A lane that stopped on a capture refusal is not dead** — it needs the shot: line run,
@@ -325,8 +327,9 @@ call per spawn; routing never blocks work.
    > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
    > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    Its proposals go into the close report, numbered — the human applies one by replying
-   "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Skip this
-   step only when the run built ≤1 task — there is no signal in a sample of one.
+   "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Spawn it
+   only when the run had a kickback, a blocked task, a red proof or more than five Learned bullets;
+   otherwise skip it and say one line: `EVOLVE skipped — nothing to learn from this run`.
    **Then the final `bash ops/polaris qa`** — after EVOLVE, not before it. An auto-applied evolve
    commit moves HEAD, so a `qa` run ahead of it certifies a tree that no longer ships, and `finish`
    pays the whole suite a second time. After EVOLVE, one `qa` proves the tree that actually ships and

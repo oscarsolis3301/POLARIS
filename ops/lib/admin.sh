@@ -435,6 +435,48 @@ EOF3
   [ -n "$t" ] && line="$line Your last full run took $t."
   printf '%s
 ' "$line"
+  # Landing time (minutes.md § 5.3): how long the last 20 finished tasks took to build, and how long
+  # each then waited to land. ONE awk over EVENTS.ndjson, no per-line forks. Per task: its last `done`;
+  # the last `handoff` at or before it; the last `claim` at or before that handoff. A task missing any
+  # of the three is not counted; none counted → neither line. Median = element int((n-1)/2) of the
+  # sorted values, zero-based, in whole minutes rounded to nearest. The log is union-merged across
+  # branches, so it is never assumed to be in time order.
+  if [ -f "$EVENTS" ]; then
+    awk '
+      { ts = ""; ev = ""; id = ""
+        if (match($0, /"ts":[0-9]+/)) ts = substr($0, RSTART + 5, RLENGTH - 5) + 0
+        if (match($0, /"ev":"[^"]*"/)) ev = substr($0, RSTART + 6, RLENGTH - 7)
+        if (match($0, /"id":"[^"]*"/)) id = substr($0, RSTART + 6, RLENGTH - 7)
+        if (ts == "" || id == "") next
+        if (ev == "claim") cl[id] = cl[id] " " ts
+        else if (ev == "handoff") ho[id] = ho[id] " " ts
+        else if (ev == "done" && (!(id in dn) || ts > dn[id])) dn[id] = ts
+      }
+      function med(v, m,   i, j, x) {
+        for (i = 2; i <= m; i++) { x = v[i]; j = i - 1; while (j > 0 && v[j] > x) { v[j + 1] = v[j]; j-- } v[j + 1] = x }
+        return int(v[int((m - 1) / 2) + 1] / 60 + 0.5)
+      }
+      END {
+        n = 0
+        for (id in dn) {
+          d = dn[id]; h = -1; c = -1
+          k = split(ho[id], a, " "); for (i = 1; i <= k; i++) if (a[i] + 0 <= d && a[i] + 0 > h) h = a[i] + 0
+          if (h < 0) continue
+          k = split(cl[id], a, " "); for (i = 1; i <= k; i++) if (a[i] + 0 <= h && a[i] + 0 > c) c = a[i] + 0
+          if (c < 0) continue
+          n++; D[n] = d; B[n] = h - c; W[n] = d - h
+        }
+        if (n == 0) exit
+        for (i = 2; i <= n; i++) {
+          x = D[i]; y = B[i]; z = W[i]; j = i - 1
+          while (j > 0 && D[j] > x) { D[j + 1] = D[j]; B[j + 1] = B[j]; W[j + 1] = W[j]; j-- }
+          D[j + 1] = x; B[j + 1] = y; W[j + 1] = z
+        }
+        m = 0; for (i = (n > 20 ? n - 19 : 1); i <= n; i++) { m++; b[m] = B[i]; w[m] = W[i] }
+        printf "build: median %d min\n", med(b, m)
+        printf "built → done: median %d min\n", med(w, m)
+      }' "$EVENTS" 2>/dev/null || true
+  fi
   [ "$(cfg drain "")" = queue ] && printf '   → one change lands at a time, in a queue: set drain: plan in ops/CONVENTIONS.md
 '
   [ "$(cfg autonomy trusted)" = standard ] && printf '   → every merge stops for your yes: set autonomy: trusted in ops/CONVENTIONS.md
@@ -526,7 +568,27 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   tarball="$(ver tarball || true)"; [ -n "$tarball" ] || die "no tarball: in ops/VERSION"
   repo="$(ver repo || true)"; cur="$(ver version)"
 
-  if [ -n "$(git -C "$PRIMARY" status --porcelain)" ]; then
+  # THE SELF-COMMIT'S PRECONDITIONS (minutes.md § 5.1), read once, BEFORE anything is touched. One
+  # project was left with 64 uncommitted files by updates nobody committed; the commit at the end is
+  # only safe when HEAD is on $BASE, nothing is half-done, nothing was staged, and the project does
+  # not land through pull requests. The FIRST false condition is kept as the reason the closing note
+  # gives. The status read here doubles as the dirt test below and as the fence the commit stages
+  # inside: a path dirty before the update is never the update's to commit.
+  local sc_pre sc_why="" sc_gd sc_new sc_k
+  sc_pre="$(git -C "$PRIMARY" -c core.quotePath=false status --porcelain 2>/dev/null || true)"
+  sc_gd="$(git -C "$PRIMARY" rev-parse --absolute-git-dir 2>/dev/null || true)"
+  if [ "$(git -C "$PRIMARY" symbolic-ref -q --short HEAD 2>/dev/null || true)" != "$BASE" ]; then
+    sc_why="not on $BASE"
+  elif [ -z "$sc_gd" ] || [ -e "$sc_gd/MERGE_HEAD" ] || [ -d "$sc_gd/rebase-merge" ] || [ -d "$sc_gd/rebase-apply" ] \
+       || [ -e "$sc_gd/CHERRY_PICK_HEAD" ] || [ -e "$sc_gd/REVERT_HEAD" ]; then
+    sc_why="a merge or rebase is in progress"
+  elif ! git -C "$PRIMARY" diff --cached --quiet 2>/dev/null; then
+    sc_why="something was already staged"
+  elif [ "$(cfg publish direct)" = pr ]; then
+    sc_why="publish: pr — the change goes through a pull request"
+  fi
+
+  if [ -n "$sc_pre" ]; then
     if [ ! -f "$PRIMARY/ops/CONVENTIONS.md" ]; then
       # Never-configured repo: no board to protect, and the dirt is usually the human's own
       # work plus the uncommitted install itself. Don't send the agent stash-wrangling —
@@ -536,7 +598,7 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
       note "  python ~/.claude/skills/polaris-install/polaris-v5.zip"
       die "worktree is dirty — use the installer above (then run setup), or commit/stash and re-run update"
     fi
-    if git -C "$PRIMARY" status --porcelain | update_dirt_overlaps_kit; then
+    if printf '%s\n' "$sc_pre" | update_dirt_overlaps_kit; then
       # Configured repo (ops/contracts/shared-checkout.md): N chats share this one checkout, so
       # "commit or stash first" hands whoever happened to run update a decision about work that is
       # very likely somebody else's — the exact git question this contract exists to stop asking.
@@ -619,12 +681,100 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   if [ -f "$CONV" ] && pending="$(interview_pending)"; then
     note "preferences never set here: $pending — one round of questions: ops/polaris interview"
   fi
-  note "review the diff, then commit ops/ — nothing was committed for you"
+  # THE SELF-COMMIT (minutes.md § 5.1). Every precondition held at the start → stage exactly the paths
+  # this update changed — in the status now, absent from the status read before it (one awk, no fork
+  # per path) — and commit them with one plain subject. Never pushed. A path dirty before is never
+  # staged, so a parked or app-only change stays exactly where it was. Nothing was staged before, so
+  # if anything goes wrong an empty index (`git reset -q`) is exactly as found, and the note falls
+  # back to today's. Under `--auto` this runs in the child whose output is the log: no stdout line.
+  # ONE STEP AT A TIME (minutes.md § 13). The list is computed FIRST, into a variable, and only then
+  # handed to `git add`: a `status` piped straight into the `add` raced it for .git/index.lock, and on
+  # macOS the add lost every time (it dies before reading a path). Another program holding the lock (an
+  # editor's git view, a second terminal) gets 3 tries, 1 s apart; any other refusal is not retried.
+  # Whatever still fails is said, from git's own first line — never a silent "nothing was committed".
+  local sc_list sc_out sc_err="" sc_try
+  sc_k=0
+  if [ -z "$sc_why" ]; then
+    sc_new="$(ver version)"
+    sc_list="$(git -C "$PRIMARY" -c core.quotePath=false status --porcelain 2>/dev/null \
+         | SC_PRE="$sc_pre" awk '
+             function path(l) { l = substr(l, 4); sub(/\r$/, "", l); sub(/^.* -> /, "", l)
+                                if (l ~ /^".*"$/) l = substr(l, 2, length(l) - 2); return l }
+             BEGIN { n = split(ENVIRON["SC_PRE"], a, "\n"); for (i = 1; i <= n; i++) if (a[i] != "") was[path(a[i])] = 1 }
+             $0 != "" && !(path($0) in was) { print path($0) }' || true)"
+    if [ -n "$sc_list" ]; then
+      sc_try=1
+      while :; do
+        if sc_out="$(printf '%s\n' "$sc_list" | git -C "$PRIMARY" --literal-pathspecs add --pathspec-from-file=- 2>&1 >/dev/null)"; then
+          sc_k="$(git -C "$PRIMARY" diff --cached --name-only 2>/dev/null | awk 'END { print NR }')"
+          case "$sc_k" in ''|*[!0-9]*) sc_k=0;; esac
+          break
+        fi
+        case "$sc_out" in *index.lock*) if [ "$sc_try" -lt 3 ]; then sc_try=$((sc_try + 1)); sleep 1; continue; fi;; esac
+        sc_err="git could not stage the update's files — $(printf '%s\n' "$sc_out" | awk '{ sub(/\r$/, "") } NF { print; exit }')"
+        break
+      done
+    fi
+    if [ "$sc_k" -gt 0 ]; then
+      sc_try=1
+      while :; do
+        if sc_out="$(git -C "$PRIMARY" commit -q -m "chore(polaris): POLARIS $cur → $sc_new" 2>&1)"; then break; fi
+        case "$sc_out" in *index.lock*) if [ "$sc_try" -lt 3 ]; then sc_try=$((sc_try + 1)); sleep 1; continue; fi;; esac
+        sc_err="git refused the commit — $(printf '%s\n' "$sc_out" | awk '{ sub(/\r$/, "") } NF { print; exit }')"
+        sc_k=0
+        break
+      done
+    fi
+    if [ "$sc_k" -eq 0 ]; then
+      git -C "$PRIMARY" diff --cached --quiet 2>/dev/null || git -C "$PRIMARY" reset -q >/dev/null 2>&1 || true
+    fi
+  fi
+  if [ "$sc_k" -gt 0 ]; then
+    note "committed for you: chore(polaris): POLARIS $cur → $sc_new — $sc_k files, not pushed"
+  else
+    note "review the diff, then commit ops/ — nothing was committed for you"
+    if [ -n "$sc_why" ]; then note "not committed: $sc_why"
+    elif [ -n "$sc_err" ]; then note "not committed: $sc_err"; fi
+  fi
   # Reprinted LAST for the same reason the INIT epilogue below is: the park happened ~40 lines of
   # install output ago, and an agent reads the END of the output as "what is left". Somebody's
   # uncommitted work is in a stash, and nothing else here will say so again.
   if [ "$parked" = 1 ]; then
     note "your parked work:  bash ops/polaris unpark  — returns the dirt this update stashed (after you have reviewed the diff)"
+  fi
+
+  # THE FAN-OUT (minutes.md § 5.2). Other projects on this PC sat on old versions because nobody
+  # remembered to update them, so a TYPED update (no --auto, no --all, no --repo-only — those return
+  # above or set repo_only) ends by starting `update --all` for the rest of the machine registry.
+  # Counted in ONE awk over the registry entries' first lines, this project excluded. Detached the way
+  # `bg run` detaches: a background subshell, stdin from /dev/null, output appended to the log. The
+  # child runs a COPY of this CLI in a temp dir of its own: $SELF lives in the re-exec copy the
+  # wrapper deletes the moment this process exits, so a child reading it could find it gone. `exec
+  # bash -c` holds no script open, so both temp dirs can be removed. Placed before the speed report
+  # and the ▶ NEXT epilogue, which stay the last lines an agent reads. POLARIS_UPDATE_NO_FANOUT=1 is
+  # the test seam, and the `--auto` child below always sets it: --auto never fans out.
+  if [ "$repo_only" = 0 ] && [ "${POLARIS_UPDATE_NO_FANOUT:-}" != 1 ]; then
+    local fo_home fo_n fo_d fo_log
+    fo_home="$(awake_home)"
+    if [ "$fo_home" != "-" ] && [ -d "$fo_home/repos" ]; then
+      fo_n="$(FO_ME="$(git -C "$PRIMARY" rev-parse --show-toplevel 2>/dev/null || true)" FO_PR="$PRIMARY" \
+        awk 'FNR == 1 { sub(/\r$/, ""); if ($0 != "" && $0 != ENVIRON["FO_ME"] && $0 != ENVIRON["FO_PR"]) n++ } END { print n + 0 }' \
+        "$fo_home"/repos/* 2>/dev/null)" || fo_n=0
+      case "$fo_n" in ''|*[!0-9]*) fo_n=0;; esac
+      if [ "$fo_n" -gt 0 ]; then
+        fo_log="$fo_home/update-all.log"
+        fo_d="$(mktemp -d)"
+        if cp "$SELF" "$fo_d/polaris" 2>/dev/null && cp -R "${SELF%/*}/lib" "$fo_d/lib" 2>/dev/null; then
+          # shellcheck disable=SC2016
+          ( cd "$PRIMARY" && printf '\n--- %s · update --all, started by the update in %s\n' "$(date '+%Y-%m-%d %H:%M')" "$PRIMARY" \
+              && POLARIS_UPDATE_REEXEC=1 exec bash -c 'bash "$1/polaris" update --all; rm -rf "$1"' polaris-fanout "$fo_d"
+          ) </dev/null >>"$fo_log" 2>&1 &
+          note "updating $fo_n other projects on this PC in the background — see $fo_log"
+        else
+          rm -rf "$fo_d" 2>/dev/null || true
+        fi
+      fi
+    fi
   fi
 
   # The speed report (one-yes.md § 6): what the repo's own history says it now gains. Guarded twice —
@@ -789,9 +939,9 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionS
   log="$PRIMARY/.polaris/update.log"
   rc=0
   if [ "$repo_only" = 1 ]; then
-    (cd "$PRIMARY" && POLARIS_UPDATE_REEXEC=1 bash "$SELF" update --repo-only) > "$log" 2>&1 || rc=$?
+    (cd "$PRIMARY" && POLARIS_UPDATE_REEXEC=1 POLARIS_UPDATE_NO_FANOUT=1 bash "$SELF" update --repo-only) > "$log" 2>&1 || rc=$?
   else
-    (cd "$PRIMARY" && POLARIS_UPDATE_REEXEC=1 bash "$SELF" update) > "$log" 2>&1 || rc=$?
+    (cd "$PRIMARY" && POLARIS_UPDATE_REEXEC=1 POLARIS_UPDATE_NO_FANOUT=1 bash "$SELF" update) > "$log" 2>&1 || rc=$?
   fi
   new="$(ver version 2>/dev/null || true)"
   if [ "$rc" -eq 0 ] && [ -n "$new" ] && [ "$new" != "$cur" ]; then
@@ -931,15 +1081,20 @@ heal_claudemd() { # append the marked efficiency section to the repo's OWN CLAUD
   # every session. A section an older kit appended keeps its old text: the marker guard above.
   local f="$PRIMARY/CLAUDE.md"
   [ -f "$f" ] || return 0
-  # THE ONE REWRITE (ops/contracts/speed.md § 2b). Older kits appended a model line saying Fable and
-  # Haiku are forbidden outright; since 2026-11-09 Fable is the owner's to pick. Only that EXACT line
-  # changes, the first time it appears — a line its owner has edited is theirs and stays. Its line
-  # ending is kept and every other byte with it; a file without the line is never written. Builtins
-  # only past the one grep, so a CLAUDE.md that never had the line costs that grep and nothing more.
-  local mo='- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.'
-  local mn='- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.'
+  # THE ONE REWRITE (ops/contracts/speed.md § 2b, then minutes.md § 11.1). Three model lines older kits
+  # wrote — A "Fable and Haiku are forbidden outright", B "Fable runs only when the owner picks it", and C
+  # the short one heal itself used to append — all said "never name a model". Once `route` names a model
+  # and an effort for every helper, a project CLAUDE.md still saying that overrides CONDUCTOR.md there and
+  # silently switches the sizing off, so each becomes the one line T. Only an EXACT whole line changes,
+  # the first one found — a line its owner has edited is theirs and stays. Its line ending is kept and
+  # every other byte with it; a file holding none of them is never written. Builtins only past the one
+  # grep, so a CLAUDE.md that never had any of them costs that grep and nothing more.
+  local ma='- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.'
+  local mb='- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.'
+  local mc='- **Never name a model** — every spawn inherits the session.'
+  local mn='- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku is blocked, and Fable runs only when the owner picks it.'
   local ml='' me='' mt='' mhit=0
-  if grep -qF -- "$mo" "$f" 2>/dev/null; then
+  if grep -qF -e "$ma" -e "$mb" -e "$mc" -- "$f" 2>/dev/null; then
     # `|| mhit=0`: under the CLI's set -e a failed write must neither kill heal nor leave a half copy.
     {
       while :; do
@@ -947,12 +1102,12 @@ heal_claudemd() { # append the marked efficiency section to the repo's OWN CLAUD
         IFS= read -r ml || { [ -n "$ml" ] || break; mt=''; }
         me=''
         case "$ml" in *$'\r') me=$'\r'; ml="${ml%$'\r'}";; esac
-        if [ "$mhit" = 0 ] && [ "$ml" = "$mo" ]; then ml="$mn"; mhit=1; fi
+        if [ "$mhit" = 0 ] && { [ "$ml" = "$ma" ] || [ "$ml" = "$mb" ] || [ "$ml" = "$mc" ]; }; then ml="$mn"; mhit=1; fi
         printf '%s%s%s' "$ml" "$me" "$mt"
       done < "$f" > "$f.heal-tmp"
     } 2>/dev/null || mhit=0
     if [ "$mhit" = 1 ] && mv -f "$f.heal-tmp" "$f" 2>/dev/null; then
-      note "healed: CLAUDE.md — the model line now says Fable is the owner's to pick (your prose untouched)"
+      note "healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)"
     else
       rm -f "$f.heal-tmp" 2>/dev/null || true
     fi
@@ -966,7 +1121,7 @@ heal_claudemd() { # append the marked efficiency section to the repo's OWN CLAUD
     printf '%s\n' 'lookup ladder and the ask-first rule live in the POLARIS block above (FEWEST HOPS).'
     printf '%s\n' ''
     printf '%s\n' '- **Prefer ONE context over three**, and the smallest check that proves the change.'
-    printf '%s\n' '- **Never name a model** — every spawn inherits the session.'
+    printf '%s\n' "$mn"
     printf '%s\n' '- **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:'
     printf '%s\n' '  one command per line, never `&&` (PowerShell has no chain operators), no placeholders.'
     printf '%s\n' ''

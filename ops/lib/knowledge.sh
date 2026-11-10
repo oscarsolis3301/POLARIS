@@ -349,46 +349,104 @@ guide_purpose() { # guide_purpose <dir> [<root>] — the purpose line of <dir>/C
 
 brain_code_map() { # code-map.md — per-DIRECTORY digest (≤15 lines/dir; caller caps 300 total).
   # Scale by summarizing per directory, never by listing files (contract § Hop guarantee).
+  # brain v3 / minutes.md § 4.1: ONE pass — one `git ls-files -z`, one symbol grep over every tracked
+  # file, one LC_ALL=C awk that prints every folder. A process start costs 30-50 ms on Git Bash, and
+  # the old per-folder loop paid a dozen of them per folder. Purposes are the only per-folder work, and
+  # only for folders that HAVE a guide or a README. Order is pinned in C bytes, never the locale:
+  # folders; extensions by count, ties ascending; the first twelve unique symbols.
   printf '# code map — per-directory digest (files: count · symbols: grepped defs · hotspot: from ops/MAP.md)\n'
-  local hotspots=""
-  [ -f "$OPS/MAP.md" ] && hotspots="$(awk '/^## Hotspot/{f=1;next} /^## /{f=0} f' "$OPS/MAP.md" \
-      | grep -o '`[^`]*`' | tr -d '\140' || true)"
-  local dirs
-  dirs="$( { git -C "$PRIMARY" ls-files 2>/dev/null | sed -n 's|/[^/]*$||p'; \
-             git -C "$PRIMARY" ls-files 2>/dev/null | grep -q '^[^/]*$' && echo . || true; } | sort -u )"
-  local d files n exts purpose syms hs
-  while IFS= read -r d; do
-    [ -n "$d" ] || continue
-    if [ "$d" = "." ]; then
-      files="$(git -C "$PRIMARY" ls-files 2>/dev/null | grep '^[^/]*$' || true)"
-    else
-      files="$(git -C "$PRIMARY" ls-files -- "$d" 2>/dev/null | grep "^$d/[^/]*$" || true)"
-    fi
-    [ -n "$files" ] || continue
-    n="$(printf '%s\n' "$files" | grep -c . || true)"
-    exts="$(printf '%s\n' "$files" | sed -n 's/.*\(\.[A-Za-z0-9_]*\)$/\1/p' | sort | uniq -c \
-        | sort -rn | head -3 | awk '{printf "%s ", $2}' | sed 's/ $//')"
-    purpose=""   # the folder's own guide speaks first (save-hops § 3.3), then its README heading
-    [ "$d" != "." ] && [ -f "$PRIMARY/$d/CLAUDE.md" ] && { purpose="$(guide_purpose "$d")" || purpose=""; }
-    [ -z "$purpose" ] && [ "$d" != "." ] && [ -f "$PRIMARY/$d/README.md" ] \
-      && purpose="$(sed -n 's/^#\{1,\}[[:space:]]\{1,\}//p' "$PRIMARY/$d/README.md" | head -1 || true)"
-    syms="$(printf '%s\n' "$files" | tr '\n' '\0' \
-        | { cd "$PRIMARY" && xargs -0 grep -hIE '^(cmd_[A-Za-z0-9_]+\(\)|[A-Za-z_][A-Za-z0-9_]*\(\)[ \t]*\{|function[ \t]|def[ \t]|class[ \t])' 2>/dev/null; } \
-        | sed -e 's/().*$//' -e 's/^function[ \t]*//' -e 's/^def[ \t]*//' -e 's/^class[ \t]*//' -e 's/[ ({:].*$//' \
-        | grep . | sort -u | head -12 | tr '\n' ' ' | sed 's/ $//' || true)"
-    hs=""
-    if [ -n "$hotspots" ]; then
-      if [ "$d" = "." ]; then hs="$(printf '%s\n' "$hotspots" | grep '^[^/]*$' | head -1 || true)"
-      else hs="$(printf '%s\n' "$hotspots" | grep "^$d/[^/]*$" | head -1 || true)"; fi
-    fi
-    printf '\n## %s/\n' "$d"
-    printf -- '- files: %s%s\n' "$n" "${exts:+ ($exts)}"
-    [ -n "$purpose" ] && printf -- '- purpose: %s\n' "$purpose"
-    [ -n "$syms" ] && printf -- '- symbols: %s\n' "$syms"
-    [ -n "$hs" ] && printf -- '- hotspot: %s — chain edits, never parallel-own (ops/MAP.md)\n' "$hs"
-  done <<EOF
-$dirs
-EOF
+  local tmp d p map
+  tmp="$(mktemp -d 2>/dev/null)" || return 0
+  git -C "$PRIMARY" ls-files -z 2>/dev/null > "$tmp/ls" || true
+  tr '\0' '\n' < "$tmp/ls" > "$tmp/ls.nl"
+  : > "$tmp/syms"
+  if [ -s "$tmp/ls" ]; then
+    ( cd "$PRIMARY" && xargs -0 grep -HIE '^(cmd_[A-Za-z0-9_]+\(\)|[A-Za-z_][A-Za-z0-9_]*\(\)[ \t]*\{|function[ \t]|def[ \t]|class[ \t])' \
+        < "$tmp/ls" 2>/dev/null ) > "$tmp/syms" || true
+  fi
+  # purposes: the folder's own guide speaks first (save-hops § 3.3), then its README's first heading
+  : > "$tmp/purp"
+  while IFS= read -r p; do
+    d="${p%/CLAUDE.md}"
+    p="$(guide_purpose "$d")" || continue
+    printf '%s\t%s\n' "$d" "$p" >> "$tmp/purp"
+  done <<GUIDES
+$(grep '/CLAUDE\.md$' "$tmp/ls.nl" || true)
+GUIDES
+  : > "$tmp/rd"
+  grep '/README\.md$' "$tmp/ls.nl" | tr '\n' '\0' > "$tmp/readmes" || true
+  if [ -s "$tmp/readmes" ]; then
+    ( cd "$PRIMARY" && xargs -0 env LC_ALL=C awk 'FNR == 1 { seen = 0 }
+        !seen && /^#+[ \t]+/ { s = $0; sub(/\r$/, "", s); sub(/^#+[ \t]+/, "", s)
+          d = FILENAME; sub(/\/README\.md$/, "", d); print d "\t" s; seen = 1 }' < "$tmp/readmes" 2>/dev/null ) \
+      > "$tmp/rd" || true
+  fi
+  map="$tmp/nomap"; : > "$map"
+  [ -f "$OPS/MAP.md" ] && map="$OPS/MAP.md"
+  BCM_PURP="$tmp/purp" BCM_RD="$tmp/rd" BCM_MAP="$map" BCM_LS="$tmp/ls.nl" BCM_SYM="$tmp/syms" LC_ALL=C awk '
+    function dirof(p,   i) { i = match(p, /\/[^\/]*$/); return i ? substr(p, 1, i - 1) : "." }
+    FILENAME == ENVIRON["BCM_PURP"] || FILENAME == ENVIRON["BCM_RD"] {
+      i = index($0, "\t"); if (!i) next
+      d = substr($0, 1, i - 1); if (!(d in pur)) pur[d] = substr($0, i + 1)
+      next }
+    FILENAME == ENVIRON["BCM_MAP"] {
+      sub(/\r$/, "")
+      if ($0 ~ /^## Hotspot/) { hot = 1; next }
+      if ($0 ~ /^## /) hot = 0
+      if (!hot) next
+      s = $0
+      while (match(s, /`[^`]*`/)) {
+        t = substr(s, RSTART + 1, RLENGTH - 2); s = substr(s, RSTART + RLENGTH)
+        if (t == "") continue
+        h = dirof(t); if (!(h in hs)) hs[h] = t
+      }
+      next }
+    FILENAME == ENVIRON["BCM_LS"] {
+      if ($0 == "") next
+      d = dirof($0)
+      if (!(d in nf)) dirs[++nd] = d
+      nf[d]++
+      b = $0; sub(/^.*\//, "", b)
+      if (match(b, /\.[A-Za-z0-9_]*$/)) {
+        e = substr(b, RSTART)
+        if (!((d, e) in ec)) { ne[d]++; el[d, ne[d]] = e }
+        ec[d, e]++
+      }
+      next }
+    FILENAME == ENVIRON["BCM_SYM"] {
+      i = index($0, ":"); if (!i) next
+      d = dirof(substr($0, 1, i - 1)); s = substr($0, i + 1); sub(/\r$/, "", s)
+      sub(/\(\).*$/, "", s); sub(/^function[ \t]*/, "", s); sub(/^def[ \t]*/, "", s)
+      sub(/^class[ \t]*/, "", s); sub(/[ ({:].*$/, "", s)
+      if (s == "" || ((d, s) in sy)) next
+      sy[d, s] = 1
+      n = ns[d] + 0      # the twelve smallest so far, kept sorted: one insertion, never a full sort
+      if (n == 12 && (s "") >= (top[d, 12] "")) next
+      if (n < 12) n++
+      for (j = n; j > 1 && (top[d, j - 1] "") > (s ""); j--) top[d, j] = top[d, j - 1]
+      top[d, j] = s; ns[d] = n
+      next }
+    END {
+      for (i = 2; i <= nd; i++) { x = dirs[i]; for (j = i; j > 1 && (dirs[j - 1] "") > (x ""); j--) dirs[j] = dirs[j - 1]; dirs[j] = x }
+      for (i = 1; i <= nd; i++) {
+        d = dirs[i]
+        printf "\n## %s/\n", d
+        m = ne[d] + 0
+        for (a = 1; a <= m; a++) o[a] = el[d, a]
+        for (a = 2; a <= m; a++) {   # count descending, ties by extension ascending
+          x = o[a]
+          for (j = a; j > 1 && (ec[d, o[j - 1]] < ec[d, x] || (ec[d, o[j - 1]] == ec[d, x] && (o[j - 1] "") > (x ""))); j--) o[j] = o[j - 1]
+          o[j] = x
+        }
+        ex = ""; for (a = 1; a <= m && a <= 3; a++) ex = ex (a > 1 ? " " : "") o[a]
+        printf "- files: %d%s\n", nf[d], (ex == "" ? "" : " (" ex ")")
+        if (d != "." && (d in pur)) printf "- purpose: %s\n", pur[d]
+        sl = ""; for (a = 1; a <= ns[d]; a++) sl = sl (a > 1 ? " " : "") top[d, a]
+        if (sl != "") printf "- symbols: %s\n", sl
+        if (d in hs) printf "- hotspot: %s — chain edits, never parallel-own (ops/MAP.md)\n", hs[d]
+      }
+    }' "$tmp/purp" "$tmp/rd" "$map" "$tmp/ls.nl" "$tmp/syms" || true
+  rm -rf "$tmp"
   return 0
 }
 
@@ -628,6 +686,24 @@ brain_learned() { # learned.md — what this repo's HISTORY says, distilled (cal
   printf '\nPointing calibration and cycle times: `polaris metrics`. Sprint lessons: gotchas.md.\n'
 }
 
+_brain_put() { # _brain_put <file> <cap|-> <cmd…> — brain v3 atomic write (minutes.md § 4.2): <cmd>'s
+  # output (its first <cap> lines; `-` = all of it) goes to <file>.tmp.$$ in the same folder, then
+  # `mv -f` onto <file>, so a reader never sees half a file. A failed write removes the temp file,
+  # leaves the old <file> in place and stops the build. The command's own status is not read: `head`
+  # closing the pipe early is how a cap works, not a failure.
+  local f="$1" cap="$2" t="$1.tmp.$$"
+  shift 2
+  if [ "$cap" = "-" ]; then
+    "$@" > "$t" || true
+  else
+    "$@" | head -n "$cap" > "$t" || true
+  fi
+  # A folder squatting on <file>'s name is a failed write: `mv` would quietly drop the file inside it.
+  if [ -f "$t" ] && [ ! -d "$f" ] && mv -f "$t" "$f" 2>/dev/null; then return 0; fi
+  rm -f "$t" 2>/dev/null || true
+  die "cannot write $f — the old copy is kept"
+}
+
 cmd_brain() { # brain [--refresh] — generate .polaris/brain/ (ops/contracts/brain.md).
   # Full build by default. --refresh: cheap files (board/contracts/commands/gotchas + INDEX)
   # always rebuilt; code-map.md ONLY when `git diff --name-only <stamp-sha>..HEAD` is non-empty
@@ -646,22 +722,22 @@ cmd_brain() { # brain [--refresh] — generate .polaris/brain/ (ops/contracts/br
     fi
   fi
   mkdir -p "$BR" || die "cannot create $BR"
-  brain_index > "$BR/INDEX.md"
-  if [ "$build_map" -eq 1 ]; then brain_code_map | head -n 300 > "$BR/code-map.md"; fi
-  brain_board     | head -n 80  > "$BR/board.md"
-  brain_contracts | head -n 120 > "$BR/contracts.md"
-  brain_commands  | head -n 80  > "$BR/commands.md"
-  brain_gotchas   | head -n 60  > "$BR/gotchas.md"
+  _brain_put "$BR/INDEX.md" - brain_index
+  if [ "$build_map" -eq 1 ]; then _brain_put "$BR/code-map.md" 300 brain_code_map; fi
+  _brain_put "$BR/board.md"     80  brain_board
+  _brain_put "$BR/contracts.md" 120 brain_contracts
+  _brain_put "$BR/commands.md"  80  brain_commands
+  _brain_put "$BR/gotchas.md"   60  brain_gotchas
   # v2 (5.19.0): the two files that make the brain ACCUMULATE rather than just digest. Both are
   # cheap-tier — always rebuilt, never gated on the code-map's changed-files check — because both
   # read history/index rather than the tree, and a stale preference is a wrong preference.
-  brain_prefs     | head -n 40  > "$BR/prefs.md"
-  brain_learned   | head -n 60  > "$BR/learned.md"
+  _brain_put "$BR/prefs.md"     40  brain_prefs
+  _brain_put "$BR/learned.md"   60  brain_learned
   local ep sha
   ep="$(date +%s)"
   sha="$(git -C "$PRIMARY" rev-parse --short "refs/heads/$BASE" 2>/dev/null \
       || git -C "$PRIMARY" rev-parse --short HEAD 2>/dev/null || echo none)"
-  printf '%s %s\n' "$ep" "$sha" > "$BR/.stamp"
+  _brain_put "$BR/.stamp" - printf '%s %s\n' "$ep" "$sha"
   say "brain $kind: .polaris/brain/ (INDEX + code-map$( [ "$build_map" -eq 1 ] || printf ' [unchanged, kept]' ) + board + contracts + commands + gotchas + prefs + learned) · stamp $ep $sha"
 }
 

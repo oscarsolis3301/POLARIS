@@ -21,7 +21,7 @@ case "${1:-}" in
 esac
 
 # `help` needs the text below and NOTHING else — no modules, no git, no CONVENTIONS. It used to
-# source all 15 lib modules and resolve the full environment to print a heredoc: 2820ms measured.
+# source all 19 lib modules and resolve the full environment to print a heredoc: 2820ms measured.
 # usage() lives up here so both the fast path and the dispatch table below can reach it.
 usage() { cat <<'EOF'
 polaris — POLARIS board CLI (run from anywhere inside the repo)
@@ -42,6 +42,11 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  it waits on another task — a task in ready/, active/ or review/
                                  that shares a file with it joins its depends_on. ONE board commit
                                  for all of them; any refusal writes nothing. Refuses on feat/*
+  begin <draft.md>               ONE CALL IN: new → triage → claim → pack. A task whose lane is
+                                 not solo stays in ready/ and triage's answer is printed (rc 3)
+  wrap [ID]                      ONE CALL OUT, from the task's worktree: handoff → land --express
+                                 (landing: integrator, solo task) → next; runs finish when next
+                                 says finish, and exits with its code
   claim [ID]                     lock + ready→active + worktree  (no ID = top wsjf; skips locked)
   resume [ID]                    re-enter an already-claimed active task (crash/kickback/new session)
   verify [ID]                    diff ⊆ files_owned + run verify: commands (in worktree)
@@ -115,12 +120,14 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  before the spine (unknown drill label); --parallel <N> = run the
                                  selected drills as N parallel child shards (serial stays the default)
                                  doctor --fast = the in-process tier: pure functions, no CLI re-invocation, no scratch repo — seconds
-  check [--only <glob>] [--update]
+  check [--only <glob>] [--update] [--jobs <N>]
                                  golden-output acceptance tests, ZERO LLM: ops/tests/<name>.cmd is
                                  run and its stdout diffed against <name>.expected (optional
                                  <name>.rc = expected exit code). --update rewrites goldens — a
                                  human/Builder decision, never automatic. Wire it into qa by setting
                                  `uat: bash ops/polaris check` in ops/CONVENTIONS.md
+                                 side by side: --jobs <N> goldens at once (default = this PC's
+                                 cores, at most 12; POLARIS_CHECK_JOBS overrides), same output as --jobs 1
   check --scaffold [--app] [--cmd "<shell>"]
                                  GENERATE the pairs from observed behavior — public API surface per
                                  source dir (from the index) + this CLI's parsed output shapes. Runs
@@ -197,11 +204,12 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   route [<ID> | --role <R> | --points <N> [--risk <R>]]
                                  which MODEL TIER runs a piece of work — line 1 is always one
                                  word: strong | mid | cheap (a task's model: frontmatter
-                                 overrides; unknown role → mid, routing never blocks work). A
-                                 `   model: <name>` note follows ONLY when ops/CONVENTIONS.md
-                                 maps that tier (model_strong/mid/cheap). Read-only: the
-                                 CONDUCTOR asks it before every spawn; fleet rides the max
-                                 tier over ready/
+                                 overrides; unknown role → mid, routing never blocks work). Then
+                                 `   model: <name>` and `   effort: <level>` for the spawn (cheap
+                                 sonnet/low · mid opus/medium · strong opus/high; model_<tier> and
+                                 effort_<tier> in ops/CONVENTIONS.md override, inherit drops the
+                                 note). Read-only: the CONDUCTOR asks it before every spawn; fleet
+                                 rides the max tier over ready/
   next [--do|--brief]            what this session does NEXT, read off the board — line 1 is ONE verb:
                                  resume <ID> · build <ID> · integrate · promote · wait · stop · tidy · finish;
                                  --do performs a promote under the board lock · --brief re-anchors a chat
@@ -337,7 +345,7 @@ esac
 # (ops/contracts/module-layout.md v2 — both lists stay LITERAL, never a glob.)
 case "${1:-}" in
   _match|_rules|_guard) _mods="core ownership" ;;
-  *)             _mods="core ownership workspace surfaces visual builder integrate knowledge search observe admin bg awake handover skills author
+  *)             _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg awake handover skills author flow
                         selftest/spine selftest/board selftest/history selftest/report
                         selftest/brain selftest/policy selftest/remote selftest/fast selftest/hops" ;;
 esac
@@ -400,6 +408,8 @@ case "$PWD" in */.polaris/wt/*) _w="${PWD##*/.polaris/wt/}"; _w="${_w%%/*}"; : 2
 case "${1:-}" in
   init-board) cmd_init_board;;
   new)        shift; cmd_new "$@";;
+  begin)      shift; cmd_begin "$@";;
+  wrap)       shift; cmd_wrap "$@";;
   claim)      shift; awake_ensure || true; update_check_maybe || true; cmd_claim "$@";;
   pack)       shift 2>/dev/null || true; cmd_pack "${1:-}";;
   resume)     shift; cmd_resume "$@";;

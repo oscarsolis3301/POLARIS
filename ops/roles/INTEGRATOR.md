@@ -23,13 +23,16 @@ An approved plan covers its own `risk: high` tasks (`approve --plan` recorded `m
 
 ## 3. Land — batch mode (default)
 ```bash
-git checkout -b integrate/<date> <base>
 # per task, in dependency order:
 bash ops/polaris land <ID>           # audits, then squash-merges feat/<ID> into ONE commit
-                                      # (message = task-commit-msg + Landed-from trailer)
-bash ops/polaris qa                  # stamped, depth-aware — run ONCE, after all lands
+                                      # (message = task-commit-msg + Landed-from trailer); run from
+                                      # <base>, it creates (or reuses) today's integrate/<date> itself
+bash ops/polaris run-verify <ID>     # the wave gate: that task's own verify lines, once all are
+                                      # landed — "not re-run" when it is the tree its builder proved
 ```
-Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+**The wave gate is the tasks' verify lines; the full proof runs in the background.** Once the wave is sealed (§ 4), start the full proof — the CONVENTIONS `test:` suite, through the stamped `qa` — with `bash ops/polaris bg run proof-<date> -- bash ops/polaris qa`, and collect it with `bash ops/polaris bg wait proof-<date> --max 120`, repeating until the rc is not 2. It never blocks the next wave: land the next wave while it runs. A red background proof becomes a fix task (authored, carved and landed like any other work) before `finish`.
+
+Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait --max 120`. A subagent never ends its turn with a job still running.
 
 - **The integration lane is shared and lease-serialized — another session may be holding it.**
   integration lane busy → wait; rc 3 with a queued: line means report queued and retry at the next wave boundary
@@ -37,9 +40,10 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
 - `land` makes no board write and no evt — a red task on integrate unwinds cleanly with a single `git reset --hard HEAD~1`, nothing uncommitted to lose.
 - **Squash conflict is a planning bug** — disjointness failed. `land` already resets integrate's HEAD and kicks the task back itself (`"squash conflict — planning bug"`); write the matching Learned entry so the Planner tightens ownership, then keep landing the rest.
 - **Empty diff** → `land` resets and dies; you decide (skip + kickback, or investigate) — never an automatic kickback.
-- **Suite green** → if `ops/CONVENTIONS.md` sets `uat:`, run it ONCE here on the integrate branch — red means bisect exactly like a red suite. Green → step 4.
-- **Suite red** → find the offender by halving, not by re-testing every land: `git reset --hard <base>`, re-land the first half of the list (`bash ops/polaris land <ID>` per task, in order), run the suite; recurse into whichever half is red (log₂N suite runs — one commit per task, no merge topology to fight). Offender found → `git reset --hard HEAD~1` to drop its land, `bash ops/polaris kickback <ID> -m "<failing output, path:line refs only>"`, skip anything that `depends_on` it, re-land the survivors, re-run the suite, continue.
-- **Before ANY kickback on a red suite, rule out a pre-existing flake.** Re-run the failing test file *in isolation*, and run it against `<base>` with none of the sprint's lands applied. If it is red on base too, or flips to green on a lone re-run, the flake is the repo's — NOT the task's: do not kick back, note it in the Learned log (and, if `ops/CONVENTIONS.md` carries a `flaky:` list, that it matched). Only a failure that is green on base AND reproducible on the merge is the task's to fix. Kicking good work back over someone else's flake is how the gate loses trust.
+- **Verify lines green** → if `ops/CONVENTIONS.md` sets `uat:`, run it ONCE here on the integrate branch — red means bisect exactly like a red suite. Green → step 4.
+- **A verify line red** → `run-verify` has named the offender: `git reset --hard <base>`, re-land the others in order, `bash ops/polaris kickback <ID> -m "<failing output, path:line refs only>"`, skip anything that `depends_on` it, re-run their verify lines, continue.
+- **Background proof red** (or a red `uat:`) → find the offender by halving, not by re-testing every land: on a scratch branch from the commit before the wave, re-land the first half of the list (`bash ops/polaris land <ID>` per task, in order), run the suite; recurse into whichever half is red (log₂N suite runs — one commit per task, no merge topology to fight). The fix is a new task that names the offender, and it lands before `finish`.
+- **Before ANY kickback or fix task on a red suite, rule out a pre-existing flake.** Re-run the failing test file *in isolation*, and run it against `<base>` with none of the sprint's lands applied. If it is red on base too, or flips to green on a lone re-run, the flake is the repo's — NOT the task's: do not kick back, note it in the Learned log (and, if `ops/CONVENTIONS.md` carries a `flaky:` list, that it matched). Only a failure that is green on base AND reproducible on the merge is the task's to fix. Kicking good work back over someone else's flake is how the gate loses trust.
 
 **Paranoid mode** (suite <2 min): identical, except after EVERY `land` you run that one land's depth-aware check, the same depth decision `qa` makes (a CSS-only land runs no suite; never the whole suite per land) — red identifies itself, `git reset --hard HEAD~1` to drop that one land, kick the task back, and continue the convoy.
 
@@ -56,18 +60,19 @@ bash ops/polaris seal [<date>]       # default <date> = today. base ← --no-ff 
                                       # remote exists. Merge conflict → seal aborts and dies; the
                                       # human resolves it — never auto-resolve.
 # then, per landed task, on <base>:
-bash ops/polaris run-verify <ID>     # acceptance stays true post-merge
 bash ops/polaris done <ID>           # review→done · applies map_delta to MAP.md · writes the task's
                                      # surface: rows to ops/SURFACES.tsv (docs(surfaces):, or riding
                                      # docs(map):) · releases lock · removes worktree + feat branch
                                      # (local AND origin, so no stale branch pile-up on the host) ·
                                      # refuses if not actually landed
-git branch -d integrate/<date>
 bash ops/polaris finish              # the whole gate in one shot, on <base>: it RUNS qa (suite +
-                                     # build + board hygiene + env) and then asks the run-level
+                                     # build + board hygiene + env; seconds when the background
+                                     # proof already stamped this commit), deletes the merged
+                                     # integrate/<date> itself, and then asks the run-level
                                      # question. Red or pending here = the sprint is NOT done;
                                      # report it that way. See § 6 for what the exit code licenses.
 ```
+`done` needs no `run-verify` here: `<base>` now holds the very tree § 3's verify lines proved.
 A rejected `<base>` push (protected branch) prints a by-hand note and suggests `publish: pr`; if
 origin keeps rejecting your base pushes, switch modes.
 
@@ -98,8 +103,8 @@ first seal of sprint `<n>` creates tag `sprint/<n>`; a later seal of the same sp
 --no-ff merge and MOVES the tag onto it (output logs old → new; the tag pushes compare-and-swap).
 `sprint/<n>` always marks the sprint's latest sealed checkpoint — end of sprint = final checkpoint.
 Rolling back: `rollback sprint/<n>` reverts the LATEST wave only; earlier waves revert by SHA
-(`git revert -m 1 <sha>`). Reusing the integrate branch for a later wave? Keep it (skip the
-`git branch -d` above) and catch it up first: `git checkout integrate/<date> && git merge --ff-only <base>`.
+(`git revert -m 1 <sha>`). Reusing the integrate branch for a later wave? `land` on `<base>` reuses
+today's branch and catches it up itself; `finish` deletes it only once it is merged.
 
 ## 5. Sweep and promote
 ```bash

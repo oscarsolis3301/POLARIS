@@ -206,6 +206,40 @@ EOF_SKGLOB
   note "top-level session: EnterWorktree({path: \".polaris/wt/<ID>\"}) · pinned-cwd subagent or any other CLI: run everything via absolute paths under .polaris/wt/<ID> (or cd there in the SAME call — a subagent's Bash resets its working folder between calls)"
 }
 
+_verify_listsum() { # _verify_listsum <taskfile> — the task's verify list as `fm_list verify` prints it,
+  # fingerprinted: cksum's two numbers joined by `-` (minutes.md § 12). One pipeline, no per-line fork.
+  set -- $(fm_list verify "$1" 2>/dev/null | cksum)
+  printf '%s-%s' "${1:-}" "${2:-}"
+}
+_verify_stamp_write() { # _verify_stamp_write <ID> <taskfile> — after a GREEN verify run in the task's
+  # worktree: record `<HEAD sha> <listsum>` in the PRIMARY's .polaris/verify-stamp/<ID> (minutes.md
+  # § 12, correcting § 7), so a skip later rests on both facts — this commit was proven, and by this
+  # very list. Only a clean tree is stamped — with uncommitted edits the thing proven is not the
+  # commit — and a dirty run drops any older stamp. An EMPTY list (cksum's byte count 0) proved
+  # nothing, so it is never stamped and an older stamp goes too (minutes.md § 12, v2.4). Best-effort.
+  local vs="$PRIMARY/.polaris/verify-stamp" vh vl
+  vh="$(git rev-parse HEAD 2>/dev/null || true)"
+  vl="$(_verify_listsum "$2")"
+  if [ -n "$vh" ] && [ "${vl##*-}" != 0 ] && [ -z "$(git status --porcelain 2>/dev/null | head -1)" ]; then
+    mkdir -p "$vs" 2>/dev/null || true
+    printf '%s %s\n' "$vh" "$vl" 2>/dev/null > "$vs/$1" || true
+  else
+    rm -f "$vs/$1" 2>/dev/null || true
+  fi
+}
+_verify_stamp_ok() { # _verify_stamp_ok <ID> <sha> <taskfile> — rc 0 only when the stamp is exactly
+  # `<sha> <listsum of the task file NOW>`. No stamp, an old one-field stamp, another commit or an
+  # edited list → rc 1, and the caller runs the commands. The list is fingerprinted only once a
+  # stamp exists, so the common no-stamp path costs no process at all. An empty list is never
+  # proven (minutes.md § 12, v2.4): rc 1 whatever the stamp says, and the caller takes the old path.
+  local vf="$PRIMARY/.polaris/verify-stamp/$1" vl="" vn
+  [ -n "$2" ] && [ -f "$vf" ] || return 1
+  IFS= read -r vl < "$vf" || [ -n "$vl" ] || return 1
+  vl="${vl%$'\r'}"
+  vn="$(_verify_listsum "$3")"
+  [ "${vn##*-}" != 0 ] && [ "$vl" = "$2 $vn" ]
+}
+
 cmd_verify() {
   local id="${1:-}"; [ -n "$id" ] || id="$(current_task_id)" || die "not on a feat/<ID> branch — pass the ID"
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
@@ -213,6 +247,7 @@ cmd_verify() {
   check_ownership "$tf" HEAD
   check_rules HEAD "$id"           # ID threaded: an `ask` rule cleared by <ID>'s approved: list
   run_verify_cmds "$tf"
+  _verify_stamp_write "$id" "$tf"
   # capture check, the ⚠ twin of handoff's gate (ops/contracts/visual-check.md): the same body in
   # lib/visual.sh and the same sentence, but mid-flight it only warns — a Builder may verify before
   # the shot is taken. The die lives in cmd_handoff.
@@ -247,7 +282,18 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
   git diff --quiet && git diff --cached --quiet || die "uncommitted changes — commit on feat/$id first"
   check_ownership "$tf" "feat/$id"
   check_rules "feat/$id" "$id"     # ID threaded: an `ask` rule cleared by <ID>'s approved: list
-  run_verify_cmds "$tf"
+  # Verify once (minutes.md § 12): the verify COMMANDS are skipped only when the stamp names this
+  # exact HEAD, its list fingerprint matches the task file's verify list now, and the tree is clean
+  # — the same code, proven by the same list. Ownership and rules (which carries the surfaces and
+  # freshness gates) ran above regardless.
+  local vsha
+  vsha="$(git rev-parse HEAD 2>/dev/null || true)"
+  if _verify_stamp_ok "$id" "$vsha" "$tf" && [ -z "$(git status --porcelain 2>/dev/null | head -1)" ]; then
+    say "verify: proven at $(printf '%.7s' "$vsha") — not re-run"
+  else
+    run_verify_cmds "$tf"
+    _verify_stamp_write "$id" "$tf"
+  fi
   # capture gate (ops/contracts/visual-check.md § v2.6) — body in lib/visual.sh: a diff that touches
   # a visual: path ships with its pictures and a word about them, or not at all, and it dies HERE,
   # before any board write, so the task stays in active/. cmd_verify runs the same body in warn mode.
@@ -416,8 +462,17 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
       || note "⚠ done $tid failed — finish it by hand: bash ops/polaris done $tid"
   done
   if [ -n "$own_last" ]; then
-    ( cd "$PRIMARY" && "$SELF" done "$own_last" ) \
-      || note "⚠ done $own_last failed — finish it by hand: bash ops/polaris done $own_last"
+    if ( cd "$PRIMARY" && "$SELF" done "$own_last" ); then
+      # The lane has walked away (minutes.md § 7): its task is in done/, so its own beat goes quiet
+      # here, and the next lossless clear-up (finish, qa, sweep --fix) may take the worktree it
+      # left — the same "fake-idle" the drills write. Quieting is the safe side of the beat, never a
+      # re-beat, and Guard 1 still refuses any worktree a caller is standing in.
+      if [ -f "$BOARD/done/$own_last.md" ] && [ -d "$GCD/worktrees/$own_last" ]; then
+        printf '1\n' 2>/dev/null > "$GCD/worktrees/$own_last/polaris-beat" || true
+      fi
+    else
+      note "⚠ done $own_last failed — finish it by hand: bash ops/polaris done $own_last"
+    fi
   fi
   return 0
 }

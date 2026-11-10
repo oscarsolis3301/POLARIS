@@ -488,14 +488,16 @@ drill_qa() {
     git branch -D feat/T-QD >/dev/null 2>&1 || true
     rm -f ops/board/done/T-QC.md ops/board/done/T-QD.md ops/board/done/T-QW.md
     "$SELF" qa > "$T/qaclean.out" 2>&1 || { cat "$T/qaclean.out"; echo "QA CRUFT HERMETIC FAIL (the fixture must leave qa green again)"; exit 1; }
-    # T-179: MAP Deltas > 20 stays a HARD gate — the suite runs green, qa is rc 1, and NO stamp.
+    # minutes.md § 7: MAP Deltas > 20 is ADVICE — the suite runs green, qa is rc 0, the stamp is
+    # written, and the advisory line still says what to fold (it was a hard gate until 6.14.0).
     qm=0; while [ "$qm" -lt 21 ]; do qm=$((qm+1)); printf -- '- qa drill delta %s (T-QM, 2026-09-24)\n' "$qm" >> ops/MAP.md; done
     git add -A; git commit -qm 'drill: qa map overflow'
     rm -f .polaris/suite-stamp
-    "$SELF" qa > "$T/qamap.out" 2>&1 && { cat "$T/qamap.out"; echo "QA MAP RC FAIL (MAP Deltas > 20 must red qa)"; exit 1; }
-    grep -q 'MAP: ' "$T/qamap.out" || { cat "$T/qamap.out"; echo "QA MAP REASON FAIL (qa must be red for the MAP overflow)"; exit 1; }
-    grep -q 'test — green' "$T/qamap.out" || { cat "$T/qamap.out"; echo "QA MAP SUITE FAIL (the suite must have run green, or the no-stamp proves nothing)"; exit 1; }
-    [ -f .polaris/suite-stamp ] && { cat "$T/qamap.out"; echo "QA MAP STAMP FAIL (a MAP overflow is a hard gate — no stamp)"; exit 1; }
+    "$SELF" qa > "$T/qamap.out" 2>&1 || { cat "$T/qamap.out"; echo "QA MAP RC FAIL (a MAP overflow is advice — it must never red qa)"; exit 1; }
+    grep -q '^   advisory: MAP: [0-9]* delta lines' "$T/qamap.out" || { cat "$T/qamap.out"; echo "QA MAP ADVISORY FAIL (qa must pass the MAP overflow on as an advisory: line)"; exit 1; }
+    grep -q 'test — green' "$T/qamap.out" || { cat "$T/qamap.out"; echo "QA MAP SUITE FAIL (the suite must have run green, or the stamp proves nothing)"; exit 1; }
+    [ "$(cut -d' ' -f1 < .polaris/suite-stamp 2>/dev/null)" = "$(git rev-parse HEAD)" ] || { cat "$T/qamap.out"; echo "QA MAP STAMP FAIL (a MAP overflow never withholds the stamp)"; exit 1; }
+    rm -f .polaris/suite-stamp
     git reset -q --hard HEAD~1
     printf 'test: false\n' > ops/CONVENTIONS.md
     "$SELF" qa >/dev/null 2>&1 && { echo "QA RED FAIL (red suite must rc 1)"; exit 1; }
@@ -839,11 +841,12 @@ drill_route() {
     # ---- T-071 route drill (ops/contracts/model-routing.md § Executable check) ----
     # `triage` answers "which lane"; `route` answers "which MODEL", and the CONDUCTOR calls it
     # before EVERY spawn while `fleet` injects its answer into every pane it opens. So line 1 is
-    # parsed BLIND — always exactly one of three words — and the note is the other half of the
-    # contract: it appears when, and ONLY when, a mapping knob or a task's literal `model:` names a
-    # model, because a repo that sets no knobs must behave byte-identically to one with no routing
-    # in it at all. That silence is the invariant a knob-shaped feature loses first, so it is
-    # asserted here in both directions rather than assumed.
+    # parsed BLIND — always exactly one of three words — and the notes are the other half of the
+    # contract (minutes.md § 8): line 2 is ALWAYS `   model: <name>` and line 3 `   effort: <level>`.
+    # The model is a task's literal `model:` first, then the tier's `model_<tier>` knob, then the
+    # kit's own default (cheap sonnet/low, mid opus/medium, strong opus/high) — so a repo that sets
+    # no knobs still gets sized spawns. `fleet` is NOT sized by route: with no knobs its pane
+    # command carries no --model token at all, and that silence is asserted in section 5.
     # HERMETIC (T-046): CONVENTIONS.md is saved and restored byte-exactly, the fixture tasks and the
     # stub PATH bin are removed, and nothing here claims, locks, commits or touches the board branch.
     [ -f ops/CONVENTIONS.md ] && cp ops/CONVENTIONS.md "$T/rt-conv.bak" || rm -f "$T/rt-conv.bak"
@@ -854,7 +857,11 @@ drill_route() {
     [ "$("$SELF" route --points 1 --risk normal | head -1)" = cheap ]  || { echo "ROUTE TIER FAIL (<=1 point is cheap)"; exit 1; }
     [ "$("$SELF" route --points 2 --risk high   | head -1)" = strong ] || { echo "ROUTE TIER FAIL (risk must dominate points)"; exit 1; }
     [ "$("$SELF" route --points x --risk normal | head -1)" = mid ]    || { echo "ROUTE TIER FAIL (non-numeric points is the safe middle, NEVER an error)"; exit 1; }
-    [ "$("$SELF" route --points 5 --risk normal | wc -l | tr -d ' ')" = 1 ] || { echo "ROUTE QUIET FAIL (an unset knob must print NOTHING but the tier word)"; exit 1; }
+    # minutes.md § 7/§ 8: with no knobs the route prints the tier, then the model note, then the effort note.
+    rtn="$("$SELF" route --points 5 --risk normal)"
+    { [ "$(printf '%s\n' "$rtn" | wc -l | tr -d ' ')" = 3 ] && printf '%s\n' "$rtn" | sed -n 2p | grep -q '^   model: ' \
+      && printf '%s\n' "$rtn" | sed -n 3p | grep -q '^   effort: '; } \
+      || { printf '%s\n' "$rtn"; echo "ROUTE NOTES FAIL (the default route prints the tier, then model, then effort)"; exit 1; }
     # 2) the role table, and the only two things route is allowed to refuse. An unknown role is mid
     #    at rc 0 on purpose — routing must never be the reason a piece of work cannot start.
     [ "$("$SELF" route --role PLANNER | head -1)" = strong ] || { echo "ROUTE ROLE FAIL (PLANNER is strong)"; exit 1; }
@@ -863,24 +870,30 @@ drill_route() {
     [ "$("$SELF" route --role NO-SUCH-ROLE | head -1)" = mid ] || { echo "ROUTE ROLE FAIL (an unknown role falls back to mid)"; exit 1; }
     "$SELF" route >/dev/null 2>&1 && { echo "ROUTE USAGE FAIL (no args must rc 1)"; exit 1; }
     "$SELF" route T-NOPE >/dev/null 2>&1 && { echo "ROUTE ID FAIL (an unknown ID must rc 1)"; exit 1; }
-    # 3) the note, via a FIXTURE CONVENTIONS: three-space indent (triage's shape), the knob's value
+    # 3) the notes, via a FIXTURE CONVENTIONS: three-space indent (triage's shape), the knob's value
     #    with its owner comment stripped, and strictly per-tier — model_mid is left unset here, so
-    #    mid must stay a bare word while its neighbours note.
+    #    mid's line 2 is the kit default (opus) while its neighbours carry their knob. Every tier
+    #    prints three lines: tier, model, effort. Only cheap's effort is pinned exactly (low is the
+    #    floor, so the chat-level clamp can never move it); mid's is pinned by shape.
     printf 'model_strong: drill-strong-9   # owner comment, stripped by cfg\nmodel_cheap: drill-cheap-2\n' > ops/CONVENTIONS.md
     "$SELF" route --points 5 --risk normal | awk 'NR==2 && $0 == "   model: drill-strong-9" { ok=1 } END { exit !ok }' \
       || { "$SELF" route --points 5 --risk normal; echo "ROUTE NOTE FAIL (want line 2 = three spaces + 'model: <knob value>')"; exit 1; }
-    [ "$("$SELF" route --points 1 --risk normal | wc -l | tr -d ' ')" = 2 ] || { echo "ROUTE NOTE FAIL (the cheap knob must note too)"; exit 1; }
-    [ "$("$SELF" route --points 3 --risk normal | wc -l | tr -d ' ')" = 1 ] || { echo "ROUTE NOTE FAIL (model_mid is unset — mid must stay a bare word)"; exit 1; }
+    [ "$("$SELF" route --points 5 --risk normal | wc -l | tr -d ' ')" = 3 ] || { "$SELF" route --points 5 --risk normal; echo "ROUTE NOTE FAIL (strong prints tier, model, effort)"; exit 1; }
+    "$SELF" route --points 1 --risk normal | awk 'NR==2 && $0 == "   model: drill-cheap-2" { m=1 } NR==3 && $0 == "   effort: low" { e=1 } END { exit !(m && e && NR==3) }' \
+      || { "$SELF" route --points 1 --risk normal; echo "ROUTE NOTE FAIL (the cheap knob must note too — tier, model: <knob>, effort: low)"; exit 1; }
+    "$SELF" route --points 3 --risk normal | awk 'NR==1 && $0 == "mid" { t=1 } NR==2 && $0 == "   model: opus" { m=1 } NR==3 && /^   effort: [a-z]+$/ { e=1 } END { exit !(t && m && e && NR==3) }' \
+      || { "$SELF" route --points 3 --risk normal; echo "ROUTE NOTE FAIL (model_mid is unset — mid notes the kit default: model: opus, then effort)"; exit 1; }
     # 4) the task override, both shapes. A tier WORD wins outright and the OVERRIDDEN tier's knob is
     #    the one that speaks; any other value is a literal model name, and then line 1 stays the
-    #    DERIVED tier (informational) while the note carries the name verbatim, knob or no knob.
+    #    DERIVED tier (informational) while line 2 carries the name verbatim, knob or no knob.
+    #    Either way the effort note follows on line 3.
     printf -- '---\nid: T-RTW\npoints: 5\nwsjf: 1\nrisk: normal\nmodel: cheap\nstatus: ready\nfiles_owned:\n  - src/rtw.txt\n---\n' > ops/board/ready/T-RTW.md
     printf -- '---\nid: T-RTL\npoints: 5\nwsjf: 1\nrisk: normal\nmodel: drill-literal-7\nstatus: ready\nfiles_owned:\n  - src/rtl.txt\n---\n' > ops/board/ready/T-RTL.md
     [ "$("$SELF" route T-RTW | head -1)" = cheap ] || { echo "ROUTE OVERRIDE FAIL (a tier-word model: must beat the derived tier)"; exit 1; }
-    "$SELF" route T-RTW | awk 'NR==2 && $0 == "   model: drill-cheap-2" { ok=1 } END { exit !ok }' \
+    "$SELF" route T-RTW | awk 'NR==2 && $0 == "   model: drill-cheap-2" { ok=1 } NR==3 && $0 == "   effort: low" { e=1 } END { exit !(ok && e && NR==3) }' \
       || { "$SELF" route T-RTW; echo "ROUTE OVERRIDE FAIL (the overridden tier's knob is the one that notes)"; exit 1; }
     [ "$("$SELF" route T-RTL | head -1)" = strong ] || { echo "ROUTE LITERAL FAIL (line 1 stays the DERIVED tier)"; exit 1; }
-    "$SELF" route T-RTL | awk 'NR==2 && $0 == "   model: drill-literal-7" { ok=1 } END { exit !ok }' \
+    "$SELF" route T-RTL | awk 'NR==2 && $0 == "   model: drill-literal-7" { ok=1 } NR==3 && /^   effort: [a-z]+$/ { e=1 } END { exit !(ok && e && NR==3) }' \
       || { "$SELF" route T-RTL; echo "ROUTE LITERAL FAIL (a literal model: name must reach the note verbatim)"; exit 1; }
     # 5) fleet carries the ready queue's MAX tier: panes claim RACILY, so every pane must be able to
     #    afford the hardest task on the board. T-RTL is 5 points, so strong is the max whatever else
