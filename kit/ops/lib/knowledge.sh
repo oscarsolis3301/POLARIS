@@ -297,7 +297,11 @@ board_changed_touch() { # freshness beacon: done/seal call this AFTER their muta
 brain_refresh_if_present() { # seal/done auto-refresh (ops/contracts/brain.md v1.1): after the
   # caller's board/base mutation succeeds, an EXISTING brain follows the base. No brain dir →
   # feature not opted into → silence. Failure → one ⚠ note, never a caller failure.
+  # away.md § 7: whichever refresh runs clears the due marker a skipping seal/done left behind;
+  # POLARIS_BRAIN_TRACE (tests only) counts the refreshes that actually run.
+  rm -f "$PRIMARY/.polaris/brain-due" 2>/dev/null || true
   [ -d "$PRIMARY/.polaris/brain" ] || return 0
+  [ -z "${POLARIS_BRAIN_TRACE:-}" ] || printf 'refresh\n' >> "$POLARIS_BRAIN_TRACE" 2>/dev/null || true
   "$SELF" brain --refresh >/dev/null 2>&1 \
     || note "⚠ brain refresh failed — run by hand: ops/polaris brain --refresh"
   return 0

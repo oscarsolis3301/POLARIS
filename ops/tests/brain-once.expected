@@ -1,0 +1,18 @@
+installed: yes
+== self-landing handoff: land, seal and done under one lease
+begin rc=0
+handoff rc=0
+done: yes
+refreshes: 1
+marker: none
+== landing: integrator — a standalone seal, then a plain done
+begin rc=0
+handoff rc=0
+in review: yes
+land rc=0
+seal rc=0
+seal refreshes: 1
+done rc=0
+done: yes
+done refreshes: 1
+marker: none
