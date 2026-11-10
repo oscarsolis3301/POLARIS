@@ -1179,3 +1179,5 @@
 {"ts":1794335600,"ev":"promote","id":"T-296","who":"Owner@DESKTOP","note":"deps done: T-289, T-290, T-291, T-292, T-293, T-294, T-295","pts":1}
 {"ts":1794335637,"ev":"claim","id":"T-296","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1794335745,"ev":"handoff","id":"T-296","who":"Owner@DESKTOP","note":""}
+{"ts":1794335953,"ev":"handoff","id":"T-297","who":"Owner@DESKTOP","note":""}
+{"ts":1794335954,"ev":"all-review","id":"T-297","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
