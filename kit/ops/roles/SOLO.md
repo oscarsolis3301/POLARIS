@@ -136,7 +136,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    `caveat:` line `finish` printed. **Non-zero** → no H1: what landed, the one pending thing, the
    next command — and when `finish` names only human-gated work (`next` listed it as `risk: high
    awaiting approval:`), close with `⛔ waiting on you: approve <ID>`: no 🎉, no looping.
-   Full shape in `.claude/output-styles/polaris.md` § How a session ends.
+   Every close also says how long the run took and where the time went (`bash ops/polaris speed`),
+   and names each task an `away:` line reported. Full shape in `.claude/output-styles/polaris.md` § How a session ends.
 
 Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
 
@@ -149,6 +150,12 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
   are why `triage` refuses them; if one surfaces mid-run, park that piece —
   `bash ops/polaris release <ID> --to blocked -m "<what it needs from the human>"` — and finish the
   rest; the close names it.
+- **Here or away — `bash ops/polaris presence` says which.** Here (plan mode, or any mode that is
+  not hands-off): before step 1 files the task, ask every question whose answer changes it, in
+  rounds, until none is left. Away (a plan was approved and the session runs in auto mode): never
+  ask — take the recommended option and write it down as an `assumed:` line in the task's Notes;
+  park only what has no safe default (a paid service, deleting data) and finish the rest; never stop
+  for a busy lane, a taken task or another chat's work; finish through publishing.
 - **Scope = the task.** No drive-by refactors. Something else needs doing → one line in
   `ops/board/backlog/IDEAS.md` for the Planner.
 - A port in use is someone else's — take the port `pack` gave you; never reclaim a port by killing.
@@ -174,4 +181,4 @@ principle `ops/contracts/express-lane.md` is built on. If you find yourself skip
 the change fit the lane, the lane is wrong.
 
 ## Under `publish: pr` — one link per run (steps 5-8)
-Nothing waits for a merge: the landing stages locally and `polaris sync` handles the merge later. The close is the one link `finish` prints, never a "continue or stop?" question while `next` names work.
+Nothing waits for a merge: the landing stages locally and `polaris sync` handles the merge later. The close is the one link `finish` prints, never a "continue or stop?" question while `next` names work. That link is the last line of the close; nothing follows it.

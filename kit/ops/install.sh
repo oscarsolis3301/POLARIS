@@ -110,7 +110,7 @@ else
   done
   UPGRADE=0
 fi
-chmod +x "$TARGET/ops/polaris" "$TARGET/ops/hooks/ownership-guard.sh" "$TARGET/ops/hooks/readonly-allow.sh" "$TARGET/ops/hooks/checkout-guard.sh" "$TARGET/ops/hooks/awake-hook.sh" "$TARGET/ops/hooks/handover-hook.sh" "$TARGET/ops/hooks/update-hook.sh" "$TARGET/ops/hooks/commit-msg" "$TARGET/ops/install.sh" 2>/dev/null || true
+chmod +x "$TARGET/ops/polaris" "$TARGET/ops/hooks/ownership-guard.sh" "$TARGET/ops/hooks/readonly-allow.sh" "$TARGET/ops/hooks/checkout-guard.sh" "$TARGET/ops/hooks/presence-guard.sh" "$TARGET/ops/hooks/awake-hook.sh" "$TARGET/ops/hooks/handover-hook.sh" "$TARGET/ops/hooks/update-hook.sh" "$TARGET/ops/hooks/commit-msg" "$TARGET/ops/install.sh" 2>/dev/null || true
 say "ops/ installed"
 
 # --- machine registry: this repo, so `polaris update --all` can find it ---------

@@ -48,6 +48,13 @@ board, which lane — these are `triage`'s answer, never a question. The intervi
 PRODUCT. The moment a question is about how POLARIS itself will run, the CLI already answered it and
 you are asking anyway.
 
+**Here or away — `bash ops/polaris presence` says which.** Here (plan mode, or any mode that is not
+hands-off): ask every question whose answer changes the plan, in rounds, until none is left. Away (a
+plan was approved and the chat runs in auto mode): never ask. Take the recommended option and write
+it down as an `assumed:` line; set aside only what has no safe default (a paid service, deleting
+data) and finish the rest; never stop for a busy lane, a taken task or another chat's work; finish
+all the way through publishing.
+
 Exceptions, and they are narrow: they explicitly asked for the explanation · a STOP-AND-ASK
 confirmation (never compress a destructive-action check) · a genuine ambiguity that needs a
 question · a debugging spiral where the reasoning IS the answer.
@@ -89,6 +96,10 @@ not a ceremony.
 
 Every `caveat:` line `finish` printed — blocked tasks, work still queued — goes into the message in
 plain words, under the H1. **Exit 0 means "the run is over", never "nothing was left behind."**
+
+**Every close says how long the run took and where the time went** — `bash ops/polaris speed`
+prints both — and names each task an `away:` line reported: a high-risk task that was saved in on
+the approved plan's yes while the owner was away.
 
 **A hop is not an ending.** No H1 until `bash ops/polaris next` says `finish` and `finish` returns
 0 — a role change mid-chat is the next context, not the close.
@@ -148,4 +159,4 @@ Not complete:
 > Next: `bash ops/polaris land T-014` — that folds it in. About a minute.
 
 ### Under `publish: pr` — the approval link
-The one next step is the approval link `finish` prints. Human-only checks go in ONE non-blocking flag list after it, never as questions.
+The one next step is the approval link `finish` prints. Human-only checks go in ONE non-blocking flag list before it, never as questions. The link is the last line of the close; nothing follows it.

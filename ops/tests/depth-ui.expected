@@ -1,0 +1,73 @@
+installed: yes
+== a 1-point risk: normal task changing one .tsx ==
+depth T-1
+ui
+   why: only ui paths (1) in 1-2 point work
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== the source kit agrees with the installed one ==
+agrees
+== 2 points, .tsx beside a .css and a docs file: the look and docs paths drop, one ui path left ==
+depth T-2
+ui
+   why: only ui paths (1) in 1-2 point work
+   paths: 3 changed (1 skipped by test_skip)
+rc 0
+== the same .tsx in a 3-point task: today's verdict ==
+depth T-3
+full
+   why: test_select unset
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== 3 points + test_depth: ui: ui, and the why names the task ==
+depth T-4
+ui
+   why: only ui paths (1), test_depth: ui on T-4
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== .tsx beside a .py: today's verdict ==
+depth T-5
+full
+   why: test_select unset
+   paths: 2 changed (0 skipped by test_skip)
+rc 0
+== risk: high: today's verdict (and test_depth: ui cannot lift it) ==
+depth T-6
+full
+   why: test_select unset
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== .css alone: look, unchanged ==
+depth T-7
+look
+   why: only look paths (1)
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== depth --commit at ui: lint and typecheck would run; test, build and uat would be skipped ==
+ui
+   why: only ui paths (1) in 1-2 point work
+   paths: 1 changed (0 skipped by test_skip)
+   would run: echo LINT
+   would run: echo TC
+   would skip: test
+   would skip: build
+   would skip: uat
+rc 0
+== no taskfile (a commit with no task): today's verdict ==
+full
+   why: web/App.tsx has no related tests (no package.json)
+   paths: 1 changed (0 skipped by test_skip)
+   would run: echo TEST
+   would run: echo LINT
+   would run: echo TC
+   would run: echo BUILD
+   would run: echo UAT
+rc 0
+== qa says the depth line at ui with no suite time, even when one was measured ==
+   depth: ui — only ui paths (1) in 1-2 point work
+== test_ui: - : the 1-point .tsx change of T-1 goes back to today's verdict ==
+depth T-1
+full
+   why: test_select unset
+   paths: 1 changed (0 skipped by test_skip)
+rc 0

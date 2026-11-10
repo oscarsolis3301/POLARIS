@@ -23,8 +23,9 @@ for pair in "settings.json|$S" "bootstrap.py PERMS|$B"; do
   done
   printf '%s:%s → %s of 7\n' "$label" "$found" "$n"
 done
+# settings.json: only its permission RULES count — the presence hook (away.md § 2.1) must name both tools as matchers, and a matcher is not a rule.
 printf 'gates absent (ExitPlanMode AskUserQuestion): settings.json %s · bootstrap.py %s\n' \
-  "$(( $(grep -c 'ExitPlanMode' "$S") + $(grep -c 'AskUserQuestion' "$S") ))" \
+  "$(python -c 'import json,sys; p=json.load(open(sys.argv[1],encoding="utf-8")).get("permissions") or {}; print(sum(1 for v in p.values() if isinstance(v,list) for r in v if isinstance(r,str) for g in ("ExitPlanMode","AskUserQuestion") if g in r))' "$S" | tr -d '\r')" \
   "$(( $(grep -c 'ExitPlanMode' "$B") + $(grep -c 'AskUserQuestion' "$B") ))"
 printf 'union blocks intact: bootstrap.py %s · admin.sh %s\n' \
   "$(grep -c 'added = \[rule for rule in PERMS' "$B")" \

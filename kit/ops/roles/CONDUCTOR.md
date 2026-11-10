@@ -89,10 +89,12 @@ work.
 1. **Interview + brief.** Run PLANNER.md steps 0b and 0c yourself — subagents can't talk to the
    human, so the questions and the "what I understood" brief (WILL change · WON'T touch · DONE looks
    like · assumptions) happen here, in `voice:`. Scaled to vagueness: a concrete request gets zero
-   questions; a vague one gets more. **HARD CAP: 3 rounds** (INIT.md:25 already works this way).
-   Anything still open after 3 becomes a defaulted assumption carried into the 0c brief, or a
-   `spike` task — never a 4th round. The brief gate is what makes that safe: a wrong assumption
-   costs one message, and every round you ask can block on a human who has walked away.
+   questions; a vague one gets more. **Here** (`bash ops/polaris presence` says `here`: plan mode, or
+   any mode that is not hands-off): ask every question whose answer changes the plan, in rounds,
+   until none is left. **Away** (`presence` says `away`: a plan was approved and the session runs in
+   auto mode): ask nothing — take the recommended option and write it down as an `assumed:` line in
+   the 0c brief; park only what has no safe default (a paid service, deleting data), or make it a
+   `spike` task. The brief gate is what makes that safe: a wrong assumption costs one message.
    **Ask first, then finish:** this is the run's only question time. `.polaris/hops-due` says the
    layout pass is due? Fold `bash ops/polaris hops --questions` (≤ 3) into this SAME round — never a
    separate one — and carry the answers verbatim into the TIDY kickoff (step 2.5).
@@ -153,7 +155,7 @@ work.
      > you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout.
      > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
 3. **Plan gate — the one human gate.** Present the plan in `voice:`: what gets built, in how many
-   parallel lanes, what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
+   parallel lanes and how many waves, about how long it will take, what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
    `drain: queue` (unset defaults to `plan`, not this) and other tasks already sitting in `ready/`,
    disclose that too —
    "…and once your plan lands I'll finish the N tasks already queued." `drain: backlog` →
@@ -169,6 +171,11 @@ work.
    proceeding; say stop to halt". After the go you run autonomously and never stop to ask: a
    builder question, a `risk: high` the plan did not cover, or a STOP-AND-ASK item parks, and the
    close names it (steps 5, 6, 8) — `autonomy: standard` still asks right away.
+   **Away** (`presence` says `away`), never ask: take the recommended option and write it down as an
+   `assumed:` line; park only what has no safe default and finish everything else; never stop for a
+   busy lane, a taken task or another chat's work; finish through publishing. A `risk: high` task of
+   the approved plan merges on the plan's yes — its handoff prints an `away:` line, and the close
+   names it.
    - **One yes covers the plan.** After the go, once, in the primary checkout: `bash ops/polaris approve --plan <slug> -m "<the human's words, quoted>"`. It records every scope the approved plan named (`merge`, `need:<v>`, `ask` rules) on its tasks, so nothing the plan named asks again mid-run. Overlap with another plan's tasks is ready-gate sequencing, never an owner question (at most one caveat line). Claude Code's own auto-mode classifier may still refuse an action; POLARIS cannot lift that, so say so in one line. `autonomy: standard` keeps the per-merge stop.
    - **An unapproved `ask` scope is a human gate here, like `risk: high`.** `ask` = the same denial
      as `path`, lifted only by a human's recorded approval on the task — so a task the planner parked
@@ -246,8 +253,8 @@ work.
    runs, and no gate weakens.
    > You are the INTEGRATOR, conductor-entered. Read ops/roles/INTEGRATOR.md and execute it. Land
    > tasks as they arrive in review/, in dependency order — a task whose depends_on has not yet landed
-   > waits, everything else lands on arrival. Do NOT merge `risk: high` tasks — list them in your
-   > result. The all-review `Integrate now` notice is your signal the wave is complete: run the suite
+   > waits, everything else lands on arrival. Do NOT merge `risk: high` tasks the approved plan does
+   > not cover — list them in your result, with every `away:` line you saw. The all-review `Integrate now` notice is your signal the wave is complete: run the suite
    > once, then seal.
    > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
    > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
@@ -339,7 +346,8 @@ work.
 8. **Report, then close.** In `voice:`, **≤8 lines** (INIT.md's cap, same reason): what got built and
    what it means for them, what was set aside and why, whether every check passed, one thing to try
    right now — then EVOLVE's numbered proposals ("reply approve <n> to apply"). One report; the
-   board holds the detail.
+   board holds the detail. It says how long the run took and where the time went (`bash ops/polaris
+   speed`) and names each task an `away:` line reported (merged on the approved plan's yes).
    Then, and only then, run `bash ops/polaris finish` — the one command that decides how this run
    ends. It re-checks the board mechanically (nothing building, nothing waiting to land, `ready/`
    drained per `drain:`, no unmerged `integrate/<date>`, no orphan locks, clean tree, `qa` green on
@@ -365,4 +373,4 @@ board summaries, never the repo; one retry per task, never loops of retries. Whe
 `ops/polaris fleet` instead of grinding on.
 
 ## Under `publish: pr` — one link per run
-Nothing waits for a merge: seal stages locally, dependents are claimable at once, and `polaris sync` (run by `triage` and `next`) picks up the merge later. The close is the one link `finish` prints (`ship/<date>`). Never close with "continue or stop?" while `next` names work.
+Nothing waits for a merge: seal stages locally, dependents are claimable at once, and `polaris sync` (run by `triage` and `next`) picks up the merge later. The close is the one link `finish` prints (`ship/<date>`): it is the last line, and nothing follows it. Never close with "continue or stop?" while `next` names work.

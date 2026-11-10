@@ -1,0 +1,32 @@
+install rc=0
+merge report: added ops/hooks/presence-guard.sh
+hook file: installed · lib: installed
+PreToolUse  matcher=AskUserQuestion|Bash|PowerShell  bash "ops/hooks/presence-guard.sh"  timeout=5
+PostToolUse  matcher=ExitPlanMode  bash "ops/hooks/presence-guard.sh"  timeout=5
+UserPromptSubmit  matcher=-  bash my-own-prompt-hook.sh  timeout=-
+UserPromptSubmit  matcher=-  bash "ops/hooks/presence-guard.sh"  timeout=5
+--- no session id
+here
+   why: no session id
+rc=0
+--- a session, no plan approved
+here
+   why: no plan approved in this session
+rc=0
+--- approved, mode not yet on record
+here
+   why: this session's mode is unknown
+rc=0
+--- approved, default mode
+here
+   why: this session runs in default mode
+rc=0
+--- approved, auto mode: away
+away
+   why: the plan was approved and this session runs in auto mode
+rc=0
+--- the fixture hook refuses the question while away
+1
+--- a bad session id is no session id
+here
+   why: no session id

@@ -106,6 +106,28 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "AskUserQuestion|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/presence-guard.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/presence-guard.sh\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "Stop": [
@@ -147,6 +169,15 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/handover-hook.sh\" prompt",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/ops/hooks/presence-guard.sh\"",
             "timeout": 5
           }
         ]

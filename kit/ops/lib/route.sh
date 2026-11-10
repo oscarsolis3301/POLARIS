@@ -409,6 +409,10 @@ PATHS
   if [ -n "$commit" ]; then
     if [ -z "$csf" ]; then
       note "would run: nothing"
+    elif [ "$depth" = ui ]; then
+      # test-depth.md § v2.3: lint then typecheck run; test, build and uat are skipped (each only when set)
+      for k in lint typecheck; do c="$(cfg "$k" "")"; [ -n "$c" ] && note "would run: $c"; done
+      for k in test build uat; do [ -n "$(cfg "$k" "")" ] && note "would skip: $k"; done
     else
       for k in test lint typecheck build uat; do
         c="$(cfg "$k" "")"
