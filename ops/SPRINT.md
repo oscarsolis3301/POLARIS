@@ -19,6 +19,7 @@ integrator for this run.
 | 2026-11-09 | 5 | 47 |
 | 2026-11-09 | 25 | 22 |
 | 2026-11-09 | 5 | 22 |
+| 2026-11-09 | 3 | 22 |
 
 # SPRINT 21 — The tidy pass, hardened (6.13.0)          capacity: 35   dates: 2026-11-06–
 
