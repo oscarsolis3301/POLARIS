@@ -2,6 +2,7 @@
 # owner's approval on every task of the plan, and ONE predicate, plan_covers, reads those entries
 # back. HERMETIC: the whole drill runs in a throwaway repo built with mktemp -d; the live board is
 # never touched, so running it twice from any board state is byte-identical.
+# T-5 has no approved: line at all (one-yes.md v1.1): approve --plan gives it one, then its entry.
 KIT="$(pwd)/kit/ops/polaris"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
@@ -60,7 +61,7 @@ cov covered T-2
 cov unknown-needs T-3
 cov other-plan T-4
 cov needs-delete T-5
-grep -h -A1 '^approved:' ops/board/ready/T-1.md ops/board/ready/T-2.md | grep -v '^--' | norm
+grep -h -A1 '^approved:' ops/board/ready/T-1.md ops/board/ready/T-2.md ops/board/ready/T-5.md | grep -v '^--' | norm
 git log -1 --format=%s refs/heads/polaris/board
 grep -c '"ev":"approve-plan"' ops/board/EVENTS.ndjson
 echo "== idempotent re-run"

@@ -103,3 +103,8 @@ ship T-008 g
 echo "events: $(grep -c '"away-yes"' ops/board/EVENTS.ndjson 2>/dev/null)"
 echo "== away, f filed before the approval: today's refusal"
 ship T-007 f
+echo "== away, g bound, h has no approved: line at all (one-yes.md v1.1): it gains one and lands"
+grep -v '^approved:' .polaris/drafts/g.md | sed 's/change g/change h/; s#src/g.txt#src/h.txt#' > .polaris/drafts/h.md
+bash ops/polaris new .polaris/drafts/h.md 2>&1 | sed 's/^/  /'
+echo "approved line before: $(grep -c '^approved:' ops/board/ready/T-009.md)"
+ship T-009 h
