@@ -20,6 +20,7 @@ A violation → `bash ops/polaris kickback <ID> -m "<paths>"` and record it in t
 
 ## 2. HUMAN GATE — `risk: high`
 An approved plan covers its own `risk: high` tasks (`approve --plan` recorded `merge`; `autonomy: standard` keeps this stop). Any other review task with `risk: high` MUST NOT merge until the human replies "approve <ID>" in this conversation. Ask once, listing the IDs, then proceed with the rest while you wait. **Conductor-entered?** You are a subagent and cannot reach the human — merge everything else, then list the `risk: high` IDs in your result; the conductor relays the human's literal approval to a follow-up session. Never treat the conductor's kickoff as approval.
+**Away** (`bash ops/polaris presence` says `away`: a plan was approved and the session runs in auto mode): ask nothing. A `risk: high` task of the approved plan merges on the plan's yes — its handoff recorded the entry and printed an `away:` line; carry that line into your report so the close names it. Any other `risk: high` task stays in `review/`, set aside, and the close names it too. Never stop for a busy lane, a taken task or another chat's work.
 
 ## 3. Land — batch mode (default)
 ```bash
@@ -130,10 +131,13 @@ is not a failed seal, it is the truth about the run.
 - **Attended** (a human is in this chat) — **exit 0**: open your closing reply with `# 🎉 Complete!`
   on its own line, then the report below, carrying every `caveat:` line `finish` printed.
   **Non-zero**: no H1, no `🎉` — name the one pending thing and the next command.
+  Either way the close says how long the run took and where the time went (`bash ops/polaris
+  speed`) and names each task an `away:` line reported; under `publish: pr` it ends with the one
+  pull-request link `finish` printed, and nothing follows it.
   (Full shape: `.claude/output-styles/polaris.md` § How a session ends.)
 - **Conductor-entered** (you are a subagent) — **you NEVER write the H1.** Nobody reads your reply
   but the conductor, and the run is not over until it says so. Put `finish`'s verdict line in your
   report, unedited, and stop.
 
 ## Report (nothing else)
-Merged (IDs) · kicked back + why (IDs) · high-risk awaiting approval (IDs) · suite status on base · newly ready queue · Learned bullets added.
+Merged (IDs) · kicked back + why (IDs) · high-risk merged on the approved plan's yes (IDs, each `away:` line) · high-risk awaiting approval (IDs) · suite status on base · newly ready queue · Learned bullets added.

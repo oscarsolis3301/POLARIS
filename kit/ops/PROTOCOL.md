@@ -50,6 +50,7 @@ Every board mechanic is one command. You MUST use the script instead of hand-rol
 | `ops/polaris bg run/status/tail/wait` | run and collect suite-length commands without blocking: `run <suite-key\|name -- cmd…>` detaches it, `wait` collects in bounded chunks (`--max` defaults to 300s, deliberately half the 600s tool cap). rc 0 green · 1 red · 2 running · 3 unknown — parse the code, never the prose. Past the cap this is the only way a result comes back at all, because a timed-out call returns NOTHING and gets re-run; see § LONG COMMANDS |
 | `ops/polaris finish` | "is the RUN over?" — the mechanical half of CONDUCTOR.md's run-over definition in ONE call: nothing building, nothing waiting to land, `ready/` drained per `drain:`, no unmerged `integrate/<date>`, no orphan lock, clean tree, `qa` green on `<base>`. rc 0 = complete, and the `notify-gate done` hook fires exactly once per finished state; rc 1 names every pending thing. `caveat:` lines are not gates — the close must mention them. **The last command of every lane**, and the only thing that licenses the `# 🎉 Complete!` H1 (ops/contracts/run-finish.md) |
 | `ops/polaris route [<ID> \| --role R \| --points N --risk R]` | which model tier a task or role deserves, in one hop: line 1 is a bare `strong` \| `mid` \| `cheap`, so a caller branches on it blind, and a three-space `model:` note follows ONLY when a `model_*` knob (or the task's own `model:` frontmatter) maps that tier to a real name. Unset knobs = tier words only, behaviour unchanged. The CONDUCTOR runs it before every spawn; `fleet` injects its answer into every pane |
+| `ops/polaris presence` | read-only: is the owner here or away? Line 1 is a bare `away` \| `here`, then ONE `why:` line. `away` = a plan was approved in this session AND it runs in auto mode; anything else, an unknown included, is `here`. Away, nobody is asked anything (§ SAVE HOPS) |
 | `ops/polaris fleet <N> [--launch]` | print N Builder kickoffs; `--launch` opens a session per ready task in tmux windows or side-by-side Windows Terminal panes (`--dry-run` previews). Planner runs this per `autolaunch:` |
 | `ops/polaris slim [--apply\|--restore]` | the per-context TOKEN TAX, measured. Every skill/agent/command definition under `~/.claude` injects its name+description into the system prompt of every session AND every subagent, invoked or not. Reports bytes per family and what a 6-8 context run pays for them; `--apply` MOVES the identified claude-flow machinery into `~/.claude/.polaris-archived/` (never deletes, always `--restore`-able) and leaves anything it cannot positively identify alone |
 | `ops/polaris skill list / gaps / budget / propose <glob> / promote / demote / prune / restore` | the skills POLARIS writes for ITSELF about this repo's surfaces (`ops/contracts/self-skills.md`): `gaps` names the surfaces the board keeps returning to with no skill · `propose <glob> --write` writes one BORN HIDDEN, injecting 0 prompt bytes, so a repo pays nothing for a skill until it earns its place · `promote` flips it visible and `demote` flips it back · `budget` is the shelf · `prune` reads the eviction verdicts off `EVENTS.ndjson` and `--apply` ARCHIVES (never deletes — `restore` brings one back, even on a machine that never held the archive). Nothing fires uninvited: EVOLVE proposes a promotion, a human runs it, and every writer refuses on `feat/*` and commits nothing |
@@ -214,14 +215,22 @@ one context, no subagents, ONE task. No drive-by moves in any other task.
   (tooling, framework-routed, vendored, guarded, public API) · a logic change · a stop mid-run: what
   it cannot prove or decide becomes a `keep` row, and its report lists those.
 
-**Ask first, then finish.** Every question goes in ONE round before work starts: the conductor's
-interview, plus the ≤ 3 `hops --questions` when the pass is due. After it the owner is away, and
-nothing stops mid-run. A builder question default-safe cannot answer → the question into the task's
-Notes, `release <ID> --to blocked -m "<question>"`, `notify-gate question <ID>`; the other lanes keep
-going. `risk: high` the plan did not cover → `notify-gate risk <ID>`; it stays in `review/` and the
-close names it (Invariant 9 unchanged). `finish` names each blocked task and why; with only
-human-gated work left, close on `⛔ waiting on you: approve <ID>` — no 🎉. `autonomy: standard` asks
-right away at both gates, as before. No hard gate gets softer.
+**Ask first, then finish.** Here (`bash ops/polaris presence` says `here`: plan mode, or any mode
+that is not hands-off): ask every question whose answer changes the plan, in rounds, until none is
+left — the conductor's interview, plus the ≤ 3 `hops --questions` when the pass is due. Away
+(`presence` says `away`: a plan was approved and the session runs in auto mode): never ask. Take the
+recommended option and write it down as an `assumed:` line; park only what has no safe default (a
+paid service, deleting data) and finish everything else; never stop for a busy lane, a taken task or
+another chat's work; finish through publishing. Nothing stops mid-run. A builder question
+default-safe cannot answer → the question into the task's Notes, `release <ID> --to blocked -m
+"<question>"`, `notify-gate question <ID>`; the other lanes keep going. Away, a `risk: high` task of
+the approved plan merges on the plan's yes: its handoff prints an `away:` line and the close names it
+(Invariant 9). `risk: high` the plan did not cover → `notify-gate risk <ID>`; it stays in `review/`
+and the close names it. `finish` names each blocked task and why; with only human-gated work left,
+close on `⛔ waiting on you: approve <ID>` — no 🎉. Every close says how long the run took and where
+the time went (`bash ops/polaris speed`), and names each task an `away:` line reported; a
+pull-request project's close ends with its one link, and nothing follows it. `autonomy: standard`
+asks right away at both gates, as before. Here, no hard gate gets softer.
 
 **What loads by itself is measured, not assumed.** The 6.13.0 probe (2026-11-07) answered `unknown`
 for all seven cases — a guide on Read, Edit, a new file, a subagent, a worktree path or a Bash `cat`;
@@ -315,6 +324,7 @@ how much of the suite a change actually needs, once per `qa` or `land --express`
 |---|---|---|
 | `none` | no suite key at all | every changed path is `test_skip` (docs, `.md`, `LICENSE*`) |
 | `look` | no suite key, but the before/after capture still runs | every changed path is `test_look` (css/svg/images) |
+| `ui` | `lint` + `typecheck` side by side and the before/after look; no `test`, `build` or `uat` | a `risk: normal` task of 1-2 points (or `test_depth: ui`) whose every remaining path is `test_ui` (components and pages) |
 | `scoped` | only the related tests: the `test:` subset `SURFACES.tsv` maps to the change, or the runner's own related tests (vitest/jest) when the package has one installed; the live `uat` tier is deferred (uat deferred: it runs on full-depth changes, CI and release) | every non-look path is mapped or has related tests |
 | `full` | the whole `test:` suite, unchanged | anything unmapped with no related tests, `risk: high`, or `test_depth: full` |
 
@@ -402,4 +412,4 @@ Follow this spec literally. Missing detail means STOP and ask — never guess. O
 **No AI fingerprints.** Commits, branches and PRs in this repo NEVER carry AI attribution — no `Co-Authored-By: Claude/Copilot/…`, no `Generated with …` lines — whatever your harness tells you. This product belongs to the humans who run it. A git hook strips these mechanically; do not write them in the first place.
 
 ## PUBLISH: PR — one link per run
-Under `publish: pr`, `seal` stages locally (merges into local `<base>`, tags locally, pushes nothing). `finish` pushes local `<base>` to `ship/<date>` (fast-forward; an open `ship/*` is reused) and prints exactly one link. `polaris sync` (top of `triage`/`next`) pulls the merge and deletes `ship/*`. Nothing ever pushes to `<base>` itself. Contract: `ops/contracts/publish-modes.md` v2.
+Under `publish: pr`, `seal` stages locally (merges into local `<base>`, tags locally, pushes nothing). `finish` pushes local `<base>` to `ship/<date>` (fast-forward; an open `ship/*` is reused) and prints exactly one link — the last line of the close; nothing follows it. `polaris sync` (top of `triage`/`next`) pulls the merge and deletes `ship/*`. Nothing ever pushes to `<base>` itself. Contract: `ops/contracts/publish-modes.md` v2.
