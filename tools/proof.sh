@@ -7,7 +7,7 @@
 #   bash tools/proof.sh --report        one line per job of the recorded run
 #
 # Seams (the golden proof-ci uses every one): PROOF_GH (default gh) · PROOF_GOLDENS (the command that
-# runs ONE golden, given its name; default `bash kit/ops/polaris check --only`) · PROOF_SELFTEST (the
+# runs ONE golden, given its name; default: one `bash kit/ops/polaris check` for all) · PROOF_SELFTEST (the
 # no-CI self-test command) · PROOF_POLL (job poll, default 15 s) · PROOF_FIND_POLL (run-id poll,
 # default 5 s). bash 3.2-safe: no arrays, no `case` inside $(...), no ${v,,}, no wait -n.
 GH="${PROOF_GH:-gh}"
@@ -116,21 +116,34 @@ if [ -n "$why" ]; then
 fi
 
 # ---- goldens half, meanwhile ------------------------------------------------------------------
+# Default: ONE `check` call runs them side by side (minutes.md § 6); its ⛔ lines name the red ones.
+# PROOF_GOLDENS (the seam) still runs one golden per call, 12 at a time.
 mkdir -p "$TMP/g"
 names=""
 for f in ops/tests/*.cmd; do
   [ -e "$f" ] || break
   n="${f##*/}"; names="$names ${n%.cmd}"
 done
-export P_RUN="${PROOF_GOLDENS:-bash kit/ops/polaris check --only}" P_DIR="$TMP/g"
-[ -n "$names" ] && printf '%s\n' $names | xargs -n 1 -P 12 bash -c \
-  'eval "$P_RUN \"\$1\"" > "$P_DIR/$1.out" 2>&1; echo $? > "$P_DIR/$1.rc"' _
 total=0; red=0; rednames=""
-for n in $names; do
-  total=$((total + 1))
-  rc="$(cat "$TMP/g/$n.rc" 2>/dev/null)"
-  [ "$rc" = "0" ] || { red=$((red + 1)); rednames="$rednames $n"; }
-done
+if [ -z "${PROOF_GOLDENS:-}" ]; then
+  bash kit/ops/polaris check > "$TMP/g/check.out" 2>&1; crc=$?
+  for n in $names; do total=$((total + 1)); done
+  rednames="$(awk '/^⛔ [^ ]+ — / { printf " %s", $2 }' "$TMP/g/check.out")"
+  for n in $rednames; do red=$((red + 1)); done
+  [ "$crc" -ne 0 ] && [ "$red" -eq 0 ] && { red=1; rednames=" check"; }
+  for n in $rednames; do
+    awk -v n="$n" '/^(✅|⛔) / { on = ($2 == n) } /^⛔ check: / { on = 0 } on' "$TMP/g/check.out" > "$TMP/g/$n.out"
+  done
+else
+  export P_RUN="$PROOF_GOLDENS" P_DIR="$TMP/g"
+  [ -n "$names" ] && printf '%s\n' $names | xargs -n 1 -P 12 bash -c \
+    'eval "$P_RUN \"\$1\"" > "$P_DIR/$1.out" 2>&1; echo $? > "$P_DIR/$1.rc"' _
+  for n in $names; do
+    total=$((total + 1))
+    rc="$(cat "$TMP/g/$n.rc" 2>/dev/null)"
+    [ "$rc" = "0" ] || { red=$((red + 1)); rednames="$rednames $n"; }
+  done
+fi
 ok=1
 if [ "$red" -eq 0 ]; then echo "proof: goldens — $total green"
 else

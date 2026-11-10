@@ -1,0 +1,37 @@
+== six goldens, one at a time ==
+⛔ a-red — output differs:
+     @@ -1 +1 @@
+     -two
+     +one
+✅ b-rc
+✅ c-slow
+✅ d-slow
+✅ e-plain
+✅ f-plain
+⛔ check: 6 golden(s) run, at least one red
+rc=1
+== six goldens, three at a time ==
+same output: yes
+overlap at 3: yes
+overlap at 1: no
+check-times names: a-red b-rc c-slow d-slow e-plain f-plain g-shy 
+== a seventh golden, red only while another is busy ==
+⛔ a-red — output differs:
+     @@ -1 +1 @@
+     -two
+     +one
+✅ b-rc
+✅ c-slow
+✅ d-slow
+✅ e-plain
+✅ f-plain
+✅ g-shy
+   note: g-shy passed alone but not beside others — it shares state with another golden
+⛔ check: 7 golden(s) run, at least one red
+rc=1
+== the same seven, one at a time: no note ==
+0
+== --jobs needs a number ==
+⛔ check: --jobs takes a number
+rc=1
+temp left behind: 0

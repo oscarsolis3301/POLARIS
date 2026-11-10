@@ -599,7 +599,105 @@ cmd_scaffold() { # check --scaffold [--cmd "<shell>"] — GENERATE goldens from 
   return 0
 }
 
-cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output acceptance tests, ZERO LLM.
+# ---- the goldens side by side (ops/contracts/minutes.md § 6) ------------------------------------
+# _check_jobs <flag value> — how many goldens run at once: the flag, else POLARIS_CHECK_JOBS, else the
+# machine's cores; capped at 12, floored at 1.
+_check_jobs() {
+  local j="${1:-${POLARIS_CHECK_JOBS:-}}"
+  if [ -z "$j" ]; then
+    j="$(getconf _NPROCESSORS_ONLN 2>/dev/null)"
+    [ -n "$j" ] || j="$(nproc 2>/dev/null)"
+    [ -n "$j" ] || j="$(sysctl -n hw.ncpu 2>/dev/null)"
+    case "$j" in ''|*[!0-9]*) j=4;; esac
+  fi
+  case "$j" in ''|*[!0-9]*) die "check: --jobs takes a number";; esac
+  j=$((10#$j)); [ "$j" -gt 12 ] && j=12; [ "$j" -lt 1 ] && j=1
+  printf '%s\n' "$j"
+}
+
+# _check_times <file> — fold "<name> <seconds>" lines from stdin into .polaris/check-times: one awk,
+# every golden that ran gets its new time, every other line is kept.
+_check_times() {
+  local tf="$1"
+  mkdir -p "${tf%/*}" 2>/dev/null || return 0
+  awk -v tf="$tf" 'BEGIN { while ((getline l < tf) > 0) { split(l, a, " "); if (a[1] != "") t[a[1]] = a[2] } }
+    NF >= 2 { t[$1] = $2 }
+    END { for (k in t) print k, t[k] }' > "$tf.$$" 2>/dev/null && mv -f "$tf.$$" "$tf" 2>/dev/null
+  rm -f "$tf.$$" 2>/dev/null
+  return 0
+}
+
+# _check_ok <name> — quiet verdict on the golden's result in G_GOT / G_RC (no printing).
+_check_ok() {
+  local exp="$G_DIR/$1.expected" rcf="$G_DIR/$1.rc" want=0
+  [ -f "$exp" ] || return 1
+  [ -f "$rcf" ] && want="$(tr -d ' \r\n' < "$rcf")"
+  [ "$G_RC" = "$want" ] || return 1
+  printf '%s\n' "$G_GOT" | diff -q - "$exp" >/dev/null 2>&1
+}
+
+# _check_say <name> — today's result line(s) for one golden, exactly as the one-at-a-time loop
+# prints them; rc 1 when it is red.
+_check_say() {
+  local name="$1" exp="$G_DIR/$1.expected" rcf="$G_DIR/$1.rc" want=0
+  [ -f "$rcf" ] && want="$(tr -d ' \r\n' < "$rcf")"
+  if [ ! -f "$exp" ]; then printf '⛔ %s — no golden yet (polaris check --only %s --update)\n' "$name" "$name"; return 1; fi
+  if [ "$G_RC" != "$want" ]; then printf '⛔ %s — exit %s, expected %s\n' "$name" "$G_RC" "$want"; return 1; fi
+  if printf '%s\n' "$G_GOT" | diff -q - "$exp" >/dev/null 2>&1; then say "$name"; return 0; fi
+  printf '⛔ %s — output differs:\n' "$name"
+  printf '%s\n' "$G_GOT" | diff -u "$exp" - 2>/dev/null | sed -n '3,12p' | sed 's/^/     /'
+  return 1
+}
+
+# _check_parallel <root> <jobs> <names, one per line> — run the goldens <jobs> at a time, then print
+# their results in the usual order with the usual lines. A golden red beside others runs once more,
+# alone, before it counts.
+_check_parallel() {
+  local root="$1" jobs="$2" names="$3" tmp i pids="" name s r red=0 n=0 tf="$PRIMARY/.polaris/check-times"
+  G_DIR="$root/ops/tests"
+  tmp="$(mktemp -d 2>/dev/null)" || die "check: could not make a temp folder"
+  # deal longest-first, round-robin over the descending list (unknown = 20 s) — ONE awk
+  printf '%s\n' "$names" | awk -v tf="$tf" -v n="$jobs" -v d="$tmp" '
+    BEGIN { while ((getline l < tf) > 0) { split(l, a, " "); if (a[1] != "") t[a[1]] = a[2] + 0 } }
+    NF { c++; nm[c] = $0; s[c] = ($0 in t) ? t[$0] : 20
+         for (j = c; j > 1 && s[j] > s[j - 1]; j--) { x = s[j]; s[j] = s[j - 1]; s[j - 1] = x; y = nm[j]; nm[j] = nm[j - 1]; nm[j - 1] = y } }
+    END { for (j = 1; j <= c; j++) print nm[j] > (d "/w" ((j - 1) % n)) }'
+  i=0
+  while [ "$i" -lt "$jobs" ]; do
+    if [ -f "$tmp/w$i" ]; then
+      ( while IFS= read -r name <&3; do
+          s=$SECONDS
+          ( cd "$root" && bash -c "$(cat "$G_DIR/$name.cmd")" ) > "$tmp/$name.out" 2>/dev/null && r=0 || r=$?
+          echo "$r" > "$tmp/$name.rc"
+          echo "$name $((SECONDS - s))" >> "$tmp/w$i.t"
+        done 3< "$tmp/w$i" ) &
+      pids="$pids $!"
+    fi
+    i=$((i + 1))
+  done
+  wait $pids || true
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    n=$((n + 1))
+    G_GOT="$(< "$tmp/$name.out")"; G_RC="$(< "$tmp/$name.rc")"
+    if ! _check_ok "$name" && [ -f "$G_DIR/$name.expected" ]; then
+      G_GOT="$( cd "$root" && bash -c "$(cat "$G_DIR/$name.cmd")" 2>/dev/null )" && G_RC=0 || G_RC=$?
+      if _check_say "$name"; then
+        note "note: $name passed alone but not beside others — it shares state with another golden"
+      else red=1; fi
+      continue
+    fi
+    _check_say "$name" || red=1
+  done <<NAMES
+$names
+NAMES
+  cat "$tmp"/w*.t 2>/dev/null | _check_times "$tf"
+  rm -rf "$tmp"
+  [ "$red" -eq 0 ] || die "check: $n golden(s) run, at least one red"
+  say "check: $n golden(s), all green"
+}
+
+cmd_check() { # check [--only <glob>] [--update] [--jobs <N>] [--scaffold] — golden-output acceptance tests, ZERO LLM.
   # ops/tests/<name>.cmd       one or more shell lines, run from the repo root
   # ops/tests/<name>.expected  the golden stdout  (stderr is NOT captured — it is noisy and
   #                            makes goldens flap; assert on stdout, or redirect inside the .cmd)
@@ -613,14 +711,16 @@ cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output 
   # on purpose ("the goldens" are one concept), and it must be the first flag so a mistyped
   # `--scaffold --update` can never be read as a request to overwrite every reviewed golden.
   [ "${1:-}" = "--scaffold" ] && { shift; cmd_scaffold "$@"; return $?; }
-  local only="*" upd=0 named=0
+  local only="*" upd=0 named=0 jv="" jobs
   while [ $# -gt 0 ]; do
     case "$1" in
       --only) only="${2:?--only needs a glob}"; named=1; shift 2;;
       --update) upd=1; shift;;
-      *) die "usage: polaris check [--only <glob>] [--update] | check --scaffold [--app] [--cmd \"<shell>\"]";;
+      --jobs) [ $# -ge 2 ] && [ -n "$2" ] || die "check: --jobs takes a number"; jv="$2"; shift 2;;
+      *) die "usage: polaris check [--only <glob>] [--update] [--jobs <N>] | check --scaffold [--app] [--cmd \"<shell>\"]";;
     esac
   done
+  jobs="$(_check_jobs "$jv")" || exit 1
   # WHICH tree (speed.md § 3): run from inside a builder's worktree, check tests THAT worktree —
   # its ops/tests, run from its root. Anchored to the primary it proved the base instead, and a
   # golden that exists only on the branch printed "no goldens matched" and passed having run
@@ -630,12 +730,27 @@ cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output 
     [ -n "$wt" ] && [ -d "$PRIMARY/.polaris/wt/$wt" ] && root="$PRIMARY/.polaris/wt/$wt";; esac
   local dir="$root/ops/tests" f name exp rcf want got grc red=0 n=0
   [ -d "$dir" ] || { note "no ops/tests/ yet — add <name>.cmd + <name>.expected (polaris check --update writes the golden)"; return 0; }
+  # Side by side (minutes.md § 6) unless --update, one job, or one golden: those keep the loop below.
+  local sel="" cnt=0 t0 times=""
+  if [ "$upd" -eq 0 ] && [ "$jobs" -gt 1 ]; then
+    for f in "$dir"/*.cmd; do
+      [ -e "$f" ] || break
+      name="${f##*/}"; name="${name%.cmd}"
+      case "$name" in $only) ;; *) continue;; esac
+      cnt=$((cnt+1)); sel="$sel$name
+"
+    done
+    [ "$cnt" -gt 1 ] && { [ "$jobs" -gt "$cnt" ] && jobs=$cnt; _check_parallel "$root" "$jobs" "$sel"; return $?; }
+  fi
   for f in "$dir"/*.cmd; do
     [ -e "$f" ] || break
     name="${f##*/}"; name="${name%.cmd}"
     case "$name" in $only) ;; *) continue;; esac
     n=$((n+1)); exp="$dir/$name.expected"; rcf="$dir/$name.rc"
-    got="$( cd "$root" && bash -c "$(cat "$f")" 2>/dev/null )"; grc=$?
+    t0=$SECONDS
+    got="$( cd "$root" && bash -c "$(cat "$f")" 2>/dev/null )" && grc=0 || grc=$?
+    times="$times$name $((SECONDS - t0))
+"
     want=0; [ -f "$rcf" ] && want="$(tr -d ' \r\n' < "$rcf")"
     if [ "$upd" -eq 1 ]; then printf '%s\n' "$got" > "$exp"; say "updated golden: $name"; continue; fi
     if [ ! -f "$exp" ]; then printf '⛔ %s — no golden yet (polaris check --only %s --update)\n' "$name" "$name"; red=1; continue; fi
@@ -647,6 +762,7 @@ cmd_check() { # check [--only <glob>] [--update] [--scaffold] — golden-output 
       red=1
     fi
   done
+  [ -n "$times" ] && printf '%s' "$times" | _check_times "$PRIMARY/.polaris/check-times"
   # A NAMED check that runs nothing is red: `--only <typo>` used to pass, proving nothing. A bare
   # check over an empty ops/tests/ stays rc 0 — there is simply nothing yet.
   [ "$n" -eq 0 ] && { note "no goldens matched '$only'"; [ "$named" -eq 1 ] && return 1; return 0; }
