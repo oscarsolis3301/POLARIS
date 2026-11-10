@@ -1,0 +1,65 @@
+installed: yes
+== qa_parallel on (the default) ==
+on-scoped: rc=0 overlapped: yes ran: lint test typecheck 
+  test marker: created
+  stamp scope: scoped
+     depth: scoped — every code path mapped in SURFACES.tsv
+  ✅ test — green (scoped: 1 command(s))
+  ✅ lint — green
+  ✅ typecheck — green
+  ✅ build — green
+on-red: rc=1 overlapped: yes ran: lint test typecheck 
+  test marker: created
+  stamp scope: scoped
+     depth: scoped — every code path mapped in SURFACES.tsv
+  ✅ test — green (scoped: 1 command(s))
+  ⛔ lint — RED: bash k.sh lint
+       lint says line 1
+       lint says line 2
+       lint says line 3
+  ⛔ typecheck — RED: bash k.sh typecheck
+       typecheck says line 1
+       typecheck says line 2
+       typecheck says line 3
+  ✅ build — green
+on-ui: rc=0 overlapped: yes ran: lint typecheck 
+  test marker: never
+  stamp scope: ui
+     depth: ui — only ui paths (1) in 1-2 point work
+     ui — test, build and uat skipped: lint and typecheck plus the before/after look
+  ✅ lint — green
+  ✅ typecheck — green
+== qa_parallel: off ==
+off-scoped: rc=0 overlapped: no ran: lint test typecheck 
+  test marker: created
+  stamp scope: scoped
+     depth: scoped — every code path mapped in SURFACES.tsv
+  ✅ test — green (scoped: 1 command(s))
+  ✅ lint — green
+  ✅ typecheck — green
+  ✅ build — green
+off-red: rc=1 overlapped: no ran: lint test typecheck 
+  test marker: created
+  stamp scope: scoped
+     depth: scoped — every code path mapped in SURFACES.tsv
+  ✅ test — green (scoped: 1 command(s))
+  ⛔ lint — RED: bash k.sh lint
+       lint says line 1
+       lint says line 2
+       lint says line 3
+  ⛔ typecheck — RED: bash k.sh typecheck
+       typecheck says line 1
+       typecheck says line 2
+       typecheck says line 3
+  ✅ build — green
+off-ui: rc=0 overlapped: no ran: lint typecheck 
+  test marker: never
+  stamp scope: ui
+     depth: ui — only ui paths (1) in 1-2 point work
+     ui — test, build and uat skipped: lint and typecheck plus the before/after look
+  ✅ lint — green
+  ✅ typecheck — green
+== the printed text is the same in both modes ==
+scoped: same
+red: same
+ui: same

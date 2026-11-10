@@ -1,6 +1,44 @@
 # POLARIS lib/qa.sh — the closing checks, sourced by ops/polaris (the lib loader): qa and finish.
 # Moved out of observe.sh unchanged (ops/contracts/minutes.md § 3).
 
+_qa_key() { # PRIVATE to cmd_qa: _qa_key <key> <cmd> <selection|""> <n> <logfile> — runs ONE suite key
+  # from the repo root in $PRIMARY and prints today's green/red lines for it; rc 1 = red. A selection
+  # (scoped test) runs each selected command in order and the first red stops, naming that command.
+  local k="$1" c="$2" sel="$3" m="$4" log="$5" c2
+  if [ -n "$sel" ]; then
+    while IFS= read -r c2; do
+      [ -z "$c2" ] && continue
+      if ( cd "$PRIMARY" && bash -c "$c2" ) >"$log" 2>&1; then continue; fi
+      printf '⛔ %s — RED: %s
+' "$k" "$c2"
+      tail -20 "$log" | sed 's/^/     /'
+      return 1
+    done <<EOF
+$sel
+EOF
+    say "$k — green (scoped: $m command(s))"
+    return 0
+  fi
+  if ( cd "$PRIMARY" && bash -c "$c" ) >"$log" 2>&1; then say "$k — green"; return 0; fi
+  printf '⛔ %s — RED: %s
+' "$k" "$c"
+  tail -20 "$log" | sed 's/^/     /'
+  return 1
+}
+
+_qa_drain() { # PRIVATE to cmd_qa (reads and sets its locals qpids qkeys qpd red sred_any): wait for
+  # every key started side by side, each by its PID, then replay each key's own lines in the order it
+  # was started (today's key order) — a red key keeps its own block, never interleaved.
+  local kk
+  [ -n "$qpids" ] || return 0
+  wait $qpids || true
+  for kk in $qkeys; do
+    cat "$qpd/$kk.say" 2>/dev/null || true
+    [ "$(cat "$qpd/$kk.rc" 2>/dev/null)" = 0 ] || { red=1; sred_any=1; }
+  done
+  qpids=""; qkeys=""
+}
+
 cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the full CONVENTIONS suite
   # (test/lint/typecheck/build, uat if set), then drift --strict, then doctor's env check. Runs EVERY
   # check even after a red — one pass paints the whole picture — and exits 1 if anything was
@@ -14,6 +52,8 @@ cmd_qa() { # qa [--force] [--full] — ONE answer to "is everything okay?": the 
   # speed.md § 4: red is EVERYTHING; sred_any = a suite key went red; hred = a red that is neither a
   # suite key nor CRUFT-class. The stamp needs sred_any=0 AND hred=0 — the rc still reads red alone.
   local sred_any=0 hred=0
+  # test-depth.md § v2.4: uiskip=1 at depth `ui`; qpar/qpd/qpids/qkeys drive the side-by-side keys.
+  local uiskip=0 qpar=0 qpd="" qpids="" qkeys=""
   # test-depth.md § 4: depth_skip=1 ⇒ the whole suite loop never runs (none|look). ddepth/dwhy carry
   # whatever depth_for actually answered (any of the four words), empty when the gate never ran
   # (--force, --full, or an unbounded change set) — decision_log below fires only when non-empty.
@@ -87,9 +127,23 @@ EOF
     scope="$ddepth"; depth_skip=1
   else
   [ -z "$ddepth" ] || depth_line_say "$ddepth" "$dwhy"
+  # test-depth.md § v2.4: at `ui` only lint and typecheck run; test, build and uat are skipped, said once.
+  if [ "$ddepth" = ui ]; then
+    note "ui — test, build and uat skipped: lint and typecheck plus the before/after look"
+    scope=ui; uiskip=1
+  fi
+  # qa_parallel (default on; anything but `off` ⇒ on): test, lint and typecheck start together, each in
+  # ONE background subshell writing its printed lines, raw output and rc to its own temp files; they are
+  # collected (_qa_drain) before build, then uat, run in line — and replayed in today's key order.
+  # `off` ⇒ every key runs right here, one after another, exactly as before.
+  qpar=1; [ "$(cfg qa_parallel on)" = off ] && qpar=0
+  [ "$qpar" -eq 0 ] || qpd="$(mktemp -d)"
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
+    if [ "$uiskip" -eq 1 ]; then case "$k" in test|build|uat) continue;; esac; fi
+    # build can write where tests read: everything started side by side is collected first
+    case "$k" in build|uat) _qa_drain;; esac
     # change-sized.md § 5: at scoped depth the slow live tier is deferred, said once
     if [ "$k" = uat ] && [ "$ddepth" = scoped ]; then uat_deferred_say; continue; fi
     # test — change-scoped selection (test-surfaces.md § 6), and ONLY when test_select: is set:
@@ -140,30 +194,16 @@ EOF
       rm -f "$csf"
     fi
     ran=$((ran+1))
-    if [ -n "$sel" ]; then
-      # scoped: each selected command in order, from the repo root in $PRIMARY; the first red stops
-      # — today's red shape exactly, naming the command that failed rather than test: itself.
-      scope=scoped; sred=0
-      while IFS= read -r c2; do
-        [ -z "$c2" ] && continue
-        if ( cd "$PRIMARY" && bash -c "$c2" ) >"$out" 2>&1; then continue; fi
-        printf '⛔ %s — RED: %s\n' "$k" "$c2"
-        tail -20 "$out" | sed 's/^/     /'
-        red=1; sred=1; sred_any=1; break
-      done <<EOF
-$sel
-EOF
-      [ "$sred" -eq 0 ] && say "$k — green (scoped: $m command(s))"
+    [ -z "$sel" ] || scope=scoped
+    if [ "$qpar" -eq 1 ] && { [ "$k" = test ] || [ "$k" = lint ] || [ "$k" = typecheck ]; }; then
+      ( r=0; _qa_key "$k" "$c" "$sel" "$m" "$qpd/$k.log" || r=1; echo "$r" > "$qpd/$k.rc" ) > "$qpd/$k.say" 2>&1 &
+      qpids="$qpids $!"; qkeys="$qkeys $k"
       continue
     fi
-    if ( cd "$PRIMARY" && bash -c "$c" ) >"$out" 2>&1; then
-      say "$k — green"
-    else
-      printf '⛔ %s — RED: %s\n' "$k" "$c"
-      tail -20 "$out" | sed 's/^/     /'
-      red=1; sred_any=1
-    fi
+    _qa_key "$k" "$c" "$sel" "$m" "$out" || { red=1; sred_any=1; }
   done
+  _qa_drain
+  [ -z "$qpd" ] || rm -rf "$qpd"
   fi
   fi
   # T-031 (ops/contracts/verification-tiering.md): stamp how long the suite took — one line,
@@ -185,7 +225,7 @@ EOF
       rm -f "$csf"
     fi
   fi
-  [ "$ran" -eq 0 ] && [ "$skip" -eq 0 ] && [ "$carry" -eq 0 ] && [ "$depth_skip" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
+  [ "$ran" -eq 0 ] && [ "$skip" -eq 0 ] && [ "$carry" -eq 0 ] && [ "$depth_skip" -eq 0 ] && [ "$uiskip" -eq 0 ] && note "no test/lint/typecheck/build/uat in CONVENTIONS.md — only board + env checked"
   # CRUFT (ops/contracts/worktree-liveness.md § v2): clear the provably-landed leftovers BEFORE
   # drift looks at them. This is qa's only mutation besides the stamp, and it is exactly the subset
   # of `sweep --fix` that is lossless by construction — a branch goes only when its commits are
@@ -236,7 +276,7 @@ EOF
   # Stamp v3 (test-surfaces.md § 6): ONE line `<sha> <epoch> <scope>` — scoped iff the test key
   # ran a selection, full otherwise; a carried verdict re-stamps HEAD with the baseline's own scope.
   # Readers go through suite_stamp_scope (a 2-field pre-6.4 stamp reads as full).
-  if { [ "$ran" -ge 1 ] || [ "$carry" -eq 1 ] || [ "$depth_skip" -eq 1 ]; } && [ "$head" != "none" ] && [ "$sred_any" -eq 0 ] && [ "$hred" -eq 0 ]; then
+  if { [ "$ran" -ge 1 ] || [ "$carry" -eq 1 ] || [ "$depth_skip" -eq 1 ] || [ "$uiskip" -eq 1 ]; } && [ "$head" != "none" ] && [ "$sred_any" -eq 0 ] && [ "$hred" -eq 0 ]; then
     if [ "$head2" = "$head" ] && [ -z "$dirty" ] && [ -z "$dirty2" ]; then
       mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
       printf '%s %s %s\n' "$head" "$(date +%s)" "$scope" > "$PRIMARY/.polaris/suite-stamp" 2>/dev/null || true
