@@ -1121,3 +1121,4 @@
 {"ts":1794287477,"ev":"done","id":"T-222","who":"Owner@DESKTOP","note":"","pts":4}
 {"ts":1794287493,"ev":"done","id":"T-288","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794287525,"ev":"promote","id":"T-223","who":"Owner@DESKTOP","note":"deps done: T-222","pts":5}
+{"ts":1794287570,"ev":"claim","id":"T-223","who":"Owner@DESKTOP","note":"","pts":5}
