@@ -215,12 +215,14 @@ _verify_stamp_write() { # _verify_stamp_write <ID> <taskfile> — after a GREEN 
   # worktree: record `<HEAD sha> <listsum>` in the PRIMARY's .polaris/verify-stamp/<ID> (minutes.md
   # § 12, correcting § 7), so a skip later rests on both facts — this commit was proven, and by this
   # very list. Only a clean tree is stamped — with uncommitted edits the thing proven is not the
-  # commit — and a dirty run drops any older stamp. Best-effort.
-  local vs="$PRIMARY/.polaris/verify-stamp" vh
+  # commit — and a dirty run drops any older stamp. An EMPTY list (cksum's byte count 0) proved
+  # nothing, so it is never stamped and an older stamp goes too (minutes.md § 12, v2.4). Best-effort.
+  local vs="$PRIMARY/.polaris/verify-stamp" vh vl
   vh="$(git rev-parse HEAD 2>/dev/null || true)"
-  if [ -n "$vh" ] && [ -z "$(git status --porcelain 2>/dev/null | head -1)" ]; then
+  vl="$(_verify_listsum "$2")"
+  if [ -n "$vh" ] && [ "${vl##*-}" != 0 ] && [ -z "$(git status --porcelain 2>/dev/null | head -1)" ]; then
     mkdir -p "$vs" 2>/dev/null || true
-    printf '%s %s\n' "$vh" "$(_verify_listsum "$2")" 2>/dev/null > "$vs/$1" || true
+    printf '%s %s\n' "$vh" "$vl" 2>/dev/null > "$vs/$1" || true
   else
     rm -f "$vs/$1" 2>/dev/null || true
   fi
@@ -228,12 +230,14 @@ _verify_stamp_write() { # _verify_stamp_write <ID> <taskfile> — after a GREEN 
 _verify_stamp_ok() { # _verify_stamp_ok <ID> <sha> <taskfile> — rc 0 only when the stamp is exactly
   # `<sha> <listsum of the task file NOW>`. No stamp, an old one-field stamp, another commit or an
   # edited list → rc 1, and the caller runs the commands. The list is fingerprinted only once a
-  # stamp exists, so the common no-stamp path costs no process at all.
-  local vf="$PRIMARY/.polaris/verify-stamp/$1" vl=""
+  # stamp exists, so the common no-stamp path costs no process at all. An empty list is never
+  # proven (minutes.md § 12, v2.4): rc 1 whatever the stamp says, and the caller takes the old path.
+  local vf="$PRIMARY/.polaris/verify-stamp/$1" vl="" vn
   [ -n "$2" ] && [ -f "$vf" ] || return 1
   IFS= read -r vl < "$vf" || [ -n "$vl" ] || return 1
   vl="${vl%$'\r'}"
-  [ "$vl" = "$2 $(_verify_listsum "$3")" ]
+  vn="$(_verify_listsum "$3")"
+  [ "${vn##*-}" != 0 ] && [ "$vl" = "$2 $vn" ]
 }
 
 cmd_verify() {
