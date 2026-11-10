@@ -1176,3 +1176,4 @@
 {"ts":1794334708,"ev":"claim","id":"T-297","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1794335378,"ev":"handoff","id":"T-295","who":"Owner@DESKTOP","note":""}
 {"ts":1794335579,"ev":"done","id":"T-295","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1794335600,"ev":"promote","id":"T-296","who":"Owner@DESKTOP","note":"deps done: T-289, T-290, T-291, T-292, T-293, T-294, T-295","pts":1}
