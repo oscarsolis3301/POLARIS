@@ -272,3 +272,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - kit/ops/lib/author.sh — `polaris new`: files task drafts with IDs, checks and the ready gate (review/ counted), in ONE board commit (ops/contracts/task-author.md)  (T-262, 2026-11-07)
 
 - kit/ops/lib/observe.sh split: drift.sh (drift, rules, surfaces health) · check.sh (goldens, scaffold, harness) · route.sh (triage, route, depth) · qa.sh (qa, finish) — module-layout v9 (minutes, 2026-11-09)  (T-273, 2026-11-09)
+
+- kit/ops/lib/flow.sh (new): cmd_begin, cmd_wrap — one call in, one call out (minutes, 2026-11-09)  (T-279, 2026-11-09)
