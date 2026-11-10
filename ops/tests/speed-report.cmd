@@ -2,6 +2,10 @@
 # the same function `depth --commit` uses, prints the counts line + last full run time, then one advice
 # line per slowing setting. Read-only (repo byte-identical after). cmd_update's tail is checked statically
 # (it cannot run hermetically): the speed report there must be guarded by `|| true`.
+# Landing time (ops/contracts/minutes.md § 5.3): a fixture EVENTS log with known times gives two
+# medians — build (last claim → last handoff) and built → done (that handoff → done) — printed right
+# after the counts line; tasks missing a claim, a handoff or a done do not count; only the last 20 by
+# done time do, whatever order the log is in.
 #
 # HERMETIC: a throwaway fixture repo under mktemp -d, the CLI run from INSIDE it.
 KIT="$(pwd)/kit/ops/polaris"
@@ -34,6 +38,37 @@ mkdir -p .polaris
 BEFORE="$(snap)"
 echo "plain:"; bash "$KIT" speed 2>&1; echo "  rc=$?"
 [ "$BEFORE" = "$(snap)" ] && echo "read-only: repo byte-identical after" || echo "read-only: REPO CHANGED"
+EV=ops/board/EVENTS.ndjson
+[ -f "$EV" ] && cp "$EV" "$FIX/events.bak"
+# A: 10 min build, 20 min wait · B: claimed twice, the LAST claim counts: 30 / 5 · C: handed off twice,
+# the LAST handoff before done counts: 2.5 → 3 / 0.5 → 1 · D: never done · E: no claim. Not in time order.
+{
+  printf '{"ts":7400,"ev":"done","id":"T-B","who":"t","note":"","pts":1}\n'
+  printf '{"ts":1000,"ev":"claim","id":"T-A","who":"t","note":"","pts":1}\n'
+  printf '{"ts":1600,"ev":"handoff","id":"T-A","who":"t","note":"","pts":1}\n'
+  printf '{"ts":2800,"ev":"done","id":"T-A","who":"t","note":"","pts":1}\n'
+  printf '{"ts":5000,"ev":"claim","id":"T-B","who":"t","note":"","pts":1}\n'
+  printf '{"ts":5300,"ev":"claim","id":"T-B","who":"t","note":"","pts":1}\n'
+  printf '{"ts":7100,"ev":"handoff","id":"T-B","who":"t","note":"","pts":1}\n'
+  printf '{"ts":9000,"ev":"claim","id":"T-C","who":"t","note":"","pts":1}\n'
+  printf '{"ts":9090,"ev":"handoff","id":"T-C","who":"t","note":"","pts":1}\n'
+  printf '{"ts":9150,"ev":"handoff","id":"T-C","who":"t","note":"","pts":1}\n'
+  printf '{"ts":9180,"ev":"done","id":"T-C","who":"t","note":"","pts":1}\n'
+  printf '{"ts":9500,"ev":"claim","id":"T-D","who":"t","note":"","pts":1}\n'
+  printf '{"ts":9600,"ev":"handoff","id":"T-D","who":"t","note":"","pts":1}\n'
+  printf '{"ts":9700,"ev":"handoff","id":"T-E","who":"t","note":"","pts":1}\n'
+  printf '{"ts":9800,"ev":"done","id":"T-E","who":"t","note":"","pts":1}\n'
+} > "$EV"
+echo "landing:"; bash "$KIT" speed 2>&1 | sed 's/^Of your last [0-9]* changes: .*/COUNTS/'
+# 21 finished tasks: the 20 newest are ten 1-minute builds and ten 9-minute ones (median 1); the oldest,
+# written LAST, is a 9-minute build that would tip the median to 9 if it were counted.
+awk 'BEGIN { for (i = 2; i <= 21; i++) { c = i * 10000; b = (i <= 11 ? 60 : 540)
+               printf "{\"ts\":%d,\"ev\":\"claim\",\"id\":\"T-%d\"}\n{\"ts\":%d,\"ev\":\"handoff\",\"id\":\"T-%d\"}\n{\"ts\":%d,\"ev\":\"done\",\"id\":\"T-%d\"}\n", c, i, c + b, i, c + b + 120, i }
+             printf "{\"ts\":100,\"ev\":\"claim\",\"id\":\"T-1\"}\n{\"ts\":640,\"ev\":\"handoff\",\"id\":\"T-1\"}\n{\"ts\":760,\"ev\":\"done\",\"id\":\"T-1\"}\n" }' > "$EV"
+echo "last-20:"; bash "$KIT" speed 2>&1 | grep -e '^build:' -e '^built'
+printf '{"ts":100,"ev":"claim","id":"T-1"}\n{"ts":200,"ev":"handoff","id":"T-1"}\n' > "$EV"
+echo "none-finished-lines: $(bash "$KIT" speed 2>&1 | grep -c -e '^build:' -e '^built')"
+if [ -f "$FIX/events.bak" ]; then cp "$FIX/events.bak" "$EV"; else rm -f "$EV"; fi
 echo "45 1" > .polaris/last-suite-seconds
 echo "last-run-45s:"; bash "$KIT" speed 2>&1 | grep -c 'Your last full run took 45s\.'
 echo "300 1" > .polaris/last-suite-seconds

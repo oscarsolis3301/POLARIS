@@ -442,7 +442,7 @@ drill_autoupdate() {
     # resets away; ops/VERSION, CONVENTIONS.md and src/a.txt come back exactly as found.
     # Windows: curl is a native binary and cannot open `file:///tmp/…` — cygpath -m turns $T into
     # `C:/Users/…`, and `file:///C:/…` reads; POSIX hosts use file://$T verbatim.
-    local au_pre au_st au_base au_url au_mp au_home au_v au_d
+    local au_pre au_st au_base au_url au_mp au_home au_v au_d au_br au_s0 au_fh au_fo au_w
     au_pre="$(git rev-parse HEAD)"
     au_st="$(git status --porcelain)"
     [ -f ops/VERSION ] && cp ops/VERSION "$T/au-ver.bak" || rm -f "$T/au-ver.bak"
@@ -519,21 +519,91 @@ drill_autoupdate() {
     # (5) explicit update with app-only dirt → applies WITHOUT a stash, the left-alone note, dirt intact
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache
     echo dirt >> src/a.txt
-    "$SELF" update --repo-only > "$T/au5.out" 2>&1 || { cat "$T/au5.out"; echo "AUTOUPDATE (5) RC FAIL (app-only dirt must not stop an explicit update)"; exit 1; }
+    POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au5.out" 2>&1 || { cat "$T/au5.out"; echo "AUTOUPDATE (5) RC FAIL (app-only dirt must not stop an explicit update)"; exit 1; }
     [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au5.out"; echo "AUTOUPDATE (5) APPLY FAIL (ops/VERSION must read 0.0.2)"; exit 1; }
     [ -z "$(git stash list)" ] || { echo "AUTOUPDATE (5) STASH FAIL (app-only dirt is never parked)"; exit 1; }
     grep -q "outside the kit's paths — left alone" "$T/au5.out" || { cat "$T/au5.out"; echo "AUTOUPDATE (5) NOTE FAIL (the left-alone note)"; exit 1; }
     [ "$(tail -1 src/a.txt | tr -d '\r')" = "dirt" ] || { echo "AUTOUPDATE (5) DIRT FAIL (src/a.txt must keep its uncommitted line)"; exit 1; }
+    git diff-tree --no-commit-id --name-only -r HEAD | grep -qx 'src/a.txt' && { echo "AUTOUPDATE (5) COMMIT DIRT FAIL (a file dirty before the update must never enter its commit)"; exit 1; }
     # (5b) explicit update with dirt on a kit path → parked as today, and the update still lands
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache
     echo dirt >> ops/PROTOCOL.md
-    "$SELF" update --repo-only > "$T/au5b.out" 2>&1 || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) RC FAIL (kit dirt parks, then proceeds)"; exit 1; }
+    POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au5b.out" 2>&1 || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) RC FAIL (kit dirt parks, then proceeds)"; exit 1; }
     [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) APPLY FAIL"; exit 1; }
     [ "$(git stash list | wc -l | tr -d ' ')" = "1" ] || { echo "AUTOUPDATE (5b) PARK FAIL (kit dirt must be parked in exactly one stash)"; exit 1; }
     grep -q '^✅ parked as polaris/park-' "$T/au5b.out" || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) PARK SAY FAIL (the park must announce itself)"; exit 1; }
     git stash list | grep -q 'dirty tree at update' || { git stash list; echo "AUTOUPDATE (5b) PARK NAME FAIL (the stash must carry the why)"; exit 1; }
     tail -1 ops/PROTOCOL.md | grep -qx 'dirt' && { echo "AUTOUPDATE (5b) DIRT FAIL (the parked line must have left the file)"; exit 1; }
+    git diff-tree --no-commit-id --name-only -r HEAD | grep -qx 'ops/PROTOCOL.md' && { echo "AUTOUPDATE (5b) COMMIT DIRT FAIL (a parked path must never enter the update's commit)"; exit 1; }
     git stash drop -q
+    # (7) the self-commit (minutes.md § 5.1): on base, nothing staged, nothing half-done, not publish: pr →
+    # ONE commit on top of au_base, the plain subject, no body, never pushed, the tree as it was before.
+    # Every typed update here carries the no-fan-out seam (and --repo-only): none may reach a registry.
+    au_br="$(git symbolic-ref -q --short HEAD)"
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache
+    au_s0="$(git status --porcelain)"
+    POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au7.out" 2>&1 || { cat "$T/au7.out"; echo "AUTOUPDATE (7) RC FAIL"; exit 1; }
+    [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] || { git log --oneline -3; echo "AUTOUPDATE (7) COMMIT FAIL (exactly one new commit, on top of where the update started)"; exit 1; }
+    [ "$(git log -1 --format=%s)" = "chore(polaris): POLARIS 0.0.1 → 0.0.2" ] || { git log -1 --format=%s; echo "AUTOUPDATE (7) SUBJECT FAIL"; exit 1; }
+    [ -z "$(git log -1 --format=%b | tr -d '\r\n')" ] || { git log -1 --format=%B; echo "AUTOUPDATE (7) BODY FAIL (the subject and nothing else)"; exit 1; }
+    [ "$(git status --porcelain)" = "$au_s0" ] || { git status --porcelain; echo "AUTOUPDATE (7) CLEAN FAIL (everything the update changed is in its commit)"; exit 1; }
+    au_v="$(git diff-tree --no-commit-id --name-only -r HEAD | wc -l | tr -d ' ')"
+    grep -qxF "   committed for you: chore(polaris): POLARIS 0.0.1 → 0.0.2 — $au_v files, not pushed" "$T/au7.out" || { cat "$T/au7.out"; echo "AUTOUPDATE (7) NOTE FAIL (the committed-for-you note, with the file count)"; exit 1; }
+    grep -q -e 'nothing was committed for you' -e 'not committed:' "$T/au7.out" && { cat "$T/au7.out"; echo "AUTOUPDATE (7) OLD NOTE FAIL (a commit replaces today's note)"; exit 1; }
+    [ -z "$(git for-each-ref refs/remotes)" ] || { git for-each-ref refs/remotes; echo "AUTOUPDATE (7) PUSH FAIL (no remote ref may appear)"; exit 1; }
+    # (7b) a feature branch · (7c) staged work · (7d) publish: pr · (7e) a merge in progress → today's
+    # note, then ONE `not committed:` note naming the reason, and no new commit.
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache
+    git checkout -q -b au-feat
+    POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au7b.out" 2>&1 || { cat "$T/au7b.out"; echo "AUTOUPDATE (7b) RC FAIL"; exit 1; }
+    [ "$(git rev-parse HEAD)" = "$au_base" ] || { echo "AUTOUPDATE (7b) COMMIT FAIL (never a commit off base)"; exit 1; }
+    grep -qxF "   not committed: not on $au_br" "$T/au7b.out" && grep -q 'nothing was committed for you' "$T/au7b.out" || { cat "$T/au7b.out"; echo "AUTOUPDATE (7b) NOTE FAIL"; exit 1; }
+    git reset -q --hard "$au_base"; git checkout -q "$au_br"; git branch -q -D au-feat
+    rm -f .polaris/update-cache
+    echo staged >> src/a.txt; git add -- src/a.txt 2>/dev/null
+    POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au7c.out" 2>&1 || { cat "$T/au7c.out"; echo "AUTOUPDATE (7c) RC FAIL"; exit 1; }
+    [ "$(git rev-parse HEAD)" = "$au_base" ] || { echo "AUTOUPDATE (7c) COMMIT FAIL (never a commit over staged work)"; exit 1; }
+    [ "$(git diff --cached --name-only)" = "src/a.txt" ] || { git diff --cached --name-only; echo "AUTOUPDATE (7c) INDEX FAIL (the staged work stays staged, alone)"; exit 1; }
+    grep -qxF "   not committed: something was already staged" "$T/au7c.out" || { cat "$T/au7c.out"; echo "AUTOUPDATE (7c) NOTE FAIL"; exit 1; }
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache
+    printf 'publish: pr\n' >> ops/CONVENTIONS.md
+    POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au7d.out" 2>&1 || { cat "$T/au7d.out"; echo "AUTOUPDATE (7d) RC FAIL"; exit 1; }
+    [ "$(git rev-parse HEAD)" = "$au_base" ] || { echo "AUTOUPDATE (7d) COMMIT FAIL (publish: pr never commits on base)"; exit 1; }
+    grep -qxF "   not committed: publish: pr — the change goes through a pull request" "$T/au7d.out" || { cat "$T/au7d.out"; echo "AUTOUPDATE (7d) NOTE FAIL"; exit 1; }
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache
+    git rev-parse HEAD > "$(git rev-parse --git-dir)/MERGE_HEAD"
+    POLARIS_UPDATE_NO_FANOUT=1 "$SELF" update --repo-only > "$T/au7e.out" 2>&1 || { rm -f "$(git rev-parse --git-dir)/MERGE_HEAD"; cat "$T/au7e.out"; echo "AUTOUPDATE (7e) RC FAIL"; exit 1; }
+    rm -f "$(git rev-parse --git-dir)/MERGE_HEAD"
+    [ "$(git rev-parse HEAD)" = "$au_base" ] || { echo "AUTOUPDATE (7e) COMMIT FAIL (never a commit mid-merge)"; exit 1; }
+    grep -qxF "   not committed: a merge or rebase is in progress" "$T/au7e.out" || { cat "$T/au7e.out"; echo "AUTOUPDATE (7e) NOTE FAIL"; exit 1; }
+    # (8) the fan-out (§ 5.2): a typed update with no flag, over a registry of THROWAWAY entries only —
+    # this fixture (counted out) and two self-hosting dirs the walk skips, so the launched walk is a stub
+    # by construction. A fake HOME and USERPROFILE (no .claude/ in it) keep the machine refresh away from
+    # the owner's own. The one line names the count and the log; the walk really runs, detached, and is
+    # waited for (its last entry's line) before anything else touches this fixture.
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache
+    au_fh="$T/au-fhome"; au_fo="$T/au-fo"; rm -rf "$au_fh" "$au_fo" "$T/au-fo-s1" "$T/au-fo-s2"
+    mkdir -p "$au_fh" "$au_fo/repos" "$T/au-fo-s1/kit/ops" "$T/au-fo-s2/kit/ops"
+    : > "$T/au-fo-s1/kit/ops/pack.py"; : > "$T/au-fo-s2/kit/ops/pack.py"
+    printf '%s\n' "$au_mp"       > "$au_fo/repos/0-me"
+    printf '%s\n' "$T/au-fo-s1"  > "$au_fo/repos/a-self1"
+    printf '%s\n' "$T/au-fo-s2"  > "$au_fo/repos/b-self2"
+    HOME="$au_fh" USERPROFILE="$au_fh" POLARIS_AWAKE_HOME="$au_fo" "$SELF" update > "$T/au8.out" 2>&1 || { cat "$T/au8.out"; echo "AUTOUPDATE (8) RC FAIL"; exit 1; }
+    grep -qxF "   updating 2 other projects on this PC in the background — see $au_fo/update-all.log" "$T/au8.out" \
+      || { cat "$T/au8.out"; echo "AUTOUPDATE (8) FAN-OUT LINE FAIL (two other projects, this one counted out, the log named)"; exit 1; }
+    au_w=0
+    while [ "$au_w" -lt 180 ] && ! grep -qxF "$T/au-fo-s2: self-hosting — skipped" "$au_fo/update-all.log" 2>/dev/null; do sleep 0.5; au_w=$((au_w + 1)); done
+    grep -qxF "$T/au-fo-s1: self-hosting — skipped" "$au_fo/update-all.log" && grep -qxF "$T/au-fo-s2: self-hosting — skipped" "$au_fo/update-all.log" \
+      || { cat "$au_fo/update-all.log" 2>/dev/null; echo "AUTOUPDATE (8) WALK FAIL (the detached update --all must walk the registry into the log)"; exit 1; }
+    sleep 1
+    [ -z "$(find "$au_fh" -type f)" ] || { find "$au_fh" -type f; echo "AUTOUPDATE (8) HOME FAIL (nothing may be written under the home)"; exit 1; }
+    # (9) --auto never fans out — same registry, same fake home, no seam, no --repo-only — and its own
+    # self-commit adds no line: still exactly the ✅ line, one commit on top of au_base.
+    git reset -q --hard "$au_base"; rm -f .polaris/update-cache .polaris/update.log "$au_fo/update-all.log"
+    HOME="$au_fh" USERPROFILE="$au_fh" POLARIS_AWAKE_HOME="$au_fo" "$SELF" update --auto --say > "$T/au9.out" 2> "$T/au9.err" || { cat "$T/au9.out" "$T/au9.err"; echo "AUTOUPDATE (9) RC FAIL"; exit 1; }
+    [ "$(wc -l < "$T/au9.out" | tr -d ' ')" = "1" ] && grep -q '^✅ POLARIS updated 0.0.1 → 0.0.2 at session start' "$T/au9.out" || { cat "$T/au9.out"; echo "AUTOUPDATE (9) ONE-LINE FAIL (--auto stays one line, its commit included)"; exit 1; }
+    [ ! -e "$au_fo/update-all.log" ] || { cat "$au_fo/update-all.log"; echo "AUTOUPDATE (9) FAN-OUT FAIL (--auto must never start the walk)"; exit 1; }
+    [ "$(git rev-parse HEAD^ 2>/dev/null)" = "$au_base" ] && [ "$(git log -1 --format=%s)" = "chore(polaris): POLARIS 0.0.1 → 0.0.2" ] || { git log --oneline -3; echo "AUTOUPDATE (9) COMMIT FAIL (--auto commits itself too)"; exit 1; }
     # (6) --all over a temp registry holding this fixture, a gone path and a self-hosting repo
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache
     au_home="$T/au-awake"; rm -rf "$au_home" "$T/au-self" "$T/au-gone"
@@ -595,7 +665,7 @@ drill_autoupdate() {
       fi
     done
     rm -f .polaris/update-cache .polaris/update.log .polaris/install.log .polaris/CLAUDE.md.pre-heal
-    rm -rf "$T/polaris-v5" "$T/chan" "$T/kit.tgz" "$au_home" "$T/au-self" "$T/au-ver.bak" "$T/au-conv.bak"
+    rm -rf "$T/polaris-v5" "$T/chan" "$T/kit.tgz" "$au_home" "$T/au-self" "$T/au-ver.bak" "$T/au-conv.bak" "$au_fh" "$au_fo" "$T/au-fo-s1" "$T/au-fo-s2"
     [ "$(git rev-parse HEAD)" = "$au_pre" ] || { echo "AUTOUPDATE HERMETIC FAIL (HEAD must return to where the drill found it)"; exit 1; }
     [ "$(git status --porcelain)" = "$au_st" ] || { echo "entry:"; printf '%s
 ' "$au_st"; echo "now:"; git status --porcelain; echo "AUTOUPDATE HERMETIC FAIL (the drill must leave the tree exactly as it found it)"; exit 1; }
