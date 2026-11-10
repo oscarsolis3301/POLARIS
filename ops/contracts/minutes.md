@@ -1,4 +1,4 @@
-# CONTRACT: minutes — proof runs where it is fast, and a release check proves bytes   (v2.6 — 2026-11-09)
+# CONTRACT: minutes — proof runs where it is fast, and a release check proves bytes   (v2.7 — 2026-11-09)
 Owned by the Planner. Builders code against this and never invent beyond it.
 Append-only once any dependent task is claimed: breaking changes = new `## v2` section + a migration task.
 
@@ -483,6 +483,27 @@ under the command standing in it (worktree-liveness v1.2), so it is LEFT, its br
   drills that cover drift, finish, self-landing and worktree liveness (CI's Linux run of the task's own
   commit, once, by hand: `PROOF_GOLDENS=true bash tools/proof.sh`).
 
+## 15. `check --only` takes a list (conductor, 2026-11-09 — extends § 6; ships in 6.15.0)
+Since § 7 a task's own verify list is the whole gate at handoff and again at landing, and such a list
+often names several goldens, one `check --only <name>` line each. Each line is its own `check`, so
+they run one after another: T-286's five took 8 minutes here, T-223's twelve take about 12, while the
+same goldens side by side take about 2. `--only` only ever took ONE glob, so a list could not ask for
+its goldens together.
+- **`--only <glob>[,<glob>…]`.** The value is split on commas; a golden is selected when its name
+  matches ANY of the globs. Order of the globs never matters: selection, deal-out and printing follow
+  the directory order exactly as today. One glob with no comma behaves byte for byte as today.
+- **Every glob must match something.** A glob that selects no golden is red, with today's line for a
+  named check that ran nothing, naming that glob — a typo in a list never passes silently. Empty
+  entries (`a,,b`, a trailing comma) are a usage error.
+- Two or more goldens selected → side by side under the § 6 rules (jobs, the alone re-run, output in
+  today's order). `--update` with a list stays serial, as today.
+- No new key, no new public function name, and the help line is unchanged in this task (the command
+  table moves at the next dogfood with everything else); `kit/ops/roles/PLANNER.md` tells the planner
+  to put a task's goldens on ONE verify line: `bash kit/ops/polaris check --only a,b,c`.
+- Golden `check-parallel` gains the cases: a two-name list selects exactly those two and prints them
+  in directory order; `b,a` prints the same as `a,b`; a list with one unknown name is red and names
+  it; a one-name value prints exactly what it prints today.
+
 ## Changelog
 - v1 2026-11-09: created for the Phase 1 tasks of plans/minutes.md.
 - v2 2026-11-09: § 3–§ 10 added for Phase 2 (sprint 22, plan minutes, 6.14.0).
@@ -492,3 +513,4 @@ under the command standing in it (worktree-liveness v1.2), so it is LEFT, its br
 - v2.4 2026-11-09 (conductor): § 12 — an empty verify list is never "proven" (goldens guide-stale, pack-visual, shots-gallery caught it).
 - v2.5 2026-11-09 (conductor): § 13 — the update's commit stages one step at a time, retries a held index lock, and says why when it cannot commit (macOS CI: the status and the add in one pipeline raced for the index lock).
 - v2.6 2026-11-09 (conductor): § 14 — `wrap` typed from the task's own folder ends green: a worktree the running command stands in counts as still in use, and finish says the next finish clears it (found by a fresh-install test).
+- v2.7 2026-11-09 (conductor): § 15 — `check --only` takes a comma list, so a task's goldens run side by side on one verify line.

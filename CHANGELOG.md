@@ -35,6 +35,14 @@ Good to know: POLARIS never picks Fable by itself. The `effort_*` and `model_*` 
 `ops/CONVENTIONS.md` change the sizing, and setting any of them to `inherit` goes back to "same as
 the chat".
 
+One update is still left for you to save: the jump from an older version to this one is done by
+the old updater, so its files wait for your commit as before. From here on updates save
+themselves, and `polaris update --all` run from an updated project saves in every project it
+updates.
+
+`polaris wrap` cannot remove the folder it is running from, so that one task folder stays until
+the next `finish` run from the project folder clears it. There is nothing for you to do.
+
 ## 6.13.0 — 2026-11-07
 
 **The layout pass, hardened. It now runs start to finish on its own, moves whole features only, and reports its true before-and-after. And `polaris new` files new tasks in one command.**
