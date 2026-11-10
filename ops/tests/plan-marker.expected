@@ -1,0 +1,9 @@
+== 1. the first claim writes the marker ==
+claim rc=0
+marker: alpha
+== 2. a beta claim while an alpha task is still active keeps alpha ==
+claim rc=0
+marker: alpha
+== 3. the alpha task is done: another beta claim writes beta ==
+claim rc=0
+marker: beta

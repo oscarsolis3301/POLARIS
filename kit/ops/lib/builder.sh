@@ -168,7 +168,7 @@ EOF_SKGLOB
   # that never runs another command is still provably live for wt_live_minutes. Best-effort, rc 0.
   beat_touch "$id"
   # session state (ops/contracts/role-handover.md § session state): `task` on every claim, `plan`
-  # on the FIRST claim only (the task's plan: slug, may be empty) — `next` reads `plan` to tell a
+  # on the first claim (the task's plan: slug, may be empty), re-marked by rider a below — `next` reads `plan` to tell a
   # foreign task from this run's under drain: plan. Per checkout, gitignored, every line best-effort,
   # and nothing without a session id (a plain shell, CI) — the same shape evt() uses for last-event.
   local hs
@@ -176,7 +176,31 @@ EOF_SKGLOB
     hs="$PRIMARY/.polaris/handover/$CLAUDE_CODE_SESSION_ID"
     mkdir -p "$hs" 2>/dev/null || true
     printf '%s\n' "$id" 2>/dev/null > "$hs/task" || true
-    [ -e "$hs/plan" ] || printf '%s\n' "$(fm_get plan "$BOARD/active/$id.md" 2>/dev/null || true)" 2>/dev/null > "$hs/plan" || true
+    # Rider a (safe-landing v1.1 § D): a marker naming ANOTHER plan is overwritten with this task's
+    # plan once no task of the marked plan is left in active/ or review/ (this task excluded) — so a
+    # second plan run in the same session is not held as foreign. Same plan → untouched. One awk; an
+    # empty column leaves its glob unexpanded, and BEGIN drops it (active/ always holds this task).
+    local hp_new hp_old hp_live
+    hp_new="$(fm_get plan "$BOARD/active/$id.md" 2>/dev/null || true)"
+    if [ ! -e "$hs/plan" ]; then
+      printf '%s\n' "$hp_new" 2>/dev/null > "$hs/plan" || true
+    else
+      hp_old="$(tr -d '\r\n' < "$hs/plan" 2>/dev/null || true)"
+      if [ "$hp_old" != "$hp_new" ]; then
+        hp_live="$(awk -v k="$hp_old" -v me="$id.md" '
+          BEGIN { for (i = 1; i < ARGC; i++) if (index(ARGV[i], "*")) delete ARGV[i] }
+          FNR==1 { fs=0; seen=0; n=split(FILENAME, a, "/"); skip=(a[n]==me) }
+          skip { next }
+          /^---[\r]?$/ { fs++; if (fs==2 && !seen && k=="") c++; next }
+          fs==1 && index($0, "plan:")==1 && !seen {
+            seen=1; s=substr($0, 6)
+            sub(/[ \t]#.*$/,"",s); sub(/^[ \t]*/,"",s); sub(/[ \t\r]*$/,"",s)
+            if (s==k) c++
+          }
+          END { print c+0 }' "$BOARD/active/"*.md "$BOARD/review/"*.md 2>/dev/null || true)"
+        [ "$hp_live" = 0 ] && { printf '%s\n' "$hp_new" 2>/dev/null > "$hs/plan" || true; }
+      fi
+    fi
   fi
   say "claimed $id → cd \"$wt\""
   # bootstrap: a fresh worktree is a bare checkout — node_modules/.venv/target are gitignored and

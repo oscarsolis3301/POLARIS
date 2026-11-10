@@ -232,6 +232,11 @@ int_on() { # int_on [<why>] — take the integration lease $LOCKS/.int-lease (th
   # rc 3 — NEVER a question, NEVER a raw die. Re-entrant: already ours (same pid file) → rc 0.
   # LOCK ORDERING: the lease is OUTERMOST — take it BEFORE any mutex_on, never while holding the
   # board mutex. Sets INT_HELD so core.sh::on_die releases a crashed holder's lease.
+  # LEASE TOKEN (ops/contracts/safe-landing.md § 1): the taking frame also writes `token`
+  # (<pid>:<nonce>) and exports POLARIS_INT_TOKEN, so a CHILD process of the holder re-enters
+  # (rc 0, no wait, nothing rewritten) with INT_TOOK=0 and its int_off is a silent no-op. Only the
+  # frame that created the lease (INT_TOOK=1) ever removes it. Any other session has no token and
+  # queues exactly as before.
   local why="${1:-}"
   local lease="$LOCKS/.int-lease"
   local wm; wm="$(cfg integration_wait_minutes 10)"
@@ -239,6 +244,9 @@ int_on() { # int_on [<why>] — take the integration lease $LOCKS/.int-lease (th
   case "$wm" in ''|*[!0-9]*) wm=10;; esac
   case "$sm" in ''|*[!0-9]*) sm=45;; esac
   if [ -d "$lease" ] && [ "$(cat "$lease/pid" 2>/dev/null)" = "$$" ]; then INT_HELD=1; return 0; fi
+  if [ -n "${POLARIS_INT_TOKEN:-}" ] && [ -d "$lease" ] && [ "$(cat "$lease/token" 2>/dev/null)" = "$POLARIS_INT_TOKEN" ]; then
+    INT_HELD=1; INT_TOOK=0; return 0
+  fi
   mkdir -p "$LOCKS"
   local waited=0
   local told=0
@@ -280,19 +288,34 @@ int_on() { # int_on [<why>] — take the integration lease $LOCKS/.int-lease (th
   printf '%s\n' "$WHO" > "$lease/who"
   printf '%s\n' "$$" > "$lease/pid"
   if [ -n "$why" ]; then printf '%s\n' "$why" > "$lease/why"; fi
+  POLARIS_INT_TOKEN="$$:$(date +%s)$RANDOM"
+  printf '%s\n' "$POLARIS_INT_TOKEN" > "$lease/token"
+  export POLARIS_INT_TOKEN
   INT_HELD=1
+  INT_TOOK=1
   trap on_die EXIT
   return 0
 }
 
-int_off() { # release the integration lease if OURS (same pid file); silent no-op otherwise —
-  # another session's lease is invisible to us and stays exactly where it is.
+int_off() { # release the integration lease only in the frame that TOOK it (INT_TOOK=1) and only
+  # while its token still matches; silent no-op otherwise — a re-entering child (token) never
+  # releases, and another session's lease is invisible to us and stays exactly where it is.
   local lease="$LOCKS/.int-lease"
-  if [ -d "$lease" ] && [ "$(cat "$lease/pid" 2>/dev/null)" = "$$" ]; then
+  if [ "${INT_TOOK:-0}" = 1 ] && [ -d "$lease" ] && [ -n "${POLARIS_INT_TOKEN:-}" ] \
+     && [ "$(cat "$lease/token" 2>/dev/null)" = "$POLARIS_INT_TOKEN" ]; then
     rm -rf "$lease" 2>/dev/null || true
-    INT_HELD=""
+    INT_HELD=""; INT_TOOK=0
+    unset POLARIS_INT_TOKEN
   fi
   return 0
+}
+
+int_mine() { # int_mine — rc 0 when this process may rely on the integration lease: the lease pid
+  # file is ours, or POLARIS_INT_TOKEN matches the lease token (a child of the holder). Pure read.
+  local lease="$LOCKS/.int-lease"
+  [ -d "$lease" ] || return 1
+  [ "$(cat "$lease/pid" 2>/dev/null)" = "$$" ] && return 0
+  [ -n "${POLARIS_INT_TOKEN:-}" ] && [ "$(cat "$lease/token" 2>/dev/null)" = "$POLARIS_INT_TOKEN" ]
 }
 
 wave_on() { # wave_on — ensure + check out today's integrate/<date> in the primary.

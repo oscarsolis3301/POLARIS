@@ -601,6 +601,7 @@ kit/ops/lib/workspace.sh	fn	beat_touch
 kit/ops/lib/workspace.sh	fn	cmd_park
 kit/ops/lib/workspace.sh	fn	cmd_unpark
 kit/ops/lib/workspace.sh	fn	id_ok
+kit/ops/lib/workspace.sh	fn	int_mine
 kit/ops/lib/workspace.sh	fn	int_off
 kit/ops/lib/workspace.sh	fn	int_on
 kit/ops/lib/workspace.sh	fn	park

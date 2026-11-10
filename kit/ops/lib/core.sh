@@ -597,9 +597,10 @@ mutex_off() { # release the board mutex if OURS (the $MUTEX/pid mutex_on wrote m
 on_die() {  # EXIT trap while a claim/board op is in flight
   mutex_off
   # T-057: release the integration lease when this process holds it — a crashed holder must not
-  # cost integration_stale_minutes of staleness. ${INT_HELD:-}-guarded on purpose: the 2-module
-  # guard path (core+ownership — no workspace.sh, so no int_off) never sets it and never notices.
-  [ -n "${INT_HELD:-}" ] && int_off || true
+  # cost integration_stale_minutes of staleness. Only the TAKING frame releases (safe-landing § 1):
+  # ${INT_TOOK:-}-guarded, so a child that re-entered by token never drops its parent's lease, and
+  # the 2-module guard path (core+ownership — no workspace.sh, so no int_off) never sets it.
+  [ "${INT_TOOK:-0}" = 1 ] && int_off || true
   if [ -n "$FAIL_LOCK_ID" ]; then
     lock_drop "$FAIL_LOCK_ID"
     [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$FAIL_LOCK_ID" || true
@@ -616,7 +617,7 @@ mutex_on() {
       # network outlives 120s — and two sessions then mutated the board at once. A holder whose pid
       # still answers keeps it until the 20-minute backstop; a dead or pid-less one goes at 120s,
       # so a crashed holder is still recovered without anyone reaching for rm -rf.
-      local e age hp; e="$(cat "$MUTEX/epoch" 2>/dev/null)"; e="${e:-$(date +%s)}"
+      local e age hp; e="$(cat "$MUTEX/epoch" 2>/dev/null || true)"; e="${e:-$(date +%s)}"
       age=$(( $(date +%s) - e ))
       hp="$(cat "$MUTEX/pid" 2>/dev/null || true)"; case "$hp" in ''|*[!0-9]*) hp="";; esac
       if [ "$age" -gt 1200 ] || { [ "$age" -gt 120 ] && { [ -z "$hp" ] || ! kill -0 "$hp" 2>/dev/null; }; }; then

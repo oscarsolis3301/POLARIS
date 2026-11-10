@@ -1,0 +1,20 @@
+== 1. the token re-enters a lease another pid holds; its release leaves it standing ==
+land rc=0
+waited or queued: 0
+T-1 landed: 1
+lease: standing, token unchanged
+== 2. no token, or a wrong one, still queues ==
+land rc=3
+queued: integration lane busy — <holder> holds it — re-run when the lane frees; a conductor polls at wave boundaries
+land rc=3
+queued lines: 1
+T-2 still in review: yes
+lease: standing, token unchanged
+== 3. the taking frame: a child re-enters, only the taker releases ==
+seal rc=0
+land rc=0
+child land rc=0
+lease after the child: standing
+child skipped without waiting: 1 · waited: 0
+T-2 landed: 1
+lease: gone
