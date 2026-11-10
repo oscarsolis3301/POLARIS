@@ -195,6 +195,59 @@ EOF
   return 1
 }
 
+_done_reland() { # _done_reland <ID> <task-file> <paths> — safe-landing.md § 5.2, PRIVATE to cmd_done.
+  # Runs in a subshell cd'd to the primary, under the lease cmd_done holds: wave_on and cmd_seal both
+  # re-enter it, and INT_TOOK=0 here means nothing in this subshell can ever release it. Restores each
+  # mismatching path from the feat tip on today's wave (git rm for a path the tip deleted), makes ONE
+  # commit whose subject ends [<ID>] (so landed_sha still finds it; the first squash stays in history)
+  # with a `re-land:` body line, then seals. Runs NO suite. rc ≠ 0 → the caller's re-check decides;
+  # every failure after wave_on puts the wave back where it stood and returns to $BASE. The seal is a
+  # child (`$SELF seal`, re-entering by the exported token) exactly as self_land runs it: this body
+  # sits in cmd_done's `( … ) || rc`, where bash ignores set -e for anything run in-process.
+  local id="$1" tf="$2" bad="$3" feat subj n keep gone pre nl oifs
+  INT_TOOK=0
+  nl='
+'
+  feat="$(git rev-parse -q --verify "refs/heads/feat/$id^{commit}" 2>/dev/null)" \
+    || feat="$(git rev-parse -q --verify "refs/remotes/origin/feat/$id^{commit}" 2>/dev/null)" || return 1
+  # dirty tree → park + caveat, exactly as land does (the wave checkout needs the dirt gone)
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    park "re-land $id" || return 1
+    note "⚠ parked your dirt — bash ops/polaris unpark returns it"
+  fi
+  oifs="$IFS"; IFS="$nl"; set -f
+  # shellcheck disable=SC2086 # one path per line, split on newlines only, globbing off
+  set -- $bad
+  IFS="$oifs"; set +f
+  n=$#
+  # ONE ls-tree splits the list: what the tip still has is restored, the rest is removed
+  keep="$(git --literal-pathspecs -c core.quotepath=off ls-tree -r --name-only "$feat" -- "$@" 2>/dev/null)" || return 1
+  gone="$(printf '%s\n\n%s\n' "$keep" "$bad" | awk 'p == 0 && $0 == "" { p = 1; next } p == 0 { k[$0] = 1; next } $0 != "" && !($0 in k)')"
+  subj="$(cmd_task_commit_msg "$tf" | sed -n 1p)"
+  wave_on
+  pre="$(git rev-parse HEAD)"
+  if [ -n "$keep" ]; then
+    IFS="$nl"; set -f
+    # shellcheck disable=SC2086
+    set -- $keep
+    IFS="$oifs"; set +f
+    git --literal-pathspecs checkout -q "$feat" -- "$@" || { git reset -q --hard "$pre"; git checkout -q "$BASE" 2>/dev/null || true; return 1; }
+  fi
+  if [ -n "$gone" ]; then
+    IFS="$nl"; set -f
+    # shellcheck disable=SC2086
+    set -- $gone
+    IFS="$oifs"; set +f
+    git --literal-pathspecs rm -q --ignore-unmatch -- "$@" >/dev/null || { git reset -q --hard "$pre"; git checkout -q "$BASE" 2>/dev/null || true; return 1; }
+  fi
+  if git diff --cached --quiet \
+     || ! git commit -q -m "$subj" -m "re-land: $n path(s) did not arrive"; then
+    git reset -q --hard "$pre"; git checkout -q "$BASE" 2>/dev/null || true
+    return 1
+  fi
+  "$SELF" seal
+}
+
 cmd_done() { # Integrator only, after the task is landed (squash) or merged (legacy) into BASE
   local id="${1:?usage: polaris done <ID>}"
   local tf; tf="$(task_file "$id" review)" || die "$id is not in review/"
@@ -282,6 +335,23 @@ EOF
   local done_had=""
   if int_mine; then done_had=1; fi
   int_on "done $id" || return $?
+  # THE NET (safe-landing.md § 5): inside the lease and BEFORE anything moves or is deleted — the
+  # task, the verify stamp, the worktree, the branch — prove the task's files are on $BASE. rc 0 or
+  # 2 (nothing to prove) → nothing printed, nothing committed: the normal path, byte for byte. A
+  # mismatch re-lands only the missing paths through a wave + seal, then re-checks; still missing →
+  # ONE ⛔ line and rc 1, with the task left in review/ and feat/$id kept, because it is the only copy.
+  local lc_bad lc_rc=0
+  lc_bad="$(landed_content_ok "$id")" || lc_rc=$?
+  if [ "$lc_rc" -eq 1 ]; then
+    printf '⚠ %s did not fully arrive — re-landing
+' "$id"
+    ( cd "$PRIMARY" && _done_reland "$id" "$tf" "$lc_bad" ) || true
+    lc_rc=0; lc_bad="$(landed_content_ok "$id")" || lc_rc=$?
+    if [ "$lc_rc" -eq 1 ]; then
+      die "$id still missing from $BASE: $(printf '%s
+' "$lc_bad" | awk 'NR <= 5 { printf "%s%s", (NR > 1 ? " " : ""), $0 } END { if (NR > 5) printf " +%d more", NR - 5 }') — branch feat/$id kept"
+    fi
+  fi
   mutex_on
   mv "$BOARD/review/$id.md" "$BOARD/done/$id.md"
   set_fm status done "$BOARD/done/$id.md"

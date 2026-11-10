@@ -29,7 +29,7 @@ Two small fixes, both first in the chain. (1) The integration lease today only r
 - [ ] selftest history.sh and board.sh edited only if busyint / handover assert on what this changes
 
 ## T-223 — "Self-land holds ONE lease from land through seal and done, and unwinds to the exact sha"
-points 5 · risk normal · landed c3cd9de (2026-11-09) · claimed 2026-11-09
+points 5 · risk normal · landed c3cd9de (2026-11-09) · claimed 2026-11-09 → done 2026-11-09
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/integrate.sh
 
 ### Why
@@ -41,6 +41,20 @@ This is the fix itself (contract safe-landing sections 2-3, pointers in its v1.1
 - [ ] self_land decides the seal from the board inside the lease
 - [ ] api-kit.expected regenerated and matches
 - [ ] every golden in verify: still matches, unchanged; ownership, rc 3 queued-line-last and the risk: high refusal text are unchanged
+
+## T-224 — "done proves the task's files are on main, re-lands them if not, and keeps the branch until they match"
+points 5 · risk normal · landed d471c73 (2026-11-09) · claimed 2026-11-09
+files touched: kit/ops/lib/core.sh, kit/ops/lib/integrate.sh, ops/tests/api-kit.expected, ops/tests/landed-content.cmd, ops/tests/landed-content.expected
+
+### Why
+Nothing today checks that a done task's files really reached main before done deletes the only copy (the branch). Implement contract safe-landing sections 4-5: public helper landed_content_ok <ID> [<ref>] in core.sh (every path in `git diff --name-only --no-renames <merge-base> feat/<ID>` must have main's blob equal to the feat tip's, deletions absent; stdout the bad paths; rc 0 ok, 1 mismatch, 2 cannot check so proceed silently). In cmd_done (integrate.sh:198), inside the lease T-223 gave it and BEFORE the task moves, the verify stamp is removed (:362) or any branch/worktree is deleted: a mismatch prints the one warning line, re-lands only the mismatching paths on a fresh wave through the existing wave_on / seal machinery with a subject ending [<ID>] (landed_sha must still find it) and a `re-land:` body line, then re-checks; a second mismatch prints ONE line naming the task and files, exits 1, keeps the branch and leaves the task in review/. Normal path: no extra commit, no extra output. Golden landed-content drives cases a-d of contract § 8 plus case e of v1.1 § E (rider b): a task kicked back AFTER its squash landed, fixed on its branch and handed off again, is healed at done. land's two skip gates stay as they are (integrate.sh:543 "already landed — skipped ($id is in $BASE history)", :567 "… on $br"); done is the healer. Update any drill in history.sh / policy.sh whose fixtures now hit the check (fixtures without a feat branch get rc 2 and stay silent).
+
+### Acceptance
+- [ ] landed-content golden passes all five cases (a-d, and e: the kicked-back-after-land fix reaches main through done)
+- [ ] the branch is never deleted while content is missing
+- [ ] normal path: byte-identical output, zero extra commits; every golden in verify: unchanged
+- [ ] landed_content_ok is a pure read (no writes)
+- [ ] api-kit.expected regenerated and matches
 
 ## T-226 — "Prose: tasks land themselves, the run trusts the content check, lease inheritance, and bg wait --max 120"
 points 2 · risk normal · landed 075c033 (2026-11-09) · claimed 2026-11-09 → done 2026-11-09
