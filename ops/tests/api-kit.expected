@@ -407,6 +407,8 @@ kit/ops/lib/drift.sh	fn	pat_overlap
 kit/ops/lib/drift.sh	fn	rules_gate
 kit/ops/lib/drift.sh	fn	surfaces_apply
 kit/ops/lib/drift.sh	fn	surfaces_health
+kit/ops/lib/flow.sh	fn	cmd_begin
+kit/ops/lib/flow.sh	fn	cmd_wrap
 kit/ops/lib/handover.sh	fn	cmd_next
 kit/ops/lib/handover.sh	fn	next_brief
 kit/ops/lib/handover.sh	fn	next_budget

@@ -1,0 +1,11 @@
+begin rc=0
+pack printed: 1
+active: yes
+wrap rc=0
+finish ran: 1
+done: yes
+file on main: 1
+begin rc=3
+begin: T-002 needs the express lane, not solo — it waits in ready/ for the conductor
+ready: yes
+active: no
