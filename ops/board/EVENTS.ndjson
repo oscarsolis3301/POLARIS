@@ -1166,3 +1166,5 @@
 {"ts":1794331825,"ev":"done","id":"T-291","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794331851,"ev":"done","id":"T-292","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1794331875,"ev":"done","id":"T-293","who":"Owner@DESKTOP","note":"","pts":3}
+{"ts":1794331922,"ev":"promote","id":"T-294","who":"Owner@DESKTOP","note":"deps done: T-289","pts":3}
+{"ts":1794331925,"ev":"promote","id":"T-295","who":"Owner@DESKTOP","note":"deps done: T-291, T-225","pts":3}
