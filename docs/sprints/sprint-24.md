@@ -97,7 +97,7 @@ The owner decided: away, a high-risk task that belongs to the approved plan merg
 - [ ] CI's Linux and macOS runs of the full self-test are green on this task's own commit (see Notes; never in verify)
 
 ## T-295 — "Quick checks side by side: qa runs lint and typecheck together at ui, and test, lint and typecheck together at scoped and full"
-points 3 · risk normal · landed 0db6ca4 (2026-11-10) · claimed 2026-11-10
+points 3 · risk normal · landed 0db6ca4 (2026-11-10) · claimed 2026-11-10 → done 2026-11-10
 files touched: kit/ops/lib/qa.sh, ops/tests/qa-parallel.cmd, ops/tests/qa-parallel.expected
 
 ### Why
@@ -111,3 +111,29 @@ A project's checks run one after another (`for k in test lint typecheck build ua
 - [ ] qa-parallel golden: two keys log start/end to one file ⇒ overlapped at `scoped` and at `ui`, strictly ordered with `off`, the test key's marker never created at `ui`, printed text identical between on and off; the fixture has the kit installed into it and runs its own `ops/polaris qa`
 - [ ] every existing qa golden in verify stays green unchanged
 - [ ] CI's Linux and macOS runs of the full self-test are green on this task's own commit (see Notes; never in verify)
+
+## T-296 — "Release 6.16.0 - away means away, small means fast: version and changelog (LAST)"
+points 1 · risk normal · landed e991641 (2026-11-10) · claimed 2026-11-10
+files touched: CHANGELOG.md, kit/ops/VERSION
+
+### Why
+6.16.0 ships what plans/away.md Phase B built: once the owner approves a plan and switches to auto mode, nothing waits on them (the question tool is refused, a closing question is bounced, a high-risk task of the plan merges on the plan's yes and the close names it), a small UI change gets lint and typecheck side by side plus a look instead of a suite, every bigger change runs its checks side by side, and a landing rebuilds the project's knowledge digest once instead of twice. This task is the version number and the release notes, in plain words. Contract: ops/contracts/away.md § 9.
+
+### Acceptance
+- [ ] kit/ops/VERSION reads `version: 6.16.0`
+- [ ] CHANGELOG.md has a `## 6.16.0` section above 6.15.0 that covers T-289 to T-295 in plain words, one bullet per change a user would notice
+- [ ] nothing else changes
+
+## T-297 — "Filing a task binds its plan to your approval, so a plan approved before you left covers its tasks with no extra command"
+points 2 · risk normal · landed 068f2b1 (2026-11-10) · claimed 2026-11-10
+files touched: kit/ops/lib/author.sh, ops/tests/away-yes.cmd, ops/tests/away-yes.expected, ops/tests/new-task.cmd, ops/tests/new-task.expected
+
+### Why
+While the owner is away, a high-risk task of the approved plan merges on the plan's own yes (T-294). T-294 knows a plan is "the approved one" only when `approve --plan <slug>` was typed in the session after the approval. An agent that forgets that one command is back to a task waiting for a yes nobody will give. The contract (away.md § 4, "Binding a slug") also binds a plan the moment its tasks are filed: `new` binds the `plan:` slug of every task it files, while an approval is on record. This task adds that, and moves the test that guards `new` with it.
+
+### Acceptance
+- [ ] `new` (kit/ops/lib/author.sh) calls `_presence_bind <slug>` once for each distinct `plan:` slug among the tasks it just filed, after its one board commit; no approval on record → nothing is written; `new`'s output does not change by a byte
+- [ ] golden `new-task` fakes HOME and USERPROFILE together (and POLARIS_AWAKE_HOME), so it can never write into the real home, and pins both sides: with an approval on record the slug is appended once to `<sid>.approved` (filing a second task of the same plan does not append it again); with none, no file appears
+- [ ] golden `away-yes` gains the case that left T-294: a plan whose tasks were filed with `new` AFTER the approval, with no `approve --plan` at all, is covered at handoff (the merge entry, the `away:` line, the self-landing); a task filed BEFORE the approval is not
+- [ ] every other case of both goldens is unchanged
+- [ ] CI's Linux run of the full self-test is green on this task's own commit: `PROOF_GOLDENS=true bash tools/proof.sh`, once, by hand, through `bg run` (never in verify)
