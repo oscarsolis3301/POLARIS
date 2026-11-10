@@ -6,7 +6,10 @@
 # lines; the two slow goldens overlap at 3 and never at 1. Then a seventh golden that goes red only
 # while another golden is busy shows the "passed alone" note. .polaris/check-times is seeded before
 # each run so the two slow goldens are dealt first, to different workers. TMPDIR points into the
-# fixture, so a temp folder left behind is counted.
+# fixture, so a temp folder left behind is counted. Then `--only` with a comma list (minutes.md
+# § 15, T-287): two names run side by side in directory order whatever the list's order, an unknown
+# name is red and named, an empty entry is refused, one name prints what it always printed, and
+# `--update` with a list still goes one at a time.
 KIT="$(pwd)/kit/ops/polaris"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
@@ -49,4 +52,20 @@ echo '== the same seven, one at a time: no note =='
 C 1 | grep -c 'note:'
 echo '== --jobs needs a number =='
 ( cd "$R" && bash "$KIT" check --jobs many 2>&1; echo "rc=$?" )
+O() { seed; ( cd "$R" && TMPDIR="$FIX/tmp" bash "$KIT" check --jobs 3 "$@" 2>&1; echo "rc=$?" ); }
+echo '== --only with a two-name list =='
+O --only e-plain,b-rc > "$FIX/ab"; cat "$FIX/ab"
+O --only b-rc,e-plain > "$FIX/ba"
+cmp -s "$FIX/ab" "$FIX/ba" && echo "list order changes nothing: yes" || { echo "list order changes nothing: no"; diff "$FIX/ab" "$FIX/ba"; }
+O --only 'd-slow,c-*' >/dev/null; echo "a list runs side by side: $(ov)"
+echo '== a list with an unknown name =='
+O --only e-plain,nope
+echo '== an empty entry =='
+O --only e-plain,,b-rc
+O --only e-plain,
+echo '== one name, as always =='
+O --only e-plain
+O --only nope
+echo '== --update with a list goes one at a time =='
+O --only f-plain,e-plain --update
 echo "temp left behind: $(ls -A "$FIX/tmp" | wc -l | tr -d ' ')"

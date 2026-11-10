@@ -34,4 +34,30 @@ rc=1
 == --jobs needs a number ==
 ⛔ check: --jobs takes a number
 rc=1
+== --only with a two-name list ==
+✅ b-rc
+✅ e-plain
+✅ check: 2 golden(s), all green
+rc=0
+list order changes nothing: yes
+a list runs side by side: yes
+== a list with an unknown name ==
+   no goldens matched 'nope'
+rc=1
+== an empty entry ==
+⛔ usage: polaris check --only <glob>[,<glob>…] — an empty entry in 'e-plain,,b-rc'
+rc=1
+⛔ usage: polaris check --only <glob>[,<glob>…] — an empty entry in 'e-plain,'
+rc=1
+== one name, as always ==
+✅ e-plain
+✅ check: 1 golden(s), all green
+rc=0
+   no goldens matched 'nope'
+rc=1
+== --update with a list goes one at a time ==
+✅ updated golden: e-plain
+✅ updated golden: f-plain
+✅ check: 2 golden(s), all green
+rc=0
 temp left behind: 0
