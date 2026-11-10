@@ -1,0 +1,30 @@
+== a. a healthy seal: nothing new ==
+seal rc=0
+warnings: 0
+sealed line: 1
+[T-1] commits on main: 1
+on: main
+== b. a path clobbered on the wave before the seal: seal re-lands it ==
+on the wave: integrate/<date>
+seal rc=0
+⚠ T-2 did not fully arrive — re-landing
+main has the feat text: yes
+[T-2] commits on main: 2
+its re-land line: 1
+lease free: yes
+on: main
+T-1 is in: done
+T-2 is in: done
+== c. finish: task A landed, task B later changed the same file ==
+T-3 and T-4 are in: done done
+main has T-4's text: yes
+finish rc=0
+(no done-task refusal)
+== d. finish: a landed file put back by a commit that is no task ==
+finish rc=1
+⛔ T-5 is done but its files are not on main: src/5.txt
+feat/T-5 still there: yes
+== e. finish: done on the board, never landed on main ==
+finish rc=1
+⛔ T-5 is done but its files are not on main: src/5.txt
+⛔ T-6 is done but its files are not on main: src/6.txt
