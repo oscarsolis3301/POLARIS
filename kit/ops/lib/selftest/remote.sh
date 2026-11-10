@@ -536,12 +536,30 @@ drill_autoupdate() {
     grep -q '^✅ parked as polaris/park-' "$T/au5b.out" || { cat "$T/au5b.out"; echo "AUTOUPDATE (5b) PARK SAY FAIL (the park must announce itself)"; exit 1; }
     git stash list -1 | grep -q 'dirty tree at update' || { git stash list; echo "AUTOUPDATE (5b) PARK NAME FAIL (the stash must carry the why)"; exit 1; }
     tail -1 ops/PROTOCOL.md | grep -qx 'dirt' && { echo "AUTOUPDATE (5b) DIRT FAIL (the parked line must have left the file)"; exit 1; }
-    git diff-tree --no-commit-id --name-only -r HEAD | grep -qx 'ops/PROTOCOL.md' && { echo "=== DEBUG au5b.out"; cat "$T/au5b.out"; echo "=== DEBUG log"; git log --oneline -4; echo "=== DEBUG au_base=$au_base HEAD=$(git rev-parse HEAD)"; echo "=== DEBUG HEAD files"; git diff-tree --no-commit-id --name-only -r HEAD | head -30; echo "=== DEBUG status"; git status --porcelain | head -20; echo "=== DEBUG stash"; git stash list; echo "=== DEBUG git"; git --version; echo "=== probe C status"; git -c core.quotePath=false status --porcelain | head -40; echo "=== probe A"; printf 'ops/VERSION
-' | git --literal-pathspecs add --pathspec-from-file=-; echo "rcA=$?"; git reset -q; echo "=== probe B"; printf 'ops/VERSION
-' | git add --pathspec-from-file=-; echo "rcB=$?"; git reset -q; echo "=== probe D"; git -c core.quotePath=false status --porcelain | awk '{ print substr($0, 4) }' | git --literal-pathspecs add --pathspec-from-file=-; echo "rcD=$?"; git reset -q; echo "=== probe E"; git -c core.quotePath=false status --porcelain | awk '{ print substr($0, 4) }' | git add --pathspec-from-file=-; echo "rcE=$?"; git reset -q; echo "=== probe F update-index"; git -c core.quotePath=false status --porcelain --untracked-files=all | awk '{ print substr($0, 4) }' | git update-index --add --remove --stdin; echo "rcF=$?"; git diff --cached --name-only | wc -l; git reset -q; echo "=== DEBUG awk"; (awk -version 2>&1 || awk --version 2>&1) | head -2; echo "=== DEBUG pipeline probe"; printf ' M ops/x.md
-?? ops/new.txt
-' | SC_PRE=' M ops/x.md' awk 'function path(l) { l = substr(l, 4); sub(/$/, "", l); sub(/^.* -> /, "", l); if (l ~ /^".*"$/) l = substr(l, 2, length(l) - 2); return l } BEGIN { n = split(ENVIRON["SC_PRE"], a, "
-"); for (i = 1; i <= n; i++) if (a[i] != "") was[path(a[i])] = 1 } $0 != "" && !(path($0) in was) { print path($0) }'; echo "probe rc=$?"; echo "AUTOUPDATE (5b) COMMIT DIRT FAIL (a parked path must never enter the update's commit)"; exit 1; }
+    echo "=== PROBE3 start (git $(git --version), bash $BASH_VERSION)"
+    p3_race=0; p3_seq=0; p3_nolock=0; p3_i=0
+    while [ "$p3_i" -lt 40 ]; do
+      p3_i=$((p3_i + 1))
+      printf 'x%s\n' "$p3_i" >> ops/PROTOCOL.md; printf 'y%s\n' "$p3_i" > "p3new$p3_i.txt"
+      # (a) the shipped shape: status and add in ONE pipeline, so they run at the same moment
+      if git -c core.quotePath=false status --porcelain 2>/dev/null | awk '{ print substr($0, 4) }' 2>/dev/null \
+           | git --literal-pathspecs add --pathspec-from-file=- >/dev/null 2>"$T/p3.err"; then :
+      else p3_race=$((p3_race + 1)); [ "$p3_race" -le 3 ] && echo "PROBE3 race fail at $p3_i: $(head -1 "$T/p3.err")"; fi
+      git reset -q
+      # (b) one after the other: the list first, then the add
+      p3_l="$(git -c core.quotePath=false status --porcelain 2>/dev/null | awk '{ print substr($0, 4) }')"
+      if printf '%s\n' "$p3_l" | git --literal-pathspecs add --pathspec-from-file=- >/dev/null 2>"$T/p3.err"; then :
+      else p3_seq=$((p3_seq + 1)); [ "$p3_seq" -le 3 ] && echo "PROBE3 seq fail at $p3_i: $(head -1 "$T/p3.err")"; fi
+      git reset -q
+      # (c) one pipeline again, but the status takes no lock
+      if git --no-optional-locks -c core.quotePath=false status --porcelain 2>/dev/null | awk '{ print substr($0, 4) }' 2>/dev/null \
+           | git --literal-pathspecs add --pathspec-from-file=- >/dev/null 2>"$T/p3.err"; then :
+      else p3_nolock=$((p3_nolock + 1)); [ "$p3_nolock" -le 3 ] && echo "PROBE3 nolock fail at $p3_i: $(head -1 "$T/p3.err")"; fi
+      git reset -q
+    done
+    echo "=== PROBE3 of 40: one-pipeline failed $p3_race · one-after-the-other failed $p3_seq · no-lock pipeline failed $p3_nolock"
+    git checkout -q -- ops/PROTOCOL.md; rm -f p3new*.txt
+    git diff-tree --no-commit-id --name-only -r HEAD | grep -qx 'ops/PROTOCOL.md' && { echo "AUTOUPDATE (5b) COMMIT DIRT FAIL (a parked path must never enter the update's commit)"; exit 1; }
     git stash drop -q
     # (7) the self-commit (minutes.md § 5.1): on base, nothing staged, nothing half-done, not publish: pr →
     # ONE commit on top of au_base, the plain subject, no body, never pushed, the tree as it was before.
