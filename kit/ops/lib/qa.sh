@@ -148,7 +148,7 @@ EOF
         [ -z "$c2" ] && continue
         if ( cd "$PRIMARY" && bash -c "$c2" ) >"$out" 2>&1; then continue; fi
         printf '⛔ %s — RED: %s\n' "$k" "$c2"
-        tail -15 "$out" | sed 's/^/     /'
+        tail -20 "$out" | sed 's/^/     /'
         red=1; sred=1; sred_any=1; break
       done <<EOF
 $sel
@@ -160,7 +160,7 @@ EOF
       say "$k — green"
     else
       printf '⛔ %s — RED: %s\n' "$k" "$c"
-      tail -15 "$out" | sed 's/^/     /'
+      tail -20 "$out" | sed 's/^/     /'
       red=1; sred_any=1
     fi
   done
@@ -215,7 +215,7 @@ EOF
     say "doctor — env OK"
   else
     printf '⛔ doctor — RED:\n'
-    tail -5 "$out" | sed 's/^/     /'
+    tail -20 "$out" | sed 's/^/     /'
     red=1; hred=1
   fi
   rm -f "$out"
@@ -269,6 +269,53 @@ EOF
   say "qa: all green"
 }
 
+_fin_landed_gate() { # PRIVATE to cmd_finish (safe-landing.md § 7, as corrected by v1.3 § J): every
+  # task in done/ this run — plan: equal to the session's plan record, or all of done/ without one —
+  # whose feat/<ID> still exists must have its files on $BASE. A task whose branch is gone is rc 2 to
+  # landed_content_ok, nothing to prove, so the candidates are ONE for-each-ref, never a scan of
+  # done/. A differing path is MISSING only when no commit on $BASE after the task's newest landed
+  # [<ID>] commit touched it under another task's [<other ID>] (chain tasks share files, § C); no
+  # landed commit on $BASE at all → every differing path is missing. One `⛔` line per task, counted
+  # as pending in the caller's PEND, so qa and the cleanup below never run while one is red.
+  local ref id seen=" " tf fplan="" fpf bad rc landed miss nl oifs
+  nl='
+'
+  fpf="$(next_dir)/plan"
+  [ -f "$fpf" ] && fplan="$(tr -d ' \r\n' < "$fpf" 2>/dev/null)"
+  for ref in $(git -C "$PRIMARY" for-each-ref --format='%(refname)' refs/heads/feat/ refs/remotes/origin/feat/ 2>/dev/null); do
+    id="${ref##*/feat/}"
+    case "$seen" in *" $id "*) continue;; esac
+    seen="$seen$id "
+    tf="$BOARD/done/$id.md"
+    [ -f "$tf" ] || continue
+    if [ -n "$fplan" ] && [ "$(fm_get plan "$tf" 2>/dev/null)" != "$fplan" ]; then continue; fi
+    rc=0; bad="$(landed_content_ok "$id")" || rc=$?
+    [ "$rc" -eq 1 ] || continue
+    landed="$(landed_sha "$id" || true)"
+    miss="$bad"
+    if [ -n "$landed" ]; then
+      oifs="$IFS"; IFS="$nl"; set -f
+      # shellcheck disable=SC2086 # one path per line, split on newlines only, globbing off
+      set -- $bad
+      IFS="$oifs"; set +f
+      # ONE log over the differing paths: a path touched later by another task's commit was changed
+      # on purpose after this one landed — superseded, not lost
+      miss="$( { git -C "$PRIMARY" --literal-pathspecs -c core.quotepath=off log --format='%x01%s' --name-only "$landed..$BASE" -- "$@" 2>/dev/null
+                 printf '\002\n%s\n' "$bad"; } | awk -v me="[$id]" '
+        $0 == "\002" { p = 1; next }
+        p == 1 { if ($0 != "" && !($0 in sup)) print; next }
+        substr($0, 1, 1) == "\001" { s = substr($0, 2); o = 0
+                  if (match(s, /\[[^][]*\]$/) && substr(s, RSTART) != me) o = 1; next }
+        $0 != "" && o { sup[$0] = 1 }')"
+    fi
+    [ -n "$miss" ] || continue
+    PEND=$((PEND+1))
+    printf '⛔ %s is done but its files are not on %s: %s\n' "$id" "$BASE" \
+      "$(printf '%s\n' "$miss" | awk 'NR <= 5 { printf "%s%s", (NR > 1 ? " " : ""), $0 } END { if (NR > 5) printf " +%d more", NR - 5 }')"
+  done
+  return 0
+}
+
 cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish.md). The mechanical
   # half of CONDUCTOR.md's "the run is over ONLY when" list, in ONE call: nothing building, nothing
   # waiting to land, ready/ drained per drain:, no unmerged integrate/<date>, no orphan lock, clean
@@ -320,6 +367,7 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
     || fin_pending "uncommitted changes in the working tree — commit or discard them before calling the work done, or park it: bash ops/polaris park"
   n=$(fin_count active); [ "$n" -eq 0 ] || fin_pending "$n building — $(fin_ids active)"
   n=$(fin_count review); [ "$n" -eq 0 ] || fin_pending "$n waiting to land — $(fin_ids review) (audit + land + seal them)"
+  _fin_landed_gate
   # drain: (ops/contracts/hands-free-knobs.md) decides whether a queued task blocks the close. Under
   # `plan` one "go" authorizes THE PLAN, not the board, so ready/ is legitimately non-empty at the
   # end — gating on it there would make the default run un-finishable. Under queue/backlog it gates.
@@ -356,7 +404,7 @@ EOF
   # a finish nested inside our own landing pass is not a conflict. Past integration_stale_minutes
   # the holder is abandoned by definition and the next `int_on` steals it automatically, so that is
   # a caveat — gating on a crashed session would make the run un-finishable for 45 minutes.
-  if [ -d "$LOCKS/.int-lease" ] && [ "$(cat "$LOCKS/.int-lease/pid" 2>/dev/null | tr -d ' \r\n')" != "$$" ]; then
+  if [ -d "$LOCKS/.int-lease" ] && ! int_mine; then
     lho="$(cat "$LOCKS/.int-lease/who" 2>/dev/null | tr -d '\r\n')"; lho="${lho:-unknown}"
     lag="$(cat "$LOCKS/.int-lease/epoch" 2>/dev/null | tr -d ' \r\n')"
     case "$lag" in ''|*[!0-9]*) lag="$(date +%s)";; esac
@@ -511,8 +559,20 @@ EOF
         say "qa green on $BASE"
       fi
     else
-      fin_pending "qa is red on $BASE"
-      tail -6 "$out" | sed 's/^/     /'
+      # safe-landing.md v1.1 § F: name the red key(s), in qa's order, from qa's `⛔ <key> — ` header
+      # lines, then each red key's whole block verbatim (the header and its 5-space-indented lines),
+      # indented 5 more. ONE awk pass. No header at all (qa died before any) → today's tail -6.
+      w="$(awk '/^⛔ [^ ]+ — / { k = $2; o = o (o == "" ? "" : ", ") k }
+                END { printf "%s", o }' "$out")"
+      if [ -n "$w" ]; then
+        fin_pending "qa is red on $BASE — $w"
+        awk '/^⛔ [^ ]+ — / { b = 1; print "     " $0; next }
+             b && /^     / { print "     " $0; next }
+             { b = 0 }' "$out"
+      else
+        fin_pending "qa is red on $BASE"
+        tail -6 "$out" | sed 's/^/     /'
+      fi
     fi
     rm -f "$out"
   fi

@@ -43,7 +43,7 @@ This is the fix itself (contract safe-landing sections 2-3, pointers in its v1.1
 - [ ] every golden in verify: still matches, unchanged; ownership, rc 3 queued-line-last and the risk: high refusal text are unchanged
 
 ## T-224 — "done proves the task's files are on main, re-lands them if not, and keeps the branch until they match"
-points 5 · risk normal · landed d471c73 (2026-11-09) · claimed 2026-11-09
+points 5 · risk normal · landed d471c73 (2026-11-09) · claimed 2026-11-09 → done 2026-11-09
 files touched: kit/ops/lib/core.sh, kit/ops/lib/integrate.sh, ops/tests/api-kit.expected, ops/tests/landed-content.cmd, ops/tests/landed-content.expected
 
 ### Why
@@ -54,6 +54,20 @@ Nothing today checks that a done task's files really reached main before done de
 - [ ] the branch is never deleted while content is missing
 - [ ] normal path: byte-identical output, zero extra commits; every golden in verify: unchanged
 - [ ] landed_content_ok is a pure read (no writes)
+- [ ] api-kit.expected regenerated and matches
+
+## T-225 — "seal checks the tasks it just merged; finish refuses a done task whose files are missing from main and names the red qa key"
+points 4 · risk normal · landed 27de28c (2026-11-10) · claimed 2026-11-10
+files touched: kit/ops/lib/integrate.sh, kit/ops/lib/qa.sh, ops/tests/finish-qa-red.cmd, ops/tests/finish-qa-red.expected, ops/tests/landed-seal.cmd, ops/tests/landed-seal.expected
+
+### Why
+Contract safe-landing sections 6-7 on top of T-224's helper and re-land, plus rider c (v1.1 § F). (1) cmd_seal (integrate.sh:894) runs landed_content_ok over each task whose [<ID>] commit it just merged; a mismatch prints `⚠ <ID> did not fully arrive — re-landing` and re-lands that task in the same lease, then carries on (all green prints nothing new). (2) cmd_finish, now in kit/ops/lib/qa.sh:272 (it moved out of observe.sh in T-273), gains one gate in PHASE A, before qa runs and before anything is cleaned: every task in done/ this run (plan: matches the run's plan record, or all of done/ when there is none) must pass landed_content_ok (rc 0 or 2); otherwise ONE line `⛔ <ID> is done but its files are not on main: <paths>` and a non-zero exit. (3) Rider c: when qa is red, finish (qa.sh:510, today `fin_pending "qa is red on $BASE"` + `tail -6`) names the red key(s) and prints each red key's block, and qa's red block for a suite key or doctor shows its last 20 lines (today 15 and 5); the exact lines are pinned in v1.1 § F. Golden landed-seal: a sealed wave with a clobbered path is re-landed and says so; a healthy seal is unchanged; finish refuses a done task whose file is missing (fixture keeps the branch). Golden finish-qa-red: a fixture whose `test:` prints 30 numbered lines and fails; finish names `test` and shows lines 11-30 and nothing earlier.
+
+### Acceptance
+- [ ] landed-seal and finish-qa-red goldens pass
+- [ ] a healthy seal and a healthy finish print exactly what they printed before (every golden in verify: unchanged)
+- [ ] finish exits non-zero with one line naming the task and paths on a mismatch
+- [ ] a red finish names the failing qa key and shows that key's last 20 lines
 - [ ] api-kit.expected regenerated and matches
 
 ## T-226 — "Prose: tasks land themselves, the run trusts the content check, lease inheritance, and bg wait --max 120"

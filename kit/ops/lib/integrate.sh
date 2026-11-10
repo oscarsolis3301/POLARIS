@@ -245,7 +245,9 @@ _done_reland() { # _done_reland <ID> <task-file> <paths> — safe-landing.md § 
     git reset -q --hard "$pre"; git checkout -q "$BASE" 2>/dev/null || true
     return 1
   fi
-  "$SELF" seal
+  # POLARIS_SEAL_NOCHECK: this seal must not run § 6's check again — the caller re-checks itself,
+  # and a second mismatch there is the caller's one ⛔ line, never another re-land.
+  POLARIS_SEAL_NOCHECK=1 "$SELF" seal
 }
 
 cmd_done() { # Integrator only, after the task is landed (squash) or merged (legacy) into BASE
@@ -1123,12 +1125,26 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
   # the layout verdict follows it too (save-hops.md § 0.5), now that the merge and the tag stand —
   # done's call, word for word; never a failed seal, and a silent no-op until `hops --due` ships
   "$SELF" hops --due >/dev/null 2>&1 || true
-  [ -n "$seal_had" ] || int_off   # last mutation of the sealing pass is behind us — free the lane
   if [ -n "$oldtag" ]; then
     say "sprint $n re-sealed — integrate/$date merged into $BASE (--no-ff); sprint/$n: $old7 → $new7"
   else
     say "sprint $n sealed — integrate/$date merged into $BASE (--no-ff), tagged sprint/$n"
   fi
+  # THE SEAL CHECK (safe-landing.md § 6): every task whose [<ID>] commit this seal just merged must
+  # have its files on $BASE now. Still under the lease, so a mismatch re-lands in the same lane
+  # (done's _done_reland: a wave, one [<ID>] commit, a child seal that skips this check), then the
+  # next task. All green prints nothing. rc 2 (no feat branch left) is nothing to prove.
+  if [ -z "${POLARIS_SEAL_NOCHECK:-}" ]; then
+    local sid stf sbad src
+    for sid in $(printf '%s\n' "$subjects" | sed -n 's/.*\[\([^][]*\)\]$/\1/p'); do
+      src=0; sbad="$(landed_content_ok "$sid")" || src=$?
+      [ "$src" -eq 1 ] || continue
+      stf="$(task_file "$sid")" || continue
+      printf '⚠ %s did not fully arrive — re-landing\n' "$sid"
+      ( cd "$PRIMARY" && _done_reland "$sid" "$stf" "$sbad" ) || true
+    done
+  fi
+  [ -n "$seal_had" ] || int_off   # last mutation of the sealing pass is behind us — free the lane
   # A wave is not a run: a sprint may seal several times (INTEGRATOR.md § 4). So this POINTS at the
   # run-level verdict rather than calling it — an auto-called finish would print `⛔ pending:` inside
   # two successful seals out of three, and would put the whole suite between the merge and the push.
