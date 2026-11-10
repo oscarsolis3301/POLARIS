@@ -139,7 +139,7 @@ While the owner is away, a high-risk task of the approved plan merges on the pla
 - [ ] CI's Linux run of the full self-test is green on this task's own commit: `PROOF_GOLDENS=true bash tools/proof.sh`, once, by hand, through `bg run` (never in verify)
 
 ## T-298 — "The kit's list of names knows the presence hook's two helpers"
-points 1 · risk normal · landed 6358aa4 (2026-11-10) · claimed 2026-11-10
+points 1 · risk normal · landed 6358aa4 (2026-11-10) · claimed 2026-11-10 → done 2026-11-10
 files touched: ops/tests/api-kit.expected
 
 ### Why
@@ -148,3 +148,19 @@ The release proof for 6.16.0 is red on one golden, `api-kit`, which lists every 
 ### Acceptance
 - [ ] `bash kit/ops/polaris check --update --only api-kit` is run from the worktree, and the diff of ops/tests/api-kit.expected is EXACTLY two added rows: `kit/ops/hooks/presence-guard.sh	fn	pg_approve` and `kit/ops/hooks/presence-guard.sh	fn	pg_end` (tab-separated, like the rows around them). Any other difference → stop and report it instead of committing.
 - [ ] `bash kit/ops/polaris check --only api-kit` is green
+
+## T-299 — "6.16.1: a task without the approvals line gains it when the plan's yes is recorded, so older tasks are covered too"
+points 3 · risk normal · landed dac2f92 (2026-11-10) · claimed 2026-11-10
+files touched: CHANGELOG.md, kit/ops/VERSION, kit/ops/lib/builder.sh, ops/tests/away-yes.cmd, ops/tests/away-yes.expected, ops/tests/plan-approval.cmd, ops/tests/plan-approval.expected
+
+### Why
+Found by a live test of the published 6.16.0 an hour after it shipped. When the plan's yes is recorded on a task (by `approve --plan`, or at handoff while the owner is away), the entry is written into the task's `approved:` list. A task whose front matter has no `approved:` line is skipped with `⚠ <ID> skipped — no approved: front-matter field`, and a high-risk one then waits in review for a yes: the exact stall 6.16.0 was meant to end. The line is marked "optional" in the task template, and measured today in the owner's projects 13 of 15 open high-risk tasks do not have it. Contract: ops/contracts/one-yes.md v1.1.
+
+### Acceptance
+- [ ] `_approve_plan_entries` (kit/ops/lib/builder.sh) gives a task that has no `approved:` line an empty one, inside the front matter and directly above its closing `---`, and then writes the entries exactly as for any other task; nothing else in the task file changes
+- [ ] the `⚠ … skipped — no approved: front-matter field` line can only still appear when the file cannot be written; a task with an unknown `needs:` value is still skipped with its own ⚠ line, as today
+- [ ] `approve --plan` counts such a task like any other (`approved plan <slug>: <n> scope(s) on <m> task(s)`); plain `approve <ID> <scope>` (the hand-recorded form) is unchanged
+- [ ] golden `plan-approval`: the case that pinned the skip now pins the gained line and the entry; every other case is unchanged
+- [ ] golden `away-yes` gains one case: a high-risk task with NO `approved:` line, away and bound → the line is added, the `merge` entry is written, the `away:` line prints, and it lands itself
+- [ ] kit/ops/VERSION reads `version: 6.16.1` (that line only) and CHANGELOG.md has a `## 6.16.1 — 2026-11-10` entry above 6.16.0: two or three plain sentences saying what was wrong and what changed, in the same voice as the entries below it (no task IDs, no file names)
+- [ ] CI's Linux AND macOS runs of the full self-test are green on this task's own commit: `PROOF_GOLDENS=true bash tools/proof.sh`, then `bash tools/proof.sh --await macos-latest`, each once, by hand, through `bg run` (never in verify)
