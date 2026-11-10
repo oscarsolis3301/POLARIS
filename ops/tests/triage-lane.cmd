@@ -38,7 +38,7 @@ printf '%s\n' "$OUT" | sed -n '2,$p' | grep -c '^   '
 # The SOLO envelope. 5.21.0 widened it 2 -> 3 points because the gates were never the expense, the
 # CONTEXTS were: a 3-point task in `express` opens three cold starts to land work one context
 # finishes. This asserts the threshold ITSELF, not the help text — a revert to 2 reds here.
-grep -c 'pts" -le 3 \]' kit/ops/lib/observe.sh
+grep -c 'pts" -le 3 \]' kit/ops/lib/route.sh
 # ...and the help text must agree with it. cli-docs-parity: one fact, one home — a threshold that
 # disagrees with its own documentation is how an agent talks itself back into the wrong lane.
 bash kit/ops/polaris help | grep -c '1 task ≤3pts'
