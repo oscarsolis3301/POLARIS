@@ -8,7 +8,8 @@
 # (1) the stamp's shape · (3) an edited list makes handoff run the checks and refuse on the red line ·
 # (2) the list put back → handoff says proven · (4) run-verify on a same-tree land with that stamp
 # skips · (5) no stamp, or an old one-field stamp → the checks run · (6) the list edited to a red
-# line → run-verify fails and shows it · (7) `done` removes the stamp.
+# line → run-verify fails and shows it · (7) `done` removes the stamp · (8) an empty list (v2.4) →
+# verify, handoff and run-verify say acceptance is manual, never "not re-run", and leave no stamp.
 #
 # HERMETIC (the self-land-finish pattern): ONE throwaway repo under mktemp -d, no remote, no session
 # id, HOME and USERPROFILE faked together, the CLI run from INSIDE the fixture so polaris anchors to
@@ -87,3 +88,22 @@ echo "stamp before done: $([ -f "$ST" ] && echo yes || echo no)"
 bash "$KIT" done T-1 >/dev/null 2>&1; echo "done rc=$?"
 echo "T-1 is in: $(col T-1)"
 echo "stamp after done: $([ -f "$ST" ] && echo yes || echo no)"
+
+echo '== 8. an empty verify list is never proven: the manual-acceptance line, no stamp =='
+printf -- '---\nid: T-2\ntitle: no checks\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/b.txt\nverify: []\n---\n## Why\nthe lane with no checks.\n' > ops/board/ready/T-2.md
+bash "$KIT" claim T-2 >/dev/null 2>&1; echo "claim rc=$?"
+W2="$R/.polaris/wt/T-2"; ST2=.polaris/verify-stamp/T-2
+( cd "$W2" && echo b > src/b.txt && git add -A && git commit -qm 'feat: T-2 the edit' ) >/dev/null 2>&1
+lsum0() { set -- $(printf '' | cksum); printf '%s-%s' "$1" "$2"; }   # the listsum of an empty list
+plant() { mkdir -p .polaris/verify-stamp; printf '%s %s\n' "$(git -C "$W2" rev-parse HEAD)" "$(lsum0)" > "$ST2"; }   # an old stamp that must not count
+for step in verify handoff; do
+  plant
+  OUT="$(cd "$W2" && bash "$KIT" $step T-2 2>&1)"; echo "$step rc=$?"
+  echo "$step said acceptance is manual: $(printf '%s\n' "$OUT" | grep -c '^   no verify: commands on task (acceptance is manual)$' || true)"
+  echo "$step said not re-run: $(printf '%s\n' "$OUT" | grep -c 'not re-run' || true)"
+  echo "stamp after $step: $([ -f "$ST2" ] && echo yes || echo no)"
+done
+echo "T-2 is in: $(col T-2)"
+( git checkout -q -b integrate/vs2 main && git merge -q --squash feat/T-2 && git commit -qm 'land T-2 [T-2]' ) >/dev/null 2>&1
+plant
+bash "$KIT" run-verify T-2 2>&1; echo "run-verify rc=$?"

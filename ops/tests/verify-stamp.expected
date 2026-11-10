@@ -32,3 +32,16 @@ stamp before done: yes
 done rc=0
 T-1 is in: done
 stamp after done: no
+== 8. an empty verify list is never proven: the manual-acceptance line, no stamp ==
+claim rc=0
+verify rc=0
+verify said acceptance is manual: 1
+verify said not re-run: 0
+stamp after verify: no
+handoff rc=0
+handoff said acceptance is manual: 1
+handoff said not re-run: 0
+stamp after handoff: no
+T-2 is in: review
+   no verify: commands on task (acceptance is manual)
+run-verify rc=0

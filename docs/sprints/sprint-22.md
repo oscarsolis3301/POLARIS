@@ -108,7 +108,7 @@ Change version: in kit/ops/VERSION to 6.14.0 and leave every other line of that 
 - [ ] every verify line passes (VERSION is multi-line: use grep, never test "$(cat kit/ops/VERSION)" = ..., the T-217 trap)
 
 ## T-281 — "The route drill expects the sized notes everywhere: tier, then model, then effort"
-points 2 · risk normal · landed 5905a24 (2026-11-09) · claimed 2026-11-09
+points 2 · risk normal · landed 5905a24 (2026-11-09) · claimed 2026-11-09 → done 2026-11-09
 files touched: kit/ops/lib/selftest/policy.sh
 
 ### Why
@@ -121,7 +121,7 @@ Since this release `route` always prints three lines: the tier word, then the mo
 - [ ] nothing outside the route drill changes
 
 ## T-282 — "A skipped check rests on a real proof: the stamp names the commit and the check list it proved"
-points 3 · risk normal · landed a80a748 (2026-11-09) · claimed 2026-11-09
+points 3 · risk normal · landed a80a748 (2026-11-09) · claimed 2026-11-09 → done 2026-11-09
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/integrate.sh, ops/tests/self-land-finish.cmd, ops/tests/self-land-finish.expected, ops/tests/verify-stamp.cmd, ops/tests/verify-stamp.expected
 
 ### Why
@@ -134,3 +134,29 @@ This release let a landing skip a task's checks when the landed code was identic
 - [ ] `done` removes the stamp; `amend` still does
 - [ ] golden `verify-stamp` is new and covers the seven cases of § 12; `self-land-finish` is re-pinned for the two-field stamp; api-kit does not move (private names only)
 - [ ] `bash kit/ops/polaris doctor --selftest --only express` passes, run once by hand through `bg run` (not in verify: it takes 2-4 minutes)
+
+## T-283 — "The update drill checks that nothing was pushed by comparing before and after, so it passes in any drill order"
+points 1 · risk normal · landed b169382 (2026-11-09) · claimed 2026-11-09
+files touched: kit/ops/lib/selftest/remote.sh
+
+### Why
+The update drill's new "it commits, and never pushes" case proved "never pushed" by requiring that no remote-tracking ref exists at all. That holds only when the drill runs alone. CI runs every drill one after another in one practice repo, earlier drills leave such refs behind, and the case failed there on Linux and macOS (`AUTOUPDATE (7) PUSH FAIL (no remote ref may appear)`) while passing here. The check now records the remote refs before the update and requires them unchanged after it, which is what "never pushed" means in any order.
+
+### Acceptance
+- [ ] case (7) of `drill_autoupdate` records `git for-each-ref refs/remotes` before the update and fails only if that listing differs afterwards; its message says a remote ref moved or appeared
+- [ ] any other assertion in `drill_autoupdate` that assumes no earlier drill ran (no remotes, no stashes, no other branches, an empty registry) is made order-proof the same way; none is weakened
+- [ ] run one after another in ONE process (no `--parallel`): `bash kit/ops/polaris doctor --selftest --only remote,syncrace,pr-publish,autoupdate,selfland,wtreap,hops` passes; before the fix that same command fails at case (7)
+- [ ] nothing outside `drill_autoupdate` changes
+
+## T-284 — "A task with no checks is never called proven: handoff says acceptance is manual, as it always did"
+points 2 · risk normal · landed 449e62f (2026-11-09) · claimed 2026-11-09
+files touched: kit/ops/lib/builder.sh, ops/tests/verify-stamp.cmd, ops/tests/verify-stamp.expected
+
+### Why
+This release lets a handoff skip a task's checks when a stamp shows they already passed on the same commit. For a task that has no checks at all, the handoff started printing "verify: proven at … — not re-run" where it used to say that acceptance is manual. Nothing was proven, so the line is false, and three acceptance checks that pin the handoff's output failed. A task with no checks now behaves exactly as it did before this release.
+
+### Acceptance
+- [ ] with an empty verify list, `verify`, `handoff` and `run-verify` print the manual-acceptance line as before, write no stamp (and remove an old one), and never print a "not re-run" line (ops/contracts/minutes.md § 12, v2.4)
+- [ ] the goldens `guide-stale`, `pack-visual` and `shots-gallery` pass with their .expected files UNCHANGED
+- [ ] golden `verify-stamp` gains case (8) for the empty list; its other cases and `self-land-finish` stay green
+- [ ] api-kit does not move (private names only)
