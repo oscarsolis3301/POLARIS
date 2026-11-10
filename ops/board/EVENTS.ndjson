@@ -1068,3 +1068,5 @@
 {"ts":1794272220,"ev":"done","id":"T-280","who":"Owner@DESKTOP","note":"","pts":1}
 {"ts":1794272284,"ev":"new","id":"T-281","who":"Owner@DESKTOP","note":"ready","pts":2}
 {"ts":1794272316,"ev":"claim","id":"T-281","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1794272352,"ev":"done","id":"T-160","who":"conductor","note":"retired: shipped by hand"}
+{"ts":1794272352,"ev":"done","id":"T-232","who":"conductor","note":"retired: shipped by hand"}
