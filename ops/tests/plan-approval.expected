@@ -9,18 +9,19 @@ positional: rc=1 ⛔ approve --plan takes no task ID or scope (T-1) | board iden
 feat-branch: rc=1 ⛔ approve refused on feat/T-9 | board identical
 == approve --plan p
    ⚠ T-3 skipped — unknown needs: value 'bogus'
-   ⚠ T-5 skipped — no approved: front-matter field
-approved plan p: 2 scope(s) on 2 task(s)
+approved plan p: 3 scope(s) on 3 task(s)
 == after approval
 covered T-1 rc=0 
 covered T-2 rc=0 
 unknown-needs T-3 rc=1 needs: bogus and the plan did not approve need:bogus
 other-plan T-4 rc=0 
-needs-delete T-5 rc=1 needs: delete and the plan did not approve need:delete
+needs-delete T-5 rc=0 
 approved: [merge — WHO, DATE: plan p: the plan, approved]
 verify: []
 approved: [need:schema — WHO, DATE: plan p: the plan, approved]
 verify: []
+approved:
+  - need:delete — WHO, DATE: plan p: the plan, approved
 chore(board): approve plan p
 1
 == idempotent re-run

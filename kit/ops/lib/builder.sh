@@ -802,6 +802,21 @@ cmd_approve_plan() { # approve --plan <slug> -m "why" — ONE yes for every scop
   say "approved plan $slug: $n scope(s) on $m task(s)"
 }
 
+_approved_ensure() { # _approved_ensure <taskfile> — one-yes.md v1.1: a task with no `approved:` key in
+  # its front matter gains an empty `approved:` line directly above the closing `---`, so the plan's
+  # yes can be written onto older tasks (the template calls the line optional). Nothing else in the
+  # file changes and the closing line's ending (LF or CRLF) is kept. rc 0 = the key is there now;
+  # rc 1 = the file could not be written (untouched). A file that already has the key is not rewritten.
+  local tf="$1" tmp="$1.tmp.$$"
+  awk '/^---[\r]?$/ { fs++; if (fs==2) exit } fs==1 && index($0, "approved:")==1 { found=1; exit }
+    END { exit (found ? 0 : 1) }' "$tf" && return 0
+  awk '/^---[\r]?$/ { fs++
+      if (fs==2 && !done) { cr=""; if ($0 ~ /\r$/) cr="\r"; print "approved:" cr; done=1 } }
+    { print }
+    END { if (!done) exit 3 }' "$tf" > "$tmp" 2>/dev/null && mv "$tmp" "$tf" 2>/dev/null && return 0
+  rm -f "$tmp" 2>/dev/null; return 1
+}
+
 _approve_plan_entries() { # _approve_plan_entries <taskfile> <slug> <msg> — the per-task half of
   # approve --plan (one-yes.md § 1), shared with handoff's away record (away.md § 4): append every
   # scope the plan covers on this ONE task — `merge` for risk: high, need:<v> per needs:, every ask
@@ -842,7 +857,7 @@ EOF
     [ -n "$sc" ] || continue
     case "$nl$existing$nl" in *"$nl$sc|$slug$nl"*) continue;; esac
     entry="$sc — $WHO, $_APE_DAY: plan $slug: $msg"
-    if fm_append_item approved "$entry" "$f"; then
+    if _approved_ensure "$f" && fm_append_item approved "$entry" "$f"; then
       existing="$existing$nl$sc|$slug"; _APE_N=$((_APE_N+1))
       [ "$sc" = "merge" ] && _APE_MERGE=1
     else

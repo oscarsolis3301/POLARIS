@@ -4,6 +4,15 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.16.1 — 2026-11-10
+
+**A plan you approved now covers your older tasks too, so a risky one no longer waits for you while you are away.**
+
+The plan's yes is written onto each of its tasks, in a list of approvals. Older tasks often had no
+such list, so the yes could not be written down and a high-risk task still sat waiting for you,
+the very stall 6.16.0 set out to end. Now the list is added the moment the yes is recorded, and
+everything else on the task stays as it was.
+
 ## 6.16.0 — 2026-11-10
 
 **Once you approve a plan and switch to auto mode, nothing in the run waits on you any more. And a small screen tweak no longer pays for the whole test suite.**

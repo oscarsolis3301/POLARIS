@@ -81,3 +81,14 @@ self-land: 0
 landed: 0
 entries:
   []
+== away, g bound, h has no approved: line at all (one-yes.md v1.1): it gains one and lands
+  T-009 ready — nothing to wait for
+approved line before: 0
+handoff rc=0
+away line: 1
+  away: T-009 merges on the approved plan's yes (plan g, risk: high) — the close names it
+refusal: 0
+self-land: 1
+landed: 1
+entries:
+    - merge — WHO, DATE: plan g: approved plan, owner away
