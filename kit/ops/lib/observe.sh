@@ -129,6 +129,22 @@ cmd_status() {
 $pks
 EOF
   fi
+  # push: end | wave (ops/contracts/hour.md § 2): what origin does not have yet, from the LOCAL
+  # tracking ref only — never a network read. publish: direct, a remote and a tracking ref, n > 0;
+  # anything else prints nothing, so a pr-mode or remote-less status stays byte-identical.
+  local ahead
+  publish_resolve
+  if [ "$PUB" != "pr" ] && has_remote && git -C "$PRIMARY" show-ref -q --verify "refs/remotes/origin/$BASE" 2>/dev/null; then
+    ahead=$(git -C "$PRIMARY" rev-list --count "origin/$BASE..$BASE" 2>/dev/null || echo 0)
+    if [ "${ahead:-0}" -gt 0 ]; then
+      _push_resolve
+      if [ "$PUSH" = "end" ]; then
+        note "on this machine only: $ahead commit(s) — finish pushes them in one push (push: end)"
+      else
+        note "on this machine only: $ahead commit(s) — the next seal pushes them (push: wave)"
+      fi
+    fi
+  fi
 }
 
 cmd_board_fm() { # board-fm [<col>…] — ONE tab line per task: the frontmatter a Planner actually

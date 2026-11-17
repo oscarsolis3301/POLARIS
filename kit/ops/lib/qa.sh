@@ -138,9 +138,13 @@ EOF
   # `off` ⇒ every key runs right here, one after another, exactly as before.
   qpar=1; [ "$(cfg qa_parallel on)" = off ] && qpar=0
   [ "$qpar" -eq 0 ] || qpd="$(mktemp -d)"
+  # hour.md § 3: the suite run takes the machine's heavy slot ONCE, at its first real key, and lets
+  # it go right after the last key is collected — no suite configured, no slot.
+  local qheavy=""
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
+    [ -n "$qheavy" ] || { _heavy_on "qa suite"; qheavy=1; }
     if [ "$uiskip" -eq 1 ]; then case "$k" in test|build|uat) continue;; esac; fi
     # build can write where tests read: everything started side by side is collected first
     case "$k" in build|uat) _qa_drain;; esac
@@ -203,6 +207,7 @@ EOF
     _qa_key "$k" "$c" "$sel" "$m" "$out" || { red=1; sred_any=1; }
   done
   _qa_drain
+  [ -z "$qheavy" ] || _heavy_off
   [ -z "$qpd" ] || rm -rf "$qpd"
   fi
   fi
@@ -353,6 +358,58 @@ _fin_landed_gate() { # PRIVATE to cmd_finish (safe-landing.md § 7, as corrected
     printf '⛔ %s is done but its files are not on %s: %s\n' "$id" "$BASE" \
       "$(printf '%s\n' "$miss" | awk 'NR <= 5 { printf "%s%s", (NR > 1 ? " " : ""), $0 } END { if (NR > 5) printf " +%d more", NR - 5 }')"
   done
+  return 0
+}
+
+_finish_push() { # PRIVATE to cmd_finish: the run's ONE push (ops/contracts/hour.md § 2). Callers gate
+  # it (publish: direct, a remote). ONE ls-remote read of origin's $BASE and sprint tags; ahead =
+  # commits in $BASE that origin's $BASE lacks; a tag counts when origin lacks it (plain refspec) or
+  # holds another sha (--force-with-lease=<tag>:<origin sha>). Nothing to send → silent rc 0. Else ONE
+  # `git push --atomic`, under the heavy slot: green → the pinned line + base_push_clear, rc 0; red →
+  # base_push_reject, rc 1. Sets FP_N (the commits still here) for the caller's red line. The board
+  # ref is never part of it. No arrays, no fork per tag: one awk joins the two ref lists.
+  local rl lt rb="" k=0 specs="" leases="" kind ref osha rc=0
+  FP_N=0
+  if ! rl="$(git -C "$PRIMARY" ls-remote origin "refs/heads/$BASE" 'refs/tags/sprint/*' 2>/dev/null)"; then
+    # origin unreachable: count against the last known tracking ref (all of $BASE without one)
+    if git -C "$PRIMARY" show-ref -q --verify "refs/remotes/origin/$BASE" 2>/dev/null; then
+      FP_N=$(git -C "$PRIMARY" rev-list --count "origin/$BASE..$BASE" 2>/dev/null || echo 0)
+    else
+      FP_N=$(git -C "$PRIMARY" rev-list --count "$BASE" 2>/dev/null || echo 0)
+    fi
+    return 1
+  fi
+  lt="$(git -C "$PRIMARY" for-each-ref --format='%(objectname) %(refname)' 'refs/tags/sprint/' 2>/dev/null)"
+  # origin's lines, a `--` separator, then ours: B <origin base sha> · N <new tag> · M <moved tag> <origin sha>
+  lt="$(printf '%s\n--\n%s\n' "$rl" "$lt" | awk -v b="refs/heads/$BASE" '
+    $0 == "--" { l = 1; next }
+    NF < 2 || $2 ~ /\^\{\}$/ { next }
+    !l { if ($2 == b) print "B", $1; else o[$2] = $1; next }
+    { if (!($2 in o)) print "N", $2; else if (o[$2] != $1) print "M", $2, o[$2] }')"
+  while read -r kind ref osha; do
+    case "$kind" in
+      B) rb="$ref";;
+      N) k=$((k+1)); specs="$specs $ref";;
+      M) k=$((k+1)); specs="$specs $ref"; leases="$leases --force-with-lease=$ref:$osha";;
+    esac
+  done <<EOF
+$lt
+EOF
+  if [ -z "$rb" ]; then
+    FP_N=$(git -C "$PRIMARY" rev-list --count "$BASE" 2>/dev/null || echo 0)
+  elif git -C "$PRIMARY" cat-file -e "$rb^{commit}" 2>/dev/null; then
+    FP_N=$(git -C "$PRIMARY" rev-list --count "$rb..$BASE" 2>/dev/null || echo 0)
+  else
+    FP_N=$(git -C "$PRIMARY" rev-list --count "$BASE" --not --remotes=origin 2>/dev/null || echo 0)
+  fi
+  [ "$FP_N" -gt 0 ] && specs="refs/heads/$BASE:refs/heads/$BASE$specs"
+  [ -n "$specs" ] || return 0
+  _heavy_on "finish push $BASE"
+  ( cd "$PRIMARY" && git push --atomic -q $leases origin $specs ) >/dev/null 2>&1 || rc=1
+  _heavy_off
+  if [ "$rc" -ne 0 ]; then base_push_reject; return 1; fi
+  base_push_clear
+  say "pushed: $FP_N commit(s) and $k tag(s) to origin in one push"
   return 0
 }
 
@@ -571,13 +628,10 @@ EOF
   done <<EOF
 $(git -C "$PRIMARY" stash list --format='%gd %gs' 2>/dev/null | grep 'polaris/park-' || true)
 EOF
-  # Local ref read only — NEVER a fetch. A missing or stale origin ref is silence, not a caveat
-  # about nothing.
+  # hour.md § 2: under publish: direct with a remote, what is still on this machine is no longer a
+  # caveat to push by hand — the green path below makes the run's ONE push (_finish_push) and says
+  # how many commits it carried, or fails the close naming how many stay here.
   publish_resolve
-  if [ "$PUB" != "pr" ] && has_remote && git -C "$PRIMARY" show-ref -q --verify "refs/remotes/origin/$BASE" 2>/dev/null; then
-    n=$(git -C "$PRIMARY" rev-list --count "origin/$BASE..$BASE" 2>/dev/null || echo 0)
-    [ "$n" -eq 0 ] || fin_caveat "$n commit(s) on $BASE not pushed to origin — git push origin $BASE"
-  fi
 
   # PHASE B — qa, and only once the board is quiet: a suite run while a lane is still building
   # proves nothing about the finished state. finish RUNS it rather than requiring it, because
@@ -649,6 +703,17 @@ EOF
   done <<EOF
 $CAVS
 EOF
+
+  # THE ONE PUSH (hour.md § 2): publish: direct with a remote — push: end makes the run's first and
+  # only code push here; push: wave makes the same catch-up push when anything is still ahead
+  # (normally nothing). Red → the pinned line, rc 1, no done signal, no finish stamp, and the
+  # handover `finished` marker is taken back: the run is not over while its code is on one disk.
+  if [ "$PUB" != "pr" ] && has_remote; then
+    if ! _finish_push; then
+      [ -z "${hsd:-}" ] || rm -f "$hsd/finished" 2>/dev/null || true
+      die "finish: the push to origin failed — $FP_N commit(s) stay on this machine only; nothing else changed — run finish again"
+    fi
+  fi
 
   # publish: pr (publish-modes.md v2 § ship branch): local $BASE ran ahead of origin by design.
   # Fast-forward it to origin ship/<date> (an open ship/* is reused, so the same PR updates) and
