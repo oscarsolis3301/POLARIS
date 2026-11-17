@@ -83,7 +83,7 @@ it used to show the older, longer message. This updates the expected output to m
 changes.
 
 ## T-311 — The update's own commit no longer cancels the tune-up it just found
-points 3 · risk normal · landed e05a83f (2026-11-17) · claimed 2026-11-17
+points 3 · risk normal · landed e05a83f (2026-11-17) · claimed 2026-11-17 → done 2026-11-17
 files touched: CHANGELOG.md, kit/ops/VERSION, kit/ops/lib/admin.sh, kit/ops/lib/tune.sh, ops/contracts/tune.md, ops/tests/tune-report.cmd, ops/tests/tune-report.expected
 
 ### Why
@@ -97,3 +97,17 @@ both notes right after its own commit, so what it says at the end is true for th
 ### Acceptance
 - [ ] a due layout note cached for an older commit: `tune` still prints `layout:`, writes tune-due due for the new commit, and `next` says `tidy`
 - [ ] the update refreshes both notes after its own commit, and only when it committed something
+
+## T-312 — The update's verdict refresh no longer breaks the update after it
+points 2 · risk normal · landed 0546455 (2026-11-17) · claimed 2026-11-17
+files touched: kit/ops/lib/selftest/remote.sh
+
+### Why
+6.18.1 made the update refresh its two tune-up notes right after its own commit. On GitHub's Linux and
+macOS self-test that broke the next update in the same project: the autoupdate drill's second run
+failed. This finds why, fixes it in the update itself, and makes the drill expect the session-start
+line as it now truly reads.
+
+### Acceptance
+- [ ] doctor --selftest --only autoupdate is green
+- [ ] an update after a refreshed update applies
