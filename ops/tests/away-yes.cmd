@@ -10,6 +10,9 @@
 # ⇒ no entry · a hand entry on the task ⇒ no entry · `autonomy: standard` ⇒ no entry · `claim` never
 # binds · `new` binds: a task filed after the approval with no `approve --plan` at all is covered, one
 # filed before the approval is not.
+# `landed:` counts the land line every land prints, whichever tail follows it; `sealed:` pins that
+# tail (hour.md § 7): a lane whose plan still has cards in ready/ lands mid-wave (0), and a lane whose
+# only leftovers belong to other plans is the last lane out and seals the wave (1).
 # No sha, path or time is printed: the entry's actor and date are masked.
 KIT_DIR="$(pwd)/kit"
 FIX="$(mktemp -d)"
@@ -57,7 +60,8 @@ ship() { # ship <ID> — claim, one commit in the worktree, handoff from inside 
   printf '%s\n' "$out" | grep '^away: ' | sed 's/^/  /'
   echo "refusal: $(printf '%s\n' "$out" | grep -c 'risk: high never self-lands — a human must approve the merge; task stays in review/')"
   echo "self-land: $(printf '%s\n' "$out" | grep -c 'landing: self — continuing into land')"
-  echo "landed: $(printf '%s\n' "$out" | grep -c "$1 landed on the wave")"
+  echo "landed: $(printf '%s\n' "$out" | grep -c "^✅ landed $1 on ")"
+  echo "sealed: $(printf '%s\n' "$out" | grep -cE '^✅ sprint [0-9]+ (re-)?sealed — ')"
   echo "entries:"; entries "$1"
 }
 echo "installed: $([ -f ops/polaris ] && echo yes || echo no)"
