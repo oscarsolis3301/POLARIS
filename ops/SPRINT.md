@@ -36,3 +36,6 @@ each verify list is its whole gate, and CI's Linux serial self-test runs once pe
 | 2026-11-16 | 8 | 0 |
 | 2026-11-17 | 2 | 0 |
 | 2026-11-17 | 1 | 0 |
+
+## Learned
+- 2026-11-17 · speed --plan priced two 13-point chain cards as average cards (24 min); they took 23 and 42 min — price a chain card by its steps, not as one card (plan tune)
