@@ -1217,3 +1217,4 @@
 {"ts":1794901591,"ev":"promote","id":"T-305","who":"Owner@DESKTOP","note":"deps done: T-300, T-301, T-302, T-303","pts":3}
 {"ts":1794901593,"ev":"promote","id":"T-304","who":"Owner@DESKTOP","note":"deps done: T-300, T-301","pts":5}
 {"ts":1794901654,"ev":"claim","id":"T-304","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1794901661,"ev":"claim","id":"T-305","who":"Owner@DESKTOP","note":"","pts":3}
