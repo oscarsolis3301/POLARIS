@@ -1257,3 +1257,5 @@
 {"ts":1794942554,"ev":"grant","id":"T-311","who":"Owner@DESKTOP","note":"ops/tests/tune-report.expected"}
 {"ts":1794942560,"ev":"amend","id":"T-311","who":"Owner@DESKTOP","note":"verify[3]"}
 {"ts":1794942985,"ev":"note","id":"T-311","who":"Owner@DESKTOP","note":""}
+{"ts":1794943049,"ev":"handoff","id":"T-311","who":"Owner@DESKTOP","note":""}
+{"ts":1794943051,"ev":"all-review","id":"T-311","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
