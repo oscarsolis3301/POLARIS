@@ -103,7 +103,7 @@ for x in "$@"; do case "$x" in *polaris/board*) b=1;; esac; done
 exec "$(cat "$d/real")" "$@"
 RM4GIT
     chmod +x "$rm4_gd/git"
-    rm4_p="$rm4_gd:$PATH"; export POLARIS_HEAVY_DIR="$T/T-304/heavy"
+    rm4_p="$rm4_gd:$PATH"; rm4_hd="${POLARIS_HEAVY_DIR:-}"; export POLARIS_HEAVY_DIR="$T/T-304/heavy"
     rm4_gcd="$(git rev-parse --git-common-dir)"
     # finish must be able to go green: the lanes above handed off seconds before their done, so their
     # worktrees still beat — say those sessions are gone, and let the shipped tidy reap them.
@@ -184,7 +184,7 @@ RM4GIT
     if [ "$rm4_trk" = 1 ]; then git add -A -f ops/CONVENTIONS.md; else git rm -q --cached --ignore-unmatch ops/CONVENTIONS.md; fi
     git commit -qm 'drill: push wave restored'
     if [ -f "$T/T-304/sprint.bak" ]; then cp "$T/T-304/sprint.bak" ops/SPRINT.md; else rm -f ops/SPRINT.md; fi
-    unset POLARIS_HEAVY_DIR
+    if [ -n "$rm4_hd" ]; then export POLARIS_HEAVY_DIR="$rm4_hd"; else unset POLARIS_HEAVY_DIR; fi   # back to the selftest's scratch slot, never the real one
     rm -rf "$T/T-304"
     # ---- end T-304 the one push ----
     # ---- T-148 board_pull (ops/contracts/first-run.md § 5): the READ side of claim: claim-branch ----
