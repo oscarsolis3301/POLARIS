@@ -4,6 +4,31 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.17.0 — 2026-11-16
+
+**The hour: a run that used to take most of an afternoon is built to finish in about one.**
+
+- **Your work reaches GitHub once, at the end.** Tasks no longer send their work out one by one as
+  they finish; everything stays on your machine until the run closes, then goes out in a single
+  push. `status` tells you how much is waiting to go out. Prefer the old way? `push: wave` sends
+  each finished wave as it lands, in one push instead of two.
+- **One heavy job at a time on your computer.** Test runs and pushes now take turns instead of
+  fighting over the machine, so several helpers working at once no longer slow each other to a
+  crawl. A helper that is waiting says who it is waiting for; `heavy_slots:` changes how many run
+  at once.
+- **Fewer, bigger cards.** Work that can only ever happen one piece after another now goes on one
+  card of up to 13 points, split into steps, instead of a string of small cards that each paid
+  their own setup and landing.
+- **A finished task no longer waits for unrelated work.** The last helper out only counts this
+  run's own tasks, and when the next task is waiting on work that just landed, the wave closes at
+  once so it can start.
+- **A price on every plan.** `speed` now shows how long building takes with one, two or more
+  helpers side by side, and which number gets the most done per hour here; `speed --plan` gives a
+  plan's expected time before you approve it, and the planner re-shapes a plan once when it runs
+  over `target_minutes:` (60 by default).
+- **The rules say what the tools now do.** The protocol's wording — the size limit on a card, and
+  running the whole test suite once per wave rather than once per card — matches the new behaviour.
+
 ## 6.16.1 — 2026-11-10
 
 **A plan you approved now covers your older tasks too, so a risky one no longer waits for you while you are away.**

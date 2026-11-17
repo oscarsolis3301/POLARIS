@@ -155,7 +155,8 @@ work.
      > you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout.
      > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
 3. **Plan gate — the one human gate.** Present the plan in `voice:`: what gets built, in how many
-   parallel lanes and how many waves, about how long it will take, what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
+   parallel lanes and how many waves, how long it will take — the `projected:` line of `bash ops/polaris
+   speed --plan <slug>`, verbatim, never a guess — what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
    `drain: queue` (unset defaults to `plan`, not this) and other tasks already sitting in `ready/`,
    disclose that too —
    "…and once your plan lands I'll finish the N tasks already queued." `drain: backlog` →
@@ -191,7 +192,9 @@ work.
      of steps 4–6 and stop — the human chose to watch sessions in terminal panes (classic flow).
      Each pane loops itself via `bash ops/polaris next` after its handoff, so the queue drains
      without `start` nudges from you. Default (`subagents` or unset) → continue.
-4. **Build (parallel subagents).** Lanes = min(ready tasks, `autolaunch_max`, default 5). Spawn ALL
+4. **Build (parallel subagents).** Lanes = min(ready tasks, `autolaunch_max` (default 5), the
+   `lanes:` value `bash ops/polaris speed` prints when it prints one — the lane count that lands the
+   most cards per hour on this machine). Spawn ALL
    lanes in ONE message, in the background, each pinned to a distinct task ID from the ready queue
    (top-wsjf first — you know the queue; the lock still protects against races). Route each lane
    first — `bash ops/polaris route <ID>`, per the preamble rule — so every builder spawns at its
@@ -346,8 +349,9 @@ work.
 8. **Report, then close.** In `voice:`, **≤8 lines** (INIT.md's cap, same reason): what got built and
    what it means for them, what was set aside and why, whether every check passed, one thing to try
    right now — then EVOLVE's numbered proposals ("reply approve <n> to apply"). One report; the
-   board holds the detail. It says how long the run took and where the time went (`bash ops/polaris
-   speed`) and names each task an `away:` line reported (merged on the approved plan's yes).
+   board holds the detail. It quotes the plan's `projected:` line beside the real time, says where
+   the time went (`bash ops/polaris speed`), lists the owner-only "record" items (they are never
+   cards) and names each task an `away:` line reported (merged on the approved plan's yes).
    Then, and only then, run `bash ops/polaris finish` — the one command that decides how this run
    ends. It re-checks the board mechanically (nothing building, nothing waiting to land, `ready/`
    drained per `drain:`, no unmerged `integrate/<date>`, no orphan locks, clean tree, `qa` green on

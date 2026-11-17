@@ -57,20 +57,24 @@ is not a task commit). Then the modes diverge.
 ### `publish: direct` — the default: seal writes `<base>` locally
 ```bash
 bash ops/polaris seal [<date>]       # default <date> = today. base ← --no-ff merge of
-                                      # integrate/<date>, tags sprint/<n>, pushes base + tag if a
-                                      # remote exists. Merge conflict → seal aborts and dies; the
+                                      # integrate/<date>, tags sprint/<n>. push: end (the default)
+                                      # pushes NOTHING — finish makes the one push; push: wave sends
+                                      # base + tag in ONE atomic push if a remote exists.
+                                      # Merge conflict → seal aborts and dies; the
                                       # human resolves it — never auto-resolve.
 # then, per landed task, on <base>:
 bash ops/polaris done <ID>           # review→done · applies map_delta to MAP.md · writes the task's
                                      # surface: rows to ops/SURFACES.tsv (docs(surfaces):, or riding
                                      # docs(map):) · releases lock · removes worktree + feat branch
-                                     # (local AND origin, so no stale branch pile-up on the host) ·
+                                     # (local; origin too under push: wave — under push: end
+                                     # nothing was pushed, so there is nothing to delete there) ·
                                      # refuses if not actually landed
 bash ops/polaris finish              # the whole gate in one shot, on <base>: it RUNS qa (suite +
                                      # build + board hygiene + env; seconds when the background
                                      # proof already stamped this commit), deletes the merged
                                      # integrate/<date> itself, and then asks the run-level
-                                     # question. Red or pending here = the sprint is NOT done;
+                                     # question; green, it makes the one push of base + sprint
+                                     # tags (push: end). Red or pending here = the sprint is NOT done;
                                      # report it that way. See § 6 for what the exit code licenses.
 ```
 `done` needs no `run-verify` here: `<base>` now holds the very tree § 3's verify lines proved. `done` and `seal` run a content check — they prove each task's files are on `<base>` and re-land any that did not arrive — so never check main's files by hand or copy files across branches.
