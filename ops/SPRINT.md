@@ -10,6 +10,11 @@ next/triage take the tune-up with cards waiting, the hold rule keeps the layout 
 files, update/install/heal/done/seal name and refresh it, find --api skips nested helpers, TIDY/INIT/
 CLAUDE words). After both land: dogfood, then re-pin cli-help and api-kit (the seven nested rows leave).
 
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+| 2026-11-17 | 26 | 0 |
+
 # SPRINT 25 — The hour: push once, one heavy job, fewer cards, a price on every plan (6.17.0)          capacity: 30   dates: 2026-11-16–
 
 Owner ask of 2026-11-16 (plans/hour.md, approved in plan mode): Sonoba quoted 60–70 hours for one
