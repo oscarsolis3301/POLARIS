@@ -1272,3 +1272,4 @@
 {"ts":1794954981,"ev":"new","id":"T-315","who":"Owner@DESKTOP","note":"ready","pts":10}
 {"ts":1794954982,"ev":"new","id":"T-316","who":"Owner@DESKTOP","note":"ready","pts":12}
 {"ts":1794954984,"ev":"new","id":"T-317","who":"Owner@DESKTOP","note":"backlog","pts":3}
+{"ts":1794955178,"ev":"claim","id":"T-313","who":"Owner@DESKTOP","note":"","pts":13}
