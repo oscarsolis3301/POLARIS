@@ -63,7 +63,7 @@ Card count is the cost of a plan: every card pays a build, a landing and a wave.
 - [ ] route and triage untouched in code; route-tier and triage-lane stay green
 
 ## T-304 — "Code goes to origin once, at the end of a run: seal and done stop pushing under push: end, finish makes one atomic push, status says what is still on this machine"
-points 5 · risk normal · landed 311d9e6 (2026-11-17) · claimed 2026-11-16
+points 5 · risk normal · landed 311d9e6 (2026-11-17) · claimed 2026-11-16 → done 2026-11-17
 files touched: kit/ops/lib/integrate.sh, kit/ops/lib/observe.sh, kit/ops/lib/qa.sh, kit/ops/lib/selftest/remote.sh
 
 ### Why
@@ -77,7 +77,7 @@ The owner decided (2026-11-16): code is pushed once, at the very end of a run. T
 - [ ] keys-drift strict and green (all three key readers have landed)
 
 ## T-305 — "Release 6.17.0 - the hour: the words (Invariants 2 and 4, roles, protocol) and the version and changelog"
-points 3 · risk normal · landed a358f49 (2026-11-16) · claimed 2026-11-16
+points 3 · risk normal · landed a358f49 (2026-11-16) · claimed 2026-11-16 → done 2026-11-17
 files touched: CHANGELOG.md, kit/CLAUDE.md, kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/VERSION, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md
 
 ### Why
@@ -89,3 +89,21 @@ files touched: CHANGELOG.md, kit/CLAUDE.md, kit/ops/MANUAL.md, kit/ops/PROTOCOL.
 - [ ] PLANNER, CONDUCTOR, BUILDER, SOLO and INTEGRATOR say what hour.md § 9 lists; MANUAL's by-hand recipe matches `push: end`
 - [ ] kit/ops/VERSION reads `version: 6.17.0`; CHANGELOG.md has `## 6.17.0 — <date>` above 6.16.1, one plain bullet per change a user would notice, covering T-300 to T-304
 - [ ] nothing else changes; the root ops/ copy is untouched (the dogfood is the conductor's)
+
+## T-306 — "The tests keep their own heavy slot: check and the self-test never wait on the real one"
+points 2 · risk normal · landed 26cca93 (2026-11-17) · claimed 2026-11-17
+files touched: kit/ops/lib/check.sh, kit/ops/lib/selftest/remote.sh, kit/ops/lib/selftest/spine.sh
+
+### Why
+6.17.0 made every heavy check on a machine take turns through one shared slot folder. The kit's own
+tests run many goldens side by side, and a golden that ran a check without faking its home reached
+that real, shared slot: it waited on a sibling golden and printed a "heavy: waiting" line into its
+output, so it failed beside others and passed alone. Now `check` hands every golden its own scratch
+slot folder (a golden that sets its own, like heavy-slot, still wins), and the self-test does the
+same for every drill, serial or sharded, so tests never touch the real slot. Outside tests nothing
+changes.
+
+### Acceptance
+- [ ] the six named goldens run side by side three times with no "passed alone" note and no heavy waiting line
+- [ ] heavy-slot still proves the slot itself
+- [ ] doctor --fast and the CI proof stay green
