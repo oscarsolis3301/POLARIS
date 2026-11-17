@@ -37,7 +37,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  exploratory round trips a cold session otherwise spends
   new <draft.md>…                FILE NEW TASKS in one command: each draft, written from
                                  ops/templates/TASK.md, gets the next free T-NNN and is checked
-                                 (points 1-5 · plan: · risk: · files_owned · a named contract
+                                 (points 1-5, or up to 13 with steps: · plan: · risk: · files_owned · a named contract
                                  exists), then placed by the ready gate: ready/, or backlog/ while
                                  it waits on another task — a task in ready/, active/ or review/
                                  that shares a file with it joins its depends_on. ONE board commit
@@ -188,8 +188,13 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  board's current unbounded/bounded change set. --commit <sha>: that commit's paths, and
                                  the exact commands qa would run (and the uat it would skip). Read-only
   presence                       away or here: away = a plan approved in this session AND auto mode; then a why: line
-  speed                          how your last 30 changes would be tested (skip / related tests / everything),
-                                 your last full run time, and one line per slowing setting. Read-only
+  speed [--plan <slug> [<draft.md>…]]
+                                 how your last 30 changes would be tested (skip / related tests / everything),
+                                 your last full run time, build and land medians, build time by lanes in
+                                 use and the lane count that lands the most cards per hour here, and one
+                                 line per slowing setting. --plan: a plan's cards (board + drafts named),
+                                 waves on its critical path and lanes, priced with this project's medians
+                                 against target_minutes: (default 60); over it → the re-cut line. Read-only
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)
@@ -455,7 +460,7 @@ case "${1:-}" in
   surfaces)   shift 2>/dev/null || true; cmd_surfaces "$@";;   # no update_check_maybe: read-only, drift calls it
   shots)      cmd_shots;;   # no update_check_maybe: rewrites a generated index and commits nothing
   qa)         shift 2>/dev/null || true; cmd_qa "$@";;   # every flag forwarded: `qa --force --full` used to drop --full
-  speed)      shift 2>/dev/null || true; cmd_speed;;   # no update_check_maybe: read-only report, same class as depth
+  speed)      shift 2>/dev/null || true; cmd_speed "$@";;   # no update_check_maybe: read-only report, same class as depth
   depth)      shift 2>/dev/null || true; cmd_depth "$@";;   # no update_check_maybe: read-only, same class as triage/drift
   presence)   _presence_cmd;;   # no update_check_maybe: read-only, same class as depth (away.md § 2.4)
   bg)         shift; case "${1:-}" in run) awake_ensure || true;; esac; cmd_bg "$@";;   # no update_check_maybe:

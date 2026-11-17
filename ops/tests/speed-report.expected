@@ -6,6 +6,15 @@ landing:
 COUNTS
 build: median 10 min
 built → done: median 5 min
+build by lanes: 1 lane 10 min (n=3)
+lanes: 1 — the most cards per hour here (6.0 an hour)
+lanes:
+build by lanes: 1 lane 10 min (n=3) · 2 lanes 20 min (n=4)
+lanes: 1 — the most cards per hour here (6.0 an hour)
+lanes-faster-pairs:
+build by lanes: 1 lane 10 min (n=3) · 2 lanes 10 min (n=4)
+lanes: 2 — the most cards per hour here (12.0 an hour)
+lanes-below-3: 0 lines, 1 build line
 last-20:
 build: median 1 min
 built → done: median 2 min

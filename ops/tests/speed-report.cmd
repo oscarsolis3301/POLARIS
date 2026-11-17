@@ -60,6 +60,26 @@ EV=ops/board/EVENTS.ndjson
   printf '{"ts":9800,"ev":"done","id":"T-E","who":"t","note":"","pts":1}\n'
 } > "$EV"
 echo "landing:"; bash "$KIT" speed 2>&1 | sed 's/^Of your last [0-9]* changes: .*/COUNTS/'
+# Lanes in use (hour.md § 4): A, B and C above never overlap, so each ran at 1 lane — n=3, the bucket
+# prints (median 10). Add two pairs built side by side, 20 min each: 2 lanes, n=4. 1 × 60 / 10 and
+# 2 × 60 / 20 are both 6.0 cards an hour, and a tie goes to fewer lanes.
+cp "$EV" "$FIX/events.landing"
+{
+  printf '{"ts":20000,"ev":"claim","id":"P-1"}\n{"ts":21200,"ev":"handoff","id":"P-1"}\n{"ts":21300,"ev":"done","id":"P-1"}\n'
+  printf '{"ts":20060,"ev":"claim","id":"P-2"}\n{"ts":21260,"ev":"handoff","id":"P-2"}\n{"ts":21400,"ev":"done","id":"P-2"}\n'
+  printf '{"ts":30000,"ev":"claim","id":"P-3"}\n{"ts":31200,"ev":"handoff","id":"P-3"}\n{"ts":31300,"ev":"done","id":"P-3"}\n'
+  printf '{"ts":30060,"ev":"claim","id":"P-4"}\n{"ts":31260,"ev":"handoff","id":"P-4"}\n{"ts":31400,"ev":"done","id":"P-4"}\n'
+} >> "$EV"
+echo "lanes:"; bash "$KIT" speed 2>&1 | grep -e '^build by lanes' -e '^lanes:'
+# The 1-lane pairs again with 10-min builds instead: 2 lanes now lands 12.0 an hour, so it wins.
+sed -i 's/"ts":21200,/"ts":20600,/; s/"ts":21260,/"ts":20660,/; s/"ts":31200,/"ts":30600,/; s/"ts":31260,/"ts":30660,/' "$EV"
+echo "lanes-faster-pairs:"; bash "$KIT" speed 2>&1 | grep -e '^build by lanes' -e '^lanes:'
+# Below n=3 in every bucket: two finished tasks only → neither lanes line.
+head -n 4 "$FIX/events.landing" | grep -v '"id":"T-B"' > "$EV"
+printf '{"ts":9000,"ev":"claim","id":"T-C"}\n{"ts":9150,"ev":"handoff","id":"T-C"}\n{"ts":9180,"ev":"done","id":"T-C"}\n' >> "$EV"
+OUT="$(bash "$KIT" speed 2>&1)"
+echo "lanes-below-3: $(printf '%s\n' "$OUT" | grep -c -e '^build by lanes' -e '^lanes:') lines, $(printf '%s\n' "$OUT" | grep -c '^build: median') build line"
+cp "$FIX/events.landing" "$EV"
 # 21 finished tasks: the 20 newest are ten 1-minute builds and ten 9-minute ones (median 1); the oldest,
 # written LAST, is a 9-minute build that would tip the median to 9 if it were counted.
 awk 'BEGIN { for (i = 2; i <= 21; i++) { c = i * 10000; b = (i <= 11 ? 60 : 540)

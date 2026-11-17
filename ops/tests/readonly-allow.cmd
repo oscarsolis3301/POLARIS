@@ -38,6 +38,10 @@ bash ops/polaris check --only api-kit && bash ops/polaris route --role BUILDER
 bash ops/polaris pack T-001
 bash ops/polaris depth --commit abc1234
 bash ops/polaris speed
+# `speed --plan` prices a plan from the board, EVENTS and the drafts named; it writes nothing (hour.md § 5).
+bash ops/polaris speed --plan hour
+bash ops/polaris speed --plan hour a.md
+bash ops/polaris speed --plan hour ops/board/backlog/a.md b.md
 bash ops/polaris depth --commit HEAD~1
 bash ops/polaris slim
 # `next` reads the board and names the one thing this context does next, writing nothing. Every role
@@ -100,6 +104,12 @@ git config user.name attacker
 git branch -D main
 git worktree add /tmp/x
 bash ops/polaris claim T-001
+bash ops/polaris speed --apply
+bash ops/polaris speed --plan
+bash ops/polaris speed --plan --apply
+bash ops/polaris speed --plan hour --apply
+bash ops/polaris speed --plan "$(evil)"
+bash ops/polaris speed --plan hour a.md > out.txt
 bash ops/polaris slim --apply
 bash ops/polaris slim --restore
 # `next --do` promotes backlog→ready under the board lock. The read/write split is the same one

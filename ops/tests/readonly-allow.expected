@@ -26,6 +26,9 @@ allow  bash ops/polaris check --only api-kit && bash ops/polaris route --role BU
 allow  bash ops/polaris pack T-001
 allow  bash ops/polaris depth --commit abc1234
 allow  bash ops/polaris speed
+allow  bash ops/polaris speed --plan hour
+allow  bash ops/polaris speed --plan hour a.md
+allow  bash ops/polaris speed --plan hour ops/board/backlog/a.md b.md
 allow  bash ops/polaris depth --commit HEAD~1
 allow  bash ops/polaris slim
 allow  bash ops/polaris next
@@ -76,6 +79,12 @@ ask  git config user.name attacker
 ask  git branch -D main
 ask  git worktree add /tmp/x
 ask  bash ops/polaris claim T-001
+ask  bash ops/polaris speed --apply
+ask  bash ops/polaris speed --plan
+ask  bash ops/polaris speed --plan --apply
+ask  bash ops/polaris speed --plan hour --apply
+ask  bash ops/polaris speed --plan "$(evil)"
+ask  bash ops/polaris speed --plan hour a.md > out.txt
 ask  bash ops/polaris slim --apply
 ask  bash ops/polaris slim --restore
 ask  bash ops/polaris next --do

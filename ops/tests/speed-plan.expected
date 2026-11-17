@@ -1,0 +1,37 @@
+lanes-from-the-log:
+build by lanes: 1 lane 10 min (n=3) · 2 lanes 15 min (n=6)
+lanes: 2 — the most cards per hour here (8.0 an hour)
+plan:
+plan hour: 6 cards · 3 waves on the critical path · 2 lanes
+each card: about 15 min to build + 5 min to land (this project's medians at 2 lanes)
+projected: about 60 min (target 60 min)
+  rc=0
+capped-at-cards:
+plan solo: 1 cards · 1 waves on the critical path · 1 lanes
+each card: about 10 min to build + 5 min to land (this project's medians at 1 lanes)
+projected: about 15 min (target 60 min)
+  rc=0
+drafts:
+plan hour: 8 cards · 5 waves on the critical path · 2 lanes
+each card: about 15 min to build + 5 min to land (this project's medians at 2 lanes)
+projected: about 1.7 h (target 60 min)
+over the target — re-cut once: merge each chain into one card with steps:, fold riders into the card that causes them; still over, it runs as one release and this projection is shown before approval
+  rc=0
+unknown-slug:
+speed --plan nope: no cards carry plan: nope
+  rc=1
+read-only: repo byte-identical after
+over-target:
+plan hour: 6 cards · 3 waves on the critical path · 2 lanes
+each card: about 15 min to build + 5 min to land (this project's medians at 2 lanes)
+projected: about 60 min (target 10 min)
+over the target — re-cut once: merge each chain into one card with steps:, fold riders into the card that causes them; still over, it runs as one release and this projection is shown before approval
+  rc=0
+non-numeric-target:
+projected: about 60 min (target 60 min)
+no-history:
+plan hour: 6 cards · 3 waves on the critical path · 5 lanes
+each card: about 30 min to build + 15 min to land (no history here yet — kit defaults)
+projected: about 2.3 h (target 60 min)
+over the target — re-cut once: merge each chain into one card with steps:, fold riders into the card that causes them; still over, it runs as one release and this projection is shown before approval
+  rc=0
