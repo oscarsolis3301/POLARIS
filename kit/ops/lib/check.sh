@@ -652,6 +652,9 @@ _check_say() {
 # _check_parallel <root> <jobs> <names, one per line> — run the goldens <jobs> at a time, then print
 # their results in the usual order with the usual lines. A golden red beside others runs once more,
 # alone, before it counts.
+# Every golden runs with its own scratch POLARIS_HEAVY_DIR (hour.md § 3): the test harness never
+# touches the machine's real heavy slot, so a golden whose fixture runs verify or qa cannot wait on a
+# sibling golden and print a "heavy: waiting" note. A golden that exports its own (heavy-slot) wins.
 _check_parallel() {
   local root="$1" jobs="$2" names="$3" tmp i pids="" name s r red=0 n=0 tf="$PRIMARY/.polaris/check-times"
   G_DIR="$root/ops/tests"
@@ -667,7 +670,7 @@ _check_parallel() {
     if [ -f "$tmp/w$i" ]; then
       ( while IFS= read -r name <&3; do
           s=$SECONDS
-          ( cd "$root" && bash -c "$(cat "$G_DIR/$name.cmd")" ) > "$tmp/$name.out" 2>/dev/null && r=0 || r=$?
+          ( cd "$root" && POLARIS_HEAVY_DIR="$tmp/heavy/$name" bash -c "$(cat "$G_DIR/$name.cmd")" ) > "$tmp/$name.out" 2>/dev/null && r=0 || r=$?
           echo "$r" > "$tmp/$name.rc"
           echo "$name $((SECONDS - s))" >> "$tmp/w$i.t"
         done 3< "$tmp/w$i" ) &
@@ -681,7 +684,7 @@ _check_parallel() {
     n=$((n + 1))
     G_GOT="$(< "$tmp/$name.out")"; G_RC="$(< "$tmp/$name.rc")"
     if ! _check_ok "$name" && [ -f "$G_DIR/$name.expected" ]; then
-      G_GOT="$( cd "$root" && bash -c "$(cat "$G_DIR/$name.cmd")" 2>/dev/null )" && G_RC=0 || G_RC=$?
+      G_GOT="$( cd "$root" && POLARIS_HEAVY_DIR="$tmp/heavy-alone/$name" bash -c "$(cat "$G_DIR/$name.cmd")" 2>/dev/null )" && G_RC=0 || G_RC=$?
       if _check_say "$name"; then
         note "note: $name passed alone but not beside others — it shares state with another golden"
       else red=1; fi
@@ -761,11 +764,13 @@ cmd_check() { # check [--only <glob>] [--update] [--jobs <N>] [--scaffold] — g
   if [ "$upd" -eq 0 ] && [ "$jobs" -gt 1 ] && [ "$cnt" -gt 1 ]; then
     [ "$jobs" -gt "$cnt" ] && jobs=$cnt; _check_parallel "$root" "$jobs" "$sel"; return $?
   fi
+  # one at a time, each golden still gets its own scratch heavy slot folder (see _check_parallel)
+  local htmp; htmp="$(mktemp -d 2>/dev/null)" || die "check: could not make a temp folder"
   for name in $sel; do
     f="$dir/$name.cmd"
     n=$((n+1)); exp="$dir/$name.expected"; rcf="$dir/$name.rc"
     t0=$SECONDS
-    got="$( cd "$root" && bash -c "$(cat "$f")" 2>/dev/null )" && grc=0 || grc=$?
+    got="$( cd "$root" && POLARIS_HEAVY_DIR="$htmp/$name" bash -c "$(cat "$f")" 2>/dev/null )" && grc=0 || grc=$?
     times="$times$name $((SECONDS - t0))
 "
     want=0; [ -f "$rcf" ] && want="$(tr -d ' \r\n' < "$rcf")"
@@ -779,6 +784,7 @@ cmd_check() { # check [--only <glob>] [--update] [--jobs <N>] [--scaffold] — g
       red=1
     fi
   done
+  rm -rf "$htmp"
   [ -n "$times" ] && printf '%s' "$times" | _check_times "$PRIMARY/.polaris/check-times"
   # A NAMED check that runs nothing is red: `--only <typo>` used to pass, proving nothing. A bare
   # check over an empty ops/tests/ stays rc 0 — there is simply nothing yet.

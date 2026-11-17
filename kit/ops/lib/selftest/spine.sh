@@ -121,6 +121,7 @@ selftest() { # end-to-end mechanics drill in a throwaway repo — run once per n
   fi
   local T; T="$(mktemp -d)"
   export POLARIS_AWAKE_HOME="$T/awake-home"   # keep-awake.md: awake_ensure fires from claim/status/doctor/handoff/bg run, so EVERY drill would otherwise register this throwaway repo in the owner's real ~/.claude/polaris/awake — the registry follows the fixture and dies with it
+  export POLARIS_HEAVY_DIR="$T/heavy"   # hour.md § 3: drills run verify, qa and land --express, so EVERY drill would otherwise take (and wait on) the owner's real ~/.claude/polaris/heavy slot — shards each reach this line with their own $T
   note "selftest in $T${SELFTEST_ONLY:+  (subset: $SELFTEST_ONLY)}"
   ( set -e; cd "$T"
     git init -q -b main repo 2>/dev/null || { git init -q repo; git -C repo symbolic-ref HEAD refs/heads/main; }
