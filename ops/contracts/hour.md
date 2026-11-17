@@ -255,5 +255,22 @@ projected: about 82 min (target 60 min)
 over the target — re-cut once: merge each chain into one card with steps:, fold riders into the card that causes them; still over, it runs as one release and this projection is shown before approval
 ```
 
+## v1.1 — 2026-11-16: who owns `ops/tests/api-kit.expected`
+Supersedes the v1 cross-card line "no card owns `ops/tests/api-kit.expected`". `api-kit` runs
+`find --api 'kit/*'`, which pins more than functions: every public (non-`_`) shell/python function and
+constant, every h1-h4 heading of a `kit/**/*.md` file (role files, PROTOCOL, MANUAL, PROMPTS,
+kit/CLAUDE.md, templates — including a column-0 `# …` comment line in `templates/TASK.md`), and the
+first column of every row of a `kit/**/*.tsv` file (KEYS.tsv). So:
+- **T-300 owns it first**, for exactly the three `kit/ops/KEYS.tsv	key	push|heavy_slots|target_minutes`
+  rows of § 1 — nothing else in that file moves.
+- **T-305 owns it after T-300** (it already depends on T-300), for any heading it adds, rewords or removes
+  in the files it owns; prefer sentences to new headings. T-305 carries `api-kit` in its check line.
+- **No other card moves it.** T-301, T-302, T-303 and T-304 add no public function, no new `drill_*`
+  function (they extend existing drills) and no heading; T-303 writes the template's `steps:` key as a
+  real key with an inline comment (`steps:   # …`) or an indented comment — never a column-0 `# steps:`
+  line, which would be a heading row. Each keeps `api-kit` in its verify line as the proof.
+- Order: T-300 → T-305. T-304 never touches the file, so T-304 and T-305 still run side by side.
+
 ## Changelog
 - v1 2026-11-16: created for T-300 … T-305 (plan `hour`, kit 6.17.0).
+- v1.1 2026-11-16: ownership of `ops/tests/api-kit.expected` (T-300 then T-305); the TASK.md `steps:` shape that keeps it still.
