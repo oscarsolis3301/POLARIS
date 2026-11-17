@@ -27,7 +27,7 @@ Your kickoff names your role. Read `ops/roles/<ROLE>.md` and execute it. Nothing
 | `solo` | `ops/roles/SOLO.md` | one context does the whole path. **This is the common case** |
 | `express` | CONDUCTOR, express path | one builder, one integrator |
 | `full` | `ops/roles/CONDUCTOR.md` (no subagent tool → `PLANNER.md`) | the full loop |
-| `tidy` | `ops/roles/TIDY.md` | the layout pass is due — one context, no subagents |
+| `tidy` | `ops/roles/TIDY.md` | the tune-up is due — fold waiting chains, run the layout pass, propose settings; one context, no subagents |
 
 - **`start` is the everyday kickoff.** It means "take the next piece of work". Empty board → the
   triage answer routes you to PLANNER instead of erroring.

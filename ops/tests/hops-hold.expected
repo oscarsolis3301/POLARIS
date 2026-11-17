@@ -1,0 +1,15 @@
+--- 1. no board ref: the pass as it always was
+propose: src/checkout/ 8 · src/billing/ 8 · src/profile/ 6
+guides: src/components/CLAUDE.md src/hooks/CLAUDE.md src/services/CLAUDE.md tests/CLAUDE.md 
+--- 2. a done card holds nothing
+propose: src/checkout/ 8 · src/billing/ 8 · src/profile/ 6
+--- 3. a ready card owns one checkout file: checkout waits whole, search fits behind it
+propose: src/billing/ 8 · src/profile/ 6 · src/search/ 8
+rows naming CartLine: 0
+--- 4. a backlog card READS a file that names a billing file: billing waits too
+propose: src/profile/ 6 · src/search/ 8
+--- 5. a fresh board: a review card owns the file that imports every feature — nothing moves
+propose: nothing
+--- 6. a fresh board: a blocked card owns a whole folder — no move touches it, its guide waits
+propose: nothing
+guides: src/components/CLAUDE.md src/services/CLAUDE.md tests/CLAUDE.md 

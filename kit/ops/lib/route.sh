@@ -9,8 +9,8 @@ cmd_triage() { # triage [<ID…>] — print the LANE this board's work belongs i
   #   solo    one context does plan+build+integrate. No subagents at all.
   #   express conductor + ONE builder + ONE integrator, landing through `land --express`.
   #   full    the ordinary loop: planner, N builders, integrator, wave gate.
-  #   tidy    the layout pass (ops/roles/TIDY.md), one context — a bare triage on an empty, quiet
-  #           board whose cached verdict says the pass is due, once per session (save-hops § 2.3).
+  #   tidy    the tune-up (ops/roles/TIDY.md), one context — a bare triage with nothing in flight
+  #           whose cached verdict says it is due, once per session, cards waiting or not (tune § 6).
   # With ID(s) (stay-on-request.md § 1): ONLY the named tasks count toward the lane — a leftover
   # already sitting in ready/ never drags the run into a bigger lane than the request needs. Each
   # named ID must sit in ready/ or active/, else `die` (rc 1, nothing on stdout). With a session id,
@@ -45,31 +45,51 @@ cmd_triage() { # triage [<ID…>] — print the LANE this board's work belongs i
     done
   fi
 
-  if [ "$n" -eq 0 ]; then
-    # tidy (save-hops.md § 2.3): an empty board that is also QUIET — board_quiescent (admin.sh):
-    # nothing in review/, no lock, no lease, no live bg job — with the layout pass due sends a bare
-    # `start` to the pass instead of to a Planner with nothing to plan, at most once per session:
-    # the § 0.6 marker is created in the same call that prints `tidy`. The verdict is READ from the
-    # cache `hops --due` writes (§ 0.5), never computed — triage opens every run and stays cheap, so
-    # the file test comes first and a repo without the cache pays nothing. Missing, stale (its sha
-    # is not $BASE's tip), not-due or `hops: off` → today's two `full` lines, byte for byte. Named
-    # IDs never reach this branch (n is then $# > 0), so a named request is never rerouted.
-    local hd="$PRIMARY/.polaris/hops-due" hsha="" hv="" hmsg="" hmk="" cr
-    if [ -f "$hd" ]; then
-      cr="$(printf '\r')"
-      IFS="$POLARIS_TAB" read -r hsha hv hmsg < "$hd" || true
-      hsha="${hsha%$cr}"; hv="${hv%$cr}"; hmsg="${hmsg%$cr}"
+  if [ "$named" -eq 0 ]; then
+    # tidy (tune.md § 6, save-hops.md § 2.3): a bare triage whose CACHED verdict is due for the
+    # current base — .polaris/tune-due (tune's, § 2) or .polaris/hops-due (the layout pass's, § 0.5)
+    # — on a board with nothing in flight (board_quiescent inflight: nothing in active/ or review/,
+    # no lock, no lease, no live bg job) sends `start` to the tune-up, at most once per session: the
+    # § 0.6 marker is created in the same call that prints `tidy`. Cards waiting in ready/ or
+    # backlog/ never hold it off — the pass keeps off their files. The verdict is READ, never
+    # computed: triage opens every run and stays cheap, so the file tests come first and a repo
+    # without either cache pays nothing. Not due → every branch below, byte for byte. Named IDs
+    # never reach this branch, so a named request is never rerouted.
+    local hd="$PRIMARY/.polaris/hops-due" td="$PRIMARY/.polaris/tune-due" hsha="" hv="" hmsg="" hk=""
+    local hmk="" cr tdue="" tsha=""
+    if [ -f "$td" ] || [ -f "$hd" ]; then
       hmk="$(next_dir)/tidy"
-      if [ "$hv" = 0 ] && [ ! -e "$hmk" ] && [ "$(cfg hops on)" != off ] && [ -n "$hsha" ] \
-        && [ "$hsha" = "$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)" ] && board_quiescent; then
+    fi
+    if [ -n "$hmk" ] && [ ! -e "$hmk" ]; then
+      cr="$(printf '\r')"
+      if [ -f "$td" ]; then
+        IFS="$POLARIS_TAB" read -r hsha hv hmsg hk < "$td" || true
+        hsha="${hsha%$cr}"; hv="${hv%$cr}"; hk="${hk%$cr}"
+        if [ "$hv" = 0 ] && [ -n "$hsha" ] && [ -n "$hk" ] \
+          && [ "$hsha" = "${tsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then
+          tdue="$hk"
+        fi
+      fi
+      if [ -z "$tdue" ] && [ -f "$hd" ]; then
+        hsha=""; hv=""; hmsg=""
+        IFS="$POLARIS_TAB" read -r hsha hv hmsg < "$hd" || true
+        hsha="${hsha%$cr}"; hv="${hv%$cr}"; hmsg="${hmsg%$cr}"
+        if [ "$hv" = 0 ] && [ "$(cfg hops on)" != off ] && [ -n "$hsha" ] \
+          && [ "$hsha" = "${tsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then
+          tdue="${hmsg#layout pass due — }"
+        fi
+      fi
+      if [ -n "$tdue" ] && board_quiescent inflight; then
         mkdir -p "${hmk%/tidy}" 2>/dev/null || true
         date +%s 2>/dev/null > "$hmk" || true
         printf 'tidy\n'
-        note "the board is empty and the layout pass is due: ${hmsg#layout pass due — }"
+        note "tune-up due: $tdue"
         note "read ops/roles/TIDY.md — one context, no subagents"
         return 0
       fi
     fi
+  fi
+  if [ "$n" -eq 0 ]; then
     printf 'full\n'; note "nothing claimable — the board is empty, so a Planner runs first"; return 0
   fi
   if [ "$n" -gt 1 ]; then

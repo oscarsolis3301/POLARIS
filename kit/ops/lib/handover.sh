@@ -322,7 +322,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   # the board: line 1 = `<verb>[ <ID>]`, every other line a three-space note (the `triage` shape).
   # Writes nothing. `wait` is NEVER emitted with nothing in flight; `stop` fires only where a build
   # or promote would otherwise have, so a budget stops work rather than inventing it.
-  local d sid lk id f n can=0 pro=0 mine="" active="" blocked="" bgs="" p own cwds m vs vv vm nl='
+  local d sid lk id f n can=0 pro=0 mine="" active="" blocked="" bgs="" p own cwds m vs vv vm vk bn bsha="" tdue="" nl='
 '
   d="$(next_dir)"; sid="${CLAUDE_CODE_SESSION_ID:--}"
   # 0 — my own live lock on an active task: never a second task mid-task
@@ -342,11 +342,68 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
     [ -n "$NX_REV_HUMAN" ] && note "risk: high, human approves: $NX_REV_HUMAN"
     return 0
   fi
-  # rows 3 and 4 run BEFORE row 2: a budget stops only what would otherwise start, and its note
-  # counts what is left, so both predicates must have answered before the cap is consulted.
+  # rows 3 and 4 are ASKED here, before rows 1.5 and 2: a budget stops only what would otherwise
+  # start, and its note counts what is left, so both predicates must have answered before the cap is
+  # consulted. Asking is not printing — row 1.5 still outranks them.
   next_claimable && can=1
   next_promote && pro=1
   n="$(printf '%s' "$NX_ELIGIBLE" | wc -w | tr -d ' ')"
+  # 1.5 — the tune-up (tune.md § 6, save-hops.md § 2.1): its CACHED verdict is due for the current
+  # base — .polaris/tune-due (tune's, § 2) or .polaris/hops-due (the layout pass's, § 0.5) — and
+  # nothing is building or waiting to land: no task file in active/ or review/ (a human-gated one
+  # included), the lease not live, no own live bg job. Cards waiting in ready/ or backlog/ NEVER hold
+  # it off: the pass keeps off their files (index.py's hold rule). Files only, never `tune` or `hops`
+  # itself — this runs on the anchor hook's 10 s clock — and the one fork (git) is paid only once a
+  # file already says due. The marker <dir>/tidy is written in the call that prints the verb, so a
+  # session is routed to it at most once (§ 0.6) — never named `hops`: that is the Stop hook's counter.
+  for f in "$BOARD/active/"*.md; do [ -e "$f" ] || break; f="${f##*/}"; active="${active:+$active }${f%.md}"; done
+  if [ ! -e "$d/tidy" ] && [ -z "$active$NX_REV_OK$NX_REV_HUMAN" ] && [ "$NX_LEASE" != live ]; then
+    vs=""; vv=""; vm=""; vk=""
+    IFS="$POLARIS_TAB" read -r vs vv vm vk 2>/dev/null < "$PRIMARY/.polaris/tune-due" || true
+    vs="${vs%$'\r'}"; vv="${vv%$'\r'}"; vk="${vk%$'\r'}"
+    if [ "$vv" = 0 ] && [ -n "$vs" ] && [ -n "$vk" ] \
+       && [ "$vs" = "${bsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then tdue="$vk"
+    elif [ -f "$PRIMARY/.polaris/hops-due" ]; then
+      vs=""; vv=""; vm=""
+      IFS="$POLARIS_TAB" read -r vs vv vm 2>/dev/null < "$PRIMARY/.polaris/hops-due" || true
+      vs="${vs%$'\r'}"; vv="${vv%$'\r'}"; vm="${vm%$'\r'}"
+      if [ "$vv" = 0 ] && [ -n "$vs" ] && [ "$(cfg hops on)" != off ] \
+         && [ "$vs" = "${bsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then
+        tdue="${vm#layout pass due — }"
+      fi
+    fi
+  fi
+  # Own live bg jobs, scanned only where an answer needs them: row 1.5 once due, row 5 once nothing
+  # would build or promote. Ownership = the job's cwd, never its pid (bg-jobs.md v2).
+  if [ -n "$tdue" ] || { [ "$can" -eq 0 ] && [ "$pro" -eq 0 ]; }; then
+    cwds="$(printf '%s\n%s\n' "$PRIMARY" "$PWD"; for id in $mine; do wt_path "$id"; printf '\n'; done)"
+    cwds="$nl$(printf '%s' "$cwds" | tr 'A-Z\\' 'a-z/')$nl"
+    # ZERO forks per folder until a job is proven live (T-178): the registry is never pruned of its
+    # `.prev` archives, and one `basename` per folder was 24 s of this route on a 153-folder box —
+    # past the anchor hook's 10 s limit. So `.prev` goes first, before any other work, then the rc
+    # file, then `kill -0` (a builtin). Only a live rc-less job pays the one `tr` that case-folds.
+    for f in "$PRIMARY"/.polaris/bg/*/; do
+      case "$f" in *.prev/) continue;; esac
+      [ -e "$f" ] || break
+      f="${f%/}"; bn="${f##*/}"
+      [ -f "$f/rc" ] && continue
+      p=""; read -r p 2>/dev/null < "$f/pid" || true
+      bg_alive "${p%$'\r'}" || continue
+      p=""; IFS= read -r p 2>/dev/null < "$f/cwd" || true
+      p="${p%$'\r'}"; p="${p// /}"; [ -n "$p" ] || continue
+      p="$(printf '%s' "$p" | tr 'A-Z\\' 'a-z/')"; own=0
+      case "$cwds" in *"$nl$p$nl"*) own=1;; esac
+      [ "$own" -eq 1 ] && bgs="${bgs:+$bgs }$bn"
+    done
+  fi
+  if [ -n "$tdue" ] && [ -z "$bgs" ]; then
+    { mkdir -p "$d" && date +%s > "$d/tidy"; } 2>/dev/null || true
+    NX_HELD=""
+    printf 'tidy\n'
+    note "tune-up due: $tdue"
+    note "read ops/roles/TIDY.md — one context, it lands at most one task; then bash ops/polaris next"
+    return 0
+  fi
   if [ "$can" -eq 1 ] || [ "$pro" -eq 1 ]; then
     if ! { { [ "$can" -eq 1 ] && next_inplan $NX_BUILD; } || { [ "$can" -eq 0 ] && next_inplan $NX_ELIGIBLE; }; } && next_budget $(( NX_READY_N + n )); then printf 'stop\n'; note "$NX_BUDGET_NOTE"; return 0; fi
   fi
@@ -354,29 +411,9 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   if [ "$pro" -eq 1 ]; then printf 'promote\n'
     note "eligible: $NX_ELIGIBLE — bash ops/polaris next --do promotes them under the board lock"; return 0; fi
   # 5 — wait, only with work genuinely in flight: others' lanes · a live foreign lease · an OWN live
-  # bg job (ownership = the job's cwd, never its pid — bg-jobs.md v2). review/ work only a human can
-  # land is NOT in flight (role-handover.md v3): it no longer holds a run open mid-way — row 6 closes
-  # the run and names it, and the merge still waits for the human's recorded yes (Invariant 9).
-  for f in "$BOARD/active/"*.md; do [ -e "$f" ] || break; f="${f##*/}"; active="${active:+$active }${f%.md}"; done
-  cwds="$(printf '%s\n%s\n' "$PRIMARY" "$PWD"; for id in $mine; do wt_path "$id"; printf '\n'; done)"
-  cwds="$nl$(printf '%s' "$cwds" | tr 'A-Z\\' 'a-z/')$nl"
-  # ZERO forks per folder until a job is proven live (T-178): the registry is never pruned of its
-  # `.prev` archives, and one `basename` per folder was 24 s of this route on a 153-folder box —
-  # past the anchor hook's 10 s limit. So `.prev` goes first, before any other work, then the rc
-  # file, then `kill -0` (a builtin). Only a live rc-less job pays the one `tr` that case-folds.
-  for f in "$PRIMARY"/.polaris/bg/*/; do
-    case "$f" in *.prev/) continue;; esac
-    [ -e "$f" ] || break
-    f="${f%/}"; n="${f##*/}"
-    [ -f "$f/rc" ] && continue
-    p=""; read -r p 2>/dev/null < "$f/pid" || true
-    bg_alive "${p%$'\r'}" || continue
-    p=""; IFS= read -r p 2>/dev/null < "$f/cwd" || true
-    p="${p%$'\r'}"; p="${p// /}"; [ -n "$p" ] || continue
-    p="$(printf '%s' "$p" | tr 'A-Z\\' 'a-z/')"; own=0
-    case "$cwds" in *"$nl$p$nl"*) own=1;; esac
-    [ "$own" -eq 1 ] && bgs="${bgs:+$bgs }$n"
-  done
+  # bg job (scanned above). review/ work only a human can land is NOT in flight (role-handover.md
+  # v3): it no longer holds a run open mid-way — row 6 closes the run and names it, and the merge
+  # still waits for the human's recorded yes (Invariant 9).
   if [ -n "$active" ] || [ "$NX_LEASE" = live ] || [ -n "$bgs" ]; then
     printf 'wait\n'
     [ -n "$active" ] && note "active: $active"
@@ -384,26 +421,6 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
     for n in $bgs; do note "bg: $n running"; done
     [ -n "$NX_REV_HUMAN" ] && note "review/ awaits a human: $NX_REV_HUMAN"
     return 0
-  fi
-  # 5.5 — tidy (save-hops.md § 2.1): the board is done, nothing in review/ waits on a human, and the
-  # CACHED layout verdict is due for the current base — once per session. Files only, never `hops`
-  # itself: this runs on the anchor hook's 10 s clock. Due ⇔ .polaris/hops-due exists AND field 2 is
-  # 0 AND field 1 is $BASE's sha now AND `hops:` is not off; anything else is silence (§ 0.5). The
-  # forks (cfg, git) are paid only once the file already says due. The marker <dir>/tidy is written
-  # in the call that prints the verb, so a session is routed to the pass at most once (§ 0.6) — and
-  # never named `hops`: that file in the same dir is the Stop hook's hop counter.
-  if [ -z "$NX_REV_HUMAN" ] && [ ! -e "$d/tidy" ] && [ -f "$PRIMARY/.polaris/hops-due" ]; then
-    vs=""; vv=""; vm=""
-    IFS="$POLARIS_TAB" read -r vs vv vm 2>/dev/null < "$PRIMARY/.polaris/hops-due" || true
-    vs="${vs%$'\r'}"; vv="${vv%$'\r'}"; vm="${vm%$'\r'}"
-    if [ "$vv" = 0 ] && [ -n "$vs" ] && [ "$(cfg hops on)" != off ] \
-       && [ "$vs" = "$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)" ]; then
-      { mkdir -p "$d" && date +%s > "$d/tidy"; } 2>/dev/null || true
-      printf 'tidy\n'
-      note "layout pass due: ${vm#layout pass due — }"
-      note "read ops/roles/TIDY.md — one context, it lands one task; then bash ops/polaris next"
-      return 0
-    fi
   fi
   # 6 — otherwise the run's board is done; name what is parked, each only when non-empty. Human-gated
   # review/ work lands here too (v3), carrying the approval note: the close names what waits on you.

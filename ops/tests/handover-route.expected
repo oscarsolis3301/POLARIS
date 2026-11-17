@@ -26,8 +26,8 @@ finish
 tidy
 1
 2
-   layout pass due: ~40% fewer folders per change · 3 folders of 5+ files have no guide
-   read ops/roles/TIDY.md — one context, it lands one task; then bash ops/polaris next
+   tune-up due: ~40% fewer folders per change · 3 folders of 5+ files have no guide
+   read ops/roles/TIDY.md — one context, it lands at most one task; then bash ops/polaris next
 carriage-return: no
 marker: 1 · hop counter: untouched
 finish

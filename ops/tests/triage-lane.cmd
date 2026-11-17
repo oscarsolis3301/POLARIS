@@ -100,8 +100,8 @@ printf 'publish: pr\n' >> "$FIX/repo/ops/CONVENTIONS.md"
 OUT="$(cd "$FIX/repo" && bash "$KIT" triage 2>&1)"
 printf '%s\n' "$OUT" | sed -n 1p
 printf '%s\n' "$OUT" | grep -c 'publish: pr' || true
-# --- T-237: the tidy lane (save-hops.md § 2.3, § 0.5-§ 0.6). A bare triage on an EMPTY, QUIET board
-# whose cached layout verdict says due prints `tidy` with two pinned note lines and writes the
+# --- T-237: the tidy lane (save-hops.md § 2.3, § 0.5-§ 0.6; tune.md § 6). A bare triage on a QUIET
+# board (nothing in flight) whose cached verdict says due prints `tidy` with two pinned note lines and writes the
 # once-per-session marker; every other state keeps today's `full` lines BYTE FOR BYTE, so each case
 # prints the whole answer, not just line 1. The cache carries the fixture's REAL base sha — a made-up
 # one is exactly the stale cache a reader must refuse — and every call pins its own session id, so
@@ -131,9 +131,11 @@ printf -- '---\nid: T-7\npoints: 1\nstatus: review\n---\n' > "$FIX/repo/ops/boar
 rm -f "$FIX/repo/ops/board/review/T-7.md"
 # 8) a CRLF cache (python on Windows writes one until the dogfood) still reads due, the \r stripped
 printf '%s\t0\t%s\r\n' "$SHA" "$DUE" > "$HD"; T tl-8
-# 9) ready work is never rerouted, bare or named: the empty-board branch is never reached
+# 9) ready work waiting no longer holds the tune-up off (tune.md § 6) — a bare triage takes it, then
+#    its usual answer; a named request is never rerouted, marker or not
 printf -- '---\nid: T-1\ntitle: fixture task\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/a.txt\nverify: []\n---\n' > "$FIX/repo/ops/board/ready/T-1.md"
 T tl-9 | sed -n 1p
-( cd "$FIX/repo" && CLAUDE_CODE_SESSION_ID=tl-9 bash "$KIT" triage T-1 2>&1 ) | sed -n 1p
-# ...and only the two sessions that were told `tidy` carry the marker
+T tl-9 | sed -n 1p
+( cd "$FIX/repo" && CLAUDE_CODE_SESSION_ID=tl-10 bash "$KIT" triage T-1 2>&1 ) | sed -n 1p
+# ...and only the three sessions that were told `tidy` carry the marker
 ls -d "$FIX/repo/.polaris/handover/"*/tidy | sed 's#.*/handover/##'

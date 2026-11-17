@@ -1,0 +1,30 @@
+--- 1. a card building, first seen now: under a day, today's skip — and the first wait is recorded
+active, fresh
+   --say: skipped: active: 1
+   bare:  (silent)
+update-waiting: now · <latest> · fields 2
+--- 2. the same wait, over a day old: the one line, in both modes
+active, 2 days
+   --say: ⏸ POLARIS <cur> → <latest> has waited 2 day(s): 1 card(s) still building — it updates when they land — nothing to do
+   bare:  ⏸ POLARIS <cur> → <latest> has waited 2 day(s): 1 card(s) still building — it updates when they land — nothing to do
+--- 3. a wait recorded for another version starts over: under a day again
+active, another version
+   --say: skipped: active: 1
+   bare:  (silent)
+update-waiting now names: <latest>
+--- 4. the rest of the table, each alone, each waiting 3 days
+review
+   --say: ⏸ POLARIS <cur> → <latest> has waited 3 day(s): 2 card(s) wait to land, the oldest for 4 day(s) — land them or kick them back: bash ops/polaris next
+   bare:  ⏸ POLARIS <cur> → <latest> has waited 3 day(s): 2 card(s) wait to land, the oldest for 4 day(s) — land them or kick them back: bash ops/polaris next
+lock
+   --say: ⏸ POLARIS <cur> → <latest> has waited 3 day(s): a claim on T-K1 is still held — finish it, or: bash ops/polaris release T-K1
+   bare:  ⏸ POLARIS <cur> → <latest> has waited 3 day(s): a claim on T-K1 is still held — finish it, or: bash ops/polaris release T-K1
+lease
+   --say: ⏸ POLARIS <cur> → <latest> has waited 3 day(s): the landing lane is held — it frees itself after integration_stale_minutes
+   bare:  ⏸ POLARIS <cur> → <latest> has waited 3 day(s): the landing lane is held — it frees itself after integration_stale_minutes
+bg job
+   --say: ⏸ POLARIS <cur> → <latest> has waited 3 day(s): a background job is running (fixture-job) — it updates when the job ends
+   bare:  ⏸ POLARIS <cur> → <latest> has waited 3 day(s): a background job is running (fixture-job) — it updates when the job ends
+kit dirt
+   --say: ⏸ POLARIS <cur> → <latest> has waited 3 day(s): uncommitted edits inside the kit's own files — commit or stash them, then: bash ops/polaris update
+   bare:  ⏸ POLARIS <cur> → <latest> has waited 3 day(s): uncommitted edits inside the kit's own files — commit or stash them, then: bash ops/polaris update
