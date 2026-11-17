@@ -1255,3 +1255,4 @@
 {"ts":1794942507,"ev":"claim","id":"T-311","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794942549,"ev":"grant","id":"T-311","who":"Owner@DESKTOP","note":"ops/tests/tune-report.cmd"}
 {"ts":1794942554,"ev":"grant","id":"T-311","who":"Owner@DESKTOP","note":"ops/tests/tune-report.expected"}
+{"ts":1794942560,"ev":"amend","id":"T-311","who":"Owner@DESKTOP","note":"verify[3]"}
