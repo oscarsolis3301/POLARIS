@@ -838,6 +838,11 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
     fi
   fi
   if [ "$sc_k" -gt 0 ]; then
+    # The commit just moved the base, so the two verdicts heal wrote a moment ago now name the old
+    # commit and every reader would drop them. Refresh both for the new base BEFORE the closing lines
+    # read them (tune.md § 2, 2026-11-17 note) — silent, never an update failure.
+    "$SELF" hops --due >/dev/null 2>&1 || true
+    "$SELF" tune >/dev/null 2>&1 || true
     note "committed for you: chore(polaris): POLARIS $cur → $sc_new — $sc_k files, not pushed"
   else
     note "review the diff, then commit ops/ — nothing was committed for you"

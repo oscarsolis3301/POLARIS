@@ -88,3 +88,23 @@ rm -f ops/board/*/T-*.md .polaris/update-cache ops/VERSION .polaris/last-suite-s
 printf 'test: true\n' > ops/CONVENTIONS.md
 bash "$KIT" tune 2>&1; echo "  rc=$?"
 cache 1 0 -
+echo "--- 7. a due layout verdict cached for the commit before the update's own: tune refreshes it (T-311)"
+# heal writes .polaris/hops-due for commit A; one more commit stands in for the update's own, so the
+# cache names a commit that is no longer the base. tune must refresh it, not drop it. The real engine
+# runs here (the practice shop is due), reached through POLARIS_INDEX_BIN as hops-due.cmd does.
+S="$FIX/shop"
+bash -c '. "$1/lib/selftest/hops.sh"; hops_fixture "$2"' _ "${KIT%/polaris}" "$S" >/dev/null 2>&1
+printf '#!/usr/bin/env bash\nexec python "%s" "$@"\n' "${KIT%/polaris}/index.py" > "$FIX/engine"; chmod +x "$FIX/engine"
+export POLARIS_INDEX_BIN="$FIX/engine"
+cd "$S"
+( bash "$KIT" init-board && git add -A && git commit -qm 'chore: the board' ) >/dev/null 2>&1
+mkdir -p .polaris/brain
+bash "$KIT" heal >/dev/null 2>&1
+A="$(git rev-parse main)"
+printf '  cached for commit A: %s\n' "$(awk -F'\t' -v s="$A" '{ sub(/\r$/, ""); print ($1 == s ? "A" : "other"), ($2 == 0 ? "due" : "not due") }' .polaris/hops-due)"
+git -c user.name=t -c user.email=t@t commit -q --allow-empty -m 'chore(polaris): POLARIS 6.18.0 → 6.18.1'
+B="$(git rev-parse main)"
+bash "$KIT" tune 2>&1 | tr -d '\r' | sed -n '/^layout:/,/^   fix:/p'
+printf '  hops-due now: %s\n' "$(awk -F'\t' -v s="$B" '{ sub(/\r$/, ""); print ($1 == s ? "the new base" : "OLD"), ($2 == 0 ? "due" : "not due") }' .polaris/hops-due)"
+printf '  tune-due now: %s\n' "$(awk -F'\t' -v s="$B" '{ sub(/\r$/, ""); print ($1 == s ? "the new base" : "OLD"), ($2 == 0 ? "due" : "not due"), "kinds " $4 }' .polaris/tune-due)"
+printf '  next: %s\n' "$(CLAUDE_CODE_SESSION_ID=tr-7 bash "$KIT" next 2>&1 | tr -d '\r' | sed -n 1p)"
