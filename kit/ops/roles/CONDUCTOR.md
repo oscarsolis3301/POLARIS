@@ -148,7 +148,7 @@ work.
      `bash ops/polaris finish`. Any lane can end on this verb, once per session — run
      `bash ops/polaris next` before the solo and express lanes' `finish` (full lane: step 7) and
      treat a `tidy` in a lane's report the same: this subagent first, then that lane's own ending.
-     > You are TIDY, conductor-entered. Read ops/roles/TIDY.md and execute it — one context, no subagents. Up-front answers: <answers, or none>. Return: before/after score · what moved · what was left for you to decide. Do NOT run next or finish.
+     > You are TIDY, conductor-entered. Read ops/roles/TIDY.md and execute it — one context, no subagents. Up-front answers: <answers, or none>. Return: before/after score · what moved · folds made · settings proposals · what was left for you to decide. Do NOT run next or finish.
      > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
      > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
      > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
@@ -232,6 +232,11 @@ work.
      fix, hand off") one effort level above the one `route` named (low → medium → high → xhigh →
      max; max stays max). Still red → `bash ops/polaris release <ID> --to blocked -m "<why>"`, tell the
      human plainly what's parked and why, keep the other lanes going.
+   - Builder returns NEEDS PATH (one path no card owns, everything else green, e.g. a derived golden
+     the contract forgot) → `bash ops/polaris grant <ID> <path> -m "<why, naming the contract line>"`
+     from the primary, then resume the SAME builder (SendMessage: "granted <path>; re-pin, re-run
+     verify, hand off"). No release, no Planner resume, no cold start. grant refuses (another
+     ready/active card owns it) → a real carve fault: `release --to blocked` and resume the Planner.
    - Builder dies without reporting → a lane gone silent past `stale_hours` is a DEAD lane, not a
      slow one. **A lane that stopped on a capture refusal is not dead** — it needs the shot: line run,
      not a respawn; refused for a missing `--saw`, it needs the sentence written, not a respawn

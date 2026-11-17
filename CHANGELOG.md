@@ -4,6 +4,34 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.18.0 — 2026-11-17
+
+**The tune-up: every install ends faster than it started.**
+
+Read from the six projects on this machine on 2026-11-17: three had a layout pass due that had never
+run, two still landed every card with `integration: paranoid`, one kept `autolaunch_max: 6`, three had
+not updated at all (cards sitting in review, or uncommitted edits inside the kit's own files), and
+between them they held 96 open cards, most cut under the old 5-point rule — and this kit's own
+numbers put a card at about 36 minutes whatever its size. An update refreshed the kit and stopped there. Now it goes on:
+
+- **`tune` says what slows a project, one line each, with the one step that fixes it.** Waiting
+  chains that can become one card, a layout pass that is due, a lane limit above what this project
+  manages per hour, a whole-suite landing on every card, no fast checks, a kit that is behind and
+  why, and unused definitions every context pays for. Settings come back as proposals and are never
+  changed for you; the answer is kept in a small file the other commands read for free.
+- **`fold` turns a chain of small waiting cards into one card**, its pieces becoming steps, in one
+  board save that one undo reverses. Cards that waited on a folded piece wait on the new card.
+- **The tune-up runs on its own.** When it is due and nothing is being built or waiting to land,
+  `next` and `start` hop to it even with cards waiting — and it never moves a waiting card's files.
+  A typed `update` ends by naming it, and an update held back for more than a day now says why and
+  what frees it, instead of staying silent.
+- **`note` writes one line on your own card, in its own save**, so a builder's `assumed:` line no
+  longer rides another lane's board change.
+- **A builder one file short keeps its card.** It asks for that one path and is handed it, instead
+  of giving the card back and starting over cold.
+- **The public-name check stops counting helpers nested inside functions**, so a small private
+  helper no longer turns it red.
+
 ## 6.17.0 — 2026-11-16
 
 **The hour: a run that used to take most of an afternoon is built to finish in about one.**

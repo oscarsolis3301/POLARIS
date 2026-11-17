@@ -1,0 +1,36 @@
+no-id: rc=1
+  ⛔ usage: polaris note <ID> -m "<line>"
+  nothing written
+no-m: rc=1
+  ⛔ usage: polaris note <ID> -m "<line>"
+  nothing written
+empty-m: rc=1
+  ⛔ usage: polaris note <ID> -m "<line>"
+  nothing written
+unknown-flag: rc=1
+  ⛔ unknown flag --force — usage: polaris note <ID> -m "<line>"
+  nothing written
+two-lines: rc=1
+  ⛔ note takes ONE line — call it once per line
+  nothing written
+not-active: rc=1
+  ⛔ T-2 is not in active/ (state: ready) — note writes on CLAIMED work only
+  nothing written
+unknown-id: rc=1
+  ⛔ T-9 is not in active/ (state: unknown) — note writes on CLAIMED work only
+  nothing written
+good:
+✅ noted on T-1: assumed: the safe default
+  rc=0
+  subject: chore(board): note T-1
+  events: 1
+dash-not-doubled:
+✅ noted on T-1: a finding for the planner
+  rc=0
+  board commits: 2
+notes now:
+  ## Notes
+  - first
+  - assumed: the safe default
+  - a finding for the planner
+on the ref: - a finding for the planner

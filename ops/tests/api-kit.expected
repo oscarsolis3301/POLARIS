@@ -96,12 +96,14 @@ kit/ops/MANUAL.md	heading	Claim (Builder)
 kit/ops/MANUAL.md	heading	Express lane by hand (Integrator) — one small task, one pass
 kit/ops/MANUAL.md	heading	Finding code by hand — what `find` / `show` replace
 kit/ops/MANUAL.md	heading	Finish — "is the run over?" by hand
+kit/ops/MANUAL.md	heading	Fold — a chain of waiting cards becomes ONE chain card
 kit/ops/MANUAL.md	heading	Grant (Builder) — amend `files_owned` mid-flight, the sanctioned way
 kit/ops/MANUAL.md	heading	Handoff (Builder)
 kit/ops/MANUAL.md	heading	Integrate (Integrator) — audit → land-per-task → suite → seal
 kit/ops/MANUAL.md	heading	Kit lifecycle by hand (no `ops/polaris`)
 kit/ops/MANUAL.md	heading	Land (Integrator) — what `ops/polaris land <ID>` does by hand
 kit/ops/MANUAL.md	heading	MANUAL — raw recipes when you cannot run `ops/polaris`
+kit/ops/MANUAL.md	heading	Note — one line on a CLAIMED card, in its own board commit
 kit/ops/MANUAL.md	heading	Notes that keep this safe
 kit/ops/MANUAL.md	heading	Ownership + RULES proof (Builder, before handoff — mandatory)
 kit/ops/MANUAL.md	heading	Plan commit (Planner) — the moved set and `<base>` files split into TWO commits
@@ -335,6 +337,7 @@ kit/ops/lib/builder.sh	fn	cmd_approve_plan
 kit/ops/lib/builder.sh	fn	cmd_claim
 kit/ops/lib/builder.sh	fn	cmd_grant
 kit/ops/lib/builder.sh	fn	cmd_handoff
+kit/ops/lib/builder.sh	fn	cmd_note
 kit/ops/lib/builder.sh	fn	cmd_pack
 kit/ops/lib/builder.sh	fn	cmd_release
 kit/ops/lib/builder.sh	fn	cmd_resume
@@ -593,6 +596,8 @@ kit/ops/lib/surfaces.sh	fn	related_cmds
 kit/ops/lib/surfaces.sh	fn	surfaces_pairs
 kit/ops/lib/surfaces.sh	fn	surfaces_proposal
 kit/ops/lib/surfaces.sh	fn	surfaces_runner
+kit/ops/lib/tune.sh	fn	cmd_fold
+kit/ops/lib/tune.sh	fn	cmd_tune
 kit/ops/lib/visual.sh	fn	cmd_shots
 kit/ops/lib/visual.sh	fn	visual_caption
 kit/ops/lib/visual.sh	fn	visual_file_strays
