@@ -1,4 +1,4 @@
-# CONTRACT: the smooth run — fewer hand edits, reds found in their own wave   (v1 — 2026-11-17)
+# CONTRACT: the smooth run — fewer hand edits, reds found in their own wave   (v1.1 — 2026-11-17)
 Owned by the Planner. Builders code against this and never invent beyond it.
 Append-only once any dependent task is claimed: breaking changes = new `## v2` section + a migration task.
 Plan: `plans/smooth.md` (the eighteen gap lines dated 2026-11-17 on `ops/board/backlog/IDEAS.md`;
@@ -19,13 +19,14 @@ golden, `api-kit`, VERSION and CHANGELOG) depends on all four.
 - **Public names.** The only new public names in this release are T-313's `cmd_retire`
   (`kit/ops/lib/author.sh`) and T-315's three new MANUAL headings (§ 9). Every other helper any card writes
   is `_`-prefixed; no new column-0 public shell fn, python def/class, KEYS row or kit `.md` heading
-  anywhere else. `kit/ops/lib/handover.sh` keeps exactly its eight public fns and gains no fn at all
+  anywhere else — except T-315's ONE KEYS row `wave_check` (§ 3.5, v1.1). `kit/ops/lib/handover.sh` keeps exactly its eight public fns and gains no fn at all
   (inline changes only); `kit/ops/lib/route.sh` gains no public fn (`lib-census`). `update_hops_hint`
   keeps its name (install.sh greps `^update_hops_hint()`).
 - No `IFS="$(printf` in new code (`startup-budget`) — use `$POLARIS_TAB`. bash 3.2: no `case` inside
   `$(...)`, no assoc arrays, no `mapfile`; never one fork per card in a loop over the board. An awk
   `function` takes at least one parameter (or a dummy local).
-- No new CONVENTIONS key; nothing here edits `ops/CONVENTIONS.md`, `ops/RULES.tsv`, `.github/` or
+- ONE new CONVENTIONS key, `wave_check:` (§ 3.5) — read with a kit-code default, never written into
+  any project's CONVENTIONS; nothing here edits `ops/CONVENTIONS.md`, `ops/RULES.tsv`, `.github/` or
   anything under `~/.claude`. No new dependency. No repo file deleted (a retired card is MOVED, § 2).
 - Goldens are hermetic (mktemp repos, fake HOME + USERPROFILE, `file://` channels), print no
   sha/time/absolute path, never wait on a fixed `sleep` (poll an observable line), pipe python output
@@ -187,22 +188,43 @@ background proof after the seal.)
 - **Change set** = `git diff --name-only --no-renames "$BASE...integrate/<date>"` minus `ops/MAP.md`,
   `ops/SURFACES.tsv` and the sprint report directory (the paths `surface_change_set` already drops).
   **Wave cards** = the `[<ID>]` suffixes of the wave's non-board subjects (`$subjects`).
-- **Selection** = `test_select_for <change-set file>` — the one decision qa and express share: rc 0 →
-  those commands; rc 1 → `test:` verbatim (so a project with only `test:` set runs `test:` once).
+- **Selection (v1.1 — amended 2026-11-17 before T-315 was claimed, coordinator's rule).** The change
+  set splits in two: MAPPED paths (≥ 1 SURFACES row matches, `surface_rows_for`) and UNMAPPED ones.
+  - **Rows — at EVERY seal.** `test_select_for <mapped-paths file>` rc 0 → those commands run. rc 1
+    (e.g. a `-` row with `test_select:` unset) → that part needs the whole `test:` instead (below).
+  - **The whole `test:` — only when DUE.** Needed when an unmapped path exists or the rows' selection
+    failed. Due ⇔ `wave_check:` is `0`, OR no whole-suite green is on record, OR the newest one is at
+    least `wave_check:` minutes old. The newest whole-suite green = the later of `.polaris/wave-check`
+    field 2 and, when `.polaris/suite-stamp` field 3 reads `full`, its field 2 (a green `qa`/`finish`
+    counts). When it runs, the `-`-row commands it covers are not run separately (explicit `cmd` rows
+    still are).
+  - **Not due** → ONE note line, and the seal goes on:
+    `   wave check: whole test: not due — last green <m> min ago; it runs at the first seal after <k> more min (wave_check: <w>)`
+  - **`wave_check: off`** → the whole `test:` never runs at a seal (rows still do), note line
+    `   wave check: whole test: off at the seal (wave_check: off) — finish runs it`.
+  - `finish` is unchanged: the whole suite always runs there.
 - Runs each command once from `$PRIMARY` (`bash -c`), under the heavy slot (`_heavy_on "seal wave
   check"` once, `_heavy_off` after the last command or before a red exit), re-stamping the lease epoch
-  after each command like express does. At most one run per wave; nothing per card.
-### 3.2 Green
-One line: `✅ wave check — <k> command(s) green (<scoped: … | whole test: <reason>>)` then the seal
-goes on unchanged. Writes `.polaris/wave-check` = one LF line `<wave-tip-sha> green <scoped|full>`.
+  after each command like express does. Nothing per card.
+### 3.2 Green, and the stamp
+One line: `✅ wave check — <k> command(s) green (rows: <n><, whole test:>)` then the seal goes on.
+`.polaris/wave-check` (v1.1) = ONE LF line, three TAB fields: `<wave-tip-sha><TAB><epoch of the newest
+whole-suite green, or 0><TAB><pending>`, where `<pending>` = the cards sealed since that green as
+`<ID>:<seal-epoch>` items, comma-joined (`-` when none). Rewritten on every green check (rows-only
+included): a whole-suite green sets field 2 to now and `<pending>` to `-`; a rows-only green appends
+this wave's cards with the time now. Readers strip ``; malformed = no stamp (whole `test:` due,
+nothing pending). Items whose epoch is not after the newest whole-suite green (a later `qa` counts)
+are dropped on read.
 ### 3.3 Red — the wave stays open
 - Stops at the first red command. Primary checked back out to `$BASE` (best-effort, as § 15.2's
   refusals do), lease released, NOTHING merged or tagged, no report commit; `integrate/<date>` keeps
   every landed card. The cards stay in review/ landed, so a fix card lands on the same wave and the
   next `seal` re-runs the check.
-- **Named cards**: a SELECTED command → the wave cards whose own changed files (one `git log
+- **Named cards**: a ROW command → the wave cards whose own changed files (one `git log
   --name-only` over the wave) match the surface of any SURFACES row that produced that command (a row's
-  `cmd`, or a `-` row through `test_select`); `test:` verbatim or nothing matched → every wave card.
+  `cmd`, or a `-` row through `test_select`); nothing matched → every wave card. The WHOLE `test:` →
+  every card sealed since the last whole-suite green (`<pending>`) plus this wave's cards, in that order,
+  de-duplicated.
 - Prints, on stderr, then dies rc 1:
   ```
   ⛔ wave check red — integrate/<date> stays open: <command>
@@ -218,6 +240,16 @@ Refused on any `feat/*` branch (`seal --no-check refused on <br> — run it from
 checkout`) and without `-m`. Skips the check, prints `   wave check: skipped by hand — <why>`, adds one
 event `wave-check-skipped` (note = why) to the seal's board writes. `finish` still runs the whole suite.
 Usage line: `seal [<date>] [--no-check -m "why"] | seal --sync [<date>]`.
+### 3.5 The key `wave_check:` (v1.1, T-315 — `kit/ops/KEYS.tsv`)
+- `cfg wave_check 60`: minutes between whole-suite runs at a seal. `0` = every seal; `off` = never at
+  a seal; anything else that is not a whole number → 60. Never written into a project's CONVENTIONS.
+- KEYS.tsv row (TAB-separated, after the last row): `wave_check	6.19.0	60	the seal runs the tests
+  mapped to what a wave changed every time, and the whole test: at most once an hour for the rest (0 =
+  every seal, off = only at finish)` — one line. `keys-drift` ("registry lacks: nothing") proves it;
+  T-317's `api-kit` re-pin gains the row `kit/ops/KEYS.tsv	key	wave_check`.
+- Why the window: with seal on demand a chained plan seals at almost every card, so a whole suite at
+  every seal (Sonoba: 11 min; its own `speed` says 22 of its last 24 changes "run everything") puts
+  that suite on the critical path of every chain link — the per-card wait 6.17.0 removed (445 s → 4 s).
 
 ## § 4 `amend <ID> --deps +<ID>|-<ID> -m "why"` (T-315, integrate.sh `cmd_amend`)
 - For a card in backlog/ ready/ blocked/ or active/. Same containment as today: any `feat/*` branch
@@ -370,10 +402,10 @@ databaseId --jq '.[0].databaseId'`); a different run found → `proof: <job> —
   section with the same two paths — owned and run by **T-317** on the joined tree.
 - **T-317's last step** runs, side by side on the joined tree, every golden a wave-1 card created or
   re-pinned plus every golden more than one card's code reaches: `api-kit` (strict, rows for
-  `cmd_retire` and the three MANUAL headings), `pack-named-tests`, `pack-guides`, `pack-steps`,
+  `cmd_retire`, the three MANUAL headings and the `wave_check` KEYS row), `pack-named-tests`, `pack-guides`, `pack-steps`,
   `pack-visual`, `shots-gallery`, `new-task`, `retire-board`, `hops-map`, `fm-comments`,
   `builder-cmds`, `next-own-folder`, `handover-route`, `triage-lane`, `tune-hop`, `tune-report`,
-  `wave-check`, `amend-deps`, `away-yes`, `brain-once`, `express-pr`, `pr-one-link`,
+  `wave-check`, `keys-drift`, `amend-deps`, `away-yes`, `brain-once`, `express-pr`, `pr-one-link`,
   `update-registry`, `update-pending`, `update-waiting`, `speed-plan`, `proof-ci`, `lib-census`,
   `startup-budget`, `readonly-allow`, `plain-voice`. A red there is re-pinned by T-317 only when the
   diff is exactly what this contract says the joined tree prints (it owns the `pack-*`,
@@ -395,8 +427,10 @@ databaseId --jq '.[0].databaseId'`); a different run found → `proof: <job> —
   from the primary does not say `resume`, from the worktree it does; a stale tune-due + a quiet board →
   `next` and bare `triage` recompute and answer from the fresh verdict).
 - T-315: `wave-check` (a wave whose joined tree fails a mapped test does not seal, names the card,
-  `integrate/<date>` still open; a green wave seals and writes the stamp; `test:` unset is silent; an
-  unmapped path runs `test:` verbatim; `seal --no-check` records the why) · `amend-deps` (§ 4).
+  `integrate/<date>` still open; a green wave seals and writes the stamp; `test:` unset is silent; two
+  seals with unmapped paths inside the window run the whole `test:` once, a third after the window (the
+  stamp's epoch moved back — no sleep) runs it again; a whole-suite red names every card sealed since
+  the last green; `wave_check: off` and `0`; `seal --no-check` records the why) · `keys-drift` · `amend-deps` (§ 4).
 - T-316: `update-registry` (case-folded duplicate removed, worktree skipped, no-VERSION entry removed,
   typed `--all` forces the channel, `--auto` re-asks a same-version cache older than an hour) ·
   `update-pending` (a publish: pr fixture whose only dirt is its recorded pending update is not held;
