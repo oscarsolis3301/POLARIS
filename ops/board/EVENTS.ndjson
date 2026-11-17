@@ -1235,3 +1235,5 @@
 {"ts":1794908770,"ev":"handoff","id":"T-307","who":"Owner@DESKTOP","note":""}
 {"ts":1794908772,"ev":"all-review","id":"T-307","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1794908892,"ev":"done","id":"T-307","who":"Owner@DESKTOP","note":"","pts":1}
+{"ts":1794933154,"ev":"new","id":"T-308","who":"Owner@DESKTOP","note":"ready","pts":13}
+{"ts":1794933155,"ev":"new","id":"T-309","who":"Owner@DESKTOP","note":"ready","pts":13}
