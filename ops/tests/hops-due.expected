@@ -35,11 +35,11 @@ questions rc=1
 --- 9. heal writes the cache; the real next and triage read it
 heal's cache: one LF line — main sha · 0 · the line of case 1
 tidy
-   tune-up due: ~52% fewer folders per change · 4 folders of 5+ files have no guide
+   tune-up due: layout
    read ops/roles/TIDY.md — one context, it lands at most one task; then bash ops/polaris next
 finish
 tidy
-   tune-up due: ~52% fewer folders per change · 4 folders of 5+ files have no guide
+   tune-up due: layout
    read ops/roles/TIDY.md — one context, no subagents
 full
    nothing claimable — the board is empty, so a Planner runs first
