@@ -116,7 +116,9 @@ The tool's signature is `handoff [ID] [--saw "<what the after shot shows>"] [--n
 there was nothing to photograph>"]` — the first non-flag argument is the ID, and the flags may come
 in any order, before it or after it. By hand there are no flags, so you do by hand what they record.
 Commit everything on `feat/<ID>`. Then, gated on `publish:` in `ops/CONVENTIONS.md`:
-- `publish: direct` (default / absent / unknown value) → `git push origin feat/<ID>`.
+- `publish: direct` (default / absent / unknown value) with `push: end` (the default with
+  `claim: local-lock`) → do NOT push; code reaches origin once, at Finish.
+- `publish: direct` with `push: wave` (the default with `claim: claim-branch`) → `git push origin feat/<ID>`.
 - `publish: pr` → do NOT push (feat branches never leave the machine); all else identical.
 Then, in the PRIMARY checkout: `mv ops/board/active/<ID>.md ops/board/review/<ID>.md` with the
 acceptance boxes checked, append the handoff telemetry line, `board_commit "chore(board): handoff <ID>" ops/board/active/<ID>.md ops/board/review/<ID>.md ops/board/EVENTS.ndjson`
@@ -183,7 +185,7 @@ Then, per landed task (`publish: direct` → right after seal; `publish: pr` →
 - `mv ops/board/review/<ID>.md ops/board/done/<ID>.md`, stamp `landed: <sha>` onto its frontmatter, append the done telemetry line, `board_commit "chore(board): done <ID>" <the two task paths> ops/board/EVENTS.ndjson` + `sync_board`;
 - **map_delta is a SEPARATE base commit, not part of the board_commit:** ONLY when the task's `map_delta` is non-empty, append those lines to `ops/MAP.md` and commit on `<base>` as `docs(map): <ID> <first delta line>`. This and the `surface:` rows below are the ONLY commits any board mutation ever makes on `<base>`;
 - **`surface:` rows ride that same base commit:** for each item of the task's `surface:` list write one row `<surface><TAB><tests><TAB><cmd or -><TAB><note> [<ID>]` to `ops/SURFACES.tsv` (grammar: the first token is the surface, `tests:` is required and its value the next token, `cmd:` is everything up to ` note: ` or the end — absent means `-`, `note:` is the rest — absent means the task's `title:`); seed the file with its comment header first when it is absent. Skip, with a `⚠` note and never a die, a malformed item, a `tests` glob that covers its own surface, or a (surface, tests) pair the file already has. Then commit on `<base>`: a `docs(map):` commit made above takes `ops/SURFACES.tsv` too; rows only → `docs(surfaces): <ID> <first row's surface>` over `ops/SURFACES.tsv` alone. No rows → byte-identical to before. The file is RULES-guarded `path` — this recipe is its ONLY writer;
-- release its lock and delete `feat/<ID>` local AND — `publish: direct` only — remote (`git push origin :refs/heads/feat/<ID>`; under `publish: pr` the feat branch was never pushed, so the remote delete is a no-op — skip it), then `git worktree prune`.
+- release its lock and delete `feat/<ID>` local AND — `publish: direct` with `push: wave` only — remote (`git push origin :refs/heads/feat/<ID>`; under `push: end` or `publish: pr` the feat branch was never pushed, so the remote delete is a no-op — skip it), then `git worktree prune`.
   The worktree itself is `wt_remove`'s: `bash ops/polaris sweep --fix` removes it once idle; by hand only when the beat
   file is older than `wt_live_minutes`: `git worktree remove .polaris/wt/<ID>`
   (never `--force`; a dirty one is moved to `.polaris/wt-archive/`, never deleted).
@@ -239,15 +241,16 @@ git merge --no-ff "integrate/<date>" -m "Sprint <n> — <goal>
 
 - <subject of each non-chore(board) commit in base..integrate, oldest first>"
 git tag sprint/<n>                       # lightweight, on the merge commit
-git push origin <base> "sprint/<n>"      # only if a remote exists
+git push --atomic origin <base> "sprint/<n>"   # push: wave only, and only if a remote exists
 ```
+Under `push: end` (the default) the seal pushes NOTHING — base and tag stay on this machine, and the
+one note is `seal: kept on this machine — finish pushes base and tags in one push (push: end)`.
 Merge conflict → `git merge --abort` → die; a human resolves it, never auto-resolve.
 Rejected `<base>` push → keep the by-hand note AND add one line: origin may be a protected branch — set `publish: pr` in `ops/CONVENTIONS.md`. (Record the rejection under `.polaris/base-push-rejected`; two or more → `doctor` warns.)
 **Sealing the same sprint again (a later wave):** identical merge and message (bullets are naturally the new wave's commits — `<base>..integrate/<date>` excludes prior waves). Then MOVE the tag instead of creating it, and push it compare-and-swap — the only forced ref update POLARIS ever makes, and it is leased:
 ```bash
 git tag -f "sprint/<n>"                  # onto the new merge; log the move (old → new SHA)
-git push origin <base>
-git push --force-with-lease=refs/tags/sprint/<n>:<old-sha> origin "refs/tags/sprint/<n>"
+git push --atomic --force-with-lease=refs/tags/sprint/<n>:<old-sha> origin <base> "refs/tags/sprint/<n>"   # push: wave only
 ```
 `sprint/<n>` always marks the sprint's latest sealed checkpoint — end of sprint = final checkpoint. `rollback sprint/<n>` reverts the LATEST wave; earlier waves revert by SHA: `git revert --no-edit -m 1 <sha>`.
 
@@ -311,7 +314,13 @@ first group that fails and report exactly what it was, never a summary:
 4. **The locks.** No lock dir under the lock path (see § Locks) whose task is absent from `active/`
    and `review/`, and no board mutex left holding.
 5. **The suite.** The **QA** recipe below, green.
-All five → the run is over. Report it, and open that reply with `# 🎉 Complete!` on its own line —
+6. **The one push** (`publish: direct` with a remote only). Read origin once —
+   `git ls-remote origin "refs/heads/<base>" 'refs/tags/sprint/*'` — and if `<base>` is ahead or a
+   sprint tag is missing or moved there, send it all in ONE push:
+   `git push --atomic origin "refs/heads/<base>:refs/heads/<base>" <tags>` (a moved tag as
+   `--force-with-lease=refs/tags/sprint/<n>:<origin sha>`). Rejected → the run is NOT over: the
+   commits stay on this machine only; fix it and push again. Nothing ahead → no push.
+All six → the run is over. Report it, and open that reply with `# 🎉 Complete!` on its own line —
 a markdown H1, because it renders large in the human's client where a command's stdout cannot. Any
 one of them failing → no H1 and no `🎉`: say warmly and briefly what landed, name the ONE thing that
 is pending, and give the single next command.

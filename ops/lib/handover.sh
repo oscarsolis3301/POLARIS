@@ -89,7 +89,7 @@ next_claimable() { # next_claimable — row 3's predicate: the top-wsjf ready ta
 
 next_promote() { # next_promote [--do] — row 4's scan, and `--do`'s worker. Every backlog/ task (wsjf
   # desc; files without frontmatter such as IDEAS.md skipped) is held to the FULL ready gate, drift's
-  # checks reused: every depends_on in done/ · contract file exists · points ∉ {8, 13, ''} · no
+  # checks reused: every depends_on in done/ · contract file exists · the size rule (_card_ok) · no
   # unapproved `ask` scope (rules_gate) · files_owned disjoint from ready/ ∪ active/ BOTH directions
   # (pat_overlap — claim's loop, builder.sh) INCLUDING tasks accepted earlier in this pass. Scan
   # fills NX_ELIGIBLE and writes nothing; `--do` re-checks INSIDE the mutex, moves each passer
@@ -97,17 +97,20 @@ next_promote() { # next_promote [--do] — row 4's scan, and `--do`'s worker. Ev
   # v2: under `drain: plan` a candidate carrying a DIFFERENT plan slug than this run's is HELD by
   # name, never adopted — one "go" authorises one plan, and the refusal is reported, not silent.
   local mode="${1:-}" f id w cands="" acc="" pts v d g gid cpat apat over deps others
-  local drain myplan="" pl pdir wt dc
+  local drain myplan="" pl pdir wt dc have="" row con dl st cl nl='
+'
   NX_ELIGIBLE=""; NX_PROMOTED=""; NX_HELD=""
+  set --
   for f in "$BOARD/backlog/"*.md; do [ -e "$f" ] || break
     v=""; IFS= read -r v 2>/dev/null < "$f" || true
-    [ "${v%$'\r'}" = "---" ] || continue
-    w="$(fm_get wsjf "$f")"; case "$w" in ''|*[!0-9.]*) w=0;; esac
-    id="${f##*/}"; cands="$cands$w$POLARIS_TAB${id%.md}
-"
+    [ "${v%$'\r'}" = "---" ] && { have=1; set -- "$@" "$f"; }
   done
-  [ -n "$cands" ] || return 1
+  [ -n "$have" ] || return 1
   [ "$mode" = "--do" ] && mutex_on
+  # hour.md § 8: every gate key of every backlog/ task in ONE awk pass, read after the mutex so `--do`
+  # still judges what it moves. Each key reads as its old per-file reader did (_np_rows says how), one
+  # row per task: wsjf TAB id TAB points TAB contract TAB plan TAB deps (space-led) TAB steps (US-joined).
+  cands="$(_np_rows "$@")"
   # P, this run's plan (contract v2): the session's `plan` file, stamped at its first claim; else the
   # single distinct slug the in-flight tasks carry; else none. `drain: plan` AND P known is the only
   # state that filters, so a repo that never uses plan slugs — and a board between two runs — promotes
@@ -115,13 +118,32 @@ next_promote() { # next_promote [--do] — row 4's scan, and `--do`'s worker. Ev
   drain="$(cfg drain plan)"; pdir="$(next_dir)"
   [ -f "$pdir/plan" ] && myplan="$(tr -d ' \r\n' < "$pdir/plan")"
   if [ -z "$myplan" ] && [ "$drain" = plan ]; then
-    for g in "$BOARD/ready/"*.md "$BOARD/active/"*.md "$BOARD/review/"*.md; do [ -e "$g" ] || continue
-      pl="$(fm_get plan "$g" 2>/dev/null || true)"; [ -z "$pl" ] && continue
-      case "$myplan" in '') myplan="$pl";; "$pl") ;; *) myplan=""; break;; esac  # two slugs in flight ⇒ none
-    done
+    set --
+    for g in "$BOARD/ready/"*.md "$BOARD/active/"*.md "$BOARD/review/"*.md; do [ -e "$g" ] && set -- "$@" "$g"; done
+    if [ $# -gt 0 ]; then
+      while IFS= read -r pl; do [ -z "$pl" ] && continue
+        case "$myplan" in '') myplan="$pl";; "$pl") ;; *) myplan=""; break;; esac  # two slugs in flight ⇒ none
+      done <<EOF_PL
+$(_np_plans "$@")
+EOF_PL
+    fi
   fi
-  while IFS= read -r id; do
-    [ -n "$id" ] || continue
+  # one listing per column the deps resolve against (ids space-wrapped), instead of a probe per dep
+  local c_done c_active c_review c_ready c_blocked c_backlog
+  for g in done active review ready blocked backlog; do
+    cl=" "; for f in "$BOARD/$g/"*.md; do [ -e "$f" ] || break; f="${f##*/}"; cl="$cl${f%.md} "; done
+    case "$g" in
+      done) c_done="$cl";; active) c_active="$cl";; review) c_review="$cl";;
+      ready) c_ready="$cl";; blocked) c_blocked="$cl";; *) c_backlog="$cl";;
+    esac
+  done
+  while IFS= read -r row; do
+    [ -n "$row" ] || continue
+    row="${row#*$POLARIS_TAB}"; id="${row%%$POLARIS_TAB*}"; row="${row#*$POLARIS_TAB}"
+    pts="${row%%$POLARIS_TAB*}"; row="${row#*$POLARIS_TAB}"
+    con="${row%%$POLARIS_TAB*}"; row="${row#*$POLARIS_TAB}"
+    pl="${row%%$POLARIS_TAB*}"; row="${row#*$POLARIS_TAB}"
+    dl="${row%%$POLARIS_TAB*}"; st="${row#*$POLARIS_TAB}"; st="${st//$'\037'/$nl}"
     f="$BOARD/backlog/$id.md"; [ -f "$f" ] || continue
     # EVERY gate failure is HELD with its reason, one line naming the task — the first failure wins.
     # These three used to `continue` in silence, so a planned task could fall out of both the
@@ -130,27 +152,33 @@ next_promote() { # next_promote [--do] — row 4's scan, and `--do`'s worker. Ev
     # a contract is OPTIONAL (SOLO.md step 1: most small tasks have no seam). Only a contract that
     # is NAMED but MISSING fails the gate — Invariant 3 forbids a missing one, never an absent one.
     over=""
-    v="$(fm_get contract "$f")"; [ -n "$v" ] && [ ! -f "$PRIMARY/$v" ] && over="held: $id — contract $v missing"
-    pts="$(fm_get points "$f")"
-    if [ -z "$over" ]; then
-      case "$pts" in
-        '')   over="held: $id — points not set (must be 1-5)";;
-        8|13) over="held: $id — points $pts must be 1-5 — split it";;
-      esac
+    [ -n "$con" ] && [ ! -f "$PRIMARY/$con" ] && over="held: $id — contract $con missing"
+    # the size rule (hour.md § 6): the one predicate `new` and drift use; an empty points: keeps its
+    # own line, so a board with no chain card prints what it always did.
+    if [ -z "$over" ] && ! _card_ok "$pts" "$st"; then
+      if [ -z "$pts" ]; then over="held: $id — points not set (must be 1-5)"
+      else over="held: $id — points $pts must be 1-5, or up to 13 with steps: — split it"; fi
     fi
     deps=""; wt=""
     while IFS= read -r d; do [ -z "$d" ] && continue
-      deps="${deps:+$deps, }$d"; task_file "$d" done >/dev/null && continue
-      dc=""; for g in active review ready blocked backlog; do [ -f "$BOARD/$g/$d.md" ] && { dc="$g"; break; }; done
+      deps="${deps:+$deps, }$d"
+      case "$c_done" in *" $d "*) continue;; esac
+      dc=""
+      for g in active review ready blocked backlog; do
+        case "$g" in
+          active) cl="$c_active";; review) cl="$c_review";; ready) cl="$c_ready";;
+          blocked) cl="$c_blocked";; *) cl="$c_backlog";;
+        esac
+        case "$cl" in *" $d "*) dc="$g"; break;; esac
+      done
       wt="${wt:+$wt, }$d (${dc:-no such task})"
     done <<EOF_DEP
-$(dep_ids "$f")
+${dl// /$nl}
 EOF_DEP
     [ -z "$over" ] && [ -n "$wt" ] && over="held: $id — waits on $wt"
     # the plan gate, ahead of the disjointness loop: a candidate with NO plan: is never foreign (the
     # rule next_claimable applies to ready/, so riders still flow), and a foreign one is held WITH ITS
     # REASON — a silent drop lands in neither the eligible nor the held list and reads as a bug (T-130).
-    pl="$(fm_get plan "$f" 2>/dev/null || true)"
     if [ -z "$over" ] && [ "$drain" = plan ] && [ -n "$myplan" ] && [ -n "$pl" ] && [ "$pl" != "$myplan" ]; then
       over="held: $id — plan $pl is not this run's ($myplan) — drain: plan"
     fi
@@ -181,11 +209,13 @@ EOF_CPAT
     if [ "$mode" = "--do" ]; then
       mv "$f" "$BOARD/ready/$id.md"; set_fm status ready "$BOARD/ready/$id.md"
       evt promote "$id" "deps done: ${deps:-none}" "$pts"; f="$BOARD/ready/$id.md"
+      # the listings follow the move, so a later task waiting on this one names ready/, as it did
+      c_backlog="${c_backlog/ $id / }"; c_ready="$c_ready$id "
     fi
     acc="$acc$f
 "
   done <<EOF_CAND
-$(printf '%s' "$cands" | sort -t "$POLARIS_TAB" -k1,1rn -k2,2 | cut -f2)
+$(printf '%s\n' "$cands" | sort -t "$POLARIS_TAB" -k1,1rn -k2,2)
 EOF_CAND
   if [ "$mode" = "--do" ]; then
     NX_PROMOTED="$NX_ELIGIBLE"
@@ -194,6 +224,62 @@ EOF_CAND
     mutex_off; trap - EXIT
   fi
   [ -n "$NX_ELIGIBLE" ]
+}
+
+_np_rows() { # _np_rows <task.md…> — next_promote's one pass (hour.md § 8): per file one row
+  # wsjf TAB id TAB points TAB contract TAB plan TAB deps TAB steps. Scalars read as fm_get reads them
+  # (first match, the " #" comment stripped before the blanks), a non-number wsjf as 0; deps as dep_ids
+  # gives them (fm_list items, [ ] , and blanks as separators) space-joined; steps as fm_list, \037-joined.
+  awk '
+    function trim(s) { sub(/[ \t]#.*$/, "", s); sub(/^[ \t]*/, "", s); sub(/[ \t\r]*$/, "", s); return s }
+    function dep(s,   n, j, p) {
+      gsub(/\[/, " ", s); gsub(/\]/, " ", s); gsub(/[,\t]/, " ", s); n = split(s, p, " ")
+      for (j = 1; j <= n; j++) if (p[j] != "") dl = dl " " p[j]
+    }
+    function item(k, s) { if (k == "depends_on") dep(s); else st = st (st == "" ? "" : "\037") s }
+    function emit(k, s,   n, j, p, it) {
+      if (s == "") return
+      if (s ~ /^\[.*\]$/) {
+        s = substr(s, 2, length(s) - 2); n = split(s, p, ",")
+        for (j = 1; j <= n; j++) { it = p[j]; sub(/^[ \t]*/, "", it); sub(/[ \t]*$/, "", it); if (it != "") item(k, it) }
+        return
+      }
+      item(k, s)
+    }
+    function flush(   id, w) {
+      if (fn == "") return
+      id = fn; sub(/.*[\/\\]/, "", id); sub(/\.md$/, "", id)
+      w = v["wsjf"]; if (w == "" || w ~ /[^0-9.]/) w = "0"
+      printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", w, id, v["points"], v["contract"], v["plan"], dl, st
+    }
+    BEGIN { split("wsjf points contract plan", sk, " ") }
+    FNR == 1 { flush(); fn = FILENAME; fs = 0; on = ""; dl = ""; st = ""; split("", v); split("", got) }
+    /^---[\r]?$/ { fs++; next }
+    fs != 1 { next }
+    {
+      for (j = 1; j <= 4; j++) if (!(sk[j] in got) && index($0, sk[j] ":") == 1) {
+        v[sk[j]] = trim(substr($0, length(sk[j]) + 2)); got[sk[j]] = 1
+      }
+      if (index($0, "depends_on:") == 1) { on = "depends_on"; emit(on, trim(substr($0, 12))); next }
+      if (index($0, "steps:") == 1) { on = "steps"; emit(on, trim(substr($0, 7))); next }
+      if (on != "" && $0 ~ /^[ \t]*-[ \t]/) {
+        s = $0; sub(/[ \t]#.*$/, "", s); sub(/^[ \t]*-[ \t]*/, "", s); sub(/[ \t\r]*$/, "", s)
+        if (s != "") item(on, s)
+        next
+      }
+      if (on != "" && $0 ~ /^[A-Za-z_]/) on = ""
+    }
+    END { flush() }' "$@" 2>/dev/null || true
+}
+
+_np_plans() { # _np_plans <task.md…> — each file's plan: as fm_get reads it, one line per file, in order
+  awk '
+    FNR == 1 { if (seen) print p; seen = 1; p = ""; fs = 0; got = 0 }
+    /^---[\r]?$/ { fs++; next }
+    fs == 1 && !got && index($0, "plan:") == 1 {
+      p = substr($0, 6); sub(/[ \t]#.*$/, "", p); sub(/^[ \t]*/, "", p); sub(/[ \t\r]*$/, "", p); got = 1
+    }
+    END { if (seen) print p }' "$@" 2>/dev/null || true
 }
 
 next_inplan() { # next_inplan <ID...> — 0 only when this session recorded a plan AND every task named

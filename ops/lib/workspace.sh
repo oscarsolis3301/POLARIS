@@ -318,6 +318,113 @@ int_mine() { # int_mine — rc 0 when this process may rely on the integration l
   [ -n "${POLARIS_INT_TOKEN:-}" ] && [ "$(cat "$lease/token" 2>/dev/null)" = "$POLARIS_INT_TOKEN" ]
 }
 
+_heavy_dead() { # _heavy_dead <pid> — rc 0 when the pid is gone: `kill -0` fails, or on msys/cygwin it is
+  # absent from the PID column of ONE `ps -W` listing (int_on's rule, restated, not shared: int_on is frozen).
+  case "$1" in ''|*[!0-9]*) return 0;; esac
+  case "${OSTYPE:-}" in
+    msys*|cygwin*) ps -W 2>/dev/null | awk -v p="$1" '$1==p{f=1} END{exit f}';;
+    *) ! kill -0 "$1" 2>/dev/null;;
+  esac
+}
+
+_heavy_on() { # _heavy_on <why> — take one machine-wide heavy slot (ops/contracts/hour.md § 3). rc 0 ALWAYS:
+  # it never refuses work. Same mechanism as the integration lease — atomic mkdir of
+  # $POLARIS_HEAVY_DIR/slot-<i> (default ~/.claude/polaris/heavy, spanning worktrees and projects) +
+  # epoch/who/pid/why/repo/token files, the token exported so a CHILD of the holder re-enters
+  # without waiting. heavy_slots: N slots (default 1, non-numeric → 1, 0 → no-op). Busy → poll every
+  # 2 s; on the first busy look and every ~30 s: steal a slot whose pid is dead or whose epoch is
+  # older than 120 min, else one waiting note. Still busy after POLARIS_HEAVY_WAIT (1800) seconds →
+  # run without the slot. LOCK ORDER: lease → heavy → board mutex; never called under mutex_on.
+  # HEAVY_SLOT names the slot THIS frame took; only that frame's _heavy_off releases it.
+  local why="${1:-}" n dir i s tk p e now age wmax waited=0 told=-30 bwho bwhy brepo stole nopid="" nopid2=""
+  n="$(cfg heavy_slots 1)"
+  case "$n" in ''|*[!0-9]*) n=1;; esac
+  [ "$n" -eq 0 ] && return 0
+  dir="${POLARIS_HEAVY_DIR:-$HOME/.claude/polaris/heavy}"
+  if [ -d "$dir" ]; then
+    for s in "$dir"/slot-*; do
+      [ -d "$s" ] || continue
+      if [ -n "${POLARIS_HEAVY_TOKEN:-}" ] && [ "$(cat "$s/token" 2>/dev/null)" = "$POLARIS_HEAVY_TOKEN" ]; then return 0; fi
+      [ "$(cat "$s/pid" 2>/dev/null)" = "$$" ] && return 0
+    done
+  fi
+  wmax="${POLARIS_HEAVY_WAIT:-1800}"
+  case "$wmax" in ''|*[!0-9]*) wmax=1800;; esac
+  mkdir -p "$dir" 2>/dev/null || return 0
+  while :; do
+    i=1
+    while [ "$i" -le "$n" ]; do
+      s="$dir/slot-$i"
+      if mkdir "$s" 2>/dev/null; then
+        who
+        date +%s > "$s/epoch"
+        printf '%s\n' "$WHO" > "$s/who"
+        printf '%s\n' "$$" > "$s/pid"
+        printf '%s\n' "${why:-unknown}" > "$s/why"
+        printf '%s\n' "${PRIMARY:-unknown}" > "$s/repo"
+        POLARIS_HEAVY_TOKEN="$$:$(date +%s)$RANDOM"
+        printf '%s\n' "$POLARIS_HEAVY_TOKEN" > "$s/token"
+        export POLARIS_HEAVY_TOKEN
+        HEAVY_SLOT="$s"
+        return 0
+      fi
+      i=$((i+1))
+    done
+    if [ $(( waited - told )) -ge 30 ]; then
+      told="$waited"; now="$(date +%s)"; stole=0; bwho=""; nopid2=""
+      i=1
+      while [ "$i" -le "$n" ]; do
+        s="$dir/slot-$i"; i=$((i+1))
+        [ -d "$s" ] || continue
+        e="$(cat "$s/epoch" 2>/dev/null || true)"
+        case "$e" in ''|*[!0-9]*) e="$now";; esac
+        age=$(( now - e ))
+        p="$(cat "$s/pid" 2>/dev/null || true)"
+        tk="$(cat "$s/token" 2>/dev/null || true)"
+        # no pid yet = a taker between its mkdir and its pid write: dead only if still so a look later
+        if [ -z "$p" ]; then
+          case " $nopid " in *" $s "*) ;; *) nopid2="$nopid2 $s"; p="$$";; esac
+        fi
+        if [ "$age" -gt 7200 ] || _heavy_dead "$p"; then
+          if [ "$age" -gt 7200 ]; then e="held $(( age / 60 ))m, over 120m"; else e="its process is gone"; fi
+          if [ "$(cat "$s/token" 2>/dev/null || true)" = "$tk" ]; then
+            note "heavy: took a stale slot from $(cat "$s/who" 2>/dev/null || echo unknown) ($e)"
+            rm -rf "$s" 2>/dev/null || true
+          fi
+          stole=1
+          continue
+        fi
+        if [ -z "$bwho" ]; then
+          bwho="$(cat "$s/who" 2>/dev/null || true)"; bwho="${bwho:-unknown}"
+          bwhy="$(cat "$s/why" 2>/dev/null || true)"; bwhy="${bwhy:-unknown}"
+          brepo="$(cat "$s/repo" 2>/dev/null || true)"; brepo="${brepo##*/}"; brepo="${brepo:-unknown}"
+          age=$(( age / 60 ))
+          bwhy="$bwhy, ${age}m, $brepo"
+        fi
+      done
+      nopid="$nopid2"
+      [ "$stole" -eq 1 ] && continue
+      [ -n "$bwho" ] && note "heavy: waiting for $bwho ($bwhy) — one heavy job at a time on this machine"
+    fi
+    if [ "$waited" -ge "$wmax" ]; then
+      note "heavy: waited $(( waited / 60 ))m for ${bwho:-another job} — running without the slot"
+      return 0
+    fi
+    sleep 2
+    waited=$(( waited + 2 ))
+  done
+}
+
+_heavy_off() { # _heavy_off — release the heavy slot only in the frame that took it (HEAVY_SLOT set) and
+  # only while its token still matches; a silent no-op otherwise (a re-entering child, a stolen slot).
+  if [ -n "${HEAVY_SLOT:-}" ] && [ -n "${POLARIS_HEAVY_TOKEN:-}" ] \
+     && [ "$(cat "$HEAVY_SLOT/token" 2>/dev/null)" = "$POLARIS_HEAVY_TOKEN" ]; then
+    rm -rf "$HEAVY_SLOT" 2>/dev/null || true
+  fi
+  if [ -n "${HEAVY_SLOT:-}" ]; then HEAVY_SLOT=""; unset POLARIS_HEAVY_TOKEN; fi
+  return 0
+}
+
 wave_on() { # wave_on — ensure + check out today's integrate/<date> in the primary.
   # PRECONDITION: the caller HOLDS the integration lease (int_on) — wave_on never takes it.
   # Three outcomes, and it says which: absent → create from $BASE · present and fast-forwardable

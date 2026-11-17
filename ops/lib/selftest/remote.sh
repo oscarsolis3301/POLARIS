@@ -5,6 +5,12 @@ drill_remote() {
     # (T-C is deliberately merged --no-ff, NOT landed: it is the ONE legacy drill proving the
     #  gate's rule-2 fallback — hand merges per MANUAL.md still pass done + remote cleanup.)
     ensure_origin   # T-033: scratch bare origin (self-provisions under --only remote; spine no longer)
+    # T-301 (ops/contracts/hour.md § 2): every assertion down to the end of T-059 is about a handoff
+    # that PUSHES feat/<ID>, which is `push: wave` now — unset composes to `end` on one machine. Set
+    # explicitly here (uncommitted, like T-148's claim: flip) and restored byte-for-byte after.
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/rm-conv.bak"; else rm -f "$T/rm-conv.bak"; fi
+    { grep -v '^push:' ops/CONVENTIONS.md 2>/dev/null || true; printf 'push: wave\n'; } > "$T/rm-conv"
+    cp "$T/rm-conv" ops/CONVENTIONS.md; rm -f "$T/rm-conv"
     printf -- '---\nid: T-C\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/c.txt\nverify: []\n---\n' > ops/board/ready/T-C.md
     "$SELF" claim T-C >/dev/null
     ( cd .polaris/wt/T-C && echo c > src/c.txt && git add -A && git commit -qm ok && "$SELF" handoff T-C >/dev/null )
@@ -63,6 +69,124 @@ drill_remote() {
     git merge -q --no-ff feat/T-PF -m merge
     "$SELF" done T-PF >/dev/null
     # ---- end T-059 handoff push resilience ----
+    if [ -f "$T/rm-conv.bak" ]; then cp "$T/rm-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    rm -f "$T/rm-conv.bak"
+    # (c) T-301: push unset (→ end on one machine) — the handoff pushes nothing: origin gains no
+    # feat/<ID>, no ⚠ Note lands on the task and no push-fail event is logged.
+    printf -- '---\nid: T-PE\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/pe.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-PE.md
+    "$SELF" claim T-PE >/dev/null
+    ( cd .polaris/wt/T-PE && echo pe > src/pe.txt && git add -A && git commit -qm ok && "$SELF" handoff T-PE > "$T/pe.out" 2>&1 ) \
+      || { cat "$T/pe.out"; echo "PUSH END RC FAIL (a handoff under push: end must succeed)"; exit 1; }
+    [ -f ops/board/review/T-PE.md ] || { cat "$T/pe.out"; echo "PUSH END MOVE FAIL (the board move must happen)"; exit 1; }
+    git ls-remote origin refs/heads/feat/T-PE | grep -q . && { echo "PUSH END PUSH FAIL (push: end must leave origin without feat/T-PE)"; exit 1; }
+    grep -q '"ev":"push-fail","id":"T-PE"' ops/board/EVENTS.ndjson && { echo "PUSH END EVENT FAIL (no push was tried, so no push-fail)"; exit 1; }
+    grep -q 'push failed' "$T/pe.out" ops/board/review/T-PE.md && { cat "$T/pe.out"; echo "PUSH END NOTE FAIL (no ⚠ push note under push: end)"; exit 1; }
+    git merge -q --no-ff feat/T-PE -m merge
+    "$SELF" done T-PE >/dev/null
+    rm -f "$T/pe.out"
+    # ---- T-304 the one push (ops/contracts/hour.md § 2) ----
+    # A `git` stand-in first on PATH (the T-285 pattern, drill_autoupdate case 10) logs every `push`
+    # whose arguments name anything but polaris/board — the board keeps syncing as it goes and is
+    # never part of the one push — then hands the call to the real git, resolved BEFORE PATH changes.
+    # PATH changes for the counted calls only; the heavy slot lives in the scratch dir, never ~/.claude.
+    rm -rf "$T/T-304"; rm4_gd="$T/T-304/git"; mkdir -p "$rm4_gd"
+    command -v git > "$rm4_gd/real"
+    cat > "$rm4_gd/git" <<'RM4GIT'
+#!/bin/sh
+d="$(dirname "$0")"; s=""; sk=0; b=0
+for x in "$@"; do
+  if [ "$sk" = 1 ]; then sk=0; continue; fi
+  case "$x" in -C|-c) sk=1;; -*) ;; *) s="$x"; break;; esac
+done
+for x in "$@"; do case "$x" in *polaris/board*) b=1;; esac; done
+[ "$s" = push ] && [ "$b" = 0 ] && printf '%s\n' "$*" >> "$d/pushes"
+exec "$(cat "$d/real")" "$@"
+RM4GIT
+    chmod +x "$rm4_gd/git"
+    rm4_p="$rm4_gd:$PATH"; rm4_hd="${POLARIS_HEAVY_DIR:-}"; export POLARIS_HEAVY_DIR="$T/T-304/heavy"
+    rm4_gcd="$(git rev-parse --git-common-dir)"
+    # finish must be able to go green: the lanes above handed off seconds before their done, so their
+    # worktrees still beat — say those sessions are gone, and let the shipped tidy reap them.
+    for rm4_f in ops/board/done/*.md; do [ -e "$rm4_f" ] || break
+      rm -f "$rm4_gcd/worktrees/$(basename "$rm4_f" .md)/polaris-beat"
+    done
+    "$SELF" sweep --fix >/dev/null 2>&1 || true
+    for rm4_f in ops/board/done/*.md; do [ -e "$rm4_f" ] || break
+      git branch -q -D "feat/$(basename "$rm4_f" .md)" 2>/dev/null || true
+    done
+    [ -f ops/SPRINT.md ] && cp ops/SPRINT.md "$T/T-304/sprint.bak" || rm -f "$T/T-304/sprint.bak"
+    # (a) push unset (→ end on one machine): handoff, land, seal and done leave origin's refs alone
+    printf '# SPRINT 30 — push end drill  capacity: 5\n' > ops/SPRINT.md   # moved set: disk-only, ignored on base
+    printf -- '---\nid: T-PN\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/pn.txt\nverify: []\n---\n' > ops/board/ready/T-PN.md
+    "$SELF" claim T-PN >/dev/null
+    rm4_refs="$(git ls-remote origin | grep -v polaris/board | sort)"
+    ( cd .polaris/wt/T-PN && echo pn > src/pn.txt && git add -A && git commit -qm ok && PATH="$rm4_p" "$SELF" handoff T-PN > "$T/T-304/a1.out" 2>&1 ) \
+      || { cat "$T/T-304/a1.out"; echo "ONE PUSH HANDOFF FAIL"; exit 1; }
+    git checkout -q -b integrate/2030-03-03
+    PATH="$rm4_p" "$SELF" land T-PN > "$T/T-304/a2.out" 2>&1 || { cat "$T/T-304/a2.out"; echo "ONE PUSH LAND FAIL"; exit 1; }
+    PATH="$rm4_p" "$SELF" seal 2030-03-03 > "$T/T-304/a3.out" 2>&1 || { cat "$T/T-304/a3.out"; echo "ONE PUSH SEAL FAIL"; exit 1; }
+    grep -qxF '   seal: kept on this machine — finish pushes base and tags in one push (push: end)' "$T/T-304/a3.out" \
+      || { cat "$T/T-304/a3.out"; echo "ONE PUSH SEAL NOTE FAIL (push: end seals say the code stays here)"; exit 1; }
+    git checkout -q main
+    rm -f "$rm4_gcd/worktrees/T-PN/polaris-beat"
+    PATH="$rm4_p" "$SELF" done T-PN > "$T/T-304/a4.out" 2>&1 || { cat "$T/T-304/a4.out"; echo "ONE PUSH DONE FAIL"; exit 1; }
+    [ ! -s "$rm4_gd/pushes" ] || { cat "$rm4_gd/pushes"; echo "ONE PUSH EARLY FAIL (under push: end nothing but the board reaches origin before finish)"; exit 1; }
+    [ "$(git ls-remote origin | grep -v polaris/board | sort)" = "$rm4_refs" ] || { echo "ONE PUSH REFS FAIL (origin's refs moved before finish)"; exit 1; }
+    "$SELF" status > "$T/T-304/a5.out" 2>&1 || { cat "$T/T-304/a5.out"; echo "ONE PUSH STATUS RC FAIL"; exit 1; }
+    grep -qE '^   on this machine only: [0-9]+ commit\(s\) — finish pushes them in one push \(push: end\)$' "$T/T-304/a5.out" \
+      || { cat "$T/T-304/a5.out"; echo "ONE PUSH STATUS LINE FAIL (status names what is still on this machine)"; exit 1; }
+    PATH="$rm4_p" "$SELF" finish > "$T/T-304/a6.out" 2>&1 || { cat "$T/T-304/a6.out"; echo "ONE PUSH FINISH RC FAIL"; exit 1; }
+    [ "$(grep -c . "$rm4_gd/pushes" 2>/dev/null)" = 1 ] || { cat "$rm4_gd/pushes" "$T/T-304/a6.out"; echo "ONE PUSH COUNT FAIL (finish makes exactly ONE push)"; exit 1; }
+    grep -q -- '--atomic' "$rm4_gd/pushes" && grep -qF 'refs/heads/main:refs/heads/main' "$rm4_gd/pushes" && grep -qF 'refs/tags/sprint/30' "$rm4_gd/pushes" \
+      || { cat "$rm4_gd/pushes"; echo "ONE PUSH CARGO FAIL (one atomic push carrying base and the sprint tag)"; exit 1; }
+    grep -qE '^✅ pushed: [0-9]+ commit\(s\) and [0-9]+ tag\(s\) to origin in one push$' "$T/T-304/a6.out" \
+      || { cat "$T/T-304/a6.out"; echo "ONE PUSH GREEN LINE FAIL"; exit 1; }
+    [ "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse main)" ] || { echo "ONE PUSH BASE FAIL (origin's base equals local after finish)"; exit 1; }
+    [ "$(git ls-remote origin refs/tags/sprint/30 | cut -f1)" = "$(git rev-parse refs/tags/sprint/30)" ] || { echo "ONE PUSH TAG FAIL (the sprint tag reached origin)"; exit 1; }
+    "$SELF" status > "$T/T-304/a7.out" 2>&1
+    grep -q 'on this machine only' "$T/T-304/a7.out" && { cat "$T/T-304/a7.out"; echo "ONE PUSH STATUS AFTER FAIL (nothing is left on this machine)"; exit 1; }
+    rm -f "$rm4_gd/pushes"
+    PATH="$rm4_p" "$SELF" finish > "$T/T-304/a8.out" 2>&1 || { cat "$T/T-304/a8.out"; echo "ONE PUSH REFINISH RC FAIL"; exit 1; }
+    [ ! -s "$rm4_gd/pushes" ] || { cat "$rm4_gd/pushes"; echo "ONE PUSH REFINISH FAIL (a second finish has nothing to push)"; exit 1; }
+    # (b) push: wave — each seal makes exactly ONE push carrying base and its tag; the second wave of
+    # the sprint moves the tag, so it rides as a compare-and-swap. Committed (land and seal park a
+    # dirty tracked file), restored and committed back after, with the file's tracked state kept.
+    rm4_trk=0; git ls-files --error-unmatch ops/CONVENTIONS.md >/dev/null 2>&1 && rm4_trk=1
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/T-304/conv.bak"; else rm -f "$T/T-304/conv.bak"; fi
+    { grep -v '^push:' ops/CONVENTIONS.md 2>/dev/null || true; printf 'push: wave\n'; } > "$T/T-304/conv"
+    cp "$T/T-304/conv" ops/CONVENTIONS.md
+    git add -f ops/CONVENTIONS.md; git commit -qm 'drill: push wave'
+    printf '# SPRINT 31 — push wave drill  capacity: 5\n' > ops/SPRINT.md
+    for rm4_i in 4 5; do
+      printf -- '---\nid: T-PW%s\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/pw%s.txt\nverify: []\n---\n' "$rm4_i" "$rm4_i" > "ops/board/ready/T-PW$rm4_i.md"
+      "$SELF" claim "T-PW$rm4_i" >/dev/null
+      ( cd ".polaris/wt/T-PW$rm4_i" && echo pw > "src/pw$rm4_i.txt" && git add -A && git commit -qm ok && "$SELF" handoff "T-PW$rm4_i" > "$T/T-304/b1.out" 2>&1 ) \
+        || { cat "$T/T-304/b1.out"; echo "ONE PUSH WAVE HANDOFF FAIL ($rm4_i)"; exit 1; }
+      git checkout -q -b "integrate/2030-03-0$rm4_i"
+      "$SELF" land "T-PW$rm4_i" > "$T/T-304/b2.out" 2>&1 || { cat "$T/T-304/b2.out"; echo "ONE PUSH WAVE LAND FAIL ($rm4_i)"; exit 1; }
+      rm -f "$rm4_gd/pushes"
+      PATH="$rm4_p" "$SELF" seal "2030-03-0$rm4_i" > "$T/T-304/b3.out" 2>&1 || { cat "$T/T-304/b3.out"; echo "ONE PUSH WAVE SEAL FAIL ($rm4_i)"; exit 1; }
+      [ "$(grep -c . "$rm4_gd/pushes" 2>/dev/null)" = 1 ] || { cat "$rm4_gd/pushes" "$T/T-304/b3.out"; echo "ONE PUSH WAVE COUNT FAIL ($rm4_i: a wave seal makes exactly ONE push)"; exit 1; }
+      grep -q -- '--atomic' "$rm4_gd/pushes" && grep -qF 'refs/heads/main:refs/heads/main' "$rm4_gd/pushes" && grep -qF 'refs/tags/sprint/31' "$rm4_gd/pushes" \
+        || { cat "$rm4_gd/pushes"; echo "ONE PUSH WAVE CARGO FAIL ($rm4_i: base and tag ride together)"; exit 1; }
+      if [ "$rm4_i" = 5 ]; then
+        grep -qF -- '--force-with-lease=refs/tags/sprint/31:' "$rm4_gd/pushes" || { cat "$rm4_gd/pushes"; echo "ONE PUSH WAVE LEASE FAIL (a moved tag rides as a compare-and-swap)"; exit 1; }
+      fi
+      [ "$(git ls-remote origin refs/heads/main | cut -f1)" = "$(git rev-parse main)" ] \
+        && [ "$(git ls-remote origin refs/tags/sprint/31 | cut -f1)" = "$(git rev-parse refs/tags/sprint/31)" ] \
+        || { echo "ONE PUSH WAVE ORIGIN FAIL ($rm4_i: origin holds base and tag after the seal)"; exit 1; }
+      git checkout -q main
+      rm -f "$rm4_gcd/worktrees/T-PW$rm4_i/polaris-beat"
+      "$SELF" done "T-PW$rm4_i" >/dev/null || { echo "ONE PUSH WAVE DONE FAIL ($rm4_i)"; exit 1; }
+      git branch -q -D "integrate/2030-03-0$rm4_i" 2>/dev/null || true
+    done
+    if [ -f "$T/T-304/conv.bak" ]; then cp "$T/T-304/conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    if [ "$rm4_trk" = 1 ]; then git add -A -f ops/CONVENTIONS.md; else git rm -q --cached --ignore-unmatch ops/CONVENTIONS.md; fi
+    git commit -qm 'drill: push wave restored'
+    if [ -f "$T/T-304/sprint.bak" ]; then cp "$T/T-304/sprint.bak" ops/SPRINT.md; else rm -f ops/SPRINT.md; fi
+    if [ -n "$rm4_hd" ]; then export POLARIS_HEAVY_DIR="$rm4_hd"; else unset POLARIS_HEAVY_DIR; fi   # back to the selftest's scratch slot, never the real one
+    rm -rf "$T/T-304"
+    # ---- end T-304 the one push ----
     # ---- T-148 board_pull (ops/contracts/first-run.md § 5): the READ side of claim: claim-branch ----
     # Two checkouts of one origin. The second claims (its sync_board pushes the board ref); the first's
     # status must FETCH it: active/ gains the task, the throttle stamp appears, the local ref lands on
@@ -399,6 +523,11 @@ drill_pushdegrade() {
     # the contract's ⚠ Note on the task + the push-fail event: a finished task is never stranded
     # in active/ by the network.
     ensure_origin
+    # T-301: these assertions are about a handoff that pushes — `push: wave` (unset is `end` now),
+    # set uncommitted and restored byte-for-byte at the end.
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/pd-conv.bak"; else rm -f "$T/pd-conv.bak"; fi
+    { grep -v '^push:' ops/CONVENTIONS.md 2>/dev/null || true; printf 'push: wave\n'; } > "$T/pd-conv"
+    cp "$T/pd-conv" ops/CONVENTIONS.md; rm -f "$T/pd-conv"
     printf -- '---\nid: T-PD\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/pd.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-PD.md
     git push -q origin main:refs/heads/feat
     pd_sha="$(git rev-parse main)"
@@ -429,6 +558,8 @@ drill_pushdegrade() {
     git push -q origin ":refs/heads/feat/T-PD2/x"
     git merge -q --no-ff feat/T-PD2 -m merge
     "$SELF" done T-PD2 >/dev/null
+    if [ -f "$T/pd-conv.bak" ]; then cp "$T/pd-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    rm -f "$T/pd-conv.bak"
 }
 drill_autoupdate() {
     # ============ T-126 auto-update drill (ops/contracts/auto-update.md § Executable check) ============

@@ -1,4 +1,4 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.16.1] -->
+<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.17.0] -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 Model-agnostic operating system for running N coding agents in parallel on this repo with zero merge
@@ -94,12 +94,12 @@ need one section or none.
    every mapped surface it changed moved its tests too (`ops/SURFACES.tsv`). Rules bind inside
    `files_owned` too, and outside Builder sessions. A guard rejection means hand back or ask the
    human — never work around it.
-2. **Ready gate.** A task enters `ready/` only if: ≤5 points, every `depends_on` is in `done/`, its
-   contract exists, and its `files_owned` overlaps NOTHING in `ready/` or `active/`.
+2. **Ready gate.** A task enters `ready/` only if: ≤5 points (a chain card: up to 13, with `steps:` each ≤5),
+   every `depends_on` is in `done/`, its contract exists, and its `files_owned` overlaps NOTHING in `ready/` or `active/`.
 3. **Contract before code.** Contract missing or ambiguous → `blocked/` with a note. NEVER invent an
    interface.
-4. **Green before `review/`.** Test commands from CONVENTIONS green AND `polaris verify` green. Red
-   work never leaves `active/`.
+4. **Green before `review/`.** The card's own `verify:` checks green AND `polaris verify` green;
+   the full suite runs once per wave, never per card. Red work never leaves `active/`.
 5. **One task per context, one role per context.** A session hops roles only at a boundary the board proves (a completion event), into the role `polaris next` names, with the hop logged; compaction is the context reset and the anchor hook the re-entry. Sessions are disposable; the board is the memory.
 6. **Board mutations go through `ops/polaris`** (they commit on `refs/heads/polaris/board`, never on
    `<base>`). Code commits go on `feat/<ID>` in your worktree. Never mix the two.

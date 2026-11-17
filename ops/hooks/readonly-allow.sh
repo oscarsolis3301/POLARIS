@@ -209,8 +209,17 @@ git_ok() {
 polaris_ok() {
   case "${1:-}" in
     find|show|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|route|--help|-h|'') return 0;;
-    # `speed` is the read-only history report (one-yes.md § 6): bare only — any argument keeps its prompt.
-    speed) [ $# -le 1 ] && return 0 || return 1;;
+    # `speed` is the read-only history report (one-yes.md § 6), and `speed --plan <slug> [<draft.md>…]`
+    # only reads the board, EVENTS and the drafts (hour.md § 5): a plain slug, then plain paths. Any
+    # other argument (`--apply`, a flag after the slug, a shell-shaped word) keeps its prompt.
+    speed) case "${2:-}" in
+             '') [ $# -le 1 ] && return 0 || return 1;;
+             --plan) case "${3:-}" in ''|-*|*[!A-Za-z0-9._-]*) return 1;; esac
+                     shift 3
+                     for _sp in "$@"; do case "$_sp" in -*|*[!A-Za-z0-9._/:~-]*) return 1;; esac; done
+                     return 0;;
+             *) return 1;;
+           esac;;
     # `depth` reads the board/git and prints; `--commit <sha>` takes ONE hex sha or ref name, nothing
     # else (change-sized.md § 6) — any other shape of argument keeps its prompt.
     depth) case "${2:-}" in
