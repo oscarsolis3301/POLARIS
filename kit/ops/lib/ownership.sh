@@ -61,7 +61,20 @@ run_verify_cmds() { # run_verify_cmds <taskfile> — execute verify: list in CWD
   # tasks doing it anyway: that is where most of the board's wall-clock went. A rule half the board
   # violates is not a rule, so it is now mechanical. `test_fast:` is deliberately NOT refused —
   # a fast tier in verify: is the whole point.
-  local tf="$1" c n=0 nc suite_t suite_b
+  # The heavy slot (ops/contracts/hour.md § 3) is taken ONCE around the whole list — only when there
+  # is a list — and released after it, green or red. Callers run this outside the board mutex.
+  local tf="$1" list rc
+  list="$(fm_list verify "$tf")"
+  if [ -z "$(printf '%s' "$list" | tr -d ' \t\r\n')" ]; then
+    note "no verify: commands on task (acceptance is manual)"; return 0
+  fi
+  _heavy_on "verify $(basename "$tf" .md)"
+  rc=0; _run_verify_list "$list" || rc=$?   # `|| rc=` — under the CLI's set -e a red list must still release
+  _heavy_off
+  return "$rc"
+}
+_run_verify_list() { # _run_verify_list <list> — run_verify_cmds' body: refuse a bare suite, run each line
+  local list="$1" c n=0 nc suite_t suite_b
   suite_t="$(_norm_cmd "$(cfg test "")")"
   suite_b="$(_norm_cmd "$(cfg build "")")"
   while IFS= read -r c; do
@@ -78,7 +91,7 @@ run_verify_cmds() { # run_verify_cmds <taskfile> — execute verify: list in CWD
     n=$((n+1)); note "verify[$n]: $c"
     bash -c "$c" || { printf '⛔ verify command failed: %s\n' "$c" >&2; return 1; }
   done <<EOF
-$(fm_list verify "$tf")
+$list
 EOF
   [ "$n" -eq 0 ] && note "no verify: commands on task (acceptance is manual)" || say "all $n verify commands green"
 }
