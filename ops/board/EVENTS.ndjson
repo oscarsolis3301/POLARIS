@@ -1206,3 +1206,4 @@
 {"ts":1794900014,"ev":"blocked","id":"T-300","who":"Owner@DESKTOP","note":"→ blocked: api-kit golden indexes kit/ops/KEYS.tsv rows as public surface, so the three rows hour.md § 1 requires (push, heavy_slots, target_minutes) add three lines to ops/tests/api-kit.expected — a file T-300 does not own (contract § cross-card says no card owns it). Fix: add ops/tests/api-kit.expected to T-300 files_owned and re-pin with check --update api-kit (only the three key lines move). All else green on feat/T-300 (heavy-slot, keys-drift, verify-stamp, lease-token, land-race, interview, adopt-stub, doctor --fast)."}
 {"ts":1794900353,"ev":"claim","id":"T-300","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794901039,"ev":"handoff","id":"T-303","who":"Owner@DESKTOP","note":""}
+{"ts":1794901106,"ev":"handoff","id":"T-301","who":"Owner@DESKTOP","note":""}
