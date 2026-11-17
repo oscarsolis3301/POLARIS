@@ -149,7 +149,6 @@ kit/ops/VISUAL.md	heading	The keys (ops/CONVENTIONS.md)
 kit/ops/VISUAL.md	heading	The rule
 kit/ops/VISUAL.md	heading	What handoff checks
 kit/ops/VISUAL.md	heading	What pack prints
-kit/ops/bench.sh	fn	ctx_b
 kit/ops/bench.sh	fn	ms
 kit/ops/bootstrap.py	const	FLAGS
 kit/ops/bootstrap.py	const	PERMS
@@ -416,7 +415,6 @@ kit/ops/lib/drift.sh	fn	cmd_rules
 kit/ops/lib/drift.sh	fn	cmd_surfaces
 kit/ops/lib/drift.sh	fn	dep_ids
 kit/ops/lib/drift.sh	fn	dep_reaches
-kit/ops/lib/drift.sh	fn	finding
 kit/ops/lib/drift.sh	fn	pat_overlap
 kit/ops/lib/drift.sh	fn	rules_gate
 kit/ops/lib/drift.sh	fn	surfaces_apply
@@ -507,7 +505,6 @@ kit/ops/lib/ownership.sh	fn	check_rules
 kit/ops/lib/ownership.sh	fn	cmd_guard
 kit/ops/lib/ownership.sh	fn	cmd_match
 kit/ops/lib/ownership.sh	fn	cmd_rules_check
-kit/ops/lib/ownership.sh	fn	gdiff
 kit/ops/lib/ownership.sh	fn	guide_stale_hint
 kit/ops/lib/ownership.sh	fn	map_delta_hint
 kit/ops/lib/ownership.sh	fn	match_one
@@ -518,10 +515,6 @@ kit/ops/lib/ownership.sh	fn	rule_scan_path
 kit/ops/lib/ownership.sh	fn	run_verify_cmds
 kit/ops/lib/qa.sh	fn	cmd_finish
 kit/ops/lib/qa.sh	fn	cmd_qa
-kit/ops/lib/qa.sh	fn	fin_caveat
-kit/ops/lib/qa.sh	fn	fin_count
-kit/ops/lib/qa.sh	fn	fin_ids
-kit/ops/lib/qa.sh	fn	fin_pending
 kit/ops/lib/route.sh	fn	cmd_depth
 kit/ops/lib/route.sh	fn	cmd_route
 kit/ops/lib/route.sh	fn	cmd_triage

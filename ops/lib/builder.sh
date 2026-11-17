@@ -823,6 +823,30 @@ EOF
   note "RULES.tsv still binds inside granted paths · prove it when done: polaris verify"
 }
 
+cmd_note() { # note <ID> -m "<line>" — append ONE Notes line (an `assumed:` default, a finding for the
+  # Planner) to a CLAIMED task in its OWN board commit (ops/contracts/tune.md § 3). Hand-appended lines
+  # used to ride whichever lane committed next (plan hour: T-301/T-302's in "release T-300", T-303's in
+  # "claim T-300"). A refusal writes nothing.
+  local id="${1:-}" msg="" u='usage: polaris note <ID> -m "<line>"'
+  [ -n "$id" ] || die "$u"; shift
+  while [ $# -gt 0 ]; do case "$1" in
+    -m) msg="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
+    *)  die "unknown flag $1 — $u";;
+  esac; done
+  [ -n "$msg" ] || die "$u"
+  case "$msg" in *"
+"*) die "note takes ONE line — call it once per line";; esac
+  local tf; tf="$(task_file "$id" active)"     || die "$id is not in active/ (state: $(task_col "$id" || echo unknown)) — note writes on CLAIMED work only"
+  mutex_on
+  printf -- '- %s
+' "${msg#- }" >> "$tf"
+  evt note "$id" ""
+  board_commit "chore(board): note $id"
+  sync_board
+  mutex_off; trap - EXIT
+  say "noted on $id: ${msg#- }"
+}
+
 cmd_approve() { # approve <ID> <scope> -m "why" — the sibling of grant (ops/contracts/ask-approval.md).
   case " $* " in *" --plan "*) cmd_approve_plan "$@"; return;; esac
   # Records a HUMAN's yes on ONE task's approved: list — to an `ask` rule, or to an ops/SURFACES.tsv

@@ -315,11 +315,23 @@ def selfcheck():
         if got != want:
             print("FAIL mention %s in %s: expected %r, got %r" % (path, rel, want, got))
             bad += 1
+    # find --api: a column-0 shell fn is surface; a helper nested in a body and an awk `function
+    # x()` inside a quoted program are not (_api_nested reads the same lines the scanner counted).
+    api_text = ("top() {\n  inner() { :; }\n  awk '\n    function pick() { return 1 }\n"
+                "  ' /dev/null\n}\n")
+    api_lines = {"a.sh": api_text.splitlines()}
+    api_got = sorted(n for n, k, l, _ in scan_text(api_text, "sh")[0]
+                     if k == "fn" and not _api_nested("", "a.sh", l, api_lines))
+    api_cases = 1
+    if api_got != ["top"]:
+        print("FAIL api a.sh: expected ['top'], got %r" % api_got)
+        bad += 1
     if bad:
         print("selfcheck FAILED (%d)" % bad)
         return 1
-    print("selfcheck ok (%d language fixtures, %d import cases, %d resolve cases, %d mention cases)"
-          % (len(FIXTURES), len(imp_cases), len(res_cases) + len(fact_cases), len(men_cases)))
+    print("selfcheck ok (%d language fixtures, %d import cases, %d resolve cases, %d mention cases,"
+          " %d api case)"
+          % (len(FIXTURES), len(imp_cases), len(res_cases) + len(fact_cases), len(men_cases), api_cases))
     return 0
 
 
@@ -804,6 +816,18 @@ def score(name, q, kind, churn, fanin, flags):
     return s
 
 
+def _api_nested(root, path, ln, cache):
+    """True when line `ln` (1-based, as the indexer counts) of `path` starts with whitespace."""
+    if path not in cache:
+        try:
+            with open(os.path.join(root, path), encoding="utf-8", errors="replace") as fh:
+                cache[path] = fh.read().splitlines()
+        except OSError:
+            cache[path] = []
+    lines = cache[path]
+    return 0 < ln <= len(lines) and lines[ln - 1][:1] in (" ", "\t")
+
+
 def cmd_find(root, args):
     con, have_fts, _, _ = build(root)
     cur = con.cursor()
@@ -832,14 +856,20 @@ def cmd_find(root, args):
         # argument order, sorted and de-duplicated within itself, so the output is byte-identical
         # to one call per glob, concatenated. `pack` asks for every owned path in one call (T-180).
         hit = False
+        src = {}
         for q in args:
             pat = q.replace("*", "%") if "*" in q else "%" + q + "%"
             seen = set()
             rows = []
-            for path, kind, name in cur.execute(
-                    "SELECT f.path,s.kind,s.name FROM symbols s JOIN files f ON f.id=s.file_id "
+            for path, kind, name, ln, lang in cur.execute(
+                    "SELECT f.path,s.kind,s.name,s.line,f.lang FROM symbols s JOIN files f ON f.id=s.file_id "
                     "WHERE f.path LIKE ?", (pat,)):
                 if name.startswith("_"):
+                    continue
+                # An INDENTED shell definition is a helper nested in a function body, or an awk
+                # `function x()` inside a quoted program: neither is callable from outside its file,
+                # so neither is surface (plan hour: T-301, T-302, T-303 each went red on one).
+                if kind == "fn" and lang == "sh" and _api_nested(root, path, ln, src):
                     continue
                 key = (path, kind, name)
                 if key in seen:
@@ -1022,6 +1052,67 @@ def _hops_task(root):
     feat/<ID> — else "". What such a tree changes is the pass's own work, never somebody else's."""
     b = sh(["git", "symbolic-ref", "-q", "--short", "HEAD"], root).strip()
     return b[len("feat/"):] if b.startswith("feat/") else ""
+
+
+def _hops_fm_list(text, key):
+    """core.sh fm_list over a task file's text: the items of `key:` in its frontmatter — a `- x`
+    block list, an inline `[a, b]` flow list, or an inline scalar; comments and \\r stripped."""
+    out, fs, on = [], 0, False
+    for line in text.split("\n"):
+        line = line.rstrip("\r")
+        if line == "---":
+            fs += 1
+            continue
+        if fs != 1:
+            continue
+        if line.startswith(key + ":"):
+            on, s = True, re.sub(r"[ \t]#.*$", "", line[len(key) + 1:]).strip(" \t")
+            if s.startswith("[") and s.endswith("]"):
+                out += [x.strip(" \t") for x in s[1:-1].split(",") if x.strip(" \t")]
+            elif s:
+                out.append(s)
+            continue
+        if on and re.match(r"[ \t]*-[ \t]", line):
+            s = re.sub(r"^[ \t]*-[ \t]*", "", re.sub(r"[ \t]#.*$", "", line)).rstrip(" \t")
+            if s:
+                out.append(s)
+        elif on and re.match(r"[A-Za-z_]", line):
+            on = False
+    return out
+
+
+def _hops_board_held(root, task=""):
+    """§ 6 of ops/contracts/tune.md, rule 10's second half: every files_owned and context_files
+    pattern of an OPEN card — backlog, ready, active, review, blocked — on the board ref, except the
+    tree's own task. One ls-tree and one cat-file --batch for the whole board, never a fork per
+    card. No board ref: nothing held, so the pass is exactly what it was before the rule."""
+    ref = "refs/heads/polaris/board"
+    names = [p for p in sh(["git", "ls-tree", "-r", "--name-only", ref, "--"] +
+                           ["ops/board/%s/" % c for c in ("backlog", "ready", "active", "review",
+                                                          "blocked")], root).split("\n")
+             if p.endswith(".md") and p.rpartition("/")[2] != (task + ".md")]
+    if not names:
+        return ()
+    try:
+        raw = subprocess.run(["git", "cat-file", "--batch"], cwd=root, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL,
+                             input="".join("%s:%s\n" % (ref, p) for p in names).encode("utf-8")).stdout
+    except Exception:
+        return ()
+    pats, i = [], 0
+    while i < len(raw):
+        j = raw.find(b"\n", i)
+        if j < 0:
+            break
+        head = raw[i:j].split(b" ")
+        i = j + 1
+        if len(head) != 3 or head[1] != b"blob":
+            continue
+        n = int(head[2])
+        text = raw[i:i + n].decode("utf-8", "replace")
+        i += n + 1
+        pats += _hops_fm_list(text, "files_owned") + _hops_fm_list(text, "context_files")
+    return tuple(sorted(set(pats)))
 
 
 def _hops_in_flight(root, base, task=""):
@@ -1215,6 +1306,10 @@ def _hops_fixed(root, base, files=(), edges=(), task=""):
     routed = {"migrations", "public", "static"} | set(_HOPS_LOOKS)
     relaxed = routed.difference(_HOPS_LOOKS)
     unity = {"Resources", "StreamingAssets", "Editor", "Plugins"}                      # 8
+    # 10, its board half (tune.md § 6): what an open card owns or reads is held for the pass too —
+    # but per FEATURE, never per path: held here, one file would drop out of its cluster and the
+    # rest of the feature would move without it. _hops_hold leaves the whole feature out instead.
+    board = _hops_board_held(root, task)
 
     def _fixed(p, loose=False):
         segs = p.split("/")[:-1]
@@ -1222,6 +1317,7 @@ def _hops_fixed(root, base, files=(), edges=(), task=""):
                 or bool((relaxed if loose else routed).intersection(segs))                  # 2
                 or bool(unity.intersection(segs)) or p.endswith((".meta", ".asmdef", ".asmref"))
                 or p in flight or p.startswith(held) or bool(lasting(p)))
+    _fixed.board = board
     return _fixed
 
 
@@ -1437,7 +1533,8 @@ def _hops_survey(root, files):
     s.dirs = sorted(s.per, key=lambda d: (-s.per[d], d))
     s.guides = _hops_guides(root, files)
     s.big = [d for d in s.dirs if s.per[d] >= 5]
-    s.missing = [d for d in s.big if d not in s.guides]
+    s.missing = [d for d in s.big if d not in s.guides
+                 and not any(_hops_match(d + "/CLAUDE.md", b) for b in s.fixed.board)]
     return s
 
 
@@ -1475,6 +1572,34 @@ def _hops_proposals(root, s):
             moves += [(f, t, name) for f, t in mv]
             claimed.update(t for _, t in mv)
     return rows, moves
+
+
+def _hops_hold(root, s, moves):
+    """tune.md § 6: the MOVE rows minus every feature (a run of rows with one name) whose moves,
+    importer edits or mention edits — what --owned would list — touch a path an open card owns or
+    reads (_hops_board_held). It waits WHOLE, like the 25-file cut, so a smaller one behind it can
+    still fit. Nothing held on the board: the rows exactly as they came, and nothing read."""
+    board = s.fixed.board
+    if not board or not moves:
+        return moves
+    froms = {}
+    bad = set()
+    for f, t, name in moves:
+        froms.setdefault(name, set()).add(f)
+        if any(_hops_match(f, x) or _hops_match(t, x) for x in board):
+            bad.add(name)
+    for a, b in s.edges:
+        for name, fs in froms.items():
+            if b in fs and a in s.tracked and any(_hops_match(a, x) for x in board):
+                bad.add(name)
+    for rel in s.files:
+        if not _mention_src(rel) or not any(_hops_match(rel, x) for x in board):
+            continue
+        text = read(root, rel) or ""
+        for name, fs in froms.items():
+            if name not in bad and any(_mentioned(f, rel, text) for f in fs):
+                bad.add(name)
+    return [m for m in moves if m[2] not in bad]
 
 
 def _hops_cut(moves):
@@ -1650,7 +1775,9 @@ def _hops_owned(root, rows, files):
     per = collections.Counter(p.rpartition("/")[0] for p in after)
     guides = _hops_guides(root, files)
     out.update(d + "/CLAUDE.md" for d in sorted(
-        (d for d in per if d and per[d] >= 5 and d not in guides), key=lambda d: (-per[d], d))[:8])
+        (d for d in per if d and per[d] >= 5 and d not in guides
+         and not any(_hops_match(d + "/CLAUDE.md", b) for b in fixed.board)),
+        key=lambda d: (-per[d], d))[:8])
     for p in sorted(out):
         print(p)
     return 0
@@ -2016,7 +2143,7 @@ def _hops_due(root, files):
                    root).strip() if last else ""
         if not (since.isdigit() and int(since) < 30):
             s = _hops_survey(root, files)
-            ren = {f: t for f, t, _ in _hops_cut(_hops_proposals(root, s)[1])}
+            ren = {f: t for f, t, _ in _hops_cut(_hops_hold(root, s, _hops_proposals(root, s)[1]))}
             # folders summed over every kept change, before and after: the mean's numerators, so
             # the 15% line is decided in whole numbers, never by a float landing a hair under it
             a, b = (sum(len({r.get(p, p).rpartition("/")[0] for p in c}) for c in s.commits)
@@ -2181,7 +2308,7 @@ def cmd_hops(root, args):
     if mode == "--questions":
         return _hops_questions(root, s, moves)
     if mode == "--propose":
-        for f, t, _ in _hops_cut(moves):
+        for f, t, _ in _hops_cut(_hops_hold(root, s, moves)):
             print("move\t%s\t%s" % (f, t))
         return 0
     merges, splits = _hops_merges(root, s, moves), _hops_splits(root, s)

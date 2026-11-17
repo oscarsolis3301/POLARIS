@@ -284,9 +284,11 @@ EOF
     ft_assert 'empty status → rc 1'                      ! update_dirt_overlaps_kit <<< ''
     ft_section dirt ) || ft_red=1
 
-  # ---- hops-hint (save-hops.md § 5, § 0.5) — update_hops_hint <explicit|auto> READS the verdict
-  # cache .polaris/hops-due and never runs hops: due ⇔ field 2 is 0 AND field 1 is $BASE's sha now
-  # AND `hops:` is not off; anything else is rc 1 and silence. `git` is stubbed on the opener line,
+  # ---- hops-hint (tune.md § 6, save-hops.md § 5, § 0.5) — update_hops_hint <explicit|auto> READS
+  # .polaris/tune-due (its count when field 1 is $BASE's sha now) and, when that is missing, stale or
+  # malformed, the layout verdict .polaris/hops-due as a count of 1: due ⇔ field 2 is 0 AND field 1
+  # is $BASE's sha now AND `hops:` is not off. A count of 0 is rc 1 and silence. Quiet = nothing in
+  # flight (board_quiescent inflight): a card waiting in ready/ never makes it busy. `git` is stubbed on the opener line,
   # the section's own override beside its globals — it answers the one call the reader makes with a
   # fixed sha and anything else with nothing, so the tier still runs no git and gains no module fn
   # (exactly three, fast-tier.md). PRIMARY borrows the quiescent fixture's bgrc/ (its .polaris/
@@ -299,15 +301,38 @@ EOF
     printf '%s\t0\tlayout pass due — 3 folders scatter one change\r\n' "$ft_sha" > "$ft_hd"
     ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
     ft_assert 'due + quiet → rc 0'                                test "$ft_rc" = 0
-    ft_assert 'due + quiet → the run-it-now line, one newline'    test "$ft_out" = "▶ NEXT — save hops: read ops/roles/TIDY.md and run it now${ft_nl}x"
+    ft_assert 'due + quiet → the run-it-now line, one newline'    test "$ft_out" = "▶ NEXT — tune-up (1): read ops/roles/TIDY.md and run it now${ft_nl}x"
+    BOARD="$FT_TMP/q/ready/board"
+    ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'due + a card waiting in ready/ → still quiet, run it now' test "$ft_out" = "▶ NEXT — tune-up (1): read ops/roles/TIDY.md and run it now${ft_nl}x"
     BOARD="$FT_TMP/q/active/board"
     ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
     ft_assert 'due + busy → rc 0'                                 test "$ft_rc" = 0
-    ft_assert 'due + busy → the wraps-up line, one newline'       test "$ft_out" = "▶ NEXT — save hops: the layout pass is due — it runs when your next piece of work wraps up${ft_nl}x"
+    ft_assert 'due + busy → the in-flight line, one newline'      test "$ft_out" = "▶ NEXT — tune-up due (1): it runs when the work in flight lands${ft_nl}x"
     ft_out="$(update_hops_hint auto && printf x)" && ft_rc=0 || ft_rc=1
     ft_assert 'auto → rc 0'                                       test "$ft_rc" = 0
-    ft_assert 'auto → the suffix: leading space, NO newline'      test "$ft_out" = ' · layout pass due — runs when your next piece of work wraps upx'
+    ft_assert 'auto → the suffix: leading space, NO newline'      test "$ft_out" = ' · tune-up due (1)x'
     ft_assert 'an unknown mode → rc 1'                            ! update_hops_hint sideways
+    # the tune-up's own verdict (tune.md § 2) is read FIRST: its count when current, the layout
+    # verdict only when it is missing, stale or malformed — and a current count of 0 is silence
+    ft_td="$FT_TMP/q/bgrc/.polaris/tune-due"
+    printf '%s\t0\t3\tcards,layout,landing\r\n' "$ft_sha" > "$ft_td"
+    ft_out="$(update_hops_hint auto && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'tune-due current, n = 3 → auto says (3)'           test "$ft_out" = ' · tune-up due (3)x'
+    BOARD="$FT_TMP/q/empty/board"
+    ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'tune-due current, n = 3, quiet → run it now (3)'   test "$ft_out" = "▶ NEXT — tune-up (3): read ops/roles/TIDY.md and run it now${ft_nl}x"
+    printf '%s\t1\t0\t-\n' "$ft_sha" > "$ft_td"
+    ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'tune-due current, n = 0 → rc 1, the layout verdict unread' test "$ft_rc" = 1
+    ft_assert 'tune-due current, n = 0 → nothing'                 test -z "$ft_out"
+    printf 'fedcba9876543210fedcba9876543210fedcba98\t0\t3\tcards\n' > "$ft_td"
+    ft_out="$(update_hops_hint auto && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'tune-due stale → the layout verdict, as (1)'       test "$ft_out" = ' · tune-up due (1)x'
+    printf '%s\t0\tthree\n' "$ft_sha" > "$ft_td"
+    ft_out="$(update_hops_hint auto && printf x)" && ft_rc=0 || ft_rc=1
+    ft_assert 'tune-due malformed → the layout verdict, as (1)'   test "$ft_out" = ' · tune-up due (1)x'
+    rm -f "$ft_td"
     BOARD="$FT_TMP/q/empty/board"; CONV="$FT_TMP/conv-hops-off"
     printf 'hops: off\n' > "$CONV"
     ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
