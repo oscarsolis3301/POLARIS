@@ -156,7 +156,8 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
 - **Here or away — `bash ops/polaris presence` says which.** Here (plan mode, or any mode that is
   not hands-off): before step 1 files the task, ask every question whose answer changes it, in
   rounds, until none is left. Away (a plan was approved and the session runs in auto mode): never
-  ask — take the recommended option and write it down as an `assumed:` line in the task's Notes;
+  ask — take the recommended option and record it: `bash ops/polaris note <ID> -m "assumed: <choice>"`
+  (its own board commit, never a hand edit of a board file);
   park only what has no safe default (a paid service, deleting data) and finish the rest; never stop
   for a busy lane, a taken task or another chat's work; finish through publishing.
 - **Scope = the task.** No drive-by refactors. Something else needs doing → one line in

@@ -72,12 +72,14 @@ fi
 # `-c pass` proves a REAL interpreter (the Windows Store python3 stub passes command -v).
 PY=""; python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
 
-# Who prints the layout-pass line (save-hops.md § 16.4)? Asked HERE, before the copy below overwrites
-# the answer: the target's own ops/lib/admin.sh is the code of the updater running us, if one is.
-# From 6.12.0 on it defines update_hops_hint() and prints that line itself once we return; an older
-# one has never heard of the layout pass, so the end of this file says it instead.
+# Who prints the tune-up line (tune.md § 6, save-hops.md § 16.4)? Asked HERE, before the copy below
+# overwrites the answer: the target's own ops/lib/admin.sh is the code of the updater running us, if
+# one is. From 6.18.0 on its update_hops_hint() reads .polaris/tune-due and prints that line itself
+# once we return; an older one has never heard of the tune-up (6.12-6.17 knew only the layout pass),
+# so the end of this file says it instead.
 PRE_HINT_FN=0
-if grep -q '^update_hops_hint()' "$TARGET/ops/lib/admin.sh" 2>/dev/null; then PRE_HINT_FN=1; fi
+if grep -q '^update_hops_hint()' "$TARGET/ops/lib/admin.sh" 2>/dev/null \
+   && grep -q 'tune-due' "$TARGET/ops/lib/admin.sh" 2>/dev/null; then PRE_HINT_FN=1; fi
 
 # --- ops/ ---------------------------------------------------------------------
 KIT_CODE="polaris dashboard.py index.py bench.sh PROTOCOL.md MANUAL.md PROMPTS.md VISUAL.md install.sh VERSION KEYS.tsv"  # + roles/ templates/ hooks/ ci/
@@ -612,37 +614,47 @@ if [ "$STATE" = fresh ]; then
   printf '  (No AI reading this? Open your AI chat in this repo and ask it to set up POLARIS.)\n'
 fi
 
-# The layout pass, for an updater too old to mention it (save-hops.md § 16.4). The first update onto
-# the layout tooling is run by the OLD updater, and before 6.12.0 that updater knew nothing of the
-# pass — so the one line saying "it is due, here is how" never appeared on that jump. This installer
-# is always the NEW code, so it says it: once, LAST, after the routing line, and only when all hold —
-# a live board · an updater ran us (POLARIS_SHA set, maybe empty) · that updater did not claim the
-# line (the current one passes POLARIS_UPDATE_HINTS=1) · the admin.sh it ran from had no
-# update_hops_hint() (6.12.0 prints its own) · and the verdict heal refreshed above says due, read
-# the way save-hops.md § 0.5 reads it: field 2 is 0, field 1 is <base>'s sha now, `hops:` is not
-# off, every \r dropped. A fresh install never gets here — it ends with the setup epilogue above.
+# The tune-up, for an updater too old to mention it (tune.md § 6, save-hops.md § 16.4). An update is
+# run by the OLD updater, and before 6.18.0 that updater knew nothing of the tune-up — so the one line
+# saying "it is due, here is how" never appeared on that jump. This installer is always the NEW code,
+# so it says it: once, LAST, after the routing line, and only when all hold — a live board · an
+# updater ran us (POLARIS_SHA set, maybe empty) · the admin.sh it ran from never reads tune-due
+# (6.12-6.17's own old `save hops` line may follow; it leads to the same TIDY.md, which now starts
+# with the tune-up) · and the count is above 0: the tune-up's verdict heal refreshed above
+# (.polaris/tune-due, tune.md § 2 — field 1 is <base>'s sha now, field 3 the count), else the layout
+# verdict by save-hops § 0.5's rule (field 2 is 0, field 1 is <base>'s sha now, `hops:` not off) as a
+# count of 1; every \r dropped. A fresh install never gets here — it ends with the setup epilogue above.
 # Plain printf, like the routing line: `note` is quiet-swallowed. The two strings are byte for byte
 # the ones `update_hops_hint explicit` prints, so a reader meets ONE sentence whichever kit said it.
-if [ "$UPGRADE" = 1 ] && [ -n "${POLARIS_SHA+x}" ] && [ -z "${POLARIS_UPDATE_HINTS+x}" ] \
-   && [ "$PRE_HINT_FN" = 0 ] && [ -f "$TARGET/.polaris/hops-due" ]; then
-  _vs=""; _vv=""; _vm=""
-  IFS=$'\t' read -r _vs _vv _vm 2>/dev/null < "$TARGET/.polaris/hops-due" || true
-  _vs="${_vs%$'\r'}"; _vv="${_vv%$'\r'}"
+if [ "$UPGRADE" = 1 ] && [ -n "${POLARIS_SHA+x}" ] && [ "$PRE_HINT_FN" = 0 ] \
+   && { [ -f "$TARGET/.polaris/tune-due" ] || [ -f "$TARGET/.polaris/hops-due" ]; }; then
   # base: and hops: exactly as core.sh's cfg reads a key — first line wins, a comment and \r dropped
   _CFG='index($0, k":")==1 { s=substr($0, length(k)+2); sub(/\r$/,"",s); sub(/^[ \t]*/,"",s); if (s ~ /^#/) s=""; else sub(/[ \t]#.*$/,"",s); sub(/[ \t]*$/,"",s); print s; exit }'
   _base="$(awk -v k=base "$_CFG" "$TARGET/ops/CONVENTIONS.md" 2>/dev/null || true)"; [ -n "$_base" ] || _base=main
-  _hops="$(awk -v k=hops "$_CFG" "$TARGET/ops/CONVENTIONS.md" 2>/dev/null || true)"
-  if [ "$_vv" = 0 ] && [ -n "$_vs" ] && [ "$_hops" != off ] \
-     && [ "$_vs" = "$(git -C "$TARGET" rev-parse --verify -q "$_base" 2>/dev/null || true)" ]; then
-    # Quiet = no task file in ready/, active/ or review/: then the pass can run right now.
+  _sha="$(git -C "$TARGET" rev-parse --verify -q "$_base" 2>/dev/null || true)"
+  _n=""; _vs=""; _vv=""; _vm=""; _vk=""
+  IFS=$'\t' read -r _vs _vv _vm _vk 2>/dev/null < "$TARGET/.polaris/tune-due" || true
+  _vs="${_vs%$'\r'}"; _vv="${_vv%$'\r'}"; _vm="${_vm%$'\r'}"; _vk="${_vk%$'\r'}"
+  case "$_vv" in 0|1) case "$_vm" in ''|*[!0-9]*) ;; *)
+    if [ -n "$_vs" ] && [ -n "$_vk" ] && [ "$_vs" = "$_sha" ]; then _n="$_vm"; fi;; esac;; esac
+  if [ -z "$_n" ]; then
+    _vs=""; _vv=""; _vm=""
+    IFS=$'\t' read -r _vs _vv _vm 2>/dev/null < "$TARGET/.polaris/hops-due" || true
+    _vs="${_vs%$'\r'}"; _vv="${_vv%$'\r'}"
+    _hops="$(awk -v k=hops "$_CFG" "$TARGET/ops/CONVENTIONS.md" 2>/dev/null || true)"
+    if [ "$_vv" = 0 ] && [ -n "$_vs" ] && [ "$_hops" != off ] && [ "$_vs" = "$_sha" ]; then _n=1; fi
+  fi
+  if [ -n "$_n" ] && [ "$_n" -gt 0 ] 2>/dev/null; then
+    # Quiet = no task file in active/ or review/: nothing in flight, so the tune-up can run right
+    # now — cards merely waiting in ready/ or backlog/ never hold it off (it keeps off their files).
     _busy=0
-    for _col in ready active review; do
+    for _col in active review; do
       for _f in "$TARGET/ops/board/$_col"/*.md; do
         if [ -f "$_f" ]; then _busy=1; fi
       done
     done
-    if [ "$_busy" = 0 ]; then printf '\n%s\n' '▶ NEXT — save hops: read ops/roles/TIDY.md and run it now'
-    else printf '\n%s\n' '▶ NEXT — save hops: the layout pass is due — it runs when your next piece of work wraps up'; fi
+    if [ "$_busy" = 0 ]; then printf '\n▶ NEXT — tune-up (%s): read ops/roles/TIDY.md and run it now\n' "$_n"
+    else printf '\n▶ NEXT — tune-up due (%s): it runs when the work in flight lands\n' "$_n"; fi
   fi
-  unset _vs _vv _vm _CFG _base _hops _busy _col _f
+  unset _vs _vv _vm _vk _CFG _base _sha _n _hops _busy _col _f
 fi

@@ -69,7 +69,7 @@ route
 #     note naming what waits on the human — a task only a human can merge no longer holds a run open
 #     mid-way, and its merge still needs that human's yes. A DUE layout verdict sits on disk here on
 #     purpose: the pass never runs while review/ holds work for the human, so this is still `finish`,
-#     not row 5.5. The verdict carries the fixture's REAL base sha — the reader compares field 1
+#     not row 1.5. The verdict carries the fixture's REAL base sha — the reader compares field 1
 #     with $BASE's sha now, so a made-up sha would prove the silence, never the pass. -----------
 rm -f ops/board/review/T-HR2.md
 mkdir -p .polaris; B="$(git rev-parse main)"
@@ -77,7 +77,7 @@ printf '%s\t0\tlayout pass due — ~40%% fewer folders per change · 3 folders o
 route
 printf '%s\n' "$OUT" | sed -n 's/^   \(risk: high awaiting approval: .*\)$/\1/p'
 rm -f ops/board/review/T-HR3.md
-# --- row 5.5, tidy (save-hops.md § 2.1): the board is done and the cached verdict says due — but
+# --- row 1.5, tidy (tune.md § 6): nothing in flight and the cached verdict says due — but
 #     only a verdict that IS due, for THIS base, with the pass switched on, may route a session.
 #     Each silence first (not due · a verdict for an older base · `hops: off`), each `finish`. ----
 printf '%s\t1\t-\n' "$B" > .polaris/hops-due

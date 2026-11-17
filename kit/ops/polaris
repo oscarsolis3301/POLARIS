@@ -64,6 +64,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   grant <ID> <path> -m "why"     append one path to a CLAIMED task's files_owned (sanctioned
                                  amendment; REFUSES any overlap with another ready/active task's
                                  ownership — refusal mutates nothing; RULES.tsv still binds)
+  note <ID> -m "<line>"          append ONE Notes line (an assumed: default) to a CLAIMED task, own board commit
   amend <ID> --verify <n> -m "why" -- <cmd…>
         | --verify <n> --drop -m "why" | --verify --add -m "why" -- <cmd…>
                                  replace, drop or append ONE verify: line of a CLAIMED task (the
@@ -195,6 +196,13 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  line per slowing setting. --plan: a plan's cards (board + drafts named),
                                  waves on its critical path and lanes, priced with this project's medians
                                  against target_minutes: (default 60); over it → the re-cut line. Read-only
+  tune                           what slows this project, one line each with the one step that fixes it
+                                 (cards: waiting chains that fold · layout: the pass is due · lanes ·
+                                 landing · checks · behind · context). rc 0 = nothing to do, 1 = findings.
+                                 Writes only .polaris/tune-due; settings come back as proposals, never applied
+  fold <ID> <ID>…                turn a chain of waiting cards into ONE chain card (the first ID survives,
+                                 the rest become its steps:) in ONE board commit; one git revert undoes it.
+                                 Every refusal writes nothing
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
                                  plan · risk <ID> · question <ID> · done [ID]  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)
@@ -352,7 +360,7 @@ esac
 # (ops/contracts/module-layout.md v2 — both lists stay LITERAL, never a glob.)
 case "${1:-}" in
   _match|_rules|_guard) _mods="core ownership" ;;
-  *)             _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg awake handover presence skills author flow
+  *)             _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg awake handover presence skills author tune flow
                         selftest/spine selftest/board selftest/history selftest/report
                         selftest/brain selftest/policy selftest/remote selftest/fast selftest/hops" ;;
 esac
@@ -425,7 +433,10 @@ case "${1:-}" in
   release)    shift; cmd_release "$@";;
   park)       shift; cmd_park "$@";;
   unpark)     shift; cmd_unpark "$@";;
+  tune)       shift 2>/dev/null || true; cmd_tune "$@";;   # no update_check_maybe: read-only report, its one write is .polaris/tune-due
+  fold)       shift; cmd_fold "$@";;
   grant)      shift; cmd_grant "$@";;
+  note)       shift; cmd_note "$@";;
   amend)      shift; cmd_amend "$@";;
   approve)    shift; cmd_approve "$@";;
   kickback)   shift; cmd_kickback "$@";;

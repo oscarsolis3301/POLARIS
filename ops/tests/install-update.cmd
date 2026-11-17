@@ -1,5 +1,5 @@
-# install-update: what an UPDATE leaves behind (ops/contracts/save-hops.md § 16) — the layout pass
-# offered on the first jump from an older POLARIS, and no churn in .claude/settings.json.
+# install-update: what an UPDATE leaves behind (ops/contracts/save-hops.md § 16, tune.md § 6) — the
+# tune-up offered on the first jump from an older POLARIS, and no churn in .claude/settings.json.
 #
 # Two field reports, one at each end of install.sh. The update that brings a repo onto the layout
 # tooling is RUN BY THE OLD UPDATER, which knows nothing about the pass, so the one line naming it
@@ -8,9 +8,11 @@
 # (§ 16.3). And the update rewrote .claude/settings.json when nothing in it had changed, turning every
 # LF into CRLF on Windows: a diff of pure noise in a file the owner is asked to review (§ 16.1).
 #
-# Nine installs is the whole truth table of § 16.4's five conditions — each one taken away alone,
-# once (cases 1, 2, 4, 5, and 6-8: not due · another commit's sha · hops: off) — plus both pinned
-# lines (3, 9).
+# Ten installs is the whole truth table of § 16.4's conditions as tune.md § 6 moves them — each one
+# taken away alone, once (cases 1, 2, 5, and 6-8: not due · another commit's sha · hops: off) — plus
+# both pinned lines (3, 9), a 6.12-6.17 updater that knew only the layout pass (4), and a card merely
+# waiting in ready/, which never makes the board busy (10). With no .polaris/tune-due on disk (`tune`
+# writes it; until it ships heal's call is a silent no-op) the count is the layout verdict's, 1.
 #
 # HERMETIC: throwaway repos under ONE mktemp -d. HOME, USERPROFILE and POLARIS_AWAKE_HOME all point
 # inside it — Python's expanduser reads USERPROFILE on Windows, so a HOME-only fake would still reach
@@ -58,14 +60,15 @@ R="$FIX/repo"; SJ="$R/.claude/settings.json"; OUT="$FIX/out"
 # Every helper works on $R / $SJ / $OUT — the shared fixture for case 1, a lane's own copy after it.
 I() { # I [VAR=value …] — ONE install: its verdict on one line, its stdout kept in $OUT
   env "$@" bash "$KIT_DIR/ops/install.sh" "$R" > "$OUT" 2> "$OUT.err"; rc=$?
-  printf 'rc %s · %s · save-hops lines %s · upgrade lines %s · ▶ NEXT lines %s\n' "$rc" \
+  printf 'rc %s · %s · tune-up lines %s · upgrade lines %s · ▶ NEXT lines %s\n' "$rc" \
     "$(sed -n 's/^POLARIS [^ ]* installed · //p' "$OUT")" \
-    "$(grep -c '^▶ NEXT — save hops' "$OUT")" \
+    "$(grep -c '^▶ NEXT — tune-up' "$OUT")" \
     "$(grep -c -e '^   live board: finish it with these two lines (never re-run INIT):$' -e '^     cd ' -e '^     bash ops/polaris upgrade$' "$OUT")" \
     "$(grep -c '^▶ NEXT' "$OUT")"
 }
 TAIL() { tail -n 3 "$OUT" | sed 's/^POLARIS [^ ]* installed/POLARIS <version> installed/'; }
 OLD() { printf '# an older kit'"'"'s admin.sh: it has never heard of the layout pass\n' > "$R/ops/lib/admin.sh"; }
+OLD17() { printf 'update_hops_hint() { # a 6.12-6.17 kit: it knows the layout pass, never the tune-up\n  return 1\n}\n' > "$R/ops/lib/admin.sh"; }
 SAID() { sed -n 's/^✅ \(\.claude\/settings\.json: .*\)$/\1/p' "$OUT"; }
 SAME() { if cmp -s "$1" "$SJ"; then echo 'settings.json: byte-identical'; else echo 'settings.json: REWRITTEN'; fi; }
 WRITE() { # WRITE <indent> <lf|crlf> [rule] [key…] — settings.json = the kit's object, minus its last allow rule / those keys
@@ -136,18 +139,19 @@ c3() { lane 3
   SAID
   ENDS crlf
   cp "$SJ" "$FIX/crlf.json"
-  echo '--- 4. the current updater passes POLARIS_UPDATE_HINTS=1 and prints the line itself: none here'
+  echo '--- 4. a 6.12-6.17 updater (POLARIS_UPDATE_HINTS=1, an admin.sh that never reads tune-due): the line, here too'
   # ...and this second install over that CRLF file has nothing left to merge: byte-identical.
-  OLD
+  OLD17
   I VERDICT=due POLARIS_SHA=abc1234 POLARIS_UPDATE_HINTS=1
+  TAIL
   SAME "$FIX/crlf.json"
 }
 
 c5() { lane 5
-  echo '--- 5. a 6.12.0 updater: its admin.sh defines update_hops_hint() and prints its own line: none here'
+  echo '--- 5. a 6.18 updater: its admin.sh reads tune-due and prints its own line: none here'
   # Every copy holds the admin.sh case 1's install wrote — the kit's own, so this is the real
   # definition. Same install: an LF settings file missing one allow rule gets it back, and stays LF.
-  if grep -q '^update_hops_hint()' "$R/ops/lib/admin.sh"; then echo 'admin.sh defines update_hops_hint(): yes'; else echo 'admin.sh defines update_hops_hint(): NO'; fi
+  if grep -q '^update_hops_hint()' "$R/ops/lib/admin.sh" && grep -q 'tune-due' "$R/ops/lib/admin.sh"; then echo 'admin.sh reads tune-due: yes'; else echo 'admin.sh reads tune-due: NO'; fi
   WRITE 2 lf rule
   I VERDICT=due POLARIS_SHA=abc1234
   SAID
@@ -162,12 +166,18 @@ c8() { lane 8
   I VERDICT=due POLARIS_SHA=abc1234
 }
 c9() { lane 9
-  echo '--- 9. due on a busy board (a task waits in ready/): the other pinned line, once, last'
+  echo '--- 9. due on a busy board (a card is building in active/): the other pinned line, once, last'
+  OLD; printf -- '---\nid: T-1\n---\n' > "$R/ops/board/active/T-1.md"
+  I VERDICT=due POLARIS_SHA=abc1234
+  TAIL
+}
+c10() { lane 10
+  echo '--- 10. due with a card merely waiting in ready/: nothing in flight, so run it now'
   OLD; printf -- '---\nid: T-1\n---\n' > "$R/ops/board/ready/T-1.md"
   I VERDICT=due POLARIS_SHA=abc1234
   TAIL
 }
 
-for n in 2 3 5 6 7 8 9; do ( "c$n" ) > "$FIX/report$n" 2>/dev/null & done
+for n in 2 3 5 6 7 8 9 10; do ( "c$n" ) > "$FIX/report$n" 2>/dev/null & done
 wait
-for n in 2 3 5 6 7 8 9; do cat "$FIX/report$n"; done
+for n in 2 3 5 6 7 8 9 10; do cat "$FIX/report$n"; done

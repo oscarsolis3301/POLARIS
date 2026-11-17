@@ -230,6 +230,10 @@ polaris_ok() {
     # `slim` bare is a report and writes nothing; `--apply`/`--restore` MOVE files under ~/.claude,
     # so they keep their prompt. Same split as check vs check --update.
     slim) case "${2:-}" in '') return 0;; *) return 1;; esac;;
+    # `tune` bare reads the board, EVENTS and config and writes only its own verdict cache
+    # (.polaris/tune-due, tune.md § 2) — never config. Any argument is a usage error, so it keeps its
+    # prompt. `fold` and `note` commit to the board and are deliberately absent from this gate.
+    tune) [ $# -le 1 ] && return 0 || return 1;;
     # `bg` splits the same way, and it is why this gate matters: agents run these reads INSIDE
     # compound lines (`bg status x && …`), where a settings.json allow rule cannot match at all.
     # `status`/`tail`/`wait` only read the job registry. `bg run` spawns a detached process and

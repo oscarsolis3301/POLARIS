@@ -31,6 +31,7 @@ allow  bash ops/polaris speed --plan hour a.md
 allow  bash ops/polaris speed --plan hour ops/board/backlog/a.md b.md
 allow  bash ops/polaris depth --commit HEAD~1
 allow  bash ops/polaris slim
+allow  bash ops/polaris tune
 allow  bash ops/polaris next
 allow  find ops -maxdepth 2 -type f -exec wc -l {} + | sort -rn | head -50
 allow  find . -name "*.md" -exec grep -l TODO {} \;
@@ -43,6 +44,9 @@ allow  bash ops/polaris bg tail qa -n 40
 allow  bash ops/polaris bg wait qa --max 120
 allow  bash ops/polaris route --role CONDUCTOR | head -1
 allow  bash ops/polaris bg status qa && bash ops/polaris bg tail qa -n 5
+ask  bash ops/polaris tune --apply
+ask  bash ops/polaris fold T-1 T-2
+ask  bash ops/polaris note T-1 -m "assumed: x"
 ask  bash ops/polaris depth --commit abc1234 extra
 ask  bash ops/polaris depth --commit -x
 ask  bash ops/polaris depth --commit

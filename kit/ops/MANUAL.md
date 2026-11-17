@@ -175,6 +175,35 @@ Then ONE `board_commit` (polaris/board — never `<base>`), subject `chore(board
 2. append to the task's Notes: `- amend: verify[<n>] "<old>" → "<new>" — <why>` (`--drop` → `"<old>" → dropped`; `--add` → `verify[+] "<new>"`);
 3. append the telemetry line: `{"ts":<epoch>,"ev":"amend","id":"<ID>","who":"<you@host>","note":"verify[<n>]"}`.
 
+## Note — one line on a CLAIMED card, in its own board commit
+What `ops/polaris note <ID> -m "<line>"` does by hand — how a Builder records an `assumed:` default
+without it riding another lane's board commit. Preconditions — ALL must hold, else STOP and change NOTHING:
+- `<ID>` is in `ops/board/active/` — note writes on claimed work only;
+- the message is non-empty and ONE line (two lines = two notes).
+Then ONE `board_commit`, subject `chore(board): note <ID>`, over `ops/board/active/<ID>.md` +
+`ops/board/EVENTS.ndjson`, then `sync_board`:
+1. append `- <line>` to the end of the task file (a message that already starts `- ` is not doubled);
+2. append `{"ts":<epoch>,"ev":"note","id":"<ID>","who":"<you@host>","note":""}`.
+
+## Fold — a chain of waiting cards becomes ONE chain card
+What `ops/polaris fold <C1> <C2>…` does by hand (ops/contracts/tune.md § 4). Check ALL of these first —
+any one fails → STOP and change NOTHING:
+- 2+ distinct IDs, each in `ready/` or `backlog/` with no lock; one `plan:`, one `risk:`, one `contract:`;
+- each 1-5 points with no `steps:`, and the points add up to 13 at most;
+- in the order given, each next card depends on the one before it — or shares a `files_owned` entry
+  with it and depends on no card of the group;
+- no card outside the group depends on a member AND is depended on by a later member.
+Then edit C1 in place: `points:` = the sum · `steps:` = `- <points> <ID>: <title>` per card in order ·
+`files_owned`, `context_files`, `verify`, `surface`, `needs`, `approved` = the unions in first-seen
+order · `depends_on` = the union minus the group · `value`, `time_criticality`, `risk_opportunity` = the
+max, `wsjf` = their sum over the new points (2 decimals) · append one `### Step <i> — <ID>: <title>`
+block per folded card holding its `## Why` and `## Acceptance criteria` text. Every other open card
+(ready/, backlog/, blocked/) that waited on a folded ID now names C1 instead, once. Remove the folded
+card files; C1 sits in `ready/` only when every `depends_on` is in `done/` and its files meet nothing in
+ready/, active/ or review/ outside the group, else `backlog/`. ONE `board_commit`, subject
+`chore(board): fold <C2> <C3>… → <C1>`, with `{"ts":<epoch>,"ev":"fold","id":"<C1>","who":"<you@host>","note":"<C2> <C3>…"}`,
+then `sync_board`. One `git revert` of that commit on `polaris/board` puts every card back.
+
 ## Integrate (Integrator) — audit → land-per-task → suite → seal
 List `ops/board/review/`, topologically sort by `depends_on` — that is the merge order. On `integrate/<date>` (never on `<base>`), per task in order: audit it (same ownership + RULES proof as above, run against `feat/<ID>` — before ANY merge; a violation kicks the task back, never merges it), then squash-land it (see Land below). Batch mode: run the full suite ONCE after all lands are in. Paranoid mode (suite <2 min): run the full suite after EVERY land.
 Suite red → find the offender by halving, not by re-testing every land: `git reset --hard <base>`, re-land the first half of the list, run the suite, recurse into whichever half is red (log₂N runs — one commit per task, no merge topology to fight). Offender found → `git reset --hard HEAD~1` to drop its land, kick it back with the failing output (path:line only), skip anything that `depends_on` it, re-land the survivors, re-run the suite.

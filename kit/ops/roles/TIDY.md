@@ -7,11 +7,14 @@ disappears) needs the human's yes from before the run; a proven move is not a de
 
 ## Entry — who sends you here
 - **`next` or the Stop hook, at the end of a run** — a board-proven hop: only the run's own answers.
-- **`triage` on an empty board** — you are the whole run: ask `bash ops/polaris hops --questions`
+- **`next`/`triage` with cards waiting** — the tune-up runs first; it never touches a waiting card's
+  files (`hops` holds every path an open card owns or reads, and a feature touching one waits whole).
+- **`triage` with nothing in flight** — you are the whole run: ask `bash ops/polaris hops --questions`
   once, NOW, before any work. That is the run's one round; after it the owner is away.
 - **A conductor's TIDY subagent** — its kickoff carries the up-front answers; ask nothing. Your
   report is your close — never `next` or `finish`: the conductor's own run takes it from there.
-- **The explicit `update` epilogue** — `▶ NEXT — save hops: read ops/roles/TIDY.md and run it now`.
+- **The explicit `update` epilogue** — `▶ NEXT — tune-up (<n>): read ops/roles/TIDY.md and run it now`
+  (an older updater may still say `▶ NEXT — save hops: …`: the same pass, tune-up first).
 
 One context, no subagents. `hops: off` in `ops/CONVENTIONS.md` → stop: one line saying so, nothing
 else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a job still running.
@@ -24,6 +27,12 @@ else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a 
    RULES, LAYOUT, ROADMAP), plus `CLAUDE.md`, `.gitignore`, `.gitattributes` and the kit's `.claude/`
    pieces — never anyone's other work. Work in flight elsewhere (dirty files, unmerged branches, an
    open PR) `hops` leaves out on its own; `git fetch --quiet` first when there is an origin.
+0.5 **The tune-up.** `bash ops/polaris tune` — read-only, seconds. Note `bash ops/polaris speed
+   --plan <slug>`'s projected line for each plan a `cards:` finding names, then run every
+   `   fix: bash ops/polaris fold …` line it printed, in order (a refusal = one report line, go on),
+   and the same `speed --plan` again: those before → after go in § Report. The settings findings
+   (`lanes:` `landing:` `checks:` `behind:` `context:`) are never applied — they become numbered
+   proposals there. Go on to step 1 ONLY when it printed a `layout:` line; else straight to § Report.
 1. **Questions — only answers the run already has.** None yet (`next`, the Stop hook, a kickoff
    saying `none`)? Run `bash ops/polaris hops --questions` read-only: all it prints is unanswered. A
    merge needs a yes; a `keep` answer is a keep row `framework convention`; anything unanswered gets
@@ -82,6 +91,10 @@ else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a 
 
 ## Report
 In the repo's `voice:` — outcomes, not tooling. Conductor-entered, this is your whole result.
+- **Folds made** (step 0.5) — cards before → after, and `speed --plan`'s projected time before →
+  after, per plan; each refused fold, one line. None → say the tune-up found nothing to fold.
+- **Settings worth changing** — each settings finding as a numbered proposal,
+  `<n>. <finding> — reply "approve <n>"`. Never applied by you; a yes is the owner's to give.
 - **Before → after**, a small table: folders per change (step 2's line 1 → the after-score) and
   guides (`<guided>/<busy folders>` before → after, each with its own denominator); then what moved, each `from → to`.
 - **These tasks now take fewer lookups** — step 3's `change <name>: <k> folders → <k2>` lines, one

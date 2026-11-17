@@ -739,9 +739,9 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   sha=""
   [ -n "$repo" ] && sha="$(git ls-remote "$repo" HEAD 2>/dev/null | cut -c1-7 || true)"
 
-  # POLARIS_UPDATE_HINTS=1 tells install.sh "this updater prints the layout-pass line itself" (the
-  # update_hops_hint call at the end of this function), so the installer stays quiet about it. Without
-  # the marker, a new install.sh run by an updater older than 6.12.0 says it instead (save-hops.md § 16).
+  # POLARIS_UPDATE_HINTS=1 is what 6.12-6.17 installers read as "this updater prints the line itself".
+  # From 6.18.0 install.sh asks the admin.sh it ran from instead: one that reads tune-due (this one,
+  # through the update_hops_hint call at the end of this function) keeps it quiet (tune.md § 6).
   POLARIS_SHA="$sha" POLARIS_UPDATE_HINTS=1 bash "$K/ops/install.sh" "$PRIMARY" || die "install failed — repo untouched except where noted above"
 
   # AFTER the install, so `ver` reads the NEW VERSION (and its zip: URL), and before $T is gone.
@@ -976,27 +976,45 @@ update_dirt_overlaps_kit() { # stdin = `git status --porcelain`; rc 0 = some dir
   return 1
 }
 
-update_hops_hint() { # update_hops_hint <explicit|auto> — the layout-pass line an update ends with; not due → rc 1, silent
-  # save-hops.md § 5. READS the verdict cache .polaris/hops-due (§ 0.5) — heal refreshed it during
-  # the update that just ran — and never runs hops itself. Due ⇔ the file exists AND field 2
-  # is 0 AND field 1 is $BASE's sha now AND `hops:` is not off; anything else is rc 1 and silence.
-  # The forks (cfg, git) are paid only once the file already says due. `explicit` (a typed update)
-  # names the next step on a line of its own: run the pass now on a quiet board, or let it run when
-  # the next piece of work wraps up on a busy one. `auto` (the session-start line) is a SUFFIX —
-  # leading space, NO newline — because that path stays exactly one line and never asks.
-  local f="$PRIMARY/.polaris/hops-due" vs="" vv="" vm=""
-  [ -f "$f" ] || return 1
-  IFS="$POLARIS_TAB" read -r vs vv vm 2>/dev/null < "$f" || true
-  vs="${vs%$'\r'}"; vv="${vv%$'\r'}"
-  [ "$vv" = 0 ] && [ -n "$vs" ] || return 1
-  [ "$(cfg hops on)" != off ] || return 1
-  [ "$vs" = "$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)" ] || return 1
-  case "${1:-}" in
-    auto) printf ' · layout pass due — runs when your next piece of work wraps up';;
+update_hops_hint() { # update_hops_hint <explicit|auto> — the tune-up line an update ends with; n = 0 → rc 1, silent
+  # tune.md § 6 (the name is save-hops.md § 5's: install.sh greps it). READS the tune-up's verdict
+  # .polaris/tune-due (tune.md § 2) — heal refreshed it during the update that just ran — and never
+  # runs tune itself. Current ⇔ the file exists AND field 1 is $BASE's sha now; then n = field 3, the
+  # number of finding kinds. Missing, stale or malformed → the layout verdict .polaris/hops-due by
+  # save-hops § 0.5's rule (field 2 is 0, field 1 is $BASE's sha now, `hops:` not off), as n = 1.
+  # n = 0 is rc 1 and silence, so the session-start line stays byte-identical. The one fork (git) is
+  # paid only once a file is there to compare. `explicit` (a typed update) names the next step on a
+  # line of its own: run it now on a quiet board (nothing in flight — waiting cards never count), or
+  # let it run when the work in flight lands. `auto` (the session-start line) is a SUFFIX — leading
+  # space, NO newline — because that path stays exactly one line and never asks.
+  local f="$PRIMARY/.polaris/tune-due" vs="" vv="" vn="" vk="" sha="" n=0
+  case "${1:-}" in explicit|auto) ;; *) return 1;; esac
+  if [ -f "$f" ]; then
+    IFS="$POLARIS_TAB" read -r vs vv vn vk 2>/dev/null < "$f" || true
+    vs="${vs%$'\r'}"; vv="${vv%$'\r'}"; vn="${vn%$'\r'}"; vk="${vk%$'\r'}"
+    case "$vv$vn" in 0[0-9]*|1[0-9]*) ;; *) vs="";; esac
+    case "$vn" in *[!0-9]*) vs="";; esac
+    if [ -n "$vs" ] && [ -n "$vk" ]; then
+      sha="$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)"
+      [ "$vs" = "$sha" ] && n="$vn" || vs=""
+    else vs=""; fi
+  fi
+  f="$PRIMARY/.polaris/hops-due"
+  if [ -z "$vs" ] && [ -f "$f" ]; then
+    IFS="$POLARIS_TAB" read -r vs vv vk 2>/dev/null < "$f" || true
+    vs="${vs%$'\r'}"; vv="${vv%$'\r'}"
+    [ "$vv" = 0 ] && [ -n "$vs" ] || return 1
+    [ "$(cfg hops on)" != off ] || return 1
+    [ -n "$sha" ] || sha="$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)"
+    [ "$vs" = "$sha" ] || return 1
+    n=1
+  fi
+  [ "$n" -gt 0 ] 2>/dev/null || return 1
+  case "$1" in
+    auto) printf ' · tune-up due (%s)' "$n";;
     explicit)
-      if board_quiescent; then printf '▶ NEXT — save hops: read ops/roles/TIDY.md and run it now\n'
-      else printf '▶ NEXT — save hops: the layout pass is due — it runs when your next piece of work wraps up\n'; fi;;
-    *) return 1;;
+      if board_quiescent inflight; then printf '▶ NEXT — tune-up (%s): read ops/roles/TIDY.md and run it now\n' "$n"
+      else printf '▶ NEXT — tune-up due (%s): it runs when the work in flight lands\n' "$n"; fi;;
   esac
   return 0
 }
@@ -1006,6 +1024,7 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionS
   # into one `skipped: <reason>` line, which `--all` reads. Never parks, never asks, never exits
   # non-zero, never prints more than one line: a hook must never fail the session or flood it.
   local say_="${1:-0}" repo_only="${2:-0}" major="${3:-0}" cur latest mode log rc new
+  local wy wf we wl ww ws wd now f
   # 1. self-hosting — this repo never self-updates (cmd_update exits before the re-exec; kept here
   #    so the function stands alone for anyone who calls it directly)
   if [ -f "$PRIMARY/kit/ops/pack.py" ]; then
@@ -1036,13 +1055,50 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionS
     return 0
   fi
   # 5. a busy board is normal — work in flight only; a task waiting in ready/ never holds it back (v5)
-  if ! board_quiescent inflight; then
-    [ "$say_" = 1 ] && printf 'skipped: %s\n' "$QUIET_WHY"; return 0
-  fi
   # 6. dirt inside the kit's footprint — the explicit form parks it; a stash appearing at session
   #    start is a surprise, so this form just waits for a cleaner day
-  if git -C "$PRIMARY" status --porcelain | update_dirt_overlaps_kit; then
-    [ "$say_" = 1 ] && printf 'skipped: uncommitted changes inside the kit'"'"'s paths\n'; return 0
+  # Either skip stops being silent once it has lasted a day (tune.md § 5, § 6): the first time an
+  # update to <latest> waited is kept in .polaris/update-waiting (`<epoch><TAB><latest>`, rewritten
+  # only when absent or naming another version), and from 24 h on the skip prints ONE line naming
+  # what holds it and the step that frees it — in both modes, in place of `skipped: …`. Under a day,
+  # today's behaviour byte for byte. It still never applies under work in flight.
+  wy=""
+  if ! board_quiescent inflight; then wy="$QUIET_WHY"
+  elif git -C "$PRIMARY" status --porcelain | update_dirt_overlaps_kit; then wy=dirt; fi
+  if [ -n "$wy" ]; then
+    wf="$PRIMARY/.polaris/update-waiting"; we=""; wl=""; now="$(date +%s)"
+    IFS="$POLARIS_TAB" read -r we wl 2>/dev/null < "$wf" || true
+    we="${we%$'\r'}"; wl="${wl%$'\r'}"
+    case "$we" in ''|*[!0-9]*) wl="";; esac
+    if [ "$wl" != "$latest" ]; then
+      we="$now"
+      { mkdir -p "$PRIMARY/.polaris" && printf '%s\t%s\n' "$we" "$latest" > "$wf"; } 2>/dev/null || true
+    fi
+    if [ $(( now - we )) -ge 86400 ]; then
+      case "$wy" in
+        dirt) ww="uncommitted edits inside the kit's own files"; ws="commit or stash them, then: bash ops/polaris update";;
+        "active: "*) ww="${wy#active: } card(s) still building"; ws="it updates when they land — nothing to do";;
+        "review: "*)
+          # <d> = whole days since the oldest review/ card's `handoff` event, one awk over EVENTS
+          wd="$(for f in "$BOARD/review/"*.md; do [ -e "$f" ] || break; f="${f##*/}"; printf '%s\n' "${f%.md}"; done \
+            | awk -v now="$now" 'NR == FNR { want["\"id\":\"" $0 "\""] = 1; next }
+                index($0, "\"ev\":\"handoff\"") { for (k in want) if (index($0, k)) {
+                  t = $0; sub(/.*"ts":/, "", t); sub(/[^0-9].*/, "", t)
+                  if (t != "" && (m == "" || t + 0 < m)) m = t + 0 } }
+                END { d = (m == "") ? 0 : int((now - m) / 86400); print (d < 0 ? 0 : d) }' - "$EVENTS" 2>/dev/null)"
+          ww="${wy#review: } card(s) wait to land, the oldest for ${wd:-0} day(s)"; ws="land them or kick them back: bash ops/polaris next";;
+        "lock: "*) ww="a claim on ${wy#lock: } is still held"; ws="finish it, or: bash ops/polaris release ${wy#lock: }";;
+        "integration lease held") ww="the landing lane is held"; ws="it frees itself after integration_stale_minutes";;
+        "bg job running: "*) ww="a background job is running (${wy#bg job running: })"; ws="it updates when the job ends";;
+        *) ww="nothing holds it"; ws="bash ops/polaris update";;
+      esac
+      printf '⏸ POLARIS %s → %s has waited %s day(s): %s — %s\n' "$cur" "$latest" "$(( (now - we) / 86400 ))" "$ww" "$ws"
+      return 0
+    fi
+    if [ "$wy" = dirt ]; then
+      [ "$say_" = 1 ] && printf 'skipped: uncommitted changes inside the kit'"'"'s paths\n'; return 0
+    fi
+    [ "$say_" = 1 ] && printf 'skipped: %s\n' "$QUIET_WHY"; return 0
   fi
   # 7. apply — the explicit body, verbatim, as a child of THIS re-exec'd copy ($SELF already lives
   #    in the temp dir, so install.sh overwriting ops/polaris cannot bite), stdout+stderr to the
@@ -1057,6 +1113,7 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionS
   fi
   new="$(ver version 2>/dev/null || true)"
   if [ "$rc" -eq 0 ] && [ -n "$new" ] && [ "$new" != "$cur" ]; then
+    rm -f "$PRIMARY/.polaris/update-waiting" 2>/dev/null || true
     # The layout pass rides this line as a SUFFIX when it is due (save-hops.md § 5, auto-update.md
     # v3) — still one line, still never a question; not due → the suffix is empty and the line is
     # byte-identical to 6.11 (the autoupdate drill's end-anchored greps hold it there).
@@ -1279,8 +1336,11 @@ cmd_heal() { # heal — repair the configuration efficiency depends on. Safe to 
   # THE LAYOUT VERDICT (save-hops § 0.5). Refresh .polaris/hops-due, the one file `next`, `triage` and
   # the update hint READ to learn whether the layout pass is due — they never run hops themselves.
   # Last, after heal's own work, with exactly the call done and seal make. Never a heal failure; until
-  # `hops --due` ships it has nothing to run and stays a silent no-op.
+  # `hops --due` ships it has nothing to run and stays a silent no-op. The tune-up's verdict
+  # (.polaris/tune-due, tune.md § 2) follows it the same way, read by the same three — a silent no-op
+  # until `tune` ships.
   "$SELF" hops --due >/dev/null 2>&1 || true
+  "$SELF" tune >/dev/null 2>&1 || true
   say "heal: configuration checked"
   return 0
 }

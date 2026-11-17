@@ -1,0 +1,107 @@
+--- refusals
+one-id: rc=1
+  ⛔ usage: polaris fold <ID> <ID>…
+  nothing written
+named-twice: rc=1
+  ⛔ fold refused: T-1 is named twice
+  nothing written
+unknown: rc=1
+  ⛔ fold refused: T-99 is not in ready/ or backlog/ (state: unknown)
+  nothing written
+not-waiting: rc=1
+  ⛔ fold refused: T-23 is not in ready/ or backlog/ (state: active)
+  nothing written
+locked: rc=1
+  ⛔ fold refused: T-22 is claimed — its lock is held
+  nothing written
+other-plan: rc=1
+  ⛔ fold refused: T-6 is plan 'other', T-1 is plan 'p' — one plan per fold
+  nothing written
+has-steps: rc=1
+  ⛔ fold refused: T-7 already has steps: — a chain card does not fold again
+  nothing written
+over-5: rc=1
+  ⛔ fold refused: T-8 has points: 6 — only 1-5 point cards fold
+  nothing written
+other-risk: rc=1
+  ⛔ fold refused: T-9 is risk 'high', T-1 is risk 'normal' — one risk per fold
+  nothing written
+other-contract: rc=1
+  ⛔ fold refused: T-10 names contract 'ops/contracts/b.md', T-1 names 'ops/contracts/a.md' — one contract per fold
+  nothing written
+over-13: rc=1
+  ⛔ fold refused: the cards add up to 15 points — a chain card holds at most 13
+  nothing written
+unrelated: rc=1
+  ⛔ fold refused: T-14 neither depends on T-1 nor shares a file with it
+  nothing written
+shared-but-waits: rc=1
+  ⛔ fold refused: T-15 shares a file with T-1 but depends on T-2 — order the IDs along depends_on
+  nothing written
+cycle: rc=1
+  ⛔ fold refused: T-20 depends on T-19 and T-21 depends on T-20 — folding would make the chain wait on itself
+  nothing written
+--- a good fold
+✅ folded T-2 T-3 into T-1 — 3 cards → 1, 7 points, ready/
+  rc=0
+board commits added: 1
+subject: chore(board): fold T-2 T-3 → T-1
+fold events: 1
+folded cards left: 0
+survivor (ready/T-1.md):
+  | ---
+  | id: T-1
+  | title: "card T-1"
+  | plan: p
+  | points: 7
+  | risk: normal
+  | contract: ops/contracts/a.md
+  | depends_on: []
+  | files_owned:
+  |   - src/1.txt
+  |   - src/2.txt
+  |   - src/3.txt
+  | value: 8
+  | time_criticality: 6
+  | risk_opportunity: 4
+  | wsjf: 2.57
+  | verify:
+  |   - bash -n a.sh
+  |   - bash -n b.sh
+  | context_files:
+  |   - docs/a.md
+  | approved: []
+  | steps:
+  |   - 2 T-1: card T-1
+  |   - 3 T-2: card T-2
+  |   - 2 T-3: card T-3
+  | status: ready
+  | ---
+  | ## Why
+  | why T-1
+  | ## Acceptance criteria
+  | - [ ] T-1 works
+  | ## Notes
+  | - note T-1
+  | 
+  | ### Step 2 — T-2: card T-2
+  | #### Why
+  | why T-2
+  | #### Acceptance criteria
+  | - [ ] T-2 works
+  | 
+  | ### Step 3 — T-3: card T-3
+  | #### Why
+  | why T-3
+  | #### Acceptance criteria
+  | - [ ] T-3 works
+T-4 waits on: depends_on: [T-1]
+T-5 waits on: depends_on: [T-1]
+T-15 waits on: depends_on: [T-1]
+--- one git revert undoes it
+  revert rc=0
+  the board is back, byte for byte
+--- a shared file outside the group sends the survivor to backlog/
+✅ folded T-12 into T-11 — 2 cards → 1, 10 points, backlog/
+  rc=0
+  T-11 now: backlog/T-11.md · points: 10 · T-13 depends_on: [T-11]

@@ -293,6 +293,9 @@ Say only:
 - **anything that needs them**: git-tracked build output (step 1), a `risk: high` task, a command you couldn't find, a danger zone you guessed at. This is the one thing you must never trim.
 - how to start: *"From now on, just tell me what you want built — I'll ask a couple of questions, show you the plan, and run the whole thing in this chat. Or say **start** to pick up the queued work."* (Harness without subagents: *"say **start** — I'll pick up the top task and build it."*)
 - how to watch: `bash ops/polaris dash` → http://127.0.0.1:7373
+- what the tune-up found: run `bash ops/polaris tune` last and put its lines here in plain words
+  (rc 0 = one line, nothing slows this project down). Never act on them in this context — the pass
+  itself runs at the next `bash ops/polaris next`, a context of its own.
 - **two low-key offers, never questions — they do not touch the 3-interaction cap, it already closed**: *"Keep a standing goal list? I can seed `ops/ROADMAP.md` from the shipped skeleton (`ops/templates/ROADMAP.md`)."* and *"Want board events pinged somewhere? Notify recipes live in `ops/PROMPTS.md`."* Skip either line if it doesn't apply — offers, not homework.
 
 Do NOT list every task, print the board, explain `wsjf`/`files_owned`/worktrees, recap the config you just wrote, or describe the write-guard. It is all on disk and they can ask. Under `voice: technical`, be dense and drop the explanations — but the warnings stay.

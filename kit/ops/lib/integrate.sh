@@ -473,8 +473,10 @@ EOF
   # THE LAYOUT VERDICT (save-hops.md § 0.5): .polaris/hops-due follows the new base the way the brain
   # does — it is the one file `next` and `triage` READ at the end of a run to learn whether the layout
   # pass is due. Exactly heal's call, after the board commit; never a red done, and until `hops --due`
-  # ships (or where no engine is installed) it is a silent no-op.
+  # ships (or where no engine is installed) it is a silent no-op. The tune-up's verdict
+  # (.polaris/tune-due, tune.md § 2) right after it, the same way.
   "$SELF" hops --due >/dev/null 2>&1 || true
+  "$SELF" tune >/dev/null 2>&1 || true
   # THE removal goes through wt_remove (ops/contracts/worktree-liveness.md, the `done` row) — this
   # is the line that killed ARC-428 back when it forced the removal. clean+idle ⇒ removed,
   # rc 0 · dirty+idle ⇒ archived to .polaris/wt-archive/<ID>-<epoch>, rc 2 · LIVE ⇒ LEFT, rc 1,
@@ -1169,8 +1171,10 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
     brain_refresh_if_present  # follows the new base — a refresh failure notes ⚠, never fails the seal
   fi
   # the layout verdict follows it too (save-hops.md § 0.5), now that the merge and the tag stand —
-  # done's call, word for word; never a failed seal, and a silent no-op until `hops --due` ships
+  # done's call, word for word; never a failed seal, and a silent no-op until `hops --due` ships —
+  # and the tune-up's verdict right after it (tune.md § 2)
   "$SELF" hops --due >/dev/null 2>&1 || true
+  "$SELF" tune >/dev/null 2>&1 || true
   if [ -n "$oldtag" ]; then
     say "sprint $n re-sealed — integrate/$date merged into $BASE (--no-ff); sprint/$n: $old7 → $new7"
   else
@@ -1275,6 +1279,7 @@ EOF
   board_changed_touch   # the fold completed here in pr mode (ops/contracts/brain.md)
   brain_refresh_if_present  # existing brain follows the fast-forwarded base; failure = ⚠ note only
   "$SELF" hops --due >/dev/null 2>&1 || true   # and so does the layout verdict (save-hops.md § 0.5) — never a failed sync
+  "$SELF" tune >/dev/null 2>&1 || true         # and the tune-up's (tune.md § 2)
   [ -n "$ss_had" ] || int_off   # fold complete — free the lane before the per-task next steps
   # 5. the [<ID>]-in-$BASE gate now passes — walk each task out
   if [ -n "$ids" ]; then

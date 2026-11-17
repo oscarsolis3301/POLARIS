@@ -44,6 +44,8 @@ bash ops/polaris speed --plan hour a.md
 bash ops/polaris speed --plan hour ops/board/backlog/a.md b.md
 bash ops/polaris depth --commit HEAD~1
 bash ops/polaris slim
+# `tune` reports what slows the project; its one write is its own verdict cache (tune.md § 1-2).
+bash ops/polaris tune
 # `next` reads the board and names the one thing this context does next, writing nothing. Every role
 # runs it at EVERY boundary now, so a prompt on it would be the loudest in the kit. `--do` is below.
 bash ops/polaris next
@@ -68,6 +70,10 @@ bash ops/polaris bg wait qa --max 120
 bash ops/polaris route --role CONDUCTOR | head -1
 bash ops/polaris bg status qa && bash ops/polaris bg tail qa -n 5
 # --- must ASK: every door out of "read" ---------------------------------------
+# `tune` with any argument is a usage error; `fold` and `note` commit to the board (tune.md § 3-4).
+bash ops/polaris tune --apply
+bash ops/polaris fold T-1 T-2
+bash ops/polaris note T-1 -m "assumed: x"
 bash ops/polaris depth --commit abc1234 extra
 bash ops/polaris depth --commit -x
 bash ops/polaris depth --commit

@@ -1,0 +1,33 @@
+--- 1. a ready card and a backlog card waiting, the verdict due: tidy once per session, then the usual answer
+tidy
+   tune-up due: cards,layout
+   read ops/roles/TIDY.md — one context, it lands at most one task; then bash ops/polaris next
+build T-R1
+tidy
+   tune-up due: cards,layout
+   read ops/roles/TIDY.md — one context, no subagents
+solo
+markers: th-1/tidy th-2/tidy 
+--- 2. the verdict not due, stale or malformed: silence — the usual answers
+build T-R1
+solo
+build T-R1
+solo
+build T-R1
+solo
+   tune-up due: cards,layout
+   tune-up due: cards,layout (a CRLF verdict reads due, its \r stripped)
+--- 3. what holds it off — each answer byte-identical to the one with no verdict
+an active card · next: build T-R1 · same as with no verdict: yes
+an active card · triage: full · same as with no verdict: yes
+a review card · next: integrate · same as with no verdict: yes
+a review card · triage: solo · same as with no verdict: yes
+a human-gated review card · next: build T-R1 · same as with no verdict: yes
+a human-gated review card · triage: solo · same as with no verdict: yes
+a live lease · next: build T-R1 · same as with no verdict: yes
+a live lease · triage: solo · same as with no verdict: yes
+an own live bg job · next: build T-R1 · same as with no verdict: yes
+an own live bg job · triage: solo · same as with no verdict: yes
+--- 4. with nothing holding it any more, a fresh session hops again
+tidy
+tidy
