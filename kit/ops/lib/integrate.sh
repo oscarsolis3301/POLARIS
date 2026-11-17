@@ -496,8 +496,11 @@ EOF
   # that is how a sprint turns into a wall of stale branches on the host. Delete only when the
   # remote tip == the local tip we just landed from (squash landings), or is provably in $BASE
   # (legacy merges); a diverged tip is left for sweep to flag, never lost.
+  # push: end (hour.md § 2) pushed no feat/<ID>, so there is nothing to ask origin about or delete:
+  # no ls-remote, no remote delete. pr mode and push: wave keep today's cleanup byte for byte.
   local remote_note=""
-  if has_remote; then
+  publish_resolve; [ "$PUB" = "pr" ] || _push_resolve
+  if has_remote && { [ "$PUB" = "pr" ] || [ "$PUSH" != "end" ]; }; then
     local rsha; rsha="$(git -C "$PRIMARY" ls-remote origin "refs/heads/feat/$id" 2>/dev/null | cut -f1)"
     if [ -n "$rsha" ]; then
       if [ -n "$ltip" ] && [ "$rsha" = "$ltip" ]; then
@@ -801,9 +804,13 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
     ex_scope="$ex_depth"; ex_depth_skip=1
   else
   [ -z "$ex_depth" ] || depth_line_say "$ex_depth" "$ex_dwhy"
+  # hour.md § 3: the suite loop takes the machine's heavy slot ONCE, at its first real key, and lets
+  # it go right after the loop (or before the red unwind) — lease → heavy, never the other way.
+  local ex_heavy=""
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
+    [ -n "$ex_heavy" ] || { _heavy_on "land --express $id suite"; ex_heavy=1; }
     if [ "$k" = uat ] && [ "$ex_depth" = scoped ]; then uat_deferred_say; continue; fi
     ex_cmds="$c"; ex_selected=0
     if [ "$k" = "test" ] && { [ -n "$(cfg test_select "")" ] || [ "$(cfg test_related "")" != "-" ]; }; then
@@ -840,6 +847,7 @@ EOF
         tail -15 "$out" | sed 's/^/     /' >&2
         tailtxt="$(tail -3 "$out" | tr '\n' ' ' | cut -c1-200)"
         rm -f "$out" "$ex_paths"
+        _heavy_off
         git reset -q --hard "$pre"        # unwind the land — integrate/<date> back where it stood
         cmd_kickback "$id" -m "express suite red on $k: $tailtxt"
         int_off    # kickback's `trap - EXIT` disarmed the on_die net — release the lease by hand
@@ -855,6 +863,7 @@ EOF
       say "$k — green"
     fi
   done
+  [ -z "$ex_heavy" ] || _heavy_off
   fi
   rm -f "$out" "$ex_paths"
   # decision log (test-depth.md § 5): one row when the gate above actually reached a depth.
@@ -1019,6 +1028,7 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
   if [ "${1:-}" = "--sync" ]; then sync=1; shift; fi
   local date="${1:-}"; [ -n "$date" ] || { date="$(date +%F)"; typed=""; }
   publish_resolve
+  [ "$PUB" = "pr" ] || _push_resolve   # hour.md § 2: push: end | wave — pr mode never reads it
   if [ -n "$sync" ]; then
     [ "$PUB" = "pr" ] || die "publish: direct seals locally — nothing to sync"
     seal_sync "$date" || return $?
@@ -1124,21 +1134,22 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
   fi
   if [ "$PUB" = "pr" ]; then
     : # publish: pr (publish-modes v2): local staging seal — merge + tag stay on this machine; `finish` ships ONE ship/<date> link
+  elif has_remote && [ "$PUSH" = "end" ]; then
+    # push: end (hour.md § 2): merge + tag stay on this machine; finish makes the run's ONE push
+    note "seal: kept on this machine — finish pushes base and tags in one push (push: end)"
   elif has_remote; then
-    # push $BASE on its own so its result is known: success clears the protected-branch stamp,
-    # rejection records it (doctor reads the count). The tag push follows only once base lands.
-    if git push -q origin "$BASE" 2>/dev/null; then
+    # push: wave — $BASE and its tag in ONE atomic push, so a pre-push check runs once and the two
+    # can never part: success clears the protected-branch stamp, rejection records it (doctor reads
+    # the count). A moved tag rides as a compare-and-swap, leased against the wave we know we're
+    # replacing: the ONLY forced ref update POLARIS ever makes. Heavy slot around it (§ 3).
+    local slease=""
+    [ -z "$oldtag" ] || slease="--force-with-lease=refs/tags/sprint/$n:$oldtag"
+    _heavy_on "seal push $BASE"
+    if git push --atomic -q $slease origin "refs/heads/$BASE:refs/heads/$BASE" "refs/tags/sprint/$n" 2>/dev/null; then
+      _heavy_off
       base_push_clear
-      if [ -n "$oldtag" ]; then
-        # moved tag → compare-and-swap push, leased against the wave we know we're replacing:
-        # the ONLY forced ref update POLARIS ever makes.
-        git push -q --force-with-lease="refs/tags/sprint/$n:$oldtag" origin "refs/tags/sprint/$n" 2>/dev/null \
-          || tag_push_recovery_note "$n"
-      else
-        git push -q origin "refs/tags/sprint/$n" 2>/dev/null \
-          || note "⚠ tag push failed — push by hand: git push origin sprint/$n"
-      fi
     else
+      _heavy_off
       base_push_reject
       if [ -n "$oldtag" ]; then
         note "⚠ push failed — push $BASE by hand: git push origin $BASE"

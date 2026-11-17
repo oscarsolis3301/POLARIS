@@ -73,7 +73,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    Which one you used is convenience; staying in the primary is what actually fails — the ownership
    guard denies writes to shared source while any task lock is live.
 3. **Build.** Match the surrounding code: `.polaris/brain/prefs.md` records the repo's real
-   conventions, so you do not have to infer them.
+   conventions, so you do not have to infer them. A chain card (`steps:`) is built step by step, one
+   commit per step, each step's verify lines green before the next starts.
 4. **Verify** — `wrap` runs it for you (step 5, through `handoff`); a separate `bash ops/polaris
    verify` is an optional mid-flight check. Proves diff ⊆ `files_owned` and runs your `verify:` list.
    It also refuses a change to a mapped surface whose tests did not change — `⛔ SURFACES stale`
@@ -83,7 +84,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    `polaris done` from a task's `surface:` list and is RULES-guarded. A wrong or missing row → one
    line in `ops/board/backlog/IDEAS.md`, or a `surface:` item on the task (step 1).
    Then the repo's fast tier: `test_fast:` from `ops/CONVENTIONS.md` when it is set — seconds, on
-   every change. When it is UNSET there is NO fallback: do not run `test:` here. The suite is
+   every change. The card's own checks run per card, never the whole suite. When it is UNSET there
+   is NO fallback: do not run `test:` here. The suite is
    sized to the change — at `land --express`, or at `finish`, `qa` runs only the related tests for
    a small change and the whole suite only when the change needs it — and `finish` skips it
    outright when `.polaris/suite-stamp` already names HEAD (an express land writes that stamp since
@@ -99,7 +101,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    its code (steps 6-7 in one call). Under `landing: self` (since 6.1.0 unset composes to `self`)
    `handoff` itself continues into the land in this same session: it takes the integration lease
    (wait-your-turn behind every other session), squashes `feat/<ID>` onto the wave, and — you being
-   the only lane — seals the wave and finishes the task. Entered as a conductor's subagent? Run
+   the only lane — seals the wave and finishes the task. Under `push: end` (the default) that seal
+   pushes nothing; `finish` makes the one push of base and tags to origin. Entered as a conductor's subagent? Run
    `handoff` in place of `wrap` — `finish` is the conductor's. That tail can wait on a busy lease, so
    detach it and collect the rc in chunks:
    `bash ops/polaris bg run ship-<ID> -- bash ops/polaris wrap --saw "<the after shot vs the bar>"`, then
