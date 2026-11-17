@@ -5,6 +5,12 @@ drill_remote() {
     # (T-C is deliberately merged --no-ff, NOT landed: it is the ONE legacy drill proving the
     #  gate's rule-2 fallback — hand merges per MANUAL.md still pass done + remote cleanup.)
     ensure_origin   # T-033: scratch bare origin (self-provisions under --only remote; spine no longer)
+    # T-301 (ops/contracts/hour.md § 2): every assertion down to the end of T-059 is about a handoff
+    # that PUSHES feat/<ID>, which is `push: wave` now — unset composes to `end` on one machine. Set
+    # explicitly here (uncommitted, like T-148's claim: flip) and restored byte-for-byte after.
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/rm-conv.bak"; else rm -f "$T/rm-conv.bak"; fi
+    { grep -v '^push:' ops/CONVENTIONS.md 2>/dev/null || true; printf 'push: wave\n'; } > "$T/rm-conv"
+    cp "$T/rm-conv" ops/CONVENTIONS.md; rm -f "$T/rm-conv"
     printf -- '---\nid: T-C\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/c.txt\nverify: []\n---\n' > ops/board/ready/T-C.md
     "$SELF" claim T-C >/dev/null
     ( cd .polaris/wt/T-C && echo c > src/c.txt && git add -A && git commit -qm ok && "$SELF" handoff T-C >/dev/null )
@@ -63,6 +69,21 @@ drill_remote() {
     git merge -q --no-ff feat/T-PF -m merge
     "$SELF" done T-PF >/dev/null
     # ---- end T-059 handoff push resilience ----
+    if [ -f "$T/rm-conv.bak" ]; then cp "$T/rm-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    rm -f "$T/rm-conv.bak"
+    # (c) T-301: push unset (→ end on one machine) — the handoff pushes nothing: origin gains no
+    # feat/<ID>, no ⚠ Note lands on the task and no push-fail event is logged.
+    printf -- '---\nid: T-PE\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/pe.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-PE.md
+    "$SELF" claim T-PE >/dev/null
+    ( cd .polaris/wt/T-PE && echo pe > src/pe.txt && git add -A && git commit -qm ok && "$SELF" handoff T-PE > "$T/pe.out" 2>&1 ) \
+      || { cat "$T/pe.out"; echo "PUSH END RC FAIL (a handoff under push: end must succeed)"; exit 1; }
+    [ -f ops/board/review/T-PE.md ] || { cat "$T/pe.out"; echo "PUSH END MOVE FAIL (the board move must happen)"; exit 1; }
+    git ls-remote origin refs/heads/feat/T-PE | grep -q . && { echo "PUSH END PUSH FAIL (push: end must leave origin without feat/T-PE)"; exit 1; }
+    grep -q '"ev":"push-fail","id":"T-PE"' ops/board/EVENTS.ndjson && { echo "PUSH END EVENT FAIL (no push was tried, so no push-fail)"; exit 1; }
+    grep -q 'push failed' "$T/pe.out" ops/board/review/T-PE.md && { cat "$T/pe.out"; echo "PUSH END NOTE FAIL (no ⚠ push note under push: end)"; exit 1; }
+    git merge -q --no-ff feat/T-PE -m merge
+    "$SELF" done T-PE >/dev/null
+    rm -f "$T/pe.out"
     # ---- T-148 board_pull (ops/contracts/first-run.md § 5): the READ side of claim: claim-branch ----
     # Two checkouts of one origin. The second claims (its sync_board pushes the board ref); the first's
     # status must FETCH it: active/ gains the task, the throttle stamp appears, the local ref lands on
@@ -399,6 +420,11 @@ drill_pushdegrade() {
     # the contract's ⚠ Note on the task + the push-fail event: a finished task is never stranded
     # in active/ by the network.
     ensure_origin
+    # T-301: these assertions are about a handoff that pushes — `push: wave` (unset is `end` now),
+    # set uncommitted and restored byte-for-byte at the end.
+    if [ -f ops/CONVENTIONS.md ]; then cp ops/CONVENTIONS.md "$T/pd-conv.bak"; else rm -f "$T/pd-conv.bak"; fi
+    { grep -v '^push:' ops/CONVENTIONS.md 2>/dev/null || true; printf 'push: wave\n'; } > "$T/pd-conv"
+    cp "$T/pd-conv" ops/CONVENTIONS.md; rm -f "$T/pd-conv"
     printf -- '---\nid: T-PD\npoints: 1\nwsjf: 4\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/pd.txt\nverify: []\n---\n## Notes\n' > ops/board/ready/T-PD.md
     git push -q origin main:refs/heads/feat
     pd_sha="$(git rev-parse main)"
@@ -429,6 +455,8 @@ drill_pushdegrade() {
     git push -q origin ":refs/heads/feat/T-PD2/x"
     git merge -q --no-ff feat/T-PD2 -m merge
     "$SELF" done T-PD2 >/dev/null
+    if [ -f "$T/pd-conv.bak" ]; then cp "$T/pd-conv.bak" ops/CONVENTIONS.md; else rm -f ops/CONVENTIONS.md; fi
+    rm -f "$T/pd-conv.bak"
 }
 drill_autoupdate() {
     # ============ T-126 auto-update drill (ops/contracts/auto-update.md § Executable check) ============

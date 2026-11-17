@@ -421,6 +421,36 @@ drill_selfland() {
     [ -d .polaris/wt/T-SL1 ] && { cat "$T/sl1sw.out"; echo "SELFLAND SWEEP FAIL (once the beat goes quiet, sweep --fix removes the worktree)"; exit 1; }
     [ -z "$(git branch --list feat/T-SL1)" ] || { cat "$T/sl1sw.out"; echo "SELFLAND SWEEP BRANCH FAIL (a removed worktree on a done task takes feat/T-SL1 with it)"; exit 1; }
     rm -f "$T/sl1sw.out"
+    # (a2) T-301 (ops/contracts/hour.md § 7): last lane out counts only THIS run's cards — a card of
+    #      another plan sitting in ready/ no longer keeps the wave open.
+    printf -- '---\nid: T-SLP\ntitle: self land plan pa\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nplan: pa\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/slp.txt\nverify: []\n---\n' > ops/board/ready/T-SLP.md
+    printf -- '---\nid: T-SLQ\ntitle: another plan waits\ntype: feature\nscope: src\npoints: 1\nwsjf: 1\nrisk: normal\nplan: pb\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/slq.txt\nverify: []\n---\n' > ops/board/ready/T-SLQ.md
+    "$SELF" claim T-SLP >/dev/null
+    ( cd .polaris/wt/T-SLP && echo slp > src/slp.txt && git add -A && git commit -qm ok && "$SELF" handoff T-SLP > "$T/slp.out" 2>&1 ) || { cat "$T/slp.out"; echo "SELFLAND PLAN RC FAIL"; exit 1; }
+    [ -f ops/board/done/T-SLP.md ] || { cat "$T/slp.out"; echo "SELFLAND PLAN SEAL FAIL (another plan's card in ready/ must not hold this run's wave open)"; exit 1; }
+    git log --format=%s main | grep -q '\[T-SLP\]$' || { cat "$T/slp.out"; echo "SELFLAND PLAN MAIN FAIL (the wave must be sealed onto the base branch)"; exit 1; }
+    [ -f ops/board/ready/T-SLQ.md ] || { echo "SELFLAND PLAN OTHER FAIL (the other plan's card stays in ready/, untouched)"; exit 1; }
+    rm -f ops/board/ready/T-SLQ.md
+    echo 1 2>/dev/null > "$sl_gcd/worktrees/T-SLP/polaris-beat" || true
+    "$SELF" sweep --fix >/dev/null 2>&1 || true
+    # (b2) T-301 seal on demand + promote in the same step: plan px, A lands while sibling C (px) is
+    #      still active with a live beat, and B (backlog, px) depends on A alone → the lane seals now,
+    #      A reaches done/ and B reaches ready/ inside the same self-land.
+    printf -- '---\nid: T-SLC\ntitle: slow sibling\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nplan: px\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/slc.txt\nverify: []\n---\n' > ops/board/ready/T-SLC.md
+    printf -- '---\nid: T-SLA\ntitle: first link\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nplan: px\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/sla.txt\nverify: []\n---\n' > ops/board/ready/T-SLA.md
+    printf -- '---\nid: T-SLB\ntitle: second link\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nplan: px\ndepends_on: [T-SLA]\nowner: null\nbranch: null\nstatus: backlog\nfiles_owned:\n  - src/slb.txt\nverify: []\n---\n' > ops/board/backlog/T-SLB.md
+    "$SELF" claim T-SLC >/dev/null
+    "$SELF" claim T-SLA >/dev/null
+    ( cd .polaris/wt/T-SLA && echo sla > src/sla.txt && git add -A && git commit -qm ok && "$SELF" handoff T-SLA > "$T/sla.out" 2>&1 ) || { cat "$T/sla.out"; echo "SELFLAND CHAIN RC FAIL"; exit 1; }
+    grep -q 'seal on demand: T-SLB waits only on work that just landed — sealing the wave now so it can start' "$T/sla.out" || { cat "$T/sla.out"; echo "SELFLAND CHAIN NOTE FAIL (the pinned seal-on-demand note must print)"; exit 1; }
+    [ -f ops/board/done/T-SLA.md ] || { cat "$T/sla.out"; echo "SELFLAND CHAIN DONE FAIL (A must reach done/ in the same self-land)"; exit 1; }
+    [ -f ops/board/ready/T-SLB.md ] || { cat "$T/sla.out"; echo "SELFLAND CHAIN PROMOTE FAIL (B must reach ready/ in the same self-land)"; exit 1; }
+    [ -f ops/board/active/T-SLC.md ] || { echo "SELFLAND CHAIN SIBLING FAIL (the slow sibling stays in active/)"; exit 1; }
+    [ -d "$sl_gcd/polaris-locks/.int-lease" ] && { echo "SELFLAND CHAIN LEASE FAIL (the lease must release after the tail)"; exit 1; }
+    "$SELF" release T-SLC --to ready -m drill >/dev/null 2>&1 || { echo "SELFLAND CHAIN RELEASE FAIL"; exit 1; }
+    rm -f ops/board/ready/T-SLC.md ops/board/ready/T-SLB.md "$T/slp.out" "$T/sla.out"
+    echo 1 2>/dev/null > "$sl_gcd/worktrees/T-SLA/polaris-beat" || true
+    "$SELF" sweep --fix >/dev/null 2>&1 || true
     # (b) risk: high → the pinned refusal, the task STAYS in review/, and NOTHING lands
     printf -- '---\nid: T-SL2\ntitle: self land high\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: high\nowner: null\nbranch: null\nstatus: ready\nfiles_owned:\n  - src/sl2.txt\nverify: []\n---\n' > ops/board/ready/T-SL2.md
     "$SELF" claim T-SL2 >/dev/null
