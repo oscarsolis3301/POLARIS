@@ -69,9 +69,17 @@ _new_check() { # _new_check <i> <arg> — § 3 for ONE draft, in the contract's 
   v=""; IFS= read -r v < "$p" || true
   [ "${v%$'\r'}" = "---" ] || die "new: $a: no frontmatter — the first line must be ---"
   _new_val title "$p"; [ -n "$_NV" ] || die "new: $a: title: is empty"
-  _new_val points "$p"
-  case "$_NV" in [1-5]) ;; *) die "new: $a: points: must be 1-5 (got $_NV) — split anything bigger";; esac
-  _npts[$1]="$_NV"
+  _new_val points "$p"; v="$_NV"
+  # hour.md § 6: the one size rule next and drift share — 1-5, or a chain card of up to 13 with steps:
+  if ! _card_ok "$v" "$(fm_list steps "$p")"; then
+    case "$_CARD" in
+      points) die "new: $a: points: must be 1-5, or up to 13 with steps: (got $v) — split anything bigger";;
+      count) die "new: $a: steps: a card over 5 points lists its steps (2 or more, each 1-5 points)";;
+      step*) die "new: $a: steps: step ${_CARD#step } is not \"<points 1-5> <what>\"";;
+      *) die "new: $a: steps: steps add up to ${_CARD#sum }, points: says $v";;
+    esac
+  fi
+  _npts[$1]="$v"
   _new_val plan "$p"; [ -n "$_NV" ] || die "new: $a: plan: is empty — every task names the plan it belongs to"
   _nplan[$1]="$_NV"
   _new_val risk "$p"

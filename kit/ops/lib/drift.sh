@@ -63,6 +63,26 @@ dep_ids() { # dep_ids <taskfile> — depends_on entries as clean ids, handling B
   # portably — BSD tr (macOS) mishandles a bare '[]' set, so `tr -d '[]'` is NOT portable here.
   fm_list depends_on "$1" 2>/dev/null | sed 's/[][,]/ /g' | tr ' ' '\n' | grep -v '^[[:space:]]*$' || true
 }
+_card_ok() { # _card_ok <points> <steps, one per line> — hour.md § 6, the ONE size rule `new`, `next`'s
+  # promote pass and drift's ready gate share: 1-5 legal (steps optional, checked when present) · 6-13
+  # only with 2+ steps adding up to points · anything else refused. A step is `<1-5> <what>`. rc 0 =
+  # legal; else _CARD = points | count | step <n> | sum <s>. Builtins only: callers loop the board.
+  local p="$1" x w n=0 s=0
+  _CARD=""
+  case "$p" in [1-9]|1[0-3]) ;; *) _CARD=points; return 1;; esac
+  while IFS= read -r x; do
+    x="${x%$'\r'}"; [ -n "$x" ] || continue
+    n=$((n+1)); w="${x#? }"
+    case "$x" in [1-5]" "*) ;; *) _CARD="step $n"; return 1;; esac
+    case "$w" in *[![:space:]]*) ;; *) _CARD="step $n"; return 1;; esac
+    s=$((s + ${x%% *}))
+  done <<EOF
+$2
+EOF
+  if [ "$p" -gt 5 ] && [ "$n" -lt 2 ]; then _CARD=count; return 1; fi
+  if [ "$n" -gt 0 ] && [ "$s" -ne "$p" ]; then _CARD="sum $s"; return 1; fi
+  return 0
+}
 dep_reaches() { # dep_reaches <cur-id> <target-id> <visited> — 0 if target is reachable from cur via
   # depends_on. A task that reaches ITSELF sits in a cycle and can never satisfy the ready gate.
   local cur="$1" target="$2" visited="$3" f d
@@ -93,12 +113,12 @@ cmd_drift() { # mechanical hygiene audit — the invariants, machine-checked. --
   done
   # ONE frontmatter pass over ready ∪ active — the only columns § 1 and § 2 read (speed.md § 3).
   # Every key is read exactly as its reader reads it: contract/points/title as fm_get (first match),
-  # files_owned/surface as fm_list, depends_on as dep_ids — tagged <pos><TAB><key><TAB><value>,
+  # files_owned/surface/steps as fm_list, depends_on as dep_ids — tagged <pos><TAB><key><TAB><value>,
   # <pos> being the file's 0-based place in $claimable (ready first, then active, glob order).
   # The per-key, per-pair awk starts this replaces were most of what drift still cost once § 7
-  # became one pass. Kept in fcon/fpts/fttl (scalars) and fown/fsrf/fdep (newline lists).
+  # became one pass. Kept in fcon/fpts/fttl (scalars) and fown/fsrf/fdep/fstp (newline lists).
   local nl='
-' fx fk fv fmx fcon fpts fttl fown fsrf fdep
+' fx fk fv fmx fcon fpts fttl fown fsrf fdep fstp
   if [ $# -gt 0 ]; then
     fmx="$(awk '
   function out(x, k, s) { printf "%d\t%s\t%s\n", x, k, s }
@@ -121,7 +141,7 @@ cmd_drift() { # mechanical hygiene audit — the invariants, machine-checked. --
     item(x, k, s)
   }
   BEGIN {
-    ns = split("contract points title", sk, " "); nk = split("files_owned surface depends_on", lk, " ")
+    ns = split("contract points title", sk, " "); nk = split("files_owned surface depends_on steps", lk, " ")
     for (i = 1; i < ARGC; i++) {
       path = ARGV[i]; x = i - 1; fs = 0; on = ""
       while ((getline line < path) > 0) {
@@ -159,6 +179,7 @@ cmd_drift() { # mechanical hygiene audit — the invariants, machine-checked. --
         files_owned) fown[$fx]="${fown[$fx]:-}$fv$nl";;
         surface) fsrf[$fx]="${fsrf[$fx]:-}$fv$nl";;
         depends_on) fdep[$fx]="${fdep[$fx]:-}$fv$nl";;
+        steps) fstp[$fx]="${fstp[$fx]:-}$fv$nl";;
       esac
     done <<EOF
 $fmx
@@ -190,7 +211,7 @@ EOF1
   done <<EOF
 $claimable
 EOF
-  # 2) ready-gate: contract exists · deps all done · ≤5 points — the ready files are positions
+  # 2) ready-gate: contract exists · deps all done · the size rule — the ready files are positions
   # 0..nready-1 of the same list, so every key below comes from the one pass above.
   k=0
   for f in "$@"; do
@@ -204,7 +225,12 @@ EOF
     done <<EOF
 ${fdep[$k]:-}
 EOF
-    v="${fpts[$k]:-}"; case "$v" in 8|13) finding "READY GATE: $id is ${v}pts — must be split before ready/";; esac
+    # the size rule (hour.md § 6) through the one predicate `new` and `next` use. An unset points: (or
+    # the template's bare comment) is not judged here — `new` refuses it and `next` holds it by name.
+    v="${fpts[$k]:-}"; case "$v" in '#'*) v="";; esac
+    if [ -n "$v" ] && ! _card_ok "$v" "${fstp[$k]:-}"; then
+      finding "READY GATE: $id is ${v}pts without valid steps: — must be split before ready/"
+    fi
     # ask gate (ask-approval.md § 5): a ready task owning anything under an `ask` scope with no
     # covering approved: entry would spawn a Builder only to die on its first write — the ARC
     # sequence, stopped here at step 1. The asking belongs at the plan gate, where a human is

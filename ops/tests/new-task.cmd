@@ -19,6 +19,9 @@
 #      from the first line, so no call can reach the real ~/.claude. Cases 1-4 run with a session id and
 #      no approval on record: no state file appears. Then an approval on record: the plan: slug of every
 #      task filed is appended once to <sid>.approved, and a second task of a plan already bound adds nothing.
+#   6. a chain card (ops/contracts/hour.md § 6, T-303): 13 points with three valid steps is filed ready
+#      with its steps kept, and drift has nothing to say. Its four refusals (no steps, steps adding to 12,
+#      a step of 8, points 21) sit in 4 with the rest.
 # Then, over every call: the drafts byte-identical, SPRINT.md and main untouched, and every success
 # line held to the plain-voice bar with plain-voice.cmd's own alternation.
 FIX="$(mktemp -d)"
@@ -77,6 +80,12 @@ R="$FIX/repo"
   dr '' 'bound one' 1 normal '  - src/b1.txt\n' '[]' '' '' > "$D/b1.md"
   dr '' 'bound two' 1 normal '  - src/b2.txt\n' '[]' '' '' > "$D/b2.md"
   printf -- '---\ntitle: another plan\nplan: q\npoints: 1\nrisk: normal\nfiles_owned:\n  - src/q1.txt\n---\n' > "$D/q1.md"
+  ch() { printf -- '---\ntitle: %s\nplan: p\npoints: %s\nrisk: normal\nfiles_owned:\n  - src/%s.txt\n%b---\n' "$@"; }
+  ch 'a chain card' 13 ch13 'steps:\n  - 5 the first step\n  - 5 the second step\n  - 3 the last step\n' > "$D/ch13.md"
+  ch 'thirteen with no steps' 13 ns13 '' > "$D/ns13.md"
+  ch 'steps short of points' 13 s12 'steps:\n  - 5 one\n  - 5 two\n  - 2 three\n' > "$D/s12.md"
+  ch 'a step too big' 13 s8 'steps:\n  - 5 one\n  - 8 two\n' > "$D/s8.md"
+  ch 'far too big' 21 p21 'steps:\n  - 5 one\n  - 5 two\n' > "$D/p21.md"
   mkdir -p "$FIX/orig"; cp "$D"/*.md "$FIX/orig/"
 ) >/dev/null 2>&1
 cd "$R"
@@ -131,6 +140,10 @@ refuse bad-id "$D/badid.md"
 refuse taken-id "$D/taken.md"
 refuse taken-in-call "$D/p60.md" "$D/p60b.md"
 refuse unknown-dep "$D/ok.md" "$D/nodep.md"
+refuse steps-none "$D/ns13.md"
+refuse steps-sum "$D/ok.md" "$D/s12.md"
+refuse steps-big "$D/s8.md"
+refuse points-21 "$D/p21.md"
 git worktree add -q "$FIX/wt" -b feat/T-099 >/dev/null 2>&1
 rc=0; ( cd "$FIX/wt" && bash "$KIT" new "$R/$D/ok.md" > "$FIX/out" 2> "$FIX/err" ) || rc=$?
 printf 'feat-worktree: rc=%s %s| stdout %s | ref %s\n' "$rc" "$(tr '\n' ' ' < "$FIX/err")" \
@@ -143,6 +156,11 @@ mkdir -p "${ST%/*}"; printf '1\n' > "$ST.approved"
 run "$D/b1.md" "$D/q1.md"
 run "$D/b2.md"
 echo "approval file:"; sed 's/^/  /' "$ST.approved"
+echo "== 6. a chain card (ops/contracts/hour.md § 6)"
+run "$D/ch13.md"
+f="$(grep -l '^title: a chain card$' ops/board/*/T-*.md)"; echo "filed in: ${f%/*}"; sed -n '/^steps:/,/^---/p' "$f"
+grep '"ev":"new"' ops/board/EVENTS.ndjson | tail -1 | sed -E 's/.*"note":"([^"]*)".*"pts":([0-9]+).*/event new \1 \2/'
+bash "$KIT" drift 2>/dev/null
 echo "== over every call"
 n=0; for f in "$FIX"/orig/*.md; do cmp -s "$f" "$D/${f##*/}" || n=$((n+1)); done; echo "drafts changed: $n"
 printf '# Sprint 1 — fixture\n' | cmp -s - ops/SPRINT.md && echo "SPRINT.md untouched" || echo "SPRINT.md CHANGED"

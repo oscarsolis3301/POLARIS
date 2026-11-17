@@ -53,6 +53,53 @@ drill_newcmds() {
     "$SELF" check --only st >/dev/null 2>&1 && { echo "CHECK RC FAIL (wrong exit code must be red)"; exit 1; }
     rm -rf ops/tests                                  # hermetic: leave the fixture as found
     rm -f ops/board/backlog/IDEAS.md
+    # chain cards (ops/contracts/hour.md § 6, T-303): new, next --do and drift share ONE size rule.
+    # A repo of its own under $T, so nothing here touches the fixture the later drills read.
+    # HOME and USERPROFILE are faked together and the session id dropped: `new` binds plans to an
+    # approval on record, and this drill must never reach the real ~/.claude.
+    (
+      C="$T/chain"; rm -rf "$C" "$T/chain-home"; mkdir -p "$T/chain-home"
+      export HOME="$T/chain-home" USERPROFILE="$T/chain-home"; unset CLAUDE_CODE_SESSION_ID
+      git init -q -b main "$C" 2>/dev/null || { git init -q "$C"; git -C "$C" symbolic-ref HEAD refs/heads/main; }
+      cd "$C" || exit 1
+      git config user.email t@t; git config user.name t
+      mkdir -p src; echo x > src/x.txt; git add -A; git commit -qm init
+      "$SELF" init-board >/dev/null 2>&1; git add -A; git commit -qm board
+      _ch() { printf -- '---\ntitle: %s\nplan: c\npoints: %s\nrisk: normal\nfiles_owned:\n  - src/%s.txt\n%b---\n' "$@"; }
+      mkdir -p "$T/chd"
+      _ch 'chain' 13 ok 'steps:\n  - 5 one\n  - 5 two\n  - 3 three\n' > "$T/chd/ok.md"
+      _ch 'no steps' 13 ns '' > "$T/chd/ns.md"
+      _ch 'short steps' 13 sh 'steps:\n  - 5 one\n  - 5 two\n  - 2 three\n' > "$T/chd/sh.md"
+      _ch 'big step' 13 bg 'steps:\n  - 5 one\n  - 8 two\n' > "$T/chd/bg.md"
+      _ch 'too big' 21 tb 'steps:\n  - 5 one\n  - 5 two\n' > "$T/chd/tb.md"
+      ref0="$(git rev-parse refs/heads/polaris/board 2>/dev/null || echo none)"
+      for k in ns sh bg tb; do
+        "$SELF" new "$T/chd/$k.md" > "$T/chd/$k.out" 2> "$T/chd/$k.err" && { echo "CHAIN NEW $k FAIL (must refuse)"; exit 1; }
+        [ -s "$T/chd/$k.out" ] && { echo "CHAIN NEW $k STDOUT FAIL (a refusal prints nothing)"; exit 1; }
+        [ "$(git rev-parse refs/heads/polaris/board 2>/dev/null || echo none)" = "$ref0" ] || { echo "CHAIN NEW $k WRITE FAIL (a refusal writes nothing)"; exit 1; }
+      done
+      grep -qF "new: $T/chd/ns.md: steps: a card over 5 points lists its steps (2 or more, each 1-5 points)" "$T/chd/ns.err" || { cat "$T/chd/ns.err"; echo "CHAIN NEW NOSTEPS LINE FAIL"; exit 1; }
+      grep -qF "new: $T/chd/sh.md: steps: steps add up to 12, points: says 13" "$T/chd/sh.err" || { cat "$T/chd/sh.err"; echo "CHAIN NEW SUM LINE FAIL"; exit 1; }
+      grep -qF "new: $T/chd/bg.md: steps: step 2 is not \"<points 1-5> <what>\"" "$T/chd/bg.err" || { cat "$T/chd/bg.err"; echo "CHAIN NEW STEP LINE FAIL"; exit 1; }
+      grep -qF "new: $T/chd/tb.md: points: must be 1-5, or up to 13 with steps: (got 21) — split anything bigger" "$T/chd/tb.err" || { cat "$T/chd/tb.err"; echo "CHAIN NEW POINTS LINE FAIL"; exit 1; }
+      ls ops/board/*/T-*.md >/dev/null 2>&1 && { echo "CHAIN NEW REFUSE FILE FAIL (no task may be filed)"; exit 1; }
+      "$SELF" new "$T/chd/ok.md" > "$T/chd/ok.out" 2>&1 || { cat "$T/chd/ok.out"; echo "CHAIN NEW FAIL (a 13-point card with three valid steps must file)"; exit 1; }
+      grep -q '^T-001 ready' "$T/chd/ok.out" || { cat "$T/chd/ok.out"; echo "CHAIN NEW READY FAIL"; exit 1; }
+      # next --do: a valid chain card in backlog/ is promoted; an 8-point card with no steps is held
+      git mv -q ops/board/ready/T-001.md ops/board/backlog/T-001.md 2>/dev/null || mv ops/board/ready/T-001.md ops/board/backlog/T-001.md
+      printf -- '---\nid: T-002\ntitle: eight\nplan: c\npoints: 8\nwsjf: 1\nrisk: normal\nstatus: backlog\nfiles_owned:\n  - src/e.txt\ndepends_on: []\n---\n' > ops/board/backlog/T-002.md
+      "$SELF" next --do > "$T/chd/next.out" 2>&1 || { cat "$T/chd/next.out"; echo "CHAIN NEXT RC FAIL"; exit 1; }
+      [ -f ops/board/ready/T-001.md ] || { cat "$T/chd/next.out"; echo "CHAIN PROMOTE FAIL (a valid chain card must reach ready/)"; exit 1; }
+      [ -f ops/board/backlog/T-002.md ] || { echo "CHAIN HOLD FAIL (an 8-point card without steps must stay in backlog/)"; exit 1; }
+      grep -qF 'held: T-002 — points 8 must be 1-5, or up to 13 with steps: — split it' "$T/chd/next.out" || { cat "$T/chd/next.out"; echo "CHAIN HELD LINE FAIL"; exit 1; }
+      # drift's ready gate: the pinned line for the 8-pointer, nothing for the valid chain card
+      mv ops/board/backlog/T-002.md ops/board/ready/T-002.md
+      "$SELF" drift > "$T/chd/drift.out" 2>&1 || true
+      grep -qF 'READY GATE: T-002 is 8pts without valid steps: — must be split before ready/' "$T/chd/drift.out" || { cat "$T/chd/drift.out"; echo "CHAIN DRIFT LINE FAIL"; exit 1; }
+      grep -q 'READY GATE: T-001' "$T/chd/drift.out" && { cat "$T/chd/drift.out"; echo "CHAIN DRIFT VALID FAIL (a valid chain card is no finding)"; exit 1; }
+      exit 0
+    ) || exit 1
+    rm -rf "$T/chain" "$T/chd" "$T/chain-home"
 }
 drill_grant() {
     # ================== T-005 grant drills (ops/contracts/grant.md) ==================

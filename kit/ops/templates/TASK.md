@@ -10,7 +10,9 @@ epic:                    # optional grouping; epics are never claimed, only leav
                           # Planner sets it on every task of a run; see contract hands-free-knobs
                           # — required (not optional) on every task authored for a specific request,
                           # including backlog/, so a run can tell its own work from a leftover
-points:                  # 1,2,3,5 claimable · 8,13 MUST be split
+points:                  # 1,2,3,5 claimable · 8,13 only as a chain card with steps:, else split
+steps:                   # optional; a chain card: one "- <points 1-5> <what>" item per step, 2 or more,
+                         # adding up to points: — required over 5 points; one builder, one commit a step
 value:                   # WSJF inputs, Fibonacci 1-13
 time_criticality:
 risk_opportunity:
