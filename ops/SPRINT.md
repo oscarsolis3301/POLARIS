@@ -1,24 +1,16 @@
-# SPRINT 24 — Away means away, small means fast (6.16.0)          capacity: 20   dates: 2026-11-10–
+# SPRINT 25 — The hour: push once, one heavy job, fewer cards, a price on every plan (6.17.0)          capacity: 30   dates: 2026-11-16–
 
-Owner ask of 2026-11-09 (plans/away.md Phase B, approved in plan mode): approved plan + auto mode means
-the owner has left, so nothing in a run waits on them; a small UI change gets quick checks and a look;
-big changes stay fully proven but never take hours. Plan `away`, contract `ops/contracts/away.md` v1,
-plus `ops/contracts/test-depth.md` § v2 and `ops/contracts/role-handover.md` § v4.
+Owner ask of 2026-11-16 (plans/hour.md, approved in plan mode): Sonoba quoted 60–70 hours for one
+stakeholder round; the bar is the same day, an hour at most. Measured cause: time = cards on the
+critical path × cost per card, and POLARIS pushes both up. Plan `hour`, contract `ops/contracts/hour.md` v1.
 
-8 tasks / 20 pts. Wave 1, side by side: T-289 (presence hook + `polaris presence`), T-290 (stop hook
-bounces an away question), T-291 (depth `ui` + keys), T-293 (the words); T-292 (brain refreshed once
-per landing) joins as soon as T-225 is done (it shares integrate.sh). Wave 2: T-294 (the plan's yes
-while away, after T-289) and T-295 (checks side by side, after T-291 and T-225). T-296 releases
-6.16.0 LAST (after T-227 frees VERSION and CHANGELOG). Every task lands itself at handoff; each verify
-list is its whole gate, and CI's Linux self-test runs once per task before handoff (T-289, T-294,
-T-295 also on macOS).
+6 tasks / 26 pts. Wave 1, side by side: T-300 (the heavy slot + the three new keys), T-301 (handoff
+stops pushing under push: end, last lane out counts only this run, seal on demand, pack steps, one-pass
+seal scan), T-302 (speed by lanes + speed --plan), T-303 (chain cards with steps: + next in one pass).
+Wave 2: T-304 (seal/done/finish/status under push: end, one atomic push; after T-300 and T-301) and
+T-305 (the words + version 6.17.0 + changelog; after T-300..T-303). Every task lands itself at handoff;
+each verify list is its whole gate, and CI's Linux serial self-test runs once per task before handoff.
 
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
-| 2026-11-10 | 13 | 7 |
-| 2026-11-10 | 3 | 4 |
-| 2026-11-10 | 3 | 3 |
-| 2026-11-10 | 3 | 0 |
-| 2026-11-10 | 1 | 0 |
-| 2026-11-10 | 3 | 0 |
