@@ -862,8 +862,11 @@ AUGIT
     POLARIS_AWAKE_HOME="$au_home" "$SELF" update --all --repo-only --major > "$T/au6c2.out" 2> "$T/au6c2.err" || { cat "$T/au6c2.out" "$T/au6c2.err"; echo "AUTOUPDATE (6c) MAJOR RC FAIL (--all --major exits 0 always)"; exit 1; }
     printf 'version: 0.0.2\n' > "$T/chan/VERSION"
     [ "$(sed -n 's/^version: *//p' ops/VERSION | head -1 | tr -d ' \r')" = "0.0.2" ] || { cat "$T/au6c2.out" "$T/au6c2.err"; echo "AUTOUPDATE (6c) MAJOR APPLY FAIL (--all --major must apply the MAJOR: ops/VERSION reads the tarball's 0.0.2)"; exit 1; }
-    grep -qxF "$au_mp: ✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting" "$T/au6c2.out" \
-      || { cat "$T/au6c2.out"; echo "AUTOUPDATE (6c) MAJOR SAY FAIL (the usual ✅ line under the prefix — the human typed --major, so it is not a surprise)"; exit 1; }
+    # The suffix is true here and only here: the channel still offers 1.0.0 while the tarball installed
+    # 0.0.2, so the tune-up's `behind` finding (tune.md § 5) counts 1 — and since 6.18.1 the update
+    # refreshes that verdict after its own commit, so the session-start line says so (tune.md § 2).
+    grep -qxF "$au_mp: ✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting · tune-up due (1)" "$T/au6c2.out" \
+      || { cat "$T/au6c2.out"; cat .polaris/tune-due 2>/dev/null; echo "AUTOUPDATE (6c) MAJOR SAY FAIL (the usual ✅ line under the prefix — the human typed --major, so it is not a surprise)"; exit 1; }
     [ "$(git stash list)" = "$au_k0" ] || { echo "AUTOUPDATE (6c) STASH FAIL (--all --major never parks)"; exit 1; }
     # hermetic teardown: the installed tree and the pin commit reset away, the three files as found,
     # the fixture's temp state gone, and the tree byte-identical to the way we found it.
