@@ -192,7 +192,14 @@ EOF
     fi
   fi
 
-  # layout — the hops verdict cache, read exactly as save-hops.md § 0.5 says, never recomputed
+  # layout — the hops verdict cache, read exactly as save-hops.md § 0.5 says. A missing cache, or one
+  # naming a commit other than the base's now (the update's own commit moves the base right after heal
+  # wrote it), is refreshed ONCE first — silently, never failing tune (tune.md § 2, 2026-11-17 note).
+  if [ -n "$sha" ] && [ "$(cfg hops on)" != off ]; then
+    hs=""; [ -f "$hf" ] && { IFS="$POLARIS_TAB" read -r hs hv hm < "$hf" 2>/dev/null || true; }
+    [ "${hs%$'\r'}" = "$sha" ] || "$SELF" hops --due >/dev/null 2>&1 || true
+    hs="" hv="" hm=""
+  fi
   if [ -f "$hf" ]; then
     IFS="$POLARIS_TAB" read -r hs hv hm < "$hf" 2>/dev/null || true
     hs="${hs%$'\r'}"; hv="${hv%$'\r'}"; hm="${hm%$'\r'}"
