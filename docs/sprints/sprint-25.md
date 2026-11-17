@@ -91,7 +91,7 @@ files touched: CHANGELOG.md, kit/CLAUDE.md, kit/ops/MANUAL.md, kit/ops/PROTOCOL.
 - [ ] nothing else changes; the root ops/ copy is untouched (the dogfood is the conductor's)
 
 ## T-306 — "The tests keep their own heavy slot: check and the self-test never wait on the real one"
-points 2 · risk normal · landed 26cca93 (2026-11-17) · claimed 2026-11-17
+points 2 · risk normal · landed 26cca93 (2026-11-17) · claimed 2026-11-17 → done 2026-11-17
 files touched: kit/ops/lib/check.sh, kit/ops/lib/selftest/remote.sh, kit/ops/lib/selftest/spine.sh
 
 ### Why
@@ -107,3 +107,23 @@ changes.
 - [ ] the six named goldens run side by side three times with no "passed alone" note and no heavy waiting line
 - [ ] heavy-slot still proves the slot itself
 - [ ] doctor --fast and the CI proof stay green
+
+## T-307 — "The away golden counts the landing itself, not which way the lane closed"
+points 1 · risk normal · landed 2ef7d9c (2026-11-17) · claimed 2026-11-17
+files touched: ops/tests/away-yes.cmd, ops/tests/away-yes.expected
+
+### Why
+The away golden went red on 6.17.0 although nothing in the landing broke. It counted a task as
+"landed" only when the lane printed the mid-wave note ("<ID> landed on the wave — mid-wave lands
+never seal"). Since 6.17.0 (hour.md § 7) the last lane out counts only its own plan's cards, so in
+the golden's plan-g cases the leftover cards of plans a and f no longer hold the seal back: T-008
+and T-009 land, seal the wave and move to done/ — the right behaviour — and the mid-wave note simply
+never prints. The golden now counts the landing line every land prints (`✅ landed <ID> on …`) and
+adds a `sealed:` line, so it pins both facts: the task landed, and whether its lane closed the wave.
+
+It looked Windows-only because the CI runs it was compared with used `PROOF_GOLDENS=true`, which
+runs `true` in place of every golden — away-yes never ran there.
+
+### Acceptance
+- [ ] `bash kit/ops/polaris check --only away-yes` green, twice
+- [ ] `landed: 1` for T-002, T-008, T-009; `sealed: 0` for T-002 (plan a still has cards in ready/), `sealed: 1` for T-008 and T-009
