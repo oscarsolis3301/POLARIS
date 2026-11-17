@@ -1,3 +1,18 @@
+# SPRINT 27 — The smooth run: cards own their tests, waves catch their reds, re-cuts by command (6.19.0)          capacity: 50   dates: 2026-11-17–
+
+Owner ask of 2026-11-17 (plans/smooth.md, approved; owner away): build the next update from the
+eighteen gap lines of 2026-11-17 (Sonoba's run on 6.17.0 + this repo's 6.18.0/6.18.1 run), plus the
+coordinator's addition from Sonoba's latest grants (folder guides auto-owned, importing files listed).
+Plan `smooth`, contract `ops/contracts/smooth.md` v1. Capacity raised to 50: one release, as decided.
+
+5 tasks / 50 pts, TWO waves. Wave 1 side by side: T-313 (new owns mapped tests + guides, lists what
+touches a card's files, sorts drafts, retire + new --retire + status --all, help; sole owner of
+kit/ops/polaris) · T-314 (grant/release/handoff --hold/approve --plan/lock folder/next+triage stale
+verdict/pack's first section) · T-315 (the wave check in seal, amend --deps, roles + PROTOCOL + MANUAL)
+· T-316 (update channel/registry/pending update, speed --plan pricing, proof.sh cancelled). Wave 2:
+T-317 (joined-tree goldens, api-kit re-pin — its sole owner — VERSION 6.19.0, CHANGELOG). After it:
+dogfood, re-pin cli-help, release ritual.
+
 # SPRINT 26 — The tune-up: every install ends faster than it started (6.18.0)          capacity: 30   dates: 2026-11-17–
 
 Owner ask of 2026-11-17 (plans/tune.md, approved; owner away): apply the three lessons of plan hour,
