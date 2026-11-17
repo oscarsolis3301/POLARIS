@@ -1234,3 +1234,4 @@
 {"ts":1794907764,"ev":"amend","id":"T-307","who":"Owner@DESKTOP","note":"verify[2]"}
 {"ts":1794908770,"ev":"handoff","id":"T-307","who":"Owner@DESKTOP","note":""}
 {"ts":1794908772,"ev":"all-review","id":"T-307","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
+{"ts":1794908892,"ev":"done","id":"T-307","who":"Owner@DESKTOP","note":"","pts":1}
