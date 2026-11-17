@@ -16,6 +16,7 @@ CLAUDE words). After both land: dogfood, then re-pin cli-help and api-kit (the s
 | 2026-11-17 | 26 | 0 |
 | 2026-11-17 | 1 | 0 |
 | 2026-11-17 | 3 | 0 |
+| 2026-11-17 | 2 | 0 |
 
 # SPRINT 25 — The hour: push once, one heavy job, fewer cards, a price on every plan (6.17.0)          capacity: 30   dates: 2026-11-16–
 
