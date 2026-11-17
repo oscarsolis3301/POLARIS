@@ -41,3 +41,10 @@ behind: kit 6.0.0, channel 9.9.9 — nothing holds it
 tune: nothing to slow this project down
   rc=0
   cache: 1 · 0 · - (matches)
+--- 7. a due layout verdict cached for the commit before the update's own: tune refreshes it (T-311)
+  cached for commit A: A due
+layout: ~52% fewer folders per change · 4 folders of 5+ files have no guide
+   fix: the layout pass — read ops/roles/TIDY.md
+  hops-due now: the new base due
+  tune-due now: the new base due kinds layout
+  next: tidy

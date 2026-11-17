@@ -4,6 +4,21 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.18.1 — 2026-11-17
+
+**The update no longer cancels the tune-up it has just found.**
+
+Two projects on this machine updated to 6.18.0 today and both lost their tune-up on the way. The
+update found the layout pass due and wrote that down, then saved its own commit a moment later — and
+from then on every command took the note as out of date. So the update ended without naming the
+tune-up, `tune` left out its layout line, and `next` sent the session to build instead. Running `tune`
+in both projects after the update is how it showed up.
+
+- **`tune` checks the layout note first.** If it is missing or written for an earlier commit, `tune`
+  works it out again before reading it, so the layout line is there when the pass is due.
+- **The update writes both notes again right after its own commit**, so the line it ends on — and the
+  short note at session start — say the tune-up is due when it is. Nothing committed, nothing redone.
+
 ## 6.18.0 — 2026-11-17
 
 **The tune-up: every install ends faster than it started.**

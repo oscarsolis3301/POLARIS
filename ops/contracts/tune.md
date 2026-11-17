@@ -88,6 +88,13 @@ the verdict cache (§ 2), on every run, both outcomes. Usage: `polaris tune` (no
 - Refreshed with exactly `"$SELF" tune >/dev/null 2>&1 || true` (T-309): in `heal` right after its
   `hops --due` call, and in `done`, `seal` and `seal --sync` right after theirs. `fold` refreshes it
   itself after its commit (T-308). Never a caller failure.
+- **2026-11-17 (T-311, 6.18.1) — a stale layout verdict no longer cancels the tune-up.** `tune` reads
+  `.polaris/hops-due` only after refreshing it: missing, or field 1 not `$BASE`'s sha now (and `hops:`
+  not off) → `"$SELF" hops --due` once, silently, never failing `tune`; a fresh verdict is read as
+  before. And `update`, right after its own commit succeeds, refreshes both verdicts (`hops --due`,
+  then `tune`, each `>/dev/null 2>&1 || true`) before its closing lines are computed, so `▶ NEXT —
+  tune-up (<n>)` and the `--auto` ` · tune-up due (<n>)` suffix are true for the new base. Nothing
+  committed → no refresh. Found on two projects whose update to 6.18.0 lost the tune-up at that commit.
 
 ## § 3 `polaris note` (T-308 — `kit/ops/lib/builder.sh`, fn `cmd_note`, after `cmd_grant`)
 - `polaris note <ID> -m "<line>"` — appends ONE line `- <line>` (a leading `- ` in the message is not

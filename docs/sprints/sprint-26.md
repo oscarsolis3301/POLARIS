@@ -72,7 +72,7 @@ silent no-op until T-308 lands, and its goldens write fixture `.polaris/tune-due
 - [ ] no new public name under kit/ (api-kit stays green with the installed indexer)
 
 ## T-310 — Re-pin the hops-due golden to the tune-up note its two cards now print together
-points 1 · risk normal · landed 83b9566 (2026-11-17) · claimed 2026-11-17
+points 1 · risk normal · landed 83b9566 (2026-11-17) · claimed 2026-11-17 → done 2026-11-17
 files touched: ops/tests/hops-due.expected
 
 ### Why
@@ -81,3 +81,19 @@ the layout pass is due, and next and triage read that note first, just as the tu
 says. So the hops-due check's expected output now shows "tune-up due: layout" in two places where
 it used to show the older, longer message. This updates the expected output to match; nothing else
 changes.
+
+## T-311 — The update's own commit no longer cancels the tune-up it just found
+points 3 · risk normal · landed e05a83f (2026-11-17) · claimed 2026-11-17
+files touched: CHANGELOG.md, kit/ops/VERSION, kit/ops/lib/admin.sh, kit/ops/lib/tune.sh, ops/contracts/tune.md, ops/tests/tune-report.cmd, ops/tests/tune-report.expected
+
+### Why
+Two projects updated to 6.18.0 today and lost their tune-up at once. During the update, heal found the
+layout pass due and wrote that down for the project as it was; a moment later the update saved its own
+commit, and every reader then took the note as out of date. So the session-start line said nothing,
+`tune` reported no layout line, and `next` sent the session to build instead of to the tune-up.
+Now `tune` refreshes an out-of-date layout note itself before reading it, and the update refreshes
+both notes right after its own commit, so what it says at the end is true for the project as it now is.
+
+### Acceptance
+- [ ] a due layout note cached for an older commit: `tune` still prints `layout:`, writes tune-due due for the new commit, and `next` says `tidy`
+- [ ] the update refreshes both notes after its own commit, and only when it committed something
