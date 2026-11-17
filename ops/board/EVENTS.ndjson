@@ -1229,3 +1229,4 @@
 {"ts":1794905540,"ev":"all-review","id":"T-306","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1794905654,"ev":"done","id":"T-306","who":"Owner@DESKTOP","note":"","pts":2}
 {"ts":1794907707,"ev":"new","id":"T-307","who":"Owner@DESKTOP","note":"ready","pts":1}
+{"ts":1794907712,"ev":"claim","id":"T-307","who":"Owner@DESKTOP","note":"","pts":1}
