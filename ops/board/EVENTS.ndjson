@@ -1221,3 +1221,4 @@
 {"ts":1794902258,"ev":"handoff","id":"T-305","who":"Owner@DESKTOP","note":""}
 {"ts":1794903948,"ev":"handoff","id":"T-304","who":"Owner@DESKTOP","note":""}
 {"ts":1794903950,"ev":"all-review","id":"T-304","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
+{"ts":1794904064,"ev":"done","id":"T-305","who":"Owner@DESKTOP","note":"","pts":3}
