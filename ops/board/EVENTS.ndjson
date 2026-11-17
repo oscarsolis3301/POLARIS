@@ -1199,3 +1199,4 @@
 {"ts":1794898682,"ev":"new","id":"T-303","who":"Owner@DESKTOP","note":"ready","pts":5}
 {"ts":1794898683,"ev":"new","id":"T-304","who":"Owner@DESKTOP","note":"backlog","pts":5}
 {"ts":1794898684,"ev":"new","id":"T-305","who":"Owner@DESKTOP","note":"backlog","pts":3}
+{"ts":1794898886,"ev":"claim","id":"T-301","who":"Owner@DESKTOP","note":"","pts":5}
