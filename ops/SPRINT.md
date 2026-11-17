@@ -14,3 +14,4 @@ each verify list is its whole gate, and CI's Linux serial self-test runs once pe
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-11-16 | 18 | 8 |
