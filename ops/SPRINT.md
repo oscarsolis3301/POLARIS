@@ -1,3 +1,15 @@
+# SPRINT 26 — The tune-up: every install ends faster than it started (6.18.0)          capacity: 30   dates: 2026-11-17–
+
+Owner ask of 2026-11-17 (plans/tune.md, approved; owner away): apply the three lessons of plan hour,
+and make every update and every install end in a tune-up that restructures what slows a project.
+Plan `tune`, contract `ops/contracts/tune.md` v1.
+
+2 tasks / 26 pts, ONE wave, side by side: T-308 (the commands: tune, fold, note, NEEDS PATH, the words,
+version 6.18.0 + changelog; sole owner of kit/ops/polaris and api-kit.expected) and T-309 (the hop:
+next/triage take the tune-up with cards waiting, the hold rule keeps the layout pass off waiting cards'
+files, update/install/heal/done/seal name and refresh it, find --api skips nested helpers, TIDY/INIT/
+CLAUDE words). After both land: dogfood, then re-pin cli-help and api-kit (the seven nested rows leave).
+
 # SPRINT 25 — The hour: push once, one heavy job, fewer cards, a price on every plan (6.17.0)          capacity: 30   dates: 2026-11-16–
 
 Owner ask of 2026-11-16 (plans/hour.md, approved in plan mode): Sonoba quoted 60–70 hours for one
