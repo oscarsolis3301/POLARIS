@@ -1,0 +1,32 @@
+== a. two verify runs started together never overlap ==
+first rc=0
+second rc=0
+overlap: no
+the one that waited said so: 1
+ran: 2
+slot: free
+== b. a live holder: the waiting note, then the run once it frees ==
+rc=0
+heavy: waiting for other@host (qa, <m>m, proj) — one heavy job at a time on this machine
+ran: 1
+slot: free
+== c. a holder whose process is gone: the stale-slot note at once ==
+rc=0
+heavy: took a stale slot from gone@host (its process is gone)
+ran: 1
+slot: free
+== d. heavy_slots: 0 — no slot folder is ever made ==
+rc=0
+slot folder made: no
+ran: 1
+== e. a child with the holder token re-enters without waiting ==
+rc=0
+heavy notes: 0
+ran: 1
+slot: standing, token unchanged
+== f. POLARIS_HEAVY_WAIT=2 and a live holder: run without the slot ==
+rc=0
+heavy: waiting for other@host (qa, <m>m, proj) — one heavy job at a time on this machine
+heavy: waited 0m for other@host — running without the slot
+ran: 1
+slot: standing, token unchanged

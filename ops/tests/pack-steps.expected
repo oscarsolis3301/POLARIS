@@ -1,0 +1,30 @@
+== 1. a 13-point chain card: the STEPS section, right after the verify list ==
+=== WHAT PROVES IT — polaris verify runs exactly this ===
+bash -n src/a.txt
+
+then the fast tier: (none set — verify: above is the per-task proof; the suite runs once at the wave gate)
+
+STEPS — one commit per step; the verify lines that cover a step are green before the next one starts
+  1. 5 pts — the push key and the handoff gate
+  2. 5 pts — seal and done under push: end
+  3. 3 pts — finish makes the one push
+
+--- end of pack. Anything beyond this needs a one-line reason in the task Notes. ---
+== 2. a card without steps: no section, the pack ends as it always did ==
+=== WHAT PROVES IT — polaris verify runs exactly this ===
+bash -n src/b.txt
+
+then the fast tier: (none set — verify: above is the per-task proof; the suite runs once at the wave gate)
+
+--- end of pack. Anything beyond this needs a one-line reason in the task Notes. ---
+== 3. the flow-list form of steps: ==
+=== WHAT PROVES IT — polaris verify runs exactly this ===
+(no verify: list — add one, narrow, each under ~10s)
+
+then the fast tier: (none set — verify: above is the per-task proof; the suite runs once at the wave gate)
+
+STEPS — one commit per step; the verify lines that cover a step are green before the next one starts
+  1. 4 pts — first half
+  2. 4 pts — second half
+
+--- end of pack. Anything beyond this needs a one-line reason in the task Notes. ---

@@ -64,7 +64,7 @@ no-such-file: rc=1 ⛔ new: .polaris/drafts/missing.md: no such file | stdout em
 in-the-board: rc=1 ⛔ new: ops/board/ready/T-010.md: is inside ops/board/ — a draft lives outside the board | stdout empty | ref unmoved
 no-frontmatter: rc=1 ⛔ new: .polaris/drafts/nofm.md: no frontmatter — the first line must be --- | stdout empty | ref unmoved
 no-title: rc=1 ⛔ new: .polaris/drafts/notitle.md: title: is empty | stdout empty | ref unmoved
-points-8: rc=1 ⛔ new: .polaris/drafts/p8.md: points: must be 1-5 (got 8) — split anything bigger | stdout empty | ref unmoved
+points-8: rc=1 ⛔ new: .polaris/drafts/p8.md: steps: a card over 5 points lists its steps (2 or more, each 1-5 points) | stdout empty | ref unmoved
 no-plan: rc=1 ⛔ new: .polaris/drafts/noplan.md: plan: is empty — every task names the plan it belongs to | stdout empty | ref unmoved
 odd-risk: rc=1 ⛔ new: .polaris/drafts/risk.md: risk: must be normal or high (got medium) | stdout empty | ref unmoved
 owns-nothing: rc=1 ⛔ new: .polaris/drafts/noown.md: files_owned: lists nothing | stdout empty | ref unmoved
@@ -73,6 +73,10 @@ bad-id: rc=1 ⛔ new: .polaris/drafts/badid.md: id: X-1 is not T-<number> | stdo
 taken-id: rc=1 ⛔ new: .polaris/drafts/taken.md: id: T-009 is taken | stdout empty | ref unmoved
 taken-in-call: rc=1 ⛔ new: .polaris/drafts/p60b.md: id: T-060 is taken | stdout empty | ref unmoved
 unknown-dep: rc=1 ⛔ new: .polaris/drafts/nodep.md: depends_on: T-404 is no task on the board | stdout empty | ref unmoved
+steps-none: rc=1 ⛔ new: .polaris/drafts/ns13.md: steps: a card over 5 points lists its steps (2 or more, each 1-5 points) | stdout empty | ref unmoved
+steps-sum: rc=1 ⛔ new: .polaris/drafts/s12.md: steps: steps add up to 12, points: says 13 | stdout empty | ref unmoved
+steps-big: rc=1 ⛔ new: .polaris/drafts/s8.md: steps: step 2 is not "<points 1-5> <what>" | stdout empty | ref unmoved
+points-21: rc=1 ⛔ new: .polaris/drafts/p21.md: points: must be 1-5, or up to 13 with steps: (got 21) — split anything bigger | stdout empty | ref unmoved
 feat-worktree: rc=1 ⛔ new: run it from the primary checkout — a builder never files work for itself | stdout empty | ref unmoved
 board files after the refusals: identical
 == 5. the plan bind
@@ -86,6 +90,20 @@ approval file:
   1
   p
   q
+== 6. a chain card (ops/contracts/hour.md § 6)
+T-056 ready — nothing to wait for
+rc=0 stderr=[]
+filed in: ops/board/ready
+steps:
+  - 5 the first step
+  - 5 the second step
+  - 3 the last step
+id: T-056
+status: ready
+---
+event new ready 13
+   advisory: orphan branch feat/T-099 — no task in any column (may hold unmerged work; never auto-cleared)
+✅ drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry · deps)
 == over every call
 drafts changed: 0
 SPRINT.md untouched

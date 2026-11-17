@@ -332,6 +332,10 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
   # publish: pr — feat branches never leave the machine; seal pushes ONE integrate branch instead
   # (ops/contracts/publish-modes.md). Everything else stays byte-identical to direct mode.
   publish_resolve
+  # push: end (ops/contracts/hour.md § 2, the default on one machine): nobody ever used the pushed
+  # feat/<ID> — land merges the LOCAL branch and done deletes the copy — so the handoff pushes
+  # nothing, and no ⚠ Note or push-fail event can arise. pr mode never reads the key at all.
+  [ "$PUB" = "pr" ] || _push_resolve
   # T-059 (ops/contracts/shared-checkout.md): the push was ONE unguarded attempt, so one network
   # hiccup stranded a FINISHED task in active/ with its lock held. Now 3 attempts 0.5s apart, ONE
   # stray_feat_repair between attempts when a ref literally named `feat` shadows the push, and a
@@ -339,7 +343,7 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
   # branch, so the work is safe either way.
   local pushed=1
   local perr ptry repaired
-  if [ "$PUB" != "pr" ] && has_remote; then
+  if [ "$PUB" != "pr" ] && [ "$PUSH" = "wave" ] && has_remote; then
     pushed=0
     perr="$(mktemp)"
     ptry=1
@@ -465,6 +469,8 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
     note "⚠ $id waits in review/: ops/SPRINT.md has no \"# SPRINT <n> — <goal>\" line, so its wave could not close — add one (ops/MANUAL.md § Board commit by hand), then: bash ops/polaris next"
     return 0
   fi
+  # hour.md § 7: this card's plan decides which cards are "this run's" — read once, before the lease.
+  local slpl; slpl="$(fm_get plan "$tf" 2>/dev/null || true)"
   note "landing: self — continuing into land $id (the lease is the integration lane: this waits its turn)"
   # ONE lease for the whole tail (ops/contracts/safe-landing.md § 2): taken HERE, once, and held
   # through land, seal and the done fan-out. Each of those runs as a child that re-enters by the
@@ -486,10 +492,16 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
   fi
   # "Am I the last lane out" is read from the board NOW, inside the lease — never from the
   # handoff-time notice, which another lane's later land could make stale (§ 2.2).
-  if ! _sl_last_out "$id"; then
-    int_off
-    note "$id landed on the wave — mid-wave lands never seal; the last lane out seals"
-    return 0
+  if ! _sl_last_out "$id" "$slpl"; then
+    # hour.md § 7, seal on demand: a card of this plan that waits only on landed work would otherwise
+    # sit until the slowest sibling lands — so this lane seals now and takes the last-out tail below.
+    _sl_chain "$slpl" wait
+    if [ -z "$_SL_SUCC" ]; then
+      int_off
+      note "$id landed on the wave — mid-wave lands never seal; the last lane out seals"
+      return 0
+    fi
+    note "seal on demand: $_SL_SUCC waits only on work that just landed — sealing the wave now so it can start"
   fi
   # last lane out seals the wave, then finishes every LANDED review task (a refused risk: high
   # task has no landed commit and stays in review/ for the human lane).
@@ -540,7 +552,88 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
       note "⚠ done $own_last failed — finish it by hand: bash ops/polaris done $own_last"
     fi
   fi
+  # hour.md § 7, promote in the same step: a card of this plan whose every depends_on is now in done/
+  # moves to ready/ here, once, still inside the lease (lease → mutex order holds). None → no call,
+  # so the tail is byte-identical to before.
+  _sl_chain "$slpl" ready
+  [ -z "$_SL_SUCC" ] || ( cd "$PRIMARY" && "$SELF" next --do ) || true
   int_off                            # the tail is over — the lane is free for the next one
+  return 0
+}
+
+_sl_scan() { # _sl_scan <column>… — ONE awk over those columns' tasks: `col|id|plan|deps` per file (deps
+  # space-separated, block or flow list). Keys read as fm_get / fm_list do: first frontmatter block,
+  # " # comment" and \r stripped. A file with no frontmatter prints an empty id and plan.
+  local c g n=$#
+  for c in "$@"; do for g in "$BOARD/$c/"*.md; do [ -f "$g" ] && set -- "$@" "$g"; done; done
+  shift "$n"
+  [ $# -gt 0 ] || return 0
+  awk '
+    function clean(s) { sub(/[ \t]#.*$/,"",s); sub(/^[ \t]*/,"",s); sub(/[ \t\r]*$/,"",s); return s }
+    function deplist(s) { gsub(/\[/," ",s); gsub(/\]/," ",s); gsub(/,/," ",s); return s }
+    function _flush() { if (fn != "") print col "|" id "|" pl "|" deps }
+    FNR == 1 { _flush(); fn = FILENAME; col = fn; sub(/\/[^\/]*$/,"",col); sub(/.*\//,"",col)
+               id = ""; pl = ""; deps = ""; fs = 0; on = 0; gi = 0; gp = 0; gd = 0 }
+    /^---[\r]?$/ { fs++; next }
+    fs != 1 { next }
+    /^[A-Za-z_]/ { on = 0 }
+    !gi && index($0, "id:") == 1 { gi = 1; id = clean(substr($0, 4)); next }
+    !gp && index($0, "plan:") == 1 { gp = 1; pl = clean(substr($0, 6)); next }
+    !gd && index($0, "depends_on:") == 1 { gd = 1; on = 1; deps = deplist(clean(substr($0, 12))); next }
+    on && /^[ \t]*-[ \t]/ { s = $0; sub(/[ \t]#.*$/,"",s); sub(/^[ \t]*-[ \t]*/,"",s); sub(/[ \t\r]*$/,"",s)
+                            deps = deps " " deplist(s); next }
+    END { _flush() }' "$@" 2>/dev/null
+}
+
+_sl_landed() { # _sl_landed <ID>… — the IDs whose [<ID>] commit is on the checked-out wave or $BASE,
+  # space-separated. ONE git call for all of them (the _brain_wait_landed pattern).
+  local ids="$*" id subj out=""
+  [ -n "$ids" ] || return 0
+  set --
+  for id in $ids; do set -- "$@" --grep "[$id]"; done
+  while IFS= read -r subj; do
+    for id in $ids; do
+      case "$subj" in *"[$id]") case " $out " in *" $id "*) ;; *) out="$out $id";; esac;; esac
+    done
+  done <<EOF
+$(git -C "$PRIMARY" log --fixed-strings "$@" --format=%s HEAD "$BASE" -- 2>/dev/null)
+EOF
+  printf '%s' "$out"
+}
+
+_sl_chain() { # _sl_chain <plan> wait|ready — hour.md § 7. Sets _SL_SUCC to the first backlog/ card of
+  # <plan> that is waiting on nothing still building: `wait` = every depends_on in done/ or a review/
+  # card already landed, one of them landed; `ready` = every depends_on in done/. A card with no
+  # depends_on is not a successor. An empty <plan> never matches — today's path, byte for byte.
+  local p="$1" mode="$2" rows col rid rpl rdeps d rv="" landed="" ok hit
+  _SL_SUCC=""
+  [ -n "$p" ] || return 0
+  rows="$(_sl_scan backlog)"
+  [ -n "$rows" ] || return 0
+  if [ "$mode" = wait ]; then
+    while IFS='|' read -r col rid rpl rdeps; do
+      [ "$rpl" = "$p" ] || continue
+      for d in $rdeps; do [ -f "$BOARD/review/$d.md" ] && rv="$rv $d"; done
+    done <<EOF
+$rows
+EOF
+    [ -n "$rv" ] || return 0
+    landed="$(_sl_landed $rv)"
+  fi
+  while IFS='|' read -r col rid rpl rdeps; do
+    [ "$rpl" = "$p" ] && [ -n "$rid" ] || continue
+    ok=1; hit=""
+    for d in $rdeps; do
+      if [ -f "$BOARD/done/$d.md" ]; then [ "$mode" = ready ] && hit=1; continue; fi
+      if [ "$mode" = wait ] && [ -f "$BOARD/review/$d.md" ]; then
+        case " $landed " in *" $d "*) hit=1; continue;; esac
+      fi
+      ok=""; break
+    done
+    [ -n "$ok" ] && [ -n "$hit" ] && { _SL_SUCC="$rid"; return 0; }
+  done <<EOF
+$rows
+EOF
   return 0
 }
 
@@ -552,14 +645,32 @@ _sl_last_out() { # _sl_last_out <ID> — rc 0 when this lane is the last one out
   # land (plan_covers: classified and covered), and a lane still beating — so a task the integrator
   # owns, or one whose lane has gone quiet, never holds a seal back. Columns are read in the order
   # tasks move (ready → active → review), so a task moving while we read is seen in one of them.
-  local id="$1" nrdy nact f tid
-  nrdy="$(ls "$BOARD/ready" 2>/dev/null | grep -c '\.md$' || true)"
-  nact="$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)"
+  # hour.md § 7: with <plan> set, a ready/ active/ review/ task of ANOTHER non-empty plan is not this
+  # run's and never holds the seal back (one awk for all three columns). No plan → today's count.
+  local id="$1" p="${2:-}" nrdy nact f tid skip="" col rid rpl rdeps nl='
+'
+  if [ -z "$p" ]; then
+    nrdy="$(ls "$BOARD/ready" 2>/dev/null | grep -c '\.md$' || true)"
+    nact="$(ls "$BOARD/active" 2>/dev/null | grep -c '\.md$' || true)"
+  else
+    nrdy=0; nact=0
+    while IFS='|' read -r col rid rpl rdeps; do
+      [ -n "$col" ] || continue
+      if [ -n "$rpl" ] && [ "$rpl" != "$p" ]; then
+        [ "$col" = review ] && [ -n "$rid" ] && skip="$skip$rid$nl"
+        continue
+      fi
+      case "$col" in ready) nrdy=$((nrdy + 1));; active) nact=$((nact + 1));; esac
+    done <<EOF
+$(_sl_scan ready active review)
+EOF
+  fi
   [ "${nrdy:-0}" -eq 0 ] && [ "${nact:-0}" -eq 0 ] || return 1
   for f in "$BOARD/review/"*.md; do
     [ -f "$f" ] || continue
     tid="$(fm_get id "$f" 2>/dev/null || true)"
     [ -n "$tid" ] && [ "$tid" != "$id" ] || continue
+    case "$nl$skip" in *"$nl$tid$nl"*) continue;; esac
     landed_sha "$tid" HEAD >/dev/null 2>&1 && continue
     landed_sha "$tid" >/dev/null 2>&1 && continue
     plan_covers "$f" >/dev/null 2>&1 || continue
@@ -1175,6 +1286,15 @@ EOF_ITEMS
   else
     printf '\nthen the fast tier: (none set — verify: above is the per-task proof; the suite runs once at the wave gate)\n'
   fi
+  # 8b. a chain card's steps (ops/contracts/hour.md § 6), right after the verify list. A card with no
+  # steps: prints nothing here, so every other pack stays byte-identical.
+  local steps
+  steps="$(fm_list steps "$f" 2>/dev/null | awk 'NF {
+      n++; s = $0; p = $1
+      if (p ~ /^[0-9]+$/) { sub(/^[^ \t]+[ \t]+/, "", s); printf "  %d. %s pts — %s\n", n, p, s }
+      else printf "  %d. %s\n", n, s
+    }')"
+  [ -z "$steps" ] || printf '\nSTEPS — one commit per step; the verify lines that cover a step are green before the next one starts\n%s\n' "$steps"
 
   printf '\n--- end of pack. Anything beyond this needs a one-line reason in the task Notes. ---\n'
   return 0

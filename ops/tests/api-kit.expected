@@ -49,6 +49,7 @@ kit/ops/KEYS.tsv	key	express
 kit/ops/KEYS.tsv	key	gallery
 kit/ops/KEYS.tsv	key	generated
 kit/ops/KEYS.tsv	key	handover
+kit/ops/KEYS.tsv	key	heavy_slots
 kit/ops/KEYS.tsv	key	hops
 kit/ops/KEYS.tsv	key	integration
 kit/ops/KEYS.tsv	key	integration_stale_minutes
@@ -62,6 +63,7 @@ kit/ops/KEYS.tsv	key	notify
 kit/ops/KEYS.tsv	key	plan_gate
 kit/ops/KEYS.tsv	key	port_base
 kit/ops/KEYS.tsv	key	publish
+kit/ops/KEYS.tsv	key	push
 kit/ops/KEYS.tsv	key	qa_parallel
 kit/ops/KEYS.tsv	key	qa_scout
 kit/ops/KEYS.tsv	key	reports
@@ -73,6 +75,7 @@ kit/ops/KEYS.tsv	key	runnable
 kit/ops/KEYS.tsv	key	serve
 kit/ops/KEYS.tsv	key	shot
 kit/ops/KEYS.tsv	key	stale_hours
+kit/ops/KEYS.tsv	key	target_minutes
 kit/ops/KEYS.tsv	key	test
 kit/ops/KEYS.tsv	key	test_fast
 kit/ops/KEYS.tsv	key	test_look

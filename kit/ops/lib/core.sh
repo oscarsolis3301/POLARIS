@@ -708,6 +708,21 @@ publish_resolve() {
   esac
   return 0
 }
+# push: end | wave (ops/contracts/hour.md § 2) — WHEN code reaches origin under publish: direct. end:
+# once, when finish closes the run; wave: every seal. Unset composes to the claim mode's default (one
+# machine → end, claim-branch → wave). Unknown warns ONCE per invocation on stderr and behaves as that
+# default. Sets $PUSH, never in a `$(...)`; its one fork is the cfg (core.sh rides the guard's hot path).
+_push_resolve() {
+  local p d="end"; p="$(cfg push "")"
+  [ "$CLAIM_MODE" = "claim-branch" ] && d="wave"
+  case "$p" in
+    end|wave) PUSH="$p";;
+    '') PUSH="$d";;
+    *) [ -z "$_PUSH_WARNED" ] && { printf "   ⚠ push: '%s' unknown (end | wave) — behaving as %s\n" "$p" "$d" >&2; _PUSH_WARNED=1; }
+       PUSH="$d";;
+  esac
+  return 0
+}
 # publish: direct base-push-rejected stamp (ops/contracts/publish-modes.md). A protected $BASE keeps
 # refusing seal's push; the stamp records date + a running count so doctor can recommend publish: pr
 # after >=2 rejections. A successful base push clears it. Lives under $PRIMARY/.polaris (gitignored).

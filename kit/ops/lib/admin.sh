@@ -366,11 +366,159 @@ AUTOMODE
   fi
 }
 
+_speed_ev() { # _speed_ev report|plan — the landing and lanes read of `speed` (minutes.md § 5.3, hour.md § 4):
+  # ONE awk over EVENTS.ndjson, no per-line forks. Per task: its last `done`; the last `handoff` at or
+  # before it; the last `claim` at or before that handoff. A task missing any of the three is not
+  # counted. Median = element int((n-1)/2) of the sorted values, zero-based, in whole minutes rounded
+  # to nearest. The log is union-merged across branches, so it is never assumed to be in time order.
+  # build / built → done: the last 20 by done time. Lanes in use for a task = how many build intervals
+  # (its own included) contain the midpoint of its own; buckets 1-4 and 5+ over the last 200 by done
+  # time, a bucket counts only with n >= 3; cards per hour = L x 60 / median (5+ counts as 5, a 0-min
+  # median as 1), ties go to fewer lanes. report: the human lines. plan: ONE machine line
+  # `<build> <wait> <best> <m1> <m2> <m3> <m4> <m5>` (-1 = none), nothing when no task counts.
+  [ -f "$EVENTS" ] || return 0
+  awk -v mode="${1:-report}" '
+    { ts = ""; ev = ""; id = ""
+      if (match($0, /"ts":[0-9]+/)) ts = substr($0, RSTART + 5, RLENGTH - 5) + 0
+      if (match($0, /"ev":"[^"]*"/)) ev = substr($0, RSTART + 6, RLENGTH - 7)
+      if (match($0, /"id":"[^"]*"/)) id = substr($0, RSTART + 6, RLENGTH - 7)
+      if (ts == "" || id == "") next
+      if (ev == "claim") cl[id] = cl[id] " " ts
+      else if (ev == "handoff") ho[id] = ho[id] " " ts
+      else if (ev == "done" && (!(id in dn) || ts > dn[id])) dn[id] = ts
+    }
+    function med(v, m,   i, j, x) {
+      for (i = 2; i <= m; i++) { x = v[i]; j = i - 1; while (j > 0 && v[j] > x) { v[j + 1] = v[j]; j-- } v[j + 1] = x }
+      return int(v[int((m - 1) / 2) + 1] / 60 + 0.5)
+    }
+    END {
+      n = 0
+      for (id in dn) {
+        d = dn[id]; h = -1; c = -1
+        k = split(ho[id], a, " "); for (i = 1; i <= k; i++) if (a[i] + 0 <= d && a[i] + 0 > h) h = a[i] + 0
+        if (h < 0) continue
+        k = split(cl[id], a, " "); for (i = 1; i <= k; i++) if (a[i] + 0 <= h && a[i] + 0 > c) c = a[i] + 0
+        if (c < 0) continue
+        n++; D[n] = d; B[n] = h - c; W[n] = d - h; C[n] = c
+      }
+      if (n == 0) exit
+      for (i = 2; i <= n; i++) {
+        x = D[i]; y = B[i]; z = W[i]; u = C[i]; j = i - 1
+        while (j > 0 && D[j] > x) { D[j + 1] = D[j]; B[j + 1] = B[j]; W[j + 1] = W[j]; C[j + 1] = C[j]; j-- }
+        D[j + 1] = x; B[j + 1] = y; W[j + 1] = z; C[j + 1] = u
+      }
+      m = 0; for (i = (n > 20 ? n - 19 : 1); i <= n; i++) { m++; b[m] = B[i]; w[m] = W[i] }
+      mb = med(b, m); mw = med(w, m)
+      for (l = 1; l <= 5; l++) { nb[l] = 0; lm[l] = -1 }
+      for (i = (n > 200 ? n - 199 : 1); i <= n; i++) {
+        mid = C[i] + B[i] / 2; l = 0
+        for (j = 1; j <= n; j++) if (C[j] <= mid && mid <= C[j] + B[j]) l++
+        if (l < 1) l = 1
+        if (l > 5) l = 5
+        nb[l]++; bv[l, nb[l]] = B[i]
+      }
+      s = ""; best = -1; bc = -1
+      for (l = 1; l <= 5; l++) {
+        if (nb[l] < 3) continue
+        split("", t); for (k = 1; k <= nb[l]; k++) t[k] = bv[l, k]
+        lm[l] = med(t, nb[l])
+        s = s (s == "" ? "" : " · ") (l == 5 ? "5+" : l) " " (l == 1 ? "lane" : "lanes") " " lm[l] " min (n=" nb[l] ")"
+        cph = l * 60 / (lm[l] < 1 ? 1 : lm[l])
+        if (cph > bc) { bc = cph; best = l }
+      }
+      if (mode == "plan") { printf "%d %d %d %d %d %d %d %d\n", mb, mw, best, lm[1], lm[2], lm[3], lm[4], lm[5]; exit }
+      printf "build: median %d min\n", mb
+      printf "built → done: median %d min\n", mw
+      if (best > 0) {
+        printf "build by lanes: %s\n", s
+        printf "lanes: %d — the most cards per hour here (%.1f an hour)\n", best, bc
+      }
+    }' "$EVENTS" 2>/dev/null || true
+}
+
+_speed_plan() { # _speed_plan <slug> [<draft.md>…] — hour.md § 5: the price of a plan. Read-only, no git walk.
+  # Cards = board tasks carrying `plan: <slug>` in backlog/ ready/ active/ review/ blocked/ (never done/)
+  # plus every draft named, whatever its plan (its `id:` resolves depends_on between drafts). ONE awk
+  # over their frontmatter, after _speed_ev's one over EVENTS.
+  local slug="${1:-}" f col ev tm nf
+  [ -n "$slug" ] || { printf 'usage: polaris speed --plan <slug> [<draft.md>…]\n' >&2; return 1; }
+  shift
+  for f in "$@"; do [ -f "$f" ] || { printf 'speed --plan: %s: no such draft\n' "$f" >&2; return 1; }; done
+  ev="$(_speed_ev plan)"
+  tm="$(cfg target_minutes 60)"
+  case "$tm" in ''|*[!0-9]*) tm=60;; esac
+  # Board files first, then the operand `draft=1`, then the drafts: awk applies it between files.
+  # No file at all would leave awk reading stdin, so that case answers before awk runs.
+  nf=$#; set -- draft=1 "$@"
+  for col in blocked review active ready backlog; do
+    for f in "$BOARD/$col"/*.md; do [ -f "$f" ] && { set -- "$f" "$@"; nf=$((nf+1)); }; done
+  done
+  [ "$nf" -gt 0 ] || { printf 'speed --plan %s: no cards carry plan: %s\n' "$slug" "$slug"; return 1; }
+  awk -v slug="$slug" -v ev="$ev" -v M="$tm" -v q="'" '
+    function val(s,   c) {
+      sub(/[ \t]#.*$/, "", s); sub(/^[ \t]*/, "", s); sub(/[ \t\r]*$/, "", s)
+      c = substr(s, 1, 1)
+      if (length(s) > 1 && (c == "\"" || c == q) && substr(s, length(s), 1) == c) s = substr(s, 2, length(s) - 2)
+      return s
+    }
+    function adddeps(s,   k, i, p) {
+      s = val(s); if (s ~ /^\[.*\]$/) s = substr(s, 2, length(s) - 2)
+      gsub(/,/, " ", s); k = split(s, p, " ")
+      for (i = 1; i <= k; i++) if (p[i] != "") cdeps = cdeps " " p[i]
+    }
+    function flush(   u) {   # (a dummy local keeps the API index from reading an awk helper as a shell fn)
+      if (!open_) return
+      if (cdraft || cplan == slug) {
+        nc++; dep[nc] = cdeps
+        if (cid != "" && !(cid in at)) at[cid] = nc
+      }
+      open_ = 0
+    }
+    function depth(i,   k, p, j, d, x) {   # longest depends_on chain from card i, inside the set
+      if (i in memo) return memo[i]
+      if (i in seen) return 0               # a cycle adds nothing; drift reports cycles
+      seen[i] = 1; d = 0
+      k = split(dep[i], p, " ")
+      for (j = 1; j <= k; j++) if (p[j] in at) { x = depth(at[p[j]]); if (x > d) d = x }
+      memo[i] = d + 1
+      return d + 1
+    }
+    FNR == 1 { flush(); open_ = 1; cdraft = draft + 0; cid = ""; cplan = ""; cdeps = ""; fs = 0; inl = 0 }
+    /^---[\r]?$/ { fs++; inl = 0; next }
+    fs != 1 { next }
+    inl && /^[ \t]+-/ { s = $0; sub(/^[ \t]+-[ \t]*/, "", s); adddeps(s); next }
+    { inl = 0 }
+    /^id:/ { cid = val(substr($0, 4)); next }
+    /^plan:/ { cplan = val(substr($0, 6)); next }
+    /^depends_on:/ { inl = 1; adddeps(substr($0, 12)); next }
+    END {
+      flush()
+      if (nc == 0) { printf "speed --plan %s: no cards carry plan: %s\n", slug, slug; exit 1 }
+      W = 0; for (i = 1; i <= nc; i++) { x = depth(i); if (x > W) W = x }
+      ne = split(ev, e, " ")
+      L = (ne >= 8 && e[3] + 0 > 0) ? e[3] + 0 : (nc < 5 ? nc : 5)
+      if (L > nc) L = nc
+      if (ne >= 8 && e[3 + L] + 0 >= 0) { B = e[3 + L] + 0; src = "this project" q "s medians at " L " lanes" }
+      else if (ne >= 8) { B = e[1] + 0; src = "this project" q "s medians" }
+      else { B = 30; src = "no history here yet — kit defaults" }
+      Dl = (ne >= 8) ? e[2] + 0 : 15
+      waves = int((nc + L - 1) / L); if (W > waves) waves = W
+      mins = waves * (B + Dl)
+      if (mins < 90) T = mins " min"
+      else { x = int(mins / 6 + 0.5); T = int(x / 10) "." (x % 10) " h" }
+      printf "plan %s: %d cards · %d waves on the critical path · %d lanes\n", slug, nc, W, L
+      printf "each card: about %d min to build + %d min to land (%s)\n", B, Dl, src
+      printf "projected: about %s (target %d min)\n", T, M
+      if (mins > M) print "over the target — re-cut once: merge each chain into one card with steps:, fold riders into the card that causes them; still over, it runs as one release and this projection is shown before approval"
+    }' "$@"
+}
+
 cmd_speed() { # speed — read-only (one-yes.md § 6 + fix wave 2): how the last 30 changes would be tested, from the
   # repo's own history. ONE git call lists every commit's paths; none/look are decided in-process with the
   # SAME test_skip/test_look defaults as depth_for (core.sh); only commits that fall through ask cmd_depth
   # --commit (the expensive one), newest first, under a time budget. Writes nothing, runs no suite, never
-  # edits config. rc 0 always.
+  # edits config. rc 0 always. `speed --plan <slug> [<draft.md>…]` prices a plan instead (hour.md § 5).
+  [ "${1:-}" = --plan ] && { shift; _speed_plan "$@"; return; }
   local budget="${POLARIS_SPEED_BUDGET:-20}" start="$SECONDS" stopped=0 nm=0 hdr
   local raw p cur="" sha n=0 a=0 b=0 c=0 d s="" t="" line v skip_raw look_raw k i ns=0 allskip allskl
   local -a SH PA
@@ -435,48 +583,8 @@ EOF3
   [ -n "$t" ] && line="$line Your last full run took $t."
   printf '%s
 ' "$line"
-  # Landing time (minutes.md § 5.3): how long the last 20 finished tasks took to build, and how long
-  # each then waited to land. ONE awk over EVENTS.ndjson, no per-line forks. Per task: its last `done`;
-  # the last `handoff` at or before it; the last `claim` at or before that handoff. A task missing any
-  # of the three is not counted; none counted → neither line. Median = element int((n-1)/2) of the
-  # sorted values, zero-based, in whole minutes rounded to nearest. The log is union-merged across
-  # branches, so it is never assumed to be in time order.
-  if [ -f "$EVENTS" ]; then
-    awk '
-      { ts = ""; ev = ""; id = ""
-        if (match($0, /"ts":[0-9]+/)) ts = substr($0, RSTART + 5, RLENGTH - 5) + 0
-        if (match($0, /"ev":"[^"]*"/)) ev = substr($0, RSTART + 6, RLENGTH - 7)
-        if (match($0, /"id":"[^"]*"/)) id = substr($0, RSTART + 6, RLENGTH - 7)
-        if (ts == "" || id == "") next
-        if (ev == "claim") cl[id] = cl[id] " " ts
-        else if (ev == "handoff") ho[id] = ho[id] " " ts
-        else if (ev == "done" && (!(id in dn) || ts > dn[id])) dn[id] = ts
-      }
-      function med(v, m,   i, j, x) {
-        for (i = 2; i <= m; i++) { x = v[i]; j = i - 1; while (j > 0 && v[j] > x) { v[j + 1] = v[j]; j-- } v[j + 1] = x }
-        return int(v[int((m - 1) / 2) + 1] / 60 + 0.5)
-      }
-      END {
-        n = 0
-        for (id in dn) {
-          d = dn[id]; h = -1; c = -1
-          k = split(ho[id], a, " "); for (i = 1; i <= k; i++) if (a[i] + 0 <= d && a[i] + 0 > h) h = a[i] + 0
-          if (h < 0) continue
-          k = split(cl[id], a, " "); for (i = 1; i <= k; i++) if (a[i] + 0 <= h && a[i] + 0 > c) c = a[i] + 0
-          if (c < 0) continue
-          n++; D[n] = d; B[n] = h - c; W[n] = d - h
-        }
-        if (n == 0) exit
-        for (i = 2; i <= n; i++) {
-          x = D[i]; y = B[i]; z = W[i]; j = i - 1
-          while (j > 0 && D[j] > x) { D[j + 1] = D[j]; B[j + 1] = B[j]; W[j + 1] = W[j]; j-- }
-          D[j + 1] = x; B[j + 1] = y; W[j + 1] = z
-        }
-        m = 0; for (i = (n > 20 ? n - 19 : 1); i <= n; i++) { m++; b[m] = B[i]; w[m] = W[i] }
-        printf "build: median %d min\n", med(b, m)
-        printf "built → done: median %d min\n", med(w, m)
-      }' "$EVENTS" 2>/dev/null || true
-  fi
+  # Landing time (minutes.md § 5.3) and lanes in use (hour.md § 4): _speed_ev, ONE awk over EVENTS.
+  _speed_ev report
   [ "$(cfg drain "")" = queue ] && printf '   → one change lands at a time, in a queue: set drain: plan in ops/CONVENTIONS.md
 '
   [ "$(cfg autonomy trusted)" = standard ] && printf '   → every merge stops for your yes: set autonomy: trusted in ops/CONVENTIONS.md

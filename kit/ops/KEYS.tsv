@@ -55,6 +55,9 @@ notify	5.0.0	<cmd or omit>	board events and gates reach nothing outside the term
 bootstrap	5.8.0	<cmd or omit>	a fresh worktree installs no dependencies, so the first verify: on a real repo fails
 generated	5.8.0	<globs or omit>	a Builder that runs build: is rejected for dirtying tracked build output it does not own
 publish	5.14.0	direct	seal merges and pushes the base locally; pr pushes only integrate/<date> and prints a PR URL
+push	6.17.0	end	end: code reaches origin once, when finish closes the run (default with claim: local-lock); wave: every seal pushes base and its tag in one push (default with claim: claim-branch)
+heavy_slots	6.17.0	1	how many heavy jobs (verify lists, qa, the express suite, the push) run at once on this machine; 0 = no limit
+target_minutes	6.17.0	60	speed --plan compares a plan's projected time with this; over it, the planner re-cuts once
 express	5.15.0	auto	a lone small task takes the express lane; off spends the full pipeline on everything
 reports	5.14.0	docs/sprints/	where seal writes the per-sprint report and polaris report regenerates it
 test	5.0.0	<cmd>	nothing proves a task green — the wave gate, qa and CI all have no suite to run

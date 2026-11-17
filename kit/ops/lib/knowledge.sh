@@ -59,24 +59,52 @@ resolve_sprint_ids() { # resolve_sprint_ids <n> — the sprint's task IDs (layer
   # bash expands every word of a `local` line BEFORE it assigns, so `tag`/`prev` must be a
   # SEPARATE `local` after n is bound — a combined decl reads the CALLER's n (empty under
   # `report --all`, which loops with m while its own n=""), silently no-op'ing Rule 2.
+  # hour.md § 8: at most three git processes whatever the size of done/ — one for-each-ref (do the two
+  # tags exist), one log for Rule 1 (subjects and bodies in one stream), one rev-list for Rule 2 — and
+  # ONE awk over done/*.md joining its id:/landed: keys against that rev-list (a short landed: matches
+  # by prefix). Output byte-identical to the per-task walk it replaced.
   local n="$1"
-  local tag="refs/tags/sprint/$n" prev="refs/tags/sprint/$((n-1))" haveprev="" msha f ls
+  local tag="refs/tags/sprint/$n" prev="refs/tags/sprint/$((n-1))" havetag="" haveprev="" r g
+  while IFS= read -r r; do
+    [ "$r" = "$tag" ] && havetag=1
+    [ "$r" = "$prev" ] && haveprev=1
+  done <<EOF
+$(git -C "$PRIMARY" for-each-ref --format='%(refname)' "$tag" "$prev" 2>/dev/null)
+EOF
+  set --
+  if [ -n "$havetag" ]; then for g in "$BOARD"/done/*.md; do [ -f "$g" ] && set -- "$@" "$g"; done; fi
   {
-    git -C "$PRIMARY" log --first-parent --format='%H%x09%s' "$BASE" -- 2>/dev/null \
-      | awk -F'\t' -v p="Sprint $n — " 'index($2,p)==1 {print $1}' \
-      | while IFS= read -r msha; do
-          [ -n "$msha" ] || continue
-          git -C "$PRIMARY" log -1 --format='%b' "$msha" 2>/dev/null | sed -n 's/.*\[\([^][]*\)\]$/\1/p'
-        done
-    if git -C "$PRIMARY" rev-parse -q --verify "$tag" >/dev/null 2>&1; then
-      git -C "$PRIMARY" rev-parse -q --verify "$prev" >/dev/null 2>&1 && haveprev=1
-      for f in "$BOARD"/done/*.md; do
-        [ -f "$f" ] || continue
-        ls="$(fm_get landed "$f" 2>/dev/null || true)"; [ -n "$ls" ] || continue
-        git -C "$PRIMARY" merge-base --is-ancestor "$ls" "$tag" 2>/dev/null || continue
-        if [ -n "$haveprev" ] && git -C "$PRIMARY" merge-base --is-ancestor "$ls" "$prev" 2>/dev/null; then continue; fi
-        fm_get id "$f"
-      done
+    # Rule 1: a commit starts at its \036 line (sha TAB subject); the body lines follow it. A body line
+    # ending in [<x>] (no bracket inside <x>) names <x> — the bullets the sprint merge carries.
+    git -C "$PRIMARY" log --first-parent --format='%x1e%H%x09%s%n%b' "$BASE" -- 2>/dev/null \
+      | awk -v p="Sprint $n — " '
+          index($0, "\036") == 1 { s = $0; sub(/^[^\t]*\t/, "", s); on = (index(s, p) == 1); next }
+          on && substr($0, length($0)) == "]" {
+            b = substr($0, 1, length($0) - 1); k = 0
+            for (i = length(b); i > 0; i--) if (substr(b, i, 1) == "[") { k = i; break }
+            if (k && index(substr(b, k + 1), "]") == 0) print substr(b, k + 1)
+          }'
+    if [ -n "$havetag" ] && [ $# -gt 0 ]; then
+      { if [ -n "$haveprev" ]; then git -C "$PRIMARY" rev-list "$tag" "^$prev" -- 2>/dev/null
+        else git -C "$PRIMARY" rev-list "$tag" -- 2>/dev/null; fi
+        printf '@@polaris-end@@\n'; } \
+        | awk '
+          function clean(s) { sub(/[ \t]#.*$/,"",s); sub(/^[ \t]*/,"",s); sub(/[ \t\r]*$/,"",s); return s }
+          function hit(l,   h) {
+            l = tolower(l)
+            if (l in rev) return 1
+            if (l !~ /^[0-9a-f]+$/ || length(l) >= 40) return 0
+            for (h in rev) if (index(h, l) == 1) return 1
+            return 0
+          }
+          function _flush() { if (fn != "" && ls != "" && hit(ls)) print id }
+          !ph { if ($0 == "@@polaris-end@@") ph = 1; else rev[$0] = 1; next }
+          FNR == 1 { _flush(); fn = FILENAME; id = ""; ls = ""; fs = 0; gi = 0; gl = 0 }
+          /^---[\r]?$/ { fs++; next }
+          fs != 1 { next }
+          !gi && index($0, "id:") == 1 { gi = 1; id = clean(substr($0, 4)); next }
+          !gl && index($0, "landed:") == 1 { gl = 1; ls = clean(substr($0, 8)); next }
+          END { _flush() }' - "$@"
     fi
   } | grep . | sort -u
 }
