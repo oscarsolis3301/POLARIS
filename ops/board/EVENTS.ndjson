@@ -1223,3 +1223,4 @@
 {"ts":1794903950,"ev":"all-review","id":"T-304","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1794904064,"ev":"done","id":"T-305","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794904075,"ev":"done","id":"T-304","who":"Owner@DESKTOP","note":"","pts":5}
+{"ts":1794904280,"ev":"new","id":"T-306","who":"Owner@DESKTOP","note":"ready","pts":2}
