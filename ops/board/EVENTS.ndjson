@@ -1267,3 +1267,8 @@
 {"ts":1794947417,"ev":"handoff","id":"T-312","who":"Owner@DESKTOP","note":""}
 {"ts":1794947419,"ev":"all-review","id":"T-312","who":"Owner@DESKTOP","note":"last lane landed — board is all review"}
 {"ts":1794947455,"ev":"done","id":"T-312","who":"Owner@DESKTOP","note":"","pts":2}
+{"ts":1794954977,"ev":"new","id":"T-313","who":"Owner@DESKTOP","note":"ready","pts":13}
+{"ts":1794954979,"ev":"new","id":"T-314","who":"Owner@DESKTOP","note":"ready","pts":12}
+{"ts":1794954981,"ev":"new","id":"T-315","who":"Owner@DESKTOP","note":"ready","pts":10}
+{"ts":1794954982,"ev":"new","id":"T-316","who":"Owner@DESKTOP","note":"ready","pts":12}
+{"ts":1794954984,"ev":"new","id":"T-317","who":"Owner@DESKTOP","note":"backlog","pts":3}
