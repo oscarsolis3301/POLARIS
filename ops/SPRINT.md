@@ -13,6 +13,11 @@ verdict/pack's first section) · T-315 (the wave check in seal, amend --deps, ro
 T-317 (joined-tree goldens, api-kit re-pin — its sole owner — VERSION 6.19.0, CHANGELOG). After it:
 dogfood, re-pin cli-help, release ritual.
 
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+| 2026-11-17 | 48 | 3 |
+
 # SPRINT 26 — The tune-up: every install ends faster than it started (6.18.0)          capacity: 30   dates: 2026-11-17–
 
 Owner ask of 2026-11-17 (plans/tune.md, approved; owner away): apply the three lessons of plan hour,
