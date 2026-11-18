@@ -108,12 +108,14 @@ cmd_amend() { # amend <ID> --verify <n> -m "why" -- <cmd…> — the SANCTIONED 
   # Every refusal mutates NOTHING — no partial write, no commit (grant's rule) — and a success is
   # ONE board commit. --verify is the only field in v2; the flag is there so a later one can join
   # without a new command.
-  local id="${1:-}" n="" msg="" newcmd="" drop=0 add=0 tok="" old="" len nc st sb br tf
-  local u='usage: polaris amend <ID> --verify <n> -m "why" -- <cmd…>  |  amend <ID> --verify <n> --drop -m "why"  |  amend <ID> --verify --add -m "why" -- <cmd…>'
+  local id="${1:-}" n="" msg="" newcmd="" drop=0 add=0 tok="" old="" len nc st sb br tf vflag=0 deps=""
+  local u='usage: polaris amend <ID> --verify <n> -m "why" -- <cmd…>  |  amend <ID> --verify <n> --drop -m "why"  |  amend <ID> --verify --add -m "why" -- <cmd…>  |  amend <ID> --deps +<ID>|-<ID> -m "why"'
   [ -n "$id" ] || die "$u"
   shift
   while [ $# -gt 0 ]; do case "$1" in
-    --verify) case "${2:-}" in ''|-*) ;; *) n="$2"; shift;; esac; shift;;   # --verify --add carries no <n>
+    --verify) vflag=1; case "${2:-}" in ''|-*) ;; *) n="$2"; shift;; esac; shift;;   # --verify --add carries no <n>
+    --deps)   [ -z "$deps" ] || die "amend: one --deps value per call ($u)"
+              deps="${2:-}"; [ -n "$deps" ] || deps="?"; [ $# -ge 2 ] && shift 2 || shift;;
     --drop)   drop=1; shift;;
     --add)    add=1; shift;;
     -m)       msg="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
@@ -127,6 +129,12 @@ cmd_amend() { # amend <ID> --verify <n> -m "why" -- <cmd…> — the SANCTIONED 
     die "amend refused on $br — a Builder never rewrites its own gate; run it from the primary checkout";;
   esac
   [ -n "$msg" ] || die "amend needs -m \"why\" — the reason the acceptance list changed goes on the task's record ($u)"
+  if [ -n "$deps" ]; then
+    { [ "$vflag" -eq 0 ] && [ "$drop" -eq 0 ] && [ "$add" -eq 0 ] && [ -z "$newcmd" ]; } \
+      || die "amend: --deps and --verify are separate amendments — one per call"
+    _amend_deps "$id" "$deps" "$msg" "$u"
+    return 0
+  fi
   if [ "$drop" -eq 1 ] && [ "$add" -eq 1 ]; then die "amend: --drop and --add are opposites — pick one ($u)"; fi
   if [ "$add" -eq 1 ]; then
     [ -z "$n" ]      || die "amend --add appends; it takes no line number ($u)"
@@ -178,6 +186,52 @@ cmd_amend() { # amend <ID> --verify <n> -m "why" -- <cmd…> — the SANCTIONED 
   else                           say "amended: $id verify[$tok] → \"$newcmd\" (was \"$old\")"
   fi
   note "the why is on the task's record, so this reads as an amendment and not as a lane lowering its own bar · re-prove: polaris verify $id"
+}
+
+_amend_deps() { # _amend_deps <ID> <+X|-X> <why> <usage> — amend --deps (ops/contracts/smooth.md § 4): ONE
+  # depends_on edit on a waiting or claimed card, the end of hand-edited depends_on. Every refusal
+  # writes nothing. A ready/ card that gains a dependency not in done/ moves to backlog/ in the same
+  # commit — the ready gate; dropping one never promotes (`next --do` / promote does that).
+  local id="$1" dep="$2" msg="$3" u="$4" op x c tf="" col="" cur v="" d
+  case "$dep" in
+    +?*) op=+; x="${dep#+}";;
+    -?*) op=-; x="${dep#-}";;
+    *)   die "amend: --deps takes +<ID> or -<ID>, got '$dep' ($u)";;
+  esac
+  for c in backlog ready blocked active; do
+    if tf="$(task_file "$id" "$c")" && [ -n "$tf" ]; then col="$c"; break; fi
+    tf=""
+  done
+  [ -n "$tf" ] || die "$id is not waiting or claimed (state: $(task_col "$id" || echo unknown))"
+  task_file "$x" >/dev/null || die "amend: depends_on: $x is no task on the board"
+  [ "$x" != "$id" ] || die "amend: a card cannot wait on itself"
+  cur="$(dep_ids "$tf")"
+  if [ "$op" = + ]; then
+    if printf '%s\n' "$cur" | grep -qxF -- "$x"; then die "amend: $id already waits on $x"; fi
+    if dep_reaches "$x" "$id" "$x"; then die "amend refused: $x already waits on $id — that would be a cycle"; fi
+  else
+    printf '%s\n' "$cur" | grep -qxF -- "$x" || die "amend: $id does not wait on $x"
+  fi
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    [ "$op" = - ] && [ "$d" = "$x" ] && continue
+    v="$v${v:+, }$d"
+  done <<EOF
+$cur
+EOF
+  [ "$op" = - ] || v="$v${v:+, }$x"
+  mutex_on
+  _new_deps "[$v]" "$tf"
+  printf -- '- amend: deps %s%s — %s\n' "$op" "$x" "$msg" >> "$tf"
+  evt amend "$id" "deps $op$x"
+  if [ "$col" = ready ] && [ "$op" = + ] && ! task_file "$x" done >/dev/null; then
+    mv "$tf" "$BOARD/backlog/$id.md"
+    set_fm status backlog "$BOARD/backlog/$id.md"
+  fi
+  board_commit "chore(board): amend $id deps $op$x"
+  sync_board
+  mutex_off; trap - EXIT
+  say "amended $id: depends_on $op$x"
 }
 
 landed_sha() { # landed_sha <ID> [ref] — SHA of the squash commit in <ref> (default $BASE) whose
@@ -913,8 +967,11 @@ EOF
     int_off    # kickback's `trap - EXIT` disarmed the on_die net — release the lease by hand
     die "express: verify red — land unwound on integrate/$date, $id kicked back with the failing tail"
   fi
-  # step 4: seal — existing cmd_seal semantics, unchanged (tag sprint/<n>, pushes when remoted)
+  # step 4: seal — existing cmd_seal semantics (tag sprint/<n>, pushes when remoted). Step 3 already ran
+  # the suite on this very tip, so the seal's wave check (smooth.md § 3) reads it as already green.
+  _WC_PROVEN="$ex_tested"
   cmd_seal "$date"
+  _WC_PROVEN=""
   # step 5: close — done (landed: stamp + cleanup; verify: already ran in step 3b, on the tree this
   # seal merged), then the wave branch goes (its job is finished; a fresh one is cheap tomorrow)
   cmd_done "$id"
@@ -1015,7 +1072,236 @@ seal_burndown_row() { # seal_burndown_row <n> <date> <ids> — sprint-report.md 
   return 0
 }
 
-cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wave: ONE --no-ff merge
+_seal_wave_cards() { # _seal_wave_cards <date> — "<ID><TAB><path>" for every file a wave card's own commits
+  # changed (ops/contracts/smooth.md § 3.3): ONE git log over the wave, board commits and subjects
+  # without an [<ID>] suffix skipped. rc 0 always. Plain awk rules, no functions.
+  git log --reverse --no-renames --name-only --format='%x01%s' "$BASE..integrate/$1" 2>/dev/null | tr -d '\r' | awk '
+    /^\001/ { s = substr($0, 2); id = ""
+              if (s !~ /^chore\(board\):/ && s ~ /\]$/) {
+                i = length(s); while (i > 0 && substr(s, i, 1) != "[") i--
+                if (i > 0) id = substr(s, i + 1, length(s) - i - 1)
+              }
+              next }
+    id != "" && $0 != "" { print id "\t" $0 }'
+  return 0
+}
+
+_seal_wave_red() { # _seal_wave_red <date> <r|w> <command> <output-file> <pending IDs> <wave IDs> — the red
+  # half of the wave check (smooth.md § 3.3): name the cards, say so on stderr, ONE board commit of
+  # wave-red events, the primary back on $BASE, the lease freed, exit 1. Nothing merged, tagged or
+  # reported; integrate/<date> keeps every landed card, so a fix card lands on this same wave.
+  local date="$1" kind="$2" c="$3" out="$4" pend="$5" ids="$6" named="" id surfs="" row rest rc nl cid cp s list
+  nl=$'\n'
+  if [ "$kind" = w ]; then
+    # the whole test: → every card sealed since the last whole-suite green, then this wave's cards
+    for id in $pend $ids; do
+      case " $named " in *" $id "*) ;; *) named="$named${named:+ }$id";; esac
+    done
+  else
+    # a row command → the rows that produced it: an explicit cmd equal to it, else the `-` rows
+    # (test_select's one line); then the wave cards whose own files match one of those surfaces
+    list="$(surfaces_lines)"
+    while IFS= read -r row; do
+      [ -n "$row" ] || continue
+      rest="${row#*$POLARIS_TAB}"; [ "$rest" != "$row" ] || rest=""
+      case "$rest" in *"$POLARIS_TAB"*) rc="${rest#*$POLARIS_TAB}"; rc="${rc%%$POLARIS_TAB*}";; *) rc="";; esac
+      [ "$rc" = "$c" ] && surfs="${surfs:+$surfs$nl}${row%%$POLARIS_TAB*}"
+    done <<EOF
+$list
+EOF
+    if [ -z "$surfs" ]; then
+      while IFS= read -r row; do
+        [ -n "$row" ] || continue
+        rest="${row#*$POLARIS_TAB}"; [ "$rest" != "$row" ] || rest=""
+        case "$rest" in *"$POLARIS_TAB"*) rc="${rest#*$POLARIS_TAB}"; rc="${rc%%$POLARIS_TAB*}";; *) rc="";; esac
+        { [ -z "$rc" ] || [ "$rc" = "-" ]; } && surfs="${surfs:+$surfs$nl}${row%%$POLARIS_TAB*}"
+      done <<EOF
+$list
+EOF
+    fi
+    while IFS="$POLARIS_TAB" read -r cid cp; do
+      [ -n "$cid" ] && [ -n "$cp" ] || continue
+      case " $named " in *" $cid "*) continue;; esac
+      while IFS= read -r s; do
+        [ -n "$s" ] || continue
+        if match_one "$cp" "$s"; then named="$named${named:+ }$cid"; break; fi
+      done <<EOF
+$surfs
+EOF
+    done <<EOF
+$(_seal_wave_cards "$date")
+EOF
+    [ -n "$named" ] || named="$(printf '%s ' $ids)"; named="${named% }"
+  fi
+  {
+    printf '⛔ wave check red — integrate/%s stays open: %s\n' "$date" "$c"
+    tail -15 "$out" | sed 's/^/     /'
+    printf '   cards: %s\n' "$(printf '%s' "$named" | sed 's/ /, /g')"
+    printf '   fix: file a fix card for them (it lands on this wave), then: bash ops/polaris seal\n'
+  } >&2
+  rm -f "$out"
+  # board: one wave-red event per named card, ONE commit. Commit + sync in subshells — both die on a
+  # stuck ref or a rejected push, and the red exit below must stay the one way this ends.
+  mutex_on
+  for id in $named; do evt wave-red "$id" "$(printf '%s' "$c" | cut -c1-200)"; done
+  if ( board_commit "chore(board): wave check red integrate/$date — $named" ); then
+    ( sync_board ) >/dev/null 2>&1 || true
+  fi
+  mutex_off
+  git checkout -q "$BASE" 2>/dev/null || true   # never strand the primary on the wave (save-hops § 15.2)
+  int_off
+  exit 1
+}
+
+_seal_wave_check() { # _seal_wave_check <date> <subjects> [<no-check why>] — THE WAVE CHECK
+  # (ops/contracts/smooth.md § 3). Before a wave merges, the tests covering what it changed run ONCE,
+  # from $PRIMARY with integrate/<date> checked out, under the lease cmd_seal holds and the machine's
+  # heavy slot — never per card. The commands SURFACES maps to the changed paths run at every seal; the
+  # whole `test:` (a changed path no row covers, or a selection that failed) runs only when due.
+  # Green → one line, and _WC_LINE holds the stamp's fields 2-3 for cmd_seal to write after the report
+  # commit, so a re-seal of that same tip skips. Red → _seal_wave_red: the wave stays open, exit 1.
+  # `test:` unset → returns at once, silent: every seal without it is byte-identical to 6.18.1.
+  local date="$1" subjects="$2" why="${3:-}" tcmd tip sf wf s1="" s2="" s3="" w1="" w2="" w3="" junk bad=0
+  local ids id tf csf mf rel skip_raw nf p dline depth dwhy unm=0 ecmds="" rows row rest c nl sel="" selok=0 need=0
+  local newest=0 now pend="" pids="" it ie run="" line kind out k=0 nr=0 whole="" heavy="" f2 pnew wc m
+  nl=$'\n'
+  _WC_LINE=""
+  if [ -n "$why" ]; then note "wave check: skipped by hand — $why"; return 0; fi
+  tcmd="$(cfg test "")"
+  [ -n "$tcmd" ] || return 0
+  [ -z "${POLARIS_SEAL_NOCHECK:-}" ] || return 0       # the re-land child seal: its parent checked
+  tip="$(git rev-parse -q --verify "refs/heads/integrate/$date^{commit}" 2>/dev/null || true)"
+  sf="$PRIMARY/.polaris/suite-stamp"; wf="$PRIMARY/.polaris/wave-check"
+  if [ -s "$sf" ]; then read -r s1 s2 s3 junk < "$sf" || true; fi
+  if [ -s "$wf" ]; then
+    IFS="$POLARIS_TAB" read -r w1 w2 w3 junk <<EOF
+$(head -1 "$wf" | tr -d '\r')
+EOF
+    case "$w1" in ''|*[!0-9a-f]*) bad=1;; esac
+    case "$w2" in ''|*[!0-9]*) bad=1;; esac
+    [ -n "$w3" ] && [ -z "$junk" ] || bad=1
+  else
+    bad=1
+  fi
+  [ "$bad" -eq 0 ] || { w1=""; w2=0; w3="-"; }          # malformed = no stamp
+  if [ -n "$tip" ] && { [ "$tip" = "$s1" ] || [ "$tip" = "$w1" ] || [ "$tip" = "${_WC_PROVEN:-}" ]; }; then
+    say "wave check — already green at $(printf '%.7s' "$tip")"
+    return 0
+  fi
+  ids="$(printf '%s\n' "$subjects" | sed -n 's/.*\[\([^][]*\)\]$/\1/p' | awk '!s[$0]++')"
+  set --
+  for id in $ids; do tf="$(task_file "$id")" && set -- "$@" "$tf"; done
+  # the change set: the wave's own diff, minus the board-noise paths and test_skip — the paths
+  # surface_change_set drops, so a docs-only wave reads as depth none and costs nothing
+  csf="$(mktemp)"; mf="$(mktemp)"
+  rel="$(cfg reports docs/sprints)"; rel="${rel%/}"; [ -n "$rel" ] || rel="docs/sprints"
+  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
+  [ "$skip_raw" = "-" ] && skip_raw=""
+  case $- in *f*) nf=1;; *) nf=0; set -f;; esac       # the glob list is word-split unexpanded
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    case "$p" in "$rel/"*|ops/MAP.md|ops/SURFACES.tsv) continue;; esac
+    if [ -n "$skip_raw" ] && owned_match "$p" $skip_raw; then continue; fi
+    printf '%s\n' "$p"
+  done > "$csf" <<EOF
+$(git diff --name-only --no-renames "$BASE...integrate/$date" 2>/dev/null | tr -d '\r')
+EOF
+  [ "$nf" -eq 1 ] || set +f
+  dline="$(depth_for "$@" < "$csf")"
+  depth="${dline%%$POLARIS_TAB*}"; dwhy="${dline#*$POLARIS_TAB}"
+  case "$depth" in none|look|ui)
+    note "wave check: skipped — $depth: $dwhy"; rm -f "$csf" "$mf"; return 0;;
+  esac
+  # mapped vs unmapped: a path with ≥ 1 SURFACES row is mapped; the explicit (non-`-`) cmd of every
+  # row a mapped path matches is kept, because a whole test: still runs those beside it
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    rows="$(surface_rows_for "$p")" || { unm=$((unm+1)); continue; }
+    printf '%s\n' "$p" >> "$mf"
+    while IFS= read -r row; do
+      rest="${row#*$POLARIS_TAB}"; [ "$rest" != "$row" ] || rest=""
+      case "$rest" in *"$POLARIS_TAB"*) c="${rest#*$POLARIS_TAB}"; c="${c%%$POLARIS_TAB*}";; *) c="";; esac
+      { [ -n "$c" ] && [ "$c" != "-" ]; } || continue
+      case "$nl$ecmds$nl" in *"$nl$c$nl"*) ;; *) ecmds="${ecmds:+$ecmds$nl}$c";; esac
+    done <<EOF
+$rows
+EOF
+  done < "$csf"
+  if [ -s "$mf" ]; then
+    if sel="$(test_select_for "$mf")"; then selok=1; else need=1; fi
+  fi
+  rm -f "$csf" "$mf"
+  [ "$unm" -eq 0 ] || need=1
+  # the newest whole-suite green: the wave-check stamp's field 2, or a full qa/finish stamp's time
+  newest="$w2"
+  if [ "$s3" = full ]; then case "$s2" in ''|*[!0-9]*) ;; *) [ "$s2" -le "$newest" ] || newest="$s2";; esac; fi
+  # pending = the cards sealed since that green (items not after it are dropped on read)
+  if [ "$w3" != "-" ]; then
+    for it in $(printf '%s' "$w3" | tr ',' ' '); do
+      ie="${it##*:}"; id="${it%:*}"
+      case "$ie" in ''|*[!0-9]*) continue;; esac
+      [ -n "$id" ] && [ "$ie" -gt "$newest" ] || continue
+      pend="${pend:+$pend,}$it"; pids="$pids${pids:+ }$id"
+    done
+  fi
+  # the whole-test window (§ 3.1, § 3.5): with seal on demand a chained plan seals at almost every card,
+  # so a whole suite at each seal would put it back on every chain link's critical path. The whole
+  # test: runs when due — wave_check: 0, no whole-suite green on record, or the newest one at least
+  # wave_check: minutes old; `off` leaves it to finish. The rows above run at every seal regardless.
+  now="$(date +%s)"
+  if [ "$need" -eq 1 ]; then
+    wc="$(cfg wave_check 60)"
+    case "$wc" in off) ;; ''|*[!0-9]*) wc=60;; esac
+    if [ "$wc" = off ]; then
+      need=0
+      note "wave check: whole test: off at the seal (wave_check: off) — finish runs it"
+    elif [ "$wc" -gt 0 ] && [ "$newest" -gt 0 ] && [ $((now - newest)) -lt $((wc * 60)) ]; then
+      need=0; m=$(( (now - newest) / 60 ))
+      note "wave check: whole test: not due — last green $m min ago; it runs at the first seal after $((wc - m)) more min (wave_check: $wc)"
+    fi
+  fi
+  if [ "$need" -eq 1 ]; then
+    [ -z "$ecmds" ] || run="$(printf '%s\n' "$ecmds" | sed "s/^/r$POLARIS_TAB/")"
+    run="${run:+$run$nl}w$POLARIS_TAB$tcmd"
+  elif [ "$selok" -eq 1 ]; then
+    run="$(printf '%s\n' "$sel" | sed "s/^/r$POLARIS_TAB/")"
+  fi
+  out="$(mktemp)"
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    kind="${line%%$POLARIS_TAB*}"; c="${line#*$POLARIS_TAB}"
+    [ -n "$c" ] || continue
+    [ -n "$heavy" ] || { _heavy_on "seal wave check"; heavy=1; }
+    if ( cd "$PRIMARY" && bash -c "$c" ) </dev/null >"$out" 2>&1; then
+      k=$((k+1))
+      if [ "$kind" = w ]; then whole=1; else nr=$((nr+1)); fi
+      # the longest thing a seal ever does — re-stamp after EACH command, as express does
+      [ -n "${INT_HELD:-}" ] && date +%s > "$LOCKS/.int-lease/epoch" 2>/dev/null || true
+    else
+      [ -z "$heavy" ] || _heavy_off
+      _seal_wave_red "$date" "$kind" "$c" "$out" "$pids" "$ids"
+    fi
+  done <<EOF
+$run
+EOF
+  rm -f "$out"
+  [ -z "$heavy" ] || _heavy_off
+  [ "$k" -eq 0 ] || say "wave check — $k command(s) green (rows: $nr${whole:+, whole test:})"
+  now="$(date +%s)"   # the end of the run: the green's own time
+  if [ -n "$whole" ]; then
+    f2="$now"; pnew="-"
+  else
+    f2="$newest"; pnew="$pend"
+    for id in $ids; do
+      case ",$pnew," in *",$id:"*) ;; *) pnew="${pnew:+$pnew,}$id:$now";; esac
+    done
+    [ -n "$pnew" ] || pnew="-"
+  fi
+  _WC_LINE="$f2$POLARIS_TAB$pnew"
+  return 0
+}
+
+cmd_seal() { # seal [<date>] [--no-check -m "why"] | seal --sync [<date>] — close an integration wave: ONE --no-ff merge
   # of integrate/<date> into $BASE, tagged sprint/<n>. Message = sprint header + a bullet per landed
   # commit — the changelog entry `history` shows forever. sprint/<n> always marks the sprint's
   # LATEST sealed checkpoint (contract v2, multi-wave): the first seal of sprint n creates the tag,
@@ -1026,9 +1312,27 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
   # shared-checkout v1 (T-058): the sealing pass runs under the integration lease (int_on first,
   # statement-level; busy lane → `queued: ` + rc 3), a dirty tree parks instead of dying, and a
   # wave with only board noise closes idempotently — `nothing new to seal`, rc 0.
-  local sync="" typed=1
-  if [ "${1:-}" = "--sync" ]; then sync=1; shift; fi
-  local date="${1:-}"; [ -n "$date" ] || { date="$(date +%F)"; typed=""; }
+  # smooth.md § 3: before the merge the seal runs the wave check (_seal_wave_check) — the tests that
+  # cover what the wave changed; a red keeps the wave open. `--no-check -m "why"` is the recorded way
+  # past a red that is not the wave's code: refused on any feat/* branch and without -m.
+  local sync="" typed=1 date="" nocheck="" ncwhy="" ncbr
+  local su='usage: polaris seal [<date>] [--no-check -m "why"] | seal --sync [<date>]'
+  while [ $# -gt 0 ]; do case "$1" in
+    --sync)     sync=1; shift;;
+    --no-check) nocheck=1; shift;;
+    -m)         ncwhy="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
+    -*)         die "unknown flag $1 — $su";;
+    *)          date="$1"; shift;;
+  esac; done
+  if [ -n "$nocheck" ]; then
+    ncbr="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    case "$ncbr" in feat/*) die "seal --no-check refused on $ncbr — run it from the primary checkout";; esac
+    [ -z "$sync" ] || die "seal --sync takes no --no-check — $su"
+    [ -n "$ncwhy" ] || die "seal --no-check needs -m \"why\" — the reason the wave check was skipped goes on the record ($su)"
+  elif [ -n "$ncwhy" ]; then
+    die "-m goes with --no-check — $su"
+  fi
+  [ -n "$date" ] || { date="$(date +%F)"; typed=""; }
   publish_resolve
   [ "$PUB" = "pr" ] || _push_resolve   # hour.md § 2: push: end | wave — pr mode never reads it
   if [ -n "$sync" ]; then
@@ -1107,7 +1411,16 @@ cmd_seal() { # seal [<date>] | seal --sync [<date>] — close an integration wav
   # / the push (pr). $subjects was captured above, so the report never appears in the merge bullets;
   # it is a docs(sprint-N) commit with no [<ID>] suffix (ID resolution ignores it).
   git checkout -q "integrate/$date"
+  # smooth.md § 3.1: the wave check, after every gate above and before the report and the merge. A red
+  # exits from inside it with the wave open and the primary back on $BASE.
+  _seal_wave_check "$date" "$subjects" "$ncwhy"
   seal_report_commit "$n" "$date"
+  # § 3.2: the stamp names the tip that merges (the report commit included), so a re-seal of that same
+  # tip — a merge conflict resolved on $BASE, say — skips the check. Best-effort.
+  if [ -n "${_WC_LINE:-}" ]; then
+    mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
+    printf '%s\t%s\n' "$(git rev-parse HEAD)" "$_WC_LINE" > "$PRIMARY/.polaris/wave-check" 2>/dev/null || true
+  fi
   local msg
   msg="Sprint $n — $goal
 
@@ -1122,6 +1435,9 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
   # subjects name the wave and the board holds the rest, so the numbers need no one to remember
   # them. $subjects was captured before the report commit, so the [<ID>] suffixes are the tasks
   # and nothing else. Best-effort inside: a ⚠ at worst, never a failed seal.
+  # smooth.md § 3.4: a check skipped by hand leaves its why on the board — the event rides the
+  # burndown's board commit just below.
+  if [ -n "$ncwhy" ]; then mutex_on; evt wave-check-skipped "integrate/$date" "$ncwhy"; mutex_off; fi
   seal_burndown_row "$n" "$date" "$(printf '%s\n' "$subjects" | sed -n 's/.*\[\([^][]*\)\]$/\1/p' | tr '\n' ' ')"
   # the merge is behind us and the pushes below are the network-slow stretch — re-stamp so the
   # lease reads fresh across them (worktree-liveness.md § steals)

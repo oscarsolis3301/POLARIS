@@ -162,6 +162,11 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
   for a busy lane, a taken task or another chat's work; finish through publishing.
 - **Scope = the task.** No drive-by refactors. Something else needs doing → one line in
   `ops/board/backlog/IDEAS.md` for the Planner.
+- **Short a path? Hand the card back — never grant yourself one.** `pack`'s first section lists the
+  tests and files that touch yours without being on the card; one you must change → in your first
+  minute, `bash ops/polaris release <ID> --to ready -m "NEEDS PATH <path> — <why>"`, and the close
+  names it. `grant` refuses from your branch and your worktree anyway: a lone session widening its
+  own card is the same move as a builder doing it, with nobody watching.
 - A port in use is someone else's — take the port `pack` gave you; never reclaim a port by killing.
 - **A RULES rejection or a guard block is an answer, not an obstacle.** Hand back or ask. Never
   edit `ops/RULES.tsv` to get unstuck (Invariant 11). Converting a rule between `path` and `ask` is

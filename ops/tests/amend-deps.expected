@@ -1,0 +1,38 @@
+== refusals write nothing
+⛔ amend refused on feat/T-7 — a Builder never rewrites its own gate; run it from the primary checkout
+⛔ amend needs -m "why" — the reason the acceptance list changed goes on the task's record
+   rc=1 · board untouched
+⛔ amend: --deps and --verify are separate amendments — one per call
+   rc=1 · board untouched
+⛔ T-4 is not waiting or claimed (state: review)
+   rc=1 · board untouched
+⛔ T-42 is not waiting or claimed (state: unknown)
+   rc=1 · board untouched
+⛔ amend: depends_on: T-99 is no task on the board
+   rc=1 · board untouched
+⛔ amend: a card cannot wait on itself
+   rc=1 · board untouched
+⛔ amend: T-2 already waits on T-1
+   rc=1 · board untouched
+⛔ amend: T-3 does not wait on T-1
+   rc=1 · board untouched
+⛔ amend refused: T-2 already waits on T-1 — that would be a cycle
+   rc=1 · board untouched
+== + on a ready card, the dependency unfinished — it waits in backlog/
+✅ amended T-3: depends_on +T-2
+   rc=0 · board moved: chore(board): amend T-3 deps +T-2
+T-3 is in: backlog · depends_on: [T-2]
+- amend: deps +T-2 — it needs the second card first
+amend events for T-3: 1
+== - never promotes
+✅ amended T-3: depends_on -T-2
+   rc=0 · board moved: chore(board): amend T-3 deps -T-2
+T-3 is in: backlog · depends_on: []
+== + a finished dependency — a ready card stays ready
+✅ amended T-6: depends_on +T-5
+   rc=0 · board moved: chore(board): amend T-6 deps +T-5
+T-6 is in: ready · depends_on: [T-5]
+== an active card
+✅ amended T-7: depends_on +T-1
+   rc=0 · board moved: chore(board): amend T-7 deps +T-1
+T-7 is in: active · depends_on: [T-1]
