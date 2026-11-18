@@ -1,0 +1,39 @@
+--- 1. grant refuses from a card lane — a feat branch, a card worktree folder — and writes nothing
+⛔ grant refused on feat/T-G1 — a builder never widens its own card; return NEEDS PATH <path> — <why> and the conductor grants it from the primary checkout
+rc 1
+⛔ grant refused on <FIX>/repo/.polaris/wt/T-G1/sub — a builder never widens its own card; return NEEDS PATH <path> — <why> and the conductor grants it from the primary checkout
+rc 1
+board commits added: 0 · tree changed: no
+--- 2. release --to blocked parks an UNCLAIMED ready card; a release that removes the worktree removes an empty feat branch too
+✅ T-U1 → blocked/ · no lock or worktree held
+column: T-U1.md · owner: null status: blocked  · - ⛔ released by <who>: waits on the owner
+event: blocked · commit: chore(board): release T-U1 → blocked
+1
+✅ T-G1 → ready/ · lock released · worktree removed (branch feat/T-G1 removed — it held no commits)
+feat/T-G1 after an empty release: gone
+1
+✅ T-G1 → ready/ · lock released · worktree removed (branch feat/T-G1 kept)
+feat/T-G1 after a release with a commit: kept
+--- 3. handoff --hold stops at review/ with held: yes and lands nothing; --no-before with no visual: path in the diff asks for no capture
+✅ T-H1 → review/. Lock stays until the Integrator lands it. Session may close.
+held: T-H1 waits in review/ — nothing landed. After the yes: bash ops/polaris land T-H1, then bash ops/polaris seal
+rc 0
+column: T-H1.md · held: yes · - held at handoff: waits in review/ for a yes — then: bash ops/polaris land T-H1
+events: handoff hold  · commit: chore(board): handoff T-H1
+landed on main: 0 · shots asked: 0
+build T-G1
+   fixture T-G1 (1 pts, wsjf 5)
+held alone: finish|   blocked/: T-U1|   held for a yes: T-H1|
+beside a landable card: integrate|   review/: T-H2|   held for a yes: T-H1|
+--- 4. approve --plan makes the plan the run's plan when a session id is set — and only then
+✅ approved plan recut: 0 scope(s) on 0 task(s)
+   this run's plan is now recut — drain: plan takes its cards
+marker: recut
+✅ approved plan recut: 0 scope(s) on 0 task(s)
+a plan marker without a session id: 0
+--- 5. pack prints FILES THAT TOUCH YOURS first, only when _card_reach is defined and lists something
+no _card_reach — first section: === THE TASK
+(no ## Why section — ask before coding)
+nothing listed — pack byte-identical: yes
+FILES THAT TOUCH YOURS — not on files_owned. One you will have to change → stop now: return NEEDS PATH <path> — <why> (BUILDER.md), not after the build
+   tests/test_kappa.sh — names kappa

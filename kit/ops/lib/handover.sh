@@ -17,10 +17,14 @@ next_landable() { # next_landable — row 1's predicate, ONE pass over review/ a
   # merge only a human may license · NX_LEASE = absent | mine | stale | live, on int_on's OWN steal
   # predicate (worktree-liveness.md § steals). rc 0 iff something is landable AND the lane is open —
   # under BOTH landing modes, since a self-land tail that queued leaves its task for nobody.
-  local f id rk ap lease now e hp sm dead
-  NX_REV_OK=""; NX_REV_HUMAN=""; NX_LEASE=absent; NX_LEASE_WHO=""; NX_LEASE_M=0
+  # NX_REV_HELD (smooth.md § 5.3) = `held: yes` cards: never landable, they wait for a typed land.
+  local f id rk ap lease now e hp sm dead held="-" hnl='
+'
+  NX_REV_OK=""; NX_REV_HUMAN=""; NX_REV_HELD=""; NX_LEASE=absent; NX_LEASE_WHO=""; NX_LEASE_M=0
   for f in "$BOARD/review/"*.md; do [ -e "$f" ] || break
     id="${f##*/}"; id="${id%.md}"
+    [ "$held" = "-" ] && held="$hnl$(grep -lE '^held:[[:space:]]*yes' "$BOARD/review/"*.md 2>/dev/null)$hnl"
+    case "$held" in *"$hnl$f$hnl"*) NX_REV_HELD="${NX_REV_HELD:+$NX_REV_HELD }$id"; continue;; esac
     # one-yes.md section 2: the ONE predicate (ownership.sh) — rc 0 is landable, else the human lane
     if ! plan_covers "$f" >/dev/null 2>&1; then NX_REV_HUMAN="${NX_REV_HUMAN:+$NX_REV_HUMAN }$id"
     else NX_REV_OK="${NX_REV_OK:+$NX_REV_OK }$id"; fi
@@ -329,9 +333,22 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   if [ "$sid" != "-" ]; then
     for lk in "$LOCKS"/*/; do [ -e "$lk" ] || break
       lk="${lk%/}"; id="${lk##*/}"
-      m=""; { read -r m && read -r m && read -r m && IFS= read -r m; } 2>/dev/null < "$lk/meta" || true   # meta line 4 = the sid
+      m=""; vs=""; { read -r m && read -r m && read -r m && IFS= read -r m && read -r vs && IFS= read -r vs; } 2>/dev/null < "$lk/meta" || true   # meta line 4 = the sid
       [ "${m%$'\r'}" = "$sid" ] || continue
       mine="${mine:+$mine }$id"
+      # smooth.md § 5.5: line 6 = the card's worktree. Builder subagents share the conductor's sid, so
+      # with line 6 present only a caller standing in that folder (or below it) is told to resume.
+      # Folded on both sides, builtins only: `\` → `/`, a leading /<letter>/ → <letter>:/, no case.
+      vs="${vs%$'\r'}"
+      if [ -n "$vs" ]; then
+        vv="${PWD//\\//}"; vs="${vs//\\//}"
+        case "$vv" in /[A-Za-z]/*) vv="${vv:1:1}:/${vv:3}";; esac
+        case "$vs" in /[A-Za-z]/*) vs="${vs:1:1}:/${vs:3}";; esac
+        vm=0; shopt -q nocasematch && vm=1; shopt -s nocasematch
+        vk=0; case "$vv/" in "${vs%/}"/*) vk=1;; esac
+        [ "$vm" -eq 1 ] || shopt -u nocasematch
+        [ "$vk" -eq 1 ] || continue
+      fi
       if task_file "$id" active >/dev/null; then printf 'resume %s\n' "$id"
         note "mid-task: your own lock is live — finish or release before anything else"; return 0; fi
     done
@@ -340,6 +357,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   if next_landable; then
     printf 'integrate\n'; note "review/: $NX_REV_OK"
     [ -n "$NX_REV_HUMAN" ] && note "risk: high, human approves: $NX_REV_HUMAN"
+    [ -n "$NX_REV_HELD" ] && note "held for a yes: $NX_REV_HELD"
     return 0
   fi
   # rows 3 and 4 are ASKED here, before rows 1.5 and 2: a budget stops only what would otherwise
@@ -357,21 +375,40 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   # file already says due. The marker <dir>/tidy is written in the call that prints the verb, so a
   # session is routed to it at most once (§ 0.6) — never named `hops`: that is the Stop hook's counter.
   for f in "$BOARD/active/"*.md; do [ -e "$f" ] || break; f="${f##*/}"; active="${active:+$active }${f%.md}"; done
-  if [ ! -e "$d/tidy" ] && [ -z "$active$NX_REV_OK$NX_REV_HUMAN" ] && [ "$NX_LEASE" != live ]; then
-    vs=""; vv=""; vm=""; vk=""
-    IFS="$POLARIS_TAB" read -r vs vv vm vk 2>/dev/null < "$PRIMARY/.polaris/tune-due" || true
-    vs="${vs%$'\r'}"; vv="${vv%$'\r'}"; vk="${vk%$'\r'}"
-    if [ "$vv" = 0 ] && [ -n "$vs" ] && [ -n "$vk" ] \
-       && [ "$vs" = "${bsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then tdue="$vk"
-    elif [ -f "$PRIMARY/.polaris/hops-due" ]; then
-      vs=""; vv=""; vm=""
-      IFS="$POLARIS_TAB" read -r vs vv vm 2>/dev/null < "$PRIMARY/.polaris/hops-due" || true
-      vs="${vs%$'\r'}"; vv="${vv%$'\r'}"; vm="${vm%$'\r'}"
-      if [ "$vv" = 0 ] && [ -n "$vs" ] && [ "$(cfg hops on)" != off ] \
-         && [ "$vs" = "${bsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then
-        tdue="${vm#layout pass due — }"
+  # smooth.md § 5.6: a cache that names another commit is STALE, not "nothing due" — with the gate
+  # passed and nothing due, ONE refresh (hops --due, then tune) and one more read by the same rules.
+  # The refresh names the new base, so it is paid at most once per base; `--brief` never pays it, and
+  # a missing cache is never computed here. `p` = refreshed already · `lk` = a cache is stale.
+  if [ ! -e "$d/tidy" ] && [ -z "$active$NX_REV_OK$NX_REV_HUMAN$NX_REV_HELD" ] && [ "$NX_LEASE" != live ]; then
+    p=0
+    while :; do
+      lk=""
+      vs=""; vv=""; vm=""; vk=""
+      IFS="$POLARIS_TAB" read -r vs vv vm vk 2>/dev/null < "$PRIMARY/.polaris/tune-due" || true
+      vs="${vs%$'\r'}"; vv="${vv%$'\r'}"; vk="${vk%$'\r'}"
+      if [ "$vv" = 0 ] && [ -n "$vs" ] && [ -n "$vk" ] \
+         && [ "$vs" = "${bsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then tdue="$vk"
+      else
+        [ "$p" -eq 0 ] && [ "${NX_BRIEF:-}" != 1 ] && [ -f "$PRIMARY/.polaris/tune-due" ] \
+          && [ -n "${bsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ] && [ "$vs" != "$bsha" ] && lk=1
+        if [ -f "$PRIMARY/.polaris/hops-due" ]; then
+          vs=""; vv=""; vm=""
+          IFS="$POLARIS_TAB" read -r vs vv vm 2>/dev/null < "$PRIMARY/.polaris/hops-due" || true
+          vs="${vs%$'\r'}"; vv="${vv%$'\r'}"; vm="${vm%$'\r'}"
+          if [ "$vv" = 0 ] && [ -n "$vs" ] && [ "$(cfg hops on)" != off ] \
+             && [ "$vs" = "${bsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then
+            tdue="${vm#layout pass due — }"
+          elif [ "$p" -eq 0 ] && [ "${NX_BRIEF:-}" != 1 ] && [ -z "$lk" ] \
+             && [ -n "${bsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ] && [ "$vs" != "$bsha" ] \
+             && [ "$(cfg hops on)" != off ]; then lk=1
+          fi
+        fi
       fi
-    fi
+      [ -z "$tdue" ] && [ -n "$lk" ] || break
+      p=1
+      "$SELF" hops --due >/dev/null 2>&1 || true
+      "$SELF" tune >/dev/null 2>&1 || true
+    done
   fi
   # Own live bg jobs, scanned only where an answer needs them: row 1.5 once due, row 5 once nothing
   # would build or promote. Ownership = the job's cwd, never its pid (bg-jobs.md v2).
@@ -420,6 +457,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
     [ "$NX_LEASE" = live ] && note "lease: $NX_LEASE_WHO (${NX_LEASE_M}m)"
     for n in $bgs; do note "bg: $n running"; done
     [ -n "$NX_REV_HUMAN" ] && note "review/ awaits a human: $NX_REV_HUMAN"
+    [ -n "$NX_REV_HELD" ] && note "held for a yes: $NX_REV_HELD"
     return 0
   fi
   # 6 — otherwise the run's board is done; name what is parked, each only when non-empty. Human-gated
@@ -429,6 +467,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   for f in "$BOARD/blocked/"*.md; do [ -e "$f" ] || break; f="${f##*/}"; blocked="${blocked:+$blocked }${f%.md}"; done
   [ -n "$blocked" ] && note "blocked/: $blocked"
   [ -n "$NX_REV_HUMAN" ] && note "risk: high awaiting approval: $NX_REV_HUMAN"
+  [ -n "$NX_REV_HELD" ] && note "held for a yes: $NX_REV_HELD"
   return 0
 }
 
@@ -467,7 +506,7 @@ next_brief() { # next_brief — `--brief`: ≤8 lines, no `|` anywhere, markers 
   done <<EOF_EV
 $(grep -F "\"who\":\"$WHO\"" "$EVENTS" 2>/dev/null | tail -3 | sed '1!G;h;$!d')
 EOF_EV
-  line1="$(next_route | sed -n 1p)"
+  line1="$(NX_BRIEF=1 next_route | sed -n 1p)"   # smooth.md § 5.6: the anchor never recomputes a verdict
   printf 'next: %s\n' "$line1"
   case "${line1%% *}" in
     resume|build)      rfile=BUILDER;;
