@@ -46,6 +46,8 @@ cmd_claim() {
       fi
     fi
     FAIL_LOCK_ID="$cand"; trap on_die EXIT   # we hold the lock from here — any die below must release it
+    # smooth.md § 5.5: meta line 6 = the card's worktree, so `next` says resume only from that folder
+    { wt_path "$cand"; printf '\n'; } >> "$LOCKS/$cand/meta" 2>/dev/null || true
     # T-059 claim-time disjointness gate, widened to ready ∪ active by T-086 (shared-checkout § v2.3):
     # the locked candidate's files_owned vs EVERY task in ready/ AND active/, both directions via
     # pat_overlap (observe.sh). Two planners racing can put overlapping tasks in ready/, and the
@@ -280,7 +282,7 @@ cmd_verify() {
   guide_stale_hint "$tf" HEAD
 }
 
-cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
+cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"] [--hold]
   # The FIRST non-flag argument is the ID and both flags take a value, in any order, before or after
   # it (ops/contracts/visual-check.md § v2.7). Until 6.6.0 this line was `local id="${1:-}"` with no
   # parsing at all, so `handoff --saw "…"` read as a task literally named `--saw`. Ten call sites
@@ -290,9 +292,12 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
   # nothing else. `--no-before` says there was nothing to photograph yet (a brand-new screen), drops
   # the requirement from two captures to one, and its reason is recorded in the caption so a missing
   # before-shot is visible rather than silent.
-  local id="" saw="" nobefore="" need=2
-  local uho='usage: polaris handoff [ID] [--saw "<what the after shot shows>"] [--no-before "<why there was nothing to photograph>"]'
+  # `--hold` (smooth.md § 5.3) stops at review/: the card is stamped `held: yes` and nothing lands it
+  # by itself — not self_land, not next's integrate row, not a sibling's seal — until a typed land.
+  local id="" saw="" nobefore="" need=2 hold=""
+  local uho='usage: polaris handoff [ID] [--saw "<what the after shot shows>"] [--no-before "<why there was nothing to photograph>"] [--hold]'
   while [ $# -gt 0 ]; do case "$1" in
+    --hold)      hold=1; shift;;
     --saw)       saw="${2:-}"; [ $# -ge 2 ] && shift 2 || shift;;
     --no-before) nobefore="${2:-}"; [ $# -ge 2 ] && shift 2 || shift
                  [ -n "$nobefore" ] || die "--no-before needs the reason — it is what the caption shows in place of the before-shot. $uho"
@@ -374,6 +379,11 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
     evt push-fail "$id" "feat/$id local-only after 3 push attempts"
   fi
   evt handoff "$id"
+  if [ -n "$hold" ]; then
+    fm_stamp held yes "$BOARD/review/$id.md"
+    printf -- '- held at handoff: waits in review/ for a yes — then: bash ops/polaris land %s\n' "$id" >> "$BOARD/review/$id.md"
+    evt hold "$id"
+  fi
   # away.md § 4: the owner approved the plan and left — the plan's yes is the yes. Recorded here,
   # inside this mutex and this board commit, as the very entries `approve --plan` writes; plan_covers
   # (unedited) then passes for every caller downstream. Here, an unbound slug, a hand entry on the
@@ -398,6 +408,10 @@ cmd_handoff() { # handoff [ID] [--saw "<text>"] [--no-before "<why>"]
   say "$id → review/. Lock stays until the Integrator lands it. Session may close."
   [ -z "$awayl" ] || printf '%s\n' "$awayl"
   [ "$pushed" -eq 0 ] && note "⚠ push failed ×3 — feat/$id is local-only; the board moved anyway and land merges the local branch"
+  if [ -n "$hold" ]; then
+    printf 'held: %s waits in review/ — nothing landed. After the yes: bash ops/polaris land %s, then bash ops/polaris seal\n' "$id" "$id"
+    return 0
+  fi
   case "$notice" in
     integrate) say "all lanes done — nothing left building. Integrate now: \"You are the INTEGRATOR. Land everything in ops/board/review/.\"";;
     queue)     note "$nrdy ready task(s) still queued — the board hands you the next step: bash ops/polaris next";;
@@ -666,8 +680,11 @@ $(_sl_scan ready active review)
 EOF
   fi
   [ "${nrdy:-0}" -eq 0 ] && [ "${nact:-0}" -eq 0 ] || return 1
+  # smooth.md § 5.3: a `held: yes` card waits for a typed land — it is never on its way to this wave.
+  local held; held="$nl$(grep -lE '^held:[[:space:]]*yes' "$BOARD/review/"*.md 2>/dev/null || true)$nl"
   for f in "$BOARD/review/"*.md; do
     [ -f "$f" ] || continue
+    case "$held" in *"$nl$f$nl"*) continue;; esac
     tid="$(fm_get id "$f" 2>/dev/null || true)"
     [ -n "$tid" ] && [ "$tid" != "$id" ] || continue
     case "$nl$skip" in *"$nl$tid$nl"*) continue;; esac
@@ -691,18 +708,21 @@ cmd_release() { # release <ID> [--to ready|blocked|backlog] [-m "note"]
   # --to backlog also parks a task that is UNCLAIMED in ready/ (ops/contracts/stay-on-request.md § 4):
   # no lock, no worktree — a leftover that collides with the run's request can be parked without
   # pretending to claim it first. ready|blocked keep the active/-only behaviour, unchanged.
-  if [ "$to" = "backlog" ] && [ -z "$(task_file "$id" active)" ]; then
+  # smooth.md § 5.2: --to blocked parks an unclaimed ready/ card exactly the same way (event `blocked`).
+  if [ "$to" != "ready" ] && [ -z "$(task_file "$id" active)" ]; then
     local rtf; rtf="$(task_file "$id" ready)" || die "$id is not in active/ or ready/"
     who
     mutex_on
-    mv "$BOARD/ready/$id.md" "$BOARD/backlog/$id.md"
-    set_fm owner null "$BOARD/backlog/$id.md"; set_fm status backlog "$BOARD/backlog/$id.md"
-    [ -n "$msg" ] && printf -- '- ⛔ released by %s: %s\n' "$WHO" "$msg" >> "$BOARD/backlog/$id.md"
-    evt release "$id" "→ backlog: $msg"
-    board_commit "chore(board): release $id → backlog"
+    mv "$BOARD/ready/$id.md" "$BOARD/$to/$id.md"
+    set_fm owner null "$BOARD/$to/$id.md"; set_fm status "$to" "$BOARD/$to/$id.md"
+    [ -n "$msg" ] && printf -- '- ⛔ released by %s: %s\n' "$WHO" "$msg" >> "$BOARD/$to/$id.md"
+    local uev="release"; [ "$to" = "blocked" ] && uev="blocked"
+    evt "$uev" "$id" "→ $to: $msg"
+    board_commit "chore(board): release $id → $to"
     sync_board
     mutex_off; trap - EXIT
-    say "$id → backlog/ · no lock or worktree held"
+    [ -d "$(wt_path "$id")" ] || _release_branch_gone "$id" || true
+    say "$id → $to/ · no lock or worktree held"
     return 0
   fi
   local tf; tf="$(task_file "$id" active)" || die "$id is not in active/"
@@ -736,7 +756,19 @@ cmd_release() { # release <ID> [--to ready|blocked|backlog] [-m "note"]
   wt_remove "$id" release || wrc=$?
   case "$wrc" in 0) wst=removed;; 2) wst=archived;; *) wst=LEFT;; esac
   lock_drop "$id"; [ "$CLAIM_MODE" = "claim-branch" ] && claim_branch_drop "$id"
-  say "$id → $to/ · lock released · worktree $wst (branch feat/$id kept)"
+  local bst="kept"
+  [ "$wrc" -eq 0 ] && _release_branch_gone "$id" && bst="removed — it held no commits"
+  say "$id → $to/ · lock released · worktree $wst (branch feat/$id $bst)"
+}
+
+_release_branch_gone() { # _release_branch_gone <ID> — smooth.md § 5.2: delete feat/<ID> when it exists, is
+  # checked out nowhere and holds no commits past $BASE. rc 0 only when it was removed; silent either way.
+  local b="feat/$1" n
+  git -C "$PRIMARY" show-ref --verify --quiet "refs/heads/$b" || return 1
+  git -C "$PRIMARY" worktree list --porcelain 2>/dev/null | grep -qxF "branch refs/heads/$b" && return 1
+  n="$(git -C "$PRIMARY" rev-list --count "$BASE..$b" 2>/dev/null)" || return 1
+  [ "$n" = "0" ] || return 1
+  git -C "$PRIMARY" branch -D "$b" >/dev/null 2>&1
 }
 
 fm_append_item() { # fm_append_item <field> <item> <taskfile> — THE append-only front-matter list
@@ -785,6 +817,11 @@ cmd_grant() { # grant <ID> <path> -m "why" — the SANCTIONED files_owned amendm
   # pat_overlap — refuses outright, and a refusal mutates NOTHING: no partial write, no commit.
   # RULES.tsv still binds inside granted paths: granting a danger zone does not make it writable
   # (the guard and verify check RULES independently of ownership).
+  # smooth.md § 5.1: FIRST, before the board is read — a card's own lane (a feat/* branch, or a folder
+  # inside a card worktree) never widens its own card. Builders return NEEDS PATH; the conductor grants.
+  local _gl; _gl="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  case "$_gl" in feat/*) ;; *) case "$PWD" in */.polaris/wt/*) _gl="$PWD";; *) _gl="";; esac;; esac
+  [ -z "$_gl" ] || die "grant refused on $_gl — a builder never widens its own card; return NEEDS PATH <path> — <why> and the conductor grants it from the primary checkout"
   local id="${1:-}" path="${2:-}" msg=""
   local u='usage: polaris grant <ID> <path> -m "why"'
   [ -n "$id" ] && [ -n "$path" ] || die "$u"
@@ -935,6 +972,12 @@ cmd_approve_plan() { # approve --plan <slug> -m "why" — ONE yes for every scop
   fi
   mutex_off; trap - EXIT
   say "approved plan $slug: $n scope(s) on $m task(s)"
+  # smooth.md § 5.4: the approved plan is this run's plan, so `drain: plan` takes its cards.
+  if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+    local pd; pd="$(next_dir)"
+    mkdir -p "$pd" && printf '%s\n' "$slug" > "$pd/plan" \
+      && note "this run's plan is now $slug — drain: plan takes its cards"
+  fi
 }
 
 _approved_ensure() { # _approved_ensure <taskfile> — one-yes.md v1.1: a task with no `approved:` key in
@@ -1085,6 +1128,16 @@ cmd_pack() { # pack <ID> — the whole context for one task, in ONE call. Read-o
   printf 'PACK %s — %s\n' "$id" "$title"
   printf 'points %s · risk %s · column %s · tier %s\n' "${pts:-?}" "${risk:-normal}" "$(task_col "$id" 2>/dev/null || echo '?')" "$ptier"
   printf 'This is your whole context. You should not need to go hunting for more.\n'
+  # smooth.md § 1.4: what touches this card's files without being on it — FIRST, so a builder short a
+  # path says so in its first minute. _card_reach is T-313's (author.sh); until it is defined, or when
+  # it lists nothing, the section is omitted and every other pack stays byte-identical.
+  if command -v _card_reach >/dev/null 2>&1; then
+    local reach; reach="$(_card_reach "$f" 2>/dev/null || true)"
+    if [ -n "$reach" ]; then
+      printf '\nFILES THAT TOUCH YOURS — not on files_owned. One you will have to change → stop now: return NEEDS PATH <path> — <why> (BUILDER.md), not after the build\n'
+      printf '%s\n' "$reach" | awk -F'\t' 'NF >= 3 { printf "   %s — %s %s\n", $2, ($1 == "test" ? "names" : "uses"), $3 }'
+    fi
+  fi
 
   # 1. the task itself — Why becomes the commit body, acceptance boxes are the definition of done.
   pack_section "THE TASK  ($f)"
@@ -1342,8 +1395,8 @@ cmd_resume() { # resume [ID] — re-enter an already-claimed active task without
   if beat_live "$id" && [ "$lsid" != "${CLAUDE_CODE_SESSION_ID:--}" ]; then
     die "resume refused: .polaris/wt/$id is live (beat $(beat_age "$id")s ago) — another session is inside it. Takeover is explicit: rm \"$GCD/worktrees/$id/polaris-beat\" then re-run (or work from inside that worktree)"
   fi
-  # adopt + refresh the lock — all five lines (core.sh lock_take is the twin writer)
-  who; mkdir -p "$LOCKS/$id"; { date +%s; echo "$WHO"; echo "$id"; echo "${CLAUDE_CODE_SESSION_ID:--}"; echo "${CLAUDE_PID:--}"; } > "$LOCKS/$id/meta"
+  # adopt + refresh the lock — all five lines (core.sh lock_take is the twin writer) + line 6, the worktree
+  who; mkdir -p "$LOCKS/$id"; { date +%s; echo "$WHO"; echo "$id"; echo "${CLAUDE_CODE_SESSION_ID:--}"; echo "${CLAUDE_PID:--}"; wt_path "$id"; printf '\n'; } > "$LOCKS/$id/meta"
   local wt; wt="$(wt_path "$id")"
   if [ ! -d "$wt" ]; then
     note "worktree was gone — recreating it from feat/$id"

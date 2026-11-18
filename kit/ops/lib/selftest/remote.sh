@@ -745,8 +745,10 @@ files_owned:
     # waited for (its last entry's line) before anything else touches this fixture.
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache
     au_fh="$T/au-fhome"; au_fo="$T/au-fo"; rm -rf "$au_fh" "$au_fo" "$T/au-fo-s1" "$T/au-fo-s2"
-    mkdir -p "$au_fh" "$au_fo/repos" "$T/au-fo-s1/kit/ops" "$T/au-fo-s2/kit/ops"
+    # (a self-hosting repo carries its own ops/VERSION: since 6.19.0 the walk drops an entry without one)
+    mkdir -p "$au_fh" "$au_fo/repos" "$T/au-fo-s1/kit/ops" "$T/au-fo-s2/kit/ops" "$T/au-fo-s1/ops" "$T/au-fo-s2/ops"
     : > "$T/au-fo-s1/kit/ops/pack.py"; : > "$T/au-fo-s2/kit/ops/pack.py"
+    cp ops/VERSION "$T/au-fo-s1/ops/VERSION"; cp ops/VERSION "$T/au-fo-s2/ops/VERSION"
     printf '%s\n' "$au_mp"       > "$au_fo/repos/0-me"
     printf '%s\n' "$T/au-fo-s1"  > "$au_fo/repos/a-self1"
     printf '%s\n' "$T/au-fo-s2"  > "$au_fo/repos/b-self2"
@@ -822,7 +824,8 @@ AUGIT
     # (6) --all over a temp registry holding this fixture, a gone path and a self-hosting repo
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache
     au_home="$T/au-awake"; rm -rf "$au_home" "$T/au-self" "$T/au-gone"
-    mkdir -p "$au_home/repos" "$T/au-self/kit/ops"; : > "$T/au-self/kit/ops/pack.py"
+    mkdir -p "$au_home/repos" "$T/au-self/kit/ops" "$T/au-self/ops"; : > "$T/au-self/kit/ops/pack.py"
+    cp ops/VERSION "$T/au-self/ops/VERSION"
     printf '%s\n' "$au_mp"      > "$au_home/repos/1-fixture"
     printf '%s\n' "$T/au-gone"  > "$au_home/repos/2-gone"
     printf '%s\n' "$T/au-self"  > "$au_home/repos/3-self"
@@ -850,6 +853,12 @@ AUGIT
     grep -q 'unknown flag --auto' "$T/au6b.out" "$T/au6b.err" && { cat "$T/au6b.out" "$T/au6b.err"; echo "AUTOUPDATE (6b) STUB RAN FAIL (the target's own ops/polaris must never be invoked)"; exit 1; }
     grep -qxF "$au_mp: ✅ POLARIS updated 0.0.1 → 0.0.2 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting" "$T/au6b.out" \
       || { cat "$T/au6b.out"; echo "AUTOUPDATE (6b) PREFIX FAIL (the fixture's ✅ line under its path prefix)"; exit 1; }
+    # (6)'s apply ran install.sh, which registered this fixture a second time under its own entry name.
+    # Until 6.19.0 the walk visited it twice (a stray `⚠ … failed` line for the second visit); now the
+    # second entry is the same project, said once and removed (smooth.md § 6), and the fixture is updated once.
+    grep -q ': same project as .* — registry entry removed$' "$T/au6b.out" \
+      || { cat "$T/au6b.out"; ls "$au_home/repos"; echo "AUTOUPDATE (6b) SAME-PROJECT FAIL (the entry install.sh wrote is the fixture again: one line, removed)"; exit 1; }
+    grep -q '⚠ auto-update' "$T/au6b.out" && { cat "$T/au6b.out"; echo "AUTOUPDATE (6b) TWICE FAIL (the fixture must be visited once)"; exit 1; }
     # (6c) a MAJOR on the channel: --all asks (the v1 line under the prefix) and leaves 0.0.1;
     # --all --major is the human's recorded yes and applies (the tarball's version, the ✅ line).
     git reset -q --hard "$au_base"; rm -f .polaris/update-cache .polaris/update.log

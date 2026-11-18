@@ -62,23 +62,41 @@ cmd_triage() { # triage [<ID…>] — print the LANE this board's work belongs i
     fi
     if [ -n "$hmk" ] && [ ! -e "$hmk" ]; then
       cr="$(printf '\r')"
-      if [ -f "$td" ]; then
-        IFS="$POLARIS_TAB" read -r hsha hv hmsg hk < "$td" || true
-        hsha="${hsha%$cr}"; hv="${hv%$cr}"; hk="${hk%$cr}"
-        if [ "$hv" = 0 ] && [ -n "$hsha" ] && [ -n "$hk" ] \
-          && [ "$hsha" = "${tsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then
-          tdue="$hk"
+      # smooth.md § 5.6: a cache naming another commit is stale, not "nothing due" — on a quiet board
+      # (board_quiescent inflight) with nothing due, ONE refresh (hops --due, then tune) and one more
+      # read by the same rules. `hst` = a cache is stale · `hrf` = refreshed already.
+      local hst hrf=0
+      while :; do
+        hst=""; tdue=""; hsha=""; hv=""; hmsg=""; hk=""
+        if [ -f "$td" ]; then
+          IFS="$POLARIS_TAB" read -r hsha hv hmsg hk < "$td" || true
+          hsha="${hsha%$cr}"; hv="${hv%$cr}"; hk="${hk%$cr}"
+          if [ "$hv" = 0 ] && [ -n "$hsha" ] && [ -n "$hk" ] \
+            && [ "$hsha" = "${tsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then
+            tdue="$hk"
+          elif [ "$hrf" -eq 0 ] && [ -n "${tsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ] \
+            && [ "$hsha" != "$tsha" ]; then
+            hst=1
+          fi
         fi
-      fi
-      if [ -z "$tdue" ] && [ -f "$hd" ]; then
-        hsha=""; hv=""; hmsg=""
-        IFS="$POLARIS_TAB" read -r hsha hv hmsg < "$hd" || true
-        hsha="${hsha%$cr}"; hv="${hv%$cr}"; hmsg="${hmsg%$cr}"
-        if [ "$hv" = 0 ] && [ "$(cfg hops on)" != off ] && [ -n "$hsha" ] \
-          && [ "$hsha" = "${tsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then
-          tdue="${hmsg#layout pass due — }"
+        if [ -z "$tdue" ] && [ -f "$hd" ]; then
+          hsha=""; hv=""; hmsg=""
+          IFS="$POLARIS_TAB" read -r hsha hv hmsg < "$hd" || true
+          hsha="${hsha%$cr}"; hv="${hv%$cr}"; hmsg="${hmsg%$cr}"
+          if [ "$hv" = 0 ] && [ "$(cfg hops on)" != off ] && [ -n "$hsha" ] \
+            && [ "$hsha" = "${tsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ]; then
+            tdue="${hmsg#layout pass due — }"
+          elif [ "$hrf" -eq 0 ] && [ -z "$hst" ] \
+            && [ -n "${tsha:=$(git -C "$PRIMARY" rev-parse --verify -q "$BASE" 2>/dev/null)}" ] \
+            && [ "$hsha" != "$tsha" ] && [ "$(cfg hops on)" != off ]; then
+            hst=1
+          fi
         fi
-      fi
+        [ -z "$tdue" ] && [ -n "$hst" ] && board_quiescent inflight || break
+        hrf=1
+        "$SELF" hops --due >/dev/null 2>&1 || true
+        "$SELF" tune >/dev/null 2>&1 || true
+      done
       if [ -n "$tdue" ] && board_quiescent inflight; then
         mkdir -p "${hmk%/tidy}" 2>/dev/null || true
         date +%s 2>/dev/null > "$hmk" || true

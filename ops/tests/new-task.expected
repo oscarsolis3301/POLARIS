@@ -59,7 +59,7 @@ T-052 backlog — waits on T-050 (ready)
 rc=0 stderr=[]
 chore(board): new T-051 T-050 T-052
 == 4. refusals
-no-argument: rc=1 ⛔ usage: polaris new <draft.md> [<draft.md>…] | stdout empty | ref unmoved
+no-argument: rc=1 ⛔ usage: polaris new [--retire <map>] <draft.md> [<draft.md>…] | stdout empty | ref unmoved
 no-such-file: rc=1 ⛔ new: .polaris/drafts/missing.md: no such file | stdout empty | ref unmoved
 in-the-board: rc=1 ⛔ new: ops/board/ready/T-010.md: is inside ops/board/ — a draft lives outside the board | stdout empty | ref unmoved
 no-frontmatter: rc=1 ⛔ new: .polaris/drafts/nofm.md: no frontmatter — the first line must be --- | stdout empty | ref unmoved
@@ -77,6 +77,8 @@ steps-none: rc=1 ⛔ new: .polaris/drafts/ns13.md: steps: a card over 5 points l
 steps-sum: rc=1 ⛔ new: .polaris/drafts/s12.md: steps: steps add up to 12, points: says 13 | stdout empty | ref unmoved
 steps-big: rc=1 ⛔ new: .polaris/drafts/s8.md: steps: step 2 is not "<points 1-5> <what>" | stdout empty | ref unmoved
 points-21: rc=1 ⛔ new: .polaris/drafts/p21.md: points: must be 1-5, or up to 13 with steps: (got 21) — split anything bigger | stdout empty | ref unmoved
+cycle: rc=1 ⛔ new: depends_on cycle among the drafts: T-080 → T-081 → T-080 | stdout empty | ref unmoved
+retire-unknown: rc=1 ⛔ retire refused: T-404 is no task on the board | stdout empty | ref unmoved
 feat-worktree: rc=1 ⛔ new: run it from the primary checkout — a builder never files work for itself | stdout empty | ref unmoved
 board files after the refusals: identical
 == 5. the plan bind
@@ -104,6 +106,51 @@ status: ready
 event new ready 13
    advisory: orphan branch feat/T-099 — no task in any column (may hold unmerged work; never auto-cleared)
 ✅ drift: board clean (overlap · ready gate · cruft · stale refs · doc overflow · telemetry · deps)
+== 7. a card owns its tests and guides (ops/contracts/smooth.md § 1.1)
+T-057 ready — nothing to wait for
+   T-057: owns tests/core.* too — ops/SURFACES.tsv maps lib/core.sh to it
+   T-057: owns lib/CLAUDE.md too — the guide of a folder it changes
+T-058 backlog — waits on T-057 (ready, shares lib/CLAUDE.md)
+   T-058: owns lib/CLAUDE.md too — the guide of a folder it changes
+T-057 files_owned:
+  - lib/core.sh
+  - tests/core.*
+  - lib/CLAUDE.md
+T-058 files_owned:
+  - lib/other.sh
+  - lib/CLAUDE.md
+T-059 backlog — waits on T-057 (ready, shares lib/)
+T-059 files_owned:
+  - lib/
+  - tests/core.*
+  - NOTES.md
+== 8. what touches a card's files (smooth.md § 1.2-1.3)
+T-060 ready — nothing to wait for
+files that touch these cards' files and are not on files_owned — a builder that must change one returns NEEDS PATH in its first minute:
+   T-060: 26 test files name omega
+   T-060: tests/test_alpha.py names alpha
+   T-060: src/gamma.py uses alpha.py
+files_owned:
+  - src/alpha.py
+replaces: [omega]
+== 9. drafts sort themselves (smooth.md § 2.3)
+T-071 ready — nothing to wait for
+T-072 backlog — waits on T-071 (ready)
+rc=0 stderr=[]
+chore(board): new T-071 T-072
+== 10. new --retire (smooth.md § 2.3)
+retired T-071 → T-090
+   1 dependent(s) rewired
+T-090 ready — nothing to wait for
+T-091 backlog — waits on T-090 (ready)
+rc=0 stderr=[]
+chore(board): new T-090 T-091 · retire T-071
+retired/T-071: id: T-071|depends_on: []|status: retired|
+backlog/T-072: id: T-072|depends_on: [T-090]|status: backlog|
+ready/T-090: id: T-090|depends_on: []|status: ready|
+backlog/T-091: id: T-091|depends_on: [T-090]|status: backlog|
+retired_by: T-090
+- retired: by T-090 — filed in its place by new --retire
 == over every call
 drafts changed: 0
 SPRINT.md untouched

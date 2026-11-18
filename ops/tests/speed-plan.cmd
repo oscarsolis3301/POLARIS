@@ -58,3 +58,15 @@ echo "non-numeric-target:"; bash "$KIT" speed --plan hour 2>&1 | sed -n 3p
 mv ops/board/EVENTS.ndjson "$FIX/events.bak"
 echo "no-history:"; bash "$KIT" speed --plan hour 2>&1; echo "  rc=$?"
 mv "$FIX/events.bak" ops/board/EVENTS.ndjson
+# smooth.md § 7: a chain card (points over 5) builds for round(B x (1 + (points - 5) / 8)) — 13 points is
+# twice a card — and the critical path is WEIGHTED, (card build + land) summed along depends_on, so
+# minutes = max(that path, ceil(C / L) x (B + D)). Under 5 points every card is B: the lines above hold.
+printf -- '---\nid: T-14\npoints: 13   # a chain card\ndepends_on: [T-3]\n---\n' > "$FIX/d3.md"
+echo "chain-card:"; bash "$KIT" speed --plan hour "$FIX/d3.md" 2>&1; echo "  rc=$?"
+# the release checks: one whole suite per wave check plus the finish, from .polaris/last-suite-seconds
+# (300 s → 5 min); no number there → no lines
+mkdir -p .polaris; printf 'soon 123\n' > .polaris/last-suite-seconds
+echo "suite-not-a-number: release-checks lines $(bash "$KIT" speed --plan hour 2>&1 | grep -c -e '^release checks' -e '^with the release checks')"
+printf '300 123\n' > .polaris/last-suite-seconds
+echo "release-checks:"; bash "$KIT" speed --plan hour 2>&1; echo "  rc=$?"
+echo "release-checks-and-a-chain-card:"; bash "$KIT" speed --plan hour "$FIX/d3.md" 2>&1 | sed -n '3,$p'

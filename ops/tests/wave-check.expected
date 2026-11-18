@@ -1,0 +1,73 @@
+== a. test: unset — the seal says nothing new
+seal rc=0
+✅ sprint 1 sealed
+wave check lines: 0
+stamp: none
+== b. a mapped test goes red — the wave stays open and names its card
+seal rc=1
+⛔ wave check red — integrate/<date> stays open: bash t/rows.sh tests/m.*
+     the m part is bad
+   cards: T-2
+   fix: file a fix card for them (it lands on this wave), then: bash ops/polaris seal
+on: main · wave: open · rows ran: 1 · whole ran: 0
+wave-red events: 1 · board: chore(board): wave check red integrate/<date> — T-2
+stamp: none
+== c. the fix card lands on the same wave — green, sealed, stamped
+seal rc=0
+✅ wave check — 1 command(s) green (rows: 1)
+✅ sprint 1 re-sealed
+wave: merged · rows ran: 2 · whole ran: 0
+stamp: 3 fields · tip is the wave that merged · last whole green none · pending T-2,T-3
+== d. a re-seal of the same tip skips the check
+seal rc=1
+⛔ merge conflict sealing integrate/<date> into main
+seal rc=0
+✅ wave check — already green at <sha>
+✅ sprint 1 re-sealed
+rows ran: 3
+== e. an unmapped path runs test: verbatim, once
+seal rc=0
+✅ wave check — 1 command(s) green (rows: 0, whole test:)
+✅ sprint 1 re-sealed
+rows ran: 3 · whole ran: 1
+stamp: 3 fields · tip is the wave that merged · last whole green recorded · pending -
+== f. inside the window — the rows still run, the whole test: waits
+seal rc=0
+   wave check: whole test: not due — last green <m> min ago; it runs at the first seal after <k> more min (wave_check: 60)
+✅ wave check — 1 command(s) green (rows: 1)
+✅ sprint 1 re-sealed
+the two numbers add up to the window: yes
+rows ran: 4 · whole ran: 1
+stamp: 3 fields · tip is the wave that merged · last whole green recorded · pending T-6
+== g. past the window (the stamp moved back an hour) — the whole test: runs, a red names every card since its last green
+seal rc=1
+⛔ wave check red — integrate/<date> stays open: bash t/whole.sh
+     something is bad
+   cards: T-6, T-7
+   fix: file a fix card for them (it lands on this wave), then: bash ops/polaris seal
+on: main · wave: open · whole ran: 2
+seal rc=0
+✅ wave check — 1 command(s) green (rows: 0, whole test:)
+✅ sprint 1 re-sealed
+whole ran: 3
+stamp: 3 fields · tip is the wave that merged · last whole green recorded · pending -
+== h. wave_check: 0 — the whole test: at every seal
+seal rc=0
+✅ wave check — 1 command(s) green (rows: 0, whole test:)
+✅ sprint 1 re-sealed
+whole ran: 4
+== i. wave_check: off — never at a seal, the rows still do
+seal rc=0
+   wave check: whole test: off at the seal (wave_check: off) — finish runs it
+✅ wave check — 1 command(s) green (rows: 1)
+✅ sprint 1 re-sealed
+rows ran: 5 · whole ran: 4
+== j. seal --no-check — refused on a feat branch and without a why; with both it records the why
+⛔ seal --no-check refused on feat/T-99 — run it from the primary checkout
+rc=1
+⛔ seal --no-check needs -m "why" — the reason the wave check was skipped goes on the record
+rc=1
+seal rc=0
+   wave check: skipped by hand — the runner is broken
+✅ sprint 1 re-sealed
+rows ran: 5 · skipped events: 1 · its why: the runner is broken

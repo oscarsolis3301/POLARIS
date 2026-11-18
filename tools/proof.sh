@@ -36,13 +36,15 @@ job_state() {
   "$GH" run view "$1" --json jobs --jq ".jobs[] | select(.name==\"$2\") | \"\(.status) \(.conclusion)\"" 2>/dev/null | tr -d '\r' | head -1
 }
 
-# await_job <id> <job>: 0 green · 1 red · 3 no answer in time
+# await_job <id> <job>: 0 green · 1 red · 3 no answer in time · 4 cancelled (smooth.md § 8: GitHub
+# cancels a job that sat in its queue too long — no step ran, so it is no answer, never a red)
 await_job() {
   local st end=$((SECONDS + JOB_MAX))
   while :; do
     st="$(job_state "$1" "$2")"
     case "$st" in
       "completed success") return 0;;
+      "completed cancelled") return 4;;
       completed*) return 1;;
     esac
     [ "$SECONDS" -ge "$end" ] && return 3
@@ -59,13 +61,40 @@ recorded_id() {
   printf '%s\n' "$i"
 }
 
+# _push_run: the newest run of this commit that a PUSH started (under `push: end` it exists as soon as
+# `finish` returns), or nothing
+_push_run() {
+  local id
+  id="$("$GH" run list --workflow ci.yml --commit "$sha" --event push --json databaseId --jq '.[0].databaseId' 2>/dev/null | tr -d ' \r\n')"
+  case "$id" in ''|null|*[!0-9]*) return 1;; esac
+  printf '%s\n' "$id"
+}
+
+# _await_or_push <id> <job>: await_job, and a cancelled job falls back to the push run of the same commit.
+# Prints the cancelled / waiting / no-push-run lines; sets AWAITED to the run it answered from. rc as
+# await_job, except: cancelled with no other push run → 3 (no answer), never 1.
+_await_or_push() {
+  local r p
+  AWAITED="$1"
+  await_job "$1" "$2"; r=$?
+  [ "$r" -eq 4 ] || return "$r"
+  echo "proof: $2 — cancelled — no answer"
+  if ! p="$(_push_run)" || [ "$p" = "$1" ]; then echo "proof: $2 — no push run of $s7 yet"; return 5; fi
+  echo "proof: $2 — waiting on the push run $p of $s7"
+  AWAITED="$p"
+  await_job "$p" "$2"; r=$?
+  [ "$r" -eq 4 ] && { echo "proof: $2 — cancelled — no answer"; return 5; }
+  return "$r"
+}
+
 no_record() { echo "⛔ proof: no recorded run for $s7 — run tools/proof.sh first"; exit 1; }
 
 case "${1:-}" in
   --await)
     job="${2:-}"; [ -n "$job" ] || { echo "usage: bash tools/proof.sh [--await <job> | --report]"; exit 2; }
     id="$(recorded_id)" || no_record
-    await_job "$id" "$job"; r=$?
+    _await_or_push "$id" "$job"; r=$?
+    [ "$r" -eq 5 ] && exit 3
     if [ "$r" -eq 0 ]; then echo "proof: $job — green"; exit 0; fi
     if [ "$r" -eq 1 ]; then echo "proof: $job — RED"; exit 1; fi
     echo "proof: $job — no answer after 20 minutes"; exit 1;;
@@ -162,15 +191,17 @@ if [ -n "$why" ]; then
   if [ "$(cat "$TMP/selftest.rc" 2>/dev/null)" = "0" ]; then echo "proof: self-test — green"
   else ok=0; echo "proof: self-test — RED"; tail -n 40 "$TMP/selftest.out"; fi
 else
-  await_job "$id" ubuntu-latest; r=$?
+  _await_or_push "$id" ubuntu-latest; r=$?
   if [ "$r" -eq 0 ]; then echo "proof: linux — green"
   elif [ "$r" -eq 1 ]; then
     ok=0; echo "proof: linux — RED"
-    "$GH" run view "$id" --log-failed 2>/dev/null | tail -n 40
+    "$GH" run view "$AWAITED" --log-failed 2>/dev/null | tail -n 40
+  elif [ "$r" -eq 5 ]; then noans=1
   else ok=0; echo "proof: linux — no answer after 20 minutes"; fi
   mkdir -p .polaris
-  echo "$sha $id" > "$STATE"
+  echo "$sha $AWAITED" > "$STATE"
 fi
 
+if [ "$ok" -eq 1 ] && [ "${noans:-0}" = 1 ]; then echo "⏸ proof: $s7 — CI gave no answer yet"; exit 3; fi
 if [ "$ok" -eq 1 ]; then echo "✅ proof: $s7 green"; exit 0; fi
 echo "⛔ proof: $s7 red"; exit 1

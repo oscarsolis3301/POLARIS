@@ -10,7 +10,7 @@
 #      (`Fix #12` reads `Fix`, as it always has), and a `#` inside a word stays (`Fix#12`,
 #      `src/issue#12.txt`)
 #   4. a CRLF copy of the same file reads the same, line for line
-#   5. the real TASK.md, copied untouched: no files_owned, surface, verify, approved or context_files
+#   5. the real TASK.md, copied untouched: no files_owned, replaces, surface, verify, approved or context_files
 #      items, and an empty contract
 # Every reader call is a fork, so a list is joined by parameter expansion, not a pipe through tr.
 . kit/ops/lib/core.sh
@@ -37,5 +37,5 @@ cat "$F/lf.out"
 echo "== 4. CRLF"
 cmp -s "$F/lf.out" "$F/crlf.out" && echo "the CRLF copy reads the same: yes" || echo "the CRLF copy reads the same: NO"
 echo "== 5. the real TASK.md, untouched"
-for k in files_owned surface verify approved context_files; do l "$k" "$F/TASK.md"; done
+for k in files_owned replaces surface verify approved context_files; do l "$k" "$F/TASK.md"; done
 g contract "$F/TASK.md"

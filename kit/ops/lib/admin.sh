@@ -137,9 +137,11 @@ update_latest() { # update_latest [force] — print the newest version on the ch
       latest="$(curl -fsS --max-time 5 "$chan" 2>/dev/null | sed -n 's/^version: *//p' | head -1 | tr -d ' \r' || true)"
     case "$latest" in ''|*[!0-9.]*) latest="$prev";; esac   # unreachable or junk → keep what we knew
     mkdir -p "$PRIMARY/.polaris" 2>/dev/null || return 0
+    # `epoch:` (smooth.md § 6) is WHEN the channel was asked, so `update --auto` can tell a same-day
+    # "up to date" written an hour before a release from one written a minute ago. Readers ignore it.
     { printf 'checked: %s\n' "$today"
       [ -n "$latest" ] && printf 'latest: %s\n' "$latest"
-      true
+      printf 'epoch: %s\n' "$(date +%s)"
     } > "$cache" 2>/dev/null || return 0
   else
     latest="$prev"
@@ -454,7 +456,12 @@ _speed_plan() { # _speed_plan <slug> [<draft.md>…] — hour.md § 5: the price
     for f in "$BOARD/$col"/*.md; do [ -f "$f" ] && { set -- "$f" "$@"; nf=$((nf+1)); }; done
   done
   [ "$nf" -gt 0 ] || { printf 'speed --plan %s: no cards carry plan: %s\n' "$slug" "$slug"; return 1; }
-  awk -v slug="$slug" -v ev="$ev" -v M="$tm" -v q="'" '
+  # the release checks (smooth.md § 7): one whole suite per wave check plus the finish, priced from the
+  # last whole suite on record; nothing on record → no release-checks lines
+  local ss=""
+  [ -f "$PRIMARY/.polaris/last-suite-seconds" ] && ss="$(cut -d' ' -f1 < "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null | tr -d ' \r')"
+  case "$ss" in ''|*[!0-9]*) ss=0;; esac
+  awk -v slug="$slug" -v ev="$ev" -v M="$tm" -v q="'" -v SS="$ss" '
     function val(s,   c) {
       sub(/[ \t]#.*$/, "", s); sub(/^[ \t]*/, "", s); sub(/[ \t\r]*$/, "", s)
       c = substr(s, 1, 1)
@@ -469,11 +476,21 @@ _speed_plan() { # _speed_plan <slug> [<draft.md>…] — hour.md § 5: the price
     function flush(   u) {   # (a dummy local keeps the API index from reading an awk helper as a shell fn)
       if (!open_) return
       if (cdraft || cplan == slug) {
-        nc++; dep[nc] = cdeps
+        nc++; dep[nc] = cdeps; pts[nc] = cpts
         if (cid != "" && !(cid in at)) at[cid] = nc
       }
       open_ = 0
     }
+    function wdepth(i,   k, p, j, d, x) {   # the WEIGHTED chain: (card build + land) summed along depends_on
+      if (i in wmemo) return wmemo[i]
+      if (i in wseen) return 0
+      wseen[i] = 1; d = 0
+      k = split(dep[i], p, " ")
+      for (j = 1; j <= k; j++) if (p[j] in at) { x = wdepth(at[p[j]]); if (x > d) d = x }
+      wmemo[i] = d + bm[i] + Dl
+      return wmemo[i]
+    }
+    function fmt(m,   x) { if (m < 90) return m " min"; x = int(m / 6 + 0.5); return int(x / 10) "." (x % 10) " h" }
     function depth(i,   k, p, j, d, x) {   # longest depends_on chain from card i, inside the set
       if (i in memo) return memo[i]
       if (i in seen) return 0               # a cycle adds nothing; drift reports cycles
@@ -483,13 +500,14 @@ _speed_plan() { # _speed_plan <slug> [<draft.md>…] — hour.md § 5: the price
       memo[i] = d + 1
       return d + 1
     }
-    FNR == 1 { flush(); open_ = 1; cdraft = draft + 0; cid = ""; cplan = ""; cdeps = ""; fs = 0; inl = 0 }
+    FNR == 1 { flush(); open_ = 1; cdraft = draft + 0; cid = ""; cplan = ""; cdeps = ""; cpts = 0; fs = 0; inl = 0 }
     /^---[\r]?$/ { fs++; inl = 0; next }
     fs != 1 { next }
     inl && /^[ \t]+-/ { s = $0; sub(/^[ \t]+-[ \t]*/, "", s); adddeps(s); next }
     { inl = 0 }
     /^id:/ { cid = val(substr($0, 4)); next }
     /^plan:/ { cplan = val(substr($0, 6)); next }
+    /^points:/ { cpts = val(substr($0, 8)) + 0; next }
     /^depends_on:/ { inl = 1; adddeps(substr($0, 12)); next }
     END {
       flush()
@@ -502,13 +520,25 @@ _speed_plan() { # _speed_plan <slug> [<draft.md>…] — hour.md § 5: the price
       else if (ne >= 8) { B = e[1] + 0; src = "this project" q "s medians" }
       else { B = 30; src = "no history here yet — kit defaults" }
       Dl = (ne >= 8) ? e[2] + 0 : 15
-      waves = int((nc + L - 1) / L); if (W > waves) waves = W
-      mins = waves * (B + Dl)
-      if (mins < 90) T = mins " min"
-      else { x = int(mins / 6 + 0.5); T = int(x / 10) "." (x % 10) " h" }
+      # a chain card (smooth.md § 7) builds from its points: B up to 5, then B x (1 + (points - 5) / 8)
+      kc = 0; bp = 0; bc = 0
+      for (i = 1; i <= nc; i++) {
+        bm[i] = (pts[i] <= 5) ? B : int(B * (1 + (pts[i] - 5) / 8) + 0.5)
+        if (pts[i] > 5) { kc++; if (pts[i] > bp) { bp = pts[i]; bc = bm[i] } }
+      }
+      P = 0; for (i = 1; i <= nc; i++) { x = wdepth(i); if (x > P) P = x }
+      mins = int((nc + L - 1) / L) * (B + Dl); if (P > mins) mins = P
+      T = fmt(mins)
       printf "plan %s: %d cards · %d waves on the critical path · %d lanes\n", slug, nc, W, L
       printf "each card: about %d min to build + %d min to land (%s)\n", B, Dl, src
+      if (kc > 0) printf "chain cards: %d priced from their points (largest: %d points, about %d min to build)\n", kc, bp, bc
       printf "projected: about %s (target %d min)\n", T, M
+      if (SS + 0 > 0) {
+        s = int(SS / 60 + 0.5); if (s < 1) s = 1
+        r = (W + 1) * s
+        printf "release checks: about %d min more — %d wave check(s) and the finish check at about %d min each (the last whole suite)\n", r, W, s
+        printf "with the release checks: about %s\n", fmt(mins + r)
+      }
       if (mins > M) print "over the target — re-cut once: merge each chain into one card with steps:, fold riders into the card that causes them; still over, it runs as one release and this projection is shown before approval"
     }' "$@"
 }
@@ -684,6 +714,9 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   # inside: a path dirty before the update is never the update's to commit.
   local sc_pre sc_why="" sc_gd sc_new sc_k
   sc_pre="$(git -C "$PRIMARY" -c core.quotePath=false status --porcelain 2>/dev/null || true)"
+  # The kit's own pending update (smooth.md § 6): files an earlier uncommitted update wrote, still
+  # byte for byte what it wrote, are not anybody's edits — they neither park nor fence the commit.
+  [ -n "$sc_pre" ] && [ -s "$PRIMARY/.polaris/kit-pending" ] && sc_pre="$(printf '%s\n' "$sc_pre" | _kit_pending_drop)"
   sc_gd="$(git -C "$PRIMARY" rev-parse --absolute-git-dir 2>/dev/null || true)"
   if [ "$(git -C "$PRIMARY" symbolic-ref -q --short HEAD 2>/dev/null || true)" != "$BASE" ]; then
     sc_why="not on $BASE"
@@ -742,6 +775,9 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   # POLARIS_UPDATE_HINTS=1 is what 6.12-6.17 installers read as "this updater prints the line itself".
   # From 6.18.0 install.sh asks the admin.sh it ran from instead: one that reads tune-due (this one,
   # through the update_hops_hint call at the end of this function) keeps it quiet (tune.md § 6).
+  # what is dirty just before the install, file by file — the record below keeps only what the install adds
+  local kp_pre
+  kp_pre="$(git -C "$PRIMARY" -c core.quotePath=false status --porcelain -uall 2>/dev/null | _kit_pending_drop)"
   POLARIS_SHA="$sha" POLARIS_UPDATE_HINTS=1 bash "$K/ops/install.sh" "$PRIMARY" || die "install failed — repo untouched except where noted above"
 
   # AFTER the install, so `ver` reads the NEW VERSION (and its zip: URL), and before $T is gone.
@@ -844,7 +880,9 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
     "$SELF" hops --due >/dev/null 2>&1 || true
     "$SELF" tune >/dev/null 2>&1 || true
     note "committed for you: chore(polaris): POLARIS $cur → $sc_new — $sc_k files, not pushed"
+    rm -f "$PRIMARY/.polaris/kit-pending"
   else
+    _kit_pending_write "$kp_pre"
     note "review the diff, then commit ops/ — nothing was committed for you"
     if [ -n "$sc_why" ]; then note "not committed: $sc_why"
     elif [ -n "$sc_err" ]; then note "not committed: $sc_err"; fi
@@ -966,19 +1004,119 @@ update_dirt_overlaps_kit() { # stdin = `git status --porcelain`; rc 0 = some dir
   # Any other dirty path is the human's work, outside the footprint, and must never block an update.
   # ops/LAYOUT.tsv (6.12.0, save-hops.md § 0.4) is the layout pass's record of what it kept or moved:
   # owner state exactly like RULES.tsv — install and update never write it, so its dirt is never the kit's.
+  [ -n "$(_kit_footprint_paths)" ]
+}
+
+_kit_footprint_paths() { # stdin = `git status --porcelain`; prints the path of every line inside the kit's footprint
+  # update_dirt_overlaps_kit's one list, so the pending-update record (smooth.md § 6) and the dirt rule
+  # can never disagree about which paths are the kit's.
   local line p cr; cr="$(printf '\r')"
   while IFS= read -r line; do
+    [ -n "$line" ] || continue
     p="${line#???}"; p="${p%$cr}"
     case "$p" in *' -> '*) p="${p##* -> }";; esac
     case "$p" in \"*\") p="${p#\"}"; p="${p%\"}";; esac   # git quotes paths with odd bytes
     case "$p" in
       ops/board/*|ops/contracts/*|ops/CONVENTIONS.md|ops/MAP.md|ops/SPRINT.md|ops/RULES.tsv|ops/LAYOUT.tsv|ops/ROADMAP.md|ops/tests/*) ;;
-      ops/*) return 0;;
-      .claude/settings.json|.claude/skills/polaris/*|.claude/skills/i-have-adhd/*|.claude/output-styles/polaris.md) return 0;;
-      CLAUDE.md|.gitignore|.gitattributes) return 0;;
+      ops/*|.claude/settings.json|.claude/skills/polaris/*|.claude/skills/i-have-adhd/*|.claude/output-styles/polaris.md) printf '%s\n' "$p";;
+      CLAUDE.md|.gitignore|.gitattributes) printf '%s\n' "$p";;
     esac
   done
-  return 1
+  return 0
+}
+
+# ---- the kit's own pending update (smooth.md § 6) ------------------------------------------------
+# A `publish: pr` project never commits an update itself, so the files the update wrote sat there as
+# "uncommitted edits inside the kit" and held every later update (polaris-testbed sat on 6.17.0 that
+# way). .polaris/kit-pending records exactly what an uncommitted update wrote — one LF line
+# `<git hash-object, or - for a deleted path><TAB><path>`, LC_ALL=C sorted — and both dirt checks drop
+# a dirty path only while it still hashes the same: byte-equality, so a person's later edit to a kit
+# file is dirt again and holds the update exactly as before.
+
+_kit_pending_hashes() { # stdin = paths, one a line; prints `<path><TAB><hash or ->` for each, ONE git call
+  local p ex="" hs=""
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    [ -f "$PRIMARY/$p" ] && ex="$ex$p"$'\n'
+    printf '%s\n' "$p"
+  done > "${KP_TMP:?}"
+  if [ -n "$ex" ]; then
+    hs="$(printf '%s' "$ex" | git -C "$PRIMARY" hash-object --stdin-paths 2>/dev/null)" || hs=""
+    [ -n "$hs" ] || return 1      # cannot hash → the caller records nothing / drops nothing
+  fi
+  KP_EX="$ex" KP_HS="$hs" awk 'BEGIN { n = split(ENVIRON["KP_EX"], e, "\n"); split(ENVIRON["KP_HS"], h, "\n")
+      for (i = 1; i <= n; i++) if (e[i] != "") cur[e[i]] = h[i] }
+    { print $0 "\t" (($0 in cur) ? cur[$0] : "-") }' "$KP_TMP"
+}
+
+_kit_pending_drop() { # stdin = `git status --porcelain`; stdout = the same minus every line whose path
+  # .polaris/kit-pending records with the hash it has NOW (`-` = still deleted). A collapsed untracked
+  # folder (`?? d/`) goes only when every file in it is recorded so. No record → stdin unchanged.
+  local f="$PRIMARY/.polaris/kit-pending" in ok d dirs sub="" KP_TMP
+  in="$(cat)"
+  if [ ! -s "$f" ]; then [ -n "$in" ] && printf '%s\n' "$in"; return 0; fi
+  KP_TMP="$(mktemp)"
+  ok="$(awk -F'\t' '{ sub(/\r$/, "") } NF >= 2 { print $2 }' "$f" | _kit_pending_hashes)" || ok=""
+  # the recorded lines whose hash still matches → the paths that may be dropped
+  ok="$(KP_OK="$ok" awk -F'\t' 'BEGIN { n = split(ENVIRON["KP_OK"], a, "\n")
+      for (i = 1; i <= n; i++) { t = index(a[i], "\t"); if (t) cur[substr(a[i], 1, t - 1)] = substr(a[i], t + 1) } }
+    { sub(/\r$/, "") } NF >= 2 && ($2 in cur) && cur[$2] == $1 { print $2 }' "$f")"
+  rm -f "$KP_TMP"
+  # a collapsed untracked folder that holds a recorded path: its files, one status call per folder
+  dirs="$(printf '%s\n' "$in" | KP_OK="$ok" awk 'BEGIN { n = split(ENVIRON["KP_OK"], a, "\n") }
+    /^\?\? .*\/\r?$/ { d = substr($0, 4); sub(/\r$/, "", d)
+      for (i = 1; i <= n; i++) if (a[i] != "" && index(a[i], d) == 1) { print d; break } }')"
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    sub="$sub$(git -C "$PRIMARY" -c core.quotePath=false status --porcelain -uall -- "$d" 2>/dev/null)"$'\n'
+  done <<EOF
+$dirs
+EOF
+  printf '%s\n' "$in" | KP_OK="$ok" KP_SUB="$sub" awk '
+    function path(l) { l = substr(l, 4); sub(/\r$/, "", l); sub(/^.* -> /, "", l)
+                       if (l ~ /^".*"$/) l = substr(l, 2, length(l) - 2); return l }
+    BEGIN { n = split(ENVIRON["KP_OK"], a, "\n"); for (i = 1; i <= n; i++) if (a[i] != "") ok[a[i]] = 1
+            ns = split(ENVIRON["KP_SUB"], s, "\n") }
+    $0 == "" { next }
+    { p = path($0) }
+    p ~ /\/$/ && substr($0, 1, 2) == "??" {
+      k = 0; bad = 0
+      for (i = 1; i <= ns; i++) if (s[i] != "") { q = path(s[i]); if (index(q, p) == 1) { k++; if (!(q in ok)) bad = 1 } }
+      if (k > 0 && !bad) next
+      print; next }
+    !(p in ok) { print }'
+}
+
+_kit_pending_write() { # _kit_pending_write <`status --porcelain -uall` before the install, recorded paths dropped>
+  # After an install whose self-commit did not happen: every footprint path dirty now that was not
+  # dirty then, with the hash it has now, unioned with the previous record's lines whose path is still
+  # dirty AND still hashes the same. Nothing to record → no file. Never fails the update.
+  local f="$PRIMARY/.polaris/kit-pending" now cand out KP_TMP
+  now="$(git -C "$PRIMARY" -c core.quotePath=false status --porcelain -uall 2>/dev/null)" || { rm -f "$f"; return 0; }
+  # N<TAB>path = new this update · R<TAB>hash<TAB>path = only the old record names it
+  cand="$(printf '%s\n' "$now" | _kit_footprint_paths | KP_PRE="$1" KP_NOW="$now" KP_REC="$f" awk '
+    function path(l) { l = substr(l, 4); sub(/\r$/, "", l); sub(/^.* -> /, "", l)
+                       if (l ~ /^".*"$/) l = substr(l, 2, length(l) - 2); return l }
+    BEGIN { n = split(ENVIRON["KP_PRE"], a, "\n"); for (i = 1; i <= n; i++) if (a[i] != "") was[path(a[i])] = 1
+            n = split(ENVIRON["KP_NOW"], a, "\n"); for (i = 1; i <= n; i++) if (a[i] != "") dirty[path(a[i])] = 1 }
+    !($0 in was) && !($0 in seen) { seen[$0] = 1; print "N\t" $0 }
+    END { while ((getline l < ENVIRON["KP_REC"]) > 0) {
+            sub(/\r$/, "", l); t = index(l, "\t"); if (!t) continue
+            q = substr(l, t + 1); if ((q in dirty) && !(q in seen)) { seen[q] = 1; print "R\t" substr(l, 1, t - 1) "\t" q } } }')"
+  if [ -z "$cand" ]; then rm -f "$f"; return 0; fi
+  KP_TMP="$(mktemp)"
+  out="$(printf '%s\n' "$cand" | awk -F'\t' '{ print $NF }' | _kit_pending_hashes)" || out=""
+  rm -f "$KP_TMP"
+  if [ -z "$out" ]; then rm -f "$f"; return 0; fi
+  out="$(printf '%s\n' "$out" | KP_C="$cand" awk -F'\t' 'BEGIN { n = split(ENVIRON["KP_C"], a, "\n")
+      for (i = 1; i <= n; i++) { k = split(a[i], x, "\t"); if (x[1] == "R") old[x[3]] = x[2] } }
+    !($1 in old) || old[$1] == $2 { print $2 "\t" $1 }' | LC_ALL=C sort)"
+  if [ -n "$out" ]; then
+    { mkdir -p "$PRIMARY/.polaris" && printf '%s\n' "$out" > "$f"; } 2>/dev/null || true
+  else
+    rm -f "$f"
+  fi
+  return 0
 }
 
 update_hops_hint() { # update_hops_hint <explicit|auto> — the tune-up line an update ends with; n = 0 → rc 1, silent
@@ -1044,10 +1182,24 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionS
     *) printf '⚠ auto_update: %s is not on|off — treated as off\n' "$mode" >&2
        [ "$say_" = 1 ] && printf 'skipped: auto_update: %s (unknown — treated as off)\n' "$mode"; return 0;;
   esac
-  # 3. the channel, through the same daily-throttled cache the notice uses
+  # 3. the channel, through the same daily-throttled cache the notice uses — with two ways past the
+  #    throttle (smooth.md § 6): the registry walk (a typed `update --all`) sets POLARIS_UPDATE_FORCE=1,
+  #    so a person asking for updates is answered by the channel, never by this morning's cache; and a
+  #    same-day "up to date" (the cached latest IS the installed version) over an hour old is asked
+  #    again — 6.18.1 came out hours after 6.18.0 and two projects said "up to date" all day.
   cur="$(ver version 2>/dev/null || true)"
   [ -n "$cur" ] || { [ "$say_" = 1 ] && printf 'skipped: no ops/VERSION\n'; return 0; }
-  latest="$(update_latest)"
+  local uf="" uc="$PRIMARY/.polaris/update-cache" ue
+  if [ "${POLARIS_UPDATE_FORCE:-}" = 1 ]; then uf=force
+  elif [ -f "$uc" ] && [ "$(ver checked "$uc" 2>/dev/null || true)" = "$(date +%Y-%m-%d)" ] \
+       && [ "$(ver latest "$uc" 2>/dev/null || true)" = "$cur" ]; then
+    ue="$(ver epoch "$uc" 2>/dev/null || true)"
+    case "$ue" in
+      ''|*[!0-9]*) uf=force;;
+      *) [ $(( $(date +%s) - ue )) -ge 3600 ] && uf=force;;
+    esac
+  fi
+  latest="$(update_latest "$uf")"
   if [ -z "$latest" ] || ! semver_gt "$latest" "$cur"; then
     [ "$say_" = 1 ] && printf 'skipped: up to date (%s)\n' "$cur"; return 0
   fi
@@ -1069,7 +1221,7 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionS
   # today's behaviour byte for byte. It still never applies under work in flight.
   wy=""
   if ! board_quiescent inflight; then wy="$QUIET_WHY"
-  elif git -C "$PRIMARY" status --porcelain | update_dirt_overlaps_kit; then wy=dirt; fi
+  elif git -C "$PRIMARY" -c core.quotePath=false status --porcelain | _kit_pending_drop | update_dirt_overlaps_kit; then wy=dirt; fi
   if [ -n "$wy" ]; then
     wf="$PRIMARY/.polaris/update-waiting"; we=""; wl=""; now="$(date +%s)"
     IFS="$POLARIS_TAB" read -r we wl 2>/dev/null < "$wf" || true
@@ -1143,7 +1295,11 @@ cmd_update_all() { # cmd_update_all <repo_only> [major] — walk the machine reg
   # the exec into this process and is set again on the child, so nothing below re-execs. A gone
   # path is the ONE entry the walk removes: it can never be updated and would only add a failure
   # line to every future walk (a recreated repo re-registers at its next install or update).
-  local repo_only="${1:-0}" major="${2:-0}" home f p flags out line printed
+  # The walk also tidies the registry it reads (smooth.md § 6), in this order per entry: one project
+  # listed twice by drive-letter case or slash style (`C:\x`, `c:/x`, `/c/x` are one folder) keeps its
+  # FIRST entry; a worktree (`.git` is a file) is a lane's checkout, never a project of its own, and is
+  # skipped; a folder with no ops/VERSION holds no POLARIS and its entry goes (measured: five of them).
+  local repo_only="${1:-0}" major="${2:-0}" home f p flags out line printed seen="" k
   home="$(awake_home)"
   [ "$home" != "-" ] || die "no machine registry yet — open one POLARIS repo in Claude Code first, or: ops/polaris awake install"
   flags="--auto --say"
@@ -1151,12 +1307,23 @@ cmd_update_all() { # cmd_update_all <repo_only> [major] — walk the machine reg
   [ "$major" = 1 ] && flags="$flags --major"
   for f in "$home"/repos/*; do
     [ -f "$f" ] || continue
-    p="$(head -1 "$f" 2>/dev/null | tr -d '\r')"
+    p=""; IFS= read -r p < "$f" 2>/dev/null || true
+    p="${p%$'\r'}"
     [ -n "$p" ] || continue
     if [ ! -d "$p" ]; then rm -f "$f"; printf '%s: gone — registry entry removed\n' "$p"; continue; fi
+    # one awk: the folded key, then the first earlier entry with that key (empty when none)
+    k="$(KP_SEEN="$seen" KP_P="$p" awk 'BEGIN { s = tolower(ENVIRON["KP_P"]); gsub(/\\/, "/", s)
+           if (s ~ /^\/[a-z]\//) s = substr(s, 2, 1) ":" substr(s, 3)
+           n = split(ENVIRON["KP_SEEN"], a, "\n"); hit = ""
+           for (i = 1; i <= n; i++) { t = index(a[i], "\t"); if (t && substr(a[i], 1, t - 1) == s) { hit = substr(a[i], t + 1); break } }
+           print s "\t" hit }')"
+    if [ -n "${k#*"$POLARIS_TAB"}" ]; then rm -f "$f"; printf '%s: same project as %s — registry entry removed\n' "$p" "${k#*"$POLARIS_TAB"}"; continue; fi
+    seen="$seen${seen:+$'\n'}${k%"$POLARIS_TAB"*}$POLARIS_TAB$p"
+    if [ -f "$p/.git" ]; then printf '%s: a worktree — skipped\n' "$p"; continue; fi
+    if [ ! -f "$p/ops/VERSION" ]; then rm -f "$f"; printf '%s: no POLARIS here (no ops/VERSION) — registry entry removed\n' "$p"; continue; fi
     if [ -f "$p/kit/ops/pack.py" ]; then printf '%s: self-hosting — skipped\n' "$p"; continue; fi
     # shellcheck disable=SC2086
-    out="$( (cd "$p" && POLARIS_UPDATE_REEXEC=1 bash "$SELF" update $flags) 2>&1 || true)"
+    out="$( (cd "$p" && POLARIS_UPDATE_REEXEC=1 POLARIS_UPDATE_FORCE=1 bash "$SELF" update $flags) 2>&1 || true)"
     printed=0
     while IFS= read -r line; do
       [ -n "$line" ] || continue

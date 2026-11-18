@@ -1,0 +1,15 @@
+--- 1. publish: pr, a typed update: installed, not committed, and what it wrote is recorded
+   rc=0 · version 0.0.2 · commits on main: 1
+   said: not committed: publish: pr — the change goes through a pull request
+   record: sorted yes · every line <hash><TAB><path> yes · every hash is the file's now yes
+   record = the kit's dirty files exactly: yes · names ops/polaris yes · names ops/PROTOCOL.md yes · names .claude/settings.json yes
+--- 2. the next release, at session start
+   without the record (6.18): skipped: uncommitted changes inside the kit's paths · version 0.0.2
+   with it: ✅ POLARIS updated 0.0.2 → 0.0.3 at session start — ops/ and CLAUDE.md are new; re-read your role file before acting
+   version 0.0.3 · commits on main: 1
+   record: sorted yes · every line <hash><TAB><path> yes · every hash is the file's now yes
+   record = the kit's dirty files exactly: yes · names ops/polaris yes · names ops/PROTOCOL.md yes · names .claude/settings.json yes
+--- 3. a person edits one recorded kit file: that is dirt again, and the update holds
+   said: skipped: uncommitted changes inside the kit's paths · version 0.0.3 · the edit still there: 1
+   record: sorted yes · every line <hash><TAB><path> yes · every hash is the file's now NO (1)
+   record = the kit's dirty files exactly: yes · names ops/polaris yes · names ops/PROTOCOL.md yes · names .claude/settings.json yes

@@ -22,6 +22,22 @@
 #   6. a chain card (ops/contracts/hour.md § 6, T-303): 13 points with three valid steps is filed ready
 #      with its steps kept, and drift has nothing to say. Its four refusals (no steps, steps adding to 12,
 #      a step of 8, points 21) sit in 4 with the rest.
+#   7. a card owns its tests and guides (ops/contracts/smooth.md § 1.1, T-313): a SURFACES row maps
+#      lib/core.sh to tests/core.* and lib/CLAUDE.md is tracked. A draft owning lib/core.sh gains both on
+#      its board file, one stderr line each after its ID line; a second draft owning lib/other.sh gains the
+#      guide and so waits on the first (the overlap gate reads the extended set); a third that already
+#      owns lib/ and the glob, plus a root file, gains nothing — the root CLAUDE.md never joins. (2>&1)
+#   8. what touches a card's files (smooth.md § 1.2-1.3): a draft owning src/alpha.py with replaces: [omega]
+#      prints ONE stderr block after its ID line — tests/test_alpha.py names alpha, src/gamma.py uses
+#      alpha.py (the index, kit/ops/index.py copied into the fixture), and 26 test files that all say
+#      omega fold into one line. The card's files_owned gains nothing from it. Every earlier case
+#      printed no block (their stderr above is empty, or holds only § 1.1 lines). (2>&1)
+#   9. drafts sort themselves (smooth.md § 2.3): named waiting-draft first, they file in depends_on order —
+#      the ID lines and the commit subject follow it. A cycle among drafts sits in 4 with the refusals.
+#  10. new --retire (smooth.md § 2.3): T-071 is retired for the draft T-090 that owns the same file, so
+#      T-090 files ready — it is never chained to the card it replaces; T-072, which waited on T-071, now
+#      waits on T-090; a draft that named T-071 waits on T-090 too. The retired lines first, then the ID
+#      lines; ONE commit. A map naming a card that is not on the board sits in 4 with the refusals.
 # Then, over every call: the drafts byte-identical, SPRINT.md and main untouched, and every success
 # line held to the plain-voice bar with plain-voice.cmd's own alternation.
 FIX="$(mktemp -d)"
@@ -37,12 +53,17 @@ R="$FIX/repo"
   git init -q -b main "$R" 2>/dev/null || { git init -q "$R"; git -C "$R" symbolic-ref HEAD refs/heads/main; }
   cd "$R"
   git config user.email t@t; git config user.name t
-  mkdir -p src; echo x > src/a.txt
+  mkdir -p src lib tests; echo x > src/a.txt; echo x > lib/core.sh; echo g > lib/CLAUDE.md; echo g > CLAUDE.md
+  printf 'def run():\n    return 1\n' > src/alpha.py; printf 'import alpha\n\nalpha.run()\n' > src/gamma.py
+  printf 'from src import alpha\n' > tests/test_alpha.py
+  for k in $(seq 1 26); do echo omega > "tests/many_${k}_test.txt"; done
   git add -A; git commit -qm init
   bash "$KIT" init-board
+  printf 'lib/core.sh\ttests/core.*\t-\tthe core\n' >> ops/SURFACES.tsv
   printf '# fixture contract\n' > ops/contracts/fix.md
   printf 'src/db/\task\t-\tschema changes wait for a human\n' >> ops/RULES.tsv
   git add -A; git commit -qm board
+  cp "${KIT%/*}/index.py" ops/index.py; echo ops/index.py >> .git/info/exclude   # the index the uses kind asks
   printf '# Sprint 1 — fixture\n' > ops/SPRINT.md
   printf -- '---\nid: T-007\ntitle: finished work\npoints: 1\nstatus: done\nfiles_owned:\n  - src/old.txt\n---\n' > ops/board/done/T-007.md
   printf -- '---\nid: T-009\ntitle: waiting to land\npoints: 2\nrisk: normal\nstatus: review\nfiles_owned:\n  - src/shared.txt\ndepends_on: []\n---\n' > ops/board/review/T-009.md
@@ -86,6 +107,17 @@ R="$FIX/repo"
   ch 'steps short of points' 13 s12 'steps:\n  - 5 one\n  - 5 two\n  - 2 three\n' > "$D/s12.md"
   ch 'a step too big' 13 s8 'steps:\n  - 5 one\n  - 8 two\n' > "$D/s8.md"
   ch 'far too big' 21 p21 'steps:\n  - 5 one\n  - 5 two\n' > "$D/p21.md"
+  dr '' 'owns the core' 1 normal '  - lib/core.sh\n' '[]' '' '' > "$D/m1.md"
+  dr '' 'beside the core' 1 normal '  - lib/other.sh\n' '[]' '' '' > "$D/m3.md"
+  dr '' 'owns it all already' 1 normal '  - lib/\n  - tests/core.*\n  - NOTES.md\n' '[]' '' '' > "$D/m2.md"
+  printf -- '---\ntitle: the alpha card\nplan: p\npoints: 1\nrisk: normal\nfiles_owned:\n  - src/alpha.py\nreplaces: [omega]\ndepends_on: []\n---\n' > "$D/r1.md"
+  dr T-071 'waited on' 1 normal '  - src/x1.txt\n' '[]' '' '' > "$D/x1.md"
+  dr '' 'waits on a later draft' 1 normal '  - src/x2.txt\n' '[T-071]' '' '' > "$D/x2.md"
+  dr T-080 'one half of a cycle' 1 normal '  - src/y1.txt\n' '[T-081]' '' '' > "$D/y1.md"
+  dr T-081 'the other half' 1 normal '  - src/y2.txt\n' '[T-080]' '' '' > "$D/y2.md"
+  dr T-090 'replaces T-071' 1 normal '  - src/x1.txt\n' '[]' '' '' > "$D/z1.md"
+  dr '' 'waited on the old card' 1 normal '  - src/z2.txt\n' '[T-071]' '' '' > "$D/z2.md"
+  printf 'T-071\tT-090\n' > "$FIX/recut.tsv"; printf 'T-404\tT-090\n' > "$FIX/recut-bad.tsv"
   mkdir -p "$FIX/orig"; cp "$D"/*.md "$FIX/orig/"
 ) >/dev/null 2>&1
 cd "$R"
@@ -144,6 +176,8 @@ refuse steps-none "$D/ns13.md"
 refuse steps-sum "$D/ok.md" "$D/s12.md"
 refuse steps-big "$D/s8.md"
 refuse points-21 "$D/p21.md"
+refuse cycle "$D/ok.md" "$D/y1.md" "$D/y2.md"
+refuse retire-unknown --retire "$FIX/recut-bad.tsv" "$D/ok.md"
 git worktree add -q "$FIX/wt" -b feat/T-099 >/dev/null 2>&1
 rc=0; ( cd "$FIX/wt" && bash "$KIT" new "$R/$D/ok.md" > "$FIX/out" 2> "$FIX/err" ) || rc=$?
 printf 'feat-worktree: rc=%s %s| stdout %s | ref %s\n' "$rc" "$(tr '\n' ' ' < "$FIX/err")" \
@@ -161,6 +195,22 @@ run "$D/ch13.md"
 f="$(grep -l '^title: a chain card$' ops/board/*/T-*.md)"; echo "filed in: ${f%/*}"; sed -n '/^steps:/,/^---/p' "$f"
 grep '"ev":"new"' ops/board/EVENTS.ndjson | tail -1 | sed -E 's/.*"note":"([^"]*)".*"pts":([0-9]+).*/event new \1 \2/'
 bash "$KIT" drift 2>/dev/null
+echo "== 7. a card owns its tests and guides (ops/contracts/smooth.md § 1.1)"
+bash "$KIT" new "$D/m1.md" "$D/m3.md" 2>&1 | tee -a "$FIX/said"
+for t in T-057 T-058; do f="$(ls ops/board/*/$t.md)"; echo "$t files_owned:"; sed -n '/^files_owned:/,/^depends_on:/p' "$f" | sed '1d;$d'; done
+bash "$KIT" new "$D/m2.md" 2>&1 | tee -a "$FIX/said"
+f="$(ls ops/board/*/T-059.md)"; echo "T-059 files_owned:"; sed -n '/^files_owned:/,/^depends_on:/p' "$f" | sed '1d;$d'
+echo "== 8. what touches a card's files (smooth.md § 1.2-1.3)"
+bash "$KIT" new "$D/r1.md" 2>&1 | tee -a "$FIX/said"
+sed -n '/^files_owned:/,/^replaces:/p' ops/board/ready/T-060.md
+echo "== 9. drafts sort themselves (smooth.md § 2.3)"
+run "$D/x2.md" "$D/x1.md"
+git log -1 --format=%s refs/heads/polaris/board
+echo "== 10. new --retire (smooth.md § 2.3)"
+run --retire "$FIX/recut.tsv" "$D/z1.md" "$D/z2.md"
+git log -1 --format=%s refs/heads/polaris/board
+for t in retired/T-071 backlog/T-072 ready/T-090 backlog/T-091; do fm3 "$t"; done
+grep "^retired_by:" ops/board/retired/T-071.md; tail -1 ops/board/retired/T-071.md
 echo "== over every call"
 n=0; for f in "$FIX"/orig/*.md; do cmp -s "$f" "$D/${f##*/}" || n=$((n+1)); done; echo "drafts changed: $n"
 printf '# Sprint 1 — fixture\n' | cmp -s - ops/SPRINT.md && echo "SPRINT.md untouched" || echo "SPRINT.md CHANGED"

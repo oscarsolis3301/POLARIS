@@ -1,0 +1,26 @@
+--- 1. claim writes the worktree on lock meta line 6
+1
+meta lines: 6 · line 6: <FIX>/repo/.polaris/wt/T-N1
+--- 2. the same session id: from the primary no resume, from the worktree (and below it) resume
+primary: wait
+worktree: resume T-N1
+below it: resume T-N1
+a sibling folder with the same prefix: wait
+--- 3. line 6 folded: backslashes and another letter case still name the same folder
+worktree: resume T-N1 · primary: wait
+--- 4. a lock without line 6 (an older claim): today's answer, from anywhere
+primary: resume T-N1
+--- 5. resume rewrites the lock with line 6 again
+meta lines: 6 · primary: wait · worktree: resume T-N1
+--- 6. a stale verdict on a quiet board: next and bare triage recompute it once and answer from the fresh one
+next: build T-N1
+tune-due names the base: yes · due field: 1
+triage: solo
+tune-due names the base: yes · due field: 1
+next: tidy|   tune-up due: cards|
+tune-due names the base: yes · due field: 0
+triage: tidy|   tune-up due: cards|
+tune-due names the base: yes · due field: 0
+--- 7. --brief, or a card in flight: the stale verdict is left alone
+after --brief: untouched
+with a card active: untouched
