@@ -47,12 +47,12 @@ release-checks:
 plan hour: 6 cards · 3 waves on the critical path · 2 lanes
 each card: about 15 min to build + 5 min to land (this project's medians at 2 lanes)
 projected: about 60 min (target 60 min)
-release checks: about 20 min more — 3 wave check(s) and the finish check at about 5 min each (the last whole suite)
-with the release checks: about 80 min
+release checks: about 15 min more — 2 wave check(s) and the finish check at about 5 min each (the last whole suite)
+with the release checks: about 75 min
   rc=0
 release-checks-and-a-chain-card:
 chain cards: 1 priced from their points (largest: 13 points, about 30 min to build)
 projected: about 1.6 h (target 60 min)
-release checks: about 25 min more — 4 wave check(s) and the finish check at about 5 min each (the last whole suite)
-with the release checks: about 2.0 h
+release checks: about 20 min more — 3 wave check(s) and the finish check at about 5 min each (the last whole suite)
+with the release checks: about 1.9 h
 over the target — re-cut once: merge each chain into one card with steps:, fold riders into the card that causes them; still over, it runs as one release and this projection is shown before approval

@@ -71,3 +71,10 @@ seal rc=0
    wave check: skipped by hand — the runner is broken
 ✅ sprint 1 re-sealed
 rows ran: 5 · skipped events: 1 · its why: the runner is broken
+== k. nothing of the run left to build — the rows run, the whole test: is left to finish
+seal rc=0
+   wave check: whole test: left to finish — nothing of this run is left to build
+✅ wave check — 1 command(s) green (rows: 1)
+✅ sprint 1 re-sealed
+rows ran: 6 · whole ran: 4
+stamp: 3 fields · tip is the wave that merged · last whole green recorded · pending T-10,T-12

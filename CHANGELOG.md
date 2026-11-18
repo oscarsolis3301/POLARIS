@@ -4,6 +4,52 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.19.0 — 2026-11-17
+
+**The smooth run: cards own their tests, a wave's mistakes show up in that wave, and re-planning is a command.**
+
+Built from eighteen gaps written down on 2026-11-17 — twelve from Sonoba's run on 6.17.0, six from this
+kit's own 6.18 run. At Sonoba, 24 of the 27 times a builder had to ask for one more file it was a test,
+found 25 to 40 minutes into the build; two cards landed 5 failing tests that nobody saw until the end;
+re-planning took 124 edits to board files by hand and left 78 cards parked; and 6.18.1 went unseen for
+hours because the update check kept its earlier "up to date" answer.
+
+- **A card owns its tests before anyone starts it.** `new` adds to a card, by itself, the tests
+  `ops/SURFACES.tsv` maps to its files, and the guide (`<folder>/CLAUDE.md`) of a folder the card adds
+  a new file to. A card that only edits files already there gains no guide, so two cards working in one
+  folder still run side by side. `new` also lists the test files that mention a card's files and the
+  files that use them (at Sonoba, 4 of 12 late asks were files like that); `pack` shows the same list
+  first, so a builder asks for what it needs in its first minute. `replaces:` on a card names the old
+  thing it renames, so the tests that mention the old name are found too.
+- **A wave's mistakes show up in that wave.** Before a wave is joined, `seal` runs the tests mapped to
+  what the wave changed, every time, and the whole `test:` for the rest at most once an hour
+  (`wave_check:`, 60 by default; `0` = every seal, `off` = only at `finish`). The whole `test:` waits
+  for `finish` when nothing of the run is left to build, so a one-wave run, and every single change,
+  no longer runs it twice minutes apart (here 22 + 22 minutes, at Sonoba 11 + 11). A failure keeps the
+  wave open and names the cards to fix; `seal --no-check -m "why"` is the recorded way past a failure
+  that is not the wave's own.
+- **Re-planning is commands, not hand edits.** `retire` moves waiting cards aside for the card that
+  replaces them and points everything that waited on them at it; `new --retire` files the new cards
+  and retires the old ones in one save; `new` puts a batch of drafts in the order they wait on each
+  other; `amend --deps` adds or drops one wait with the reason on record; `release --to blocked`
+  parks a ready card nobody has taken; `release` removes a card's empty branch; `status --all` lists
+  the retired cards.
+- **Fewer wrong turns.** `grant` refuses from the card's own folder; `next` answers for the folder it
+  is asked from, so a conductor is never told to pick up its builder's card; `approve --plan` makes
+  that plan this run's; `handoff --hold` stops at review/ for a card waiting on a yes; a stale
+  saved answer about the tune-up is worked out again instead of read as "nothing due".
+- **Updates arrive the day they are released.** A typed `update --all` asks for the newest version
+  itself, and the daily check asks again when its "up to date" answer is more than an hour old. The
+  project list drops a second spelling of the same folder, skips a project's worktrees and forgets
+  folders without POLARIS. A project that never saves its own update (`publish: pr`) is no longer
+  stuck behind it: the next update recognises its own unsaved files and goes on top. A project that
+  was already stuck before 6.19.0 has nothing to recognise yet — save its waiting update once, by hand.
+- **The price is closer to the time.** `speed --plan` prices a big card from its points (last plan
+  priced 24 minutes; the bigger card took 42) and adds the release checks as their own line: one whole
+  test per wave check still to come, plus the one at `finish`.
+- **The proof waits instead of failing.** `tools/proof.sh` reads a job GitHub cancelled as "no answer"
+  and waits on the push run of the same commit, instead of reporting it as a failure.
+
 ## 6.18.1 — 2026-11-17
 
 **The update no longer cancels the tune-up it has just found.**

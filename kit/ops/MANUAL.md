@@ -373,7 +373,10 @@ the wave's tip sha (say `already green`), or when the change set is docs, looks 
 3. **The whole `test:`** is needed when an unmapped path exists or the selection failed — and runs
    only when DUE: `wave_check:` is `0`, or no whole-suite green is on record, or the newest is at least
    `wave_check:` minutes old (default 60). The newest = the later of `.polaris/wave-check` field 2 and,
-   when `.polaris/suite-stamp` field 3 is `full`, its field 2. Not due → say so and go on;
+   when `.polaris/suite-stamp` field 3 is `full`, its field 2. With `wave_check:` above 0 it also waits
+   when nothing of the run is left to build — no card in `ready/`, `backlog/` or `active/` has the
+   `plan:` of a wave card (no wave card has a `plan:` → no card in `ready/` or `active/`): say `whole
+   test: left to finish` and go on, because `finish` is the next step and runs it. Not due → say so and go on;
    `wave_check: off` → never at a seal, `finish` runs it. When it runs, the explicit row `cmd`s still
    run beside it; the `-` rows' line does not.
 4. Run each command once from the repo root, one at a time, under the machine's heavy slot.

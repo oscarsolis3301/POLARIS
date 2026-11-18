@@ -87,6 +87,7 @@ kit/ops/KEYS.tsv	key	typecheck
 kit/ops/KEYS.tsv	key	uat
 kit/ops/KEYS.tsv	key	visual
 kit/ops/KEYS.tsv	key	voice
+kit/ops/KEYS.tsv	key	wave_check
 kit/ops/KEYS.tsv	key	wt_live_minutes
 kit/ops/MANUAL.md	heading	<ID> — <title>
 kit/ops/MANUAL.md	heading	Board commit by hand — the `polaris/board` ref (EVERY mutation below uses this)
@@ -99,6 +100,7 @@ kit/ops/MANUAL.md	heading	Finish — "is the run over?" by hand
 kit/ops/MANUAL.md	heading	Fold — a chain of waiting cards becomes ONE chain card
 kit/ops/MANUAL.md	heading	Grant (Builder) — amend `files_owned` mid-flight, the sanctioned way
 kit/ops/MANUAL.md	heading	Handoff (Builder)
+kit/ops/MANUAL.md	heading	Hold — stop a handoff at review/
 kit/ops/MANUAL.md	heading	Integrate (Integrator) — audit → land-per-task → suite → seal
 kit/ops/MANUAL.md	heading	Kit lifecycle by hand (no `ops/polaris`)
 kit/ops/MANUAL.md	heading	Land (Integrator) — what `ops/polaris land <ID>` does by hand
@@ -111,10 +113,12 @@ kit/ops/MANUAL.md	heading	Push the board — `sync_board` (NEVER `<base>`)
 kit/ops/MANUAL.md	heading	QA — "is everything okay?" by hand
 kit/ops/MANUAL.md	heading	Release / abort (Builder)
 kit/ops/MANUAL.md	heading	Report (Integrator/anyone) — what `ops/polaris report [--sprint <n> | --all]` does by hand
+kit/ops/MANUAL.md	heading	Retire — move waiting cards aside for their successor
 kit/ops/MANUAL.md	heading	Seal (Integrator) — what `ops/polaris seal [<date>]` does by hand
 kit/ops/MANUAL.md	heading	Sprint <n> — <goal>            (dates from the SPRINT.md header, when present)
 kit/ops/MANUAL.md	heading	Telemetry (every transition above)
 kit/ops/MANUAL.md	heading	The modular CLI — the entry script and `ops/lib/`
+kit/ops/MANUAL.md	heading	Wave check — the tests a wave changed, before it seals
 kit/ops/MANUAL.md	heading	`publish: direct` (default) — fold + tag locally
 kit/ops/MANUAL.md	heading	`publish: pr` v2 by hand - one link per run
 kit/ops/MANUAL.md	heading	`publish: pr` — one host PR per wave, the human merges
@@ -317,6 +321,7 @@ kit/ops/lib/admin.sh	fn	update_hops_hint
 kit/ops/lib/admin.sh	fn	update_latest
 kit/ops/lib/admin.sh	fn	ver
 kit/ops/lib/author.sh	fn	cmd_new
+kit/ops/lib/author.sh	fn	cmd_retire
 kit/ops/lib/awake.sh	fn	awake_conf
 kit/ops/lib/awake.sh	fn	awake_ensure
 kit/ops/lib/awake.sh	fn	awake_home

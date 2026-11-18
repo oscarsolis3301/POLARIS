@@ -1153,6 +1153,37 @@ EOF
   exit 1
 }
 
+_wc_remaining() { # _wc_remaining [<wave task file>…] — smooth.md § 3.1 v1.2: how many cards of this run
+  # are still to build. The card files in ready/, backlog/ and active/ whose plan: is the plan: of any wave
+  # card; when no wave card carries a plan:, every card file in ready/ + active/. ONE awk, prints a number.
+  local d f g=0
+  case $- in *f*) g=1; set +f;; esac
+  set -- "$@" side=1
+  for d in ready backlog active; do
+    for f in "$BOARD/$d"/T-*.md; do [ -f "$f" ] && set -- "$@" "$f"; done
+  done
+  [ "$g" -eq 0 ] || set -f
+  awk -v side=0 '
+    { sub(/\r$/, "") }
+    FNR == 1 { fm = ($0 == "---"); if (side) F[++nf] = FILENAME; next }
+    fm && $0 == "---" { fm = 0; next }
+    fm && /^plan:/ {
+      v = $0; sub(/^plan:[ \t]*/, "", v); sub(/[ \t]+#.*$/, "", v); sub(/[ \t]+$/, "", v)
+      gsub(/^["\047]|["\047]$/, "", v)
+      if (v == "") next
+      if (side) PL[FILENAME] = v; else { P[v] = 1; np++ }
+    }
+    END {
+      n = 0
+      for (i = 1; i <= nf; i++) {
+        f = F[i]
+        if (np) { if ((f in PL) && (PL[f] in P)) n++ }
+        else if (f !~ /\/backlog\/[^\/]*$/) n++
+      }
+      print n
+    }' "$@" </dev/null 2>/dev/null || echo 1   # unreadable → work remains, the window decides
+}
+
 _seal_wave_check() { # _seal_wave_check <date> <subjects> [<no-check why>] — THE WAVE CHECK
   # (ops/contracts/smooth.md § 3). Before a wave merges, the tests covering what it changed run ONCE,
   # from $PRIMARY with integrate/<date> checked out, under the lease cmd_seal holds and the machine's
@@ -1255,6 +1286,10 @@ EOF
     if [ "$wc" = off ]; then
       need=0
       note "wave check: whole test: off at the seal (wave_check: off) — finish runs it"
+    elif [ "$wc" -gt 0 ] && [ "$(_wc_remaining "$@")" -eq 0 ]; then
+      # v1.2: the check catches a red BEFORE more is built on it — nothing left to build, finish is next
+      need=0
+      note "wave check: whole test: left to finish — nothing of this run is left to build"
     elif [ "$wc" -gt 0 ] && [ "$newest" -gt 0 ] && [ $((now - newest)) -lt $((wc * 60)) ]; then
       need=0; m=$(( (now - newest) / 60 ))
       note "wave check: whole test: not due — last green $m min ago; it runs at the first seal after $((wc - m)) more min (wave_check: $wc)"

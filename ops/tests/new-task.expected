@@ -109,17 +109,18 @@ event new ready 13
 == 7. a card owns its tests and guides (ops/contracts/smooth.md § 1.1)
 T-057 ready — nothing to wait for
    T-057: owns tests/core.* too — ops/SURFACES.tsv maps lib/core.sh to it
-   T-057: owns lib/CLAUDE.md too — the guide of a folder it changes
-T-058 backlog — waits on T-057 (ready, shares lib/CLAUDE.md)
-   T-058: owns lib/CLAUDE.md too — the guide of a folder it changes
+T-058 ready — nothing to wait for
+T-005 ready — nothing to wait for
+   T-005: owns lib/CLAUDE.md too — the guide of a folder it adds a file to
 T-057 files_owned:
   - lib/core.sh
   - tests/core.*
-  - lib/CLAUDE.md
 T-058 files_owned:
-  - lib/other.sh
+  - lib/util.sh
+T-005 files_owned:
+  - lib/fresh.sh
   - lib/CLAUDE.md
-T-059 backlog — waits on T-057 (ready, shares lib/)
+T-059 backlog — waits on T-005 (ready, shares lib/), T-057 (ready, shares lib/), T-058 (ready, shares lib/)
 T-059 files_owned:
   - lib/
   - tests/core.*

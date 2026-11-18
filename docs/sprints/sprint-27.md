@@ -1,7 +1,7 @@
 # Sprint 27 — The smooth run: cards own their tests, waves catch their reds, re-cuts by command (6.19.0) (2026-11-17–)
 
 ## T-313 — "Filing work right the first time - new owns a card's mapped tests and folder guides, lists what touches its files, sorts its drafts, and retire re-cuts a plan in one command"
-points 13 · risk normal · landed 2317bc7 (2026-11-17) · claimed 2026-11-17
+points 13 · risk normal · landed 2317bc7 (2026-11-17) · claimed 2026-11-17 → done 2026-11-17
 files touched: kit/ops/index.py, kit/ops/lib/author.sh, kit/ops/lib/observe.sh, kit/ops/polaris, kit/ops/templates/TASK.md, ops/tests/fm-comments.cmd, ops/tests/fm-comments.expected, ops/tests/new-task.cmd, ops/tests/new-task.expected, ops/tests/retire-board.cmd, ops/tests/retire-board.expected
 
 ### Why
@@ -37,7 +37,7 @@ This card owns `kit/ops/polaris`, so it writes the help text for EVERY new verb 
 - [ ] help carries every § 9 item
 
 ## T-314 — "The builder's commands stop costing round trips - grant refuses from a card's own lane, release parks and cleans up, handoff can hold, the lock knows its folder, next recomputes a stale verdict"
-points 12 · risk normal · landed d2f81e1 (2026-11-17) · claimed 2026-11-17
+points 12 · risk normal · landed d2f81e1 (2026-11-17) · claimed 2026-11-17 → done 2026-11-17
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/handover.sh, kit/ops/lib/route.sh, kit/ops/lib/selftest/board.sh, ops/tests/builder-cmds.cmd, ops/tests/builder-cmds.expected, ops/tests/next-own-folder.cmd, ops/tests/next-own-folder.expected
 
 ### Why
@@ -68,7 +68,7 @@ tree.
 - [ ] pack's first section appears only when _card_reach exists and lists something; every other pack byte-identical
 
 ## T-315 — "A wave's reds show up in that wave - the seal runs the tests covering what the wave changed, amend can rewire depends_on, and the roles, PROTOCOL and MANUAL say how"
-points 11 · risk normal · landed f84663f (2026-11-17) · claimed 2026-11-17
+points 11 · risk normal · landed f84663f (2026-11-17) · claimed 2026-11-17 → done 2026-11-17
 files touched: kit/ops/KEYS.tsv, kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/lib/integrate.sh, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md, ops/tests/amend-deps.cmd, ops/tests/amend-deps.expected, ops/tests/wave-check.cmd, ops/tests/wave-check.expected
 
 ### Why
@@ -106,7 +106,7 @@ PLANNER's retire), the PROTOCOL rows and the MANUAL recipes, written from the co
 - [ ] the role files, PROTOCOL and MANUAL carry every § 9 item; the only new MANUAL headings are the three named
 
 ## T-316 — "Updates that see a same-day release and never freeze, a plan price that counts chain cards and release checks, and a proof that does not call a cancelled job red"
-points 12 · risk normal · landed 2e3f0a7 (2026-11-17) · claimed 2026-11-17
+points 12 · risk normal · landed 2e3f0a7 (2026-11-17) · claimed 2026-11-17 → done 2026-11-17
 files touched: kit/ops/lib/admin.sh, kit/ops/lib/selftest/remote.sh, ops/tests/proof-ci.cmd, ops/tests/proof-ci.expected, ops/tests/speed-plan.cmd, ops/tests/speed-plan.expected, ops/tests/update-pending.cmd, ops/tests/update-pending.expected, ops/tests/update-registry.cmd, ops/tests/update-registry.expected, tools/proof.sh
 
 ### Why
@@ -135,3 +135,26 @@ commit, which under `push: end` exists as soon as `finish` returns (§ 8).
 - [ ] a 13-point chain card prices at twice a card's build minutes; the release-checks lines appear only with a suite time on record
 - [ ] proof.sh: a cancelled job never prints RED; it falls back to the push run, or says no push run yet with rc 3
 - [ ] the autoupdate drill green, run by hand, result in Notes
+
+## T-317 — "The smooth run on the joined tree - the pack and new seam proven together, every shared golden run once, api-kit re-pinned, version 6.19.0 and its changelog"
+points 3 · risk normal · landed a119a12 (2026-11-17) · claimed 2026-11-17
+files touched: CHANGELOG.md, kit/ops/KEYS.tsv, kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/VERSION, kit/ops/lib/admin.sh, kit/ops/lib/author.sh, kit/ops/lib/integrate.sh, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, ops/contracts/smooth.md, ops/tests/api-kit.expected, ops/tests/away-yes.expected, ops/tests/new-task.cmd, ops/tests/new-task.expected, ops/tests/pack-named-tests.cmd, ops/tests/pack-named-tests.expected, ops/tests/speed-plan.expected, ops/tests/wave-check.cmd, ops/tests/wave-check.expected
+
+### Why
+Four cards build side by side and meet at one seam: `pack` (T-314) calls `_card_reach`, which T-313
+writes — so neither card can prove the pair in its own worktree. Last plan, a golden that ran the real
+`heal` went red only after both cards landed (plan tune, T-310). This card exists so that cannot happen
+silently: it starts only once all four are done, writes the one golden that runs `new` and `pack`
+together (contract § 10), and runs, once, on the joined tree, every golden a wave-1 card created or
+re-pinned plus every golden more than one card's code reaches.
+
+It is also the one owner of `ops/tests/api-kit.expected` this wave: the new public names
+(`cmd_retire`, the three MANUAL headings) are re-pinned here with the strict diff, which only the
+joined tree can satisfy. And it writes the release words: `kit/ops/VERSION` 6.19.0 and a `## 6.19.0`
+CHANGELOG section with measured claims only (contract § 9).
+
+### Acceptance
+- [ ] pack-named-tests: new owns the mapped test and the guide, lists the naming test and the importing file; pack prints the same two paths first
+- [ ] api-kit gains exactly cmd_retire and the three MANUAL headings
+- [ ] every § 10 golden green on the joined tree
+- [ ] VERSION 6.19.0; CHANGELOG 6.19.0 names all four cards' changes with measured numbers only, and the frozen-project note

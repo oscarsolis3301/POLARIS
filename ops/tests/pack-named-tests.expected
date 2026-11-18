@@ -1,0 +1,17 @@
+== 1. new: the mapped test and the guide join the card, the rest is listed
+T-001 ready — nothing to wait for
+   T-001: owns tests/beta.* too — ops/SURFACES.tsv maps src/beta.sh to it
+   T-001: owns src/CLAUDE.md too — the guide of a folder it adds a file to
+files that touch these cards' files and are not on files_owned — a builder that must change one returns NEEDS PATH in its first minute:
+   T-001: tests/test_alpha.py names alpha
+   T-001: src/gamma.py uses alpha.py
+== 2. the board file gained exactly those two
+  - src/alpha.py
+  - src/beta.sh
+  - tests/beta.*
+  - src/CLAUDE.md
+== 3. pack prints the same two paths, before any other section
+FILES THAT TOUCH YOURS — not on files_owned. One you will have to change → stop now: return NEEDS PATH <path> — <why> (BUILDER.md), not after the build
+   tests/test_alpha.py — names alpha
+   src/gamma.py — uses alpha.py
+it comes before: every === section

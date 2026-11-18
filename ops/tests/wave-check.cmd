@@ -5,6 +5,9 @@
 # The cards are plain [<ID>] commits on the wave branch — the seal reads the wave, not the board, so
 # no claim/handoff/land round trips are needed to prove it. The fixture's two test scripts write one
 # line per run to $WCLOG, so "how many times did it run" is a line count, never a time.
+# v1.2 (the coordinator's rule, 2026-11-17): the whole `test:` runs at a seal only while cards of the run
+# are still to build — every wave card gets a done/ card of plan w, and from e on one backlog card of
+# plan w waits; k takes it away and the whole `test:` is left to finish.
 # HERMETIC: one throwaway repo under mktemp -d, no remote, no session id, HOME, USERPROFILE and
 # POLARIS_AWAKE_HOME faked together (the heavy slot lives under the fake HOME). No sha, date or path.
 unset CLAUDE_CODE_SESSION_ID POLARIS_INT_TOKEN POLARIS_SEAL_NOCHECK POLARIS_HEAVY_TOKEN POLARIS_HEAVY_DIR
@@ -44,6 +47,11 @@ wave() { # wave <ID> <file> <text> — one card's commit on today's wave, cut fr
   fi
   echo "$3" > "$2"; git commit -qam "feat: $1 changes $2 [$1]"
   git checkout -q main
+  [ -f "ops/board/done/$1.md" ] || printf -- '---\nid: %s\nplan: w\nstatus: done\n---\n' "$1" > "ops/board/done/$1.md"
+}
+waiting() { # waiting on|off — one backlog card of the run's plan, still to build
+  if [ "$1" = on ]; then printf -- '---\nid: T-50\nplan: w\nstatus: backlog\n---\n' > ops/board/backlog/T-50.md
+  else rm -f ops/board/backlog/T-50.md; fi
 }
 conv() { printf "base: main\nlanding: integrator\n$1" > ops/CONVENTIONS.md; git commit -qam "conventions" >/dev/null; }
 seal() { OUT="$(bash "$KIT" seal "$@" 2>&1)"; echo "seal rc=$?"; OUT="$(printf '%s\n' "$OUT" | mask)"; }
@@ -83,6 +91,7 @@ seal; show
 echo "rows ran: $(runs rows)"
 
 echo '== e. an unmapped path runs test: verbatim, once'
+waiting on
 wave T-5 src/u.sh newer
 seal; show
 echo "rows ran: $(runs rows) · whole ran: $(runs whole)"
@@ -124,3 +133,12 @@ bash "$KIT" seal --no-check 2>&1 | tr -d '\r' | sed 's/ (usage.*//'; echo "rc=${
 wave T-11 src/m.sh bad
 seal --no-check -m "the runner is broken"; show
 echo "rows ran: $(runs rows) · skipped events: $(events wave-check-skipped) · its why: $(grep '"ev":"wave-check-skipped"' ops/board/EVENTS.ndjson | sed 's/.*"note":"\([^"]*\)".*/\1/')"
+
+echo '== k. nothing of the run left to build — the rows run, the whole test: is left to finish'
+waiting off
+conv 'test: bash t/whole.sh\ntest_select: bash t/rows.sh {tests}\n'
+awk -F'\t' 'BEGIN { OFS = "\t" } { $2 = $2 - 3660; print }' .polaris/wave-check > .polaris/wave-check.new && mv .polaris/wave-check.new .polaris/wave-check
+wave T-12 src/u.sh twelve; wave T-12 src/m.sh twelve
+seal; show
+echo "rows ran: $(runs rows) · whole ran: $(runs whole)"
+stamp

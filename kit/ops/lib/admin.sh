@@ -456,8 +456,8 @@ _speed_plan() { # _speed_plan <slug> [<draft.md>…] — hour.md § 5: the price
     for f in "$BOARD/$col"/*.md; do [ -f "$f" ] && { set -- "$f" "$@"; nf=$((nf+1)); }; done
   done
   [ "$nf" -gt 0 ] || { printf 'speed --plan %s: no cards carry plan: %s\n' "$slug" "$slug"; return 1; }
-  # the release checks (smooth.md § 7): one whole suite per wave check plus the finish, priced from the
-  # last whole suite on record; nothing on record → no release-checks lines
+  # the release checks (smooth.md § 7, v1.2): one whole suite per wave check before the last wave, plus
+  # the finish, priced from the last whole suite on record; nothing on record → no release-checks lines
   local ss=""
   [ -f "$PRIMARY/.polaris/last-suite-seconds" ] && ss="$(cut -d' ' -f1 < "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null | tr -d ' \r')"
   case "$ss" in ''|*[!0-9]*) ss=0;; esac
@@ -535,8 +535,9 @@ _speed_plan() { # _speed_plan <slug> [<draft.md>…] — hour.md § 5: the price
       printf "projected: about %s (target %d min)\n", T, M
       if (SS + 0 > 0) {
         s = int(SS / 60 + 0.5); if (s < 1) s = 1
-        r = (W + 1) * s
-        printf "release checks: about %d min more — %d wave check(s) and the finish check at about %d min each (the last whole suite)\n", r, W, s
+        w = (W < 1) ? 1 : W; r = w * s   # v1.2: the last wave leaves its whole test: to finish
+        if (w >= 2) printf "release checks: about %d min more — %d wave check(s) and the finish check at about %d min each (the last whole suite)\n", r, w - 1, s
+        else printf "release checks: about %d min more — the finish check (the last whole suite)\n", s
         printf "with the release checks: about %s\n", fmt(mins + r)
       }
       if (mins > M) print "over the target — re-cut once: merge each chain into one card with steps:, fold riders into the card that causes them; still over, it runs as one release and this projection is shown before approval"
