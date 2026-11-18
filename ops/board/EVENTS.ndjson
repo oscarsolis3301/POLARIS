@@ -1316,3 +1316,4 @@
 {"ts":1794962041,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"ops/tests/new-task.cmd"}
 {"ts":1794962059,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"ops/tests/new-task.expected"}
 {"ts":1794962077,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"kit/ops/lib/integrate.sh"}
+{"ts":1794962092,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"ops/tests/wave-check.cmd"}
