@@ -1322,3 +1322,4 @@
 {"ts":1794962144,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"ops/tests/speed-plan.cmd"}
 {"ts":1794962161,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"ops/tests/speed-plan.expected"}
 {"ts":1794962180,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"ops/contracts/smooth.md"}
+{"ts":1794962197,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"kit/ops/KEYS.tsv"}
