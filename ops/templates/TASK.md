@@ -30,6 +30,8 @@ owner: null              # set by `polaris claim`
 branch: null             # set by `polaris claim`: feat/<ID>
 files_owned:             # ONLY paths this task may create/edit — disjoint vs all ready+active.
   -                      # exact path · `dir/` prefix · glob like src/api/util_*.py (* crosses /)
+replaces:                # optional list; names or paths this card renames, replaces or redefines —
+                         # the tests that name them are listed at new and pack
 needs:                   # optional list: schema | dependency | delete, the STOP-AND-ASK items this task
                          # will do; `approve --plan` covers each the approved plan named (need:<v>)
 approved:                # optional; human-granted exceptions to `ask` rules. `polaris approve`

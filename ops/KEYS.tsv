@@ -77,3 +77,4 @@ handover	6.2.0	auto	a session hops into the role polaris next names at each boar
 auto_update	6.3.0	on	the repo updates itself at session start when the board is quiet; off leaves today's notice only
 gallery	6.6.0	<dir or omit>	captures stay local and vanish on a fresh clone: nothing committed, nothing to show anyone
 hops	6.12.0	on	the layout pass runs when it is due — at the end of a run, or right after a typed update; off never offers it
+wave_check	6.19.0	60	the seal runs the tests mapped to what a wave changed every time, and the whole test: at most once an hour for the rest, and only while cards of the run are still to build (0 = every seal, off = only at finish)

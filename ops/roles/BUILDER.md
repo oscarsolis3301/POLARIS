@@ -26,6 +26,8 @@ bash ops/polaris pack <ID>      # your whole context, in one call
 ```
 That output **is** your context: the task's `## Why` and acceptance boxes, its contract verbatim, the house style this repo actually uses (detected, not guessed), the files you own versus the ones you may only read, the code-map for each owned directory, the public API surface you must not break, the traps already recorded against those exact paths, and the `verify:` commands that will be run against you.
 
+**Read pack's first section before anything else.** When it prints `FILES THAT TOUCH YOURS`, those are tests that name your files and files that use them, none of them on your card. One you will have to change → stop in your first minute and return `NEEDS PATH <path> — <why>` (conductor-entered) or hand the card back (the Failure path below) — never after the build, when the whole lane waits on it. Do not run `grant` yourself: it refuses from your branch and from inside your worktree, because a builder never widens its own card; the conductor grants from the primary checkout.
+
 Do not go assembling those seven things by hand — that is 6-15 tool calls to arrive where `pack` already put you, and it is the single most expensive habit this role has. Anything `pack` does not answer needs a one-line justification appended to the task's Notes.
 
 **Then, for anything else: `find` first, never grep first.** `bash ops/polaris find <symbol>` returns `path:line` + signature in one hop; `bash ops/polaris show <path>#<symbol>` prints that symbol's body without the file around it. Grep only when `find` and `find -t <text>` both miss.

@@ -373,7 +373,15 @@ drill_handover() {
     "$SELF" claim T-HO1 >/dev/null || { echo "HANDOVER CLAIM FAIL"; exit 1; }
     [ "$(tr -d ' \r\n' < "$ho_dir/task")" = "T-HO1" ] || { echo "HANDOVER TASK STATE FAIL (claim must record the task in .polaris/handover/<sid>/task)"; exit 1; }
     tr -d '\r' < "$ho_dir/last-event" | grep -qE '^[0-9]+ claim T-HO1$' || { cat "$ho_dir/last-event"; echo "HANDOVER LAST-EVENT FAIL (evt must stamp <ts> <kind> <id>)"; exit 1; }
-    [ "$("$SELF" next | sed -n 1p)" = "resume T-HO1" ] || { echo "HANDOVER RESUME FAIL (row 0: my own live lock outranks every other row)"; exit 1; }
+    # smooth.md § 5.5: the lock's line 6 is the card's worktree, and row 0 answers for the caller's
+    # folder — resume from inside it, never from the primary (a conductor shares its builders' sid).
+    # $PWD is handed over in a real shell's shape (/c/… for git's C:/…): msys names a mktemp /tmp
+    # folder by its mount alias, which no real repo has.
+    ho_w6="$(sed -n 6p "$ho_gcd/polaris-locks/T-HO1/meta" | tr -d '\r')"
+    case "$ho_w6" in */.polaris/wt/T-HO1) ;; *) echo "HANDOVER LOCK FOLDER FAIL (claim must write the worktree on lock meta line 6, got '$ho_w6')"; exit 1;; esac
+    ho_pw="$ho_w6"; case "$ho_pw" in [A-Za-z]:/*) ho_pw="/$(printf '%s' "${ho_pw%%:*}" | tr 'A-Z' 'a-z')/${ho_pw#?:/}";; esac
+    [ "$(cd "$ho_w6" && PWD="$ho_pw" "$SELF" next | sed -n 1p)" = "resume T-HO1" ] || { echo "HANDOVER RESUME FAIL (row 0: my own live lock outranks every other row, from its worktree)"; exit 1; }
+    [ "$("$SELF" next | sed -n 1p)" != "resume T-HO1" ] || { echo "HANDOVER RESUME FOLDER FAIL (row 0 must not send the primary to resume a lock whose line 6 is a worktree)"; exit 1; }
     # (4) --brief re-anchors a compacted chat: under a live lock the role is real, so role/task/next
     #     are all present. No pipe anywhere — the anchor is prose, and a table would break it.
     "$SELF" next --brief > "$T/hob.out" 2>&1 || { cat "$T/hob.out"; echo "HANDOVER BRIEF RC FAIL"; exit 1; }

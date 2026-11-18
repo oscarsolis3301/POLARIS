@@ -65,12 +65,17 @@ status_brief() { # `status --brief` — ONE plain-English paragraph, no table (o
 cmd_status() {
   board_pull   # T-148: under claim: claim-branch, origin's board first — the other machine's moves are the truth (first-run.md § 5)
   [ "${1:-}" = "--brief" ] && { status_brief; return; }
-  local col n
+  local col n all="" rn=0
+  [ "${1:-}" = "--all" ] && all=1   # smooth.md § 2.2: the one reader of ops/board/retired/
   printf 'POLARIS board — base: %s · claim: %s\n' "$BASE" "$CLAIM_MODE"
   for col in backlog ready active review blocked done; do
     n=$(ls "$BOARD/$col" 2>/dev/null | grep -c '\.md$' || true)
     printf '  %-8s %s\n' "$col" "$n"
   done
+  if [ -n "$all" ]; then
+    rn=$(ls "$BOARD/retired" 2>/dev/null | grep -c '\.md$' || true)
+    printf '  %-8s %s\n' retired "$rn"
+  fi
   echo 'active:'
   local f id age
   for f in "$BOARD/active/"*.md; do
@@ -93,6 +98,15 @@ cmd_status() {
     any=1; bid="${bf##*/}"; bid="${bid%.md}"
     printf '  %s · %s\n' "$bid" "$(grep '⛔' "$bf" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*-*[[:space:]]*//' | grep . || echo 'no reason recorded — open the task')"
   done
+  # status --all: each retired card and its successor — ONE awk over the folder, never a fork per card
+  if [ -n "$all" ] && [ "${rn:-0}" -gt 0 ]; then
+    echo 'retired:'
+    awk '
+      FNR == 1 { fs = 0; id = FILENAME; sub(/^.*\//, "", id); sub(/\.md$/, "", id); by[id] = "?" }
+      /^---[\r]?$/ { fs++; next }
+      fs == 1 && index($0, "retired_by:") == 1 { s = substr($0, 12); sub(/^[ \t]*/, "", s); sub(/[ \t\r]*$/, "", s); by[id] = s }
+      END { for (k in by) print "  " k " → " by[k] }' "$BOARD/retired/"*.md | LC_ALL=C sort
+  fi
   # SHARED CHECKOUT (ops/contracts/shared-checkout.md). A second chat's FIRST read is `status`, and
   # two things that change what it may do were invisible here: someone is mid-landing (the board
   # looks quiet while a land is in flight), and someone's uncommitted work is stashed rather than

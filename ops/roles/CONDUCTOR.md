@@ -237,6 +237,20 @@ work.
      from the primary, then resume the SAME builder (SendMessage: "granted <path>; re-pin, re-run
      verify, hand off"). No release, no Planner resume, no cold start. grant refuses (another
      ready/active card owns it) → a real carve fault: `release --to blocked` and resume the Planner.
+     A NEEDS PATH that comes back in a builder's first minute (pack's first section listed it) is the
+     cheap one — grant it at once; the builder never grants itself (`grant` refuses from its lane).
+   - A card waiting on the owner's yes (a `risk: high` or STOP-AND-ASK item the plan did not cover) →
+     its builder ships with `handoff --hold`: the card waits in `review/` with nothing landed, and no
+     lane's seal waits for it. After the yes: `bash ops/polaris land <ID>`, then `bash ops/polaris seal`.
+     `bash ops/polaris approve --plan <slug>` (step 3) also makes that plan this run's plan.
+   - The plan needs re-cutting once it is filed (a card split, merged or replaced) → commands, never
+     hand edits of board files: `bash ops/polaris retire <old>… --by <new> -m "why"` for cards already
+     on the board, or `bash ops/polaris new --retire <map> <draft.md>…` to file the successors and
+     retire their predecessors in one commit. Every card that waited on an old ID waits on its successor.
+   - A red wave check (`⛔ wave check red — integrate/<date> stays open`) → the wave did not seal and
+     the line names the cards: file a fix card for them — it lands on that same wave — and the next
+     `seal` re-runs the check. `bash ops/polaris seal --no-check -m "<why>"` only for a red that is not
+     the wave's code (a broken runner, a flaky machine), from the primary, with the why on the record.
    - Builder dies without reporting → a lane gone silent past `stale_hours` is a DEAD lane, not a
      slow one. **A lane that stopped on a capture refusal is not dead** — it needs the shot: line run,
      not a respawn; refused for a missing `--saw`, it needs the sentence written, not a respawn

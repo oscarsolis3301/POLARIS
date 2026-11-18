@@ -81,6 +81,18 @@ when all three are numbers — nothing else changes. Append one line per task to
 `{"ts":<epoch>,"ev":"new","id":"<ID>","who":"<you@host>","note":"<ready|backlog>","pts":<points>}`,
 then ONE `board_commit "chore(board): new <ID> <ID> …" <every new task file> ops/board/EVENTS.ndjson`
 and `sync_board`. `ops/SPRINT.md` is never part of it: the sprint header is the Planner's own commit.
+Since 6.19.0 two more things happen. Before the checks, the drafts are put in dependency order — a
+draft moves after every draft whose preset `id:` its `depends_on` names, otherwise the given order
+stands; a cycle among them refuses the call. And after a draft's `files_owned` is read, every
+`ops/SURFACES.tsv` row whose surface overlaps an owned pattern adds its `tests` glob, and the
+`<dir>/CLAUDE.md` of every folder the draft owns a file in joins too when it is a tracked file (never
+the root's) — each added with one `  - <path>` line in the task file, and placed (step 3) with the
+widened set. Tests that NAME the card's files and files that import them are only listed, on stderr.
+**`new --retire <map> <draft.md>…`** files successors and retires their predecessors in the SAME
+board commit: check every map pair as Retire (below) checks it — a successor may also be a preset
+`id:` of a draft in this call — then do Retire's effect for every pair BEFORE step 3 reads `ready/`
+`active/` `review/`, so no draft is chained to a card it retires. ONE `board_commit
+"chore(board): new <ID>… · retire <old>…"`.
 
 ## Claim (Builder)
 **local-lock** — atomic, shared across every worktree of this repo:
@@ -133,6 +145,16 @@ caption yourself — the task title, your `--saw` text, `before:`/`after:` basen
 `(skipped — <why>)`), and today's date. Count and freshness are the whole test; filenames are never
 inspected. `ops/VISUAL.md` is the short version of all of this.
 
+## Hold — stop a handoff at review/
+What `ops/polaris handoff [ID] --hold` does by hand, for a card that waits on the owner's yes (a
+`risk: high` or STOP-AND-ASK item the approved plan did not cover). Everything Handoff above does, up to
+and including its board commit — and inside that same commit: add `held: yes` to the card's
+frontmatter, append `- held at handoff: waits in review/ for a yes — then: bash ops/polaris land <ID>`
+to its Notes and the telemetry line `{"ts":<epoch>,"ev":"hold","id":"<ID>","who":"<you@host>","note":""}`.
+Then STOP: nothing lands. A held card is never counted as landable, never holds back another lane's
+seal and is skipped by the self-landing fan-out. After the yes: `land <ID>` (as Land below), then
+`seal`; `done` finishes it as usual.
+
 ## Release / abort (Builder)
 In the PRIMARY checkout: `mv` the task back to `ops/board/ready/` (or `ops/board/blocked/` + a note),
 append the release telemetry line, `board_commit "chore(board): release <ID>" <the two task paths> ops/board/EVENTS.ndjson`
@@ -146,6 +168,13 @@ part of <plan>"` also works on an UNCLAIMED task sitting in `ready/` — `mv` it
 `status: backlog` (owner stays null), append the release note, ONE `board_commit "chore(board): release <ID> →
 backlog"` + `sync_board`. No lock, no worktree — there is neither to touch. From `active/` the same `--to backlog`
 behaves exactly like `--to ready` above but lands the file in `ops/board/backlog/` instead.
+
+`--to blocked` parks an UNCLAIMED `ready/` card the same way (6.19.0): `mv` it to
+`ops/board/blocked/`, `status: blocked`, owner stays null, append `- ⛔ released by <you>: <msg>` when
+there is a message, the `blocked` telemetry line, ONE `board_commit "chore(board): release <ID> →
+blocked"` + `sync_board`. Whenever a release leaves no worktree behind, delete `feat/<ID>` too when
+it exists, is checked out nowhere and holds no commits (`git rev-list --count <base>..feat/<ID>` is
+0) — an empty branch is clutter; one with commits is always kept.
 
 ## Grant (Builder) — amend `files_owned` mid-flight, the sanctioned way
 What `ops/polaris grant <ID> <path> -m "why"` does by hand. Preconditions — ALL must hold, else STOP and change NOTHING (no partial write, no commit):
@@ -175,6 +204,19 @@ Then ONE `board_commit` (polaris/board — never `<base>`), subject `chore(board
 2. append to the task's Notes: `- amend: verify[<n>] "<old>" → "<new>" — <why>` (`--drop` → `"<old>" → dropped`; `--add` → `verify[+] "<new>"`);
 3. append the telemetry line: `{"ts":<epoch>,"ev":"amend","id":"<ID>","who":"<you@host>","note":"verify[<n>]"}`.
 
+**Amend `depends_on` — what `ops/polaris amend <ID> --deps +<X>|-<X> -m "why"` does by hand.** One
+dependency added or dropped, never a hand edit of the card. Preconditions — ALL must hold, else STOP
+and change NOTHING: not on a `feat/*` branch · a non-empty reason · one `--deps` value, and not in the
+same call as `--verify` · `<ID>` is in `backlog/`, `ready/`, `blocked/` or `active/` · `<X>` is a task
+on the board and is not `<ID>` itself · `+<X>` is not already listed, `-<X>` is · for `+<X>`, `<X>` does
+not already wait on `<ID>` through its own `depends_on` chain (that would be a cycle). Then:
+1. rewrite `depends_on` as ONE inline list `[<ID>, <ID>]`, the block items under it removed;
+2. append to the Notes: `- amend: deps <+|-><X> — <why>`;
+3. a `ready/` card that gained a dependency not in `done/` moves to `backlog/` (`status: backlog`) —
+   dropping one never promotes; `promote` does that;
+4. the telemetry line `{"ts":<epoch>,"ev":"amend","id":"<ID>","who":"<you@host>","note":"deps <+|-><X>"}`;
+5. ONE `board_commit "chore(board): amend <ID> deps <+|-><X>"` + `sync_board`.
+
 ## Note — one line on a CLAIMED card, in its own board commit
 What `ops/polaris note <ID> -m "<line>"` does by hand — how a Builder records an `assumed:` default
 without it riding another lane's board commit. Preconditions — ALL must hold, else STOP and change NOTHING:
@@ -203,6 +245,25 @@ card files; C1 sits in `ready/` only when every `depends_on` is in `done/` and i
 ready/, active/ or review/ outside the group, else `backlog/`. ONE `board_commit`, subject
 `chore(board): fold <C2> <C3>… → <C1>`, with `{"ts":<epoch>,"ev":"fold","id":"<C1>","who":"<you@host>","note":"<C2> <C3>…"}`,
 then `sync_board`. One `git revert` of that commit on `polaris/board` puts every card back.
+
+## Retire — move waiting cards aside for their successor
+What `ops/polaris retire <ID>… --by <new> -m "why"` (or `retire --map <file> -m "why"`, one
+`old<TAB>new` pair per line, blank and `#` lines skipped) does by hand — the re-cut of a filed plan,
+never a hand edit of a card. From the primary checkout, after pulling the board, under the board lock.
+Check ALL of these first — any one fails → STOP and change NOTHING: not on a `feat/*` branch · a
+non-empty reason · at least one old ID · every old ID sits in `backlog/`, `ready/` or `blocked/` with no
+lock (a claimed card is released first; a card in `review/` or `done/` never retires) · every successor
+is a task on the board, not retired and not one of the old IDs. Then, per old card:
+1. `mv` it to `ops/board/retired/<ID>.md`, set `status: retired`, add `retired_by: <new>`, append
+   `- retired: by <new> — <why>` to its Notes and the telemetry line
+   `{"ts":<epoch>,"ev":"retire","id":"<ID>","who":"<you@host>","note":"→ <new>"}`;
+2. delete its `feat/<ID>` branch only when it exists, no worktree has it checked out and it holds no
+   commits (`git rev-list --count <base>..feat/<ID>` is 0); otherwise keep it.
+Every card in `backlog/` `ready/` `active/` `review/` `blocked/` whose `depends_on` names an old ID names
+its successor instead (once; dropped when the card IS the successor), written as one inline list. A
+rewired `ready/` card that now waits on a card not in `done/` moves to `backlog/` in the same commit.
+ONE `board_commit "chore(board): retire <old> <old>… → <new>"` (`… (map)` for a map) + `sync_board`.
+Nothing else on the board reads `retired/` but `status --all`; a retired ID is never reused.
 
 ## Integrate (Integrator) — audit → land-per-task → suite → seal
 List `ops/board/review/`, topologically sort by `depends_on` — that is the merge order. On `integrate/<date>` (never on `<base>`), per task in order: audit it (same ownership + RULES proof as above, run against `feat/<ID>` — before ANY merge; a violation kicks the task back, never merges it), then squash-land it (see Land below). Batch mode: run the full suite ONCE after all lands are in. Paranoid mode (suite <2 min): run the full suite after EVERY land.
@@ -297,6 +358,44 @@ The human merges the PR with the host's **MERGE COMMIT** strategy — NEVER squa
 3. tag the new `<base>` HEAD per clean-history rules: absent → `git tag sprint/<n>`; existing ancestor tag → move (`git tag -f sprint/<n>`) + compare-and-swap push (`git push --force-with-lease=refs/tags/sprint/<n>:<old-sha> origin refs/tags/sprint/<n>`); existing non-ancestor → die (reused number). Tag-push failure → by-hand note, as direct seal does.
 4. delete `integrate/<date>` local + remote: `git branch -D integrate/<date>` and `git push origin :refs/heads/integrate/<date>`.
 5. next: per task, `run-verify` / `done` (done's `[<ID>]`-in-base gate now passes) — see Integrate's done recipe.
+
+## Wave check — the tests a wave changed, before it seals
+What `seal` runs since 6.19.0, by hand: on `integrate/<date>`, after Seal's preconditions and BEFORE the
+report commit and the merge. `test:` unset in `ops/CONVENTIONS.md` → skip all of this; the seal is
+exactly as before. Also skip it when `.polaris/suite-stamp` field 1 or `.polaris/wave-check` field 1 is
+the wave's tip sha (say `already green`), or when the change set is docs, looks or UI only.
+1. **The change set** = `git diff --name-only --no-renames <base>...integrate/<date>`, minus
+   `ops/MAP.md`, `ops/SURFACES.tsv`, the sprint reports folder and the `test_skip:` paths. The wave's
+   cards = the `[<ID>]` suffixes of its subjects.
+2. **Split it.** A path that matches a row of `ops/SURFACES.tsv` is MAPPED; the rest are unmapped.
+   For the mapped paths, the commands are the rows' own `cmd`s plus, for `-` rows, `test_select:` with
+   `{tests}` replaced by their tests globs (what `qa` would pick). These run at EVERY seal.
+3. **The whole `test:`** is needed when an unmapped path exists or the selection failed — and runs
+   only when DUE: `wave_check:` is `0`, or no whole-suite green is on record, or the newest is at least
+   `wave_check:` minutes old (default 60). The newest = the later of `.polaris/wave-check` field 2 and,
+   when `.polaris/suite-stamp` field 3 is `full`, its field 2. With `wave_check:` above 0 it also waits
+   when nothing of the run is left to build — no card in `ready/`, `backlog/` or `active/` has the
+   `plan:` of a wave card (no wave card has a `plan:` → no card in `ready/` or `active/`): say `whole
+   test: left to finish` and go on, because `finish` is the next step and runs it. Not due → say so and go on;
+   `wave_check: off` → never at a seal, `finish` runs it. When it runs, the explicit row `cmd`s still
+   run beside it; the `-` rows' line does not.
+4. Run each command once from the repo root, one at a time, under the machine's heavy slot.
+5. **Green** → one line, then write `.polaris/wave-check` as ONE line of three TAB-separated fields —
+   the tip that merges (after the report commit) · the time of the newest whole-suite green, or 0 ·
+   the cards sealed since it as `<ID>:<epoch>` items, comma-joined (`-` when none; a whole-suite green
+   resets it to `-`, a rows-only green appends this wave's cards). Then Seal goes on.
+6. **Red** → stop at the first red command. Name the cards: for a row command, the wave cards whose own
+   changed files match the surface of a row that produced it (none → every wave card); for the whole
+   `test:`, every card in field 3 since the last whole green, then this wave's. Print `⛔ wave check red
+   — integrate/<date> stays open: <command>`, the last 15 lines of its output, `cards: …` and the fix
+   line. One `{"ev":"wave-red","id":"<ID>",…,"note":"<command>"}` per named card, ONE
+   `board_commit "chore(board): wave check red integrate/<date> — <IDs>"`; `git checkout <base>`; release
+   the integration lease. Nothing merged, tagged or reported, the stamp not written; the cards stay
+   landed in `review/`, so a fix card lands on the same wave and the next seal checks again.
+**`seal --no-check -m "why"`** — only for a red that is not the wave's code, never from a `feat/*`
+branch, never without the why: skip steps 1-6, say `wave check: skipped by hand — <why>`, and add one
+`{"ev":"wave-check-skipped","id":"integrate/<date>",…,"note":"<why>"}` line to the seal's board writes.
+`finish` still runs the whole suite.
 
 ## Express lane by hand (Integrator) — one small task, one pass
 What `ops/polaris land --express <ID>` does by hand: one small task — the lane `triage` names — collapses the whole
