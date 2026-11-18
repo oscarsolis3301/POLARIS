@@ -828,6 +828,28 @@ def _api_nested(root, path, ln, cache):
     return 0 < ln <= len(lines) and lines[ln - 1][:1] in (" ", "\t")
 
 
+def _importer_rows(root, cur, q):
+    """`find --importers <q>`'s rows, unsorted: (key, path, line, text). Code edges first (key 0), then
+    every non-code line that NAMES it (key 1). [] when <q> is not an indexed file."""
+    f = cur.execute("SELECT id FROM files WHERE path=?", (q,)).fetchone()
+    if not f:
+        return []
+    rows = []
+    edge_at = set()
+    # fetchall(): _mentions reads no cursor, but a lazy cursor shared across calls is the trap build() hit
+    for path, line, raw in cur.execute(
+            "SELECT f.path,e.line,e.raw FROM edges e JOIN files f ON f.id=e.src_id "
+            "WHERE e.dst_id=?", (f[0],)).fetchall():
+        rows.append((0, path, line, "%s:%d\t%s" % (path, line, raw)))
+        edge_at.add((path, line))
+    # then every non-code line that NAMES it (configs, docs, CI, Dockerfiles), sort key 1 so
+    # they follow all the edges: a path nobody mentions prints byte for byte as before
+    for path, line in _mentions(root, q):
+        if (path, line) not in edge_at:
+            rows.append((1, path, line, "%s:%d\tmention %s" % (path, line, _tail(q))))
+    return rows
+
+
 def cmd_find(root, args):
     con, have_fts, _, _ = build(root)
     cur = con.cursor()
@@ -911,22 +933,29 @@ def cmd_find(root, args):
             for ln, line in enumerate(text.splitlines(), 1):
                 if q.lower() in line.lower():
                     rows.append((0, r[0], ln, "%s:%d\t%s" % (r[0], ln, line.strip()[:160])))
+    elif mode == "--importers" and len(args) > 1:
+        # Several paths share this ONE build() (smooth.md § 1.2 — `new` and `pack` ask for every owned
+        # path of a card at once): each path's rows in argument order, sorted and cut to -n within
+        # itself, every line prefixed `<queried path><TAB>`. One path never reaches here, so it prints
+        # byte for byte as before.
+        hit = False
+        for q in args:
+            rows = _importer_rows(root, cur, q)
+            if not rows:
+                continue
+            hit = True
+            rows.sort(key=lambda r: (r[0], r[1], r[2]))
+            for r in rows[:n]:
+                print("%s\t%s" % (q, r[3]))
+            if len(rows) > n:
+                print("%s\t# %d more — polaris find --importers %s -n %d" % (q, len(rows) - n, q, min(len(rows), 200)))
+        return 0 if hit else 1
     else:
         f = cur.execute("SELECT id FROM files WHERE path=?", (q,)).fetchone()
         if not f:
             return 1
         if mode == "--importers":
-            edge_at = set()
-            for path, line, raw in cur.execute(
-                    "SELECT f.path,e.line,e.raw FROM edges e JOIN files f ON f.id=e.src_id "
-                    "WHERE e.dst_id=?", (f[0],)):
-                rows.append((0, path, line, "%s:%d\t%s" % (path, line, raw)))
-                edge_at.add((path, line))
-            # then every non-code line that NAMES it (configs, docs, CI, Dockerfiles), sort key 1 so
-            # they follow all the edges: a path nobody mentions prints byte for byte as before
-            for path, line in _mentions(root, q):
-                if (path, line) not in edge_at:
-                    rows.append((1, path, line, "%s:%d\tmention %s" % (path, line, _tail(q))))
+            rows = _importer_rows(root, cur, q)
         else:
             # fetchall(): the path lookup below re-uses `cur`, which silently ended this loop at the
             # first RESOLVED edge (same trap as build()'s) — rare while few edges resolved, routine now

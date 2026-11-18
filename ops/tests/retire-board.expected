@@ -1,0 +1,65 @@
+== 1. refusals
+no-argument: rc=1 ⛔ usage: polaris retire <ID>… --by <ID> -m "why"  |  retire --map <file> -m "why" | stdout empty | ref unmoved
+by-and-map: rc=1 ⛔ usage: polaris retire <ID>… --by <ID> -m "why"  |  retire --map <file> -m "why" | stdout empty | ref unmoved
+no-successor: rc=1 ⛔ usage: polaris retire <ID>… --by <ID> -m "why"  |  retire --map <file> -m "why" | stdout empty | ref unmoved
+no-why: rc=1 ⛔ retire refused: -m "why" is missing — the why goes on every retired card | stdout empty | ref unmoved
+claimed: rc=1 ⛔ retire refused: T-005 is claimed — release it first | stdout empty | ref unmoved
+in-review: rc=1 ⛔ retire refused: T-006 is in review/ — only waiting cards retire | stdout empty | ref unmoved
+in-done: rc=1 ⛔ retire refused: T-001 is in done/ — only waiting cards retire | stdout empty | ref unmoved
+unknown: rc=1 ⛔ retire refused: T-404 is no task on the board | stdout empty | ref unmoved
+unknown-successor: rc=1 ⛔ retire refused: T-404 is no task on the board | stdout empty | ref unmoved
+retired-too: rc=1 ⛔ retire refused: T-010 is retired too | stdout empty | ref unmoved
+named-twice: rc=1 ⛔ retire refused: T-003 is named twice | stdout empty | ref unmoved
+behind-a-valid: rc=1 ⛔ retire refused: T-006 is in review/ — only waiting cards retire | stdout empty | ref unmoved
+bad-map: rc=1 ⛔ retire refused: .polaris/bad.tsv line 1 is not old<TAB>new | stdout empty | ref unmoved
+no-map: rc=1 ⛔ retire refused: .polaris/none.tsv: no such file | stdout empty | ref unmoved
+feat-worktree: rc=1 ⛔ retire refused on feat/T-004 — run it from the primary checkout | stdout empty | ref unmoved
+board files after the refusals: identical
+== 2. --by
+retired T-002 → T-010
+retired T-004 → T-010
+   2 dependent(s) rewired
+board commits: 1 -> 2
+chore(board): retire T-002 T-004 → T-010
+ops/board/retired/T-002.md
+ops/board/retired/T-004.md
+retired/T-002: status: retired|depends_on: [T-001]|retired_by: T-010|
+retired/T-004: status: retired|depends_on: []|retired_by: T-010|
+backlog/T-008: status: backlog|depends_on: [T-010, T-001]|
+backlog/T-010: status: backlog|depends_on: []|
+- retired: by T-010 — the plan was re-cut
+event retire T-002 → T-010
+event retire T-004 → T-010
+feat/T-002 kept
+feat/T-004 kept
+== 3. --map
+retired T-003 → T-009
+   1 dependent(s) rewired
+board commits: 2 -> 3
+chore(board): retire T-003 (map)
+retired/T-003: status: retired|depends_on: []|retired_by: T-009|
+backlog/T-007: status: backlog|depends_on: [T-009]|
+T-007 left ready/
+feat/T-003 removed (it held no commits)
+== 4. status
+POLARIS board — base: main · claim: local-lock
+  backlog  3
+  ready    1
+  active   1
+  review   1
+  blocked  0
+  done     1
+active:
+  T-005 · someone · lock age Ns
+ready (top by wsjf):
+T-009 · 1pts · wsjf 
+-- what --all adds:
+7a8
+>   retired  3
+11a13,16
+> retired:
+>   T-002 → T-010
+>   T-003 → T-009
+>   T-004 → T-010
+== 5. new refuses a wait on a retired card
+rc=1 ⛔ new: .polaris/drafts/late.md: depends_on: T-002 is no task on the board | stdout empty
