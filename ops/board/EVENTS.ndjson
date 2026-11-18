@@ -1311,3 +1311,4 @@
 {"ts":1794961656,"ev":"done","id":"T-316","who":"Owner@DESKTOP","note":"","pts":12}
 {"ts":1794961671,"ev":"done","id":"T-315","who":"Owner@DESKTOP","note":"","pts":11}
 {"ts":1794961695,"ev":"promote","id":"T-317","who":"Owner@DESKTOP","note":"deps done: T-313, T-314, T-315, T-316","pts":3}
+{"ts":1794961934,"ev":"claim","id":"T-317","who":"Owner@DESKTOP","note":"","pts":3}
