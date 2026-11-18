@@ -57,6 +57,17 @@ golden, `api-kit`, VERSION and CHANGELOG) depends on all four.
   `   <ID>: owns <tests-glob> too — ops/SURFACES.tsv maps <surface> to it`
   `   <ID>: owns <dir>/CLAUDE.md too — the guide of a folder it changes`
 - No SURFACES row and no guide → nothing added, nothing printed (byte-identical to 6.18.1).
+- **v1.2 — amended 2026-11-17 after wave 1 landed, coordinator's rule (T-317).** A folder guide joins
+  only when the card ADDS a file to that folder: for an exact-path entry (no `*`, not ending in `/`)
+  that git does NOT track, `<dirname>/CLAUDE.md` joins when that guide is tracked. An entry that is
+  already a tracked file, a glob or a `dir/` entry adds no guide; the root's `CLAUDE.md` still never
+  joins. Why: as first built, every card owning any file of a guided folder also owned its guide, so two
+  cards editing different files of one folder overlapped and were chained by the ready gate — and every
+  tune-up adds guides, so a project got less parallel each time it was tidied; the measured case was only
+  the guide of a folder a card adds a file to. The stderr line reads
+  `   <ID>: owns <dir>/CLAUDE.md too — the guide of a folder it adds a file to`. § 1.2: an owned path
+  whose basename is `CLAUDE.md` gives no name and is not asked of the index — a guide a card owns never
+  produces a "test files name CLAUDE.md" line.
 
 ### 1.2 `_card_reach <taskfile>` — what touches a card's files without being on it (author.sh, private)
 Prints LC_ALL=C sorted, unique lines `<kind><TAB><path><TAB><name>`, kind `test` or `uses`; rc 0
@@ -203,6 +214,18 @@ background proof after the seal.)
   - **`wave_check: off`** → the whole `test:` never runs at a seal (rows still do), note line
     `   wave check: whole test: off at the seal (wave_check: off) — finish runs it`.
   - `finish` is unchanged: the whole suite always runs there.
+  - **v1.2 — amended 2026-11-17 after wave 1 landed, coordinator's rule (T-317).** Due also needs
+    cards of the run still to build, in the windowed case only (`wave_check:` a number above 0):
+    REMAINING = the card files in `ready/`, `backlog/` and `active/` whose `plan:` equals the `plan:` of
+    any card of this wave; when no wave card carries a `plan:`, the card files in `ready/` + `active/`.
+    REMAINING = 0 → the whole `test:` does not run at this seal, with ONE note line
+    `   wave check: whole test: left to finish — nothing of this run is left to build`; the mapped rows
+    still run and the wave's cards still join `<pending>` (§ 3.2 field 3). Order: `off` first, then
+    left-to-finish, then the window (`not due`). `wave_check: 0` and `finish` are unchanged. Why: as
+    first built, a one-wave run — and every SOLO change, the common lane — ran the whole suite at its
+    seal and again at `finish` minutes later, twice for one change (here 22 + 22 min; at Sonoba 11 +
+    11). The check exists to catch a red BEFORE more is built on it; with nothing left to build,
+    `finish` is the next step and runs it.
 - Runs each command once from `$PRIMARY` (`bash -c`), under the heavy slot (`_heavy_on "seal wave
   check"` once, `_heavy_off` after the last command or before a red exit), re-stamping the lease epoch
   after each command like express does. Nothing per card.
@@ -355,6 +378,12 @@ names the new base, so it is paid at most once per base commit.
   check(s) and the finish check at about <s> min each (the last whole suite)` with w = the critical
   path's wave count and r = (w + 1) × s; then `with the release checks: about <T2>` (T2 = mins + r,
   formatted like T). The over-target sentence still compares `mins` alone.
+- **v1.2 — amended 2026-11-17 after wave 1 landed, coordinator's rule (T-317).** The price follows
+  § 3.1 v1.2: the last wave leaves its whole `test:` to `finish`, so a plan's whole suites are (w − 1)
+  wave checks plus the finish check, r = w × s (w = the critical path's wave count, at least 1).
+  w ≥ 2 → `release checks: about <r> min more — <w-1> wave check(s) and the finish check at about <s>
+  min each (the last whole suite)`; w ≤ 1 → `release checks: about <s> min more — the finish check (the
+  last whole suite)`. The `with the release checks: about <T2>` line keeps its format (T2 = mins + r).
 
 ## § 8 `tools/proof.sh` (T-316)
 `await_job` returns 4 for a job that completed with conclusion `cancelled`. On 4 (in `--await` and in

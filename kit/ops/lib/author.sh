@@ -130,6 +130,8 @@ _card_reach() { # _card_reach <taskfile> — smooth.md § 1.2: what touches a ca
   own="$(fm_list files_owned "$tf" 2>/dev/null | grep -v '^#' || true)"
   while IFS= read -r x; do
     case "$x" in ''|*/|*'*'*) continue;; esac
+    # v1.2: a folder guide the card owns is searched for by no one — every test file says CLAUDE.md somewhere
+    case "$x" in CLAUDE.md|*/CLAUDE.md) continue;; esac
     exact="$exact$x$nl"; _card_names "$x"
   done <<EOF
 $own
@@ -364,8 +366,8 @@ EOF_A
 }
 
 _new_auto() { # _new_auto — smooth.md § 1.1 for the draft whose patterns are in _NO: every SURFACES row whose
-  # surface can meet one of them adds its tests glob, and every folder it owns a file in adds that folder's
-  # CLAUDE.md when git tracks one (never the root's). Extends _NO in place; _NX = one line per addition,
+  # surface can meet one of them adds its tests glob, and every folder it ADDS a file to (an exact path git
+  # does not track) adds that folder's CLAUDE.md when git tracks one (never the root's). Extends _NO in place; _NX = one line per addition,
   # `tests<TAB><glob><TAB><surface>` or `guide<TAB><path>`, in that order. Builtins over cmd_new's reads.
   local own="$_NO" s t r x d
   _NX=""
@@ -376,9 +378,12 @@ _new_auto() { # _new_auto — smooth.md § 1.1 for the draft whose patterns are 
   done <<EOF
 $_SURFACES_CACHE
 EOF
+  # v1.2: a guide joins only for a file the card ADDS — an exact path git does not track yet; a tracked
+  # file, a glob or a dir/ entry adds none, so two cards editing different files of one folder stay apart
   while IFS= read -r x; do
-    case "$x" in ''|*'*'*) continue;; */) d="${x%/}";; */*) d="${x%/*}";; *) continue;; esac
+    case "$x" in ''|*'*'*|*/) continue;; */*) d="${x%/*}";; *) continue;; esac
     [ -n "$d" ] || continue
+    case "$_NL$_nls$_NL" in *"$_NL$x$_NL"*) continue;; esac
     case "$_NL$_nls$_NL" in *"$_NL$d/CLAUDE.md$_NL"*) ;; *) continue;; esac
     if _new_join "$d/CLAUDE.md"; then _NX="$_NX"guide"$POLARIS_TAB$d/CLAUDE.md$_NL"; fi
   done <<EOF
@@ -408,7 +413,7 @@ _new_xown() { # _new_xown <i> <ID> <board file> — write draft <i>'s § 1.1 add
     fm_append_item files_owned "$p" "$3" || die "new: $2: could not add $p to files_owned"
     case "$k" in
       tests) _nxl[$1]="${_nxl[$1]}   $2: owns $p too — ops/SURFACES.tsv maps $s to it$_NL";;
-      *)     _nxl[$1]="${_nxl[$1]}   $2: owns $p too — the guide of a folder it changes$_NL";;
+      *)     _nxl[$1]="${_nxl[$1]}   $2: owns $p too — the guide of a folder it adds a file to$_NL";;
     esac
   done <<EOF
 ${_nxt[$1]:-}

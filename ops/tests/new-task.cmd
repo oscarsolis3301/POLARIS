@@ -22,11 +22,13 @@
 #   6. a chain card (ops/contracts/hour.md § 6, T-303): 13 points with three valid steps is filed ready
 #      with its steps kept, and drift has nothing to say. Its four refusals (no steps, steps adding to 12,
 #      a step of 8, points 21) sit in 4 with the rest.
-#   7. a card owns its tests and guides (ops/contracts/smooth.md § 1.1, T-313): a SURFACES row maps
-#      lib/core.sh to tests/core.* and lib/CLAUDE.md is tracked. A draft owning lib/core.sh gains both on
-#      its board file, one stderr line each after its ID line; a second draft owning lib/other.sh gains the
-#      guide and so waits on the first (the overlap gate reads the extended set); a third that already
-#      owns lib/ and the glob, plus a root file, gains nothing — the root CLAUDE.md never joins. (2>&1)
+#   7. a card owns its tests and guides (ops/contracts/smooth.md § 1.1, T-313; v1.2): a SURFACES row maps
+#      lib/core.sh to tests/core.* and lib/CLAUDE.md is tracked. A draft owning lib/core.sh gains the test
+#      glob on its board file, one stderr line after its ID line, and no guide — the file is tracked; a
+#      second draft owning lib/util.sh, another tracked file of that folder, gains nothing, so BOTH file
+#      ready, never chained; a third (preset T-005) owning lib/fresh.sh, a file git does not track yet,
+#      gains the guide and says so; a fourth that already owns lib/ and the glob, plus a root file, gains
+#      nothing — a dir/ entry adds no guide and the root CLAUDE.md never joins. (2>&1)
 #   8. what touches a card's files (smooth.md § 1.2-1.3): a draft owning src/alpha.py with replaces: [omega]
 #      prints ONE stderr block after its ID line — tests/test_alpha.py names alpha, src/gamma.py uses
 #      alpha.py (the index, kit/ops/index.py copied into the fixture), and 26 test files that all say
@@ -53,7 +55,7 @@ R="$FIX/repo"
   git init -q -b main "$R" 2>/dev/null || { git init -q "$R"; git -C "$R" symbolic-ref HEAD refs/heads/main; }
   cd "$R"
   git config user.email t@t; git config user.name t
-  mkdir -p src lib tests; echo x > src/a.txt; echo x > lib/core.sh; echo g > lib/CLAUDE.md; echo g > CLAUDE.md
+  mkdir -p src lib tests; echo x > src/a.txt; echo x > lib/core.sh; echo x > lib/util.sh; echo g > lib/CLAUDE.md; echo g > CLAUDE.md
   printf 'def run():\n    return 1\n' > src/alpha.py; printf 'import alpha\n\nalpha.run()\n' > src/gamma.py
   printf 'from src import alpha\n' > tests/test_alpha.py
   for k in $(seq 1 26); do echo omega > "tests/many_${k}_test.txt"; done
@@ -108,7 +110,8 @@ R="$FIX/repo"
   ch 'a step too big' 13 s8 'steps:\n  - 5 one\n  - 8 two\n' > "$D/s8.md"
   ch 'far too big' 21 p21 'steps:\n  - 5 one\n  - 5 two\n' > "$D/p21.md"
   dr '' 'owns the core' 1 normal '  - lib/core.sh\n' '[]' '' '' > "$D/m1.md"
-  dr '' 'beside the core' 1 normal '  - lib/other.sh\n' '[]' '' '' > "$D/m3.md"
+  dr '' 'beside the core' 1 normal '  - lib/util.sh\n' '[]' '' '' > "$D/m3.md"
+  dr T-005 'adds a file to the folder' 1 normal '  - lib/fresh.sh\n' '[]' '' '' > "$D/m4.md"
   dr '' 'owns it all already' 1 normal '  - lib/\n  - tests/core.*\n  - NOTES.md\n' '[]' '' '' > "$D/m2.md"
   printf -- '---\ntitle: the alpha card\nplan: p\npoints: 1\nrisk: normal\nfiles_owned:\n  - src/alpha.py\nreplaces: [omega]\ndepends_on: []\n---\n' > "$D/r1.md"
   dr T-071 'waited on' 1 normal '  - src/x1.txt\n' '[]' '' '' > "$D/x1.md"
@@ -196,8 +199,8 @@ f="$(grep -l '^title: a chain card$' ops/board/*/T-*.md)"; echo "filed in: ${f%/
 grep '"ev":"new"' ops/board/EVENTS.ndjson | tail -1 | sed -E 's/.*"note":"([^"]*)".*"pts":([0-9]+).*/event new \1 \2/'
 bash "$KIT" drift 2>/dev/null
 echo "== 7. a card owns its tests and guides (ops/contracts/smooth.md § 1.1)"
-bash "$KIT" new "$D/m1.md" "$D/m3.md" 2>&1 | tee -a "$FIX/said"
-for t in T-057 T-058; do f="$(ls ops/board/*/$t.md)"; echo "$t files_owned:"; sed -n '/^files_owned:/,/^depends_on:/p' "$f" | sed '1d;$d'; done
+bash "$KIT" new "$D/m1.md" "$D/m3.md" "$D/m4.md" 2>&1 | tee -a "$FIX/said"
+for t in T-057 T-058 T-005; do f="$(ls ops/board/*/$t.md)"; echo "$t files_owned:"; sed -n '/^files_owned:/,/^depends_on:/p' "$f" | sed '1d;$d'; done
 bash "$KIT" new "$D/m2.md" 2>&1 | tee -a "$FIX/said"
 f="$(ls ops/board/*/T-059.md)"; echo "T-059 files_owned:"; sed -n '/^files_owned:/,/^depends_on:/p' "$f" | sed '1d;$d'
 echo "== 8. what touches a card's files (smooth.md § 1.2-1.3)"
