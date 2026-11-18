@@ -1313,3 +1313,4 @@
 {"ts":1794961695,"ev":"promote","id":"T-317","who":"Owner@DESKTOP","note":"deps done: T-313, T-314, T-315, T-316","pts":3}
 {"ts":1794961934,"ev":"claim","id":"T-317","who":"Owner@DESKTOP","note":"","pts":3}
 {"ts":1794962020,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"kit/ops/lib/author.sh"}
+{"ts":1794962041,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"ops/tests/new-task.cmd"}
