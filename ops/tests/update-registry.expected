@@ -1,0 +1,26 @@
+--- 1. the channel: when --auto asks again
+same version, asked a minute ago: the cache answers
+   said:  skipped: up to date (0.0.1)
+   cache: latest 0.0.1 · epoch now
+same version, asked two hours ago: asked again
+   said:  skipped: active: 1
+   cache: latest 0.0.2 · epoch now
+same version, no epoch (a 6.18 cache): asked again
+   said:  skipped: active: 1
+   cache: latest 0.0.2 · epoch now
+another version, two hours old: the cache answers
+   said:  skipped: up to date (0.0.1)
+   cache: latest 0.0.0 · epoch old
+a fresh write holds: checked latest epoch
+--- 2. the walk: a typed update --all asks the channel itself, and tidies the registry
+<fix>/proj: skipped: active: 1
+<fix>/PROJ: same project as <fix>/proj — registry entry removed
+<fix>/proj-wt: a worktree — skipped
+<fix>/empty: no POLARIS here (no ops/VERSION) — registry entry removed
+<fix>/gone: gone — registry entry removed
+<fix>/self: self-hosting — skipped
+registry now: 1-proj 3-wt 6-self 
+--- 3. the same walk again: nothing left to tidy
+<fix>/proj: skipped: active: 1
+<fix>/proj-wt: a worktree — skipped
+<fix>/self: self-hosting — skipped

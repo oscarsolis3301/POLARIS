@@ -5,6 +5,10 @@
 # stub first on PATH that reads its answers from files (one line per call, the last line repeats), and
 # PROOF_GOLDENS is a stub runner, so this golden never recurses into the real goldens and never talks to
 # GitHub. Polls are 0 s. The commit id prints as <s7> / <sha12>, the stub's run ids are fixed.
+# Cases 9-10 (smooth.md § 8): a job that completed `cancelled` (GitHub cancels one that waited too long
+# in its queue; no step ran) is "cancelled — no answer", never RED, and the wait moves to the newest
+# PUSH run of the same commit (`run list --event push`, the stub's `push` file); none, or only the run
+# that was cancelled, is rc 3.
 TOOL="$(pwd)/tools/proof.sh"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
@@ -17,7 +21,7 @@ pop() { f="$STUB/$1"; [ -f "$f" ] || return 0; head -n 1 "$f"
   if [ "$(wc -l < "$f" | tr -d ' ')" -gt 1 ]; then tail -n +2 "$f" > "$f.n"; mv "$f.n" "$f"; fi; }
 case "$1 $2" in
   "auth status") exit "$(cat "$STUB/auth_rc" 2>/dev/null || echo 0)";;
-  "run list") case "$*" in *--branch*) pop branch;; *) pop list;; esac;;
+  "run list") case "$*" in *--branch*) pop branch;; *"--event push"*) pop push;; *) pop list;; esac;;
   "workflow run") exit 0;;
   "run view")
     case "$*" in
@@ -104,4 +108,24 @@ PROOF_SELFTEST='echo self-test broke; exit 1' P
 [ -f .polaris/ci-proof ] && echo 'ci-proof written: yes' || echo 'ci-proof written: no'
 
 echo '== 8. --await with no recorded run =='
+P --await macos-latest
+
+echo '== 9. the linux job was cancelled (no step ran): not RED — the push run of the same commit answers =='
+fresh; echo 555 > "$STUB/list"; echo 556 > "$STUB/push"; printf 'completed cancelled\ncompleted success\n' > "$STUB/job-ubuntu-latest"
+P
+echo "ci-proof: $(M < .polaris/ci-proof)"
+grep -c -- '--event push' "$STUB/calls" | sed 's/^/push-run lookups: /'
+echo '-- cancelled, and no push run yet: no answer, rc 3 --'
+fresh; echo 557 > "$STUB/list"; echo 'completed cancelled' > "$STUB/job-ubuntu-latest"
+P
+
+echo '== 10. --await on a cancelled job: the push run, green or RED; none yet, or only the same run: rc 3 =='
+echo "$SHA 600" > .polaris/ci-proof
+fresh; echo 601 > "$STUB/push"; printf 'completed cancelled\ncompleted success\n' > "$STUB/job-macos-latest"
+P --await macos-latest
+fresh; echo 601 > "$STUB/push"; printf 'completed cancelled\ncompleted failure\n' > "$STUB/job-macos-latest"
+P --await macos-latest
+fresh; echo 'completed cancelled' > "$STUB/job-macos-latest"
+P --await macos-latest
+fresh; echo 600 > "$STUB/push"; echo 'completed cancelled' > "$STUB/job-macos-latest"
 P --await macos-latest

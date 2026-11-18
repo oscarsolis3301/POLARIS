@@ -65,3 +65,35 @@ ci-proof written: no
 == 8. --await with no recorded run ==
 ⛔ proof: no recorded run for <s7> — run tools/proof.sh first
 rc=1
+== 9. the linux job was cancelled (no step ran): not RED — the push run of the same commit answers ==
+proof: <s7> — CI run 555 (found)
+proof: goldens — 2 green
+proof: ubuntu-latest — cancelled — no answer
+proof: ubuntu-latest — waiting on the push run 556 of <s7>
+proof: linux — green
+✅ proof: <s7> green
+rc=0
+ci-proof: <sha> 556
+push-run lookups: 1
+-- cancelled, and no push run yet: no answer, rc 3 --
+proof: <s7> — CI run 557 (found)
+proof: goldens — 2 green
+proof: ubuntu-latest — cancelled — no answer
+proof: ubuntu-latest — no push run of <s7> yet
+⏸ proof: <s7> — CI gave no answer yet
+rc=3
+== 10. --await on a cancelled job: the push run, green or RED; none yet, or only the same run: rc 3 ==
+proof: macos-latest — cancelled — no answer
+proof: macos-latest — waiting on the push run 601 of <s7>
+proof: macos-latest — green
+rc=0
+proof: macos-latest — cancelled — no answer
+proof: macos-latest — waiting on the push run 601 of <s7>
+proof: macos-latest — RED
+rc=1
+proof: macos-latest — cancelled — no answer
+proof: macos-latest — no push run of <s7> yet
+rc=3
+proof: macos-latest — cancelled — no answer
+proof: macos-latest — no push run of <s7> yet
+rc=3
