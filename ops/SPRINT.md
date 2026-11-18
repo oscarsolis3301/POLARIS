@@ -17,6 +17,7 @@ dogfood, re-pin cli-help, release ritual.
 | date | done pts | remaining |
 |---|---|---|
 | 2026-11-17 | 48 | 3 |
+| 2026-11-17 | 3 | 0 |
 
 # SPRINT 26 — The tune-up: every install ends faster than it started (6.18.0)          capacity: 30   dates: 2026-11-17–
 
