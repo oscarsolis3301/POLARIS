@@ -1318,3 +1318,4 @@
 {"ts":1794962077,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"kit/ops/lib/integrate.sh"}
 {"ts":1794962092,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"ops/tests/wave-check.cmd"}
 {"ts":1794962107,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"ops/tests/wave-check.expected"}
+{"ts":1794962127,"ev":"grant","id":"T-317","who":"Owner@DESKTOP","note":"kit/ops/lib/admin.sh"}
