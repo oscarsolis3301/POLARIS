@@ -1,4 +1,4 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.20.0] -->
+<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.21.0] -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 Model-agnostic operating system for running N coding agents in parallel on this repo with zero merge
@@ -6,29 +6,29 @@ conflicts. This file is small on purpose — the harness injects it into EVERY s
 subagent, so every byte here is paid 6-8 times a run. It routes you to your role and nothing else.
 
 ## ROLE DISPATCH — do this first
-Your kickoff names your role. Read `ops/roles/<ROLE>.md` and execute it. Nothing else.
+Your kickoff names your role. Run `bash ops/polaris role <ROLE>` and execute it. Nothing else.
 
-| Kickoff says | Read | Sessions |
+| Kickoff says | Run | Sessions |
 |---|---|---|
 | **`start`** · `start building` · `go` · `let's build` · `polaris start` | **run `bash ops/polaris triage` — line 1 names your lane** (below) | per lane |
-| a plan you wrote was just approved (harness plan mode, `plan_gate`, or a typed yes) | `ops/roles/CONDUCTOR.md` in THIS chat — no subagent tool → `PLANNER.md`, then the handover loop | 1 |
-| "You are INIT" | `ops/roles/INIT.md` | 1, once per repo |
-| "You are the PLANNER" | `ops/roles/PLANNER.md` | 1 at a time |
-| "You are SOLO" | `ops/roles/SOLO.md` | 1 — one small change, start to merged, no subagents |
-| "You are a BUILDER" | `ops/roles/BUILDER.md` | N in parallel |
-| "You are the INTEGRATOR" | `ops/roles/INTEGRATOR.md` | 1 at a time |
-| "You are the CONDUCTOR" | `ops/roles/CONDUCTOR.md` | 1 — runs the whole loop via role subagents |
-| "You are EVOLVE" | `ops/roles/EVOLVE.md` | 1, between sprints |
+| a plan you wrote was just approved (harness plan mode, `plan_gate`, or a typed yes) | `bash ops/polaris role CONDUCTOR` in THIS chat — no subagent tool → `role PLANNER`, then the handover loop | 1 |
+| "You are INIT" | `bash ops/polaris role INIT` | 1, once per repo |
+| "You are the PLANNER" | `bash ops/polaris role PLANNER` | 1 at a time |
+| "You are SOLO" | `bash ops/polaris role SOLO` | 1 — one small change, start to merged, no subagents |
+| "You are a BUILDER" | `bash ops/polaris role BUILDER` | N in parallel |
+| "You are the INTEGRATOR" | `bash ops/polaris role INTEGRATOR` | 1 at a time |
+| "You are the CONDUCTOR" | `bash ops/polaris role CONDUCTOR` | 1 — runs the whole loop via role subagents |
+| "You are EVOLVE" | `bash ops/polaris role EVOLVE` | 1, between sprints |
 
 **`triage` decides the lane — you never weigh it by hand.** It reads points, risk, `express:` and
 the RULES-guarded paths straight off the board and prints one word:
 
 | line 1 | you are | why |
 |---|---|---|
-| `solo` | `ops/roles/SOLO.md` | one context does the whole path. **This is the common case** |
+| `solo` | `bash ops/polaris role SOLO` | one context does the whole path. **This is the common case** |
 | `express` | CONDUCTOR, express path | one builder, one integrator |
-| `full` | `ops/roles/CONDUCTOR.md` (no subagent tool → `PLANNER.md`) | the full loop |
-| `tidy` | `ops/roles/TIDY.md` | the tune-up is due — fold waiting chains, run the layout pass, propose settings; one context, no subagents |
+| `full` | `bash ops/polaris role CONDUCTOR` (no subagent tool → `role PLANNER`) | the full loop |
+| `tidy` | `bash ops/polaris role TIDY` | the tune-up is due — fold waiting chains, run the layout pass, propose settings; one context, no subagents |
 
 - **`start` is the everyday kickoff.** It means "take the next piece of work". Empty board → the
   triage answer routes you to PLANNER instead of erroring.
@@ -52,7 +52,7 @@ the RULES-guarded paths straight off the board and prints one word:
 - **NEVER act as two roles inside one CONTEXT.** A hop at a board-proven boundary is not a second
   role — it is the next context (Invariant 5). Sole in-context exception: the INIT → PLANNER
   bootstrap. The CONDUCTOR is not a second one — it holds NO role and delegates each to a fresh
-  subagent. (Why, and the SOLO cost argument: `ops/PROTOCOL.md` § LANES.)
+  subagent. (Why, and the SOLO cost argument: `bash ops/polaris doc PROTOCOL "LANES"`.)
 
 ## FEWEST HOPS — the core principle
 - **Fewest hops.** Builders start with `pack` — it already prints the guides for their folders.
@@ -61,7 +61,7 @@ the RULES-guarded paths straight off the board and prints one word:
 - **A layout that makes you jump is a bug.** `hops` measures it, the tidy lane fixes it — no drive-by moves.
 - **Ask first, then finish.** Every question goes in one round before work starts. After it: a safe
   default, or park that piece and finish the rest — the close lists what waits on the human. Why, and
-  when the tidy pass runs: `ops/PROTOCOL.md` § SAVE HOPS.
+  when the tidy pass runs: `bash ops/polaris doc PROTOCOL "SAVE HOPS"`.
 
 ## THE ONE IDEA
 All coordination is front-loaded into the Planner. Every task gets a **disjoint set of files it may
@@ -71,8 +71,10 @@ task — is broken by an atomic lock. Plan once, fan out. Do NOT rely on runtime
 
 ## THE TOOL — `ops/polaris`
 Every board mechanic is ONE command. Use the script instead of hand-rolling git recipes; it is
-race-tested. (Cannot execute commands? Follow `ops/MANUAL.md` literally.) `ops/polaris help` prints
-every command; **`ops/PROTOCOL.md` § THE TOOL** explains when to reach for each.
+race-tested.
+(Cannot execute commands? Read the kit's MANUAL.md — beside ops/polaris — and follow it literally.)
+`ops/polaris help` prints every command; **`bash ops/polaris doc PROTOCOL "THE TOOL"`** explains when
+to reach for each.
 
 ```
 claim [ID]  →  build  →  verify  →  handoff     # a Builder's whole life
@@ -81,7 +83,7 @@ find <symbol>                                    # where is X — one hop, BEFOR
 check                                            # golden acceptance, zero tokens
 ```
 
-## READ THIS WHEN YOU NEED IT — `ops/PROTOCOL.md`
+## READ THIS WHEN YOU NEED IT — `bash ops/polaris doc PROTOCOL`
 The rest of the protocol lives there so this file stays cheap to inject: **the full command table ·
 what lives where on disk · LANES · TOKEN DISCIPLINE · MODEL ROUTING · VOICE · MODEL NOTES.** Open
 the section you need. Your role file already names the commands your role runs, so most sessions
@@ -127,7 +129,7 @@ Deleting any file (a move proven by `hops --proof` is not a delete; a merge is) 
 any `risk: high` task · converting a `RULES.tsv` rule between `path` and `ask` — each unless the approved plan named it. Ask before the run, never during: the plan names it, or it parks.
 **Not on it:** git/workspace mechanics are never ask material after plan approval — the CLI prints the next step; follow it.
 **Never offer a menu of execution strategies.** How many builders, one chat or several, board or no board, which lane — these are `triage`'s answer, never a question. The interview (0b) is about the PRODUCT. A question about how POLARIS itself will run was already answered by the CLI.
-Taken lock · busy lane · dirty tree → `ops/PROTOCOL.md` § N CHATS, ONE REPO. Real asks stay: spec ambiguity, `risk: high`, `ask` scopes.
+Taken lock · busy lane · dirty tree → `bash ops/polaris doc PROTOCOL "N CHATS, ONE REPO"`. Real asks stay: spec ambiguity, `risk: high`, `ask` scopes.
 
 ## PROGRESS FORMAT
 After each meaningful step, one line: `✅ <what> — <file>`. On any stop: `⛔ <why> — <what you need>`.

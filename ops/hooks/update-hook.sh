@@ -73,17 +73,22 @@ uh_primary() {
 }
 # The whole hook: resolve the primary, refuse nothing, run the engine, let its one line through.
 uh_main() {
-  local in='' cwd='' p line today='' checked='' latest='' cur='' a b i x y
+  local in='' cwd='' p line today='' checked='' latest='' cur='' a b i x y pl vf
   IFS= read -r -d '' in || true                # the whole payload, no `cat` process
   jstr cwd "$in" && cwd="$REPLY"
   uh_primary "$cwd" || exit 0
   p="$REPLY"
-  [ -f "$p/ops/polaris" ] || exit 0
+  # Kit files through the repo-or-kit lookup (doc-server § 2): the repo's copy wins, else this hook's kit.
+  [ -e "$p/ops/polaris" ] && pl="$p/ops/polaris" || pl="${BASH_SOURCE[0]%/*}/../polaris"
+  [ -e "$p/ops/VERSION" ] && vf="$p/ops/VERSION" || vf="${BASH_SOURCE[0]%/*}/../VERSION"
+  [ -f "$pl" ] || exit 0
+  case "$pl" in /*|?:*) ;; *) pl="$PWD/$pl";; esac   # the run below cds first
+  [ -e "$p/ops/polaris" ] || [ -f "$p/ops/CONVENTIONS.md" ] || exit 0   # a copy, or POLARIS state
   [ -f "$p/kit/ops/pack.py" ] && exit 0        # self-hosting: this repo never self-updates
   # Today in LOCAL time, as the cache writes it (`date +%Y-%m-%d`). bash < 4.2 has no %(…)T: one
   # `date` there is still far cheaper than two CLI starts.
   printf -v today '%(%Y-%m-%d)T' -1 2>/dev/null || today="$(date +%Y-%m-%d 2>/dev/null)" || today=''
-  if [ -f "$p/.polaris/update-cache" ] && [ -f "$p/ops/VERSION" ]; then
+  if [ -f "$p/.polaris/update-cache" ] && [ -f "$vf" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
       line="${line//[[:space:]]/}"
       case "$line" in
@@ -93,7 +98,7 @@ uh_main() {
     done < "$p/.polaris/update-cache"
     while IFS= read -r line || [ -n "$line" ]; do
       case "$line" in version:*) line="${line#version:}"; line="${line%%#*}"; cur="${line//[[:space:]]/}"; break;; esac
-    done < "$p/ops/VERSION"
+    done < "$vf"
     # Checked today → the CLI would answer from this same cache (update_latest's throttle), and it
     # acts only when latest > version. So: no latest, or latest <= version, is a guaranteed no-op.
     # Semver field by field in base 10 (a string compare puts 6.9.0 above 6.10.0); both sides must
@@ -114,9 +119,9 @@ uh_main() {
       fi
     fi
   fi
-  [ "$TESTMODE" = 1 ] && { printf 'update-hook: would run %s/ops/polaris update --auto\n' "$p"; exit 0; }
+  [ "$TESTMODE" = 1 ] && { printf 'update-hook: would run %s update --auto\n' "$pl"; exit 0; }
   mkdir -p "$p/.polaris" 2>/dev/null || true
-  ( cd "$p" && bash ops/polaris update --auto 2>>"$p/.polaris/update.log" ) || true
+  ( cd "$p" && bash "$pl" update --auto 2>>"$p/.polaris/update.log" ) || true
   exit 0
 }
 [ "${1:-}" = "--test" ] && TESTMODE=1

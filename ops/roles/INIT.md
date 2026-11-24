@@ -6,7 +6,7 @@ The point is that a human says "install polaris" once and ends up ready to build
 ## 0. Preconditions
 - **Has INIT already run?** The test is `ops/CONVENTIONS.md` — INIT writes it and nothing else does. It exists → say so and offer only (a) refresh MAP.md, (b) re-run the interview, (c) abort; NEVER re-initialize over a live board. It does NOT exist → this repo has never been initialized; proceed, and do not ask. An `ops/board/` with no `ops/CONVENTIONS.md` is a bare install from an older kit, not a live board — ignore it, `init-board` in step 3 is idempotent.
 - `chmod +x ops/polaris ops/hooks/ownership-guard.sh` (once). If the kit's `.claude/` folder is present, tell the human: Claude Code will ask to trust the project hook on first use — that hook is the write-time ownership guard, approving it is expected.
-- Run `bash ops/polaris doctor`. On a machine's first POLARIS use, also run `bash ops/polaris doctor --selftest` (throwaway repo; it runs for MINUTES, not seconds — give it an explicit timeout well above the measured time, and past your harness's cap follow `ops/PROTOCOL.md` § LONG COMMANDS). Windows: run everything in **Git Bash** (ships with Git for Windows) — PowerShell is not supported.
+- Run `bash ops/polaris doctor`. On a machine's first POLARIS use, also run `bash ops/polaris doctor --selftest` (throwaway repo; it runs for MINUTES, not seconds — give it an explicit timeout well above the measured time, and past your harness's cap follow `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`). Windows: run everything in **Git Bash** (ships with Git for Windows) — PowerShell is not supported.
 
 ## 1. Survey — hard token budget, no exceptions
 Greenfield (near-empty repo): skip to step 2; MAP.md is written from the interview instead.
@@ -22,7 +22,8 @@ From this, infer: stack + versions, module boundaries, entry points, where tests
 
 ## 2. Interview — DETECT FIRST, then ask only what the repo cannot answer
 
-**HARD CAP: 3 interactions — and the default is 2.** Most of what INIT used to ask is written down
+**HARD CAP: 3 interactions — and the default is 2** (1 when this computer already answered every
+2a preference). Most of what INIT used to ask is written down
 in the repo already. Asking a human to recite their own `package.json` is not diligence, it is an
 interrogation, and it is why installing POLARIS felt like a chore. Derive everything derivable; ask
 the rest; move on.
@@ -42,20 +43,23 @@ use it — it is faster and less intimidating than a wall of numbered markdown. 
 numbered list. Never more than 4 questions in one call.
 
 ### 2a. Interaction 1 — the preferences POLARIS asks for, in ONE call
-The questions are data, not prose. `bash ops/polaris interview` prints a `QUESTION` line and its
-`OPTION` lines for every preference this repo has never answered — on a fresh repo that is voice ·
-adhd · claim, i.e. the rows of `ops/KEYS.tsv` whose `ask` column is filled; the file is the list,
-this paragraph is not. Ask ALL of them in ONE `AskUserQuestion` (a numbered list where the harness
-has no choice UI): the voice question FIRST, the rest in the order printed, the `default`-marked
-option pre-selected. Never ask a question the CLI did not print, and never add one of your own.
+The questions are data, not prose. Run `bash ops/polaris interview --init` — it works before
+`ops/CONVENTIONS.md` exists. It prints `ANSWERED	<key>	<value>	machine` for every preference this
+computer already answered, and a `QUESTION` line and its `OPTION` lines for the rest — on a fresh
+computer that is voice · adhd · claim, i.e. the rows of `bash ops/polaris doc KEYS` whose `ask`
+column is filled; the file is the list, this paragraph is not. ANSWERED lines are this computer's
+answers: use them, never re-ask them. Ask ONLY the printed QUESTION lines, ALL of them in ONE
+`AskUserQuestion` (a numbered list where the harness has no choice UI): the voice question FIRST,
+the rest in the order printed, the `default`-marked option pre-selected. Never ask a question the
+CLI did not print, and never add one of your own. Record every answer, machine or asked, in step 3.
 
-INIT runs before `ops/CONVENTIONS.md` exists, so at this point `interview` refuses — it writes into
-that file. Read the same questions straight off `ops/KEYS.tsv`'s `ask` column (the installer just
-copied it) and record the answers in step 3, where `interview --set` applies them.
+**No QUESTION line → skip interaction 1 entirely.** The voice answer is then the machine's, and it
+binds from the next message.
 
 The voice answer binds **from the next message on**, including everything below — it is the
 difference between a human who understands their own config and one who guessed. The hard cap
-stays 3 interactions, the default 2: this call is interaction 1, whatever it carries.
+stays 3 interactions, the default 2 (1 when interaction 1 is skipped): this call is interaction 1,
+whatever it carries.
 
 ### 2b. DERIVE — silently, from the survey you already did. Ask none of this.
 Step 1 already read every manifest. Use it:
@@ -116,9 +120,9 @@ either derivable, defaultable, or EVOLVE's job once there is real data. Do not a
 has just said "install polaris" does not yet know their own sprint capacity in points.
 
 ## 3. Write the artifacts — silently. No progress commentary.
-Instantiate the skeletons below with survey + interview results — the `voice:`, `adhd:` and `claim:` lines carry the 2a answers. Then run `bash ops/polaris init-board` (creates board dirs, gitignores `.polaris/`, prepares the lock dir, seeds `EVENTS.ndjson` telemetry with its union-merge gitattribute, seeds `ops/RULES.tsv`, and seeds `ops/SURFACES.tsv` header-only — the test map `polaris done` fills from tasks' `surface:` lists and `surfaces --scaffold --apply` seeds from the layout, never a hand edit). Turn every danger-zone/content answer from the interview into an armed RULES line (format documented at the top of the file), and arm the seeded `ops/SURFACES.tsv` line the same way — it ships commented in the RULES header; delete its leading `#` so the map is `path`-guarded and only `ops/polaris` ever writes it. Now record the 2a answers where the kit applies them: `bash ops/polaris interview --set voice=<answer> --set adhd=<answer> --set claim=<answer>` — idempotent on the values you just wrote, and the one step that applies the `adhd:` side effect. `--set` refusing an answer means it cannot apply here yet: keep that key's default, quote the command's own remedy in the step-5 report, and move on. Then `bash ops/polaris surfaces --scaffold --apply` — the survey already derived `test:`; this maps what the layout makes unambiguous (zero rows is a fine answer) and the step-5 report says how many. Then install the design bar: copy `ops/templates/DESIGN.md` to `ops/DESIGN.md` IF AND ONLY IF `ops/DESIGN.md` does not already exist, and never overwrite one that does — it is repo-editable state exactly like `ops/CONVENTIONS.md`, which is why `install.sh` deliberately never copies it: on `$KIT_CODE` an update would clobber the owner's own bar. Write the look-and-feel sentence from 2c into its `## THIS PRODUCT` section, in their words, and leave the rest of the template as it shipped. Run `bash ops/polaris rules` to health-check them. Once the artifacts are written, run `bash ops/polaris brain` (the knowledge base every role reads first) and then `bash ops/polaris where --write` (the root map in `CLAUDE.md`, drawn from MAP.md). Commit everything as `chore(polaris): initialize` — `interview --set`, the scaffold and `where --write` write, they never commit; this is that commit.
+Instantiate the skeletons below with survey + interview results — the `voice:`, `adhd:` and `claim:` lines carry the 2a answers (machine or asked). Then run `bash ops/polaris init-board` (creates board dirs, gitignores `.polaris/`, prepares the lock dir, seeds `EVENTS.ndjson` telemetry with its union-merge gitattribute, seeds `ops/RULES.tsv`, and seeds `ops/SURFACES.tsv` header-only — the test map `polaris done` fills from tasks' `surface:` lists and `surfaces --scaffold --apply` seeds from the layout, never a hand edit). Turn every danger-zone/content answer from the interview into an armed RULES line (format documented at the top of the file), and arm the seeded `ops/SURFACES.tsv` line the same way — it ships commented in the RULES header; delete its leading `#` so the map is `path`-guarded and only `ops/polaris` ever writes it. Now record the 2a answers where the kit applies them: `bash ops/polaris interview --set voice=<answer> --set adhd=<answer> --set claim=<answer> --remember` — idempotent on the values you just wrote, the one step that applies the `adhd:` side effect, and `--remember` records each answer this computer's preferences file lacks. `--set` refusing an answer means it cannot apply here yet: keep that key's default, quote the command's own remedy in the step-5 report, and move on. Then `bash ops/polaris surfaces --scaffold --apply` — the survey already derived `test:`; this maps what the layout makes unambiguous (zero rows is a fine answer) and the step-5 report says how many. Then install the design bar: run `bash ops/polaris doc templates/DESIGN > ops/DESIGN.md` IF AND ONLY IF `ops/DESIGN.md` does not already exist, and never overwrite one that does — it is repo-editable state exactly like `ops/CONVENTIONS.md`, which is why `install.sh` deliberately never copies it: on `$KIT_CODE` an update would clobber the owner's own bar. Write the look-and-feel sentence from 2c into its `## THIS PRODUCT` section, in their words, and leave the rest of the template as it shipped. Run `bash ops/polaris rules` to health-check them. Once the artifacts are written, run `bash ops/polaris brain` (the knowledge base every role reads first) and then `bash ops/polaris where --write` (the root map in `CLAUDE.md`, drawn from MAP.md). Commit everything as `chore(polaris): initialize` — `interview --set`, the scaffold and `where --write` write, they never commit; this is that commit.
 
-Values you no longer ask for, so choose them: `stale_hours: 1`; `autolaunch: ask` (safe default — offers to open Builders after planning rather than surprising a brand-new user with spawned windows); SPRINT capacity — start at **10 points** and let EVOLVE calibrate it from real cycle data; omit `uat:` and `notify:` unless the survey found an obvious end-to-end command. Do not narrate any of this. The human sees one report, in step 4, after the Planner has run.
+Values you no longer ask for, so choose them: `stale_hours: 1`; `autolaunch: ask` (safe default — offers to open Builders after planning rather than surprising a brand-new user with spawned windows); SPRINT capacity — start at **10 points** and let EVOLVE calibrate it from real cycle data; omit `uat:` and `notify:` unless the survey found an obvious end-to-end command. A `#key:` line (no space after `#`) in the skeleton is a stub for a person-level key: write it as shown — this computer's preferences file fills it, else the kit default, which is the value shown. Do not narrate any of this. The human sees one report, in step 4, after the Planner has run.
 
 ### CONVENTIONS.md skeleton — the top block is machine-read by `ops/polaris`; one `key: value` per line
 ```markdown
@@ -129,16 +133,16 @@ integration: batch          # batch (merge all, test once, halve on red) | paran
 voice: standard             # standard (plain, friendly) | technical (dense, terse) — how agents TALK to
                             # the human. Never changes what they write to disk, or any gate. Default: standard.
 adhd: off                   # off | on — on lets the vendored /i-have-adhd skill fire in every session here; the output style already keeps replies short and warm
-autolaunch: ask             # wt (Planner opens a Builder pane per ready task beside you) | ask (offer once
+#autolaunch: ask            # wt (Planner opens a Builder pane per ready task beside you) | ask (offer once
                             # after planning) | off (just print the kickoff). Windows Terminal only; harmless
                             # elsewhere — falls back to printing. Default: ask.
-builders: subagents         # subagents (a work request runs the whole loop in one chat — interview, plan,
+#builders: subagents        # subagents (a work request runs the whole loop in one chat — interview, plan,
                             # build, integrate — each role a fresh subagent; needs a harness with a subagent
                             # tool, e.g. Claude Code) | panes (conductor stops after planning; Builders run
                             # in terminal sessions per autolaunch:). No subagent tool → behaves as panes.
-model_strong: <name>        # optional; literal model name per tier — `polaris route` picks the tier
-model_mid: <name>           # from points+risk, CONDUCTOR spawns and `fleet` panes carry the name.
-model_cheap: <name>         # Omit all three unless the human names models (model-routing.md).
+#model_strong: <name>       # optional; literal model name per tier — `polaris route` picks the tier
+#model_mid: <name>          # from points+risk, CONDUCTOR spawns and `fleet` panes carry the name.
+#model_cheap: <name>        # Omit all three unless the human names models (model-routing.md).
 # autonomy: standard         # standard | trusted — composition macro; nothing reads it directly. Since 6.0
                             # the DEFAULT (nothing set) is the trusted composition: plan_gate: auto +
                             # builder_questions: default-safe + evolve_apply: auto-reversible, applied only
@@ -159,18 +163,18 @@ model_cheap: <name>         # Omit all three unless the human names models (mode
                             # stale_hours/voice) without "approve <n>"; everything else still waits. EVOLVE may
                             # never set autonomy or its components either way. Unset since 6.0 = auto-reversible
                             # — uncomment this line (or set autonomy: standard) to restore the approve queue.
-drain: plan                 # plan (stop after the approved plan's own tasks — one "go" authorizes the
+#drain: plan                # plan (stop after the approved plan's own tasks — one "go" authorizes the
                             # plan the human just approved, not the whole board; dependency chains
                             # INSIDE the plan still loop automatically) | queue (also finish tasks
                             # already waiting in ready/ before signing off — the plan gate must
                             # disclose that depth) | backlog (queue, then loop the Planner to promote
                             # more from backlog/, up to drain_slices rounds). Default: plan.
-drain_slices: 2              # backlog mode only: max planner-promotion rounds per run. Default: 2.
-run_max_tasks: 12           # run bounds — a loop with no ceiling is not autonomy. Tasks a single run
-run_max_minutes: 90         # will BUILD · wall clock since kickoff · cumulative subagent spawns ·
-run_max_agents: 20          # fix waves. 0 = unbounded. Checked at WAVE BOUNDARIES only, never
-run_fix_waves: 2            # mid-task; at a cap the run integrates what landed, runs qa, and reports.
-qa_scout: auto              # auto (spawn the runtime QA scout ONLY when uat: is empty AND the run
+#drain_slices: 2             # backlog mode only: max planner-promotion rounds per run. Default: 2.
+#run_max_tasks: 12          # run bounds — a loop with no ceiling is not autonomy. Tasks a single run
+#run_max_minutes: 90        # will BUILD · wall clock since kickoff · cumulative subagent spawns ·
+#run_max_agents: 20         # fix waves. 0 = unbounded. Checked at WAVE BOUNDARIES only, never
+#run_fix_waves: 2           # mid-task; at a cap the run integrates what landed, runs qa, and reports.
+#qa_scout: auto             # auto (spawn the runtime QA scout ONLY when uat: is empty AND the run
                             # touched a runnable: path — so a repo with no declared runnable surface
                             # never pays for one) | off | always (webapps where console noise and
                             # broken flows genuinely evade the suite). Default: auto.
@@ -194,7 +198,7 @@ test_fast: <cmd or omit>    # optional: the BUILDER's pre-handoff gate when the 
                             # that times out returns NOTHING and gets re-run, which is worse than slow.
 stale_hours: 1              # sweep warns on active locks older than this
 uat: <cmd or omit>          # optional end-to-end/UAT command — Integrator runs it ONCE on the integrate branch
-notify: <cmd or omit>       # optional: runs in background per board event with POLARIS_EV/ID/NOTE env vars
+#notify: <cmd or omit>      # optional: runs in background per board event with POLARIS_EV/ID/NOTE env vars
 bootstrap: <cmd or omit>    # optional: install deps in a fresh worktree right after claim (npm ci /
                             # pnpm i --frozen-lockfile / uv sync / cargo fetch). A worktree is a bare
                             # checkout — without this, the first `verify:` on a real repo fails on missing
@@ -207,7 +211,7 @@ publish: direct             # direct (seal merges + pushes <base> locally, tags)
                             # integrate/<date> + prints a PR URL; the human merges with the host's
                             # merge-commit strategy, then seal --sync tags + cleans up). Default direct;
                             # origin on bitbucket.org → suggest pr (a protected <base> rejects direct pushes).
-express: auto               # auto (default; unset = auto) — a lone small task takes the express lane
+#express: auto              # auto (default; unset = auto) — a lone small task takes the express lane
                             # (land+suite+seal in one pass) instead of the full pipeline | off (full
                             # ceremony always). Unknown value → warn once, behave as off (the safe side).
 # ops/polaris brain (re)generates the untracked .polaris/brain/ knowledge base every role reads first — git-ignored, MAP.md the tracked fallback.
@@ -229,7 +233,7 @@ code style: <pointers, or "match surrounding code">
 | burndown row | `polaris seal`, automatically | ops/SPRINT.md |
 | Learned bullet | `polaris learned` — any lane, any branch (EVOLVE prunes to ≤5) | ops/SPRINT.md |
 | MAP content | Integrator (via task map_delta) | ops/MAP.md |
-| conventions values + Planner calibration notes | EVOLVE (human-approved) | this file · ops/roles/PLANNER.md |
+| conventions values + Planner calibration notes | EVOLVE (human-approved) | this file · `bash ops/polaris role PLANNER` |
 | RULES lines | human (EVOLVE proposes) | ops/RULES.tsv |
 | task truth | the board scripts | ops/board/** frontmatter |
 | kit code + invariants | human only | CLAUDE.md · ops/polaris · ops/lib/ · ops/dashboard.py · hooks |
@@ -280,7 +284,7 @@ git config alias.clean-log "log --first-parent --invert-grep --grep=^chore(board
 ```
 
 ## 4. Chain straight into the PLANNER — same session, no restart, no handoff message
-Do **not** tell them to open a new session. Read `ops/roles/PLANNER.md` and execute it now, with the goal from 2c as the idea to groom. This is the ONE sanctioned two-role session (see CLAUDE.md § ROLE DISPATCH): it runs before any Builder exists, on the base branch, and writes zero feature code. Every other session stays single-role.
+Do **not** tell them to open a new session. Run `bash ops/polaris role PLANNER` and execute it now, with the goal from 2c as the idea to groom. This is the ONE sanctioned two-role session (see CLAUDE.md § ROLE DISPATCH): it runs before any Builder exists, on the base branch, and writes zero feature code. Every other session stays single-role.
 
 The Planner's board commit is separate from yours — plan, place, commit as `chore(board): plan <goal>`, exactly as PLANNER.md says.
 
@@ -296,6 +300,6 @@ Say only:
 - what the tune-up found: run `bash ops/polaris tune` last and put its lines here in plain words
   (rc 0 = one line, nothing slows this project down). Never act on them in this context — the pass
   itself runs at the next `bash ops/polaris next`, a context of its own.
-- **two low-key offers, never questions — they do not touch the 3-interaction cap, it already closed**: *"Keep a standing goal list? I can seed `ops/ROADMAP.md` from the shipped skeleton (`ops/templates/ROADMAP.md`)."* and *"Want board events pinged somewhere? Notify recipes live in `ops/PROMPTS.md`."* Skip either line if it doesn't apply — offers, not homework.
+- **two low-key offers, never questions — they do not touch the 3-interaction cap, it already closed**: *"Keep a standing goal list? I can seed `ops/ROADMAP.md` from the shipped skeleton (`bash ops/polaris doc templates/ROADMAP`)."* and *"Want board events pinged somewhere? Notify recipes live in `bash ops/polaris doc PROMPTS`."* Skip either line if it doesn't apply — offers, not homework.
 
 Do NOT list every task, print the board, explain `wsjf`/`files_owned`/worktrees, recap the config you just wrote, or describe the write-guard. It is all on disk and they can ask. Under `voice: technical`, be dense and drop the explanations — but the warnings stay.

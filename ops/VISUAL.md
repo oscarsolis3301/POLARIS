@@ -52,4 +52,4 @@ permission prompt. The Planner gives each visual task a `screen:` — that human
 folder. Set `gallery:` and `done` publishes one curated image and caption per screen there, committed,
 so you can show someone. The bar those screens must clear is `ops/DESIGN.md`: INIT writes it and it is
 YOURS to edit, so unlike this file it deliberately carries no `ops/RULES.tsv` row. This file is an
-installed copy — edit `kit/ops/VISUAL.md` in the kit, which is what its rule row says.
+installed copy — edit the kit's own copy (`VISUAL.md` under `kit/ops/`), which is what its rule row says.

@@ -134,8 +134,8 @@ the approved plan's yes while the owner was away.
 **Releases, dogfoods, publishes, long suites, waits — you run them.** A run that hands the owner ten
 commands to paste has not finished; it has stopped and called it a handover, and while they are away
 nobody pastes anything. So write the commands one per line in a file, run them as ONE detached job,
-and collect the verdict once (`ops/PROTOCOL.md` § LONG COMMANDS names the wait). A 🚩 block is only
-for what needs a PERSON — the exhaustive list is `ops/roles/PLANNER.md` § Needs you before I start:
+and collect the verdict once (`bash ops/polaris doc PROTOCOL "LONG COMMANDS"` names the wait). A 🚩 block is only
+for what needs a PERSON — the exhaustive list is `bash ops/polaris doc roles/PLANNER "Needs you before I start"`:
 OS elevation, a sign-in or one-time code, a risky change or `ask` scope the plan did not cover,
 spending money, deleting what existed before the run or a force-push, a refusal that survives one
 reworded retry, another machine. **Away, there is no 🚩 mid-run:** the plan named it before the

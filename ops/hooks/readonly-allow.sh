@@ -209,6 +209,11 @@ git_ok() {
 polaris_ok() {
   case "${1:-}" in
     find|show|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|route|--help|-h|'') return 0;;
+    # `role`, `doc` and `router` only print kit documents (doc-server § 4): every form is a read.
+    role|doc|router) return 0;;
+    # `prefs` bare shows the layers; `--set`/`--unset`/`--seed`/`--yield` write this computer's
+    # preferences or this repo's CONVENTIONS (machine-prefs § 7), so any argument keeps its prompt.
+    prefs) [ $# -le 1 ] && return 0 || return 1;;
     # `speed` is the read-only history report (one-yes.md § 6), and `speed --plan <slug> [<draft.md>…]`
     # only reads the board, EVENTS and the drafts (hour.md § 5): a plain slug, then plain paths. Any
     # other argument (`--apply`, a flag after the slug, a shell-shaped word) keeps its prompt.

@@ -80,11 +80,19 @@ hh_primary() {
   REPLY="$(git -C "${c:-.}" rev-parse --show-toplevel 2>/dev/null)" && [ -n "$REPLY" ]
 }
 # One CONVENTIONS key: $1 key, $2 primary, $3 default -> REPLY. `sed`, never `ops/polaris` (~2.2 s)
-# — this is a hot path, and a hook that is slow is a hook that is not there.
+# — this is a hot path, and a hook that is slow is a hook that is not there. A blank or missing repo
+# line falls back to this computer's preferences (machine-prefs § 4; POLARIS_PREFS= turns it off);
+# no machine file costs one builtin test, no process.
 hh_cfg() {
-  local f="$2/ops/CONVENTIONS.md" v
-  REPLY="${3:-}"; [ -f "$f" ] || return 0
-  v="$(sed -n "s/^$1:[[:space:]]*\([^#]*\).*\$/\1/p" "$f" 2>/dev/null | head -1)"
+  local f="$2/ops/CONVENTIONS.md" m="${POLARIS_PREFS-${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/preferences}" v
+  REPLY="${3:-}"
+  if [ -f "$f" ]; then
+    v="$(sed -n "s/^$1:[[:space:]]*\([^#]*\).*\$/\1/p" "$f" 2>/dev/null | head -1)"
+    v="${v%"${v##*[![:space:]]}"}"
+    [ -n "$v" ] && { REPLY="$v"; return 0; }
+  fi
+  [ -n "$m" ] && [ -f "$m" ] || return 0
+  v="$(sed -n "s/^$1:[[:space:]]*\([^#[:space:]][^#]*\).*\$/\1/p" "$m" 2>/dev/null | head -1)"
   v="${v%"${v##*[![:space:]]}"}"
   [ -n "$v" ] && REPLY="$v"
   return 0
@@ -167,8 +175,8 @@ hh_bg_live() {
 _hh_away() {
   local d m=''
   case "$SID" in ''|*[!A-Za-z0-9_-]*) return 1;; esac
-  [ -n "${HOME:-}" ] || return 1
-  d="$HOME/.claude/polaris/model-state"
+  [ -n "${CLAUDE_CONFIG_DIR:-${HOME:-}}" ] || return 1
+  d="${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/model-state"
   [ -f "$d/$SID.approved" ] || return 1
   hh_jstr permission_mode "$IN" && m="$REPLY"
   [ -n "$m" ] || { hh_state "$d" "$SID.mode" || return 1; m="$REPLY"; }
@@ -339,14 +347,14 @@ hh_stop() {
   case "$verb" in
     build)  n2="$(printf '%s\n' "$out" | sed -n 2p)"; n2="${n2#   }"; n2="${n2%, wsjf *}"
             [ -n "$n2" ] && n2=" — ${n2})"
-            hh_emit block:build "You are a BUILDER (hop $n of $cap). The board hands you $id$n2. Leave the finished worktree first (ExitWorktree, or cd \"$p\"), then: bash ops/polaris claim $id — taken? bash ops/polaris claim takes the next. Read ops/roles/BUILDER.md if this context no longer has it; at your handoff run bash ops/polaris next and follow it.";;
+            hh_emit block:build "You are a BUILDER (hop $n of $cap). The board hands you $id$n2. Leave the finished worktree first (ExitWorktree, or cd \"$p\"), then: bash ops/polaris claim $id — taken? bash ops/polaris claim takes the next. Run bash ops/polaris role BUILDER if this context no longer has it; at your handoff run bash ops/polaris next and follow it.";;
     integrate) ids="$(printf '%s\n' "$out" | sed -n 's/^   review\/: //p')"
             hi="$(printf '%s\n' "$out" | sed -n 's/^   risk: high, human approves: //p')"
             [ -n "$hi" ] && hi=" $hi are risk: high — the human approves those, never you."
-            hh_emit block:integrate "You are the INTEGRATOR (hop $n). From the primary checkout land what waits in ops/board/review/ — $ids: bash ops/polaris land <ID> per task, then seal, run-verify + done each.$hi Read ops/roles/INTEGRATOR.md if this context no longer has it; then bash ops/polaris next.";;
+            hh_emit block:integrate "You are the INTEGRATOR (hop $n). From the primary checkout land what waits in ops/board/review/ — $ids: bash ops/polaris land <ID> per task, then seal, run-verify + done each.$hi Run bash ops/polaris role INTEGRATOR if this context no longer has it; then bash ops/polaris next.";;
     promote) ids="$(printf '%s\n' "$out" | sed -n 's/^   eligible: \(.*\) — bash.*$/\1/p')"
             hh_emit block:promote "Backlog work is unblocked ($ids). From the primary: bash ops/polaris next --do — it promotes what passes the ready gate under the board lock — then follow its line 1.";;
-    tidy)   hh_emit block:tidy "The layout pass is due. You are TIDY (hop $n): read ops/roles/TIDY.md and run it now — one context, no subagents, it lands one task. Then bash ops/polaris next.";;
+    tidy)   hh_emit block:tidy "The layout pass is due. You are TIDY (hop $n): run bash ops/polaris role TIDY and follow it now — one context, no subagents, it lands one task. Then bash ops/polaris next.";;
     finish) hh_emit block:finish "This run's board is done. From the primary: bash ops/polaris finish — its exit code decides your close (0 opens with # 🎉 Complete!; otherwise no H1, name the one pending thing).";;
   esac
 }

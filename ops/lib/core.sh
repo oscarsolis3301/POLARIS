@@ -5,25 +5,41 @@ die() { printf '⛔ %s\n' "$*" >&2; exit 1; }
 say() { printf '✅ %s\n' "$*"; }
 note() { printf '   %s\n' "$*"; }
 
-cfg() { # cfg <key> <default>  — reads "key: value" from CONVENTIONS.md, strips " # comment".
+# The one machine home (ops/contracts/machine-prefs.md § 1, doc-server.md § 3): a variable, zero forks.
+# CLAUDE_CONFIG_DIR moves it with Claude Code's own home; unset, it is ~/.claude/polaris as always.
+POLARIS_HOME="${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris"
+
+cfg() { # cfg <key> <default>  — repo ops/CONVENTIONS.md > this machine's preferences > <default>
   # ONE awk, never a pipeline. The old shape was sed|head|sed|tr|sed — five forks per call, and on
   # Windows/Git Bash a fork costs ~240ms, so every cfg read took ~1.2s. The globals block calls cfg
   # 4+ times on EVERY polaris invocation, and the PreToolUse write-guard invokes polaris TWICE per
   # edit: that alone was ~8s per write against a 10s hook timeout, i.e. the guard was on the edge of
   # failing OPEN and silently dropping the ownership gate. One fork instead of five fixes it.
-  # Semantics are byte-identical to the pipeline, including the two edge cases it existed for:
-  #   - first match wins  (was `head -1`, now `exit`)
-  #   - a blank key carrying only a trailing comment ("lint:   # none") reads EMPTY, not the comment
-  #     text (was the leading `s/^#.*$//`, now the `s ~ /^#/` test after left-trimming)
-  local v=""
-  [ -f "$CONV" ] && v="$(awk -v k="$1" '
-    index($0, k":")==1 {
-      s=substr($0, length(k)+2)
-      sub(/\r$/,"",s); sub(/^[ \t]*/,"",s)
-      if (s ~ /^#/) s=""; else sub(/[ \t]#.*$/,"",s)
-      sub(/[ \t]*$/,"",s)
-      print s; exit
-    }' "$CONV")"
+  # Semantics, per file: first match wins; a blank key carrying only a trailing comment
+  # ("lint:   # none") reads EMPTY, not the comment text.
+  # The machine layer (ops/contracts/machine-prefs.md § 2-3): a blank or absent repo line falls
+  # through to $POLARIS_HOME/preferences (POLARIS_PREFS overrides the path; set-but-empty = off) for
+  # the allowlisted person-level keys only — the `ok` literal below, tied to KEYS.tsv's `machine`
+  # rows by golden cfg-layers. A repo's non-blank `autonomy:` masks the machine trio. No machine file
+  # → no extra fork and the old answer; with one, the SAME single awk reads it by ARGV position (a
+  # path through -v loses its backslashes on Windows).
+  local v="" c="" m="${POLARIS_PREFS-$POLARIS_HOME/preferences}"
+  [ -f "$CONV" ] && c="$CONV"
+  [ -n "$m" ] && [ -f "$m" ] || m=""
+  [ -n "$c$m" ] && v="$(awk -v k="$1" -v two="${m:+1}" '
+    function val(s) { sub(/\r$/,"",s); sub(/^[ \t]*/,"",s); if (s ~ /^#/) return ""
+                      sub(/[ \t]#.*$/,"",s); sub(/[ \t]*$/,"",s); return s }
+    BEGIN { mf = two ? ARGV[ARGC-1] : ""
+            ok = index(" voice adhd autolaunch autolaunch_max builders model_strong model_mid model_cheap effort_strong effort_mid effort_cheap autonomy plan_gate builder_questions evolve_apply drain drain_slices run_max_tasks run_max_minutes run_max_agents run_fix_waves qa_scout qa_parallel landing handover express auto_update notify heavy_slots target_minutes runner model_runner stall_minutes pulse_minutes reentry reentry_hours reentry_max away_gate bg_retries ", " " k " ")
+            trio = index(" plan_gate builder_questions evolve_apply ", " " k " ") }
+    mf != "" && FILENAME == mf {
+      if (!ok || mask) exit
+      if (index($0, k":") == 1) { s = val(substr($0, length(k)+2)); if (s != "") { print s; exit } }
+      next }
+    trio && index($0, "autonomy:") == 1 && val(substr($0, 10)) != "" { mask = 1 }
+    got { next }
+    index($0, k":") == 1 { s = val(substr($0, length(k)+2)); if (s != "") { print s; exit }; got = 1; next }
+  ' ${c:+"$c"} ${m:+"$m"})"
   [ -n "$v" ] && printf '%s' "$v" || printf '%s' "$2"
 }
 
@@ -53,6 +69,51 @@ cfg_boot() { # the three keys the globals block needs, in ONE awk pass — emits
              (b == "" ? "main" : b), (c == "" ? "local-lock" : c), (s == "" ? "4" : s)
     }
   ' "$CONV"
+}
+
+kit_file() { # kit_file <rel> — a KIT file: this repo's copy when it has one, else the kit beside the CLI
+  # (ops/contracts/machine-prefs.md § 6, doc-server.md § 2). Repo-first on purpose: the interview,
+  # keys-drift and adopt-stub goldens plant a fake ops/KEYS.tsv. Never fails. STATE files (board,
+  # CONVENTIONS, MAP, contracts, RULES, SURFACES, SPRINT, tests) stay on $OPS — never this.
+  if [ -e "$OPS/$1" ]; then printf '%s\n' "$OPS/$1"; else printf '%s\n' "$OPS_DIR/$1"; fi
+}
+
+prefs_put() { # prefs_put <key> <value> — write ONE key into this computer's preferences file
+  # (machine-prefs.md § 1, § 6). An existing live `key:` line keeps its place and its ` # …` tail and
+  # only its value changes; else `key: value` is appended (awk prints every record with its newline,
+  # so a missing trailing newline is ensured first). No file → it and its folder are created, headed
+  # by the one comment line below. Temp file + mv, never sed -i; the written line is LF.
+  # rc 1 and NO write: the layer is off (POLARIS_PREFS set but empty), or the key is not a
+  # `machine`/`seed` row of KEYS.tsv (column 6). Validating the VALUE is the caller's job.
+  local key="${1:?usage: prefs_put <key> <value>}" m="${POLARIS_PREFS-$POLARIS_HOME/preferences}" keys src hdr="" tmp
+  [ -n "$m" ] || return 1
+  keys="$(kit_file KEYS.tsv)"
+  [ -f "$keys" ] || return 1
+  case "$(awk -F'\t' -v k="$key" '{ sub(/\r$/, "") } $1 == k { print $6; exit }' "$keys")" in
+    machine|seed) ;;
+    *) return 1;;
+  esac
+  if [ -f "$m" ]; then src="$m"
+  else
+    mkdir -p "$(dirname -- "$m")" 2>/dev/null || return 1
+    src=/dev/null; hdr=1
+  fi
+  tmp="$m.polaris-tmp.$$"
+  # the value and the header ride ENVIRON, never -v (which would eat a backslash); the machine file
+  # rides ARGV for the same reason
+  if PP_V="${2-}" PP_H="# POLARIS machine preferences — one key: value per line; a repo's ops/CONVENTIONS.md line beats this file" \
+     awk -v k="$key" -v hdr="$hdr" '
+    BEGIN { v = ENVIRON["PP_V"]; if (hdr) print ENVIRON["PP_H"] }
+    !done && index($0, k":") == 1 {
+      r = substr($0, length(k) + 2); sub(/\r$/, "", r); t = ""
+      if (match(r, /[ \t]+#.*$/)) t = substr(r, RSTART)
+      else { sub(/^[ \t]*/, "", r); if (r ~ /^#/) t = " " r }
+      print k ": " v t; done = 1; next }
+    { print }
+    END { if (!done) print k ": " v }
+  ' "$src" > "$tmp" && mv -f "$tmp" "$m"; then return 0; fi
+  rm -f "$tmp"
+  return 1
 }
 
 who() { # memoize the actor id — `hostname` costs ~524ms on Windows/Git Bash.
@@ -757,6 +818,26 @@ landed_content_ok() { # landed_content_ok <ID> [<ref>] — did the task's files 
   # one stream, the two lists split by an empty line (git never prints an empty path)
   bad="$(printf '%s\n\n%s\n' "$own" "$diff" | awk 'p == 0 && $0 == "" { p = 1; next } p == 0 { o[$0] = 1; next } ($0 in o)')"
   [ -n "$bad" ] || return 0
+  # safe-landing v1.4 § K: a mismatching path that a commit in <mb>..<ref> touched under ANOTHER
+  # task's [<other ID>] subject is shared wave work — superseded, never re-landed. Paid only on a
+  # mismatch: ONE git log over the mismatching paths, one awk splits it (\001 = a subject line).
+  local log nl oifs
+  nl='
+'
+  oifs="$IFS"; IFS="$nl"; set -f
+  # shellcheck disable=SC2086 # one path per line, split on newlines only, globbing off
+  set -- $bad
+  IFS="$oifs"; set +f
+  log="$(git -C "$PRIMARY" --literal-pathspecs -c core.quotepath=off log --no-renames --format='%x01%s' --name-only "$mb..$ref" -- "$@" 2>/dev/null)" || log=""
+  if [ -n "$log" ]; then
+    bad="$(printf '%s\n\002\n%s\n' "$log" "$bad" | awk -v id="$id" '
+      p == 0 && $0 == "\002" { p = 1; next }
+      p == 0 && substr($0, 1, 1) == "\001" {
+        t = match($0, /\[[A-Za-z0-9_.-]+\]$/) && substr($0, RSTART + 1, RLENGTH - 2) != id; next }
+      p == 0 { if (t && $0 != "") s[$0] = 1; next }
+      $0 != "" && !($0 in s)')"
+    [ -n "$bad" ] || return 0
+  fi
   printf '%s\n' "$bad"
   return 1
 }

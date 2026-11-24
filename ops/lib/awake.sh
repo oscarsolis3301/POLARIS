@@ -10,8 +10,8 @@ awake_home() { # awake_home — print the registry root (ah_home's resolution, b
   # `env -i`, where $HOME is empty, so every path the registry hands out is absolute or nothing.
   if [ -n "${POLARIS_AWAKE_HOME:-}" ]; then printf '%s\n' "$POLARIS_AWAKE_HOME"; return 0; fi
   case "${OPS_DIR:-}" in */.claude/polaris) printf '%s/awake\n' "$OPS_DIR"; return 0 ;; esac
-  if [ -f "${HOME:-}/.claude/polaris/awake-hook.sh" ]; then
-    printf '%s/.claude/polaris/awake\n' "$HOME"; return 0
+  if [ -f "$POLARIS_HOME/awake-hook.sh" ]; then
+    printf '%s/awake\n' "$POLARIS_HOME"; return 0
   fi
   printf '%s\n' '-'
 }
@@ -40,10 +40,11 @@ awake_ensure() { # awake_ensure — keep this machine's daemon alive on behalf o
   # when the beat is stale. `awake_conf`/`awake_home` are deliberately NOT called here; a command
   # substitution is a subshell, and a subshell is the fork this function exists to avoid (~240ms on
   # Windows, paid on every CLI call). Silent, rc 0, ALWAYS — an unarmed machine and CI are a no-op.
-  local h="${POLARIS_AWAKE_HOME:-}" hook="${HOME:-}/.claude/polaris/awake-hook.sh"
-  [ -f "$hook" ] || hook="${OPS_DIR:-}/hooks/awake-hook.sh"   # kit-local fallback: an armed-by-env drill
+  local h="${POLARIS_AWAKE_HOME:-}" hook="$POLARIS_HOME/awake-hook.sh"
+  # kit-local fallback (an armed-by-env drill), the repo's copy first — kit_file inline, since a $(…) forks
+  [ -f "$hook" ] || { [ -e "${OPS:-}/hooks/awake-hook.sh" ] && hook="$OPS/hooks/awake-hook.sh" || hook="${OPS_DIR:-}/hooks/awake-hook.sh"; }
   [ -f "$hook" ] || return 0                                  # unarmed machine (or CI) — nothing to ensure
-  [ -n "$h" ] || h="${HOME:-}/.claude/polaris/awake"
+  [ -n "$h" ] || h="$POLARIS_HOME/awake"
   local off="" onow=""
   if [ -e "$h/disabled" ]; then   # OFF means off: `disable` used to silence only the KEY PRESS, so this
     # kept starting daemons behind the human's back — and on Windows every start is a new console.
@@ -115,9 +116,9 @@ cmd_awake() { # polaris awake [status|start|stop|disable|enable|install] — the
   # merge. Nothing here writes the board, EVENTS.ndjson, or any lock.
   local sub="${1:-status}" h="" hook="" p="" now=""
   h="$(awake_home)"
-  hook="${HOME:-}/.claude/polaris/awake-hook.sh"
-  [ -f "$hook" ] || hook="${OPS_DIR:-}/hooks/awake-hook.sh"
-  [ "$h" != "-" ] || h="${HOME:-}/.claude/polaris/awake"
+  hook="$POLARIS_HOME/awake-hook.sh"
+  [ -f "$hook" ] || hook="$(kit_file hooks/awake-hook.sh)"
+  [ "$h" != "-" ] || h="$POLARIS_HOME/awake"
   case "$sub" in
     status)
       awake_status_line ;;

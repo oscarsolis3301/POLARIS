@@ -66,7 +66,7 @@ ah_home() { # the root: env → beside an installed copy under .claude/polaris/ 
   local d="${AH_SELF%/*}"; d="${d//\\//}"
   [ -z "${POLARIS_AWAKE_HOME:-}" ] || { printf '%s\n' "$POLARIS_AWAKE_HOME"; return 0; }
   case "$d" in */.claude/polaris) printf '%s/awake\n' "$d"; return 0;; esac
-  printf '%s/.claude/polaris/awake\n' "${HOME:-.}"
+  printf '%s/polaris/awake\n' "${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}"
 }
 ah_log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$AWAKE/daemon/log" 2>/dev/null || true; }
 ah_now() { date +%s; }
@@ -193,9 +193,16 @@ ah_press() { # run the presser ONCE; its one word lands in daemon/last-press and
 # keyboard: it counts as active. Keep-awake only REPORTS and asks `bg reap` — only budgets kill — and
 # it never starts a model. No armed file → one glob that matches nothing, and 6.19.0's verdict.
 _ah_cfg() { # one CONVENTIONS key of repo $1: $2 key, $3 default -> REPLY
-  local f="$1/ops/CONVENTIONS.md" v
-  REPLY="$3"; [ -f "$f" ] || return 0
-  v="$(sed -n "s/^$2:[[:space:]]*\([^#]*\).*\$/\1/p" "$f" 2>/dev/null | head -1)"
+  # A blank or missing repo line falls back to this computer's preferences (machine-prefs § 4).
+  local f="$1/ops/CONVENTIONS.md" m="${POLARIS_PREFS-${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/preferences}" v
+  REPLY="$3"
+  if [ -f "$f" ]; then
+    v="$(sed -n "s/^$2:[[:space:]]*\([^#]*\).*\$/\1/p" "$f" 2>/dev/null | head -1)"
+    v="${v%"${v##*[![:space:]]}"}"
+    [ -n "$v" ] && { REPLY="$v"; return 0; }
+  fi
+  [ -n "$m" ] && [ -f "$m" ] || return 0
+  v="$(sed -n "s/^$2:[[:space:]]*\([^#[:space:]][^#]*\).*\$/\1/p" "$m" 2>/dev/null | head -1)"
   v="${v%"${v##*[![:space:]]}"}"
   [ -n "$v" ] && REPLY="$v"
   return 0
@@ -315,7 +322,7 @@ ah_install() { # merge the four machine hooks into ~/.claude/settings.json BY SC
   python -c pass >/dev/null 2>&1 && py=python || { python3 -c pass >/dev/null 2>&1 && py=python3; } || true
   [ -n "$py" ] || { printf 'awake: no python — add the four hooks to %s by hand (keep-awake.md)\n' "$sj"; return 0; }
   mkdir -p "${sj%/*}" 2>/dev/null || true
-  "$py" - "$sj" "$b" "${HOME:-.}/.claude/polaris/awake-hook.sh" <<'PYEOF'
+  "$py" - "$sj" "$b" "${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/awake-hook.sh" <<'PYEOF'
 import json, os, re, sys
 p, sh, hk = sys.argv[1], sys.argv[2], sys.argv[3]
 EV = (("SessionStart", "start", 5), ("UserPromptSubmit", "busy", 10), ("Stop", "idle", 5), ("SessionEnd", "end", 5))

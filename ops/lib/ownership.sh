@@ -85,7 +85,7 @@ _run_verify_list() { # _run_verify_list <list> — run_verify_cmds' body: refuse
       printf '   That command is the WAVE gate (`polaris qa`), which already runs it once. In verify: it is\n' >&2
       printf '   paid again on verify, on handoff and on the integrator run-verify — 3x per task, for nothing.\n' >&2
       printf '   Fix the task: replace it with the narrow check this task actually needs (or `test_fast:`),\n' >&2
-      printf '   then re-run. See ops/roles/PLANNER.md "NEVER put a bare full-suite command in verify:".\n' >&2
+      printf '   then re-run. See bash ops/polaris role PLANNER, "NEVER put a bare full-suite command in verify:".\n' >&2
       return 1
     fi
     n=$((n+1)); note "verify[$n]: $c"

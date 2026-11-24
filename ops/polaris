@@ -5,7 +5,7 @@
 set -eu
 POLARIS_V=5
 
-OPS_DIR="$(cd "$(dirname "$0")" && pwd)"
+case "${BASH_SOURCE[0]}" in "$0") OPS_DIR="$(cd "$(dirname "$0")" && pwd)";; *) OPS_DIR="${BASH_SOURCE[0]%/*}";; esac
 
 # --- FAST PATH: find/show/hops answer before the environment is resolved -------------
 # `find` is the hot lookup an agent runs ten times a task, and it reads NONE of the globals below.
@@ -37,7 +37,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  exploratory round trips a cold session otherwise spends
   new [--retire <map>] <draft.md>…
                                  FILE NEW TASKS in one command: each draft, written from
-                                 ops/templates/TASK.md, gets the next free T-NNN and is checked
+                                 bash ops/polaris doc templates/TASK, gets the next free T-NNN and is checked
                                  (points 1-5, or up to 13 with steps: · plan: · risk: · files_owned · a named contract
                                  exists), then placed by the ready gate: ready/, or backlog/ while
                                  it waits on another task — a task in ready/, active/ or review/
@@ -187,7 +187,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   hops [--tsv | --propose | --stale | --due | --questions | --facts <dir>] [--score | --owned | --proof | --remap <moves.tsv>]
                                  the layout report: how many folders one change touches, what to
                                  move, which folders lack a guide. No LLM, never edits your code;
-                                 ops/roles/TIDY.md runs the pass that acts on it
+                                 bash ops/polaris role TIDY runs the pass that acts on it
   board-fm [<col>…]              one TAB line per task (col id pts wsjf risk deps owns contract
                                  title) — the Planner's board read without the prose bodies.
                                  Default columns: ready active backlog blocked (done/ is history,
@@ -257,7 +257,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  and weighing the conditions by hand. With ID(s), ONLY the named
                                  tasks count — a leftover in ready/ never widens the lane — and the
                                  first one's plan: is recorded as this run's scope.
-                                 tidy = the board is empty and the layout pass is due (ops/roles/TIDY.md)
+                                 tidy = the board is empty and the layout pass is due (bash ops/polaris role TIDY)
   route [<ID> | --role <R> | --points <N> [--risk <R>]]
                                  which MODEL TIER runs a piece of work — line 1 is always one
                                  word: strong | mid | cheap (a task's model: frontmatter
@@ -387,6 +387,21 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   awake [status|start|stop]      ONE keep-awake daemon per machine (~/.claude/polaris/awake): presses
                                  F15 every ~55s while any session is busy; exits by itself once every
                                  session and repo is idle. start = arm now · stop = 60 min off
+  role <NAME> [--page <n>]       print a role file (BUILDER, CONDUCTOR, …) — what "run bash ops/polaris
+                                 role X" means; past 28000 bytes it comes in pages cut at ## headings,
+                                 each ending with the command for the next page. Read-only
+  doc <NAME> ["<section>"] [--page <n>] | doc --where
+                                 print a kit document: PROTOCOL · MANUAL · PROMPTS · VISUAL · KEYS ·
+                                 templates/<T> · roles/<R>; with a section, just the first heading
+                                 holding that text, through its end. --where = which kit, vendored|machine
+  router [--page <n>]            print the protocol text every session reads (the kit's CLAUDE.md,
+                                 between its POLARIS markers)
+  prefs [--set <k>=<v>… | --unset <k>… | --seed | --yield]
+                                 YOUR PREFERENCES, once per computer: bare = every key, the value that
+                                 wins here and where it came from (repo · machine · default). --set /
+                                 --unset write this computer's file (person-level keys only; no agent
+                                 may set the autonomy dial). --seed creates it from this repo, --yield
+                                 comments out this repo's lines that match it — both owner commands
   version                        installed version · commit · latest on the channel
   update [--auto|--all [--major]] [--repo-only]
                                  fetch the latest KIT from the channel. Plain = explicit, as always.
@@ -415,7 +430,9 @@ esac
 # every other command parsed them on every start and never called one.
 case "${1:-}" in
   _match|_rules|_guard) _mods="core ownership" ;;
-  doctor)        _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg bgwatch pulse awake handover presence skills author tune flow
+  role|doc|router) _mods="core docs" ;;
+  prefs)         _mods="core ownership prefs" ;;
+  doctor)        _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg bgwatch pulse awake handover presence skills author tune flow docs prefs
                         selftest/spine selftest/board selftest/history selftest/report
                         selftest/brain selftest/policy selftest/remote selftest/fast selftest/hops" ;;
   *)             _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg bgwatch pulse awake handover presence skills author tune flow" ;;
@@ -450,8 +467,8 @@ OPS="$PRIMARY/ops"
 BOARD="$OPS/board"
 LOCKS="$GCD/polaris-locks"
 CONV="$OPS/CONVENTIONS.md"
-VER="$OPS/VERSION"
-SELF="$OPS_DIR/${0##*/}"
+VER="$OPS/VERSION"; [ -f "$VER" ] || VER="$OPS_DIR/VERSION"   # = kit_file VERSION, without its fork
+SELF="$OPS_DIR/${BASH_SOURCE[0]##*/}"
 eval "$(cfg_boot)"                                         # BASE + CLAIM_MODE + STALE_H, one fork
 WHO=""                                                     # filled on demand by who(); see core.sh
 EVENTS="$BOARD/EVENTS.ndjson"
@@ -553,6 +570,10 @@ case "${1:-}" in
   slim)       shift 2>/dev/null || true; cmd_slim "${1:-}";;
   skill)      shift; cmd_skill "$@";;
   version)    update_check_maybe force || true; cmd_version;;
+  role)       shift; cmd_role "$@";;     # no update_check_maybe on role/doc/router/prefs: read-only and
+  doc)        shift; cmd_doc "$@";;      # hot, like route — every session reads its role through them
+  router)     shift; cmd_router "$@";;   # (ops/contracts/doc-server.md § 1)
+  prefs)      shift; cmd_prefs "$@";;
   update)     shift; cmd_update "$@";;
   uninstall)  shift; cmd_uninstall "$@";;
   _match)     shift; cmd_match "$@";;
