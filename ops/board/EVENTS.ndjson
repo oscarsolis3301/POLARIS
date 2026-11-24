@@ -1495,3 +1495,4 @@
 {"ts":1795559671,"ev":"claim","id":"T-338","who":"oscar@Dino","note":"","pts":8}
 {"ts":1795560013,"ev":"note","id":"T-339","who":"oscar@Dino","note":""}
 {"ts":1795560016,"ev":"note","id":"T-339","who":"oscar@Dino","note":""}
+{"ts":1795560042,"ev":"grant","id":"T-339","who":"oscar@Dino","note":"ops/tests/keys-drift.expected"}
