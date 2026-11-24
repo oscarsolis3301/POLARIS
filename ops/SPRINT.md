@@ -1,3 +1,25 @@
+# SPRINT 28 — Walk away: approve, leave, come back to finished work (6.20.0)          capacity: 100   dates: 2026-11-24–
+
+Owner ask of 2026-11-24 (plans/walk-away.md, approved): after a plan is approved in auto mode POLARIS
+runs every command itself, nothing waits on the owner, a hung job is killed and parked instead of
+stalling for hours, the expensive model never sits waiting (a Haiku runner is allowed for that one
+job), and small look/text/UI changes are checked in proportion with fewer hops.
+Plan `walk-away`, contract `ops/contracts/walk-away.md` v1. Capacity 100: the whole plan is one release, as approved.
+
+10 tasks / 90 pts, THREE waves. Wave 1 side by side (57 pts): T-318 (job budgets + watchdog, pulse,
+preflight, defer, stall lines, the loader, all help; sole owner of kit/ops/polaris, KEYS.tsv and
+api-kit for wave 1) · T-319 (armed run, Stop gate, permission hooks, keep-awake — risk: high) · T-320
+(Haiku runner + its one guard exception — risk: high) · T-321 (depth in the core, route --role RUNNER)
+· T-322 (spike: timing BEFORE section D) · T-328 (fewer CLI starts, pack forecast; re-filed from
+T-323). Wave 2: T-324 (finish: parked, run: line, express ui) · T-325 (words, heal, speed; api-kit
+for wave 2) · T-326 (quiet-lane tail, only if its trigger is met). Wave 3: T-327 (joined-tree drills
+away-run + runner-path, every shared golden, api-kit, VERSION 6.20.0, CHANGELOG). After it: finish,
+release ritual, dogfood, re-pin cli-help.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 27 — The smooth run: cards own their tests, waves catch their reds, re-cuts by command (6.19.0)          capacity: 50   dates: 2026-11-17–
 
 Owner ask of 2026-11-17 (plans/smooth.md, approved; owner away): build the next update from the
