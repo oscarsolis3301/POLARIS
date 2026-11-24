@@ -167,3 +167,10 @@ verdict (a fixture that would now qualify is made to keep its original intent, e
 
 ### v2 Changelog
 - v2 2026-11-10: depth `ui`, keys `test_ui` and `qa_parallel` (plan away; ops/contracts/away.md § 5–6).
+
+## v3 — the ui floor, the edited-test rule, stamp words, one glob helper (2026-11-24, plan walk-away, 6.20.0)
+`ui` is granted only with `lint:`/`typecheck:` set, or `visual:` + `shot:`; with no look set up the
+skip line says so once. An edited test file is never none/look/ui. `suite_stamp_scope` passes
+`none|look|ui|scoped` through. `_depth_globs` composes the defaults once; `test_look` gains fonts and
+more image/style types; a value starting `+ ` extends the default. `pack` forecasts none/look/ui.
+Full spec: `ops/contracts/walk-away.md` § 6 (T-321, T-323, T-325).

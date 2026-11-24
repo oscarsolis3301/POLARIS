@@ -390,3 +390,10 @@ functions of those five files (minutes.md § 3.4). Entry `kit/ops/polaris` < 500
 ### Changelog
 - v9 2026-11-09: observe.sh → observe/drift/check/route/qa (move-only, proven by tools/fnmove.sh);
   flow.sh joins; loader gains `drift check route qa` after `observe` and `flow` after `author`.
+
+## v10 — bgwatch.sh and pulse.sh join; selftest loads for doctor only (2026-11-24, plan walk-away, 6.20.0)
+New modules `kit/ops/lib/bgwatch.sh` (≤300 lines; `bgwatch_budget`, `bgwatch_start`, `bgwatch_reap`)
+and `kit/ops/lib/pulse.sh` (≤300 lines; `cmd_pulse`, `cmd_preflight`, `cmd_defer`), loaded right
+after `bg`. The loader keeps LITERAL lists: `doctor` loads the full list; every other command loads it
+minus the nine `selftest/*` modules; `_match|_rules|_guard` unchanged. Full spec:
+`ops/contracts/walk-away.md` § 2.5 (T-318).

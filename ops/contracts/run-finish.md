@@ -206,3 +206,10 @@ contradict each other exactly once: at a handoff, v2 says run `finish`, WS7 says
   run` phrase stays byte-for-byte (the `output-style-installed` golden pins it): a SUBAGENT still never
   runs `finish`, never fires `notify-gate done`, never opens with the H1.
 - Every other rule of v1/v2 — exit codes, frozen tokens, the stamp, the four non-rc-0 endings — unchanged.
+
+## v4 — `finish: parked` and the `run:` line (2026-11-24, plan walk-away, 6.20.0)
+When everything pending is human-gated: frozen token `finish: parked - <n> waiting on you`, one
+`⛔ waiting on you: <command or click> - <reason>` line each (≤5), exit 1 (v3 rc stands), `<sid>.parked`
+written, armed file removed. Armed runs end (rc 0 or parked) with `run: <total> - <checks> in checks,
+<queue> waiting, <n> timeouts`. Armed + clean + merged off-base branch → `finish` switches to `<base>`
+itself. Unarmed output byte-identical. Full spec: `ops/contracts/walk-away.md` § 5 (T-324).

@@ -162,3 +162,10 @@ files and every existing golden line stand byte-for-byte; this section ADDS.
   T-072 files the arm + golden cases (read forms unchanged).
 - v1 2026-08-03: created for T-065, T-066, T-067, T-068, T-069, T-070, T-071 (plan: routing-and-bg)
 - v2 2026-09-01: jobs owned by cwd — a foreign same-name live job is refused (--force included); `.prev` rotates into `.archive/<name>-<epoch>`; job dirs record `sid` (T-094, T-100, T-104; plan cant-eat-itself).
+
+## v3 — budgets, a watchdog, exit 4 (2026-11-24, plan walk-away, 6.20.0)
+Every job carries a budget and a detached watchdog (`kit/ops/lib/bgwatch.sh`, new): overrun kills the
+process tree, retries once (`bg_retries`), then `rc` 124 + `<dir>/overrun`. `bg wait`/`bg status`
+exit **4** iff `overrun` exists; verdicts 0-3 and every v1/v2 message stay byte-identical. New:
+`bg run --budget <s>`, `bg run --steps <file>`, `bg wait --done`, `bg reap [<name>]`. Full spec:
+`ops/contracts/walk-away.md` § 2.1 (T-318).

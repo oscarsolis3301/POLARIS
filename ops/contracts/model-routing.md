@@ -146,3 +146,9 @@ medium, big or risky tasks plus planning and landing on Opus at high. Full rules
 
 ### Changelog
 - v4 2026-11-09: defaults in code, the effort note and its keys, the clamp (plan minutes).
+
+## v5 — the RUNNER role and its one Haiku exception (2026-11-24, plan walk-away, 6.20.0)
+`route --role RUNNER` → tier `cheap` + `   model: <model_runner, default haiku>` + `   agent: polaris-runner`;
+`model_runner` outside haiku|sonnet|inherit → sonnet; `runner: off` → no model line. `model_denied`
+is unchanged; model-guard lets only the `polaris-runner` agent type run on Haiku, and only `bg
+wait|status|tail`. Full spec: `ops/contracts/walk-away.md` § 3 (T-320, T-321).

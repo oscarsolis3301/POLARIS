@@ -974,3 +974,9 @@ Folding `ops/MAP.md` Deltas into its sections, and retiring each row `drift` rep
   role-handover.md (v3), hands-free-knobs.md (v3) and auto-update.md (v3) in the same commit.
 - v2 2026-11-06 · PLANNER · plan `tidy-hardening` (plans/tidy-hardening.md, owner-approved): § 12–§ 17
   for T-258…T-268; `polaris new` in ops/contracts/task-author.md; module-layout.md v6 (lib/author.sh).
+
+## v3 — the 🚩 rule, away-safe (2026-11-24, plan walk-away, 6.20.0)
+The pinned "Long, mechanical" two lines of § Token efficiency are superseded: the agent runs long
+mechanical work itself, detached (`bg run <name> --steps <file>`), and a 🚩 block is only for what
+needs a person, only while they are here. `heal` migrates the old two lines by exact match. Exact
+new text: `ops/contracts/walk-away.md` § 8.3 (T-325).

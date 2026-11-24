@@ -80,3 +80,7 @@ label + assertion contract for the NEW drills lives in shared-checkout.
 - v2 2026-08-03: step 0 integration lease (rc 3 `queued: `), wave_on replaces the branch block
   (adopt instead of die), dirty tree parks, refusals untouched (T-058).
 - v1 2026-07-20: created for T-031 (CLI) · T-034 (conductor triage) · T-037 (MANUAL recipe)
+
+## v3 — `land --express` honours `ui` (2026-11-24, plan walk-away, 6.20.0)
+At depth `ui` the express land runs lint and typecheck only (test, build and uat skipped, said once
+through `_ui_skip_say`). Full spec: `ops/contracts/walk-away.md` § 6 (T-323).

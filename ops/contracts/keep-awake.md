@@ -217,3 +217,8 @@ skipped-active
 
 ## Changelog
 - v1 2026-09-01: created for T-096, T-100, T-101, T-102, T-103, T-104, T-106 (plan: cant-eat-itself, 6.2.0)
+
+## v2 — an armed run keeps the machine awake, and reaps (2026-11-24, plan walk-away, 6.20.0)
+`ah_verdict`: an armed unfinished run counts as active; an rc-less job past its budget triggers
+`ops/polaris bg reap`; armed with no beat for `stall_minutes` writes `.polaris/run/stalled` and runs
+`notify-gate stall`. It never starts a model. Full spec: `ops/contracts/walk-away.md` § 4.5 (T-319).

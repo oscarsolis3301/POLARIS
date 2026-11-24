@@ -429,3 +429,10 @@ ends on a question then. Full rules: ops/contracts/away.md § 3.
   harness's own cap on consecutive Stop blocks stays the backstop.
 - The fn list ("Fns, EXACTLY") gains at most ONE private fn, `_hh_away`.
 - Here ⇒ every rung of v1–v3 byte for byte (stop-question.expected and handover-stop.expected unchanged).
+
+## v5 — the armed Stop rung, stall lines (2026-11-24, plan walk-away, 6.20.0)
+`next_route` adds `   dead: <ID>` and `   crashed: <name>` under line 1 (line 1 unchanged). `hh_stop`
+gains a FIRST rung read only when the run is armed (`block:run`, `allow:bg`, `allow:wait`,
+`allow:stalled` on the third block); unarmed, the ladder is byte-identical. New subcommands
+`substop` (SubagentStop) and `stopfail` (StopFailure). Full spec: `ops/contracts/walk-away.md`
+§ 2.4 (T-318) and § 4.2 (T-319).

@@ -723,3 +723,8 @@ pinned sibling rows are PRESENT and diffs with those rows excluded from BOTH sid
 - v2 2026-09-14: activation — engine (T-140), command + nudges + golden (T-142), tests (T-144),
   prose (T-145); D1/D2/Invariant 7 widened to the second writer; § 11's cli-help sentence extended.
   Sibling seams in `ops/contracts/first-run.md`; the loader in `ops/contracts/module-layout.md` v6.
+
+## v3 — the stale-tests gate skips test_skip and test_look paths (2026-11-24, plan walk-away, 6.20.0)
+Owner decision (plan walk-away): `check_freshness` no longer refuses a change to a mapped surface
+whose changed paths are all `test_skip`/`test_look` paths; `ui` paths stay gated. Full spec:
+`ops/contracts/walk-away.md` § 6 (T-321).

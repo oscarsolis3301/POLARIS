@@ -218,3 +218,9 @@ installs the kit INTO its fixture and runs the fixture's own `ops/polaris` (wrap
 
 ## Changelog
 - v1 2026-11-10: created for plan `away` (Phase B of plans/away.md): B1–B8.
+
+## v2 — the armed run, the permission hooks, desktop re-entry (2026-11-24, plan walk-away, 6.20.0)
+`pg_approve` also writes `<primary>/.polaris/run/<sid>.armed`; plan mode and `finish` remove it. While
+armed and away, PermissionRequest denies with the away line and the `defer` command (never allows);
+PermissionDenied appends `.polaris/run/denied.tsv`. `reentry: desktop` lets a prompt starting
+`POLARIS re-entry:` inherit the approval. Full spec: `ops/contracts/walk-away.md` § 1, § 4 (T-319).
