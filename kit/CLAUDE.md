@@ -19,8 +19,8 @@ Your kickoff names your role. Read `ops/roles/<ROLE>.md` and execute it. Nothing
 | "You are the CONDUCTOR" | `ops/roles/CONDUCTOR.md` | 1 — runs the whole loop via role subagents |
 | "You are EVOLVE" | `ops/roles/EVOLVE.md` | 1, between sprints |
 
-**`triage` decides the lane — you never weigh it by hand.** It reads points, risk, `express:`,
-`publish:` and the RULES-guarded paths straight off the board and prints one word:
+**`triage` decides the lane — you never weigh it by hand.** It reads points, risk, `express:` and
+the RULES-guarded paths straight off the board and prints one word:
 
 | line 1 | you are | why |
 |---|---|---|
@@ -94,7 +94,7 @@ need one section or none.
    `files_owned` too, and outside Builder sessions. A guard rejection means hand back or ask the
    human — never work around it.
 2. **Ready gate.** A task enters `ready/` only if: ≤5 points (a chain card: up to 13, with `steps:` each ≤5),
-   every `depends_on` is in `done/`, its contract exists, and its `files_owned` overlaps NOTHING in `ready/` or `active/`.
+   every `depends_on` is in `done/`, a contract it names exists, and its `files_owned` overlaps NOTHING in `ready/` or `active/`.
 3. **Contract before code.** Contract missing or ambiguous → `blocked/` with a note. NEVER invent an
    interface.
 4. **Green before `review/`.** The card's own `verify:` checks green AND `polaris verify` green;

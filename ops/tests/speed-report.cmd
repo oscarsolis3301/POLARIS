@@ -131,6 +131,14 @@ EL=$((SECONDS - T0 - BASE))
 echo "slow-within-budget+2s: $([ "$EL" -le 30 ] && echo yes || echo "no ${EL}s")"
 printf '%s\n' "$OUT" | sed 's/^Of your last [0-9]* changes/Of your last N changes/; s/[0-9][0-9]* not checked/M not checked/; s/[0-9][0-9]* run everything/C run everything/'
 cd "$R"
+# walk-away § 6: a `ui` verdict counts under "would skip the test run", as none/look do — before 6.20.0
+# it fell through every bucket and the commit was not counted at all. A 1-point task's one .tsx edit
+# (lint: is set, so the ui floor is met) is the newest commit: 6 changes, 3 of them skipping the run.
+mkdir -p ops/board/done
+printf -- '---\nid: T-900\npoints: 1\nrisk: normal\n---\n' > ops/board/done/T-900.md
+echo 'v2' > web/src/App.tsx; git commit -qm 'feat: button label [T-900]' -- web/src/App.tsx >/dev/null 2>&1
+echo "ui-commit: $(bash "$KIT" depth --commit HEAD 2>&1 | sed -n 1p)"
+POLARIS_SPEED_BUDGET=600 bash "$KIT" speed 2>&1 | sed -n 's/^\(Of your last [0-9]* changes: [^.]*\.\).*/\1/p'
 echo "update-guarded:"
 grep -c 'cmd_speed; } || true' "$ADMIN"
 grep -c 'cmd_speed' "$ADMIN" | sed 's/^/speed-fn-and-call-refs>=2: /' | awk '{print ($2>=2?"yes":"no")}'

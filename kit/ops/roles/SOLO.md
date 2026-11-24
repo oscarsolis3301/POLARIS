@@ -19,7 +19,7 @@ bash ops/polaris triage [<ID>]
 ```
 Line 1 is your lane. **`solo` → continue. Anything else → STOP** and say which lane it named
 (`express` or `full`); the conductor or planner takes it from there. Do not argue with triage: it
-is reading points, risk, `express:`, `publish:` and the RULES-guarded paths directly off the board.
+is reading points, risk, `express:` and the RULES-guarded paths directly off the board.
 
 If `triage` says `full` because the board is empty and the human just asked for something small,
 author the single task yourself (step 1) and re-run `triage <ID>` to confirm `solo`.
@@ -104,17 +104,21 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    the only lane — seals the wave and finishes the task. Under `push: end` (the default) that seal
    pushes nothing; `finish` makes the one push of base and tags to origin. Entered as a conductor's subagent? Run
    `handoff` in place of `wrap` — `finish` is the conductor's. That tail can wait on a busy lease, so
-   detach it and collect the rc in chunks:
+   detach it:
    `bash ops/polaris bg run ship-<ID> -- bash ops/polaris wrap --saw "<the after shot vs the bar>"`, then
-   `bash ops/polaris bg wait ship-<ID> --max 120` repeated until the rc is not 2 (0 green · 1 red ·
-   2 still running · 3 unknown) — never a foreground wait that can cross the 600s cap, never a
-   background notification. A `queued:` line (rc 3) means the lane stayed busy: report queued and
+   collect the rc the way `ops/PROTOCOL.md` § LONG COMMANDS names for where you are. Top-level: ONE
+   `bash ops/polaris bg wait ship-<ID> --done` issued with `run_in_background: true`, then end the
+   turn — the harness wakes you once, and the rc file is the truth. A conductor's subagent: `bash
+   ops/polaris bg wait ship-<ID> --max 240` repeated until the rc is not 2 (0 green · 1 red · 2 still
+   running · 3 unknown · 4 timed out) — never a foreground wait that can cross the 600s cap, because
+   a background notification never reaches a subagent. A `queued:` line (rc 3) means the lane stayed busy: report queued and
    retry at the next wave boundary. `risk: high` and STOP-AND-ASK work never reaches SOLO, so the
    self-land refusals should never fire here; under `landing: integrator` `wrap` runs step 6's
    land itself.
 6. **Land** — by hand only when step 5's tail queued or refused, or you ran `handoff` alone:
-   `bash ops/polaris land --express <ID>`. One pass: integrate branch, audit, the FULL
-   suite ONCE, seal, run-verify, done, branch cleanup. A red suite unwinds the commit and kicks the
+   `bash ops/polaris land --express <ID>`. One pass: integrate branch, audit, the test run the
+   change's size calls for ONCE (`polaris depth`: none/look skip it, ui runs lint and typecheck,
+   scoped the related tests, full the whole suite), seal, run-verify, done, branch cleanup. A red suite unwinds the commit and kicks the
    task back to you — fix it here, in this session, and land again. (After a step-5 self-land there
    is nothing left to do here — the task is already done and sealed, and `done`'s content check has
    proved its files are on main, re-landing them if not; never check them by hand.)
@@ -139,10 +143,14 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    `caveat:` line `finish` printed. **Non-zero** → no H1: what landed, the one pending thing, the
    next command — and when `finish` names only human-gated work (`next` listed it as `risk: high
    awaiting approval:`), close with `⛔ waiting on you: approve <ID>`: no 🎉, no looping.
+   **`finish: parked - <n> waiting on you`** (exit 1, an away run) is the other legitimate ending:
+   everything left needs a person — close with its `⛔ waiting on you:` lines, no 🎉, no looping. Away,
+   both endings end with `run: <total> - …`; quote it as where the time went. What needs a person is
+   `PLANNER.md` § Needs you before I start; anything else long and mechanical you run yourself.
    Every close also says how long the run took and where the time went (`bash ops/polaris speed`),
    and names each task an `away:` line reported. Full shape in `.claude/output-styles/polaris.md` § How a session ends.
 
-Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; ≥ 300 s → `bg run`, then the wait its table names (top-level: ONE backgrounded `bg wait --done`). A subagent never ends its turn with a job still running.
 
 ## Hard limits — these end the session, not the gate
 - **Never spawn a subagent.** If the work turns out to need more than one, you were in the wrong

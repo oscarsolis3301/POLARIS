@@ -143,6 +143,7 @@ kit/ops/PROMPTS.md	heading	PROMPTS — copy, paste, go
 kit/ops/PROMPTS.md	heading	Replies the human gives mid-run
 kit/ops/PROMPTS.md	heading	Watching
 kit/ops/PROTOCOL.md	heading	AWAKE — one keep-awake daemon per machine
+kit/ops/PROTOCOL.md	heading	AWAY RUNS — budgets, the pulse, parked
 kit/ops/PROTOCOL.md	heading	LANES — why the lane is a command, and why a role never does two jobs
 kit/ops/PROTOCOL.md	heading	LONG COMMANDS — living under the 600s tool cap
 kit/ops/PROTOCOL.md	heading	MODEL NOTES (whichever model runs this)
@@ -723,6 +724,7 @@ kit/ops/roles/INTEGRATOR.md	heading	then, per landed task, on <base>: run-verify
 kit/ops/roles/INTEGRATOR.md	heading	v2 (one link per run): seal stages locally, nothing waits for a merge; `polaris sync` (top of triage/next) pulls the merged ship branch.
 kit/ops/roles/INTEGRATOR.md	heading	→ open the printed URL and merge the PR with the host's MERGE-COMMIT strategy — NEVER squash, or
 kit/ops/roles/PLANNER.md	heading	Carving rules added for one-link runs
+kit/ops/roles/PLANNER.md	heading	Needs you before I start
 kit/ops/roles/PLANNER.md	heading	Pointing — Fibonacci (measures blast radius + uncertainty, not hours)
 kit/ops/roles/PLANNER.md	heading	Priority — WSJF
 kit/ops/roles/PLANNER.md	heading	Protocol

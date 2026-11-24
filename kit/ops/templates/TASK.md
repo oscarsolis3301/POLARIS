@@ -18,11 +18,11 @@ time_criticality:
 risk_opportunity:
 wsjf:                    # (value + time_criticality + risk_opportunity) / points
 risk: normal             # high = auth/payments/schema/prod-config → human approves before merge
-test_depth:              # optional; raise-only — the only value that does anything is `full`,
-                         # which forces the wave gate to run the whole suite for this task even
-                         # when depth_for would otherwise pick none/look/scoped. Any other value is
-                         # ignored. `test_depth: full` is the way to force everything, including the
-                         # live uat tier a scoped run defers. See ops/contracts/test-depth.md
+test_depth:              # optional; two values do anything. `full` forces the wave gate to run the
+                         # whole suite for this task even when depth_for would pick none/look/ui/
+                         # scoped — the way to force everything, the live uat tier a scoped run
+                         # defers included. `ui` lets a task over 2 points qualify for depth ui
+                         # (lint + typecheck + the look). Others ignored. See ops/contracts/test-depth.md
 model:                   # optional; strong|mid|cheap tier word, or a literal model name — overrides
                          # the tier `polaris route` derives for this task. ops/contracts/model-routing.md
 status: backlog          # mirrors the folder; folder is the source of truth

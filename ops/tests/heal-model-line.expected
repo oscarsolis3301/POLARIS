@@ -3,7 +3,7 @@
 healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)
   file: written
   bytes: the old file with only that line changed
-9:- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku is blocked, and Fable runs only when the owner picks it.
+9:- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku runs only the kit's job runner, and Fable runs only when the owner picks it.
 == 2. a second heal is a no-op: no note, and the file is not even rewritten ==
   heal rc: 0
   file: not written
@@ -36,6 +36,7 @@ healed: CLAUDE.md — the model line now says helpers are sized by route (your p
 healed: CLAUDE.md — appended the efficiency section (once; your prose untouched)
   new line: 1
   old lines: 0
+  new hand-off lines: 2
 == 6. one line per heal at most, and a last line with no line end still has none after ==
   heal rc: 0
 healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)
@@ -44,6 +45,31 @@ healed: CLAUDE.md — the model line now says helpers are sized by route (your p
   heal rc: 0
 healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)
   bytes: the second copy changed too, still with no line end
+== 7. the line O (6.13: "Haiku is blocked"): rewritten ==
+  heal rc: 0
+healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)
+  file: written
+  bytes: the old file with only that line changed
+== 8. the old hand-off pair (LF): both lines become the new pair, one note ==
+  heal rc: 0
+healed: CLAUDE.md — the long-command lines now say run it yourself, detached (your prose untouched)
+  file: written
+  bytes: the old file with only those two lines changed
+  old hand-off lines: 0
+== 9. the old pair with CRLF, beside the line O: all three migrate, CRLF kept ==
+  heal rc: 0
+healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)
+healed: CLAUDE.md — the long-command lines now say run it yourself, detached (your prose untouched)
+  file: written
+  bytes: the CRLF file with only those three lines changed
+== 10. an owner edited the second line of the pair: both lines are theirs and stay ==
+  heal rc: 0
+  file: not written
+  bytes: as its owner left it
+== 11. the first line alone, last in the file with no line end: kept as found ==
+  heal rc: 0
+  file: not written
+  bytes: as found
 == nothing left behind ==
   temp files beside CLAUDE.md: 0
   files under the fake home: 0

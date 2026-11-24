@@ -21,3 +21,16 @@ grep -q 'output-styles' kit/ops/lib/admin.sh && echo "uninstall removes it" || e
 # An output style never reaches subagents, so CLAUDE.md must still carry the trigger + the ban.
 grep -q '🎉 Complete!' kit/CLAUDE.md && echo "CLAUDE.md carries the subagent layer" || echo "SUBAGENT LAYER MISSING"
 grep -q 'subagent never ends a run' kit/CLAUDE.md && echo "subagent ban intact" || echo "SUBAGENT BAN MISSING"
+# walk-away § 8.3 (6.20.0): the 🚩 rule is the SAME two lines in every kit home — the heal block that
+# writes it into a project's CLAUDE.md, PROTOCOL § TOKEN DISCIPLINE, this style, CONDUCTOR — and the
+# style carries the parked ending and the away run's last line. Line ends stripped: kit prose may be CRLF.
+N1='- **Long, mechanical, no judgement in it?** Run it yourself, detached: one command per line in a file, then'
+N2='  `bash ops/polaris bg run <name> --steps <file>` and collect once. 🚩 only what needs a person, only while they are here.'
+n=0
+for f in kit/ops/PROTOCOL.md "$O" kit/ops/roles/CONDUCTOR.md; do
+  tr -d '\r' < "$f" | grep -qxF -e "$N1" && tr -d '\r' < "$f" | grep -qxF -e "$N2" && n=$((n+1))
+done
+grep -qF "local n1='$N1'" kit/ops/lib/admin.sh && grep -qF "local n2='$N2'" kit/ops/lib/admin.sh && n=$((n+1))
+echo "the 🚩 rule, word for word: $n of 4 homes"
+grep -q 'finish: parked - <n> waiting on you' "$O" && echo "parked ending present" || echo "PARKED ENDING MISSING"
+grep -q '^waiting, <n> timeouts`\|`run: <total> - ' "$O" && echo "away run's last line present" || echo "RUN LINE MISSING"
