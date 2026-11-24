@@ -4,6 +4,64 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.20.0 — 2026-11-24
+
+**Walk away: approve a plan, leave, and come back to finished work, or to a short list of what needs you.**
+
+The owner's words: runs stalled on a command with no limit on how long it could take, and after three
+hours away nothing had changed. This release gives every background job a time limit, keeps an
+approved run going until it is either done or parked, and ends every such run with one of two clear
+endings. Plan `walk-away`, contract `ops/contracts/walk-away.md`.
+
+- **Jobs that cannot hang (T-318).** Every `bg run` job gets a time limit: `--budget <s>`, or 3 × its
+  longest green run, or a default for its kind, never under 300 s. Past its limit the job and
+  everything it started is stopped, tried once more, and then reported with exit 4 and one line saying
+  how to park it. Also new: `bg reap`, `bg run --steps <file>` and `bg wait --done`. `pulse` gives a
+  session woken by a timer one word to act on. `preflight <slug>` lists what needs a person before the
+  run starts, and `defer` sets a command aside for the close. `next` names dead cards and crashed
+  jobs. The CLI no longer loads the nine self-test modules on every command.
+- **The away hooks (T-319).** Approving a plan in auto mode arms the run (`.polaris/run/<sid>.armed`).
+  While it is armed, the Stop hook keeps the session working until the work is done; three identical
+  stops count as a stall and send a notification. Permission prompts are parked instead of left
+  waiting, and are never allowed on the owner's behalf. Keep-awake stops a job that is past its time
+  limit. A run that is not armed behaves exactly as in 6.19.0.
+- **A Haiku job runner, and nothing else on Haiku (T-320).** The `polaris-runner` agent may run
+  exactly `bash ops/polaris bg wait|status|tail <name> [--max|-n N]` and nothing more. Every other
+  Haiku session, model switch and spawn is refused exactly as before. A new RULES line keeps
+  `model_runner:` off Fable and Opus.
+- **Test depth in proportion (T-321).** One shared matcher for file patterns now covers fonts and
+  more image and style file types. A `ui` change with no visual check set up says so. An edited test
+  always runs. The stamp messages describe what actually ran. `route --role RUNNER` names the runner.
+- **Fewer CLI starts for a small change (T-328).** `seal` and `done` run the tune-up checks once per
+  landing. The burndown reads the board in one pass. `begin -` takes its draft from stdin. `wrap`
+  commits the card's own files. The list of files a card touches is worked out once.
+- **Two endings (T-324).** An armed `finish` either ends green or prints
+  `finish: parked - <n> waiting on you`, with one `⛔ waiting on you:` line per item (exit 1). Both
+  endings close with a `run:` line, and both remove the armed file. `land --express` honours `ui`.
+  `notify-gate` now has `stall` and `parked`.
+- **The words match the run (T-325).** Every place that gives the hand-to-the-human rule now says the
+  same thing: run long mechanical work yourself, detached, and flag only what needs a person. `heal`
+  updates the old wording in installed CLAUDE.md files when it matches exactly. Two new headings: PLANNER
+  `Needs you before I start` and PROTOCOL `AWAY RUNS — budgets, the pulse, parked`.
+- **Fixes found while joining the cards.** Python output in the kit is UTF-8 on Windows (T-329). The
+  wave-1 seal goes green again: rules-health counts the runner rule, and keys-drift knows the
+  depth-pattern keys (T-331; T-330 was retired in its favour). T-320 and T-329 both changed
+  `kit/ops/hooks/model-guard.sh` and its test, and each re-land wrote over the other's change. Main
+  ended up with T-329's version and without the runner exception. This release puts both changes back
+  together (T-327). The update now treats `.claude/agents/polaris-runner.md` as one of the kit's own
+  files, as uninstall already did (T-327).
+- **Proven on the joined tree (T-327).** Two new tests run the cards against each other:
+  `away-run` (approval arms → a stuck job is stopped → the Stop hook blocks twice, then marks the
+  stall → `defer` + `finish` park with one line → `pulse` says parked) and `runner-path` (`route`
+  names the runner, the guard lets only it through, and the agent's two commands run against a green
+  job and a red one). All 44 shared tests of § 10 pass together.
+- **Measured, not built: the quiet-lane tail (T-326).** T-322's timing (`bench.sh --flow`, best of 3)
+  put `begin`+`wrap` at 31.25 s before T-318's loader change and T-328. After them it is 27.66 s,
+  which is 1.9% of a one-point change from start to finish. The rule for building the tail was over
+  30 s, or over 25%. Neither was met, so T-326 is parked in the backlog, not built.
+- On this machine, `doctor --fast` runs 299 checks, and the full self-test takes about 12 minutes
+  (the baseline).
+
 ## 6.19.0 — 2026-11-17
 
 **The smooth run: cards own their tests, a wave's mistakes show up in that wave, and re-planning is a command.**
