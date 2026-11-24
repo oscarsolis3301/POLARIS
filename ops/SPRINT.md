@@ -85,3 +85,4 @@ each verify list is its whole gate, and CI's Linux serial self-test runs once pe
 ## Learned
 - 2026-11-17 · speed --plan priced two 13-point chain cards as average cards (24 min); they took 23 and 42 min — price a chain card by its steps, not as one card (plan tune)
 - 2026-11-17 · two side-by-side cards met at a shared verdict file and one golden that runs the real heal went red only after both landed — a wave with a seam file needs one golden run on the joined tree before the seal (plan tune, T-310)
+- 2026-11-24 · new auto-adds a SURFACES tests glob (ops/tests/<x>.*) to a card; two cards each holding one are chained by pat_overlap's glob-vs-glob heuristic even when disjoint — a false overlap cost walk-away a wave until T-323 was re-filed as T-328 without author.sh (plan tune)

@@ -1346,3 +1346,4 @@
 {"ts":1795545593,"ev":"new","id":"T-327","who":"oscar@Dino","note":"backlog","pts":3}
 {"ts":1795545691,"ev":"retire","id":"T-323","who":"oscar@Dino","note":"→ T-328"}
 {"ts":1795545692,"ev":"new","id":"T-328","who":"oscar@Dino","note":"ready","pts":9}
+{"ts":1795545771,"ev":"learned","id":"","who":"oscar@Dino","note":"new auto-adds a SURFACES tests glob (ops/tests/<x>.*) to a c"}
