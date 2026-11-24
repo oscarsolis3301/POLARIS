@@ -200,3 +200,8 @@ runner: bg wait, agent_type after tool_input               rc 0
 PostToolUse: the runner on haiku (no caveat)               rc 0
 PostToolUse: general-purpose on haiku                      rc 0
     stdout: {"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"polaris: that subagent ran on 'claude-haiku-4-5', a FORBIDDEN model — discard its result and re-run it on the session model."}}
+== doc-server § 3 (T-334): CLAUDE_CONFIG_DIR moves the state home, HOME is not read for it ==
+config dir state says haiku (HOME state says opus)         rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+config dir state says opus (transcript says haiku)         rc 0
+SessionStart under the config dir: rc 0 · state c2 claude-opus-5-5 · under HOME absent

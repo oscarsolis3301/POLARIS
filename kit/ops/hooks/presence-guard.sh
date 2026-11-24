@@ -54,9 +54,9 @@ pg_re='"permission_mode": *"([^"]*)"'; [[ $PG_H =~ $pg_re ]] && PG_MODE="${BASH_
 [ -n "$PG_EV" ] || pg_end allow:error
 # <session_id> names a file, so it must be a plain name: `/`, `\` or `..` in it → no state at all.
 case "$PG_SID" in ''|*[!A-Za-z0-9_-]*) pg_end allow:error;; esac
-[ -n "${HOME:-}" ] || pg_end allow:error
+[ -n "${CLAUDE_CONFIG_DIR:-${HOME:-}}" ] || pg_end allow:error
 case "$PG_MODE" in *[!A-Za-z]*) PG_MODE='';; esac
-PG_F="$HOME/.claude/polaris/model-state/$PG_SID"
+PG_F="${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/model-state/$PG_SID"
 PG_P=''
 
 # The primary (walk-away § 1): the payload's cwd when it holds a board — a worktree cwd names its
@@ -71,9 +71,16 @@ _pg_primary() {
   [ -n "$PG_P" ]
 }
 _pg_cfg() { # one CONVENTIONS key of the primary: $1 key, $2 default -> REPLY. A fork, off the common path.
-  local f="$PG_P/ops/CONVENTIONS.md" v
-  REPLY="$2"; [ -f "$f" ] || return 0
-  v="$(sed -n "s/^$1:[[:space:]]*\([^#]*\).*\$/\1/p" "$f" 2>/dev/null | head -1)"
+  # A blank or missing repo line falls back to this computer's preferences (machine-prefs § 4).
+  local f="$PG_P/ops/CONVENTIONS.md" m="${POLARIS_PREFS-${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/preferences}" v
+  REPLY="$2"
+  if [ -f "$f" ]; then
+    v="$(sed -n "s/^$1:[[:space:]]*\([^#]*\).*\$/\1/p" "$f" 2>/dev/null | head -1)"
+    v="${v%"${v##*[![:space:]]}"}"
+    [ -n "$v" ] && { REPLY="$v"; return 0; }
+  fi
+  [ -n "$m" ] && [ -f "$m" ] || return 0
+  v="$(sed -n "s/^$1:[[:space:]]*\([^#[:space:]][^#]*\).*\$/\1/p" "$m" 2>/dev/null | head -1)"
   v="${v%"${v##*[![:space:]]}"}"
   [ -n "$v" ] && REPLY="$v"
   return 0

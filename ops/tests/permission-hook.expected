@@ -54,3 +54,12 @@ denied:recorded
   <epoch>|Bash|echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (173 chars)
 --- never allows: no "allow" decision anywhere in this file or any output above
   allow decisions in the hook: 0
+--- machine prefs: no machine file (POLARIS_PREFS empty) — the 12 h default, armed, denied
+deny:away
+  rc=0 stderr=0
+--- machine prefs: the machine file says reentry_hours: 1 — not armed, the dialog opens
+allow:here
+  rc=0 stderr=0
+--- machine prefs: the repo says reentry_hours: 12 — the repo line wins, denied
+deny:away
+  rc=0 stderr=0

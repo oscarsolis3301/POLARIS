@@ -130,3 +130,18 @@ ask  Start-Process x
 ask  Copy-Item a b
 allow  json: PowerShell allow case
 ask  json: PowerShell ask case
+allow  bash ops/polaris role BUILDER
+allow  bash ops/polaris role conductor --page 2
+allow  bash ops/polaris doc PROTOCOL
+allow  bash ops/polaris doc PROTOCOL "THE TOOL"
+allow  bash ops/polaris doc --where
+allow  bash ops/polaris router
+allow  bash ops/polaris prefs
+allow  bash ops/polaris prefs && bash ops/polaris doc KEYS
+ask  bash ops/polaris prefs --set voice=technical
+ask  bash ops/polaris prefs --unset voice
+ask  bash ops/polaris prefs --seed
+ask  bash ops/polaris prefs --yield
+ask  bash ops/polaris prefs voice
+ask  bash ops/polaris doc templates/task > ops/board/x.md
+ask  bash ops/polaris role BUILDER; rm -rf ops

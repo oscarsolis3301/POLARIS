@@ -217,7 +217,12 @@ norm "$GCD"; GCD="$REPLY"
 # --git-common-dir prints RELATIVE to $CWD inside the primary (".git", "../.git") and absolute from
 # a linked worktree. Anchor the relative form; leftover `..` segments are fine for the -d tests.
 case "$GCD" in ''|/*) ;; *) GCD="$CWD/$GCD";; esac
-[ -x "$TOP/ops/polaris" ] || exit 0            # not a POLARIS repo — stand down
+# The CLI and its lib through the repo-or-kit lookup (doc-server § 2): the repo's copy wins, else the
+# kit this hook ships in. A repo with no copy is POLARIS only when its state says so (CONVENTIONS).
+[ -e "$TOP/ops/polaris" ] && KPL="$TOP/ops/polaris" || KPL="${BASH_SOURCE[0]%/*}/../polaris"
+[ -e "$TOP/ops/lib" ] && KLIB="$TOP/ops/lib" || KLIB="${BASH_SOURCE[0]%/*}/../lib"
+[ -x "$KPL" ] || exit 0                        # not a POLARIS repo — stand down
+[ -e "$TOP/ops/polaris" ] || [ -f "$TOP/ops/CONVENTIONS.md" ] || exit 0
 # WHERE ARE WE? Pure string ops. The worktree layout .polaris/wt/<ID> spells out BOTH the task ID
 # and the primary checkout, so neither answer needs `git worktree list` (~460ms).
 WT_ID=""; PRIMARY=""
@@ -226,7 +231,7 @@ case "$TOP" in
   *) PRIMARY="$TOP";;
 esac
 [ -n "$WT_ID" ] && : 2>/dev/null > "$PRIMARY/.git/worktrees/$WT_ID/polaris-beat" || true
-[ -n "$PRIMARY" ] && [ -x "$PRIMARY/ops/polaris" ] || PRIMARY=""   # odd layout → resolve it lazily
+[ -n "$PRIMARY" ] && { [ -x "$PRIMARY/ops/polaris" ] || [ -f "$PRIMARY/ops/CONVENTIONS.md" ]; } || PRIMARY=""   # odd layout → resolve it lazily
 case "$FILE" in /*) ABS="$FILE";; *) ABS="$CWD/$FILE";; esac
 # Prefix-match case-INSENSITIVELY (Windows + macOS default are case-insensitive filesystems, and
 # Claude Code may hand us a cwd/path whose segments differ in case from git's toplevel). Compare on
@@ -311,8 +316,8 @@ case "$BR" in feat/*) ID="${BR#feat/}";; *) ID="-";; esac
 HIT=1; NEED_BODY=1
 if [ -n "$PRIMARY" ] && [ -n "$GCD" ] && [ "$PWD" -ef "$CWD" ] && [ "$PRIMARY/.git" -ef "$GCD" ]; then
   MATCH=0
-  [ -f "$TOP/ops/lib/core.sh" ] && [ -f "$TOP/ops/lib/ownership.sh" ] \
-    && . "$TOP/ops/lib/ownership.sh" 2>/dev/null && declare -F match_one >/dev/null && MATCH=1
+  [ -f "$KLIB/core.sh" ] && [ -f "$KLIB/ownership.sh" ] \
+    && . "$KLIB/ownership.sh" 2>/dev/null && declare -F match_one >/dev/null && MATCH=1
   RF="$PRIMARY/ops/RULES.tsv"
   if [ ! -e "$RF" ]; then                      # absent = no rules, exactly as rules_lines reads it
     HIT=0; NEED_BODY=0
@@ -366,7 +371,7 @@ fi
 # ~3.8s on Windows/Git Bash, so two calls put a Builder's write at ~7.6s against this hook's
 # timeout; at the ceiling the hook is killed and FAILS OPEN, dropping the ownership gate silently.
 # rc: 0 clean · 1 a rule denies · 3 not in files_owned.
-MSG="$("$TOP/ops/polaris" _guard "$REL" "$ID" "$BODY" 2>&1 >/dev/null)"; RC=$?
+MSG="$("$KPL" _guard "$REL" "$ID" "$BODY" 2>&1 >/dev/null)"; RC=$?
 [ "$RC" -eq 0 ] && exit 0
 if [ "$RC" -eq 1 ]; then
   { printf '%s\n' "$MSG"

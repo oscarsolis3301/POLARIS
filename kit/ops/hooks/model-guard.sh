@@ -79,7 +79,7 @@ if [ "${1:-}" = "install" ]; then
   python -c pass >/dev/null 2>&1 && mg_py=python || { python3 -c pass >/dev/null 2>&1 && mg_py=python3; } || true
   [ -n "$mg_py" ] || { printf 'model-guard: no python — add the five hook entries to %s by hand (speed.md § 2)\n' "$mg_sj"; exit 0; }
   mkdir -p "${mg_sj%/*}" 2>/dev/null || true
-  PYTHONIOENCODING=utf-8 "$mg_py" - "$mg_sj" "$mg_b" "${HOME:-.}/.claude/polaris/model-guard.sh" <<'PYEOF'
+  PYTHONIOENCODING=utf-8 "$mg_py" - "$mg_sj" "$mg_b" "${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/model-guard.sh" <<'PYEOF'
 import json, os, re, sys
 p, sh, hk = sys.argv[1], sys.argv[2], sys.argv[3]
 cmd = [{"type": "command", "timeout": 5, "command": '"%s" "%s"' % (sh, hk)}]
@@ -141,7 +141,7 @@ else case "$IN" in *'"agent_id":"'*) [[ $IN =~ $mg_re ]] && MG_AID="${BASH_REMAT
 MG_TP="${MG_TP//\\\\/\\}"                    # JSON escapes Windows separators ...
 MG_TP="${MG_TP//\\//}"                       # ... and forward slashes are what bash globs safely
 # <session_id> names a file, so it must be a plain name: `/`, `\` or `..` in it → no state at all.
-case "$MG_SID" in ''|*[!A-Za-z0-9_-]*) MG_SF='';; *) MG_SF="${HOME:+$HOME/.claude/polaris/model-state/$MG_SID}";; esac
+case "$MG_SID" in ''|*[!A-Za-z0-9_-]*) MG_SF='';; *) MG_SF="${CLAUDE_CONFIG_DIR:-${HOME:+$HOME/.claude}}"; MG_SF="${MG_SF:+$MG_SF/polaris/model-state/$MG_SID}";; esac
 # The runner's spawn, read off a FLAT tool_input object: every key before subagent_type holds a plain
 # string, number or word, so a prompt that merely quotes the name (escaped, or nested) never matches.
 MG_RUN_RE='"tool_input":[{]("[A-Za-z_]+":("([^"\\]|\\.)*"|[A-Za-z0-9.]+),)*"subagent_type":"polaris-runner"'

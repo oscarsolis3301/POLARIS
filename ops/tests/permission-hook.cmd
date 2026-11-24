@@ -64,3 +64,15 @@ P denied PermissionDenied s1 auto "$ESC" "\"tool_name\":\"Bash\",\"tool_input\":
 sed 's/^[0-9][0-9]*\t/<epoch>|/; s/\t/|/g' "$RUN/denied.tsv" | awk '{ print "  " substr($0, 1, 60) " (" length($0) " chars)" }'
 echo '--- never allows: no "allow" decision anywhere in this file or any output above'
 printf '  allow decisions in the hook: %s\n' "$(grep -c '"behavior":"allow"' "$H")"
+# --- machine-prefs § 4 (T-334): reentry_hours from this computer's preferences when the repo has no
+#     line; a repo line still beats it. The armed run is two hours old, the owner away.
+arm "$(( $(date +%s) - 7200 ))"
+printf 'reentry_hours: 1\n' > "$FIX/prefs"
+echo '--- machine prefs: no machine file (POLARIS_PREFS empty) — the 12 h default, armed, denied'
+POLARIS_PREFS= P request PermissionRequest s1 auto "$ESC" "$BASHIN"
+echo '--- machine prefs: the machine file says reentry_hours: 1 — not armed, the dialog opens'
+POLARIS_PREFS="$FIX/prefs" P request PermissionRequest s1 auto "$ESC" "$BASHIN"
+echo '--- machine prefs: the repo says reentry_hours: 12 — the repo line wins, denied'
+printf 'reentry_hours: 12\n' > "$R/ops/CONVENTIONS.md"
+POLARIS_PREFS="$FIX/prefs" P request PermissionRequest s1 auto "$ESC" "$BASHIN"
+rm -f "$R/ops/CONVENTIONS.md"

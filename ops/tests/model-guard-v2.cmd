@@ -268,3 +268,19 @@ printf -v IJ '{"session_id":"run","transcript_path":"%s","agent_id":"r1","hook_e
 R 'runner: bg wait, agent_type after tool_input'
 PT Agent '{"status":"completed","resolvedModel":"claude-haiku-4-5"}'; IJ="${IJ/\"prompt\":\"p\"/\"description\":\"d\",\"prompt\":\"wait\",\"subagent_type\":\"polaris-runner\"}"; R 'PostToolUse: the runner on haiku (no caveat)'
 PT Agent '{"status":"completed","resolvedModel":"claude-haiku-4-5"}'; IJ="${IJ/\"prompt\":\"p\"/\"subagent_type\":\"general-purpose\"}"; R 'PostToolUse: general-purpose on haiku'
+
+echo '== doc-server § 3 (T-334): CLAUDE_CONFIG_DIR moves the state home, HOME is not read for it =='
+CD="$FIX/cfg"; CS="$CD/polaris/model-state"; mkdir -p "$CS"
+line "$OPUS" > "$FIX/tx/c1.jsonl"; printf '%s\n' "$HAIKU" > "$CS/c1"; printf '%s\n' "$OPUS" > "$ST/c1"
+J c1 "$FIX/tx/c1.jsonl" PreToolUse Read "$READ"
+printf '%s' "$IJ" > "$FIX/in"; CLAUDE_CONFIG_DIR="$CD" bash "$H" < "$FIX/in" > "$FIX/out" 2> "$FIX/err"
+printf '%-58s rc %s\n' 'config dir state says haiku (HOME state says opus)' "$?"
+while IFS= read -r l; do printf '    stderr: %s\n' "$l"; done < "$FIX/err"
+printf '%s\n' "$OPUS" > "$CS/c1"; line "$HAIKU" > "$FIX/tx/c1.jsonl"
+J c1 "$FIX/tx/c1.jsonl" PreToolUse Read "$READ"
+printf '%s' "$IJ" > "$FIX/in"; CLAUDE_CONFIG_DIR="$CD" bash "$H" < "$FIX/in" > /dev/null 2>&1
+printf '%-58s rc %s\n' 'config dir state says opus (transcript says haiku)' "$?"
+MS c2 SessionStart ',"source":"startup","model":"claude-opus-5-5"'
+printf '%s' "$IJ" > "$FIX/in"; CLAUDE_CONFIG_DIR="$CD" bash "$H" < "$FIX/in" > /dev/null 2>&1
+printf 'SessionStart under the config dir: rc %s · state c2 %s · under HOME %s\n' "$?" \
+  "$(cat "$CS/c2" 2>/dev/null || echo absent)" "$( [ -f "$ST/c2" ] && echo present || echo absent)"

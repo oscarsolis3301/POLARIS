@@ -179,3 +179,26 @@ R=allow; [ -n "$(printf '%s' "$J_PS_ALLOW" | bash "$H")" ] || R=ask
 printf '%s  %s\n' "$R" "json: PowerShell allow case"
 R=allow; [ -n "$(printf '%s' "$J_PS_ASK" | bash "$H")" ] || R=ask
 printf '%s  %s\n' "$R" "json: PowerShell ask case"
+# --- doc-server § 4 / machine-prefs § 7 (T-334): the document verbs and a bare prefs are reads; every
+#     prefs flag writes this computer's preferences or this repo's CONVENTIONS, so it keeps its prompt.
+while IFS= read -r c; do
+  [ -z "$c" ] && continue
+  case "$c" in '#'*) continue;; esac
+  printf '%s  %s\n' "$(bash "$H" --test "$c")" "$c"
+done <<'DOCCASES'
+bash ops/polaris role BUILDER
+bash ops/polaris role conductor --page 2
+bash ops/polaris doc PROTOCOL
+bash ops/polaris doc PROTOCOL "THE TOOL"
+bash ops/polaris doc --where
+bash ops/polaris router
+bash ops/polaris prefs
+bash ops/polaris prefs && bash ops/polaris doc KEYS
+bash ops/polaris prefs --set voice=technical
+bash ops/polaris prefs --unset voice
+bash ops/polaris prefs --seed
+bash ops/polaris prefs --yield
+bash ops/polaris prefs voice
+bash ops/polaris doc templates/task > ops/board/x.md
+bash ops/polaris role BUILDER; rm -rf ops
+DOCCASES
