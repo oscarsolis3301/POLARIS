@@ -12,7 +12,8 @@
 # that machine changes nothing · (3) no guard file (and so no hook) → nothing is created · (4) a guard on disk but not
 # registered → the script is refreshed, the list is untouched · (5) no POLARIS_SHA (a zip or skill
 # install) → nothing happens. Then: the install output gains no line — every first install prints
-# the same number of lines whether or not anything was re-armed.
+# the same number of lines whether or not anything was re-armed. Case 6 (walk-away § 3.2, T-320): the
+# kit's agent file lands in <repo>/.claude/agents, replaced on update, a human's own file kept, silently.
 #
 # HERMETIC: one mktemp -d. Every case gets its OWN fake home with HOME and USERPROFILE pointed at it
 # together (Python's expanduser reads USERPROFILE on Windows, so a HOME-only fake would reach the real
@@ -94,9 +95,35 @@ c5() { home 5
   GUARD; MODELS; MARKER
 }
 
-for n in 1 3 4 5; do ( "c$n" ) > "$FIX/report$n" 2>/dev/null & done
+c6() { home 6
+  echo '--- 6. the job runner agent rides the .claude/ step (walk-away § 3.2): ours replaced, theirs kept'
+  KA="$KIT_DIR/.claude/agents/polaris-runner.md"; A="$R/.claude/agents"
+  I
+  cmp -s "$A/polaris-runner.md" "$KA" && echo "agent: the kit's own bytes" || echo 'agent: MISSING or NOT the kit copy'
+  # § 3.2's frontmatter, key by key (the description's words are free, its being ONE line is not),
+  # and no `#` heading anywhere: api-kit indexes kit .md headings, and this file adds none.
+  awk 'NR == 1 && $0 != "---" { print "  NO FRONTMATTER"; exit } NR > 1 && $0 == "---" { exit }
+       NR > 1 { sub(/\r$/, ""); if ($0 ~ /^description: ./) $0 = "description: <one line>"; print "  " $0 }' "$A/polaris-runner.md"
+  grep -c '^#' "$A/polaris-runner.md" | sed 's/^/  heading lines: /'
+  printf 'edited by hand
+' > "$A/polaris-runner.md"; printf -- '---
+name: mine
+---
+' > "$A/mine.md"
+  I
+  cmp -s "$A/polaris-runner.md" "$KA" && echo 'agent: replaced on the next install' || echo 'agent: NOT REPLACED'
+  [ "$(cat "$A/mine.md")" = "$(printf -- '---
+name: mine
+---')" ] && echo "agent: the human's own file kept" || echo "agent: THE HUMAN'S FILE CHANGED"
+  cp -R "$A" "$FIX/agents6"
+  I
+  diff -r "$FIX/agents6" "$A" >/dev/null 2>&1 && echo 'agent: a third install changes nothing' || echo 'agent: A THIRD INSTALL REWROTE IT'
+  grep -qiE 'polaris-runner|agents/' "$H.out" "$H.err" && echo 'OUTPUT NAMES THE AGENT' || echo 'agent: no output line names it'
+}
+
+for n in 1 3 4 5 6; do ( "c$n" ) > "$FIX/report$n" 2>/dev/null & done
 wait
-for n in 1 3 4 5; do cat "$FIX/report$n"; done
+for n in 1 3 4 5 6; do cat "$FIX/report$n"; done
 
 echo '--- the install output gains no line'
 # Every case's FIRST install met a fresh repo, so each printed the same lines whatever was re-armed:
