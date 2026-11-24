@@ -1,7 +1,7 @@
 # Sprint 28 — Walk away: approve, leave, come back to finished work (6.20.0) (2026-11-24–)
 
 ## T-318 — "Jobs that cannot hang - every background job has a budget and a watchdog, pulse/preflight/defer exist, next names dead cards and crashed jobs, and the CLI stops loading the self-test on every start"
-points 13 · risk normal · landed 96402443 (2026-11-24) · claimed 2026-11-24
+points 13 · risk normal · landed 96402443 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/KEYS.tsv, kit/ops/lib/bg.sh, kit/ops/lib/bgwatch.sh, kit/ops/lib/handover.sh, kit/ops/lib/pulse.sh, kit/ops/lib/workspace.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/bg-budget.cmd, ops/tests/bg-budget.expected, ops/tests/bg-lifecycle.cmd, ops/tests/bg-lifecycle.expected, ops/tests/handover-route.cmd, ops/tests/handover-route.expected, ops/tests/heavy-slot.cmd, ops/tests/heavy-slot.expected, ops/tests/lease-token.cmd, ops/tests/lease-token.expected, ops/tests/pulse-run.cmd, ops/tests/pulse-run.expected, ops/tests/startup-budget.cmd, ops/tests/startup-budget.expected
 
 ### Why
@@ -27,7 +27,7 @@ in the foreground. It also owns the CLI entry script for the whole plan: the loa
 - [ ] KEYS rows of § 8.2 present
 
 ## T-319 — "The away hooks - an approval arms the run, the Stop gate keeps an armed run going until it is done or parked, permission prompts park instead of waiting, and keep-awake reaps a hung job"
-points 13 · risk high · landed a670a248 (2026-11-24) · claimed 2026-11-24
+points 13 · risk high · landed a670a248 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/.claude/settings.json, kit/ops/hooks/awake-hook.sh, kit/ops/hooks/handover-hook.sh, kit/ops/hooks/permission-hook.sh, kit/ops/hooks/presence-guard.sh, ops/tests/awake-hook.cmd, ops/tests/awake-hook.expected, ops/tests/handover-stop.cmd, ops/tests/handover-stop.expected, ops/tests/install-update.cmd, ops/tests/install-update.expected, ops/tests/permission-hook.cmd, ops/tests/permission-hook.expected, ops/tests/presence-guard.cmd, ops/tests/presence-guard.expected, ops/tests/presence-installed.cmd, ops/tests/presence-installed.expected, ops/tests/run-caps-plan.cmd, ops/tests/run-caps-plan.expected, ops/tests/stop-away.cmd, ops/tests/stop-away.expected, ops/tests/stop-question.cmd, ops/tests/stop-question.expected
 
 ### Why
@@ -49,7 +49,7 @@ budget. Unarmed, every hook is byte-identical. Hook files are in scope by the ow
 - [ ] awake-hook: armed = active, reap call, stalled marker; never starts a model
 
 ## T-320 — "A Haiku job runner the guard lets through for exactly one thing - the polaris-runner agent may run only bg wait/status/tail; every other Haiku session, switch and spawn is refused as before"
-points 8 · risk high · landed 31942ef7 (2026-11-24) · claimed 2026-11-24
+points 8 · risk high · landed 0938b9f3 (2026-11-24) · claimed 2026-11-24
 files touched: kit/ops/hooks/model-guard.sh, ops/tests/model-guard-v2.cmd
 
 ### Why
