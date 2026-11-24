@@ -1440,3 +1440,4 @@
 {"ts":1795551462,"ev":"all-review","id":"T-325","who":"oscar@Dino","note":"last lane landed — board is all review"}
 {"ts":1795551488,"ev":"done","id":"T-324","who":"oscar@Dino","note":"","pts":12}
 {"ts":1795551494,"ev":"done","id":"T-325","who":"oscar@Dino","note":"","pts":13}
+{"ts":1795551502,"ev":"promote","id":"T-327","who":"oscar@Dino","note":"deps done: T-318, T-319, T-320, T-321, T-322, T-328, T-324, T-325","pts":3}
