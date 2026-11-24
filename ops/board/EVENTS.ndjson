@@ -1521,3 +1521,4 @@
 {"ts":1795561911,"ev":"note","id":"T-340","who":"oscar@Dino","note":""}
 {"ts":1795561914,"ev":"note","id":"T-340","who":"oscar@Dino","note":""}
 {"ts":1795562001,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"ops/tests/depth-ui.expected"}
+{"ts":1795562004,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"ops/tests/express-ui.expected"}
