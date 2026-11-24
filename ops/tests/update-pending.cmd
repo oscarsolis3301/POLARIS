@@ -50,7 +50,7 @@ V() { sed -n 's/^version: *//p' ops/VERSION | tr -d ' \r'; }
 FOOT() { grep -v -e '^ops/board/' -e '^ops/contracts/' -e '^ops/tests/' -e '^ops/CONVENTIONS\.md$' -e '^ops/MAP\.md$' -e '^ops/SPRINT\.md$' \
            -e '^ops/RULES\.tsv$' -e '^ops/LAYOUT\.tsv$' -e '^ops/ROADMAP\.md$' \
          | grep -e '^ops/' -e '^\.claude/settings\.json$' -e '^\.claude/skills/polaris/' -e '^\.claude/skills/i-have-adhd/' \
-           -e '^\.claude/output-styles/polaris\.md$' -e '^CLAUDE\.md$' -e '^\.gitignore$' -e '^\.gitattributes$'; }
+           -e '^\.claude/output-styles/polaris\.md$' -e '^\.claude/agents/polaris-runner\.md$' -e '^CLAUDE\.md$' -e '^\.gitignore$' -e '^\.gitattributes$'; }
 REC() { # REC — what the record holds against the tree, as verdicts
   f=.polaris/kit-pending
   [ -s "$f" ] || { echo "   record: none"; return; }

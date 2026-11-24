@@ -1022,7 +1022,7 @@ _kit_footprint_paths() { # stdin = `git status --porcelain`; prints the path of 
     case "$p" in \"*\") p="${p#\"}"; p="${p%\"}";; esac   # git quotes paths with odd bytes
     case "$p" in
       ops/board/*|ops/contracts/*|ops/CONVENTIONS.md|ops/MAP.md|ops/SPRINT.md|ops/RULES.tsv|ops/LAYOUT.tsv|ops/ROADMAP.md|ops/tests/*) ;;
-      ops/*|.claude/settings.json|.claude/skills/polaris/*|.claude/skills/i-have-adhd/*|.claude/output-styles/polaris.md) printf '%s\n' "$p";;
+      ops/*|.claude/settings.json|.claude/skills/polaris/*|.claude/skills/i-have-adhd/*|.claude/output-styles/polaris.md|.claude/agents/polaris-runner.md) printf '%s\n' "$p";;
       CLAUDE.md|.gitignore|.gitattributes) printf '%s\n' "$p";;
     esac
   done

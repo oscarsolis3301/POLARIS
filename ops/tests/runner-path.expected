@@ -1,0 +1,24 @@
+== 1. route names the runner ==
+  cheap
+     effort: low
+     model: haiku
+     agent: polaris-runner
+== 2. the guard lets that agent, and only that command shape, through ==
+  spawn polaris-runner, model haiku            rc 0
+  runner: bg wait x --max 240                  rc 0
+  runner: ls                                   rc 2
+      polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+  general-purpose on haiku: bg wait            rc 2
+      polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+== 3. the agent's two commands, on a green job and a red one ==
+  the body names: [bash ops/polaris bg wait NAME --max 240] · [bash ops/polaris bg tail NAME -n 15]
+  runner: bg wait good --max 240               rc 0
+  runner: bg tail good -n 15                   rc 0
+  good: rc=0
+    tail: built
+    tail: all green
+  runner: bg wait bad --max 240                rc 0
+  runner: bg tail bad -n 15                    rc 0
+  bad: rc=1
+    tail: built
+    tail: one red

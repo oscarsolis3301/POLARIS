@@ -1,0 +1,25 @@
+installed: yes
+== 1. the approval arms the run (presence-guard, ExitPlanMode in auto mode) ==
+allow:not-question
+  rc=0
+  approved: present
+  armed line 1: <epoch>
+  armed line 3: reentries 0
+== 2. a hung job: killed at its budget, retried once, exit 4, nothing left behind ==
+  wait rc=4
+  ⛔ hang timed out — killed after 2s, 2 attempts · log: <reg>/hang/log · park it: bash ops/polaris defer -m "hang hung" -- sh <fix>/hang.sh
+  children started: 4 · alive: 0
+== 3. the Stop gate reads the armed file: work left blocks, the third identical block is a stall ==
+  block:run
+  block:run
+  allow:stalled
+  stalled: yes · notify: notify-gate stall
+== 4. defer one command, then finish: parked, one line waiting, the armed file gone ==
+  deferred: git push origin main — finish lists it
+  finish rc=1
+  ⛔ finish: parked - 1 waiting on you
+  ⛔ waiting on you: git push origin main - the release push needs a token
+  run: <the run line>
+  armed: 0 · parked: aw.parked 
+== 5. the pulse reads finish's parked file ==
+  parked
