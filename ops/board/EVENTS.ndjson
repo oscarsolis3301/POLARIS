@@ -1451,3 +1451,4 @@
 {"ts":1795552325,"ev":"all-review","id":"T-327","who":"oscar@Dino","note":"last lane landed — board is all review"}
 {"ts":1795552348,"ev":"done","id":"T-327","who":"oscar@Dino","note":"","pts":3}
 {"ts":1795552357,"ev":"promote","id":"T-326","who":"oscar@Dino","note":"deps done: T-322, T-328, T-318, T-321","pts":5}
+{"ts":1795552409,"ev":"release","id":"T-326","who":"oscar@Dino","note":"→ backlog: parked by plan: trigger not met (begin+wrap 27.66 s best of 3 after section D, 1.9% of a 1-point change); rebuild only if a later measurement trips it"}
