@@ -49,7 +49,7 @@ budget. Unarmed, every hook is byte-identical. Hook files are in scope by the ow
 - [ ] awake-hook: armed = active, reap call, stalled marker; never starts a model
 
 ## T-320 — "A Haiku job runner the guard lets through for exactly one thing - the polaris-runner agent may run only bg wait/status/tail; every other Haiku session, switch and spawn is refused as before"
-points 8 · risk high · landed 0938b9f3 (2026-11-24) · claimed 2026-11-24
+points 8 · risk high · landed 31942ef7 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/hooks/model-guard.sh, ops/tests/model-guard-v2.cmd
 
 ### Why
@@ -69,7 +69,7 @@ anyone from pointing the runner at Fable or Opus. Hook files are in scope by the
 - [ ] ops/RULES.tsv gains exactly one content line with the owner/plan comment
 
 ## T-321 — "Test depth in proportion, in the core - one glob helper with fonts and more style types, a ui floor that says when no look is set up, an edited test that always runs, honest stamp words, a freshness gate that skips docs and styles, and route --role RUNNER"
-points 12 · risk normal · landed e2743e00 (2026-11-24) · claimed 2026-11-24
+points 12 · risk normal · landed e2743e00 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/lib/core.sh, kit/ops/lib/ownership.sh, kit/ops/lib/route.sh, ops/tests/change-bound.cmd, ops/tests/change-bound.expected, ops/tests/depth-stamp.cmd, ops/tests/depth-stamp.expected, ops/tests/depth-ui.cmd, ops/tests/depth-ui.expected, ops/tests/qa-stamp.cmd, ops/tests/qa-stamp.expected, ops/tests/related-tests.cmd, ops/tests/related-tests.expected, ops/tests/route-tier.cmd, ops/tests/route-tier.expected, ops/tests/test-depth.cmd, ops/tests/test-depth.expected, ops/tests/verify-stamp.cmd, ops/tests/verify-stamp.expected
 
 ### Why
@@ -93,7 +93,7 @@ ui-with-no-look behaviour.
 - [ ] No new public fn (lib-census, api-kit)
 
 ## T-322 — "Spike - measure a small change end to end before the speed-ups land, so the quiet-lane tail is built only if it earns it"
-points 2 · risk normal · landed fa93547e (2026-11-24) · claimed 2026-11-24
+points 2 · risk normal · landed fa93547e (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/bench.sh
 
 ### Why
@@ -112,7 +112,7 @@ re-runs the same recipe after D and decides from it.
 - [ ] No new public fn (api-kit) — helpers are `_flow_*`
 
 ## T-328 — "Fewer CLI starts for a small change - seal and done run the tune-up checks once, the burndown reads the board in one pass, begin reads stdin, wrap commits the card's files, the reach is computed once, and pack forecasts the check"
-points 9 · risk normal · landed 3254008f (2026-11-24) · claimed 2026-11-24
+points 9 · risk normal · landed 3254008f (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/flow.sh, kit/ops/lib/integrate.sh, ops/tests/flow-solo.cmd, ops/tests/flow-solo.expected, ops/tests/landed-seal.cmd, ops/tests/landed-seal.expected, ops/tests/pack-steps.cmd, ops/tests/pack-steps.expected, ops/tests/self-land-finish.cmd, ops/tests/self-land-finish.expected, ops/tests/wrap-own-folder.cmd, ops/tests/wrap-own-folder.expected
 
 ### Why
@@ -134,7 +134,7 @@ the forecast calls `depth_for` as it is, and picks up T-321's sharper rules once
 - [ ] No new public fn (lib-census, api-kit)
 
 ## T-329 — Kit python output is UTF-8 on Windows, so the model-guard goldens pass without PYTHONUTF8
-points 2 · risk normal · landed a6920a34 (2026-11-24) · claimed 2026-11-24
+points 2 · risk normal · landed 0a44f3f5 (2026-11-24) · claimed 2026-11-24
 files touched: kit/ops/hooks/model-guard.sh, ops/tests/model-guard-v2.cmd
 
 ### Why
