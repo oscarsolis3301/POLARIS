@@ -1426,3 +1426,4 @@
 {"ts":1795549740,"ev":"claim","id":"T-324","who":"oscar@Dino","note":"","pts":12}
 {"ts":1795550332,"ev":"note","id":"T-326","who":"oscar@Dino","note":""}
 {"ts":1795550335,"ev":"release","id":"T-326","who":"oscar@Dino","note":"→ backlog: trigger not met: self begin+wrap 27.66s best of 3 (rerun 28.30s) vs 30s; integrator 30.11s; 1.9% of 1pt p50 0.4h vs 25%; BEFORE 31.25s"}
+{"ts":1795550352,"ev":"amend","id":"T-327","who":"oscar@Dino","note":"deps -T-326"}
