@@ -161,7 +161,7 @@ the stale prose the plan lists is corrected. `kit/CLAUDE.md` is in scope by the 
 - [ ] SOLO.md:110 and PROTOCOL.md:330 no longer contradict the background wake-up
 
 ## T-327 — "Walk away on the joined tree - the away-run and runner-path drills prove the side-by-side seams together, every shared golden runs once, api-kit re-pinned, version 6.20.0 and its changelog"
-points 3 · risk normal · landed d1465cf9 (2026-11-24) · claimed 2026-11-24
+points 3 · risk normal · landed d1465cf9 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: CHANGELOG.md, kit/ops/VERSION, kit/ops/hooks/model-guard.sh, kit/ops/lib/admin.sh, ops/tests/away-run.cmd, ops/tests/away-run.expected, ops/tests/model-guard-v2.cmd, ops/tests/runner-path.cmd, ops/tests/runner-path.expected, ops/tests/update-pending.cmd
 
 ### Why
@@ -235,3 +235,15 @@ seal is red on two goldens left by earlier cards of this wave, and both fixes ap
    `test_ui` (all three must have rows), keep the tier rule for every other family, and update the
    § 5 comment. The check stays exactly as strict: a missing member still reds it.
 The expected output of keys-drift returns to `registry lacks: nothing`; no other expected line moves.
+
+## T-332 — qa-parallel expects the one-time "no before/after look" line that ui runs now print
+points 1 · risk normal · landed cc97d5a8 (2026-11-24) · claimed 2026-11-24
+files touched: ops/tests/qa-parallel.expected
+
+### Why
+The final qa of walk-away (2026-11-24, ca3c9fd) went red on ONE golden, qa-parallel: its fixture has
+no `visual:`/`shot:`, so since T-321's `_ui_skip_say` (wired into qa by T-324) a `ui` run prints the
+one-time line `   ui — no before/after look is set up here (visual: and shot: unset): lint and
+typecheck are the whole check — ops/VISUAL.md` (contract walk-away § 6, plan section E). That is the
+intended behaviour; the expected file predates it. Re-pin ONLY that line (it appears after each
+`ui — test, build and uat skipped` line), and confirm with a diff that nothing else in the output moved.
