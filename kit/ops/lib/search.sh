@@ -19,7 +19,7 @@ index_engine() { # index_engine <root> — resolve the engine; the ONE seam a na
   # `-c pass` defeats the Windows Store python stub exactly as ops/hooks/ownership-guard.sh does —
   # it costs ~0.19s, which is why the answer is CACHED in .polaris/index-engine after the first run.
   # Overrides bypass the cache so a test that forces an engine is never answered from disk.
-  local root="${1:-}" cache="" p="" eng="" first=""
+  local root="${1:-}" cache="" p="" eng="" first="" kf=""
   [ -n "${POLARIS_INDEX_BIN:-}" ] && [ -x "${POLARIS_INDEX_BIN}" ] && { printf '%s' "$POLARIS_INDEX_BIN"; return 0; }
   [ "${POLARIS_INDEX_TEST_NOPY:-}" = "1" ] && return 1
   [ -n "$root" ] && cache="$root/.polaris/index-engine"
@@ -29,11 +29,15 @@ index_engine() { # index_engine <root> — resolve the engine; the ONE seam a na
     first="$(cut -d' ' -f1 < "$cache")"
     if [ -x "$first" ] || command -v "$first" >/dev/null 2>&1; then cat "$cache"; return 0; fi
   fi
-  if [ -n "$root" ] && [ -x "$root/ops/polaris-index" ]; then eng="$root/ops/polaris-index"
+  # Kit files, the repo's copy first, else the kit beside the CLI (doc-server.md § 2) — inline, never
+  # kit_file: this module runs before core.sh is sourced, and a $(…) here is a fork on the hot path.
+  [ -e "$root/ops/polaris-index" ] && kf="$root/ops/polaris-index" || kf="${OPS_DIR:-$root/ops}/polaris-index"
+  if [ -n "$root" ] && [ -x "$kf" ]; then eng="$kf"
   else
     python3 -c pass >/dev/null 2>&1 && p=python3 || { python -c pass >/dev/null 2>&1 && p=python; }
     [ -n "$p" ] || return 1
-    eng="$p ${root:-.}/ops/index.py"
+    [ -e "${root:-.}/ops/index.py" ] && kf="${root:-.}/ops/index.py" || kf="${OPS_DIR:-${root:-.}/ops}/index.py"
+    eng="$p $kf"
   fi
   [ -n "$cache" ] && { mkdir -p "$root/.polaris" 2>/dev/null; printf '%s' "$eng" > "$cache" 2>/dev/null || true; }
   printf '%s' "$eng"

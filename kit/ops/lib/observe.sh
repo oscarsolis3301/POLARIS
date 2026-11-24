@@ -514,7 +514,8 @@ cmd_doctor() {
   # (INIT never ran — the line above already says the one useful thing, and "lacks 37 of 37" on top
   # of it is the storm this check exists to avoid).
   # NEVER name a kit version in the line: it is goldened, and a version number reds it every release.
-  if [ -f "$OPS/KEYS.tsv" ] && [ -f "$CONV" ]; then
+  local kys; kys="$(kit_file KEYS.tsv)"   # a kit file: the repo's copy first (doc-server.md § 2)
+  if [ -f "$kys" ] && [ -f "$CONV" ]; then
     local drift
     drift="$(awk '
       FNR==NR {                                  # pass 1: CONVENTIONS.md → every key known HERE
@@ -530,7 +531,7 @@ cmd_doctor() {
         if (!(k in present)) { n++; if (n<=6) list = (n==1 ? k : list " · " k) }
       }
       END { if (n>0) printf "⚠ CONVENTIONS.md lacks %d of %d known keys (%s%s) — see what each unlocks: ops/polaris adopt\n", n, m, list, (n>6 ? " +" (n-6) " more" : "") }
-    ' "$CONV" "$OPS/KEYS.tsv")"
+    ' "$CONV" "$kys")"
     [ -n "$drift" ] && note "$drift"
   fi
   # ACTIVATION NUDGE (ops/contracts/test-surfaces.md v2 § 15). 6.4.0 shipped change-scoped
@@ -580,7 +581,7 @@ cmd_doctor() {
   # repos most needing the message were the ones certain never to see it. `autonomy` composes only
   # the three gate knobs — never drain, which keeps its own silence-when-unset.
   if [ -f "$CONV" ]; then
-    local a pg bq ea dr ds std=0
+    local a pg bq ea dr ds std=0 mpf
     a="$(cfg autonomy "")"; pg="$(cfg plan_gate "")"; bq="$(cfg builder_questions "")"
     ea="$(cfg evolve_apply "")"; dr="$(cfg drain "")"; ds="$(cfg drain_slices "")"
     if [ "$a" = "standard" ]; then std=1
@@ -600,6 +601,12 @@ cmd_doctor() {
     fi
     if [ -z "$ea" ]; then if [ "$std" -eq 1 ]; then ea="confirm"; else ea="auto-reversible"; fi; fi
     note "autonomy: ${a:-default} → plan_gate=$pg · builder_questions=$bq · evolve_apply=$ea (explicit > autonomy > default · opt out: autonomy: standard)"
+    # The machine layer is in play only when its file exists (machine-prefs.md § 9): one line, so a
+    # person can see that some of the values above may come from this computer, not this repo.
+    mpf="${POLARIS_PREFS-$POLARIS_HOME/preferences}"
+    if [ -n "$mpf" ] && [ -f "$mpf" ]; then
+      note "machine preferences: $mpf — bash ops/polaris prefs shows which keys it sets here"
+    fi
     if [ -n "$dr$ds" ]; then
       if [ -n "$dr" ] && [ "$dr" != "queue" ] && [ "$dr" != "plan" ] && [ "$dr" != "backlog" ]; then
         note "⚠ drain: '$dr' unknown (queue | plan | backlog) — behaving as the default"; dr=""
@@ -669,16 +676,17 @@ cmd_doctor() {
   fi
   # commit-msg hook: the no-AI-fingerprints guarantee (ops/hooks/commit-msg). Self-heal here
   # because clones never carry .git/hooks — without this, every fresh clone silently loses it.
-  if [ -f "$OPS/hooks/commit-msg" ]; then
+  local cmh; cmh="$(kit_file hooks/commit-msg)"
+  if [ -f "$cmh" ]; then
     if [ -n "$(git -C "$PRIMARY" config --get core.hooksPath 2>/dev/null || true)" ]; then
       note "⚠ core.hooksPath is set — wire ops/hooks/commit-msg into your hooks dir by hand (it strips AI attribution from commits)"
     else
       local hk="$GCD/hooks/commit-msg"
       if [ ! -f "$hk" ]; then
-        mkdir -p "$GCD/hooks"; cp "$OPS/hooks/commit-msg" "$hk"; chmod +x "$hk" 2>/dev/null || true
+        mkdir -p "$GCD/hooks"; cp "$cmh" "$hk"; chmod +x "$hk" 2>/dev/null || true
         say "commit-msg hook installed — AI attribution is stripped from every commit"
       elif grep -q 'POLARIS commit-msg' "$hk" 2>/dev/null; then
-        cp "$OPS/hooks/commit-msg" "$hk"; chmod +x "$hk" 2>/dev/null || true
+        cp "$cmh" "$hk"; chmod +x "$hk" 2>/dev/null || true
       else
         note "⚠ a non-POLARIS commit-msg hook is installed — chain ops/hooks/commit-msg into it by hand"
       fi
@@ -711,7 +719,8 @@ cmd_doctor() {
   # Read-only auto-approver (ops/hooks/readonly-allow.sh). Without it every grep/sed/git-log an
   # agent runs through Bash stops and asks a human — which is what made plan mode expensive. It is
   # plumbing spread over three files, so it can be half-installed and look fine; check all three.
-  local rah="$OPS/hooks/readonly-allow.sh" psj="$PRIMARY/.claude/settings.json"
+  local rah psj="$PRIMARY/.claude/settings.json"
+  rah="$(kit_file hooks/readonly-allow.sh)"
   if [ ! -f "$rah" ]; then
     note "⚠ ops/hooks/readonly-allow.sh is missing — reads through Bash will prompt. Re-run: bash ops/install.sh"
   elif [ ! -f "$psj" ]; then
@@ -770,7 +779,7 @@ cmd_doctor() {
     local awn awh
     awn="$(grep -o 'polaris/awake-hook\.sh' "$HOME/.claude/settings.json" 2>/dev/null | grep -c . || true)"
     case "$awn" in ''|*[!0-9]*) awn=0;; esac
-    awh="${POLARIS_AWAKE_HOME:-$HOME/.claude/polaris/awake}"
+    awh="${POLARIS_AWAKE_HOME:-$POLARIS_HOME/awake}"
     if [ "$awn" -lt 4 ]; then
       note "⚠ keep-awake not armed on this machine — ops/polaris awake install"
     elif [ -e "$awh/disabled" ]; then
@@ -978,7 +987,7 @@ cmd_dash() { # launch the read-only live board (single-file stdlib server)
   # Windows Store python3 alias stub, which sits on PATH but only prints an ad.
   python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
   [ -n "$PY" ] || die "dashboard needs python3 (or python) on PATH — everything else in POLARIS runs without it"
-  exec "$PY" "$OPS/dashboard.py" --root "$PRIMARY" "$@"
+  exec "$PY" "$(kit_file dashboard.py)" --root "$PRIMARY" "$@"
 }
 
 find_claude() { # resolve the Claude Code CLI the way it will actually be invoked. On Windows `claude`

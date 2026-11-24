@@ -246,7 +246,7 @@ _route_chat_effort() { # sets RC_EFFORT to the chat's own effort level, or empty
   local f="" v=""
   RC_EFFORT=""
   [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || return 0
-  f="$HOME/.claude/polaris/model-state/$CLAUDE_CODE_SESSION_ID.effort"
+  f="$POLARIS_HOME/model-state/$CLAUDE_CODE_SESSION_ID.effort"
   [ -f "$f" ] || return 0
   read -r v < "$f" || [ -n "$v" ] || return 0
   v="${v%$'\r'}"

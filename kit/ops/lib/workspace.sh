@@ -341,7 +341,7 @@ _heavy_on() { # _heavy_on <why> — take one machine-wide heavy slot (ops/contra
   n="$(cfg heavy_slots 1)"
   case "$n" in ''|*[!0-9]*) n=1;; esac
   [ "$n" -eq 0 ] && return 0
-  dir="${POLARIS_HEAVY_DIR:-$HOME/.claude/polaris/heavy}"
+  dir="${POLARIS_HEAVY_DIR:-$POLARIS_HOME/heavy}"
   if [ -d "$dir" ]; then
     for s in "$dir"/slot-*; do
       [ -d "$s" ] || continue

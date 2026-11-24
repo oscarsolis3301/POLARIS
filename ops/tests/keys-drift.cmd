@@ -59,9 +59,11 @@ D
 printf 'voice: standard\nk_one: a\n# k_two: s\nk_three: c\n# k_four: s\nk_five: e\n# k_six: s\nk_seven: g\n# k_eight: s\n' > "$R/ops/CONVENTIONS.md"
 printf '%s\n' "$(D | grep -c .)"
 
-# 4. No ops/KEYS.tsv — a copy installed before 6.0, whose next `update` delivers the registry. The
-#    config is now missing all 8 again, and doctor still says nothing: with no registry there is no
-#    question to answer, and inventing one would nag every repo that has not updated yet.
+# 4. No ops/KEYS.tsv in the repo. The registry is a KIT file (doc-server.md § 2, T-339): doctor reads
+#    it through kit_file, the repo's copy first, else the kit's beside the CLI. This fixture's ops/
+#    holds only state and the CLI runs from kit/ops/, so it uses the kit's REAL registry and the line
+#    fires — ONE line, counted, never pinned, since the real registry grows every release. A pre-6.0
+#    vendored copy (the CLI inside that same ops/, no registry anywhere) still says nothing.
 printf 'voice: standard\n' > "$R/ops/CONVENTIONS.md"
 rm -f "$R/ops/KEYS.tsv"
 printf '%s\n' "$(D | grep -c .)"
