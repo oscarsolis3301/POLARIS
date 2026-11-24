@@ -1402,3 +1402,4 @@
 {"ts":1795548757,"ev":"claim","id":"T-330","who":"oscar@Dino","note":"","pts":1}
 {"ts":1795548879,"ev":"handoff","id":"T-330","who":"oscar@Dino","note":""}
 {"ts":1795548880,"ev":"all-review","id":"T-330","who":"oscar@Dino","note":"last lane landed — board is all review"}
+{"ts":1795548886,"ev":"kickback","id":"T-330","who":"oscar@Dino","note":"squash conflict — planning bug"}
