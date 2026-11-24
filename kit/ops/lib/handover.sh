@@ -327,7 +327,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   # Writes nothing. `wait` is NEVER emitted with nothing in flight; `stop` fires only where a build
   # or promote would otherwise have, so a budget stops work rather than inventing it.
   local d sid lk id f n can=0 pro=0 mine="" active="" blocked="" bgs="" p own cwds m vs vv vm vk bn bsha="" tdue="" nl='
-'
+' crs="" lcw="" dd="" al
   d="$(next_dir)"; sid="${CLAUDE_CODE_SESSION_ID:--}"
   # 0 — my own live lock on an active task: never a second task mid-task
   if [ "$sid" != "-" ]; then
@@ -425,12 +425,16 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
       f="${f%/}"; bn="${f##*/}"
       [ -f "$f/rc" ] && continue
       p=""; read -r p 2>/dev/null < "$f/pid" || true
-      bg_alive "${p%$'\r'}" || continue
+      # walk-away § 2.4: a dead rc-less job is CRASHED (named below), unless a budget kill is mid-retry
+      al=1; bg_alive "${p%$'\r'}" || al=0
+      [ "$al" -eq 1 ] || [ ! -f "$f/killing" ] || continue
       p=""; IFS= read -r p 2>/dev/null < "$f/cwd" || true
       p="${p%$'\r'}"; p="${p// /}"; [ -n "$p" ] || continue
       p="$(printf '%s' "$p" | tr 'A-Z\\' 'a-z/')"; own=0
+      [ "$al" -eq 1 ] && lcw="$lcw$nl$p"
       case "$cwds" in *"$nl$p$nl"*) own=1;; esac
-      [ "$own" -eq 1 ] && bgs="${bgs:+$bgs }$bn"
+      [ "$own" -eq 1 ] || continue
+      if [ "$al" -eq 1 ]; then bgs="${bgs:+$bgs }$bn"; else crs="${crs:+$crs }$bn"; fi
     done
   fi
   if [ -n "$tdue" ] && [ -z "$bgs" ]; then
@@ -458,6 +462,45 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
     for n in $bgs; do note "bg: $n running"; done
     [ -n "$NX_REV_HUMAN" ] && note "review/ awaits a human: $NX_REV_HUMAN"
     [ -n "$NX_REV_HELD" ] && note "held for a yes: $NX_REV_HELD"
+    # walk-away § 2.4 — stall lines, armed or not, after every other note: an active card whose beat is
+    # older than wt_live_minutes with no live job in its worktree is DEAD; ONE stat for every
+    # mtime-only beat (the hooks' `: >` touches), never one fork per card.
+    if [ -n "$active" ]; then
+      m="$(cfg wt_live_minutes 15)"; case "$m" in ''|*[!0-9]*) m=15;; esac
+      vv="$(date +%s)"; vs=""
+      for id in $active; do
+        f="$GCD/worktrees/$id/polaris-beat"; p=""
+        [ -r "$f" ] && { IFS= read -r p 2>/dev/null < "$f" || true; }
+        p="${p%$'\r'}"
+        case "$p" in ''|*[!0-9]*) [ -e "$f" ] && vs="$vs$nl$f";; *) dd="$dd$nl$id $p";; esac
+      done
+      if [ -n "$vs" ]; then
+        set --
+        while IFS= read -r f; do [ -n "$f" ] && set -- "$@" "$f"; done <<EOF_DD
+$vs
+EOF_DD
+        vm="$(stat -c '%Y %n' "$@" 2>/dev/null)" || [ -n "$vm" ] || vm="$(stat -f '%m %N' "$@" 2>/dev/null)" || true
+        while IFS=' ' read -r p f; do f="${f%/polaris-beat}"; dd="$dd$nl${f##*/} $p"; done <<EOF_DD
+$vm
+EOF_DD
+      fi
+      vm=0; shopt -q nocasematch && vm=1; shopt -s nocasematch
+      for id in $active; do
+        vk=0
+        while IFS=' ' read -r f p; do
+          [ "$f" = "$id" ] || continue
+          case "$p" in ''|*[!0-9]*) continue;; esac
+          [ $(( vv - p )) -lt $(( m * 60 )) ] && vk=1
+        done <<EOF_DD
+$dd
+EOF_DD
+        [ "$vk" -eq 1 ] && continue
+        case "$lcw$nl" in *"/.polaris/wt/$id$nl"*|*"/.polaris/wt/$id/"*) continue;; esac
+        note "dead: $id"
+      done
+      [ "$vm" -eq 1 ] || shopt -u nocasematch
+    fi
+    for n in $crs; do note "crashed: $n"; done
     return 0
   fi
   # 6 — otherwise the run's board is done; name what is parked, each only when non-empty. Human-gated
@@ -468,6 +511,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   [ -n "$blocked" ] && note "blocked/: $blocked"
   [ -n "$NX_REV_HUMAN" ] && note "risk: high awaiting approval: $NX_REV_HUMAN"
   [ -n "$NX_REV_HELD" ] && note "held for a yes: $NX_REV_HELD"
+  for n in $crs; do note "crashed: $n"; done
   return 0
 }
 

@@ -74,3 +74,16 @@ cat "$FIX/child.rc" 2>/dev/null || echo 'child: never ran'
 echo "child skipped without waiting: $(grep -c '^✅ already landed — skipped' "$FIX/child.out" 2>/dev/null || true) · waited: $(grep -c 'integration lane busy\|^queued: ' "$FIX/child.out" 2>/dev/null || true)"
 echo "T-2 landed: $(git log -1 --format=%s | grep -c '\[T-2\]$' || true)"
 lease
+
+echo '== 4. an ARMED run never waits for the lane: queued at once, even with a 10-minute wait set (walk-away § 2.4) =='
+printf 'base: main\nintegration_wait_minutes: 10\n' > ops/CONVENTIONS.md
+printf -- '---\nid: T-3\ntitle: lane T-3\ntype: feature\nscope: src\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: feat/T-3\nstatus: review\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/T-3.txt\nverify: []\n---\n' > ops/board/review/T-3.md
+( git checkout -q -b feat/T-3 main && echo T-3 > src/T-3.txt && git add src/T-3.txt && git commit -qm T-3 && git checkout -q main ) >/dev/null 2>&1
+mkdir -p "$LK"; date +%s > "$LK/epoch"; echo other@host > "$LK/who"; echo 1 > "$LK/pid"; echo 1:tok > "$LK/token"
+mkdir -p .polaris/run; printf '%s\nfix\nreentries 0\n' "$(date +%s)" > .polaris/run/lt.armed
+S=$SECONDS
+OUT="$(bash "$KIT" land T-3 2>&1)"; echo "land rc=$?"
+printf '%s\n' "$OUT" | grep '^queued: ' | sed 's/ — other@host holds it ([0-9]*m)/ — <holder> holds it/'
+echo "waited past a minute: $([ $((SECONDS - S)) -ge 60 ] && echo yes || echo no)"
+rm -f .polaris/run/lt.armed
+lease

@@ -243,6 +243,7 @@ int_on() { # int_on [<why>] — take the integration lease $LOCKS/.int-lease (th
   local sm; sm="$(cfg integration_stale_minutes 45)"
   case "$wm" in ''|*[!0-9]*) wm=10;; esac
   case "$sm" in ''|*[!0-9]*) sm=45;; esac
+  _run_armed >/dev/null && wm=0   # walk-away § 2.4: armed, never a foreground wait — queued: on the first busy look
   if [ -d "$lease" ] && [ "$(cat "$lease/pid" 2>/dev/null)" = "$$" ]; then INT_HELD=1; return 0; fi
   if [ -n "${POLARIS_INT_TOKEN:-}" ] && [ -d "$lease" ] && [ "$(cat "$lease/token" 2>/dev/null)" = "$POLARIS_INT_TOKEN" ]; then
     INT_HELD=1; INT_TOOK=0; return 0
@@ -404,6 +405,9 @@ _heavy_on() { # _heavy_on <why> — take one machine-wide heavy slot (ops/contra
       done
       nopid="$nopid2"
       [ "$stole" -eq 1 ] && continue
+      if [ -n "$bwho" ] && _run_armed >/dev/null; then   # walk-away § 2.4: armed, run at once, never wait
+        note "queued: heavy slot busy — $bwho ($bwhy) — running without it (armed run: no foreground wait)"; return 0
+      fi
       [ -n "$bwho" ] && note "heavy: waiting for $bwho ($bwhy) — one heavy job at a time on this machine"
     fi
     if [ "$waited" -ge "$wmax" ]; then

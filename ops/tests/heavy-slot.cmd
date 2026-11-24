@@ -99,3 +99,16 @@ echo '== f. POLARIS_HEAVY_WAIT=2 and a live holder: run without the slot =='
 POLARIS_HEAVY_WAIT=2 bash "$KIT" run-verify T-1 > "$FIX/f" 2>&1; echo "rc=$?"
 heavy "$FIX/f" | sed 's/, [0-9]*m, /, <m>m, /'
 ran; slot
+
+echo '== g. an ARMED run and a live holder: queued once, runs at once without the slot (walk-away § 2.4) =='
+# No POLARIS_HEAVY_WAIT here: unarmed, this case would wait the full 30 minutes. The armed file is
+# written by hand (T-319's presence-guard writes it for real); its epoch is now, within reentry_hours.
+kill "$HP" 2>/dev/null; sleep 120 & HP=$!
+hold other@host "$HP"
+mkdir -p "$R/.polaris/run"; printf '%s\nfix\nreentries 0\n' "$(date +%s)" > "$R/.polaris/run/hs.armed"
+S=$SECONDS
+bash "$KIT" run-verify T-1 > "$FIX/g" 2>&1; echo "rc=$?"
+grep -o 'queued: heavy slot busy.*' "$FIX/g" | sed 's/, [0-9]*m, /, <m>m, /'
+echo "waiting notes: $(heavy "$FIX/g" | grep -c . || true) · waited past a minute: $([ $((SECONDS - S)) -ge 60 ] && echo yes || echo no)"
+rm -f "$R/.polaris/run/hs.armed"
+ran; slot

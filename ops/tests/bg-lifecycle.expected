@@ -88,3 +88,37 @@ bg run ok -- echo third-run
 rc 0
 archived ok-*: 1
 ok.prev/cmd: echo second-run
+== a job past its budget is killed, retried once, then exit 4 with the park line (walk-away § 2.1) ==
+bg run hang --budget 2 -- sh .polaris/hang.sh
+✅ bg: 'hang' started (pid <pid>) — log: <reg>/hang/log · collect: bash ops/polaris bg wait hang
+rc 0
+bg wait hang --max 60
+⛔ hang timed out — killed after 2s, 2 attempts · log: <reg>/hang/log · park it: bash ops/polaris defer -m "hang hung" -- sh .polaris/hang.sh
+rc 4
+bg status hang
+⛔ hang timed out — killed after 2s, 2 attempts · log: <reg>/hang/log · park it: bash ops/polaris defer -m "hang hung" -- sh .polaris/hang.sh
+rc 4
+== --steps runs each line as ONE job and stops at the first red; the log names the line ==
+bg run st --steps .polaris/steps.txt
+✅ bg: 'st' started (pid <pid>) — log: <reg>/st/log · collect: bash ops/polaris bg wait st
+rc 0
+bg wait st --max 30
+bg: step 1 — echo one
+one
+bg: step 2 — false
+bg: step 2 red (rc 1) — false
+⛔ st red — rc 1 in <dur> · full log: <reg>/st/log
+rc 1
+st/cmd: echo one && false && echo never
+== wait --done has no --max cap: the budget bounds it ==
+bg run dn -- echo done-ok
+✅ bg: 'dn' started (pid <pid>) — log: <reg>/dn/log · collect: bash ops/polaris bg wait dn
+rc 0
+bg wait dn --done
+done-ok
+✅ 'dn' green — rc 0 in <dur>
+rc 0
+== reap with nothing past its budget is silent ==
+bg reap
+(no output)
+rc 0

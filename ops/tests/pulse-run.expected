@@ -1,0 +1,80 @@
+== not armed: ok, and the pulse says why it does nothing ==
+pulse
+ok
+   not armed — the pulse only acts on an approved away run
+rc 0
+== armed, an empty board: done ==
+pulse
+done
+   the run is over — run bash ops/polaris finish, then delete the pulse
+rc 0
+== armed, a ready card: act + next line 1 ==
+pulse
+act build T-P1
+rc 0
+== armed, a card in another lane: ok, next says wait ==
+pulse
+ok
+   next: wait
+rc 0
+== the stalled marker, then this session parked: parked ==
+pulse
+parked
+   stalled: three blocks on one line
+   what waits on you: bash ops/polaris finish
+rc 0
+pulse
+parked
+   parked: pr-sid.parked
+   what waits on you: bash ops/polaris finish
+rc 0
+== the armed file gone after a green finish: done ==
+pulse
+done
+   the run finished — delete the pulse
+rc 0
+== --reenter counts to reentry_max, then refuses ==
+pulse --reenter
+reenter fix — run: bash ops/polaris next and follow line 1
+rc 0
+pulse --reenter
+reenter fix — run: bash ops/polaris next and follow line 1
+rc 0
+pulse --reenter
+reenter fix — run: bash ops/polaris next and follow line 1
+rc 0
+armed line 3: reentries 3
+pulse --reenter
+refused: re-entered 3 times — reentry_max is 3
+rc 1
+== --reenter past reentry_hours, or with nothing armed: refused ==
+pulse --reenter
+refused: not armed — no approved away run within reentry_hours
+rc 1
+pulse --reenter
+refused: not armed — no approved away run within reentry_hours
+rc 1
+== preflight: no remote, a risk: high card with no yes, an unknown needs: value ==
+✅ no origin remote — nothing to reach
+⛔ needs you: T-P3 needs: telepathy — approve --plan cannot record it; edit the card
+⛔ needs you: T-P2 has no yes for merge — bash ops/polaris approve --plan fix -m "why"
+✅ suite time: unknown — the first wave gate will measure it
+preflight: 2 need you
+rc 1
+== preflight: the plan says yes, a suite time is measured: clear ==
+✅ no origin remote — nothing to reach
+✅ plan fix: 2 card(s) — nothing in it waits on a yes
+✅ suite time: 2m (the last full run)
+preflight: clear
+rc 0
+⛔ usage: polaris preflight <slug> — the plan's slug, as its cards' plan: names it
+rc 1
+== defer: usage refusals write nothing; a park writes one line ==
+⛔ usage: polaris defer -m "why" -- <cmd…>
+rc 1
+⛔ usage: polaris defer -m "why" -- <cmd…>
+rc 1
+deferred.tsv exists: no
+deferred: gh auth login --web — finish lists it
+rc 0
+row: <epoch> | the dashboard needs a sign-in | gh auth login --web | fields 3

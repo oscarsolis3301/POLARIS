@@ -18,3 +18,8 @@ lease after the child: standing
 child skipped without waiting: 1 · waited: 0
 T-2 landed: 1
 lease: gone
+== 4. an ARMED run never waits for the lane: queued at once, even with a 10-minute wait set (walk-away § 2.4) ==
+land rc=3
+queued: integration lane busy — <holder> holds it — re-run when the lane frees; a conductor polls at wave boundaries
+waited past a minute: no
+lease: standing, token unchanged

@@ -136,3 +136,26 @@ printf -- '---\nid: T-HR7\ntitle: fixture T-HR7\ntype: feature\npoints: 8\nwsjf:
 printf -- '---\nid: T-HR8\ntitle: fixture T-HR8\ntype: feature\npoints: 1\nwsjf: 2\nrisk: normal\nowner: null\nbranch: null\nstatus: backlog\ncontract: ops/contracts/fix.md\ndepends_on: [T-HR5]\nfiles_owned:\n  - src/e.txt\nverify: []\n---\n## Notes\n' > ops/board/backlog/T-HR8.md
 mk backlog T-HR9 1 normal src/a.txt
 route
+# --- stall lines (walk-away § 2.4): after line 1, armed or not. An active card whose beat is older
+#     than wt_live_minutes, with no live job in its worktree, is `dead:`; an own job with no rc and
+#     a dead pid is `crashed:`. Line 1 never moves for either. Jobs and beats are written by hand —
+#     a live pid is a background sleep of this script, a dead one a reaped child. ----------------
+rm -f ops/board/ready/*.md ops/board/backlog/T-HR*.md
+mk active T-HR10 5 normal src/c.txt
+G="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
+stall() { route; printf '%s\n' "$OUT" | grep -E '^   (dead|crashed): ' || echo '(no stall line)'; }
+stall
+mkdir -p "$G/worktrees/T-HR10"; date +%s > "$G/worktrees/T-HR10/polaris-beat"
+stall
+: > "$G/worktrees/T-HR10/polaris-beat"
+stall
+echo 1 > "$G/worktrees/T-HR10/polaris-beat"
+sleep 60 & SP=$!
+mkdir -p .polaris/bg/hj; echo "$SP" > .polaris/bg/hj/pid; echo "$PWD/.polaris/wt/T-HR10" > .polaris/bg/hj/cwd
+stall
+kill "$SP" 2>/dev/null; wait "$SP" 2>/dev/null
+( exit 0 ) & GP=$!; wait "$GP" 2>/dev/null
+mkdir -p .polaris/bg/cj; echo "$GP" > .polaris/bg/cj/pid; echo "$PWD" > .polaris/bg/cj/cwd
+stall
+rm -f ops/board/active/T-HR10.md
+stall

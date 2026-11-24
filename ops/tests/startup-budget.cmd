@@ -23,3 +23,9 @@ printf 'help-fast-path %s\n' "$(grep -c "help|-h|--help) usage; exit 0" kit/ops/
 printf 'rules-lines-memoized %s\n' "$(grep -c '_RULES_CACHED' kit/ops/lib/core.sh | tr -d ' ')"
 # A single-pattern match must not build a pipe (a pipe is a subshell) — see ownership.sh::match_one.
 printf 'per-rule-match-pipes %s\n' "$(grep -c "printf '%s..n' \"\$scope\" | owned_match" kit/ops/lib/ownership.sh | tr -d ' ')"
+# The nine selftest/* modules (0.52 MB) load for `doctor` ONLY (walk-away § 2.5, module-layout v10):
+# every other command parsed them on every start and never called one. Both lists stay LITERAL.
+printf 'selftest-modules-doctor-list %s\n' "$(awk '/^  doctor\) +_mods="/ { on = 1 } on { n += gsub(/selftest\//, "") } on && /" ;;$/ { on = 0 } END { print n + 0 }' kit/ops/polaris)"
+printf 'selftest-modules-every-other-command %s\n' "$(awk '/^  \*\) +_mods="/ { on = 1 } on { n += gsub(/selftest\//, "") } on && /" ;;$/ { on = 0 } END { print n + 0 }' kit/ops/polaris)"
+# bgwatch and pulse load right after bg, in both lists.
+printf 'bgwatch-pulse-after-bg %s\n' "$(grep -c ' bg bgwatch pulse awake ' kit/ops/polaris | tr -d ' ')"
