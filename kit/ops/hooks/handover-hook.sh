@@ -347,11 +347,11 @@ hh_stop() {
   case "$verb" in
     build)  n2="$(printf '%s\n' "$out" | sed -n 2p)"; n2="${n2#   }"; n2="${n2%, wsjf *}"
             [ -n "$n2" ] && n2=" — ${n2})"
-            hh_emit block:build "You are a BUILDER (hop $n of $cap). The board hands you $id$n2. Leave the finished worktree first (ExitWorktree, or cd \"$p\"), then: bash ops/polaris claim $id — taken? bash ops/polaris claim takes the next. Read ops/roles/BUILDER.md if this context no longer has it; at your handoff run bash ops/polaris next and follow it.";;
+            hh_emit block:build "You are a BUILDER (hop $n of $cap). The board hands you $id$n2. Leave the finished worktree first (ExitWorktree, or cd \"$p\"), then: bash ops/polaris claim $id — taken? bash ops/polaris claim takes the next. Run bash ops/polaris role BUILDER if this context no longer has it; at your handoff run bash ops/polaris next and follow it.";;
     integrate) ids="$(printf '%s\n' "$out" | sed -n 's/^   review\/: //p')"
             hi="$(printf '%s\n' "$out" | sed -n 's/^   risk: high, human approves: //p')"
             [ -n "$hi" ] && hi=" $hi are risk: high — the human approves those, never you."
-            hh_emit block:integrate "You are the INTEGRATOR (hop $n). From the primary checkout land what waits in ops/board/review/ — $ids: bash ops/polaris land <ID> per task, then seal, run-verify + done each.$hi Read ops/roles/INTEGRATOR.md if this context no longer has it; then bash ops/polaris next.";;
+            hh_emit block:integrate "You are the INTEGRATOR (hop $n). From the primary checkout land what waits in ops/board/review/ — $ids: bash ops/polaris land <ID> per task, then seal, run-verify + done each.$hi Run bash ops/polaris role INTEGRATOR if this context no longer has it; then bash ops/polaris next.";;
     promote) ids="$(printf '%s\n' "$out" | sed -n 's/^   eligible: \(.*\) — bash.*$/\1/p')"
             hh_emit block:promote "Backlog work is unblocked ($ids). From the primary: bash ops/polaris next --do — it promotes what passes the ready gate under the board lock — then follow its line 1.";;
     tidy)   hh_emit block:tidy "The layout pass is due. You are TIDY (hop $n): run bash ops/polaris role TIDY and follow it now — one context, no subagents, it lands one task. Then bash ops/polaris next.";;

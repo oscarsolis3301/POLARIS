@@ -194,3 +194,8 @@ a brand-new results page, one column and no chrome — PASS
 active:
 review:
 done: T-207.md T-208.md
+-- the visual doc, as a command --
+=== SEE YOUR WORK — capture before handoff (bash ops/polaris doc VISUAL) ===
+read: bash ops/polaris doc VISUAL
+=== SEE YOUR WORK — capture before handoff (bash ops/polaris doc VISUAL) ===
+(visual: unset — no capture step; bash ops/polaris doc VISUAL explains how to add one)

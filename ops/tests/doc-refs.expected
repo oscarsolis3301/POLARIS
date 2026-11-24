@@ -1,0 +1,4 @@
+== 1. prose ==
+doc-refs: 0
+== 2. printed strings in the kit code ==
+kit/ops/install.sh: printf '  THIS chat: read ops/roles/INIT.md and execute it now — it interviews the human (a few\n'

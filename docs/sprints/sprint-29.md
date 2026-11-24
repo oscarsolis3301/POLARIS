@@ -100,7 +100,7 @@ moves.
 - [ ] no code change beyond the strings; api-kit and lib-census unchanged
 
 ## T-337 — "polaris prefs, role, doc and router - the CLI finds its own code, shows and sets your machine preferences, serves role files and kit documents in pages, and CLAUDE.md routes through commands"
-points 13 · risk normal · landed fd26cbc1 (2026-11-24) · claimed 2026-11-24
+points 13 · risk normal · landed fd26cbc1 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/CLAUDE.md, kit/ops/lib/docs.sh, kit/ops/lib/prefs.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/doc-server.cmd, ops/tests/doc-server.expected, ops/tests/prefs-cli.cmd, ops/tests/prefs-cli.expected
 
 ### Why
@@ -123,7 +123,7 @@ api-kit row and this card owns api-kit in wave 2.
 - [ ] `bash kit/ops/polaris role CONDUCTOR` ends with `— page 1 of <n> · next: bash ops/polaris role CONDUCTOR --page 2`
 
 ## T-338 — "Setup answers once per computer - interview --init answers from your machine file before a repo has CONVENTIONS, --remember keeps new answers for next time, and the installer and admin commands read the kit and the machine home through one lookup"
-points 8 · risk normal · landed 8e7f9fa6 (2026-11-24) · claimed 2026-11-24
+points 8 · risk normal · landed 8e7f9fa6 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/install.sh, kit/ops/lib/admin.sh, kit/ops/lib/selftest/fast.sh, ops/tests/adopt-stub.expected, ops/tests/install-update.expected, ops/tests/interview.cmd, ops/tests/interview.expected
 
 ### Why
@@ -145,7 +145,7 @@ to the command form, except the installer's INIT epilogue, which CI greps.
 - [ ] install.sh still prints `read ops/roles/INIT.md` (ci.yml:331, selftest-install.sh:184/293)
 
 ## T-339 — "Doctor names your machine file, and the rest of the CLI finds the kit and the machine home through one lookup - status, find, keep-awake, presence, routing, heavy slots and the tune-up line"
-points 5 · risk normal · landed 415995d2 (2026-11-24) · claimed 2026-11-24
+points 5 · risk normal · landed 415995d2 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/lib/awake.sh, kit/ops/lib/observe.sh, kit/ops/lib/presence.sh, kit/ops/lib/route.sh, kit/ops/lib/search.sh, kit/ops/lib/tune.sh, kit/ops/lib/workspace.sh, ops/tests/doctor-prefs.cmd, ops/tests/doctor-prefs.expected, ops/tests/keys-drift.cmd, ops/tests/keys-drift.expected, ops/tests/tune-report.expected
 
 ### Why
@@ -161,3 +161,23 @@ ops/roles/TIDY.md" becomes the command form (doc-server § 6).
 - [ ] tune-report differs from base only on the § 6 line
 - [ ] no new function definitions (api-kit, lib-census unchanged); startup-budget unchanged
 - [ ] every listed $HOME/.claude/polaris code site uses POLARIS_HOME; POLARIS_AWAKE_HOME and POLARIS_HEAVY_DIR still win
+
+## T-340 — "Preferences once, proven on the joined tree - the CLI runs from a kit outside the repo and asks nothing the machine file answers, no kit doc path is left in the prose, every shared golden runs once, version 6.21.0 and its changelog"
+points 4 · risk normal · landed fa2bb8a6 (2026-11-24) · claimed 2026-11-24
+files touched: CHANGELOG.md, kit/ops/VERSION, kit/ops/hooks/handover-hook.sh, kit/ops/lib/builder.sh, kit/ops/lib/presence.sh, kit/ops/lib/route.sh, kit/ops/lib/visual.sh, kit/ops/selftest-install.sh, ops/contracts/doc-server.md, ops/tests/depth-ui.expected, ops/tests/doc-refs.cmd, ops/tests/doc-refs.expected, ops/tests/express-ui.expected, ops/tests/kit-mode.cmd, ops/tests/kit-mode.expected, ops/tests/pack-visual.expected, ops/tests/qa-parallel.expected, ops/tests/shots-gallery.cmd, ops/tests/shots-gallery.expected
+
+### Why
+The release is proven where the seams meet. `kit-mode` runs the CLI from a kit directory outside a
+repo that holds only board state (the shape Phase 4 ships): status, role, doc, router, prefs and
+`interview --init` all work, and the interview asks nothing the fixture machine file answers.
+`doc-refs` proves no kit doc path is left in the prose and that the only printed path left is the
+installer's epilogue CI greps. Every golden the waves touched runs once on the joined tree (sprint 27
+lesson: two side-by-side cards met at a seam that went red only after both landed). The version goes
+to 6.21.0 with a changelog that states only what was measured. Tag, push, `--dogfood` and the
+cli-help re-pin stay the conductor's release ritual.
+
+### Acceptance
+- [ ] kit-mode and doc-refs per doc-server "Executable checks" (kit-mode includes `interview --init` with a fixture machine file answering voice)
+- [ ] every golden in verify green on the joined tree; any re-pin is exactly a contract-pinned line, otherwise hand back
+- [ ] api-kit unchanged by this card unless the joined tree shows a contract-pinned row missing
+- [ ] VERSION 6.21.0; CHANGELOG `## 6.21.0 — <date>` with measured claims only

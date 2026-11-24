@@ -110,13 +110,13 @@ visual_pack() { # visual_pack <ID> <owned> — pack's SEE YOUR WORK section, the
   # it, and every repo that cannot has its strays filed at handoff. One mechanism, one thing to test.
   local id="${1:-}"
   local owned="${2:-}"
-  pack_section "SEE YOUR WORK — capture before handoff (ops/VISUAL.md)"
+  pack_section "SEE YOUR WORK — capture before handoff (bash ops/polaris doc VISUAL)"
   local vis vshot vserve vbase vport vnum vhit
   local vtf vscreen vshotdir
   local p d
   vis="$(cfg visual "")"
   if [ -z "$vis" ]; then
-    printf '(visual: unset — no capture step; ops/VISUAL.md explains how to add one)\n'
+    printf '(visual: unset — no capture step; bash ops/polaris doc VISUAL explains how to add one)\n'
   else
     vshot="$(cfg shot "")"; vserve="$(cfg serve "")"; vbase="$(cfg port_base "")"
     vhit=no
@@ -161,13 +161,13 @@ EOF_OWN
       printf 'shot AFTER you edit: %s\n' "$vshot"
       printf 'name them: %s-before-<what>.png and %s-after-<what>.png, in the shotdir above\n' "$id" "$id"
     else
-      printf 'shot: (unset — set shot: in ops/CONVENTIONS.md; ops/VISUAL.md)\n'
+      printf 'shot: (unset — set shot: in ops/CONVENTIONS.md; bash ops/polaris doc VISUAL)\n'
     fi
     if [ -n "$vport" ]; then printf 'port: %s\n' "$vport"; else printf 'port: (port_base unset — {PORT} stays literal)\n'; fi
     printf 'proof: TWO non-empty captures for %s, both newer than your branch base — READ both, then:\n' "$id"
     printf '       bash ops/polaris handoff --saw "<what the after shot shows, and how it measures against ops/DESIGN.md — PASS / WEAK / FAIL>"\n'
     printf 'nothing existed to photograph (a brand-new screen)? bash ops/polaris handoff --no-before "<why>" --saw "…"\n'
-    printf 'read: ops/VISUAL.md\n'
+    printf 'read: bash ops/polaris doc VISUAL\n'
     if [ -f "$OPS/DESIGN.md" ]; then printf 'read: ops/DESIGN.md — the bar this screen must clear\n'; fi
   fi
 }

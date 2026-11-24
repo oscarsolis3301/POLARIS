@@ -12,7 +12,7 @@ _presence_file() { # sets PRESENCE_F to the state path without extension, or emp
   PRESENCE_F=""
   case "${CLAUDE_CODE_SESSION_ID:-}" in ''|*[!A-Za-z0-9_-]*) return 0;; esac
   [ -n "${CLAUDE_CONFIG_DIR:-${HOME:-}}" ] || return 0   # no home at all → no state (presence-guard.sh's test)
-  PRESENCE_F="$POLARIS_HOME/model-state/$CLAUDE_CODE_SESSION_ID"
+  PRESENCE_F="${POLARIS_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/polaris}/model-state/$CLAUDE_CODE_SESSION_ID"
 }
 
 _presence_state() { # sets PRESENCE (away|here) and PRESENCE_WHY. rc 0 always.

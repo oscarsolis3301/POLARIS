@@ -34,6 +34,9 @@
 # One line per drill; exit 0 only if every drill passed. Needs bash >= 3.2, git, python.
 # No network: the only outward call anywhere in the path (doctor's update notice) fails open.
 set -u
+# The owner's machine file never reaches a drill (machine-prefs.md § 5, same as check.sh's
+# goldens): set and empty, so an `adhd: on` at home cannot red the adhd case.
+export POLARIS_PREFS=
 
 say()  { printf '%s\n' "$*"; }
 die()  { printf '⛔ %s\n' "$*" >&2; exit 1; }

@@ -918,7 +918,7 @@ cmd_approve() { # approve <ID> <scope> -m "why" — the sibling of grant (ops/co
   local entry; entry="$scope — $WHO, $(date +%F): $msg"
   mutex_on
   fm_append_item approved "$entry" "$tf" \
-    || die "approve refused: $tf has no approved: front-matter field — add the empty field from ops/templates/TASK.md first; nothing written"
+    || die "approve refused: $tf has no approved: front-matter field — add the empty field from bash ops/polaris doc templates/TASK first; nothing written"
   printf -- '- approve: %s — %s\n' "$scope" "$msg" >> "$tf"
   evt approve "$id" "$scope"
   board_commit "chore(board): approve $id $scope"

@@ -104,7 +104,7 @@ rc 0
 == the ui skip line: no look set up adds one line, once per repo (.polaris/look-offered) ==
 -- first ui run
    ui — test, build and uat skipped: lint and typecheck plus the before/after look
-   ui — no before/after look is set up here (visual: and shot: unset): lint and typecheck are the whole check — ops/VISUAL.md
+   ui — no before/after look is set up here (visual: and shot: unset): lint and typecheck are the whole check — bash ops/polaris doc VISUAL
 look-offered: yes
 -- second ui run
    ui — test, build and uat skipped: lint and typecheck plus the before/after look

@@ -4,6 +4,54 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.21.0 — 2026-11-24
+
+**Your preferences, once, for every project.**
+
+Answer the setup questions once on a computer and every new project starts from those answers. This
+release also prepares for one shared kit per computer (7.0.0) without changing today's installs. Plan
+`prefs`, contracts `ops/contracts/machine-prefs.md`, `ops/contracts/doc-server.md`,
+`ops/contracts/first-run.md` v2.
+
+- **A machine file under every repo (T-333).** `cfg` reads `$POLARIS_HOME/preferences`
+  (`~/.claude/polaris/preferences`, or under `CLAUDE_CONFIG_DIR`) beneath each repo's own lines:
+  repo, then machine, then the default. A blank repo line falls through; `autonomy: standard` still
+  masks a machine `plan_gate: auto`. `KEYS.tsv` gains a sixth column, `scope` (repo · machine ·
+  seed). Every golden and the install drill run with `POLARIS_PREFS=` set and empty, so the owner's
+  real file never reaches a test (`cfg-layers`).
+- **`polaris prefs` (T-337).** Shows each key's value and where it came from; `--set` / `--unset`
+  change the machine file, all-or-nothing; a value that is not a key, a per-project key, an option the
+  question does not offer or a forbidden model is refused (`prefs-cli`).
+- **Setup asks only what this computer has not answered (T-335, T-338).** `interview --init` works
+  before a repo has CONVENTIONS: a machine answer prints as `ANSWERED`, everything else is asked.
+  `interview --set … --remember` keeps new answers for the next project. INIT asks only those
+  questions (`interview`, `adopt-stub`).
+- **The CLI finds its own code and serves its own documents (T-333, T-334, T-337, T-339).**
+  `kit_file` reads a kit file from the repo copy when there is one, else from beside the CLI;
+  `bash ops/polaris role <NAME>`, `doc <NAME> ["<section>"]`, `router` and `doc --where` serve role
+  files and kit documents, paged under 28,000 bytes (`doc-server`). Prose across the kit now names
+  these commands instead of `ops/roles/…` and `ops/PROTOCOL.md` paths: the doc-refs sweep finds 0
+  left, and the CLI's printed messages name them too, apart from that one kept
+  epilogue (`doc-refs`; eight late renderings are the contract's § 6 addendum). Installer prose
+  under `skills/polaris-install/` and `install.sh`'s
+  `read ops/roles/INIT.md` epilogue (CI greps it) stay as they were.
+- **Proven from a kit outside the repo (T-340).** The new `kit-mode` drill runs
+  `bash <kit>/ops/polaris` from a repo whose `ops/` holds only the board and CONVENTIONS: `version`,
+  `status`, `role BUILDER`, `doc PROTOCOL "THE TOOL"`, `router`, `prefs`, `interview --init` and
+  `doc --where` all exit 0, the role file is served byte-identical from the kit, a fixture machine
+  file's `voice` is answered and not asked, and `doc --where` says `mode: machine`; a vendored copy
+  says `mode: vendored`.
+- **Two reads stay on the repo copy until 7.0 (deliberate).** `adopt` still reads `ops/KEYS.tsv`
+  and `heal` still copies `DESIGN.md` from the repo's `ops/templates/`; both exist in every vendored
+  install today.
+- **Fix: a wave no longer re-lands a file another card changed (T-333).** `landed_content_ok` treated
+  a path that a sibling card's commit changed after this card's fork point as this card's own work
+  and landed it again, which could undo the sibling's change after a walk-away run. The
+  `landed-seal` case b2 reproduced the loss against the old code and is green against the new.
+- **Test isolation.** `kit/ops/selftest-install.sh` exports `POLARIS_PREFS=`, so a machine file
+  with `adhd: on` can no longer turn its adhd case red; all 12 drills pass as before.
+  `lib/presence.sh` falls back to the machine home itself when sourced alone (`presence-guard`).
+
 ## 6.20.0 — 2026-11-24
 
 **Walk away: approve a plan, leave, and come back to finished work, or to a short list of what needs you.**
