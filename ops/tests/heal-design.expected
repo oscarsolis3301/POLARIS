@@ -13,9 +13,9 @@ Every token is the owner's money. Finish the task, prove it, spend as little as 
 lookup ladder and the ask-first rule live in the POLARIS block above (FEWEST HOPS).
 
 - **Prefer ONE context over three**, and the smallest check that proves the change.
-- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku is blocked, and Fable runs only when the owner picks it.
-- **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:
-  one command per line, never `&&` (PowerShell has no chain operators), no placeholders.
+- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku runs only the kit's job runner, and Fable runs only when the owner picks it.
+- **Long, mechanical, no judgement in it?** Run it yourself, detached: one command per line in a file, then
+  `bash ops/polaris bg run <name> --steps <file>` and collect once. 🚩 only what needs a person, only while they are here.
 
 Added by `polaris heal`. Edit freely — it is appended once and never rewritten.
 heal rc: 0

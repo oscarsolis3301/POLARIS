@@ -63,6 +63,26 @@ Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit ti
     **Entered from a CONDUCTOR?** Skip fan-out entirely — the conductor runs the builders as subagents. Return your report (plan summary + ready queue) as your result and stop.
 15. **Then follow the board.** A committed plan is a boundary the board can prove, so a top-level planner does not stop here: run `bash ops/polaris next` and follow line 1 — a planner may continue as BUILDER in the next context (shed the planning context, read `ops/roles/BUILDER.md`, claim what `next` named). That hop is the next context, not a second role in this one (Invariant 5). Panes you just opened loop the same way.
 
+## Needs you before I start
+The plan gate is the last moment the human is surely here, so everything only a PERSON can do is
+asked for there — never mid-run, and never as a list of commands to paste: anything mechanical the
+run does itself, detached. This list is exhaustive; an item not on it is not ask material:
+- **OS elevation** — an administrator prompt, a system setting, a driver.
+- **A sign-in, password or one-time code** — a CLI login, a token only they can mint.
+- **A `risk: high` card or `ask` scope the plan does not cover, or a RULES conversion** (`path` ↔ `ask`).
+- **Spending money** — a paid service, a purchase, a plan upgrade.
+- **Deleting data that existed before the run, or a force-push.**
+- **A harness refusal that survives one reworded retry.**
+- **Another machine** — a device, a phone, a server you cannot reach from here.
+
+The mechanical ones are checked, not guessed: `bash ops/polaris preflight <slug>` (read-only) prints
+`✅` or `⛔ needs you: <what> — <the command or click>` per check — remote reachable, `gh auth status`
+when the plan publishes, every `risk: high` card and `ask` scope `approve --plan` would not cover, the
+measured suite time — and `preflight: clear` or `preflight: <n> need you`. Each `⛔` line and each
+item above that applies goes in the report under **Needs you before I start**, so one yes covers the
+run. Found mid-run instead: `bash ops/polaris defer -m "<why>" -- <cmd…>` parks it, the run goes on,
+and the close lists it.
+
 ## Pointing — Fibonacci (measures blast radius + uncertainty, not hours)
 | Pts | Meaning | Claimable? |
 |---|---|---|
@@ -89,8 +109,9 @@ Under `voice: technical`:
 - Blocked/backlog items + one-line reason each
 - Any Learned-log item that changed how you carved ownership
 - Lanes · waves · estimated time: how many tasks build side by side, in how many waves, and the `projected:` line of `speed --plan` verbatim
+- Needs you before I start: each item of § Needs you before I start that applies, and each `⛔` line of `preflight <slug>` (or "nothing")
 
-Under `voice: standard` (the default) this is **≤6 lines of plain English**, not a table dump: what you split the work into, how many lanes run side by side, in how many waves, and about how long it will take, how many can start right now vs. are waiting on others, anything that needs them (a `risk: high` task, a missing contract, an assumption you made), and what the fan-out did — builders opened beside them (say how many and that `bash ops/polaris dash` watches them), or, if nothing launched, `start` to begin. The board is on disk; they can read it or run `bash ops/polaris status` any time. Never make them parse `wsjf`, `files_owned` or point values to find out whether their sprint is ready.
+Under `voice: standard` (the default) this is **≤6 lines of plain English**, not a table dump: what you split the work into, how many lanes run side by side, in how many waves, and about how long it will take, how many can start right now vs. are waiting on others, anything that needs them (a `risk: high` task, a missing contract, an assumption you made, each § Needs you before I start item that applies), and what the fan-out did — builders opened beside them (say how many and that `bash ops/polaris dash` watches them), or, if nothing launched, `start` to begin. The board is on disk; they can read it or run `bash ops/polaris status` any time. Never make them parse `wsjf`, `files_owned` or point values to find out whether their sprint is ready.
 
 **Entered from INIT (bootstrap)?** Then INIT's step 5 report is the only report — fold yours into it. One report per session, not two.
 

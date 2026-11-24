@@ -36,6 +36,8 @@ budget-zero:
 budget-zero-rc: 0
 slow-within-budget+2s: yes
 Of your last N changes (stopped early at the time limit): 0 would skip the test run, 0 run only related tests, C run everything. M not checked.
+ui-commit: ui
+Of your last 6 changes: 3 would skip the test run, 0 run only related tests, 3 run everything.
 update-guarded:
 1
 yes

@@ -1,4 +1,6 @@
-# heal migrates ONE line of a repo's own CLAUDE.md (ops/contracts/minutes.md § 11.1, after speed.md § 2b).
+# heal migrates ONE line of a repo's own CLAUDE.md (ops/contracts/minutes.md § 11.1, after speed.md § 2b),
+# and since 6.20.0 (walk-away.md § 8.3) the model line O ("Haiku is blocked" — the kit's job runner runs
+# on Haiku now) and the old 🚩 hand-off PAIR, which sent long command lists to the owner to paste.
 # Older kits wrote one of three model lines into every project's efficiency section, all saying "never
 # name a model": A (Fable and Haiku forbidden outright), B (Fable only when the owner picks it), and C
 # (the short line heal itself appended). Once `route` names a model and an effort for every helper, a
@@ -11,7 +13,7 @@
 # HERMETIC (the heal-design pattern): a throwaway repo, and HOME and USERPROFILE point into this
 # run's mktemp -d, so the real ~/.claude can never be read or written. A ready-made .polaris/brain/
 # keeps heal from building a knowledge base this golden does not own; the marker in every fixture
-# keeps it from appending a section. ONE fixture repo, seven heals (~1.2 s of CLI startup each).
+# keeps it from appending a section. ONE fixture repo, fifteen heals (~1.2 s of CLI startup each).
 KIT="$(pwd)/kit/ops/polaris"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
@@ -32,15 +34,20 @@ mkdir -p "$R/.polaris/brain"
 OLD='- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.'
 OLDB='- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.'
 OLDC='- **Never name a model** — every spawn inherits the session.'
-NEW='- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku is blocked, and Fable runs only when the owner picks it.'
-# doc <eol> <model line> — the owner's prose, then the section an older kit appended around <model
-# line>, every line ended by <eol>.
+OLDO='- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku is blocked, and Fable runs only when the owner picks it.'
+NEW='- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku runs only the kit'"'"'s job runner, and Fable runs only when the owner picks it.'
+H1='- **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:'
+H2='  one command per line, never `&&` (PowerShell has no chain operators), no placeholders.'
+N1='- **Long, mechanical, no judgement in it?** Run it yourself, detached: one command per line in a file, then'
+N2='  `bash ops/polaris bg run <name> --steps <file>` and collect once. 🚩 only what needs a person, only while they are here.'
+# doc <eol> <model line> [<hand-off line 1> <line 2>] — the owner's prose, then the section an older
+# kit appended around <model line> and the hand-off pair (default: the NEW pair), every line ended by <eol>.
 doc() {
   local e="$1" l
   for l in '# Fixture project' '' 'Our own words — heal never rewrites a byte of them.' '' \
            '<!-- POLARIS:EFFICIENCY -->' '## Token efficiency — the first property' '' \
            '- **Prefer ONE context over three.** Twenty-five subagents in a day is a failure, not diligence.' \
-           "$2" '- **Ask early** rather than burning tokens guessing.' '' \
+           "$2" "${3-$N1}" "${4-$N2}" '- **Ask early** rather than burning tokens guessing.' '' \
            'Added by `polaris heal`. Edit freely — it is appended once and never rewritten.'; do
     printf '%s%s' "$l" "$e"
   done
@@ -89,6 +96,7 @@ printf '# Fixture project\n\nOur own words.\n' > "$R/CLAUDE.md"
 H
 grep -c -x -F -e "$NEW" "$R/CLAUDE.md" | sed 's/^/  new line: /'
 grep -c -e 'Never name a model' "$R/CLAUDE.md" | sed 's/^/  old lines: /'
+grep -c -x -F -e "$N1" -e "$N2" "$R/CLAUDE.md" | sed 's/^/  new hand-off lines: /'
 
 echo '== 6. one line per heal at most, and a last line with no line end still has none after =='
 { doc $'\n' "$OLD"; printf '%s' "$OLD"; } > "$R/CLAUDE.md"
@@ -96,6 +104,27 @@ echo '== 6. one line per heal at most, and a last line with no line end still ha
 H; W; C 'the first copy changed, the second kept'
 { doc $'\n' "$NEW"; printf '%s' "$NEW"; } > "$FIX/want"
 H; C 'the second copy changed too, still with no line end'
+
+echo '== 7. the line O (6.13: "Haiku is blocked"): rewritten =='
+doc $'\n' "$OLDO" > "$R/CLAUDE.md"; doc $'\n' "$NEW" > "$FIX/want"; old
+H; W; C 'the old file with only that line changed'
+
+echo '== 8. the old hand-off pair (LF): both lines become the new pair, one note =='
+doc $'\n' "$NEW" "$H1" "$H2" > "$R/CLAUDE.md"; doc $'\n' "$NEW" > "$FIX/want"; old
+H; W; C 'the old file with only those two lines changed'
+grep -c -F -e 'Hand it to the human' "$R/CLAUDE.md" | sed 's/^/  old hand-off lines: /'
+
+echo '== 9. the old pair with CRLF, beside the line O: all three migrate, CRLF kept =='
+doc $'\r\n' "$OLDO" "$H1" "$H2" > "$R/CLAUDE.md"; doc $'\r\n' "$NEW" > "$FIX/want"; old
+H; W; C 'the CRLF file with only those three lines changed'
+
+echo '== 10. an owner edited the second line of the pair: both lines are theirs and stay =='
+doc $'\n' "$NEW" "$H1" "$H2 Mostly." > "$R/CLAUDE.md"; cp "$R/CLAUDE.md" "$FIX/want"; old
+H; W; C 'as its owner left it'
+
+echo '== 11. the first line alone, last in the file with no line end: kept as found =='
+{ doc $'\n' "$NEW"; printf '%s' "$H1"; } > "$R/CLAUDE.md"; cp "$R/CLAUDE.md" "$FIX/want"; old
+H; W; C 'as found'
 
 echo '== nothing left behind =='
 printf '  temp files beside CLAUDE.md: %s\n' "$(ls -a "$R" | grep -c 'heal-tmp')"

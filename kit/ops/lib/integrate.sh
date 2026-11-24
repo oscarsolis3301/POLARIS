@@ -853,7 +853,7 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   # at all; `qa --full` afterwards is the escape hatch.
   local k c out tailtxt
   local ex_ran=0 ex_t0 ex_t1 ex_tested="" ex_scope="" ex_cmds ex_paths ex_why ex_p ex_m=0 ex_n ex_selected
-  local ex_depth="" ex_dwhy="" ex_depth_skip=0 ex_dcsf="" ex_dline ex_plan ex_taskid ex_pf
+  local ex_depth="" ex_dwhy="" ex_depth_skip=0 ex_dcsf="" ex_dline ex_plan ex_taskid ex_pf ex_uiskip=0
   ex_t0="$(date +%s)"
   out="$(mktemp)"
   ex_paths="$(mktemp)"
@@ -871,12 +871,16 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
     ex_scope="$ex_depth"; ex_depth_skip=1
   else
   [ -z "$ex_depth" ] || depth_line_say "$ex_depth" "$ex_dwhy"
+  # walk-away § 6: at `ui` only lint and typecheck run — test, build and uat are skipped, said once
+  # (the same _ui_skip_say qa uses), and the stamp says `proven ui`.
+  if [ "$ex_depth" = ui ]; then _ui_skip_say; ex_scope=ui; ex_uiskip=1; fi
   # hour.md § 3: the suite loop takes the machine's heavy slot ONCE, at its first real key, and lets
   # it go right after the loop (or before the red unwind) — lease → heavy, never the other way.
   local ex_heavy=""
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
+    if [ "$ex_uiskip" -eq 1 ]; then case "$k" in test|build|uat) continue;; esac; fi
     [ -n "$ex_heavy" ] || { _heavy_on "land --express $id suite"; ex_heavy=1; }
     if [ "$k" = uat ] && [ "$ex_depth" = scoped ]; then uat_deferred_say; continue; fi
     ex_cmds="$c"; ex_selected=0
@@ -952,7 +956,7 @@ EOF
   # integrate/<date>, right after the last green, before seal/done move anything. Plus the
   # suite duration, same "<seconds> <epoch>" line qa writes, so the slow-suite hint works after
   # an express land too. Both best-effort; neither can fail the lane.
-  if [ "$ex_ran" -ge 1 ] || [ "$ex_depth_skip" -eq 1 ]; then
+  if [ "$ex_ran" -ge 1 ] || [ "$ex_depth_skip" -eq 1 ] || [ "$ex_uiskip" -eq 1 ]; then
     ex_tested="$(git rev-parse HEAD 2>/dev/null || true)"   # nothing ran ⇒ nothing proven ⇒ no carry
     # T-137 (§ 6, stamp v3): WHAT it proved, not just that it was green. `full` for every path but
     # one — selection off, no baseline, an unmapped path, or no `test:` key at all.
@@ -1251,8 +1255,7 @@ EOF
   # surface_change_set drops, so a docs-only wave reads as depth none and costs nothing
   csf="$(mktemp)"; mf="$(mktemp)"
   rel="$(cfg reports docs/sprints)"; rel="${rel%/}"; [ -n "$rel" ] || rel="docs/sprints"
-  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
-  [ "$skip_raw" = "-" ] && skip_raw=""
+  skip_raw="$(_depth_globs skip)"                    # walk-away § 6: the one composed list (`-` → empty)
   case $- in *f*) nf=1;; *) nf=0; set -f;; esac       # the glob list is word-split unexpanded
   while IFS= read -r p; do
     [ -n "$p" ] || continue

@@ -64,3 +64,9 @@ bash "$KIT" metrics 2>&1 | tail -3
 
 echo '== 3. existing metrics output above the new lines is unchanged — same run, full output =='
 bash "$KIT" metrics 2>&1
+
+# walk-away § 5.4 (T-324): the skipped-suite count splits four ways — none · look · ui · scoped. One
+# in-sprint ui row (300s) is appended: it counts under ui and adds its 1200s under the median.
+printf '{"ts":%s,"plan":"","task":"T-A","kind":"test_depth","depth":"ui","why":"w","paths":[],"secs":300,"rc":0}\n' "$((EPOCH+91))" >> .polaris/decisions.ndjson
+echo '== 4. a ui row — counted under ui =='
+bash "$KIT" metrics 2>&1 | tail -2 | head -1

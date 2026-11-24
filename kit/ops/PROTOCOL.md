@@ -115,7 +115,8 @@ So POLARIS collapses SESSIONS, never CHECKS:
 | `full` | 4+ | anything else — real parallelism, real merge risk |
 
 Every gate the long path runs, SOLO runs: `verify` (ownership + RULES), the task's `verify:` list,
-the full suite once at `land --express`, then `qa`. If you find yourself skipping a gate to make a
+the test run the change's size calls for at `land --express` (`polaris depth` — the whole suite only
+at `full`; § LONG COMMANDS has the table), then `qa`. If you find yourself skipping a gate to make a
 change fit the lane, **the lane is wrong** — release it back and take the full loop.
 
 **Checks cost no tokens — they cost minutes.** Each card pays a claim, a worktree, its `verify:`
@@ -127,8 +128,8 @@ commit per step (Invariant 2); and `speed --plan <slug>` prices a plan before it
 at a time on a machine (`heavy_slots:`, default 1), and under `push: end` (the default) code reaches
 origin once, at `finish`.
 
-**`triage` is mechanical on purpose.** It reads points, risk, `express:`, `publish:` and the
-RULES-guarded paths straight off the board. A model weighing those six conditions from prose gets it
+**`triage` is mechanical on purpose.** It reads points, risk, `express:` and the RULES-guarded
+paths straight off the board. A model weighing those conditions from prose gets it
 wrong occasionally, and a wrong guess toward `full` costs a whole sprint of contexts while a wrong
 guess toward `solo` strands a half-built task. The command is free; the judgement is not. That is
 also why the conditions are written in the command and nowhere else: a role file that restated them
@@ -248,7 +249,8 @@ default-safe cannot answer → the question into the task's Notes, `release <ID>
 the approved plan merges on the plan's yes: its handoff prints an `away:` line and the close names it
 (Invariant 9). `risk: high` the plan did not cover → `notify-gate risk <ID>`; it stays in `review/`
 and the close names it. `finish` names each blocked task and why; with only human-gated work left,
-close on `⛔ waiting on you: approve <ID>` — no 🎉. Every close says how long the run took and where
+close on `⛔ waiting on you: approve <ID>` — no 🎉 (away, `finish: parked` prints those lines itself,
+§ AWAY RUNS). Every close says how long the run took and where
 the time went (`bash ops/polaris speed`), and names each task an `away:` line reported; a
 pull-request project's close ends with its one link, and nothing follows it. `autonomy: standard`
 asks right away at both gates, as before. Here, no hard gate gets softer.
@@ -264,14 +266,18 @@ The lookup ladder lives in § SAVE HOPS.
 > **THE MISSION, and it outranks thoroughness.** Every token is the owner's money and the supply is
 > fixed. Finish the task, prove it, spend as little as possible. Prefer ONE context over three —
 > twenty-five subagents in a day is a failure, not diligence. Run the smallest check that proves the
-> change; never the full suite for a small diff. A step that is long, mechanical and needs no
-> judgement is handed to the human with 🚩, not given to an agent. Ask early rather than burning
-> tokens guessing. **The measure of a good run is the result divided by what it cost.**
+> change; never the full suite for a small diff. Ask early rather than burning tokens guessing.
+> **The measure of a good run is the result divided by what it cost.**
 >
 > This is not an aspiration. On 2026-09-15 a single day's work took a weekly model limit to 87% and
 > the main limit to 53%, on one project, in one chat — because routing sent a dozen agents to the
 > most expensive model available and nobody checked. Routing now never picks Fable or Haiku
 > (`core.sh model_denied`, § MODEL ROUTING); the habits below are the other half of the same lesson.
+
+- **Long, mechanical, no judgement in it?** Run it yourself, detached: one command per line in a file, then
+  `bash ops/polaris bg run <name> --steps <file>` and collect once. 🚩 only what needs a person, only while they are here.
+  Away, the plan named it before approval or it parks (`defer`, § AWAY RUNS); what needs a person is
+  listed exhaustively in `PLANNER.md` § Needs you before I start.
 
 - **`pack` first, everything else second.** Working a task? `ops/polaris pack <ID>` returns its
   contract, house style, owned-directory map, public API surface and gotchas in ONE call. Reading
@@ -327,8 +333,10 @@ The lookup ladder lives in § SAVE HOPS.
 - Phrase is tier-relative on purpose: models change, the routing rule doesn't.
 
 ## LONG COMMANDS — living under the 600s tool cap
-A foreground tool call is capped at 600s (600000ms). Past that it returns NOTHING — you lose the run,
-learn nothing, and re-run it. MEASURED on this repo, so nobody re-measures:
+A foreground tool call is capped at 600s (600000ms). Past its timeout the harness moves the call to the
+background (a subagent's at about 180 s) and its output comes back only as a completion notification —
+which wakes a top-level session, never a subagent whose turn has ended. So a long command starts
+detached from the outset and its rc file is the truth. MEASURED on this repo, so nobody re-measures:
 
 | command | measured | under the cap? |
 |---|---|---|
@@ -345,27 +353,46 @@ how much of the suite a change actually needs, once per `qa` or `land --express`
 |---|---|---|
 | `none` | no suite key at all | every changed path is `test_skip` (docs, `.md`, `LICENSE*`) |
 | `look` | no suite key, but the before/after capture still runs | every changed path is `test_look` (css/svg/images) |
-| `ui` | `lint` + `typecheck` side by side and the before/after look; no `test`, `build` or `uat` | a `risk: normal` task of 1-2 points (or `test_depth: ui`) whose every remaining path is `test_ui` (components and pages) |
+| `ui` | `lint` + `typecheck` side by side and the before/after look; no `test`, `build` or `uat` | a `risk: normal` task of 1-2 points (or `test_depth: ui`) whose every remaining path is `test_ui` (components and pages), and only when `lint:` or `typecheck:` is set, or both `visual:` and `shot:` |
 | `scoped` | only the related tests: the `test:` subset `SURFACES.tsv` maps to the change, or the runner's own related tests (vitest/jest) when the package has one installed; the live `uat` tier is deferred (uat deferred: it runs on full-depth changes, CI and release) | every non-look path is mapped or has related tests |
-| `full` | the whole `test:` suite, unchanged | anything unmapped with no related tests, `risk: high`, or `test_depth: full` |
+| `full` | the whole `test:` suite, unchanged | anything unmapped with no related tests, or `test_depth: full` |
 
+`risk: high` does not force `full` — it gates the merge, not the depth. An edited test file
+(`*.test.*`, `*.spec.*`, or under a `SURFACES.tsv` tests glob) is never `none`, `look` or `ui`: it
+runs, narrowed when `test_select:` can, never escalating a small change to the whole suite on its own.
+`test_skip`, `test_look` and `test_ui` set to `+ <globs>` extend the default instead of replacing it.
 CI and `pack.py --dogfood` always run `full`, serially, and never read the stamp.
 
 Three bands, and the band is a property of the MEASURED time, not of how important the command feels:
 1. **Under ~60s** — plain foreground call. No ceremony.
 2. **60s to the cap** — foreground WITH an explicit tool timeout ≥ the measured time (600000ms for
    anything near the top of the range). A defaulted timeout is how suites die at 120s.
-3. **Past the cap** — `ops/polaris bg run <key>` (a bare CONVENTIONS suite key: `test` · `test_fast` ·
-   `lint` · `typecheck` · `build` · `uat` · `qa`), keep working, then collect in bounded chunks with
-   `bg wait <key> --max 120`. Exit 2 means still running: call it again. `bg tail` reads the log
-   without waiting.
+3. **Past ~300s, or past the cap** — `ops/polaris bg run <key>` (a bare CONVENTIONS suite key: `test` ·
+   `test_fast` · `lint` · `typecheck` · `build` · `uat` · `qa`, or `<name> -- <cmd…>`), then wait the
+   way the table below names for where you are. `bg tail` reads the log without waiting.
+
+**Which wait, when** — the cheapest path first (a detached job and ONE wake-up costs about a seventh
+of polling it; the Haiku runner sits between):
+
+| situation | path |
+|---|---|
+| any job measured or expected < 300 s | foreground with an explicit timeout ≥ the measured time |
+| top-level session, ≥ 300 s | `bg run <name> -- <cmd>` · ONE `bg wait <name> --done` with `run_in_background: true` · end the turn; the harness wakes it once; the rc file is the truth |
+| top-level, ≥ 300 s, no background wake-up in this harness, `runner:` not `off` | spawn the runner (`route --role RUNNER` prints `agent: polaris-runner`) with the job name |
+| builder subagent | collect in-turn with `bg wait <name> --max 240` while rc 2, or hand `running: <name>` up to the caller |
+| CI | `bg run proof-await -- bash tools/proof.sh --await macos-latest`, one backgrounded wait |
+| runner unavailable (Haiku refused or `runner: off`) | the chunked foreground `bg wait --max 540` |
+
+`bg wait` exits 0 green · 1 red · 2 still running (wait again) · 3 unknown · 4 timed out — the job ran
+past its budget and was killed, retried, killed again (§ AWAY RUNS). The runner only ever waits and
+reads the tail; the caller starts the job and names the command.
 
 - **SUBAGENT rule — never end a turn with a job still running.** Your existence ends with your turn,
   and completion notifications re-invoke only the TOP-LEVEL session, so a job you leave behind has
   nobody left to collect it and needs a conductor rescue (two of those last sprint). Poll INSIDE your
   turn: chunked `bg wait` until it returns a verdict, then report.
-- **TOP-LEVEL rule** — the main session may instead use the harness's native `run_in_background`,
-  because it is the one context a completion notification can wake.
+- **TOP-LEVEL rule** — the main session waits with ONE backgrounded `bg wait <name> --done`
+  (`run_in_background: true`), because it is the one context a completion notification can wake.
 - **Invariant 4 is absolute either way.** `bg wait` must return 0 for YOUR suites BEFORE
   `handoff` · `land` · `seal` · `finish`. Backgrounding moves the suite off the critical path; it
   never moves the gate. `finish` enforces this — any job with no verdict is a pending line.
@@ -374,6 +401,32 @@ Three bands, and the band is a property of the MEASURED time, not of how importa
   instead of 1225s. Start it at the top of the wave gate and drain `review/` while it runs.
 - Mechanics — registry layout, rc-file-first verdicts (a pid check alone NEVER declares one), one-slot
   rotation, the `finish` guard — are specified in `ops/contracts/bg-jobs.md`.
+
+## AWAY RUNS — budgets, the pulse, parked
+A plan approved into auto mode **arms** the run (`.polaris/run/<sid>.armed`, written by the
+presence hook; `ops/contracts/walk-away.md` § 1). Everything in this section is inert until then:
+unarmed, every command prints what it always did.
+- **Budgets.** Every `bg run` job has one: `--budget <s>`, else 3 × its longest green run, else its
+  class (lint/typecheck/build 900 s; suites 3 × the last full run). Past it the whole process tree is
+  killed and the job retried once (`bg_retries`); past that `bg wait` exits 4 with the ⛔ line and the
+  `defer` command to park it. `bg reap` does the same for a job whose watchdog died. Only budgets kill.
+- **Long mechanical work** goes in a file, one command per line: `bg run <name> --steps <file>` runs
+  them in order as ONE job under one budget and stops at the first red.
+- **Before approval: `bash ops/polaris preflight <slug>`** checks the mechanical things that would
+  need a person later (remote reachable, `gh auth status`, a `risk: high` card or `ask` scope the plan
+  does not cover, the measured suite time). The full list is `PLANNER.md` § Needs you before I start.
+- **Mid-run: `bash ops/polaris defer -m "why" -- <cmd…>`** parks a step that needs a person and the
+  run keeps going; the close names it.
+- **The pulse.** At approval the conductor arms a timer every `pulse_minutes` (default 30) that runs
+  `bash ops/polaris pulse` — it says `ok` / `act` / `parked` / `done` off the board — and deletes the
+  timer at `done` or `parked`. `pulse --reenter` resumes a stalled run from the board (`reentry_max`).
+- **Stall lines.** A busy heavy slot or lease, armed, says `queued:` once and never waits on it; the
+  Stop gate blocks an armed session that tries to stop with work left, and after three blocks writes
+  `.polaris/run/stalled` and lets it go — the close names it.
+- **The two endings.** `finish` exits 0 when the run is truly over (then `# 🎉 Complete!`), or prints
+  `finish: parked - <n> waiting on you` and one `⛔ waiting on you: …` line per item, exit 1, when
+  everything left needs a person. Armed, both end with
+  `run: <total> - <checks> in checks, <queue> waiting, <n> timeouts`, and both disarm the run.
 
 ## AWAKE — one keep-awake daemon per machine
 The box used to sleep mid-run. ONE daemon per MACHINE keeps it awake while any session is still

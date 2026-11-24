@@ -9,15 +9,19 @@ cmd_notify_gate() { # notify-gate <kind> [ID] — fire the notify: hook at a HUM
   #   risk <ID>     EV=waiting  NOTE=risk-approval     SEVERITY=gate
   #   question <ID> EV=waiting  NOTE=builder-question  SEVERITY=gate
   #   done [ID]     EV=run-done NOTE=run-done          SEVERITY=done
+  #   stall         EV=waiting  NOTE=run-stalled       SEVERITY=gate   (no ID — the Stop gate, keep-awake; walk-away § 5.4)
+  #   parked        EV=waiting  NOTE=run-parked        SEVERITY=gate   (no ID — finish: parked)
   # Observe-only by contract: NEVER calls evt(), appends EVENTS.ndjson, takes the board mutex,
   # moves/edits a board file, or commits. No notify: configured → rc 0, silent.
   local kind="${1:-}" id="${2:-}" ev nt sev
-  local u="usage: polaris notify-gate <plan | risk <ID> | question <ID> | done [ID]>"
+  local u="usage: polaris notify-gate <plan | risk <ID> | question <ID> | done [ID] | stall | parked>"
   case "$kind" in
     plan)     ev="waiting"; nt="plan-gate"; sev="gate"; id="";;
     risk)     [ -n "$id" ] || die "$u"; ev="waiting"; nt="risk-approval"; sev="gate";;
     question) [ -n "$id" ] || die "$u"; ev="waiting"; nt="builder-question"; sev="gate";;
     done)     ev="run-done"; nt="run-done"; sev="done";;
+    stall)    ev="waiting"; nt="run-stalled"; sev="gate"; id="";;
+    parked)   ev="waiting"; nt="run-parked"; sev="gate"; id="";;
     *)        die "$u";;
   esac
   notify_fire "$ev" "$id" "$nt" "$sev"
@@ -903,7 +907,7 @@ metrics_depth_lines() { # test-depth.md § 6 — two lines, appended LAST: suite
           for(i=1;i<nf;i++){v=fs[i];j=i-1;while(j>=0&&fs[j]>v){fs[j+1]=fs[j];j--}fs[j+1]=v}
           med=fs[int((nf-1)/2)]; skip=0
           for(i=0;i<nd;i++){ df=med-d2[i]; if (df>0) skip+=df }
-          printf "suite skipped this sprint: %.1f min (none %d · look %d · scoped %d)\n", skip/60, cnt["none"]+0, cnt["look"]+0, cnt["scoped"]+0
+          printf "suite skipped this sprint: %.1f min (none %d · look %d · ui %d · scoped %d)\n", skip/60, cnt["none"]+0, cnt["look"]+0, cnt["ui"]+0, cnt["scoped"]+0
         } else {
           printf "suite skipped this sprint: n/a (no full suite timed yet)\n"
         }
