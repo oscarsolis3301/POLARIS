@@ -102,7 +102,7 @@ cmd_triage() { # triage [<ID…>] — print the LANE this board's work belongs i
         date +%s 2>/dev/null > "$hmk" || true
         printf 'tidy\n'
         note "tune-up due: $tdue"
-        note "read ops/roles/TIDY.md — one context, no subagents"
+        note "run bash ops/polaris role TIDY — one context, no subagents"
         return 0
       fi
     fi

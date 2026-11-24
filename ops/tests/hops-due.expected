@@ -36,10 +36,10 @@ questions rc=1
 heal's cache: one LF line — main sha · 0 · the line of case 1
 tidy
    tune-up due: layout
-   read ops/roles/TIDY.md — one context, it lands at most one task; then bash ops/polaris next
+   run bash ops/polaris role TIDY — one context, it lands at most one task; then bash ops/polaris next
 finish
 tidy
    tune-up due: layout
-   read ops/roles/TIDY.md — one context, no subagents
+   run bash ops/polaris role TIDY — one context, no subagents
 full
    nothing claimable — the board is empty, so a Planner runs first

@@ -526,7 +526,7 @@ cmd_surfaces() { # surfaces [--scaffold [--apply]] — list + health-check ops/S
     rm -f "$ls"
     while IFS="$POLARIS_TAB" read -r kind what why cmd rest; do
       case "$kind" in
-        NORUNNER) note "$what. Map rows by hand: a task's surface: items (ops/roles/PLANNER.md step 5b)"; rm -f "$prop"; return 0;;
+        NORUNNER) note "$what. Map rows by hand: a task's surface: items (bash ops/polaris role PLANNER, step 5b)"; rm -f "$prop"; return 0;;
         RUNNER)   note "runner: $what — test_select: $why"; printf '%-28s %-28s %s\n' SURFACE TESTS CMD;;
         ROW)      n=$((n + 1)); printf '%-28s %-28s %s\n' "$what" "$why" "$cmd";;
         SKIP)     s=$((s + 1)); printf '   ⚠ skipped: %s — %s\n' "$what" "$why";;

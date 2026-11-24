@@ -442,7 +442,7 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
     NX_HELD=""
     printf 'tidy\n'
     note "tune-up due: $tdue"
-    note "read ops/roles/TIDY.md — one context, it lands at most one task; then bash ops/polaris next"
+    note "run bash ops/polaris role TIDY — one context, it lands at most one task; then bash ops/polaris next"
     return 0
   fi
   if [ "$can" -eq 1 ] || [ "$pro" -eq 1 ]; then
@@ -558,7 +558,7 @@ EOF_EV
     tidy)              rfile=TIDY;;
     *)                 rfile="$role";;
   esac
-  [ "$rfile" = none ] || printf 'read ops/roles/%s.md if this context lost it\n' "$rfile"
+  [ "$rfile" = none ] || printf 'run bash ops/polaris role %s if this context lost it\n' "$rfile"
   return 0
 }
 

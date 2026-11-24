@@ -88,13 +88,13 @@ internal/foo/                internal/foo/*_test.go       go test ./internal/foo
 ✅ 1 row(s) proposed · 0 skipped — write them: ops/polaris surfaces --scaffold --apply
 rc 0
 == 4a no runner: the NORUNNER note, rc 0 ==
-   no test runner this kit can scope (pytest · jest · vitest · go) — seen: Makefile. Map rows by hand: a task's surface: items (ops/roles/PLANNER.md step 5b)
+   no test runner this kit can scope (pytest · jest · vitest · go) — seen: Makefile. Map rows by hand: a task's surface: items (bash ops/polaris role PLANNER, step 5b)
 rc 0
 == 4b --apply without ops/CONVENTIONS.md refuses ==
 ⛔ no ops/CONVENTIONS.md — run INIT first; the scaffold sets test_select: in it
 rc 1
 == 4c --apply with no runner writes nothing ==
-   no test runner this kit can scope (pytest · jest · vitest · go) — seen: Makefile. Map rows by hand: a task's surface: items (ops/roles/PLANNER.md step 5b)
+   no test runner this kit can scope (pytest · jest · vitest · go) — seen: Makefile. Map rows by hand: a task's surface: items (bash ops/polaris role PLANNER, step 5b)
 rc 0
 no ops/SURFACES.tsv written
 ops/CONVENTIONS.md: byte-identical

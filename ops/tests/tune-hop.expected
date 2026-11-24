@@ -1,11 +1,11 @@
 --- 1. a ready card and a backlog card waiting, the verdict due: tidy once per session, then the usual answer
 tidy
    tune-up due: cards,layout
-   read ops/roles/TIDY.md — one context, it lands at most one task; then bash ops/polaris next
+   run bash ops/polaris role TIDY — one context, it lands at most one task; then bash ops/polaris next
 build T-R1
 tidy
    tune-up due: cards,layout
-   read ops/roles/TIDY.md — one context, no subagents
+   run bash ops/polaris role TIDY — one context, no subagents
 solo
 markers: th-1/tidy th-2/tidy 
 --- 2. the verdict not due, stale or malformed: silence — the usual answers

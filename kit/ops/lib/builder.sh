@@ -480,7 +480,7 @@ self_land() { # self_land <ID> <notice> — T-088 (ops/contracts/shared-checkout
   # first live tidy pass got stranded. The task waits in review/ and the handoff stays green.
   local sl_hdr; sl_hdr="$(sed -n 's/^# SPRINT //p' "$OPS/SPRINT.md" 2>/dev/null | head -1 | tr -d '\r')"
   if [ -z "${sl_hdr%%[!0-9]*}" ]; then
-    note "⚠ $id waits in review/: ops/SPRINT.md has no \"# SPRINT <n> — <goal>\" line, so its wave could not close — add one (ops/MANUAL.md § Board commit by hand), then: bash ops/polaris next"
+    note "⚠ $id waits in review/: ops/SPRINT.md has no \"# SPRINT <n> — <goal>\" line, so its wave could not close — add one (bash ops/polaris doc MANUAL \"Board commit by hand\"), then: bash ops/polaris next"
     return 0
   fi
   # hour.md § 7: this card's plan decides which cards are "this run's" — read once, before the lease.

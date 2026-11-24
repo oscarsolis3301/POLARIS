@@ -9,7 +9,7 @@ MERGE     src/components/Footer.tsx + src/components/Header.tsx (4+5 lines, toge
 GUIDES    missing: src/components/ (5)
 STALE     src/services/CLAUDE.md cites basketApi.ts (missing)
 STALE     src/services/CLAUDE.md cites src/old/ (missing)
-next: bash ops/polaris hops --tsv lists every row · ops/roles/TIDY.md runs the pass
+next: bash ops/polaris hops --tsv lists every row · bash ops/polaris role TIDY runs the pass
 rc=0
 SCORE	2.89	9	1	2
 MAP	src/components/	5	-	no
@@ -123,7 +123,7 @@ MERGE     src/bits/i.ts + src/bits/j.ts (5+5 lines, together 3×)
 SPLIT     src/core/engine.ts (600 lines, pulls in 4 folders)
 SPLIT     src/flat/ (41 files)
 GUIDES    missing: src/flat/ (41) · src/full/ (40) · src/bits/ (14)
-next: bash ops/polaris hops --tsv lists every row · ops/roles/TIDY.md runs the pass
+next: bash ops/polaris hops --tsv lists every row · bash ops/polaris role TIDY runs the pass
 rc=0
 MERGE	src/bits/k.ts	src/bits/l.ts	4
 MERGE	src/bits/b.ts	src/bits/a.ts	3
