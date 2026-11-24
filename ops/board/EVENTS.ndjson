@@ -1459,3 +1459,11 @@
 {"ts":1795554318,"ev":"done","id":"T-332","who":"oscar@Dino","note":"","pts":1}
 {"ts":1795554327,"ev":"promote","id":"T-326","who":"oscar@Dino","note":"deps done: T-322, T-328, T-318, T-321","pts":5}
 {"ts":1795554865,"ev":"blocked","id":"T-326","who":"oscar@Dino","note":"→ blocked: not built by plan walk-away: trigger not met (begin+wrap 27.66 s best of 3 after section D vs the 30 s trigger; 1.9% of a 1-point change). Kept so a later measurement can revive it; parked in blocked so promote stops re-queuing it."}
+{"ts":1795557095,"ev":"new","id":"T-333","who":"oscar@Dino","note":"ready","pts":11}
+{"ts":1795557095,"ev":"new","id":"T-334","who":"oscar@Dino","note":"ready","pts":8}
+{"ts":1795557096,"ev":"new","id":"T-335","who":"oscar@Dino","note":"ready","pts":7}
+{"ts":1795557096,"ev":"new","id":"T-336","who":"oscar@Dino","note":"ready","pts":3}
+{"ts":1795557097,"ev":"new","id":"T-337","who":"oscar@Dino","note":"backlog","pts":13}
+{"ts":1795557097,"ev":"new","id":"T-338","who":"oscar@Dino","note":"backlog","pts":8}
+{"ts":1795557098,"ev":"new","id":"T-339","who":"oscar@Dino","note":"backlog","pts":5}
+{"ts":1795557098,"ev":"new","id":"T-340","who":"oscar@Dino","note":"backlog","pts":4}
