@@ -1380,3 +1380,5 @@
 {"ts":1795547565,"ev":"note","id":"T-321","who":"oscar@Dino","note":""}
 {"ts":1795547764,"ev":"note","id":"T-318","who":"oscar@Dino","note":""}
 {"ts":1795547818,"ev":"handoff","id":"T-318","who":"oscar@Dino","note":""}
+{"ts":1795547977,"ev":"handoff","id":"T-321","who":"oscar@Dino","note":""}
+{"ts":1795547977,"ev":"all-review","id":"T-321","who":"oscar@Dino","note":"last lane landed — board is all review"}
