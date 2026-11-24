@@ -655,6 +655,9 @@ _check_say() {
 # Every golden runs with its own scratch POLARIS_HEAVY_DIR (hour.md § 3): the test harness never
 # touches the machine's real heavy slot, so a golden whose fixture runs verify or qa cannot wait on a
 # sibling golden and print a "heavy: waiting" note. A golden that exports its own (heavy-slot) wins.
+# And every golden runs with POLARIS_PREFS= (set, empty — machine-prefs.md § 5): the machine
+# preferences layer is OFF, so the owner's real ~/.claude/polaris/preferences never reaches a fixture.
+# A golden that needs the layer ON sets POLARIS_PREFS=<fixture> itself.
 _check_parallel() {
   local root="$1" jobs="$2" names="$3" tmp i pids="" name s r red=0 n=0 tf="$PRIMARY/.polaris/check-times"
   G_DIR="$root/ops/tests"
@@ -670,7 +673,7 @@ _check_parallel() {
     if [ -f "$tmp/w$i" ]; then
       ( while IFS= read -r name <&3; do
           s=$SECONDS
-          ( cd "$root" && POLARIS_HEAVY_DIR="$tmp/heavy/$name" bash -c "$(cat "$G_DIR/$name.cmd")" ) > "$tmp/$name.out" 2>/dev/null && r=0 || r=$?
+          ( cd "$root" && POLARIS_PREFS= POLARIS_HEAVY_DIR="$tmp/heavy/$name" bash -c "$(cat "$G_DIR/$name.cmd")" ) > "$tmp/$name.out" 2>/dev/null && r=0 || r=$?
           echo "$r" > "$tmp/$name.rc"
           echo "$name $((SECONDS - s))" >> "$tmp/w$i.t"
         done 3< "$tmp/w$i" ) &
@@ -684,7 +687,7 @@ _check_parallel() {
     n=$((n + 1))
     G_GOT="$(< "$tmp/$name.out")"; G_RC="$(< "$tmp/$name.rc")"
     if ! _check_ok "$name" && [ -f "$G_DIR/$name.expected" ]; then
-      G_GOT="$( cd "$root" && POLARIS_HEAVY_DIR="$tmp/heavy-alone/$name" bash -c "$(cat "$G_DIR/$name.cmd")" 2>/dev/null )" && G_RC=0 || G_RC=$?
+      G_GOT="$( cd "$root" && POLARIS_PREFS= POLARIS_HEAVY_DIR="$tmp/heavy-alone/$name" bash -c "$(cat "$G_DIR/$name.cmd")" 2>/dev/null )" && G_RC=0 || G_RC=$?
       if _check_say "$name"; then
         note "note: $name passed alone but not beside others — it shares state with another golden"
       else red=1; fi
@@ -770,7 +773,7 @@ cmd_check() { # check [--only <glob>] [--update] [--jobs <N>] [--scaffold] — g
     f="$dir/$name.cmd"
     n=$((n+1)); exp="$dir/$name.expected"; rcf="$dir/$name.rc"
     t0=$SECONDS
-    got="$( cd "$root" && POLARIS_HEAVY_DIR="$htmp/$name" bash -c "$(cat "$f")" 2>/dev/null )" && grc=0 || grc=$?
+    got="$( cd "$root" && POLARIS_PREFS= POLARIS_HEAVY_DIR="$htmp/$name" bash -c "$(cat "$f")" 2>/dev/null )" && grc=0 || grc=$?
     times="$times$name $((SECONDS - t0))
 "
     want=0; [ -f "$rcf" ] && want="$(tr -d ' \r\n' < "$rcf")"

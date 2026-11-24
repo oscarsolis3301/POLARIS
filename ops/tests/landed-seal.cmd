@@ -8,6 +8,7 @@
 #   c. finish, task A landed and task B later changed the same file → no refusal (§ J: superseded)
 #   d. finish, a landed task whose file was put back by a commit that is no task's → ONE ⛔ line
 #   e. finish, a task in done/ with no landed commit on main at all → it is named with its paths
+#   b2. (appended, v1.4 § K) two tasks of one wave change one file → seal re-lands nothing
 # The finish cases keep the branch by putting feat/<ID> back where it stood, the way a self-landed
 # lane leaves it. HERMETIC: one throwaway repo under mktemp -d, no remote, no session id, HOME,
 # USERPROFILE and POLARIS_AWAKE_HOME faked together, the CLI run from INSIDE it. No sha, date or path.
@@ -120,3 +121,24 @@ echo y > src/6.txt; git commit -qam 'feat: T-6 the edit'
 git checkout -q main
 printf -- '---\nid: T-6\ntitle: lane T-6\npoints: 1\nstatus: done\nfiles_owned:\n  - src/6.txt\n---\n' > ops/board/done/T-6.md
 fin
+
+echo '== b2. two tasks of one wave change one file, the second lands after the first: nothing re-lands =='
+# safe-landing v1.4 § K: T-7 and T-8 both edit src/7.txt (different lines, so both land clean). The
+# wave then differs from feat/T-7 at that path, but a commit in <merge-base>..<wave> touched it under
+# [T-8] — shared wave work, never re-landed over T-8's line.
+printf 'a\nb\nc\n' > src/7.txt; git add src/7.txt; git commit -qm 'chore: a three-line file'
+task T-7 src/7.txt
+edit2() { # edit2 <ID> <sed expr> — claim → edit src/7.txt → handoff → land, quiet
+  bash "$KIT" claim "$1" >/dev/null 2>&1
+  ( cd "$R/.polaris/wt/$1" && sed "$2" src/7.txt > src/7.new && mv src/7.new src/7.txt && git commit -qam "feat: $1 the edit" && bash "$KIT" handoff "$1" ) >/dev/null 2>&1
+  bash "$KIT" land "$1" >/dev/null 2>&1
+}
+edit2 T-7 's/^a$/A/'
+task T-8 src/7.txt
+edit2 T-8 's/^c$/C/'
+OUT="$(bash "$KIT" seal 2>&1)"; echo "seal rc=$?"; OUT="$(strip)"
+echo "warnings: $(printf '%s\n' "$OUT" | grep -c '^⚠' || true)"
+echo "re-land lines: $(relandline T-7)$(relandline T-8)"
+echo "main has both lines: $(yn grep -qx A src/7.txt) $(yn grep -qx C src/7.txt)"
+echo "[T-7] [T-8] commits on main: $(landed_n T-7) $(landed_n T-8)"
+echo "on: $(git rev-parse --abbrev-ref HEAD)"
