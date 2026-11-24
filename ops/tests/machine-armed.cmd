@@ -61,7 +61,7 @@ arm() { HOME="$FIX" USERPROFILE="$FIX" POLARIS_AWAKE_HOME="$FIX/awake" python po
 # The ✅ line the restore prints under --verbose, its path made portable; nothing at all when it is silent.
 said() { tr -d '\r' | grep -a '^✅ availableModels:' | sed 's# in .* — # in <settings> — #'; }
 show() { # python prints CRLF on Windows; every .expected is LF
-  python - "$SJ" <<'PY' | tr -d '\r'
+  PYTHONIOENCODING=utf-8 python - "$SJ" <<'PY' | tr -d '\r'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 print("  availableModels: %s" % (json.dumps(d["availableModels"]) if "availableModels" in d else "(no key: every model is offered)"))
@@ -80,7 +80,7 @@ mark() { if [ -f "$MK" ]; then echo "  fable-restored marker: written"; else ech
 # it on every arm, so any other byte layout would read as a change nobody made. The value rides the
 # environment, never argv: a Windows argv mangles the quotes in it.
 setlist() {
-  AM="$1" python - "$SJ" <<'PY'
+  AM="$1" PYTHONIOENCODING=utf-8 python - "$SJ" <<'PY'
 import json, os, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 d["availableModels"] = json.loads(os.environ["AM"])

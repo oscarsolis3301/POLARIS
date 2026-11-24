@@ -79,7 +79,7 @@ if [ "${1:-}" = "install" ]; then
   python -c pass >/dev/null 2>&1 && mg_py=python || { python3 -c pass >/dev/null 2>&1 && mg_py=python3; } || true
   [ -n "$mg_py" ] || { printf 'model-guard: no python — add the five hook entries to %s by hand (speed.md § 2)\n' "$mg_sj"; exit 0; }
   mkdir -p "${mg_sj%/*}" 2>/dev/null || true
-  "$mg_py" - "$mg_sj" "$mg_b" "${HOME:-.}/.claude/polaris/model-guard.sh" <<'PYEOF'
+  PYTHONIOENCODING=utf-8 "$mg_py" - "$mg_sj" "$mg_b" "${HOME:-.}/.claude/polaris/model-guard.sh" <<'PYEOF'
 import json, os, re, sys
 p, sh, hk = sys.argv[1], sys.argv[2], sys.argv[3]
 cmd = [{"type": "command", "timeout": 5, "command": '"%s" "%s"' % (sh, hk)}]

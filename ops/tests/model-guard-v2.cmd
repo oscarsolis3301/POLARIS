@@ -217,9 +217,10 @@ echo '== the install branch: five entries, merged, never clobbering, idempotent 
 SJ="$HOME/.claude/settings.json"
 printf '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"mine.sh"}]}],"SessionStart":[{"hooks":[{"type":"command","command":"mine-too.sh"}]}]}}\n' > "$SJ"
 # python prints CRLF on Windows and every .expected is LF (.gitattributes): \r goes on the way out
+# PYTHONIOENCODING=utf-8: the `·` below in UTF-8, never the Windows locale codepage
 bash "$H" install | tr -d '\r' | sed "s#written to .*#written to <settings>#"
 bash "$H" install | tr -d '\r' | sed "s#written to .*#written to <settings>#"
-python - "$SJ" <<'PY' | tr -d '\r'
+PYTHONIOENCODING=utf-8 python - "$SJ" <<'PY' | tr -d '\r'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))["hooks"]
 for ev in ("PreToolUse", "PreModelSwitch", "SessionStart", "PostModelSwitch", "PostToolUse"):
