@@ -1454,3 +1454,5 @@
 {"ts":1795552409,"ev":"release","id":"T-326","who":"oscar@Dino","note":"→ backlog: parked by plan: trigger not met (begin+wrap 27.66 s best of 3 after section D, 1.9% of a 1-point change); rebuild only if a later measurement trips it"}
 {"ts":1795553426,"ev":"new","id":"T-332","who":"oscar@Dino","note":"ready","pts":1}
 {"ts":1795553443,"ev":"claim","id":"T-332","who":"oscar@Dino","note":"","pts":1}
+{"ts":1795553831,"ev":"handoff","id":"T-332","who":"oscar@Dino","note":""}
+{"ts":1795553832,"ev":"all-review","id":"T-332","who":"oscar@Dino","note":"last lane landed — board is all review"}
