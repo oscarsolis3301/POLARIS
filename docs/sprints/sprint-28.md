@@ -49,8 +49,8 @@ budget. Unarmed, every hook is byte-identical. Hook files are in scope by the ow
 - [ ] awake-hook: armed = active, reap call, stalled marker; never starts a model
 
 ## T-320 — "A Haiku job runner the guard lets through for exactly one thing - the polaris-runner agent may run only bg wait/status/tail; every other Haiku session, switch and spawn is refused as before"
-points 8 · risk high · landed 8ba214be (2026-11-24) · claimed 2026-11-24
-files touched: kit/.claude/agents/polaris-runner.md, kit/ops/hooks/model-guard.sh, kit/ops/install.sh, ops/RULES.tsv, ops/tests/model-guard-v2.cmd, ops/tests/model-guard-v2.expected, ops/tests/update-arms.cmd, ops/tests/update-arms.expected
+points 8 · risk high · landed 31942ef7 (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/hooks/model-guard.sh, ops/tests/model-guard-v2.cmd
 
 ### Why
 The owner asked for a cheap model to sit on long commands instead of Opus. The guard bans Haiku in
