@@ -287,3 +287,6 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - "kit/.claude/agents/polaris-runner.md — the Haiku job runner: waits on one bg job and reports rc + tail (walk-away § 3.2)"  (T-320, 2026-11-24)
 
 - "kit/ops/lib/core.sh — cfg reads this computer's preferences ($POLARIS_HOME/preferences) under the repo's lines; kit_file and prefs_put live here (machine-prefs.md)"  (T-333, 2026-11-24)
+
+- "kit/ops/lib/docs.sh — role / doc / router: the kit serves its own role files and documents, paged at  (T-337, 2026-11-24)
+- "kit/ops/lib/prefs.sh — polaris prefs: show, set, unset, seed and yield this computer's preferences file (machine-prefs.md § 7)"  (T-337, 2026-11-24)
