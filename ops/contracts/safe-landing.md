@@ -242,8 +242,25 @@ integrate.sh — nothing is missing, yet § 7 as written would make `finish` ref
   task A landed, task B later changed the same file → finish passes; task C done with no landed
   commit → finish refuses and names C and its paths.
 
+### K. v1.4 — a path another task of the wave changed is not "missing" at done/seal (2026-11-24, plan prefs — T-333)
+EVOLVE finding 1 of sprint 28: § J's premise for `seal`/`done` ("nothing else can have touched the
+paths") broke when two cards of one wave owned one file (T-320 and wave-fix T-329 on
+model-guard.sh): the content check re-landed one card's copy over the other's, three times, and main
+lost T-320's change until T-327 restored the union.
+- `landed_content_ok <ID> [<ref>]` (core.sh): a mismatching path is DROPPED from the output when a
+  commit in `<mb>..<ref>` (mb = the merge-base it already computes) that touched the path has a
+  subject ending in another task's `[<other ID>]` — shared wave work, superseded, never re-landed.
+  A path no other task's commit touched stays a mismatch exactly as today.
+- Cost: nothing on the healthy path; one `git log --format=%s <mb>..<ref> -- <paths>` only when a
+  mismatch exists. rc meanings unchanged; § 5/§ 6/§ 7 call sites unchanged.
+- Golden `landed-seal` gains case **b2**, APPENDED (cases a–e byte-identical): two tasks of one wave
+  change one file, the second lands after the first → seal prints nothing new, makes no re-land
+  commit, and main holds the second task's content.
+- Planning rule stays: two cards of one wave never own one file (drift); this is the backstop.
+
 ## Changelog
 - v1 2026-10-28: created for tasks of plan `safe-landing`.
 - v1.1 2026-11-09: pointers re-derived after T-259, T-273, T-277, T-282, T-284; section 8 driver corrected; riders a-d (Phase 3 groom).
 - v1.2 2026-11-09 (conductor): rider e — the wait for the board mutex no longer kills the command when the holder releases mid-read (found by T-221; folded into T-222, which owns core.sh).
 - v1.3 2026-11-10 (conductor): § J — at finish a path is missing only when no later landed task commit touched it; a done task with no landed commit counts every differing path (asked by T-225's builder, with the false alarms it measured on this run).
+- v1.4 2026-11-24 (plan prefs): § K — landed_content_ok drops a path another task of the wave changed after this task forked (EVOLVE finding 1, sprint 28).

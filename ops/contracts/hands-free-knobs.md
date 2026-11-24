@@ -212,3 +212,14 @@ composition; `autonomy: standard` keeps today's ask-right-away behavior at both 
 
 ### Changelog
 - v3 2026-11-05: ask first, then finish — question parking, `notify-gate risk`, the human-gated close (plan save-hops).
+
+## v4 — the dial on the machine file (2026-11-24, plan `prefs`, 6.21.0 — T-333 · T-337)
+- The four dial keys (`autonomy`, `plan_gate`, `builder_questions`, `evolve_apply`) are `machine`
+  scope: a person may set them once for every repo on the computer (`prefs --set`). Precedence per
+  key is repo line > machine line > default, then the v2 composition runs on the effective values.
+- A repo's non-blank `autonomy:` line MASKS the machine file's three gate knobs (machine-prefs.md
+  § 2–3): `autonomy: standard` in a repo stays the one-line opt-out even when the machine says
+  `plan_gate: auto`.
+- No agent may set the dial: `prefs --set/--unset` of a dial key refuses under `CLAUDECODE=1`;
+  `--seed` skips them there; `--yield` never touches them. EVOLVE never writes the machine file.
+- Doctor's composition line is unchanged in shape; it shows effective values.

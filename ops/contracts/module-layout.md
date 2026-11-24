@@ -397,3 +397,11 @@ and `kit/ops/lib/pulse.sh` (≤300 lines; `cmd_pulse`, `cmd_preflight`, `cmd_def
 after `bg`. The loader keeps LITERAL lists: `doctor` loads the full list; every other command loads it
 minus the nine `selftest/*` modules; `_match|_rules|_guard` unchanged. Full spec:
 `ops/contracts/walk-away.md` § 2.5 (T-318).
+
+## v11 — docs.sh and prefs.sh, need-scoped; OPS_DIR from BASH_SOURCE (2026-11-24, plan prefs, 6.21.0)
+New modules `kit/ops/lib/docs.sh` (≤300 lines; `cmd_role`, `cmd_doc`, `cmd_router`, `kit_mode`) and
+`kit/ops/lib/prefs.sh` (≤300 lines; `cmd_prefs`). They load ONLY for their own verbs
+(`role|doc|router` → `core docs`; `prefs` → `core ownership prefs`) and for `doctor` (full list +
+`docs prefs` before the selftest modules); every other command's list is unchanged, so
+`startup-budget` is unchanged. They do not join `lib-census` (it pins the observe split). Entry
+line 8 / SELF / VER: `ops/contracts/doc-server.md` § 1 (T-337).

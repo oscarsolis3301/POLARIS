@@ -228,3 +228,18 @@ wave gate (`check`) once every lane has landed, and in CI. No new KEYS.tsv row t
 - **W4:** T-160 (VERSION + CHANGELOG at the repo root) changes no indexed surface; `cli-help.expected`
   regenerates at the dogfood (it runs the installed CLI).
 Diff the golden against live output (`POLARIS_ROOT="$PWD" python kit/ops/index.py find --api 'kit/*' | grep -v i-have-adhd` from a worktree), never a commit range; an unexpected hunk is a STOP, not a refresh.
+
+## 10. Column 6 `scope` + cross-wave surface registry, sprint 29 (2026-11-24, plan prefs, 6.21.0)
+- `kit/ops/KEYS.tsv` gains column 6 `scope` ∈ `repo | machine | seed` on EVERY row (T-333). A row
+  with no `ask` keeps an EMPTY column 5 so column 6 is always field 6. The header comment documents
+  it. Values: exactly machine-prefs.md § 2 (39 `machine`, `claim` = `seed`, the rest `repo`). Every
+  reader keyed on `$5` is unchanged (`$5 == ""` still means "no question"). The registry gains no row.
+- **ONE owner of `ops/tests/api-kit.expected` and `kit/ops/KEYS.tsv` per wave:**
+  - W1 owner **T-333**: + `kit/ops/lib/core.sh	fn	kit_file` and `…	fn	prefs_put` (806 → 808). KEYS
+    column 6. T-334 · T-335 · T-336 add NO api row (no new public function, no heading change) —
+    their `check --only api-kit` asserts it.
+  - W2 owner **T-337**: + docs.sh `cmd_role` `cmd_doc` `cmd_router` `kit_mode`, prefs.sh `cmd_prefs`
+    (and any other non-underscore function it defines, named in its handback), kit/CLAUDE.md's one
+    heading row rewritten (doc-server.md § 5). T-338 · T-339 add NO api row.
+  - W3 owner **T-340**: the joined-tree re-pin only; INIT.md (T-335, W1) moves no heading row (first-run v2 § B stub form).
+- Diff the golden against live output, never a commit range; an unexpected hunk is a STOP.

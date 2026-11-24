@@ -232,3 +232,32 @@ $ bash ops/polaris doctor
 
 ## Changelog
 - v1 2026-09-14: created for T-141 · T-143 · T-144 · T-145 · T-148 (plans/v3.md § B1, B2, B4).
+
+## v2 — setup questions once per computer (2026-11-24, plan `prefs`, 6.21.0 — T-338 · T-335 · T-340)
+Owner's words: one POLARIS installation for all projects, using the same preferences. The machine
+preferences file (`ops/contracts/machine-prefs.md`) answers what a new repo would otherwise ask again.
+### A. `polaris interview --init` (admin.sh, T-338 — spec machine-prefs.md § 8)
+Works before `ops/CONVENTIONS.md` exists. Prints `ANSWERED	<key>	<value>	machine` for every `ask` row
+the machine file answers, and the v1 QUESTION/OPTION lines for the rest; nothing else, rc 0.
+`interview --set … --remember` also records each answer the machine file lacks. v1 forms unchanged.
+### B. INIT.md (T-335, W1 — headings byte-identical: the stub form below adds no api-kit row)
+- § 2a body: run `bash ops/polaris interview --init` (it replaces "read the questions straight off
+  KEYS.tsv"). ANSWERED lines are this computer's answers: use them, never re-ask them. Ask only the
+  printed QUESTION lines, in ONE call, voice first. **No QUESTION line → skip interaction 1
+  entirely** (the voice answer is then the machine's, and it binds from the next message). Cap stays 3
+  interactions; the default becomes 1 when interaction 1 is skipped.
+- § 3 skeleton: `voice:` / `adhd:` / `claim:` stay LIVE lines carrying the answers (machine or asked);
+  every OTHER `machine`-scope key the skeleton writes today as a live line (autolaunch, builders,
+  model_strong/mid/cheap, drain, drain_slices, run_max_tasks, run_max_minutes, run_max_agents,
+  run_fix_waves, qa_scout, notify, express) is written as a stub `#key: <same value>   # <same comment>`
+  — NO space after `#` (a `# ` line inside the fenced skeleton is an api-kit heading row; the stub
+  test `^#[[:space:]]*key:` accepts zero spaces, and cfg skips `#` lines). Their KEYS defaults equal
+  the skeleton values, so a computer with no preferences behaves exactly as v1. The four existing
+  `# autonomy:` … `# evolve_apply:` stubs are unchanged.
+- § 3 then runs `bash ops/polaris interview --set voice=<a> --set adhd=<b> --set claim=<c> --remember`.
+- INIT.md's own kit doc paths follow doc-server.md § 5.
+### Executable check (v2)
+`ops/tests/interview.{cmd,expected}` gains the `--init` / `--remember` cases (T-338);
+`ops/tests/doc-refs` (T-340) covers INIT.md; `ops/tests/kit-mode` (T-340) runs `interview --init` from a kit outside the repo.
+### Changelog
+- v2 2026-11-24: interview --init / --remember; INIT asks only what the machine file does not answer.
