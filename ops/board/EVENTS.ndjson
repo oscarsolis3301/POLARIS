@@ -1382,3 +1382,4 @@
 {"ts":1795547818,"ev":"handoff","id":"T-318","who":"oscar@Dino","note":""}
 {"ts":1795547977,"ev":"handoff","id":"T-321","who":"oscar@Dino","note":""}
 {"ts":1795547977,"ev":"all-review","id":"T-321","who":"oscar@Dino","note":"last lane landed — board is all review"}
+{"ts":1795548003,"ev":"wave-red","id":"T-320","who":"oscar@Dino","note":"bash ops/polaris check --only model-guard-v2"}
