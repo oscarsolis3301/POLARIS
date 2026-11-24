@@ -281,3 +281,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 
 - "kit/ops/lib/bgwatch.sh — every background job's budget, its watchdog (process-tree kill, one retry, exit 4) and bg reap (walk-away § 2.1)"  (T-318, 2026-11-24)
 - "kit/ops/lib/pulse.sh — pulse, preflight, defer and _run_armed: the away run's own commands (walk-away § 2.2-2.3)"  (T-318, 2026-11-24)
+
+- "kit/ops/hooks/permission-hook.sh — PermissionRequest/PermissionDenied while an approved run is away: park, never allow (walk-away § 4.3)"  (T-319, 2026-11-24)

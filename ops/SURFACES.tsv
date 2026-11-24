@@ -17,3 +17,6 @@ kit/ops/lib/tune.sh	ops/tests/tune-report.*	-	the tune-up report and its verdict
 tools/proof.sh	ops/tests/proof-ci.*	bash kit/ops/polaris check --only proof-ci	the repo's one-command CI proof and its await [T-316]
 kit/ops/lib/bgwatch.sh	ops/tests/bg-budget.*	bash kit/ops/polaris check --only bg-budget	job budgets, the watchdog and the reaper [T-318]
 kit/ops/lib/pulse.sh	ops/tests/pulse-run.*	bash kit/ops/polaris check --only pulse-run	pulse, preflight and defer [T-318]
+kit/ops/hooks/permission-hook.sh	ops/tests/permission-hook.*	bash kit/ops/polaris check --only permission-hook	the away run's permission prompts park instead of waiting [T-319]
+kit/ops/hooks/presence-guard.sh	ops/tests/presence-guard.*	bash kit/ops/polaris check --only presence-guard	here or away, and the armed run [T-319]
+kit/ops/hooks/awake-hook.sh	ops/tests/awake-hook.*	bash kit/ops/polaris check --only awake-hook	keep-awake and the armed run's reaper [T-319]
