@@ -1387,3 +1387,5 @@
 {"ts":1795548078,"ev":"amend","id":"T-329","who":"oscar@Dino","note":"deps -T-320"}
 {"ts":1795548088,"ev":"promote","id":"T-329","who":"oscar@Dino","note":"deps done: none","pts":2}
 {"ts":1795548116,"ev":"claim","id":"T-329","who":"oscar@Dino","note":"","pts":2}
+{"ts":1795548194,"ev":"handoff","id":"T-329","who":"oscar@Dino","note":""}
+{"ts":1795548195,"ev":"all-review","id":"T-329","who":"oscar@Dino","note":"last lane landed — board is all review"}
