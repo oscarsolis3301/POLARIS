@@ -1529,3 +1529,4 @@
 {"ts":1795562020,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"ops/tests/shots-gallery.expected"}
 {"ts":1795562671,"ev":"handoff","id":"T-340","who":"oscar@Dino","note":""}
 {"ts":1795562671,"ev":"all-review","id":"T-340","who":"oscar@Dino","note":"last lane landed — board is all review"}
+{"ts":1795562695,"ev":"done","id":"T-340","who":"oscar@Dino","note":"","pts":4}
