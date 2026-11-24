@@ -1406,3 +1406,4 @@
 {"ts":1795548989,"ev":"release","id":"T-330","who":"oscar@Dino","note":"→ ready: re-cut: an in-wave fix cannot touch core.sh lines that exist only on the wave; successor fixes the drift scanner instead"}
 {"ts":1795549010,"ev":"new","id":"T-331","who":"oscar@Dino","note":"backlog","pts":1}
 {"ts":1795549014,"ev":"retire","id":"T-330","who":"oscar@Dino","note":"→ T-331"}
+{"ts":1795549025,"ev":"promote","id":"T-331","who":"oscar@Dino","note":"deps done: none","pts":1}
