@@ -19,6 +19,7 @@ golden, VERSION 6.21.0, CHANGELOG). After it: finish, release ritual, dogfood, r
 | date | done pts | remaining |
 |---|---|---|
 | 2026-11-24 | 29 | 30 |
+| 2026-11-24 | 26 | 4 |
 
 # SPRINT 28 — Walk away: approve, leave, come back to finished work (6.20.0)          capacity: 100   dates: 2026-11-24–
 
