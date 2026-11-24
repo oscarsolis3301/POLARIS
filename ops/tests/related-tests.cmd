@@ -53,3 +53,10 @@ step python-path "py/mod.py=p v2"
 printf 'test: true\ntest_related: -\n' > ops/CONVENTIONS.md; git add -A; git commit -qm off
 bash "$KIT" qa >/dev/null 2>&1
 step related-off "app/src/a.tsx=a v5"
+# walk-away § 6 (T-321): an edited test file is never small. With lint: set and a 1-point task, a
+# .tsx change alone is ui (no runner runs); the same package's .test.tsx runs its related tests.
+printf 'test: true\nlint: true\n' > ops/CONVENTIONS.md; git add -A; git commit -qm lint
+bash "$KIT" qa >/dev/null 2>&1
+printf -- '---\nid: T-1\ntitle: fixture\ntype: feature\npoints: 1\nwsjf: 1\nrisk: normal\nowner: null\nbranch: null\nstatus: active\nfiles_owned:\n  - app/src/\nverify: []\n---\n' > ops/board/active/T-1.md
+step "ui-file [T-1]" "app/src/a.tsx=a v6"
+step "edited-test [T-1]" "app/src/a.test.tsx=t v1"

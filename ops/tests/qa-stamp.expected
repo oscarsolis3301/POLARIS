@@ -7,3 +7,11 @@ map-overflow: rc=0 stamp=HEAD suite-ran=1 skipped=0 clean=yes
 learned-overflow: rc=0 stamp=HEAD suite-ran=1 skipped=0 clean=yes
   advisory: LEARNED: N bullets — prune to ≤5 carry-overs (EVOLVE target)
 suite-red: rc=1 stamp=none suite-ran=1 skipped=0 clean=yes
+stamp none → none
+stamp look → look
+stamp ui → ui
+stamp scoped → scoped
+stamp full → full
+stamp bogus → full
+stamp 2-field → full
+ui-stamp: green at <sha> — skipped, proven ui (qa --force re-runs it)

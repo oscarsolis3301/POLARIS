@@ -107,3 +107,18 @@ echo "T-2 is in: $(col T-2)"
 ( git checkout -q -b integrate/vs2 main && git merge -q --squash feat/T-2 && git commit -qm 'land T-2 [T-2]' ) >/dev/null 2>&1
 plant
 bash "$KIT" run-verify T-2 2>&1; echo "run-verify rc=$?"
+
+echo '== 9. freshness (walk-away § 6, T-321): a CSS or MD edit under a mapped surface passes; a ui path is still gated =='
+git checkout -q main >/dev/null 2>&1
+( mkdir -p web tests/web && echo a > web/app.css && echo a > web/notes.md && echo a > web/App.tsx && echo t > tests/web/a.t
+  printf 'web/\ttests/web/\t-\tthe web screens\n' >> ops/SURFACES.tsv
+  git add -A && git commit -qm 'fixture: web + its surface row' ) >/dev/null 2>&1
+printf -- '---\nid: T-3\ntitle: web\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - web/\nverify:\n  - true\n---\n## Why\nthe web lane.\n' > ops/board/ready/T-3.md
+bash "$KIT" claim T-3 >/dev/null 2>&1; echo "claim rc=$?"
+W3="$R/.polaris/wt/T-3"
+( cd "$W3" && echo 'body{color:red}' > web/app.css && echo 'a real note' > web/notes.md && git commit -qam 'feat: T-3 style and notes' ) >/dev/null 2>&1
+OUT="$(cd "$W3" && bash "$KIT" verify T-3 2>&1)"; echo "css+md verify rc=$?"
+echo "stale lines: $(printf '%s\n' "$OUT" | grep -c 'SURFACES stale' || true)"
+( cd "$W3" && echo 'export const A = 2' > web/App.tsx && git commit -qam 'feat: T-3 the screen' ) >/dev/null 2>&1
+OUT="$(cd "$W3" && bash "$KIT" verify T-3 2>&1)"; echo "tsx verify rc=$?"
+printf '%s\n' "$OUT" | grep '^⛔ SURFACES stale' || echo 'no stale line'

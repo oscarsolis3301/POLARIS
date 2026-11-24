@@ -127,3 +127,24 @@ grep -v '^model_strong:' "$FIX/repo/ops/CONVENTIONS.md" > "$FIX/conv.tmp"
 printf 'model_strong: some-model-9\n' >> "$FIX/conv.tmp"
 mv "$FIX/conv.tmp" "$FIX/repo/ops/CONVENTIONS.md"
 FLEET
+
+echo '== RUNNER (walk-away § 3.4, T-321): the job runner — cheap, its own model line, its agent =='
+# model_runner alone names the runner's model, inside haiku|sonnet|inherit (anything else → sonnet);
+# `runner: off` drops the model and agent lines and names the fallback wait. model_denied is
+# untouched: the cheap tier above still refuses a haiku model_cheap.
+RUN() { printf 'runner %s\n' "$1"
+  grep -v '^model_runner:\|^runner:' "$FIX/repo/ops/CONVENTIONS.md" > "$FIX/conv.tmp"
+  case "$1" in default) ;; off) printf 'runner: off\n' >> "$FIX/conv.tmp";; *) printf 'model_runner: %s\n' "$1" >> "$FIX/conv.tmp";; esac
+  mv "$FIX/conv.tmp" "$FIX/repo/ops/CONVENTIONS.md"
+  ( cd "$FIX/repo" && bash "$KIT" route --role RUNNER 2>&1 ); printf 'rc %s\n' "$?"; }
+RUN default
+RUN sonnet
+RUN opus
+RUN claude-fable-5
+RUN inherit
+RUN off
+grep -v '^model_runner:\|^runner:\|^model_cheap:' "$FIX/repo/ops/CONVENTIONS.md" > "$FIX/conv.tmp"
+printf 'model_runner: haiku\nmodel_cheap: haiku\n' >> "$FIX/conv.tmp"
+mv "$FIX/conv.tmp" "$FIX/repo/ops/CONVENTIONS.md"
+echo 'route --points 1 with model_cheap: haiku and model_runner: haiku'
+( cd "$FIX/repo" && bash "$KIT" route --points 1 2>&1 ); printf 'rc %s\n' "$?"

@@ -61,3 +61,12 @@ qa learned-overflow
 rm -f ops/SPRINT.md .polaris/suite-stamp
 printf 'test: false\n' > ops/CONVENTIONS.md; git add -A >/dev/null 2>&1; git commit -qm red >/dev/null 2>&1
 qa suite-red
+# 6) walk-away § 6 (T-321): suite_stamp_scope passes none|look|ui|scoped through and reads anything
+#    else (and a 2-field pre-6.4 stamp) as full — so a skipped qa says the word that was proven.
+KIT_LIB="$(dirname "$KIT")/lib"
+for sc in none look ui scoped full bogus 2-field; do
+  if [ "$sc" = 2-field ]; then printf 'abc 1\n' > "$FIX/st"; else printf 'abc 1 %s\n' "$sc" > "$FIX/st"; fi
+  printf 'stamp %s → %s\n' "$sc" "$( . "$KIT_LIB/core.sh"; suite_stamp_scope "$FIX/st" )"
+done
+printf '%s 1 ui\n' "$(git rev-parse HEAD)" > .polaris/suite-stamp
+bash "$KIT" qa 2>&1 | sed -n 's/^.*suite already green at [0-9a-f]*\( — .*\)$/ui-stamp: green at <sha>\1/p'

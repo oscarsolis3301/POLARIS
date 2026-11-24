@@ -71,3 +71,43 @@ full
    why: test_select unset
    paths: 1 changed (0 skipped by test_skip)
 rc 0
+== a 1-point task editing a .test.tsx: never ui, today's verdict ==
+depth T-20
+full
+   why: test_select unset
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== a .spec.tsx beside the .tsx: never ui ==
+depth T-21
+full
+   why: test_select unset
+   paths: 2 changed (0 skipped by test_skip)
+rc 0
+== no lint, no typecheck, no look set up: the 1-point .tsx change is not ui ==
+depth T-1
+full
+   why: test_select unset
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== no lint, no typecheck, but visual: and shot: both set: ui ==
+depth T-1
+ui
+   why: only ui paths (1) in 1-2 point work
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== visual: alone is not a look: not ui ==
+depth T-1
+full
+   why: test_select unset
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== the ui skip line: no look set up adds one line, once per repo (.polaris/look-offered) ==
+-- first ui run
+   ui — test, build and uat skipped: lint and typecheck plus the before/after look
+   ui — no before/after look is set up here (visual: and shot: unset): lint and typecheck are the whole check — ops/VISUAL.md
+look-offered: yes
+-- second ui run
+   ui — test, build and uat skipped: lint and typecheck plus the before/after look
+-- a look set up (visual: and shot:), the marker gone: the skip line alone
+   ui — test, build and uat skipped: lint and typecheck plus the before/after look
+look-offered: no

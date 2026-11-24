@@ -398,8 +398,15 @@ check_freshness() { # check_freshness <ref> [<ID>] — the stale-tests gate over
   surfaces_lines | grep -q . || return 0
   local ref="$1" id="${2:--}" rows list f surface tests rcmd rnote hit hunk added="" nl='
 '
-  local k=0 bad=0 first="" s n t ok exc ln
+  local k=0 bad=0 first="" s n t ok exc ln small nf
   rows="$(surfaces_lines)"
+  # walk-away § 6: a doc or style edit (test_skip + test_look, composed ONCE) is never a real change
+  # to a surface; ui paths stay gated. Word-split unexpanded; an empty list never reaches owned_match
+  # (with no patterns it would read stdin).
+  small="$(_depth_globs skip) $(_depth_globs look)"
+  case $- in *f*) nf=1;; *) nf=0; set -f;; esac
+  set -- $small
+  [ "$nf" -eq 1 ] || set +f
   # HEAD resolves in the caller's worktree; a named ref in the shared repo (as check_ownership).
   if [ "$ref" = "HEAD" ]; then list="$(git diff --name-only "$BASE...$ref" 2>/dev/null || true)"
   else list="$(git -C "$PRIMARY" diff --name-only "$BASE...$ref" 2>/dev/null || true)"; fi
@@ -408,6 +415,7 @@ check_freshness() { # check_freshness <ref> [<ID>] — the stale-tests gate over
   #    cover it; a path no row maps is never diffed at all.
   while IFS= read -r f; do
     [ -z "$f" ] && continue
+    [ $# -gt 0 ] && owned_match "$f" "$@" && continue
     hit=""
     while IFS="$POLARIS_TAB" read -r surface tests rcmd rnote; do
       [ -n "$surface" ] && [ -n "$tests" ] || continue

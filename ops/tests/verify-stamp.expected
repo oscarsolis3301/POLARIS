@@ -45,3 +45,9 @@ stamp after handoff: no
 T-2 is in: review
    no verify: commands on task (acceptance is manual)
 run-verify rc=0
+== 9. freshness (walk-away § 6, T-321): a CSS or MD edit under a mapped surface passes; a ui path is still gated ==
+claim rc=0
+css+md verify rc=0
+stale lines: 0
+tsx verify rc=1
+⛔ SURFACES stale: web/App.tsx changed under 'web/' but nothing under 'tests/web/' did — the web screens
