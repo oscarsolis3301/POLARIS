@@ -27,6 +27,7 @@ on-ui: rc=0 overlapped: yes ran: lint typecheck
   stamp scope: ui
      depth: ui — only ui paths (1) in 1-2 point work
      ui — test, build and uat skipped: lint and typecheck plus the before/after look
+     ui — no before/after look is set up here (visual: and shot: unset): lint and typecheck are the whole check — ops/VISUAL.md
   ✅ lint — green
   ✅ typecheck — green
 == qa_parallel: off ==
@@ -57,6 +58,7 @@ off-ui: rc=0 overlapped: no ran: lint typecheck
   stamp scope: ui
      depth: ui — only ui paths (1) in 1-2 point work
      ui — test, build and uat skipped: lint and typecheck plus the before/after look
+     ui — no before/after look is set up here (visual: and shot: unset): lint and typecheck are the whole check — ops/VISUAL.md
   ✅ lint — green
   ✅ typecheck — green
 == the printed text is the same in both modes ==
