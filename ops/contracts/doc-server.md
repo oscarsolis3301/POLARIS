@@ -138,3 +138,19 @@ selftest-install.sh:184/293 grep it). Comments may keep paths.
 
 ## Changelog
 - v1 2026-11-24: created for plan `prefs` (T-333 … T-340).
+
+## § 6 addendum — v1.1 (2026-11-24, T-340, conductor decision: render with § 5's rules)
+The joined-tree sweep (`doc-refs`) found eight printed kit doc paths § 6 did not list. Pinned renderings:
+| site | today | becomes | goldens |
+|---|---|---|---|
+| builder.sh ~:921 | `add the empty field from ops/templates/TASK.md first` | `add the empty field from bash ops/polaris doc templates/TASK first` | — |
+| route.sh ~:381 | `… lint and typecheck are the whole check — ops/VISUAL.md` | `… — bash ops/polaris doc VISUAL` | depth-ui, express-ui, qa-parallel |
+| visual.sh ~:113 | `SEE YOUR WORK — capture before handoff (ops/VISUAL.md)` | `… (bash ops/polaris doc VISUAL)` | shots-gallery |
+| visual.sh ~:119 | `(visual: unset — no capture step; ops/VISUAL.md explains how to add one)` | `…; bash ops/polaris doc VISUAL explains how to add one)` | pack-visual, shots-gallery |
+| visual.sh ~:164 | `shot: (unset — set shot: in ops/CONVENTIONS.md; ops/VISUAL.md)` | `…; bash ops/polaris doc VISUAL)` | — |
+| visual.sh ~:170 | `read: ops/VISUAL.md` | `read: bash ops/polaris doc VISUAL` | pack-visual, shots-gallery |
+| handover-hook.sh ~:350 | `Read ops/roles/BUILDER.md if this context no longer has it` | `Run bash ops/polaris role BUILDER if this context no longer has it` | — |
+| handover-hook.sh ~:354 | `Read ops/roles/INTEGRATOR.md if this context no longer has it` | `Run bash ops/polaris role INTEGRATOR if this context no longer has it` | — |
+`ops/CONVENTIONS.md` mentions stay (repo state, not a kit file). Also: `lib/presence.sh` resolves the
+machine home as `${POLARIS_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/polaris}`, so it works sourced
+alone under `set -eu` (presence-guard), byte-identical whenever core.sh has set `POLARIS_HOME`.

@@ -2,7 +2,7 @@
 express rc=0
    depth: ui — only ui paths (1) in 1-2 point work
    ui — test, build and uat skipped: lint and typecheck plus the before/after look
-   ui — no before/after look is set up here (visual: and shot: unset): lint and typecheck are the whole check — ops/VISUAL.md
+   ui — no before/after look is set up here (visual: and shot: unset): lint and typecheck are the whole check — bash ops/polaris doc VISUAL
 ✅ lint — green
 ✅ typecheck — green
 skip line: 1

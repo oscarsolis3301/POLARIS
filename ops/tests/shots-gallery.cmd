@@ -230,3 +230,11 @@ CAP "$R/docs/screens/homepage/universal-search-bar.md"
 echo '-- the committed index --'
 cat "$R/docs/screens/INDEX.md"
 C
+# --- the kit doc is named as a command, never a path (ops/contracts/doc-server.md § 6 addendum): the
+#     section title and the read: line with visual: set, then the one line with visual: unset. Runs
+#     last because it rewrites the fixture's CONVENTIONS.
+V() { ( cd "$R" && bash "$KIT" pack T-401 2>/dev/null ) | awk '/^=== SEE YOUR WORK/{print; on=1; next} on&&/^=== /{on=0} on&&/VISUAL|ops\/VISUAL/{print}' | N; }
+echo '-- the visual doc, as a command --'
+V
+printf 'base: main\nlanding: integrator\n' > "$R/ops/CONVENTIONS.md"
+V

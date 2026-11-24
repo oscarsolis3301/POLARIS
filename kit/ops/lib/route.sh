@@ -378,7 +378,7 @@ _ui_skip_say() { # _ui_skip_say — the ONE line every run at depth ui prints be
   note "ui — test, build and uat skipped: lint and typecheck plus the before/after look"
   [ -n "$(cfg visual "")" ] && [ -n "$(cfg shot "")" ] && return 0
   [ -f "${PRIMARY:-.}/.polaris/look-offered" ] && return 0
-  note "ui — no before/after look is set up here (visual: and shot: unset): lint and typecheck are the whole check — ops/VISUAL.md"
+  note "ui — no before/after look is set up here (visual: and shot: unset): lint and typecheck are the whole check — bash ops/polaris doc VISUAL"
   { mkdir -p "${PRIMARY:-.}/.polaris" && : > "${PRIMARY:-.}/.polaris/look-offered"; } 2>/dev/null || true
   return 0
 }

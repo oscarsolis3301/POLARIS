@@ -1,0 +1,44 @@
+== the fixture ops/ holds only state ==
+   CONVENTIONS.md
+   board
+== version ==
+rc=0
+   version = the kit's VERSION: yes
+== status ==
+rc=0
+   POLARIS board — base: main · claim: local-lock
+== role BUILDER ==
+rc=0
+   byte-identical to the kit's roles/BUILDER.md
+== doc PROTOCOL "THE TOOL" ==
+rc=0
+   ## THE TOOL — `ops/polaris`
+== router ==
+rc=0
+   # POLARIS v5 — Parallel Sprint Protocol
+== prefs (fixture machine file) ==
+rc=0
+   key	value	source	scope
+   base	main	repo	repo
+   voice	technical	machine	machine
+== interview --init (fixture machine file) ==
+rc=0
+   ANSWERED	voice	technical	machine
+   questions for voice: 0
+== interview --init (layer off: voice is asked) ==
+rc=0
+   questions for voice: 1
+== doc --where ==
+rc=0
+   kit: <kit>
+   mode: machine
+   kit = the kit outside the repo: yes
+== the fixture ops/ still holds only state ==
+   CONVENTIONS.md
+   board
+== a vendored copy ==
+rc=0
+   kit: <kit>
+   mode: vendored
+rc=0
+   byte-identical to the kit's roles/BUILDER.md
