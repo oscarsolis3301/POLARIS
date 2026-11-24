@@ -1447,3 +1447,5 @@
 {"ts":1795551595,"ev":"grant","id":"T-327","who":"oscar@Dino","note":"ops/tests/update-pending.expected"}
 {"ts":1795551926,"ev":"grant","id":"T-327","who":"oscar@Dino","note":"kit/ops/hooks/model-guard.sh"}
 {"ts":1795551929,"ev":"grant","id":"T-327","who":"oscar@Dino","note":"ops/tests/model-guard-v2.cmd"}
+{"ts":1795552324,"ev":"handoff","id":"T-327","who":"oscar@Dino","note":""}
+{"ts":1795552325,"ev":"all-review","id":"T-327","who":"oscar@Dino","note":"last lane landed — board is all review"}
