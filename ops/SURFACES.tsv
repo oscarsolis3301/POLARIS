@@ -20,3 +20,4 @@ kit/ops/lib/pulse.sh	ops/tests/pulse-run.*	bash kit/ops/polaris check --only pul
 kit/ops/hooks/permission-hook.sh	ops/tests/permission-hook.*	bash kit/ops/polaris check --only permission-hook	the away run's permission prompts park instead of waiting [T-319]
 kit/ops/hooks/presence-guard.sh	ops/tests/presence-guard.*	bash kit/ops/polaris check --only presence-guard	here or away, and the armed run [T-319]
 kit/ops/hooks/awake-hook.sh	ops/tests/awake-hook.*	bash kit/ops/polaris check --only awake-hook	keep-awake and the armed run's reaper [T-319]
+kit/ops/lib/flow.sh	ops/tests/flow-solo.*	bash kit/ops/polaris check --only flow-solo	begin and wrap, one call in and one call out [T-328]
