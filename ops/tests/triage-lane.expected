@@ -24,7 +24,7 @@ full
    nothing claimable — the board is empty, so a Planner runs first
 tidy
    tune-up due: ~18% fewer folders per change · 3 folders of 5+ files have no guide
-   read ops/roles/TIDY.md — one context, no subagents
+   run bash ops/polaris role TIDY — one context, no subagents
 1
 1
 full
@@ -39,7 +39,7 @@ full
    nothing claimable — the board is empty, so a Planner runs first
 tidy
    tune-up due: ~18% fewer folders per change · 3 folders of 5+ files have no guide
-   read ops/roles/TIDY.md — one context, no subagents
+   run bash ops/polaris role TIDY — one context, no subagents
 tidy
 solo
 solo

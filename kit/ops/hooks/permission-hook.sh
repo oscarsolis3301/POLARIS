@@ -65,9 +65,16 @@ _ph_primary() {
   [ -n "$PH_P" ]
 }
 _ph_cfg() { # one CONVENTIONS key: $1 key, $2 default -> REPLY (a fork — armed runs only)
-  local f="$PH_P/ops/CONVENTIONS.md" v
-  REPLY="$2"; [ -f "$f" ] || return 0
-  v="$(sed -n "s/^$1:[[:space:]]*\([^#]*\).*\$/\1/p" "$f" 2>/dev/null | head -1)"
+  # A blank or missing repo line falls back to this computer's preferences (machine-prefs § 4).
+  local f="$PH_P/ops/CONVENTIONS.md" m="${POLARIS_PREFS-${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/preferences}" v
+  REPLY="$2"
+  if [ -f "$f" ]; then
+    v="$(sed -n "s/^$1:[[:space:]]*\([^#]*\).*\$/\1/p" "$f" 2>/dev/null | head -1)"
+    v="${v%"${v##*[![:space:]]}"}"
+    [ -n "$v" ] && { REPLY="$v"; return 0; }
+  fi
+  [ -n "$m" ] && [ -f "$m" ] || return 0
+  v="$(sed -n "s/^$1:[[:space:]]*\([^#[:space:]][^#]*\).*\$/\1/p" "$m" 2>/dev/null | head -1)"
   v="${v%"${v##*[![:space:]]}"}"
   [ -n "$v" ] && REPLY="$v"
   return 0
@@ -87,8 +94,8 @@ _ph_armed() { # rc 0 = some <primary>/.polaris/run/*.armed within reentry_hours 
 }
 _ph_away() { # the owner left: an approval on record and an away mode (payload, else <sid>.mode)
   local d m="$PH_MODE"
-  [ -n "${HOME:-}" ] || return 1
-  d="$HOME/.claude/polaris/model-state"
+  [ -n "${CLAUDE_CONFIG_DIR:-${HOME:-}}" ] || return 1
+  d="${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/model-state"
   [ -f "$d/$PH_SID.approved" ] || return 1
   [ -n "$m" ] || { { IFS= read -r m < "$d/$PH_SID.mode"; } 2>/dev/null; m="${m%$'\r'}"; }
   case "$m" in auto|bypassPermissions|dontAsk) return 0;; esac

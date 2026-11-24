@@ -28,7 +28,7 @@ checkout on: main
    no verify: commands on task (acceptance is manual)
 ✅ T-5 → review/. Lock stays until the Integrator lands it. Session may close.
 ✅ all lanes done — nothing left building. Integrate now: "You are the INTEGRATOR. Land everything in ops/board/review/."
-   ⚠ T-5 waits in review/: ops/SPRINT.md has no "# SPRINT <n> — <goal>" line, so its wave could not close — add one (ops/MANUAL.md § Board commit by hand), then: bash ops/polaris next
+   ⚠ T-5 waits in review/: ops/SPRINT.md has no "# SPRINT <n> — <goal>" line, so its wave could not close — add one (bash ops/polaris doc MANUAL "Board commit by hand"), then: bash ops/polaris next
 handoff rc=0
 the ⚠ line, times printed: 1
 T-5 sits in: review

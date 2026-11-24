@@ -118,3 +118,20 @@ PA UserPromptSubmit r3 '' auto "$ESC" "POLARIS re-entry: go"; A r3
 echo '--- re-entry: the armed run is older than reentry_hours (12) — refused'
 printf '1700000000\nwalk-away\nreentries 0\n' > "$RUN/a1.armed"
 PA UserPromptSubmit r4 '' auto "$ESC" "POLARIS re-entry: go"; A r4
+# --- machine-prefs § 4 (T-334): reentry, reentry_hours and reentry_max fall back to this computer's
+#     preferences when the repo has no line; a repo line still beats them. The armed run is 2 h old.
+printf '%s\nwalk-away\nreentries 0\n' "$(( $(date +%s) - 7200 ))" > "$RUN/a1.armed"
+printf 'reentry_hours: 1\n' > "$FIX/prefs"
+echo '--- machine prefs: repo reentry: desktop, machine reentry_hours: 1 — the 2 h old run is refused'
+POLARIS_PREFS="$FIX/prefs" PA UserPromptSubmit m1 '' auto "$ESC" "POLARIS re-entry: go"; A m1
+echo '--- machine prefs: the same with POLARIS_PREFS empty (layer off) — the 12 h default, inherited'
+POLARIS_PREFS= PA UserPromptSubmit m2 '' auto "$ESC" "POLARIS re-entry: go"; A m2
+echo '--- machine prefs: the repo also says reentry_hours: 12 — the repo line wins, inherited'
+printf 'reentry: desktop\nreentry_hours: 12\n' > "$R/ops/CONVENTIONS.md"
+POLARIS_PREFS="$FIX/prefs" PA UserPromptSubmit m3 '' auto "$ESC" "POLARIS re-entry: go"; A m3
+echo '--- machine prefs: no repo line at all, the machine file says reentry: desktop — inherited'
+: > "$R/ops/CONVENTIONS.md"; printf 'reentry: desktop\n' > "$FIX/prefs"
+POLARIS_PREFS="$FIX/prefs" PA UserPromptSubmit m4 '' auto "$ESC" "POLARIS re-entry: go"; A m4
+echo '--- machine prefs: the machine file says reentry_max: 0 — refused'
+printf 'reentry: desktop\nreentry_max: 0\n' > "$FIX/prefs"
+POLARIS_PREFS="$FIX/prefs" PA UserPromptSubmit m5 '' auto "$ESC" "POLARIS re-entry: go"; A m5

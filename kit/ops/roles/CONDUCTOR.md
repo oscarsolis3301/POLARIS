@@ -114,13 +114,13 @@ work.
 **Entered from an approved plan?** The plan IS the brief: skip step 1's interview and the 0c brief (the human approved the text), carry the plan path verbatim into the planner kickoff, and treat step 3 as passed unless the plan names a `risk: high` task or a STOP-AND-ASK item — those are still relayed. Budget caps and every other rule stand.
 
 2. **Plan (subagent).** Spawn ONE planner:
-   > You are the PLANNER, conductor-entered. Read ops/roles/PLANNER.md and execute it. The interview
+   > You are the PLANNER, conductor-entered. Run `bash ops/polaris role PLANNER` and execute it. The interview
    > and brief gate are already done — do not re-ask; if truly blocked, return the question as your
    > result. Skip fan-out; return your report. CONFIRMED BRIEF: <brief>
    > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
    > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
    > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
-   > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+   > Long command? `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    It grooms the board, runs `drift`, returns the plan. If it returns a question instead: ask the
    human, spawn a fresh planner with the brief + the answer appended.
 2.5 **Lane — one command, then branch on its first line.** After the planner's report run
@@ -133,7 +133,7 @@ work.
      integrator. It works the task(s) `triage` handed it one at a time and stops after its last
      land; YOU run `bash ops/polaris finish` as the finish line. Skip the QA scout AND EVOLVE — a
      lane this small carries no signal (the EVOLVE skip rule already exists).
-     > You are SOLO, conductor-entered. Read ops/roles/SOLO.md and execute it. Run
+     > You are SOLO, conductor-entered. Run `bash ops/polaris role SOLO` and execute it. Run
      > `bash ops/polaris triage` first and work every task it hands you ONE AT A TIME — claim →
      > build → land → `bash ops/polaris next` → the next claim. Stop after your last land: do NOT
      > run `finish`. Return: IDs landed · one-line summary each · test results · line 1 of your last `next`.
@@ -141,7 +141,7 @@ work.
      > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
      > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
      > you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout.
-     > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+     > Long command? `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    - `express` → at the plan gate (step 3 — which still runs per `plan_gate`; express changes the
      build/integrate shape, not the gate) disclose with the verbatim line
      `small change — taking the express lane`, then spawn ONE builder subagent → ONE integrator
@@ -154,12 +154,12 @@ work.
      `bash ops/polaris finish`. Any lane can end on this verb, once per session — run
      `bash ops/polaris next` before the solo and express lanes' `finish` (full lane: step 7) and
      treat a `tidy` in a lane's report the same: this subagent first, then that lane's own ending.
-     > You are TIDY, conductor-entered. Read ops/roles/TIDY.md and execute it — one context, no subagents. Up-front answers: <answers, or none>. Return: before/after score · what moved · folds made · settings proposals · what was left for you to decide. Do NOT run next or finish.
+     > You are TIDY, conductor-entered. Run `bash ops/polaris role TIDY` and execute it — one context, no subagents. Up-front answers: <answers, or none>. Return: before/after score · what moved · folds made · settings proposals · what was left for you to decide. Do NOT run next or finish.
      > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
      > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
      > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
      > you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout.
-     > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+     > Long command? `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
 3. **Plan gate — the one human gate.** Present the plan in `voice:`: what gets built, in how many
    parallel lanes and how many waves, how long it will take — the `projected:` line of `bash ops/polaris
    speed --plan <slug>`, verbatim, never a guess — what waits on what, anything `risk: high` (flag it NOW, not at merge time). With
@@ -216,7 +216,7 @@ work.
    pinned at launch, so the harness's worktree-entry tool refuses every time — and a kickoff step
    that always fails is how builders learn to skip the step entirely (shared-checkout v2 §4). Do not
    add it back here; top-level sessions get it from `claim` and from `BUILDER.md` step 1b.
-   > You are a BUILDER, conductor-entered. Read ops/roles/BUILDER.md and execute it. Claim <ID> and
+   > You are a BUILDER, conductor-entered. Run `bash ops/polaris role BUILDER` and execute it. Claim <ID> and
    > complete it end to end. A spec ambiguity → return the question as your result instead of asking
    > the human. Ship per BUILDER.md step 5: `bash ops/polaris bg run ship-<ID> -- bash ops/polaris
    > handoff --saw "<the after shot vs the bar>"`, then `bash ops/polaris bg wait ship-<ID> --max
@@ -228,7 +228,7 @@ work.
    > Anything it does not answer: `bash ops/polaris find <symbol>`, one hop, before any Grep.
    > Touching a visual: path? run the shot: line pack printed BEFORE you edit and again after, READ both against ops/DESIGN.md — the bar — and carry --saw "<the after shot vs that bar — PASS / WEAK / FAIL>" inline on the ship line (--no-before "<why>" for a brand-new screen); handoff refuses without two fresh captures, or without --saw.
    > you are a pinned-cwd subagent: work via absolute paths under .polaris/wt/<ID> (EnterWorktree will refuse) — never touch the primary checkout.
-   > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+   > Long command? `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    Say once where to watch (`bash ops/polaris dash` · 127.0.0.1:7373). As each lane reports, relay
    ONE line in `voice:` — "✅ 2 of 5 done — the new navigation is in, every check passed" — useful, plain,
    never a dump. Lane free + ready task left → spawn the next builder immediately.
@@ -287,7 +287,7 @@ work.
    LAST-LANE signal: it tells the integrator the wave is complete, so the full suite runs once and
    seal follows. Pipelining changes only WHEN integration starts — never what seal requires before it
    runs, and no gate weakens.
-   > You are the INTEGRATOR, conductor-entered. Read ops/roles/INTEGRATOR.md and execute it. Land
+   > You are the INTEGRATOR, conductor-entered. Run `bash ops/polaris role INTEGRATOR` and execute it. Land
    > tasks as they arrive in review/, in dependency order — a task whose depends_on has not yet landed
    > waits, everything else lands on arrival. Do NOT merge `risk: high` tasks the approved plan does
    > not cover — list them in your result, with every `away:` line you saw. The all-review `Integrate now` notice is your signal the wave is complete: run the suite
@@ -295,7 +295,7 @@ work.
    > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
    > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
    > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
-   > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+   > Long command? `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    > Return your report: merged · kicked back + why · suite status · newly promoted · line 1 of your last `next --do`.
    - `risk: high` in its report (not covered by the approved plan, or `autonomy: standard`) →
      `bash ops/polaris notify-gate risk <ID>`. By default it then stays in review/ and goes to the
@@ -332,7 +332,7 @@ work.
    > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
    > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
    > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
-   > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+   > Long command? `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    > Return findings as path:line one-liners, or "clean".
    Anything red — from `qa` or the scout — starts a **fix wave**: spawn a planner subagent to file
    the failures as bug task(s), then build → integrate → re-run `qa`. Cap: **`run_fix_waves`, default 2**;
@@ -364,13 +364,13 @@ work.
    per run: `next` routes a session there once), then `bash ops/polaris next` again.
 7.5 **Evolve (subagent) — the run tunes the kit before it signs off.** Once the last wave has
    landed — BEFORE the final `qa`, never after it — spawn ONE:
-   > You are EVOLVE, conductor-entered. Read ops/roles/EVOLVE.md and execute its diagnosis.
+   > You are EVOLVE, conductor-entered. Run `bash ops/polaris role EVOLVE` and execute its diagnosis.
    > APPLY NOTHING — return your ≤3 findings with evidence and the exact proposed diffs as your
    > result.
    > Read .polaris/brain/INDEX.md FIRST, repo second (no brain → ops/MAP.md). `bash ops/polaris
    > find <symbol>` locates code in one hop; `show <path>#<symbol>` prints one body, not the file.
    > Both before any Grep. Working a specific task? `bash ops/polaris pack <ID>` beats all of it.
-   > Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
+   > Long command? `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait`. A subagent never ends its turn with a job still running.
    Its proposals go into the close report, numbered — the human applies one by replying
    "approve <n>" (relay that literally to a follow-up EVOLVE session), or ignores them. Spawn it
    only when the run had a kickback, a blocked task, a red proof or more than five Learned bullets;

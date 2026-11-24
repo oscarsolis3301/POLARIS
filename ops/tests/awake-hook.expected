@@ -56,3 +56,11 @@ tick: active pressed
 calls "notify-gate stall": 1
 == it never starts a model ==
 model starts in the hook: 0
+== machine prefs: no machine file (POLARIS_PREFS empty) — the 12 h default, armed ==
+tick: active pressed
+== machine prefs: the machine file says reentry_hours: 1 — the 2 h old run is not armed ==
+tick: quiet no-press
+== machine prefs: the repo says reentry_hours: 12 — the repo line wins, armed ==
+tick: active pressed
+== machine prefs: a blank repo line falls through to the machine line ==
+tick: quiet no-press

@@ -62,7 +62,7 @@ Never stage a contract or MAP change into a `board_commit`, and never `board_com
 
 **New task (any lane) — what `ops/polaris new <draft.md>…` does by hand.** From the primary checkout,
 never a `feat/*` worktree: a builder's idea goes to IDEAS.md. A draft is a file outside `ops/board/`,
-written from `ops/templates/TASK.md`; it is read, never modified, moved or deleted. (1) Check every
+written from `templates/TASK.md` in the POLARIS kit; it is read, never modified, moved or deleted. (1) Check every
 draft, in order, before writing anything — the first failure refuses the whole call, nothing written:
 the first line is `---` · `title:` is set · `points:` is a whole number 1–5 · `plan:` is set on an
 uncommented line · `risk:` is `normal` or `high` · `files_owned` lists a path · a named `contract:`
@@ -143,7 +143,7 @@ So: run the repo's `shot:` command BEFORE your edit and again AFTER, LOOK at bot
 capture that landed outside the task's shot folder into it, and write that folder's `<ID>.md`
 caption yourself — the task title, your `--saw` text, `before:`/`after:` basenames (or
 `(skipped — <why>)`), and today's date. Count and freshness are the whole test; filenames are never
-inspected. `ops/VISUAL.md` is the short version of all of this.
+inspected. `VISUAL.md` in the POLARIS kit is the short version of all of this.
 
 ## Hold — stop a handoff at review/
 What `ops/polaris handoff [ID] --hold` does by hand, for a card that waits on the owner's yes (a

@@ -13,11 +13,11 @@ disappears) needs the human's yes from before the run; a proven move is not a de
   once, NOW, before any work. That is the run's one round; after it the owner is away.
 - **A conductor's TIDY subagent** — its kickoff carries the up-front answers; ask nothing. Your
   report is your close — never `next` or `finish`: the conductor's own run takes it from there.
-- **The explicit `update` epilogue** — `▶ NEXT — tune-up (<n>): read ops/roles/TIDY.md and run it now`
+- **The explicit `update` epilogue** — `▶ NEXT — tune-up (<n>): run bash ops/polaris role TIDY and follow it now`
   (an older updater may still say `▶ NEXT — save hops: …`: the same pass, tune-up first).
 
 One context, no subagents. `hops: off` in `ops/CONVENTIONS.md` → stop: one line saying so, nothing
-else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a job still running.
+else. Long command? `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`; never end a turn with a job still running.
 
 ## The pass
 0. **The update first.** `ops/VERSION` changed but uncommitted in the primary checkout = an update is
@@ -47,7 +47,7 @@ else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a 
    `bash ops/polaris harness`, and the run line it prints is the check. No green check at all → no
    moves: empty the proposal (guides only) and write ONE `ops/board/backlog/IDEAS.md` line,
    `set test: or typecheck: to unlock moves` (most Unity repos end here).
-5. **One task, filed by one command.** Draft it from `ops/templates/TASK.md` outside the board, in
+5. **One task, filed by one command.** Draft it from `bash ops/polaris doc templates/TASK` outside the board, in
    `.polaris/drafts/hops-<version>.md` (`version:` in `ops/VERSION`), as SOLO.md step 1 minus its
    `triage` confirm; file it with `bash ops/polaris new <draft.md>`, never a board file by hand.
    `plan: hops-<version>` · ≤ 5 points · `risk: normal` · `files_owned:` = the lines
@@ -73,7 +73,7 @@ else. Long command? `ops/PROTOCOL.md` § LONG COMMANDS; never end a turn with a 
 8. **Guides, map, record, suite, land.**
    - Guides: exactly the `<dir>/CLAUDE.md` paths in `files_owned`, bar a folder a red step left
      empty. Each: `POLARIS_ROOT=<task worktree> bash ops/polaris hops --facts <dir>`, then
-     `ops/templates/FOLDER-CLAUDE.md` filled from those facts alone, never by exploring (its **Leave
+     `bash ops/polaris doc templates/FOLDER-CLAUDE` filled from those facts alone, never by exploring (its **Leave
      alone:** from the `leave alone:` line; `-` → drop it): stable knowledge, plain Markdown, no
      POLARIS command, no file inventories or symbols. A folder `CLAUDE.md` without the
      `<!-- polaris:guide -->` line gets the block appended after one blank line, its text untouched.

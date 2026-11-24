@@ -14,3 +14,6 @@ content-no-pattern: rc=0 git=1 _guard docs/d.md - body=[]
 content-unicode: rc=0 git=3 _guard src/x.cfg - body=[bad]
 feat-branch: rc=0 git=1 _guard src/a.txt T-9 body=[]
 no-matcher: rc=0 git=1 _guard src/a.txt - body=[ok]
+kit-only-path-rule: rc=0 git=1 kit-cli _guard secret/k.txt -
+kit-only-plain: rc=0 git=1 no-cli
+kit-only-not-polaris: rc=0 git=1 no-cli

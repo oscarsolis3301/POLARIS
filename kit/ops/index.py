@@ -2378,7 +2378,7 @@ def cmd_hops(root, args):
         print("STALE     %s cites %s (missing)" % (g, c))
     if len(stale) > 4:
         print("STALE     +%d more" % (len(stale) - 4))
-    print("next: bash ops/polaris hops --tsv lists every row · ops/roles/TIDY.md runs the pass")
+    print("next: bash ops/polaris hops --tsv lists every row · bash ops/polaris role TIDY runs the pass")
     return 0
 
 

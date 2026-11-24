@@ -30,3 +30,10 @@ feat/T-5 still there: yes
 finish rc=1
 ⛔ T-5 is done but its files are not on main: src/5.txt
 ⛔ T-6 is done but its files are not on main: src/6.txt
+== b2. two tasks of one wave change one file, the second lands after the first: nothing re-lands ==
+seal rc=0
+warnings: 0
+re-land lines: 00
+main has both lines: yes yes
+[T-7] [T-8] commits on main: 1 1
+on: main

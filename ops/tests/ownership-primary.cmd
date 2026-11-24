@@ -50,3 +50,20 @@ git -C "$R" checkout -q -
 rm "$R/ops/lib/ownership.sh"
 og no-matcher Edit src/a.txt new_string 'ok'
 rm -rf "$F"
+# doc-server § 2 (T-334): a repo with NO ops/polaris copy (its ops/ holds only state) resolves the
+# kit's own CLI and lib — beside the hook, `<hook dir>/../polaris` — and still gates the write; a
+# repo with neither a copy nor a CONVENTIONS file is not a POLARIS repo, so the hook stands down.
+F="$(mktemp -d)"; R="$F/r"; K="$F/kit/ops"; HK="$K/hooks/ownership-guard.sh"
+git init -q "$R"; mkdir -p "$R/ops" "$R/src" "$K/hooks" "$K/lib" "$F/bin"
+cp "$H" "$HK"; cp kit/ops/lib/core.sh kit/ops/lib/ownership.sh "$K/lib/"
+printf 'secret/\tpath\t-\tno secrets\n' > "$R/ops/RULES.tsv"; printf 'base: main\n' > "$R/ops/CONVENTIONS.md"
+printf '#!/usr/bin/env bash\nprintf "kit-cli %%s %%s %%s\n" "$1" "$2" "$3" >> "$STUB_LOG"\n' > "$K/polaris"
+printf '#!/usr/bin/env bash\necho x >> "$GIT_COUNT"\nexec "%s" "$@"\n' "$REALGIT" > "$F/bin/git"
+chmod +x "$K/polaris" "$F/bin/git"
+echo x > "$R/src/a.txt"; git -C "$R" -c core.autocrlf=false add -A; git -C "$R" -c user.email=t@t -c user.name=t commit -qm init
+RT="$(git -C "$R" rev-parse --show-toplevel)"
+og kit-only-path-rule Edit secret/k.txt new_string 'ok'
+og kit-only-plain Edit src/a.txt new_string 'ok'
+rm "$R/ops/CONVENTIONS.md"
+og kit-only-not-polaris Edit secret/k.txt new_string 'ok'
+rm -rf "$F"

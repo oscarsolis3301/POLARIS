@@ -18,13 +18,13 @@ when you actually need it. Read the section you need, not the file.
 | how to behave as a model running this | MODEL NOTES |
 
 ## THE TOOL — `ops/polaris`
-Every board mechanic is one command. You MUST use the script instead of hand-rolling git recipes; it is race-tested. (Environment can't execute commands? Follow `ops/MANUAL.md` literally instead.) This table is a curated subset for daily board work — `ops/polaris help` prints the full command list, including admin/plumbing left out here on purpose (`init-board`, `resume`, `task-commit-msg`, `why`, `uninstall`). The script itself is `globals + lib-loader + dispatch`: `ops/polaris` is the only entry point, and every function body lives in `ops/lib/*.sh`, sourced in a fixed order at startup (a missing module refuses with a re-run-installer / `ops/polaris update` remedy).
+Every board mechanic is one command. You MUST use the script instead of hand-rolling git recipes; it is race-tested. (Environment can't execute commands? Follow the kit's `MANUAL.md` (beside `ops/polaris`) literally instead.) This table is a curated subset for daily board work — `ops/polaris help` prints the full command list, including admin/plumbing left out here on purpose (`init-board`, `resume`, `task-commit-msg`, `why`, `uninstall`). The script itself is `globals + lib-loader + dispatch`: `ops/polaris` is the only entry point, and every function body lives in `ops/lib/*.sh`, sourced in a fixed order at startup (a missing module refuses with a re-run-installer / `ops/polaris update` remedy).
 
 | Command | Does |
 |---|---|
 | `ops/polaris pack <ID>` | **the whole context for one task, in ONE call** — frontmatter + Why + acceptance, the contract verbatim, the repo's detected house style, the code-map for every owned directory, the public API surface each owned path must not break, the gotchas/co-change lines that mention an owned path, and the exact `verify:` commands. Run it FIRST, before reading anything. It replaces the 6-15 exploratory round trips a cold Builder otherwise spends rediscovering its own task |
 | `ops/polaris find <symbol>` · `show <path>#<symbol>` | the 1-hop "where is X": `path:line` + signature per hit, ranked, from a generated index; `show` prints ONE symbol's body instead of the file. `--api <glob>` = the sorted public surface of a path (the shape goldens lock). Run these BEFORE Grep |
-| `ops/polaris new <draft.md>…` | file new tasks in ONE command: each draft (from `ops/templates/TASK.md`) gets the next free `T-NNN`, is checked (points 1–5, or up to 13 with `steps:`, `plan:`, `risk:`, `files_owned`, a named contract exists) and placed by the ready gate — `ready/`, or `backlog/` while it waits on a task, and a task in `ready/`, `active/` or `review/` that shares a file with it joins its `depends_on`. ONE board commit for all of them; a refusal writes nothing. SOLO, TIDY and the Planner file their tasks with it; `ops/MANUAL.md` keeps the by-hand recipe |
+| `ops/polaris new <draft.md>…` | file new tasks in ONE command: each draft (from `bash ops/polaris doc templates/TASK`) gets the next free `T-NNN`, is checked (points 1–5, or up to 13 with `steps:`, `plan:`, `risk:`, `files_owned`, a named contract exists) and placed by the ready gate — `ready/`, or `backlog/` while it waits on a task, and a task in `ready/`, `active/` or `review/` that shares a file with it joins its `depends_on`. ONE board commit for all of them; a refusal writes nothing. SOLO, TIDY and the Planner file their tasks with it; `bash ops/polaris doc MANUAL` keeps the by-hand recipe |
 | `ops/polaris new --retire <map> <draft.md>…` | file the successors of a re-cut plan and retire their predecessors in the SAME board commit: every `old<TAB>new` pair of the map is checked as `retire` checks it (a successor may be a draft of this call), the old cards move to `ops/board/retired/` before placement, so no draft is chained to a card it retires. `new` also owns each draft's SURFACES-mapped tests itself, and the guide of each folder a draft adds a file to (a file git does not track yet — a card that only edits tracked files gains no guide, so two cards in one folder stay side by side), and lists on stderr the tests that name a card's files and the files that use them |
 | `ops/polaris claim [ID]` | atomic lock + ready→active + worktree (no ID = top wsjf) |
 | `ops/polaris verify` | proves `diff ⊆ files_owned`, no `ops/RULES.tsv` hit, and the stale-tests gate (a mapped surface that changed must have changed its tests — `ops/SURFACES.tsv`) + runs the task's `verify:` commands |
@@ -96,6 +96,8 @@ ops/
 ```
 `.claude/` ships a project skill (auto-routes any Claude Code session to this protocol) and a PreToolUse hook wiring the write-guard.
 A task's state is the folder its file sits in; moving it (via the script) is the transition. Worktrees live in `.polaris/wt/<ID>` (gitignored). Locks live in `$(git rev-parse --git-common-dir)/polaris-locks/` — shared across all worktrees, never committed.
+
+Wherever a role file says "the value in ops/CONVENTIONS.md", it means the effective value: this repo's line, else this computer's preferences file, else the kit default — bash ops/polaris prefs shows all three and which one wins.
 
 ## LANES — why the lane is a command, and why a role never does two jobs
 
@@ -221,7 +223,7 @@ nearest guide for each owned folder; then rung 4. Everyone else stops at the fir
 5. **Grep, last** — for text nothing above can match.
 
 **A layout that makes you jump is a bug.** `polaris hops` measures it (folders touched per change,
-busy folders with no guide; no LLM, never edits) and the tidy lane fixes it: `ops/roles/TIDY.md`,
+busy folders with no guide; no LLM, never edits) and the tidy lane fixes it: `bash ops/polaris role TIDY`,
 one context, no subagents, ONE task. No drive-by moves in any other task.
 - **When.** `next` prints `tidy` where a run would `finish`; `triage` prints it on an empty, quiet
   board; an explicit `update` ends with `▶ NEXT — save hops: …` and `update --auto` adds

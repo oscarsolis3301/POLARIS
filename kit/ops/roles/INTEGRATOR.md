@@ -35,7 +35,7 @@ bash ops/polaris run-verify <ID>     # the wave gate: that task's own verify lin
 
 **The wave gate is the tasks' verify lines and the wave check; the full proof runs in the background.** The wave check already ran the wave's own tests before the merge, so this proof is the part it left for later — the whole suite when the window said not due. Once the wave is sealed (§ 4), start the full proof — the CONVENTIONS `test:` suite, through the stamped `qa` — with `bash ops/polaris bg run proof-<date> -- bash ops/polaris qa`, and collect it with `bash ops/polaris bg wait proof-<date> --max 120`, repeating until the rc is not 2. It never blocks the next wave: land the next wave while it runs. A red background proof becomes a fix task (authored, carved and landed like any other work) before `finish`.
 
-Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait --max 120`. A subagent never ends its turn with a job still running.
+Long command? `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`: foreground with an explicit timeout ≥ the measured time; past the 600s cap → `bg run` + chunked `bg wait --max 120`. A subagent never ends its turn with a job still running.
 
 - **The integration lane is shared and lease-serialized — another session may be holding it.**
   integration lane busy → wait; rc 3 with a queued: line means report queued and retry at the next wave boundary
@@ -120,7 +120,7 @@ bash ops/polaris drift               # board hygiene: overlap · ready gate · c
 ```
 Orphans: `sweep --fix` removes them. Stale: flag to the human with the release command — NEVER steal silently (a fresh session can take one over with `bash ops/polaris resume <ID>`). Then promote: `bash ops/polaris next --do` does the whole pass under the board lock — every `backlog/` task whose `depends_on` are now all in `done/`, re-verifying its `files_owned` is disjoint from everything still in `ready/` + `active/` before it moves, and holding an overlap in `backlog/` with the reason. Read what it printed: a `held:` line is a planning finding, not a hiccup.
 
-Line 1 of `next --do` can be `tidy`: the layout pass is due. **Top-level?** A board-proven hop — read `ops/roles/TIDY.md`, run the pass here, then `bash ops/polaris next`. **Conductor-entered?** Put line 1 in your report unedited and let the conductor act: you carry the conductor's `CLAUDE_CODE_SESSION_ID`, so the once-per-session marker your call just set is the run's, and the conductor's own `next` will never print `tidy` again.
+Line 1 of `next --do` can be `tidy`: the layout pass is due. **Top-level?** A board-proven hop — run `bash ops/polaris role TIDY`, run the pass here, then `bash ops/polaris next`. **Conductor-entered?** Put line 1 in your report unedited and let the conductor act: you carry the conductor's `CLAUDE_CODE_SESSION_ID`, so the once-per-session marker your call just set is the run's, and the conductor's own `next` will never print `tidy` again.
 
 **Drain `blocked/`.** Nobody else owns it. `bash ops/polaris status` lists each blocked task with its reason. For each: either regroom it (fix the contract or ownership, then return it to `backlog/` — or `ready/` if it now clears the gate) or, if it needs a human decision, escalate it in your report. A task in `blocked/` sits invisible forever until you do this.
 

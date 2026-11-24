@@ -129,3 +129,23 @@ allow:not-question
 allow:not-question
   rc=0 stderr=0
   r4.approved: absent
+--- machine prefs: repo reentry: desktop, machine reentry_hours: 1 — the 2 h old run is refused
+allow:not-question
+  rc=0 stderr=0
+  m1.approved: absent
+--- machine prefs: the same with POLARIS_PREFS empty (layer off) — the 12 h default, inherited
+allow:not-question
+  rc=0 stderr=0
+  m2.approved: present
+--- machine prefs: the repo also says reentry_hours: 12 — the repo line wins, inherited
+allow:not-question
+  rc=0 stderr=0
+  m3.approved: present
+--- machine prefs: no repo line at all, the machine file says reentry: desktop — inherited
+allow:not-question
+  rc=0 stderr=0
+  m4.approved: present
+--- machine prefs: the machine file says reentry_max: 0 — refused
+allow:not-question
+  rc=0 stderr=0
+  m5.approved: absent

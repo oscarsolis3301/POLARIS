@@ -118,3 +118,18 @@ bash "$H" --test tick
 seen 'notify-gate stall'
 echo '== it never starts a model =='
 printf 'model starts in the hook: %s\n' "$(grep -cE '(^|[^-])claude +(-p|--print|code)' "$H")"
+# --- machine-prefs § 4 (T-334): reentry_hours from this computer's preferences when the repo has no
+#     line; a repo line still beats it. The armed file is two hours old, the stalled marker stands.
+printf '%s\nwalk-away\nreentries 0\n' "$(( $(date +%s) - 7200 ))" > "$RUN/s9.armed"
+echo '== machine prefs: no machine file (POLARIS_PREFS empty) — the 12 h default, armed =='
+POLARIS_PREFS= bash "$H" --test tick
+echo '== machine prefs: the machine file says reentry_hours: 1 — the 2 h old run is not armed =='
+printf '# POLARIS machine preferences\nreentry_hours: 1\n' > "$FIX/prefs"
+POLARIS_PREFS="$FIX/prefs" bash "$H" --test tick
+echo '== machine prefs: the repo says reentry_hours: 12 — the repo line wins, armed =='
+printf 'reentry_hours: 12\n' > "$R/ops/CONVENTIONS.md"
+POLARIS_PREFS="$FIX/prefs" bash "$H" --test tick
+echo '== machine prefs: a blank repo line falls through to the machine line =='
+printf 'reentry_hours:   # unset here\n' > "$R/ops/CONVENTIONS.md"
+POLARIS_PREFS="$FIX/prefs" bash "$H" --test tick
+rm -f "$R/ops/CONVENTIONS.md"

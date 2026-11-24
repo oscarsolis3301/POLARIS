@@ -22,7 +22,7 @@ block:finish
 hops-after-block: 1
 hopped-event-matches-last: yes
 allow:consumed
-{"decision":"block","reason":"The layout pass is due. You are TIDY (hop 1): read ops/roles/TIDY.md and run it now — one context, no subagents, it lands one task. Then bash ops/polaris next."}
+{"decision":"block","reason":"The layout pass is due. You are TIDY (hop 1): run bash ops/polaris role TIDY and follow it now — one context, no subagents, it lands one task. Then bash ops/polaris next."}
 hops-after-tidy: 1 · consumed: yes
 allow:question
 block:build

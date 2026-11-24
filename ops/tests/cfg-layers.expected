@@ -1,0 +1,54 @@
+== 1. repo > machine > default ==
+voice = technical
+landing = integrator
+drain = on
+run_max_tasks = 7
+== 2. the autonomy mask ==
+plan_gate = auto
+plan_gate = ask
+drain = on
+plan_gate = ask
+plan_gate = auto
+== 3. a machine line for a repo key is ignored ==
+base = main
+test = none
+== 4. CRLF machine file · a backslash path ==
+landing = integrator
+drain = on
+the path holds a backslash: yes
+drain = on
+== 5. the layer off · no CONVENTIONS ==
+drain = off
+voice = technical
+drain = on
+base = main
+drain = off
+== 6. POLARIS_PREFS unset → POLARIS_HOME ==
+drain = home
+drain = configdir
+== 7. kit_file: the repo copy first, else the kit beside the CLI ==
+KEYS.tsv: kit
+roles: kit
+KEYS.tsv: repo
+roles: repo
+no-such-file: kit
+== 8. prefs_put ==
+rc=1
+rc=1
+rc=1
+a file after refusals: no
+rc=0
+   | # POLARIS machine preferences — one key: value per line; a repo's ops/CONVENTIONS.md line beats this file
+   | voice: technical
+rc=0
+rc=0
+rc=0
+   | drain: on   # my note
+   | voice: C:\x
+   | claim: claim-branch
+drain = on
+temp files left: 0
+== 9. the allowlist literal == KEYS.tsv machine rows ==
+literal: 39 · machine rows: 39 · same: yes
+seed rows: claim
+rows not 6 fields: 0
