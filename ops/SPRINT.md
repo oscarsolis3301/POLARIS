@@ -25,6 +25,7 @@ release ritual, dogfood, re-pin cli-help.
 | 2026-11-24 | 8 | 59 |
 | 2026-11-24 | 2 | 34 |
 | 2026-11-24 | 25 | 8 |
+| 2026-11-24 | 3 | 5 |
 
 # SPRINT 27 — The smooth run: cards own their tests, waves catch their reds, re-cuts by command (6.19.0)          capacity: 50   dates: 2026-11-17–
 
