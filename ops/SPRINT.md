@@ -1,3 +1,20 @@
+# SPRINT 29 — Your preferences, once, for every project (6.21.0)          capacity: 100   dates: 2026-11-24–
+
+Owner ask of 2026-11-24 (plans/prefs.md, approved): one POLARIS installation for all projects on the
+computer, using the same preferences. A machine preferences file sits under every repo's own
+CONVENTIONS lines, `polaris prefs` shows and sets it, a new project asks nothing the file answers,
+and the CLI finds its own code and serves its own documents (groundwork for the shared kit, 7.0.0).
+Plan `prefs`, contracts machine-prefs v1 · doc-server v1 · first-run v2 · key-registry § 10 ·
+hands-free-knobs v4 · module-layout v11 · safe-landing v1.4. Capacity 100: one release, as approved.
+
+8 tasks / 59 pts, THREE waves. Wave 1 side by side (29 pts): T-333 (cfg machine layer + harness
+isolation, KEYS scope column, kit_file/prefs_put/POLARIS_HOME, landed_content_ok § K; wave-1 owner of
+api-kit + KEYS.tsv) · T-334 (all hooks) · T-335 (kit prose to command form + INIT.md) · T-336 (CLI
+printed strings). Wave 2 (26 pts): T-337 (sole owner of kit/ops/polaris: prefs, role, doc, router,
+kit/CLAUDE.md; wave-2 api-kit) · T-338 (interview --init/--remember, admin + installer) · T-339
+(doctor line, lib readers). Wave 3: T-340 (kit-mode + doc-refs on the joined tree, every shared
+golden, VERSION 6.21.0, CHANGELOG). After it: finish, release ritual, dogfood, re-pin cli-help.
+
 # SPRINT 28 — Walk away: approve, leave, come back to finished work (6.20.0)          capacity: 100   dates: 2026-11-24–
 
 Owner ask of 2026-11-24 (plans/walk-away.md, approved): after a plan is approved in auto mode POLARIS
