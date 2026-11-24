@@ -1400,3 +1400,5 @@
 {"ts":1795548733,"ev":"amend","id":"T-330","who":"oscar@Dino","note":"deps -T-321"}
 {"ts":1795548736,"ev":"promote","id":"T-330","who":"oscar@Dino","note":"deps done: none","pts":1}
 {"ts":1795548757,"ev":"claim","id":"T-330","who":"oscar@Dino","note":"","pts":1}
+{"ts":1795548879,"ev":"handoff","id":"T-330","who":"oscar@Dino","note":""}
+{"ts":1795548880,"ev":"all-review","id":"T-330","who":"oscar@Dino","note":"last lane landed — board is all review"}
