@@ -178,6 +178,34 @@ c10() { lane 10
   TAIL
 }
 
-for n in 2 3 5 6 7 8 9 10; do ( "c$n" ) > "$FIX/report$n" 2>/dev/null & done
+c11() { lane 11
+  # walk-away § 4.3 (T-319): a 6.19.0 settings.json — the kit's object without the four 6.20.0
+  # events. The update adds each exactly once, under its own event; the next update is a no-op.
+  echo '--- 11. a 6.19 settings.json: the four new registrations merge once, a re-run touches nothing'
+  python - "$KSJ" "$SJ" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+for ev in ("SubagentStop", "StopFailure", "PermissionRequest", "PermissionDenied"):
+    d["hooks"].pop(ev)
+open(sys.argv[2], "wb").write((json.dumps(d, indent=2) + "\n").encode("utf-8"))
+PY
+  I VERDICT=not POLARIS_SHA=abc1234
+  SAID
+  python - "$SJ" <<'PY' | tr -d '\r'
+import json, sys
+h = json.load(open(sys.argv[1], encoding="utf-8"))["hooks"]
+for ev in ("Stop", "SubagentStop", "StopFailure", "PermissionRequest", "PermissionDenied"):
+    for e in h.get(ev, []):
+        for x in e.get("hooks", []):
+            print("%s  matcher=%s  %s  timeout=%s" % (ev, e.get("matcher", "-"), x["command"].replace("$CLAUDE_PROJECT_DIR/", ""), x.get("timeout")))
+PY
+  ENDS lf
+  cp "$SJ" "$FIX/r11.json"
+  I VERDICT=not POLARIS_SHA=abc1234
+  SAID
+  SAME "$FIX/r11.json"
+}
+
+for n in 2 3 5 6 7 8 9 10 11; do ( "c$n" ) > "$FIX/report$n" 2>/dev/null & done
 wait
-for n in 2 3 5 6 7 8 9 10; do cat "$FIX/report$n"; done
+for n in 2 3 5 6 7 8 9 10 11; do cat "$FIX/report$n"; done

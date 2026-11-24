@@ -87,3 +87,34 @@ done
 printf 'daemon/hook.log (the live path stderr sink): %s\n' "$( [ -f "$A/daemon/hook.log" ] && echo present || echo absent )"
 printf 'daemon lock: %s\n' "$( [ -d "$A/lock" ] && echo present || echo absent )"
 printf 'daemon/pid: %s\n' "$( [ -f "$A/daemon/pid" ] && echo present || echo absent )"
+# --- walk-away § 4.5 (T-319): the armed run. $FIX/repo is registered above and no session is left,
+#     so the plain verdict is quiet. The repo's ops/polaris is a stub that only records its arguments:
+#     the reap and the stall notice are observed, never run (they are backgrounded; polled, not slept).
+R="$FIX/repo"; RUN="$R/.polaris/run"; CALLS="$FIX/calls"; mkdir -p "$R/ops" "$RUN"
+printf 'printf "%%s\n" "$*" >> "%s"\n' "$CALLS" > "$R/ops/polaris"
+seen() { local i=0; while [ "$i" -lt 100 ] && ! grep -qx "$1" "$CALLS" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
+  printf 'calls "%s": %s\n' "$1" "$(grep -cx "$1" "$CALLS" 2>/dev/null || echo 0)"; }
+echo '== armed: no armed file, quiet; an armed run counts as active, nothing to reap, no stall yet =='
+bash "$H" --test tick
+printf '%s\nwalk-away\nreentries 0\n' "$(date +%s)" > "$RUN/s9.armed"
+bash "$H" --test tick
+printf 'stalled: %s\n' "$( [ -f "$RUN/stalled" ] && echo present || echo absent )"
+echo '== armed: a stale armed file (older than reentry_hours) is not armed =='
+printf '1700000000\nwalk-away\nreentries 0\n' > "$RUN/s8.armed"; mv "$RUN/s9.armed" "$FIX/s9.armed"
+bash "$H" --test tick
+mv "$FIX/s9.armed" "$RUN/s9.armed"; rm -f "$RUN/s8.armed"
+echo '== armed: an rc-less job past its budget asks `bg reap`; one inside its budget does not =='
+J="$R/.polaris/bg/hang"; mkdir -p "$J" "$R/.polaris/bg/young"
+printf '%s\n' "$(( $(date +%s) - 1000 ))" > "$J/start"; printf '5\n' > "$J/budget"; printf '%s\n' "$R" > "$J/cwd"
+printf '%s\n' "$(date +%s)" > "$R/.polaris/bg/young/start"; printf '900\n' > "$R/.polaris/bg/young/budget"
+bash "$H" --test tick
+seen 'bg reap'
+echo '== armed: no beat for stall_minutes → the stalled marker and ONE notify-gate stall =='
+touch -t 200001010000 "$RUN/s9.armed"
+bash "$H" --test tick
+seen 'notify-gate stall'
+printf 'stalled: %s\n' "$(cut -f2 "$RUN/stalled")"
+bash "$H" --test tick
+seen 'notify-gate stall'
+echo '== it never starts a model =='
+printf 'model starts in the hook: %s\n' "$(grep -cE '(^|[^-])claude +(-p|--print|code)' "$H")"

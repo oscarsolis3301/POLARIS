@@ -1,6 +1,12 @@
 installed: yes
 begin rc=0
+wrap with an edit off the card rc=1
+✅ wrap: committed 1 owned file(s) on feat/T-001
+⛔ uncommitted changes — commit on feat/T-001 first
+its commit: feat(p): wip T-001 · src/a.txt 
+the edit off the card:  M src/seed.txt
 wrap rc=0
+committed again: 0
 finish ran: 1
 done: yes
 file on main: 1

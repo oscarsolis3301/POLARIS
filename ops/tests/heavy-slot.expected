@@ -30,3 +30,9 @@ heavy: waiting for other@host (qa, <m>m, proj) — one heavy job at a time on th
 heavy: waited 0m for other@host — running without the slot
 ran: 1
 slot: standing, token unchanged
+== g. an ARMED run and a live holder: queued once, runs at once without the slot (walk-away § 2.4) ==
+rc=0
+queued: heavy slot busy — other@host (qa, <m>m, proj) — running without it (armed run: no foreground wait)
+waiting notes: 0 · waited past a minute: no
+ran: 1
+slot: standing, token unchanged

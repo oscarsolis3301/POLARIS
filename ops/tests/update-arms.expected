@@ -25,6 +25,22 @@ rc 0
 guard: NOT the kit copy
 availableModels: ["opus", "sonnet", "haiku"]
 marker: none
+--- 6. the job runner agent rides the .claude/ step (walk-away § 3.2): ours replaced, theirs kept
+rc 0
+agent: the kit's own bytes
+  name: polaris-runner
+  description: <one line>
+  tools: Bash, Read
+  model: haiku
+  maxTurns: 12
+  omitClaudeMd: true
+  heading lines: 0
+rc 0
+agent: replaced on the next install
+agent: the human's own file kept
+rc 0
+agent: a third install changes nothing
+agent: no output line names it
 --- the install output gains no line
 guard refreshed vs nothing armed: same line count
 no updater vs updater: same line count

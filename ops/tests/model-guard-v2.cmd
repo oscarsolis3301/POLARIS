@@ -217,9 +217,10 @@ echo '== the install branch: five entries, merged, never clobbering, idempotent 
 SJ="$HOME/.claude/settings.json"
 printf '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"mine.sh"}]}],"SessionStart":[{"hooks":[{"type":"command","command":"mine-too.sh"}]}]}}\n' > "$SJ"
 # python prints CRLF on Windows and every .expected is LF (.gitattributes): \r goes on the way out
+# PYTHONIOENCODING=utf-8: the `·` below in UTF-8, never the Windows locale codepage
 bash "$H" install | tr -d '\r' | sed "s#written to .*#written to <settings>#"
 bash "$H" install | tr -d '\r' | sed "s#written to .*#written to <settings>#"
-python - "$SJ" <<'PY' | tr -d '\r'
+PYTHONIOENCODING=utf-8 python - "$SJ" <<'PY' | tr -d '\r'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))["hooks"]
 for ev in ("PreToolUse", "PreModelSwitch", "SessionStart", "PostModelSwitch", "PostToolUse"):
@@ -230,3 +231,40 @@ for ev in ("PreToolUse", "PreModelSwitch", "SessionStart", "PostModelSwitch", "P
         row.append("%s[%s]" % (who, e.get("matcher", "-")))
     print("  %-16s %s" % (ev, " · ".join(row)))
 PY
+
+echo '== the one hole: the job runner may wait, and only wait (walk-away § 3.3, T-320) =='
+# polaris-runner runs Haiku by design. Its spawn passes the door, its result carries no caveat, and its
+# calls may be exactly `bash ops/polaris bg wait|status|tail <name> [--max|-n N]` — every other tool,
+# command or agent type on Haiku gets the block line above, byte for byte.
+J s1 "$FIX/tx/a.jsonl" PreToolUse Agent '{"description":"d","prompt":"wait on x","subagent_type":"polaris-runner","model":"haiku"}'; R 'Agent subagent_type polaris-runner model haiku'
+J s1 "$FIX/tx/a.jsonl" PreToolUse Task '{"subagent_type":"polaris-runner","model":"claude-haiku-4-5"}'; R 'Task subagent_type polaris-runner model claude-haiku-4-5'
+J s1 "$FIX/tx/a.jsonl" PreToolUse Agent '{"description":"d","prompt":"p","subagent_type":"polaris-runner-2","model":"haiku"}'; R 'Agent subagent_type polaris-runner-2 model haiku'
+J s1 "$FIX/tx/a.jsonl" PreToolUse Agent '{"description":"d","prompt":"say \"subagent_type\":\"polaris-runner\"","model":"haiku"}'; R 'Agent whose PROSE names the runner, model haiku'
+J s1 "$FIX/tx/a.jsonl" PreToolUse Agent '{"description":"d","prompt":"p","x":{"subagent_type":"polaris-runner"},"model":"haiku"}'; R 'Agent with the runner name nested, model haiku'
+J s1 "$FIX/tx/a.jsonl" PreToolUse Workflow '{"script":"agent({agentType: \"polaris-runner\", model: \"haiku\"})"}'; R 'Workflow naming the runner, model haiku'
+RP="$FIX/tx/run.jsonl"; line "$OPUS" > "$RP"; printf '%s\n' "$OPUS" > "$ST/run"
+mkdir -p "$FIX/tx/run/subagents"; line "$HAIKU" > "$FIX/tx/run/subagents/agent-r1.jsonl"
+RUN=',"agent_id":"r1","agent_type":"polaris-runner"'
+RB() { J run "$RP" PreToolUse Bash "{\"command\":\"$1\"${3:-}}" "${4:-$RUN}"; R "$2"; }
+RB 'bash ops/polaris bg wait x --max 240' 'runner: bg wait x --max 240'
+RB 'bash ./ops/polaris bg tail ship-T-1 -n 15' 'runner: bash ./ops/polaris bg tail ship-T-1 -n 15'
+RB 'bash ops/polaris bg status proof.mac_2' 'runner: bg status proof.mac_2'
+RB 'bash ops/polaris bg wait x --max 240' 'runner: bg wait, with description + timeout' ',"description":"wait","timeout":600000'
+RB 'ls' 'runner: ls'
+RB 'bash ops/polaris bg run x -- ls' 'runner: bg run x -- ls'
+RB 'bash ops/polaris bg wait x; rm -rf .' 'runner: bg wait x; rm -rf .'
+RB 'bash ops/polaris bg wait x --max 240 && ls' 'runner: bg wait x --max 240 && ls'
+RB 'bash ops/polaris bg wait $(ls)' 'runner: bg wait $(ls)'
+RB 'bash ops/polaris bg wait x\nls' 'runner: bg wait x, newline, ls'
+RB 'bash ops/polaris bg wait x --done' 'runner: bg wait x --done'
+RB 'bash ops/polaris bg wait x' 'runner: a second command key' ',"x":{"command":"rm -rf ."}'
+J run "$RP" PreToolUse Read "$READ" "$RUN"; R 'runner: Read'
+J run "$RP" PreToolUse Agent '{"description":"d","prompt":"p"}' "$RUN"; R 'runner: Agent'
+RB 'bash ops/polaris bg wait x --max 240' 'general-purpose on haiku: bg wait' '' ',"agent_id":"r1","agent_type":"general-purpose"'
+RB 'bash ops/polaris bg wait x --max 240' 'agent_type polaris-runner-2 on haiku: bg wait' '' ',"agent_id":"r1","agent_type":"polaris-runner-2"'
+printf '%s\n' "$HAIKU" > "$ST/run"
+RB 'bash ops/polaris bg wait x --max 240' 'haiku main session (no agent_type): bg wait' '' ' '
+printf -v IJ '{"session_id":"run","transcript_path":"%s","agent_id":"r1","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"bash ops/polaris bg wait x --max 240"},"agent_type":"polaris-runner"}' "$RP"
+R 'runner: bg wait, agent_type after tool_input'
+PT Agent '{"status":"completed","resolvedModel":"claude-haiku-4-5"}'; IJ="${IJ/\"prompt\":\"p\"/\"description\":\"d\",\"prompt\":\"wait\",\"subagent_type\":\"polaris-runner\"}"; R 'PostToolUse: the runner on haiku (no caveat)'
+PT Agent '{"status":"completed","resolvedModel":"claude-haiku-4-5"}'; IJ="${IJ/\"prompt\":\"p\"/\"subagent_type\":\"general-purpose\"}"; R 'PostToolUse: general-purpose on haiku'

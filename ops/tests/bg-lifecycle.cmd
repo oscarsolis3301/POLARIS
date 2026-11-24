@@ -108,3 +108,24 @@ echo '== a third run archives the old .prev instead of deleting it =='
 B run ok -- echo third-run
 printf 'archived ok-*: '; ls "$FIX/repo/.polaris/bg/.archive" | grep -c '^ok-'
 printf 'ok.prev/cmd: '; cat "$FIX/repo/.polaris/bg/ok.prev/cmd"
+
+echo '== a job past its budget is killed, retried once, then exit 4 with the park line (walk-away § 2.1) =='
+# --budget 2 is the drill's size; the job waits on nothing but its own kill, so the timing is the
+# watchdog's, never a guessed margin. bg-budget pins the process tree; this pins the verdict lines.
+printf 'sleep 300 &\nsleep 301\n' > "$FIX/repo/.polaris/hang.sh"
+B run hang --budget 2 -- sh .polaris/hang.sh
+B wait hang --max 60
+B status hang
+
+echo '== --steps runs each line as ONE job and stops at the first red; the log names the line =='
+printf '# a comment line is skipped\necho one\n\nfalse\necho never\n' > "$FIX/repo/.polaris/steps.txt"
+B run st --steps .polaris/steps.txt
+B wait st --max 30
+printf 'st/cmd: '; cat "$FIX/repo/.polaris/bg/st/cmd"
+
+echo '== wait --done has no --max cap: the budget bounds it =='
+B run dn -- echo done-ok
+B wait dn --done
+
+echo '== reap with nothing past its budget is silent =='
+B reap

@@ -16,3 +16,9 @@ secs present in every row: yes
 rc present in every row: yes
 "depth":"none"
 "depth":"look"
+== qa again after the css-only run ==
+  green at <sha> — skipped, proven look (qa --force re-runs it)
+ui-only: rc=0 stamp=HEAD scope=ui suite-ran=1
+  depth: ui — only ui paths (1) in 1-2 point work
+== qa again after the ui run ==
+  green at <sha> — skipped, proven ui (qa --force re-runs it)

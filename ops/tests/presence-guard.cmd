@@ -70,3 +70,51 @@ echo '--- lib/presence.sh under set -eu: bind appends once, only to an approval 
   unset CLAUDE_CODE_SESSION_ID; _presence_state; echo "  no sid: $PRESENCE / $PRESENCE_WHY"
 )
 echo "  subshell rc=$?"
+# --- walk-away § 1, § 4.1, § 4.4 (T-319): the approval ARMS the run in the primary the cwd names.
+#     The cwd is sent JSON-escaped (every / as \\), the way Claude Code sends a Windows one.
+R="$FIX/repo"; mkdir -p "$R/ops/board"; RUN="$R/.polaris/run"
+ESC="$(printf '%s' "$R" | sed 's#/#\\\\#g')"
+PA() { # PA <event> <sid> <tool> <mode> <cwd> [prompt] — one payload with a real cwd, the word
+  local pr=''; [ -n "${6:-}" ] && pr=",\"prompt\":\"$6\""
+  printf '{"session_id":"%s","transcript_path":"x","cwd":"%s","permission_mode":"%s","hook_event_name":"%s","tool_name":"%s"%s,"tool_input":{}}' \
+    "$2" "$5" "$4" "$1" "$3" "$pr" | bash "$H" --test 2>"$FIX/err"; echo "  rc=$? stderr=$(wc -c < "$FIX/err" | tr -d ' ')"
+}
+AR() { # the armed file, line by line, the epoch shown only as its shape
+  if [ -f "$RUN/$1.armed" ]; then
+    echo "  $1.armed line 1: $(sed -n 1p "$RUN/$1.armed" | sed 's/^[0-9][0-9]*$/<epoch>/')"
+    echo "  $1.armed line 2: [$(sed -n 2p "$RUN/$1.armed")]"
+    echo "  $1.armed line 3: $(sed -n 3p "$RUN/$1.armed")"
+  else echo "  $1.armed: absent"; fi
+}
+echo '--- armed: ExitPlanMode in a repo with a board writes <primary>/.polaris/run/<sid>.armed with the slug'
+printf '1700000000\nwalk-away\n' > "$S/a1.approved"
+PA PostToolUse a1 ExitPlanMode auto "$ESC"; AR a1
+echo '--- armed: a second approval keeps the armed file as it is'
+printf '1700000000\nwalk-away\nreentries 2\n' > "$RUN/a1.armed"
+PA PostToolUse a1 ExitPlanMode auto "$ESC"; AR a1
+echo '--- armed: mode plan removes it beside the approval'
+PA PreToolUse a1 Bash plan "$ESC"; A a1; AR a1
+echo '--- armed: plan -> auto is the other approval path, and arms again (no slug on record yet)'
+PA UserPromptSubmit a1 '' auto "$ESC"; A a1; AR a1
+echo '--- armed: a worktree cwd arms its primary'
+PA PostToolUse a2 ExitPlanMode auto "$R/.polaris/wt/T-1"; AR a2
+rm -f "$RUN/a2.armed"
+echo '--- armed: no board under the cwd, nothing armed'
+PA PostToolUse a3 ExitPlanMode auto "$FIX/home"; AR a3
+echo "  run dirs under home: $(find "$FIX/home" -name run -type d | wc -l | tr -d ' ')"
+echo '--- re-entry: reentry unset (session) — the prefix means nothing'
+printf '%s\nwalk-away\nreentries 0\n' "$(date +%s)" > "$RUN/a1.armed"
+PA UserPromptSubmit r1 '' auto "$ESC" "POLARIS re-entry: run bash ops/polaris pulse --reenter"; A r1
+echo '--- re-entry: reentry: desktop — the fresh session inherits the approval and the slug'
+printf 'reentry: desktop\n' > "$R/ops/CONVENTIONS.md"
+PA UserPromptSubmit r1 '' auto "$ESC" "POLARIS re-entry: run bash ops/polaris pulse --reenter"; A r1
+echo "  r1.approved line 2: $(sed -n 2p "$S/r1.approved")"
+PA PreToolUse r1 AskUserQuestion auto "$ESC"
+echo '--- re-entry: another prompt is no re-entry'
+PA UserPromptSubmit r2 '' auto "$ESC" "keep going"; A r2
+echo '--- re-entry: reentries at reentry_max (3) — refused'
+printf '%s\nwalk-away\nreentries 3\n' "$(date +%s)" > "$RUN/a1.armed"
+PA UserPromptSubmit r3 '' auto "$ESC" "POLARIS re-entry: go"; A r3
+echo '--- re-entry: the armed run is older than reentry_hours (12) — refused'
+printf '1700000000\nwalk-away\nreentries 0\n' > "$RUN/a1.armed"
+PA UserPromptSubmit r4 '' auto "$ESC" "POLARIS re-entry: go"; A r4

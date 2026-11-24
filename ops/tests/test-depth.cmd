@@ -95,3 +95,27 @@ echo "== test_skip: '-' empties the skip list — the SAME docs-only change now 
 mkbranch T-9 "docs/readme.md=doc v7"
 task T-9 normal -
 D T-9
+
+# walk-away § 6 (T-321): ONE helper composes the glob defaults. Fonts and more style types are look
+# by default, and a `+ ` value extends a default instead of replacing it.
+( cd "$R" && printf 'test_select: echo RUN {tests}\ntest_look: + *.foo\n' > ops/CONVENTIONS.md
+  printf 'docs/golden/\tdocs/golden/\t-\tgolden docs [T-12]\n' >> ops/SURFACES.tsv
+  git add -A; git commit -qm 'fixture: test_look extends, a golden-docs row' ) >/dev/null 2>&1
+echo '== a font-only change is look by default (woff2 ttf) =='
+mkbranch T-10 "web/font.woff2=f1" "web/font.ttf=f1"
+task T-10 normal -
+D T-10
+echo "== test_look: + *.foo extends the default — a .foo and a .css are both look =="
+mkbranch T-11 "web/a.foo=x1" "style.css=css v3"
+task T-11 normal -
+D T-11
+# an edited test file is never small: under a SURFACES tests glob, a .md is not test_skip — it is
+# scoped when its row maps it; a *.spec.* doc no row maps goes to test_select like any code path
+echo '== a doc under a SURFACES tests glob: never none — scoped by its row =='
+mkbranch T-12 "docs/golden/out.md=g1"
+task T-12 normal -
+D T-12
+echo '== a *.spec.* doc: never none — test_select names it unmapped =='
+mkbranch T-13 "docs/api.spec.md=s1"
+task T-13 normal -
+D T-13

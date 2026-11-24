@@ -55,3 +55,13 @@ for k in ts plan task kind depth why paths secs rc; do
     "$([ "$(grep -c "\"$k\":" .polaris/decisions.ndjson 2>/dev/null || echo 0)" = "$(grep -c . .polaris/decisions.ndjson 2>/dev/null || echo 0)" ] && echo yes || echo no)"
 done
 grep -o '"depth":"[a-z]*"' .polaris/decisions.ndjson
+# walk-away § 6 (T-321): the stamp words are honest — a skipped qa says what was really proven.
+# The CSS-only stamp above says look; a 1-point .tsx change runs at ui and the next qa says ui.
+PROVEN() { bash "$KIT" qa 2>&1 | sed -n 's/^.*suite already green at [0-9a-f]*\( — .*\)$/  green at <sha>\1/p'; }
+echo '== qa again after the css-only run =='
+PROVEN
+printf -- '---\nid: T-1\ntitle: fixture\ntype: feature\npoints: 1\nwsjf: 1\nrisk: normal\nowner: null\nbranch: null\nstatus: active\nfiles_owned:\n  - web/\nverify: []\n---\n' > ops/board/active/T-1.md
+mkdir -p web; echo 'v1' > web/App.tsx; git add -A; git commit -qm 'ui: a header [T-1]'
+qa ui-only
+echo '== qa again after the ui run =='
+PROVEN

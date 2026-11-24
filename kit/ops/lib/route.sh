@@ -217,7 +217,7 @@ EOF
   # is exactly what a single context handles well. Revert to 2 if solo tasks start kicking back.
   if [ "$pts" -le 3 ]; then lane=solo; else lane=express; fi
   printf '%s\n' "$lane"
-  note "$id: $pts point(s), risk normal, express on, publish direct"
+  note "$id: $pts point(s), risk normal, express on"
   [ "$lane" = express ] && note "over 3 points — worth a fresh builder context, but still ONE task and ONE suite run"
   return 0
 }
@@ -268,7 +268,7 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
   # rc 0; only no-args and an unknown ID are errors. Read-only by contract: touches no lock, writes
   # no board file, fires no hook.
   local id="" role="" pts="" rsk="" pts_set="" rsk_set=""
-  local tier="" mdl="" ov="" f="" rnote="" rdeny="" rraw="" lit="" eff="" cr=""
+  local tier="" mdl="" ov="" f="" rnote="" rdeny="" rraw="" lit="" eff="" cr="" runner=""
   local u="usage: polaris route <ID> | --role <ROLE> | --points <N> [--risk <R>]"
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -286,6 +286,7 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
   elif [ -n "$role" ] && [ "$role" != "BUILDER" ]; then
     case "$role" in
       INIT|PLANNER|INTEGRATOR|EVOLVE|CONDUCTOR) tier=strong;;
+      RUNNER) tier=cheap; runner=1;;
       SOLO|scout|TIDY) tier=mid;;
       *) tier=mid; rnote="unknown role '$role' — mid (routing never blocks work)";;
     esac
@@ -333,9 +334,26 @@ cmd_route() { # route [<ID>] [--role <ROLE>] [--points <N>] [--risk <R>] — whi
   else
     eff=""
   fi
+  # The job runner (walk-away § 3.4): its model comes from model_runner alone, so the tier's model
+  # note gives way to it — effort and the rest stay the usual cheap lines. `runner: off` → no model
+  # and no agent line, and the note naming the wait the caller falls back to.
+  if [ -n "$runner" ]; then
+    mdl=""; rdeny=""
+    if [ "$(cfg runner "")" = off ]; then
+      rnote="runner off — wait with bg wait --max 540"
+    else
+      rraw="$(cfg model_runner haiku)"
+      _model_runner_ok "$rraw" || rraw=sonnet
+      [ "$rraw" = inherit ] && rraw=""
+    fi
+  fi
   [ -n "$mdl" ] && note "model: $mdl"
   [ -n "$eff" ] && note "effort: $eff"
   [ -n "$rdeny" ] && note "model REFUSED: '$rdeny' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's"
+  if [ -n "$runner" ] && [ -z "$rnote" ]; then
+    [ -n "$rraw" ] && note "model: $rraw"
+    note "agent: polaris-runner"
+  fi
   [ -n "$rnote" ] && note "$rnote"
   return 0
 }
@@ -353,6 +371,17 @@ depth_line_say() { # depth_line_say <depth> <why> — change-sized.md § 5: the 
   if [ -n "$t" ]; then note "depth: $d — $w (last full run $t)"; else note "depth: $d — $w"; fi
 }
 uat_deferred_say() { note "uat — deferred: runs on full-depth changes, CI and release"; }
+_ui_skip_say() { # _ui_skip_say — the ONE line every run at depth ui prints before its keys (qa,
+  # land --express; walk-away § 6), then — only when no before/after look is set up (visual: and
+  # shot: not both set) and only ONCE per repo — the line saying lint and typecheck are the whole
+  # check. The once is `.polaris/look-offered` (gitignored, best-effort: a failed write repeats it).
+  note "ui — test, build and uat skipped: lint and typecheck plus the before/after look"
+  [ -n "$(cfg visual "")" ] && [ -n "$(cfg shot "")" ] && return 0
+  [ -f "${PRIMARY:-.}/.polaris/look-offered" ] && return 0
+  note "ui — no before/after look is set up here (visual: and shot: unset): lint and typecheck are the whole check — ops/VISUAL.md"
+  { mkdir -p "${PRIMARY:-.}/.polaris" && : > "${PRIMARY:-.}/.polaris/look-offered"; } 2>/dev/null || true
+  return 0
+}
 cmd_depth() { # depth [<ID>] — read-only verdict: how much testing does this change need, and why
   # (ops/contracts/test-depth.md § 3). Line 1 = the depth word alone; then `   why:` and
   # `   paths:` note lines. With <ID>: paths = git diff --name-only $BASE...feat/<ID>, taskfile =
@@ -360,7 +389,7 @@ cmd_depth() { # depth [<ID>] — read-only verdict: how much testing does this c
   # `full` / `no suite baseline` outright; taskfiles = every `[<ID>]` task-commit subject since the
   # baseline (or $BASE on a branch), plus the current feat/<ID> branch, resolved with `task_file`.
   # Nothing here writes anything — same read-only contract as `triage`/`drift`.
-  local id="" tf="" paths="" n=0 skipn=0 line depth why csf p skip_raw sha cur baseline subj sid f tfs commit=""
+  local id="" tf="" paths="" n=0 skipn=0 line depth why csf p skip_raw sha cur baseline subj sid f tfs commit="" tglobs="" nf=0
   local du="usage: polaris depth [<ID> | --commit <sha>]" rp="" k c sel
   tfs=""
   case "${1:-}" in
@@ -409,27 +438,32 @@ EOF
     tf="$tfs"
   fi
   n="$(printf '%s\n' "$paths" | grep -c .)"
-  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
-  [ "$skip_raw" = "-" ] && skip_raw=""
+  skip_raw="$(_depth_globs skip)"
+  tglobs="$(_depth_test_globs)"
+  # an edited test file is never counted (or dropped) as test_skip (walk-away § 6); globs unexpanded
+  case $- in *f*) nf=1;; *) nf=0; set -f;; esac
   while IFS= read -r p; do
     [ -z "$p" ] && continue
-    [ -n "$skip_raw" ] && owned_match "$p" $skip_raw && skipn=$((skipn+1))
+    if [ -n "$skip_raw" ] && ! _depth_is_test "$p" $tglobs && owned_match "$p" $skip_raw; then skipn=$((skipn+1)); fi
   done <<EOF
 $paths
 EOF
+  [ "$nf" -eq 1 ] || set +f
   line="$(printf '%s\n' "$paths" | depth_for $tf)"
   depth="${line%%$POLARIS_TAB*}"; why="${line#*$POLARIS_TAB}"
   csf=""
   if [ -n "$commit" ] && [ "$depth" != none ] && [ "$depth" != look ]; then
     # the paths qa would hand test_select_for: the change set minus test_skip
     csf="$(mktemp)"
+    case $- in *f*) nf=1;; *) nf=0; set -f;; esac
     while IFS= read -r p; do
       [ -z "$p" ] && continue
-      if [ -n "$skip_raw" ] && owned_match "$p" $skip_raw; then continue; fi
+      if [ -n "$skip_raw" ] && ! _depth_is_test "$p" $tglobs && owned_match "$p" $skip_raw; then continue; fi
       printf '%s\n' "$p"
     done > "$csf" <<PATHS
 $paths
 PATHS
+    [ "$nf" -eq 1 ] || set +f
     # a full verdict with test_select unset only says "test_select unset": name the first path that
     # has no related tests instead, when there is one (nothing is run to find it)
     if [ "$depth" = full ] && [ "$why" = "test_select unset" ]; then

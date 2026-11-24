@@ -71,3 +71,61 @@ rc=0
   _presence_away rc=1
   no sid: here / no session id
   subshell rc=0
+--- armed: ExitPlanMode in a repo with a board writes <primary>/.polaris/run/<sid>.armed with the slug
+allow:not-question
+  rc=0 stderr=0
+  a1.armed line 1: <epoch>
+  a1.armed line 2: [walk-away]
+  a1.armed line 3: reentries 0
+--- armed: a second approval keeps the armed file as it is
+allow:not-question
+  rc=0 stderr=0
+  a1.armed line 1: <epoch>
+  a1.armed line 2: [walk-away]
+  a1.armed line 3: reentries 2
+--- armed: mode plan removes it beside the approval
+allow:not-question
+  rc=0 stderr=0
+  a1.approved: absent
+  a1.armed: absent
+--- armed: plan -> auto is the other approval path, and arms again (no slug on record yet)
+allow:not-question
+  rc=0 stderr=0
+  a1.approved: present
+  a1.armed line 1: <epoch>
+  a1.armed line 2: []
+  a1.armed line 3: reentries 0
+--- armed: a worktree cwd arms its primary
+allow:not-question
+  rc=0 stderr=0
+  a2.armed line 1: <epoch>
+  a2.armed line 2: []
+  a2.armed line 3: reentries 0
+--- armed: no board under the cwd, nothing armed
+allow:not-question
+  rc=0 stderr=0
+  a3.armed: absent
+  run dirs under home: 0
+--- re-entry: reentry unset (session) — the prefix means nothing
+allow:not-question
+  rc=0 stderr=0
+  r1.approved: absent
+--- re-entry: reentry: desktop — the fresh session inherits the approval and the slug
+allow:not-question
+  rc=0 stderr=0
+  r1.approved: present
+  r1.approved line 2: walk-away
+deny:away
+  rc=0 stderr=0
+--- re-entry: another prompt is no re-entry
+allow:not-question
+  rc=0 stderr=0
+  r2.approved: absent
+--- re-entry: reentries at reentry_max (3) — refused
+allow:not-question
+  rc=0 stderr=0
+  r3.approved: absent
+--- re-entry: the armed run is older than reentry_hours (12) — refused
+allow:not-question
+  rc=0 stderr=0
+  r4.approved: absent

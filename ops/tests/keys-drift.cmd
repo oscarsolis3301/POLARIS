@@ -68,14 +68,18 @@ printf '%s\n' "$(D | grep -c .)"
 
 # 5. The other direction, against the REAL kit: every key the kit's code reads with `$(cfg <key>`
 #    has a row in the shipped registry, or doctor can never name it and adopt can never stub it. A
-#    key ending in `_` is a family read with a tier on the end (`cfg "model_$tier"`), covered only
-#    when all three tiers have rows. Prints names, never versions, so a release cannot red it; the
+#    key ending in `_` is a family read with a suffix on the end, covered only when every member
+#    has a row: the tiers strong/mid/cheap (`cfg "model_$tier"`), except `test_`, whose members are
+#    skip/look/ui (`cfg "test_$k"`, the depth globs). Prints names, never versions, so a release cannot red it; the
 #    only thing that moves it is a key the code reads that the registry forgot.
 awk 'FNR==NR { if ($0 !~ /^#/ && split($0, f, "\t") >= 3) have[f[1]]=1; next }
   { s=$0
     while (match(s, /\$\(cfg "?[a-z][a-z_]*/)) {
       k=substr(s, RSTART+6, RLENGTH-6); sub(/^"/, "", k); s=substr(s, RSTART+RLENGTH)
-      if (k ~ /_$/) { if (!((k "strong") in have && (k "mid") in have && (k "cheap") in have)) miss[k]=1 }
+      if (k ~ /_$/) {
+        if (k == "test_") { if (!(("test_skip") in have && ("test_look") in have && ("test_ui") in have)) miss[k]=1 }
+        else if (!((k "strong") in have && (k "mid") in have && (k "cheap") in have)) miss[k]=1
+      }
       else if (!(k in have)) miss[k]=1
     } }
   END { n=0; for (k in miss) { print "registry lacks: " k; n++ } if (!n) print "registry lacks: nothing" }' \

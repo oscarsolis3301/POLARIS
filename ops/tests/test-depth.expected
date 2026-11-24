@@ -52,3 +52,27 @@ full
    why: unmapped: docs/readme.md
    paths: 1 changed (0 skipped by test_skip)
 rc 0
+== a font-only change is look by default (woff2 ttf) ==
+depth T-10
+look
+   why: only look paths (2)
+   paths: 2 changed (0 skipped by test_skip)
+rc 0
+== test_look: + *.foo extends the default — a .foo and a .css are both look ==
+depth T-11
+look
+   why: only look paths (2)
+   paths: 2 changed (0 skipped by test_skip)
+rc 0
+== a doc under a SURFACES tests glob: never none — scoped by its row ==
+depth T-12
+scoped
+   why: every code path mapped in SURFACES.tsv
+   paths: 1 changed (0 skipped by test_skip)
+rc 0
+== a *.spec.* doc: never none — test_select names it unmapped ==
+depth T-13
+full
+   why: unmapped: docs/api.spec.md
+   paths: 1 changed (0 skipped by test_skip)
+rc 0

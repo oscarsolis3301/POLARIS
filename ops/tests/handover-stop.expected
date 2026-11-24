@@ -29,3 +29,13 @@ block:build
 {"decision":"block","reason":"This run's board is done. From the primary: bash ops/polaris finish — its exit code decides your close (0 opens with # 🎉 Complete!; otherwise no H1, name the one pending thing)."}
 pinned-reason-lines: 1
 pinned-tidy-lines: 1
+substop:none
+stopfail:none
+stopfail.tsv: absent
+substop:collect
+substop:none
+{"decision":"block","reason":"Your job ship-T-9 is still running: bash ops/polaris bg wait ship-T-9 --max 240 (repeat while rc 2)."}
+substop:none
+stopfail:recorded
+0
+stopfail.tsv: <epoch>|rate_limit <epoch>|unknown 

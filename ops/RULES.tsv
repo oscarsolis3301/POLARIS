@@ -80,3 +80,5 @@ ops/SURFACES.tsv	path	-	rows are written only by polaris done (a task's surface:
 # reads rather than silently ignored at runtime. Anchored at ^ so it matches an ACTIVE key only — the commented-out
 # history in CONVENTIONS.md (which names both models on purpose, so the reversal stays legible) is untouched.
 ops/CONVENTIONS.md	content	^model_(strong|mid|cheap):.*([Ff]able|[Hh]aiku|FABLE|HAIKU)	Fable and Haiku are forbidden (owner 2026-09-15) — POLARIS names no model; every spawn inherits the session. Kit code refuses them anyway: core.sh model_denied
+# owner 2026-11-24 via approved plan walk-away: the job runner never runs on Fable or Opus
+ops/CONVENTIONS.md	content	^model_runner:.*([Ff]able|[Oo]pus|FABLE|OPUS)	the job runner (model_runner) never runs on Fable or Opus (owner 2026-11-24, plan walk-away) — haiku, sonnet or inherit

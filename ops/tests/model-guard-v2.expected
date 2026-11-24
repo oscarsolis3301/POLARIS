@@ -155,3 +155,48 @@ model-guard: 0 of 5 hook entries written to <settings>
   SessionStart     mine-too.sh[-] · model-guard[-]
   PostModelSwitch  model-guard[-]
   PostToolUse      model-guard[Agent]
+== the one hole: the job runner may wait, and only wait (walk-away § 3.3, T-320) ==
+Agent subagent_type polaris-runner model haiku             rc 0
+Task subagent_type polaris-runner model claude-haiku-4-5   rc 0
+Agent subagent_type polaris-runner-2 model haiku           rc 2
+    stderr: polaris: a subagent on 'haiku' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned.
+Agent whose PROSE names the runner, model haiku            rc 2
+    stderr: polaris: a subagent on 'haiku' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned.
+Agent with the runner name nested, model haiku             rc 2
+    stderr: polaris: a subagent on 'haiku' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned.
+Workflow naming the runner, model haiku                    rc 2
+    stderr: polaris: a subagent on 'haiku' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned.
+runner: bg wait x --max 240                                rc 0
+runner: bash ./ops/polaris bg tail ship-T-1 -n 15          rc 0
+runner: bg status proof.mac_2                              rc 0
+runner: bg wait, with description + timeout                rc 0
+runner: ls                                                 rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+runner: bg run x -- ls                                     rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+runner: bg wait x; rm -rf .                                rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+runner: bg wait x --max 240 && ls                          rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+runner: bg wait $(ls)                                      rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+runner: bg wait x, newline, ls                             rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+runner: bg wait x --done                                   rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+runner: a second command key                               rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+runner: Read                                               rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+runner: Agent                                              rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+general-purpose on haiku: bg wait                          rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+agent_type polaris-runner-2 on haiku: bg wait              rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+haiku main session (no agent_type): bg wait                rc 2
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+runner: bg wait, agent_type after tool_input               rc 0
+PostToolUse: the runner on haiku (no caveat)               rc 0
+PostToolUse: general-purpose on haiku                      rc 0
+    stdout: {"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"polaris: that subagent ran on 'claude-haiku-4-5', a FORBIDDEN model — discard its result and re-run it on the session model."}}

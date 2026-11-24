@@ -61,7 +61,7 @@ bg_rotate() { # bg_rotate <name> — archive a job dir to its ONE .prev slot (bg
   return 0
 }
 
-bg_run() { # bg run <name> [--force] [-- <cmd…>] — start a detached job (bg-jobs.md). A bare
+bg_run() { # bg run <name> [--force] [--budget <s>] [--steps <file>] [-- <cmd…>] — a detached job (bg-jobs.md). A bare
   # SUITE-KEY name runs that CONVENTIONS value in the CALLER's cwd (a builder proves its own
   # worktree); `qa` ALWAYS runs in the PRIMARY, so its green stamps .polaris/suite-stamp and a
   # later `finish` rides the existing fast path — zero new code, that is the point. `--` runs an
@@ -73,17 +73,22 @@ bg_run() { # bg run <name> [--force] [-- <cmd…>] — start a detached job (bg-
   local dir
   dir="$(bg_resolve "$name")"
   case "$name" in *.prev) die "'$name' — .prev is the rotation-slot suffix (bg-jobs.md), not a job name";; esac
-  local force=""
+  local force="" budget="" steps=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --force) force=1; shift;;
+      --budget) budget="${2:-}"; case "$budget" in ''|*[!0-9]*) die "bg run: --budget takes seconds, got '${budget}'";; esac; shift 2;;
+      --steps) steps="${2:-}"; [ -n "$steps" ] || die "bg run: --steps takes a file"; shift 2;;
       --)      shift; break;;
-      *)       die "bg run: unexpected '$1' — usage: bg run <name> [--force] [-- <cmd…>]";;
+      *)       die "bg run: unexpected '$1' — usage: bg run <name> [--force] [--budget <s>] [--steps <file>] [-- <cmd…>]";;
     esac
   done
   local cwd="$PWD"
   local cmdline=""
-  if [ $# -gt 0 ]; then
+  if [ -n "$steps" ]; then   # walk-away § 2.1: one job, one budget, stops at the first red line
+    [ $# -eq 0 ] || die "bg run: --steps or -- <cmd…>, not both"
+    cmdline="$(_bgwatch_join "$steps")" || exit 1; set -- _bgwatch_steps "$steps"
+  elif [ $# -gt 0 ]; then
     cmdline="$*"
   else
     local val=""
@@ -131,23 +136,13 @@ bg_run() { # bg run <name> [--force] [-- <cmd…>] — start a detached job (bg-
   printf '%s\n' "$cwd" > "$dir/cwd"
   printf '%s\n' "${CLAUDE_CODE_SESSION_ID:--}" > "$dir/sid"   # informational only — cwd is the ownership key (it also works in CI, where no sid exists)
   : > "$dir/log"
-  # pid semantics from birth (the T-064 lesson): spawn, write the pid, nothing in between. The
-  # runner writes end THEN rc — rc is written LAST, and its EXISTENCE means "finished". set +e
-  # inside: the subshell inherits set -e and must survive the command failing to record its rc.
-  (
-    set +e
-    rc=127
-    if cd "$cwd" 2>/dev/null; then
-      "$@"
-      rc=$?
-    else
-      echo "bg: cannot cd to $cwd"
-    fi
-    date +%s > "$dir/end"
-    printf '%s\n' "$rc" > "$dir/rc"
-  ) </dev/null >>"$dir/log" 2>&1 &
-  pid=$!
+  printf '%s\n' "${budget:-$(bgwatch_budget "$name" "$cmdline")}" > "$dir/budget"
+  # pid semantics from birth (the T-064 lesson): spawn, write the pid, nothing in between — the
+  # runner itself (rc written LAST, its EXISTENCE means "finished") is bgwatch.sh's _bgwatch_launch.
+  _bgwatch_launch "$dir" "$@"
+  pid="$_BGW_PID"
   printf '%s\n' "$pid" > "$dir/pid"
+  bgwatch_start "$dir" "$@"   # ONE watchdog per job: past the budget it kills the tree (walk-away § 2.1)
   say "bg: '$name' started (pid $pid) — log: $dir/log · collect: bash ops/polaris bg wait $name"
 }
 
@@ -183,10 +178,9 @@ bg_status() { # bg status [<name>] — rc-file-FIRST, then the pid, NEVER the re
   local p
   p="$(cat "$d/pid" 2>/dev/null | tr -d ' \r\n')"
   if [ -f "$d/rc" ]; then
-    local r
+    _bgwatch_said "$name" "$d" && return 4
+    local r s e
     r="$(tr -d ' \r\n' < "$d/rc")"
-    local s
-    local e
     s="$(cat "$d/start" 2>/dev/null | tr -d ' \r\n')"
     e="$(cat "$d/end" 2>/dev/null | tr -d ' \r\n')"
     case "$s" in ''|*[!0-9]*) s="";; esac
@@ -200,7 +194,7 @@ bg_status() { # bg status [<name>] — rc-file-FIRST, then the pid, NEVER the re
     printf '⛔ %s red — rc %s in %s · tail: bash ops/polaris bg tail %s\n' "$name" "$r" "$dur" "$name"
     return 1
   fi
-  if bg_alive "$p"; then
+  if ! _bgwatch_gone "$d" "$p"; then
     local s2
     s2="$(cat "$d/start" 2>/dev/null | tr -d ' \r\n')"
     case "$s2" in ''|*[!0-9]*) s2="$now";; esac
@@ -226,18 +220,18 @@ bg_tail() { # bg tail <name> [-n N] — last N (default 20) log lines, read-only
   tail -n "$n" "$d/log" 2>/dev/null || true
 }
 
-bg_wait() { # bg wait <name> [--max <s>] — poll ~2s until the rc file exists; --max default 300,
+bg_wait() { # bg wait <name> [--max <s> | --done] — poll ~2s until the rc file exists; --max default 300,
   # deliberately HALF the harness's 600s tool cap so agents collect in bounded, resumable chunks.
   # Finished → last log lines + verdict, exit 0 green / 1 red (the verdict, never the raw job rc:
   # a job that exited 2 must stay distinguishable from "still running"). Expired → ONE resumable
   # line, exit 2, NEVER a question. Dead pid with no rc mid-wait → the unknown story, exit 3.
   local name="${1:-}"
   [ $# -gt 0 ] && shift
-  local max=300
-  if [ "${1:-}" = "--max" ]; then
-    max="${2:-}"
-    case "$max" in ''|*[!0-9]*) die "bg wait: --max takes seconds, got '${max:-}'";; esac
-  fi
+  local max=300   # --done: no cap — the job's budget bounds the wait (walk-away § 2.1); exit 4 = timed out
+  case "${1:-}" in
+    --done) max="";;
+    --max)  max="${2:-}"; case "$max" in ''|*[!0-9]*) die "bg wait: --max takes seconds, got '${max:-}'";; esac;;
+  esac
   local d
   d="$(bg_resolve "$name")"
   [ -d "$d" ] || die "no background job '$name' — bash ops/polaris bg status lists them"
@@ -246,10 +240,9 @@ bg_wait() { # bg wait <name> [--max <s>] — poll ~2s until the rc file exists; 
   local p=""
   while :; do
     if [ -f "$d/rc" ]; then
-      local r
+      _bgwatch_said "$name" "$d" && return 4
+      local r s e
       r="$(tr -d ' \r\n' < "$d/rc")"
-      local s
-      local e
       s="$(cat "$d/start" 2>/dev/null | tr -d ' \r\n')"
       e="$(cat "$d/end" 2>/dev/null | tr -d ' \r\n')"
       case "$s" in ''|*[!0-9]*) s="";; esac
@@ -265,13 +258,13 @@ bg_wait() { # bg wait <name> [--max <s>] — poll ~2s until the rc file exists; 
       return 1
     fi
     p="$(cat "$d/pid" 2>/dev/null | tr -d ' \r\n')"
-    if ! bg_alive "$p" && [ ! -f "$d/rc" ]; then
+    if _bgwatch_gone "$d" "$p"; then
       # the runner writes rc BEFORE exiting, so the [ ! -f ] re-check above closes the race —
       # a dead pid still without rc is a crash, or Windows reused the pid (rc-file-first honesty).
       printf '%s unknown — no rc and pid %s is dead: crashed, or a Windows pid was reused · log: %s/log\n' "$name" "${p:-?}" "$d"
       return 3
     fi
-    if [ "$waited" -ge "$max" ]; then
+    if [ -n "$max" ] && [ "$waited" -ge "$max" ]; then
       printf 'still running — bash ops/polaris bg wait %s\n' "$name"
       return 2
     fi
@@ -294,6 +287,7 @@ cmd_bg() { # polaris bg <run|status|tail|wait> … — dispatch (bg-jobs.md). Wo
     status) bg_status "${1:-}";;
     tail)   bg_tail "$@";;
     wait)   bg_wait "$@";;
-    *)      die "usage: polaris bg run <name> [--force] [-- <cmd…>] · bg status [<name>] · bg tail <name> [-n N] · bg wait <name> [--max <s>]";;
+    reap)   bgwatch_reap "${1:-}";;
+    *)      die "usage: polaris bg run <name> [--force] [--budget <s>] [--steps <file>] [-- <cmd…>] · bg status [<name>] · bg tail <name> [-n N] · bg wait <name> [--max <s> | --done] · bg reap [<name>]";;
   esac
 }

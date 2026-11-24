@@ -60,3 +60,28 @@ held: T-HR6 — contract ops/contracts/gone.md missing
 held: T-HR7 — points 8 must be 1-5, or up to 13 with steps: — split it
 held: T-HR8 — waits on T-HR5 (ready)
 held: T-HR9 — overlaps T-HR5 on 'src/a.txt'
+wait
+1
+2
+   dead: T-HR10
+wait
+1
+1
+(no stall line)
+wait
+1
+1
+(no stall line)
+wait
+1
+1
+(no stall line)
+wait
+1
+3
+   dead: T-HR10
+   crashed: cj
+finish
+1
+1
+   crashed: cj

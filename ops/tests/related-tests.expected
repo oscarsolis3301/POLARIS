@@ -34,3 +34,13 @@ full
    why: test_select unset
    paths: 1 changed (0 skipped by test_skip)
    ran: nothing from a runner
+== ui-file [T-1] ==
+ui
+   why: only ui paths (1) in 1-2 point work
+   paths: 1 changed (0 skipped by test_skip)
+   ran: nothing from a runner
+== edited-test [T-1] ==
+scoped
+   why: related tests via vitest in app/
+   paths: 1 changed (0 skipped by test_skip)
+   ran: vitest related --run src/a.test.tsx

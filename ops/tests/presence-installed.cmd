@@ -66,3 +66,20 @@ echo '--- the fixture hook refuses the question while away'
 H PreToolUse AskUserQuestion auto | grep -c '"permissionDecision":"deny"'
 echo '--- a bad session id is no session id'
 CLAUDE_CODE_SESSION_ID=../s1 bash ops/polaris presence
+echo '--- walk-away § 4.3 (T-319): the four new registrations, once each, and the fixture has the hook file'
+echo "permission hook file: $([ -f ops/hooks/permission-hook.sh ] && echo installed || echo MISSING)"
+python - .claude/settings.json <<'PY' | tr -d '\r'
+import json, sys
+h = json.load(open(sys.argv[1], encoding="utf-8"))["hooks"]
+for ev in ("SubagentStop", "StopFailure", "PermissionRequest", "PermissionDenied"):
+    cmds = [x["command"].replace("$CLAUDE_PROJECT_DIR/", "") for e in h.get(ev, []) for x in e.get("hooks", [])]
+    print("%s  %d entry  %s" % (ev, len(cmds), " | ".join(cmds)))
+PY
+cp .claude/settings.json "$FIX/before.json"
+bash "$KIT_DIR/ops/install.sh" "$R" > "$FIX/out2" 2>&1; echo "re-install rc=$?"
+echo "re-install: $(cmp -s "$FIX/before.json" .claude/settings.json && echo 'settings.json byte-identical' || echo 'settings.json REWRITTEN')"
+echo "re-install report: $(grep -c 'added ops/hooks/permission-hook.sh' "$FIX/out2") added lines"
+echo '--- the fixture hook denies a permission prompt while the run is armed and away (a board dir makes the fixture a primary)'
+mkdir -p .polaris/run ops/board; printf '%s\naway\nreentries 0\n' "$(date +%s)" > .polaris/run/s1.armed
+printf '{"session_id":"s1","cwd":"%s","permission_mode":"auto","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}' "$R" \
+  | bash ops/hooks/permission-hook.sh request | grep -c '"behavior":"deny"'

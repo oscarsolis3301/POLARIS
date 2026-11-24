@@ -1,0 +1,56 @@
+--- not armed: the dialog opens as always, nothing recorded
+allow:here
+  rc=0 stderr=0
+denied:not-armed
+  rc=0 stderr=0
+  denied.tsv: absent
+--- armed + away (auto, bypassPermissions, dontAsk): denied with the park line
+deny:away
+  rc=0 stderr=0
+deny:away
+  rc=0 stderr=0
+deny:away
+  rc=0 stderr=0
+--- armed + away, the mode from <sid>.mode when the payload has none
+deny:away
+  rc=0 stderr=0
+--- armed, owner here: default mode, no approval on record, a bad session id
+allow:here
+  rc=0 stderr=0
+allow:here
+  rc=0 stderr=0
+allow:here
+  rc=0 stderr=0
+--- armed, but the cwd has no board, or the armed file is stale (older than reentry_hours)
+allow:here
+  rc=0 stderr=0
+allow:here
+  rc=0 stderr=0
+--- a worktree cwd reads its primary
+deny:away
+  rc=0 stderr=0
+--- garbage, empty, an unknown subcommand: no opinion, rc 0
+allow:here
+  rc=0
+denied:not-armed
+  rc=0
+allow:here
+  rc=0
+--- the real output: the deny JSON (escapes kept intact), and nothing at all when here
+{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"The owner approved the plan and left. Do not ask. Take the recommended option and write it down as an assumed: line; if there is no safe default, park that one piece and finish the rest. This needs a person: park it — bash ops/polaris defer -m \"Bash needed approval\" -- git push --force origin \"main\""}}}
+  rc=0 stderr=0
+{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"The owner approved the plan and left. Do not ask. Take the recommended option and write it down as an assumed: line; if there is no safe default, park that one piece and finish the rest. This needs a person: park it — bash ops/polaris defer -m \"Edit needed approval\" -- src/app.js"}}}
+  rc=0 stderr=0
+  rc=0 stderr=0
+  json ok: deny
+--- denied: armed → one TAB line per denial (epoch, tool, the first 160 chars); never prints
+denied:recorded
+  rc=0 stderr=0
+  rc=0 stderr=0
+denied:recorded
+  rc=0 stderr=0
+  <epoch>|Bash|git push --force origin \"main\" (45 chars)
+  <epoch>|Edit|src/app.js (23 chars)
+  <epoch>|Bash|echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (173 chars)
+--- never allows: no "allow" decision anywhere in this file or any output above
+  allow decisions in the hook: 0

@@ -135,3 +135,43 @@ rc 0
 token: none
 == fleet with a LEGAL strong: the token still goes in ==
 token: --model some-model-9
+== RUNNER (walk-away § 3.4, T-321): the job runner — cheap, its own model line, its agent ==
+runner default
+cheap
+   effort: low
+   model: haiku
+   agent: polaris-runner
+rc 0
+runner sonnet
+cheap
+   effort: low
+   model: sonnet
+   agent: polaris-runner
+rc 0
+runner opus
+cheap
+   effort: low
+   model: sonnet
+   agent: polaris-runner
+rc 0
+runner claude-fable-5
+cheap
+   effort: low
+   model: sonnet
+   agent: polaris-runner
+rc 0
+runner inherit
+cheap
+   effort: low
+   agent: polaris-runner
+rc 0
+runner off
+cheap
+   effort: low
+   runner off — wait with bg wait --max 540
+rc 0
+route --points 1 with model_cheap: haiku and model_runner: haiku
+cheap
+   effort: low
+   model REFUSED: 'haiku' is forbidden (owner, 2026-09-15) — this spawn names no model and inherits the session's
+rc 0

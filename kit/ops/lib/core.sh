@@ -76,6 +76,50 @@ tier_for() { # tier_for <points> <risk> — echo exactly ONE tier word (ops/cont
   return 0
 }
 # --------------------------------------------------------------- test depth
+_depth_globs() { # _depth_globs <skip|look|ui> — the ONE place the test_skip / test_look / test_ui
+  # defaults are spelled (walk-away § 6). Prints the composed list on one line, never expanded:
+  # unset → the default · `-` → nothing · `+ <globs>` → the default, then <globs> · anything else →
+  # that value verbatim, as before. ui's default is the ui file types plus the COMPOSED look list.
+  # Callers word-split it under `set -f`. rc 0 always.
+  local k="${1:-}" d v
+  case "$k" in
+    skip) d='*.md docs/** *.txt LICENSE*';;
+    look) d='*.css *.scss *.less *.svg *.png *.jpg *.jpeg *.gif *.webp *.ico *.avif *.bmp *.woff *.woff2 *.ttf *.otf *.eot *.sass *.styl *.pcss';;
+    ui)   v="$(_depth_globs look)"; d="*.tsx *.jsx *.vue *.svelte *.html *.astro${v:+ $v}";;
+    *)    return 0;;
+  esac
+  v="$(cfg "test_$k" "")"
+  case "$v" in
+    '') v="$d";;
+    -)  v="";;
+    +)  v="$d";;
+    '+ '*) v="${v#+ }"; v="$d${v:+ $v}";;
+  esac
+  printf '%s' "$v"
+  return 0
+}
+_depth_test_globs() { # _depth_test_globs — every SURFACES.tsv row's `tests` column, space-joined,
+  # in file order (nothing when there are no rows). One read of the memoized table.
+  local row rest t out=""
+  while IFS= read -r row; do
+    [ -n "$row" ] || continue
+    rest="${row#*$POLARIS_TAB}"; [ "$rest" != "$row" ] || continue
+    t="${rest%%$POLARIS_TAB*}"
+    [ -n "$t" ] && [ "$t" != "-" ] || continue
+    case " $out " in *" $t "*) ;; *) out="${out:+$out }$t";; esac
+  done <<EOF
+$(surfaces_lines)
+EOF
+  printf '%s' "$out"
+  return 0
+}
+_depth_is_test() { # _depth_is_test <path> [<tests glob>…] — rc 0 when <path> is a test file:
+  # `*.test.*`, `*.spec.*`, or under one of the given SURFACES tests globs (walk-away § 6). Zero forks.
+  local p="${1:-}"; shift
+  case "$p" in *.test.*|*.spec.*) return 0;; esac
+  [ $# -gt 0 ] || return 1
+  owned_match "$p" "$@"
+}
 depth_for() { # depth_for [<taskfile>…] < <paths, one per line> — ONE line "<depth><TAB><why>" on
   # stdout (ops/contracts/test-depth.md § 2, § v2.2); depth ∈ none | look | ui | scoped | full. rc 0 ALWAYS —
   # never dies, callers pass board data as-is. PURE: no writes to the repo, no git — stdin + the
@@ -84,6 +128,7 @@ depth_for() { # depth_for [<taskfile>…] < <paths, one per line> — ONE line "
   # `risk: high` no longer forces depth (one-yes.md § 3). A taskfile's `test_depth:` can only RAISE depth — anything but `full` is a
   # no-op here, same as unset — except `ui`, which lets a bigger task qualify for ui (§ v2.2 rule 4).
   local tf id td skip_raw look_raw p nl nonskip="" nonlook="" lookn=0 csf sel rc ui_raw uin uiok uinf uitf uiid
+  local tglobs hastest=0
   nl=$'\n'
   for tf in "$@"; do
     [ -f "$tf" ] || continue
@@ -91,43 +136,50 @@ depth_for() { # depth_for [<taskfile>…] < <paths, one per line> — ONE line "
     td="$(fm_get test_depth "$tf")"
     [ "$td" = "full" ] && { printf 'full\t%s\n' "test_depth: full on $id"; return 0; }
   done
-  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
-  [ "$skip_raw" = "-" ] && skip_raw=""
-  look_raw="$(cfg test_look '*.css *.scss *.less *.svg *.png *.jpg *.jpeg *.gif *.webp *.ico')"
-  [ "$look_raw" = "-" ] && look_raw=""
+  skip_raw="$(_depth_globs skip)"
+  look_raw="$(_depth_globs look)"
+  tglobs="$(_depth_test_globs)"
+  # every glob list below is word-split unexpanded: a root README.md must not turn `*.md` into itself
+  case $- in *f*) uinf=1;; *) uinf=0; set -f;; esac
+  # walk-away § 6: an edited test file is never small — it skips neither test_skip nor test_look nor
+  # qualifies for ui; it goes to test_select_for like any code path (scoped when that can narrow it)
   while IFS= read -r p || [ -n "$p" ]; do
     [ -z "$p" ] && continue
-    if [ -n "$skip_raw" ] && owned_match "$p" $skip_raw; then continue; fi
+    if _depth_is_test "$p" $tglobs; then hastest=1
+    elif [ -n "$skip_raw" ] && owned_match "$p" $skip_raw; then continue; fi
     nonskip="${nonskip:+$nonskip$nl}$p"
   done
-  [ -n "$nonskip" ] || { printf 'none\t%s\n' "only test_skip paths"; return 0; }
+  [ -n "$nonskip" ] || { [ "$uinf" -eq 1 ] || set +f; printf 'none\t%s\n' "only test_skip paths"; return 0; }
   while IFS= read -r p; do
     [ -z "$p" ] && continue
-    if [ -n "$look_raw" ] && owned_match "$p" $look_raw; then
+    if [ -n "$look_raw" ] && owned_match "$p" $look_raw && ! _depth_is_test "$p" $tglobs; then
       lookn=$((lookn+1)); continue
     fi
     nonlook="${nonlook:+$nonlook$nl}$p"
   done <<EOF
 $nonskip
 EOF
-  [ -n "$nonlook" ] || { printf 'look\t%s\n' "only look paths ($lookn)"; return 0; }
+  [ -n "$nonlook" ] || { [ "$uinf" -eq 1 ] || set +f; printf 'look\t%s\n' "only look paths ($lookn)"; return 0; }
   # depth ui (test-depth.md § v2.2): every remaining path is a UI file AND every task is 1-2 points
   # (or carries test_depth: ui) with risk: normal. No taskfile = unbounded ⇒ never ui. Task fields
   # are read only once the paths qualify, so every other verdict costs exactly what it did.
-  ui_raw="$(cfg test_ui "*.tsx *.jsx *.vue *.svelte *.html *.astro${look_raw:+ $look_raw}")"
-  [ "$ui_raw" = "-" ] && ui_raw=""
+  ui_raw="$(_depth_globs ui)"
+  [ "$hastest" -eq 0 ] || ui_raw=""
   if [ -n "$ui_raw" ]; then
-    uin=0; uiok=1; uinf=0
-    # the glob list is word-split unexpanded: a root index.html must not turn `*.html` into itself
-    case $- in *f*) uinf=1;; *) set -f;; esac
+    uin=0; uiok=1
     while IFS= read -r p; do
       [ -z "$p" ] && continue
       if owned_match "$p" $ui_raw; then uin=$((uin+1)); else uiok=0; break; fi
     done <<EOF
 $nonlook
 EOF
-    [ "$uinf" -eq 1 ] || set +f
-    if [ "$uiok" -eq 1 ] && [ "$uin" -gt 0 ]; then
+  fi
+  [ "$uinf" -eq 1 ] || set +f
+  if [ -n "$ui_raw" ]; then
+    # the ui floor (walk-away § 6): ui stands in for the suite only when something still checks the
+    # change — lint: or typecheck: set, or a before/after look (visual: AND shot:). Else today's verdict.
+    if [ "$uiok" -eq 1 ] && [ "$uin" -gt 0 ] && { [ -n "$(cfg lint "")" ] || [ -n "$(cfg typecheck "")" ] \
+         || { [ -n "$(cfg visual "")" ] && [ -n "$(cfg shot "")" ]; }; }; then
       uitf=0; uiid=""
       for tf in "$@"; do
         [ -f "$tf" ] || continue
@@ -245,6 +297,13 @@ model_for_tier() { # model_for_tier <tier> — the matching CONVENTIONS knob's v
   if model_denied "$m"; then MODEL_DENIED="$m"; return 0; fi
   printf '%s' "$m"
   return 0
+}
+_model_runner_ok() { # _model_runner_ok <name> — rc 0 when <name> is one of the ONLY values the job
+  # runner may take (walk-away § 3.4): haiku|sonnet|inherit. A kit constant, like model_denied's
+  # list: no key widens it. cmd_route maps any other model_runner value to sonnet. This is the one
+  # place Haiku is named as allowed; model_denied itself is unchanged and still refuses it elsewhere.
+  case "${1:-}" in haiku|sonnet|inherit) return 0;; esac
+  return 1
 }
 
 # ------------------------------------------------------------------ telemetry
@@ -453,7 +512,7 @@ surface_change_set() { # surface_change_set [--force] — the paths a verdict is
   # (test-depth.md § 4): a docs-only commit then leaves an EMPTY change set, so the existing
   # baseline-carry logic below (and every caller's own "nothing changed" branch) treats it exactly
   # like a board-noise-only change — a green stamp carries across it with no new code path.
-  local force=0 cur="" list="" p rel sha="" junk="" stamp skip_raw
+  local force=0 cur="" list="" p rel sha="" junk="" stamp skip_raw tglobs nf
   [ "${1:-}" = "--force" ] && force=1
   SURFACE_BASELINE=""; SURFACE_BASELINE_SCOPE=""; SURFACE_BOUND=""
   cur="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
@@ -475,16 +534,20 @@ surface_change_set() { # surface_change_set [--force] — the paths a verdict is
     list="$(git -C "$PRIMARY" diff --name-only "$BASE...HEAD" 2>/dev/null)" || return 1
   fi
   rel="$(cfg reports docs/sprints)"; rel="${rel%/}"; [ -n "$rel" ] || rel="docs/sprints"
-  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
-  [ "$skip_raw" = "-" ] && skip_raw=""
+  skip_raw="$(_depth_globs skip)"
+  tglobs="$(_depth_test_globs)"
+  # unexpanded word-split (a root README.md must not stand in for `*.md`); an edited test file is
+  # never dropped as test_skip (walk-away § 6) — depth_for must see it
+  case $- in *f*) nf=1;; *) nf=0; set -f;; esac
   while IFS= read -r p; do
     [ -z "$p" ] && continue
     case "$p" in "$rel/"*|ops/MAP.md|ops/SURFACES.tsv) continue;; esac
-    [ -n "$skip_raw" ] && owned_match "$p" $skip_raw && continue
+    if [ -n "$skip_raw" ] && ! _depth_is_test "$p" $tglobs && owned_match "$p" $skip_raw; then continue; fi
     printf '%s\n' "$p"
   done <<EOF
 $list
 EOF
+  [ "$nf" -eq 1 ] || set +f
   return 0
 }
 test_select_for() { # test_select_for <paths-file> — THE one decision for the `test` key
@@ -549,14 +612,16 @@ EOF
   return 0
 }
 suite_stamp_scope() { # suite_stamp_scope [<file>] — field 3 of the suite stamp (default
-  # $PRIMARY/.polaris/suite-stamp): `full` | `scoped`. A 2-field (pre-6.4) stamp → `full` — every
-  # pre-6.4 writer ran everything. Missing/empty file → prints nothing, rc 1.
+  # $PRIMARY/.polaris/suite-stamp): `none` | `look` | `ui` | `scoped` pass through as written, so qa
+  # and finish say what was really proven (walk-away § 6); anything else → `full`. A 2-field
+  # (pre-6.4) stamp → `full` — every pre-6.4 writer ran everything. Missing/empty file → prints
+  # nothing, rc 1.
   local f="${1:-${PRIMARY:-}/.polaris/suite-stamp}" sha="" epoch="" scope=""
   [ -s "$f" ] || return 1
   read -r sha epoch scope < "$f" || true
   [ -n "$sha" ] || return 1
   scope="${scope%%[!a-z]*}"
-  case "$scope" in scoped) printf 'scoped\n';; *) printf 'full\n';; esac
+  case "$scope" in none|look|ui|scoped) printf '%s\n' "$scope";; *) printf 'full\n';; esac
   return 0
 }
 

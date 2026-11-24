@@ -45,3 +45,16 @@ rc 0 · live-board · tune-up lines 1 · upgrade lines 0 · ▶ NEXT lines 1
 POLARIS <version> installed · live-board
 
 ▶ NEXT — tune-up (1): read ops/roles/TIDY.md and run it now
+--- 11. a 6.19 settings.json: the four new registrations merge once, a re-run touches nothing
+rc 0 · live-board · tune-up lines 0 · upgrade lines 0 · ▶ NEXT lines 0
+.claude/settings.json: hooks + permissions + output style merged (idempotent) — added ops/hooks/handover-hook.sh, ops/hooks/permission-hook.sh
+Stop  matcher=-  bash "ops/hooks/handover-hook.sh" stop  timeout=30
+SubagentStop  matcher=-  bash "ops/hooks/handover-hook.sh" substop  timeout=10
+StopFailure  matcher=-  bash "ops/hooks/handover-hook.sh" stopfail  timeout=5
+PermissionRequest  matcher=-  bash "ops/hooks/permission-hook.sh" request  timeout=5
+PermissionDenied  matcher=-  bash "ops/hooks/permission-hook.sh" denied  timeout=5
+every line ends LF, no CR anywhere
+the object: the kit's own
+rc 0 · live-board · tune-up lines 0 · upgrade lines 0 · ▶ NEXT lines 0
+.claude/settings.json: hooks + permissions + output style merged (idempotent)
+settings.json: byte-identical

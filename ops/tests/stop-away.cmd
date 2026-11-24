@@ -78,3 +78,65 @@ out="$(stop aw auto true "build T-1" real)"; echo "$out"
 echo "let through: $(printf '%s\n' "$out" | grep -c 'let through')"
 out="$(stop aw default false "build T-1" real)"
 echo "here let through: $(printf '%s\n' "$out" | grep -c 'ask again and you will be let through')"
+# --- walk-away § 4.2 (T-319): THE ARMED RUNG, first in the ladder. <primary>/.polaris/run/aw.armed on
+#     disk + away. POLARIS_HANDOVER_CLI is a stub that only records its arguments, so the third
+#     block's `notify-gate stall` is observed without running anything; it is polled, never slept on.
+RUN="$R/.polaris/run"; mkdir -p "$RUN"; STUB="$FIX/stub.sh"; CALLS="$FIX/stub.calls"
+printf 'printf "%%s\\n" "$*" >> "%s"\n' "$CALLS" > "$STUB"
+arm() { printf '%s\nwalk-away\nreentries 0\n' "${1:-$(date +%s)}" > "$RUN/aw.armed"; }
+BG=',"background_tasks":[{"id":"t1","type":"shell","status":"running","description":"ship","command":"bash ops/polaris bg wait ship-T-1 --done"}],"session_crons":[]'
+NOBG=',"background_tasks": [ ],"session_crons":[]'
+PULSE=',"background_tasks":[],"session_crons":[{"id":"c1","schedule":"*/30 * * * *","recurring":true,"prompt":"bash ops/polaris pulse, then follow line 1"}]'
+OTHER=',"background_tasks":[],"session_crons":[{"id":"c2","schedule":"0 9 * * *","recurring":true,"prompt":"check the build"}]'
+# $1 sid · $2 mode · $3 next line 1 · $4 the extra payload fields · $5 = real for the output layer
+rs() {
+  local t='--test'; [ "${5:-}" = real ] && t=''
+  printf '{"session_id":"%s","transcript_path":"%s","cwd":"%s","permission_mode":"%s","stop_hook_active":false,"hook_event_name":"Stop"%s}' \
+    "$1" "$TR" "$R" "$2" "${4:-}" | POLARIS_HANDOVER_NEXT="$3" POLARIS_HANDOVER_CLI="$STUB" bash "$HOOK" $t stop
+}
+calls() { local i=0; while [ "$i" -lt 100 ] && [ ! -s "$CALLS" ]; do sleep 0.1; i=$((i + 1)); done
+  printf 'stub calls: %s · %s\n' "$(grep -c . "$CALLS" 2>/dev/null || echo 0)" "$(sed -n 1p "$CALLS" 2>/dev/null)"; }
+tr_text "continue?"
+printf '%s\n' "100 done T-1" > "$R/.polaris/handover/aw/last-event"
+arm
+echo "--- armed + away: a background task in flight lets go"
+rs aw auto "build T-1" "$BG"
+echo "--- armed + away: next says wait / stop — a real wait lets go"
+rs aw auto "wait" "$NOBG"
+rs aw auto "stop" "$NOBG"
+echo "--- armed + away: work left blocks (an empty background_tasks is no task), the third identical block is a stall"
+rs aw auto "build T-1" "$NOBG"
+rs aw auto "build T-1" "$NOBG"
+echo "stalled before the third: $([ -f "$RUN/stalled" ] && echo yes || echo no)"
+rs aw auto "build T-1" "$NOBG"
+echo "stalled: $([ -f "$RUN/stalled" ] && echo yes || echo no) · $(cut -f2 "$RUN/stalled")"
+echo "run-blocks: $(cut -f2- "$R/.polaris/handover/aw/run-blocks" | tr '\t' '|')"
+calls
+rs aw auto "build T-1" "$NOBG"
+calls
+echo "--- armed + away: another line 1 is new work, the count starts again"
+rs aw auto "integrate" "$NOBG"
+echo "run-blocks: $(cut -f2- "$R/.polaris/handover/aw/run-blocks" | tr '\t' '|')"
+echo "--- armed + away: no last-event at all (a conductor that completed nothing yet) still blocks"
+rm -f "$R/.polaris/handover/aw/last-event" "$R/.polaris/handover/aw/run-blocks"
+rs aw auto "build T-1" "$NOBG"
+printf '%s\n' "100 done T-1" > "$R/.polaris/handover/aw/last-event"
+echo "--- the real output: no pulse cron → the hint; a pulse cron → none; no session_crons field → none"
+rm -f "$R/.polaris/handover/aw/run-blocks"; rs aw auto "build T-1" "$OTHER" real
+rm -f "$R/.polaris/handover/aw/run-blocks"; rs aw auto "build T-1" "$PULSE" real
+rm -f "$R/.polaris/handover/aw/run-blocks"; rs aw auto "finish" "" real
+echo "--- pulse_minutes is read from CONVENTIONS"
+printf 'handover: auto\nrun_max_tasks: 0\npulse_minutes: 15\n' > ops/CONVENTIONS.md
+rm -f "$R/.polaris/handover/aw/run-blocks"; rs aw auto "build T-1" "$NOBG" real | grep -o 'every [0-9]* min'
+printf 'handover: auto\nrun_max_tasks: 0\n' > ops/CONVENTIONS.md
+echo "--- the rung steps aside: here · away_gate: off · parked · finished · a stale armed file · no armed file"
+rm -f "$R/.polaris/handover/aw/run-blocks"
+rs aw default "build T-1" "$NOBG"
+printf 'handover: auto\nrun_max_tasks: 0\naway_gate: off\n' > ops/CONVENTIONS.md
+rs aw auto "build T-1" "$NOBG"
+printf 'handover: auto\nrun_max_tasks: 0\n' > ops/CONVENTIONS.md
+: > "$RUN/aw.parked"; rs aw auto "build T-1" "$NOBG"; rm -f "$RUN/aw.parked"
+touch -t 200001010000 "$RUN/aw.armed"; : > "$R/.polaris/handover/aw/finished"
+rs aw auto "build T-1" "$NOBG"; rm -f "$R/.polaris/handover/aw/finished"
+arm 1700000000; rs aw auto "build T-1" "$NOBG"
+rm -f "$RUN/aw.armed"; rs aw auto "build T-1" "$NOBG"

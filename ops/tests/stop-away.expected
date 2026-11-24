@@ -31,3 +31,36 @@ block:question
 {"decision":"block","reason":"The owner approved the plan and left. Do not ask. Take the recommended option and write it down as an assumed: line; if there is no safe default, park that one piece and finish the rest. Work left - next says build T-1; do it."}
 let through: 0
 here let through: 1
+--- armed + away: a background task in flight lets go
+allow:bg
+--- armed + away: next says wait / stop — a real wait lets go
+allow:wait
+allow:wait
+--- armed + away: work left blocks (an empty background_tasks is no task), the third identical block is a stall
+block:run
+block:run
+stalled before the third: no
+allow:stalled
+stalled: yes · the Stop gate blocked 3 times on: next says build T-1
+run-blocks: build T-1|3
+stub calls: 1 · notify-gate stall
+allow:stalled
+stub calls: 1 · notify-gate stall
+--- armed + away: another line 1 is new work, the count starts again
+block:run
+run-blocks: integrate|1
+--- armed + away: no last-event at all (a conductor that completed nothing yet) still blocks
+block:run
+--- the real output: no pulse cron → the hint; a pulse cron → none; no session_crons field → none
+{"decision":"block","reason":"The owner approved the plan and left. Do not ask. Take the recommended option and write it down as an assumed: line; if there is no safe default, park that one piece and finish the rest. Work left — next says build T-1; do it. Arm the pulse: CronCreate every 30 min, prompt \"bash ops/polaris pulse, then follow line 1\"."}
+{"decision":"block","reason":"The owner approved the plan and left. Do not ask. Take the recommended option and write it down as an assumed: line; if there is no safe default, park that one piece and finish the rest. Work left — next says build T-1; do it."}
+{"decision":"block","reason":"The owner approved the plan and left. Do not ask. Take the recommended option and write it down as an assumed: line; if there is no safe default, park that one piece and finish the rest. Work left — next says finish; do it."}
+--- pulse_minutes is read from CONVENTIONS
+every 15 min
+--- the rung steps aside: here · away_gate: off · parked · finished · a stale armed file · no armed file
+block:question
+block:away
+block:away
+allow:finished
+block:away
+block:away

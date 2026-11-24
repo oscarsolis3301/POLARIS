@@ -9,3 +9,11 @@ begin rc=3
 begin: T-002 needs the express lane, not solo — it waits in ready/ for the conductor
 ready: yes
 active: no
+--- begin - : the draft on stdin
+begin rc=0
+pack printed: 1
+   T-003: tests/crumb.test.sh names crumb.txt
+   reach: listed above by new
+pack's own reach section: 0
+draft files left: 0
+active: yes

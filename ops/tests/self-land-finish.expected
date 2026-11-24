@@ -27,3 +27,7 @@ finish: run complete
 integrate branches left: 0
 task worktrees left: 0
 feat branches left: 0
+== 6. the landing wrote the layout and tune-up verdicts once, in-process (walk-away § 7) ==
+kit starts in the tail: land 1 · seal 1 · done 1 · hops 0 · tune 0
+layout verdict runs: 1
+tune-up verdict names main: yes

@@ -1,0 +1,32 @@
+== a. the budget ==
+given: 7
+from the longest green run (3 x 250): 750
+a short green run gets the floor: 300
+class lint: 900
+no history, no measured suite: 1800
+class test, 3 x last-suite-seconds: 1200
+any other name, 3 x last-suite-seconds: 1200
+a short measured suite gets the floor: 300
+a kit command adds the heavy wait: 400
+given is verbatim, kit command or not: 3
+== b. a hang: killed, retried once, nothing left behind ==
+wait rc=4
+⛔ hang timed out — killed after 2s, 2 attempts · log: <reg>/hang/log · park it: bash ops/polaris defer -m "hang hung" -- sh <fix>/hang.sh
+grandchildren started: 4
+grandchildren alive: 0
+bg: budget 2s passed — killed the process tree (attempt 1)
+bg: budget 2s passed — killed the process tree (attempt 2)
+attempt: 2
+overrun: 2 2
+rc: 124
+status rc=4
+== c. a command that exits 124 by itself is an ordinary red ==
+⛔ e124 red — rc 124 in <dur> · full log: <reg>/e124/log
+overrun file: no
+== d. reap: a live watchdog owns its job; past the budget with the watchdog gone, reap kills it ==
+reap with a live watchdog: 0
+reap from another folder: 0
+reaped: rp
+wait rc=4
+overrun: 90 1
+grandchildren alive: 0

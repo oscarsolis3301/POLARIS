@@ -60,3 +60,8 @@ mkfix stamp
 qa baseline
 echo 'doc v2' > docs/readme.md; git commit -qam 'docs: v2'
 qa stamp-docs
+# 6) walk-away § 6 (T-321): no stamp + a landed plan task that edits a test file written as a doc ⇒
+#    never none: the edited test is not test_skip, so depth_for decides and the suite runs
+mkfix testdoc; plan p1
+landed T-9 p1 docs/guide.test.md 'doc test v1'
+qa test-doc

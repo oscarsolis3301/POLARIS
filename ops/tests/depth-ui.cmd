@@ -79,3 +79,32 @@ bash ops/polaris qa 2>&1 | grep 'depth:'
 echo "== test_ui: - : the 1-point .tsx change of T-1 goes back to today's verdict =="
 printf 'test_ui: -\n' >> ops/CONVENTIONS.md
 D T-1
+
+# walk-away § 6 (T-321): an edited test file is never ui, and the ui floor — ui stands in for the
+# suite only when lint: or typecheck: is set, or both visual: and shot: are.
+printf 'test: echo TEST\nlint: echo LINT\ntypecheck: echo TC\nbuild: echo BUILD\nuat: echo UAT\ntest_related: -\n' > ops/CONVENTIONS.md
+echo '== a 1-point task editing a .test.tsx: never ui, today'"'"'s verdict =='
+mkbranch T-20 "web/App.test.tsx=t1"; task T-20 1 normal -; D T-20
+echo '== a .spec.tsx beside the .tsx: never ui =='
+mkbranch T-21 "web/App.tsx=v20" "web/App.spec.tsx=s1"; task T-21 1 normal -; D T-21
+echo '== no lint, no typecheck, no look set up: the 1-point .tsx change is not ui =='
+printf 'test: echo TEST\nbuild: echo BUILD\ntest_related: -\n' > ops/CONVENTIONS.md
+D T-1
+echo '== no lint, no typecheck, but visual: and shot: both set: ui =='
+printf 'visual: web/\nshot: echo SHOT\n' >> ops/CONVENTIONS.md
+D T-1
+echo '== visual: alone is not a look: not ui =='
+printf 'test: echo TEST\nbuild: echo BUILD\ntest_related: -\nvisual: web/\n' > ops/CONVENTIONS.md
+D T-1
+echo '== the ui skip line: no look set up adds one line, once per repo (.polaris/look-offered) =='
+printf 'test: echo TEST\nlint: echo LINT\ntest_related: -\n' > ops/CONVENTIONS.md
+rm -f .polaris/look-offered
+U() { ( PRIMARY="$R" CONV="$R/ops/CONVENTIONS.md"; . "$KIT_DIR/ops/lib/core.sh"; . "$KIT_DIR/ops/lib/route.sh"; _ui_skip_say ) 2>&1; }
+echo '-- first ui run'; U
+echo "look-offered: $([ -f .polaris/look-offered ] && echo yes || echo no)"
+echo '-- second ui run'; U
+echo '-- a look set up (visual: and shot:), the marker gone: the skip line alone'
+rm -f .polaris/look-offered
+printf 'visual: web/\nshot: echo SHOT\n' >> ops/CONVENTIONS.md
+U
+echo "look-offered: $([ -f .polaris/look-offered ] && echo yes || echo no)"
