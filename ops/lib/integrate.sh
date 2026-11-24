@@ -272,6 +272,14 @@ EOF
   return 1
 }
 
+_verdicts_refresh() { # _verdicts_refresh — walk-away § 7: the layout verdict (.polaris/hops-due, save-hops.md
+  # § 0.5) then the tune-up's (.polaris/tune-due, tune.md § 2), IN THIS PROCESS: the engine through
+  # index_fast (its exec ends only the subshell) and cmd_tune in a subshell, so neither pays a full
+  # CLI start, and a die inside either stays there. Never fails the caller; output goes nowhere.
+  ( index_fast hops --due ) >/dev/null 2>&1 || true
+  ( cmd_tune ) >/dev/null 2>&1 || true
+}
+
 _done_reland() { # _done_reland <ID> <task-file> <paths> — safe-landing.md § 5.2, PRIVATE to cmd_done.
   # Runs in a subshell cd'd to the primary, under the lease cmd_done holds: wave_on and cmd_seal both
   # re-enter it, and INT_TOOK=0 here means nothing in this subshell can ever release it. Restores each
@@ -518,7 +526,9 @@ EOF
   board_changed_touch   # freshness beacon for the brain (ops/contracts/brain.md) — best-effort
   # away.md § 7: under an inherited lease (the self-land tail) with another landed task still
   # waiting for its done, the LAST done refreshes — this one only keeps the marker.
-  if [ -n "$done_had" ] && _brain_wait_landed "$id"; then
+  local dwait=""
+  [ -n "$done_had" ] && _brain_wait_landed "$id" && dwait=1
+  if [ -n "$dwait" ]; then
     touch "$PRIMARY/.polaris/brain-due" 2>/dev/null || true
   else
     brain_refresh_if_present  # v1.1: done mirrors seal — refresh AFTER the touch so the wave close
@@ -528,9 +538,10 @@ EOF
   # does — it is the one file `next` and `triage` READ at the end of a run to learn whether the layout
   # pass is due. Exactly heal's call, after the board commit; never a red done, and until `hops --due`
   # ships (or where no engine is installed) it is a silent no-op. The tune-up's verdict
-  # (.polaris/tune-due, tune.md § 2) right after it, the same way.
-  "$SELF" hops --due >/dev/null 2>&1 || true
-  "$SELF" tune >/dev/null 2>&1 || true
+  # (.polaris/tune-due, tune.md § 2) right after it, the same way. walk-away § 7: in-process, and
+  # ONCE per landing — inside the self-land tail with another landed done still to come, that last
+  # done writes both (the brain's rule, read once above).
+  [ -n "$dwait" ] || _verdicts_refresh
   # THE removal goes through wt_remove (ops/contracts/worktree-liveness.md, the `done` row) — this
   # is the line that killed ARC-428 back when it forced the removal. clean+idle ⇒ removed,
   # rc 0 · dirty+idle ⇒ archived to .polaris/wt-archive/<ID>-<epoch>, rc 2 · LIVE ⇒ LEFT, rc 1,
@@ -842,7 +853,7 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
   # at all; `qa --full` afterwards is the escape hatch.
   local k c out tailtxt
   local ex_ran=0 ex_t0 ex_t1 ex_tested="" ex_scope="" ex_cmds ex_paths ex_why ex_p ex_m=0 ex_n ex_selected
-  local ex_depth="" ex_dwhy="" ex_depth_skip=0 ex_dcsf="" ex_dline ex_plan ex_taskid ex_pf
+  local ex_depth="" ex_dwhy="" ex_depth_skip=0 ex_dcsf="" ex_dline ex_plan ex_taskid ex_pf ex_uiskip=0
   ex_t0="$(date +%s)"
   out="$(mktemp)"
   ex_paths="$(mktemp)"
@@ -860,12 +871,16 @@ cmd_land_express() { # land --express <ID> — ops/contracts/express-lane.md: th
     ex_scope="$ex_depth"; ex_depth_skip=1
   else
   [ -z "$ex_depth" ] || depth_line_say "$ex_depth" "$ex_dwhy"
+  # walk-away § 6: at `ui` only lint and typecheck run — test, build and uat are skipped, said once
+  # (the same _ui_skip_say qa uses), and the stamp says `proven ui`.
+  if [ "$ex_depth" = ui ]; then _ui_skip_say; ex_scope=ui; ex_uiskip=1; fi
   # hour.md § 3: the suite loop takes the machine's heavy slot ONCE, at its first real key, and lets
   # it go right after the loop (or before the red unwind) — lease → heavy, never the other way.
   local ex_heavy=""
   for k in test lint typecheck build uat; do
     c="$(cfg "$k" "")"
     [ -z "$c" ] && continue
+    if [ "$ex_uiskip" -eq 1 ]; then case "$k" in test|build|uat) continue;; esac; fi
     [ -n "$ex_heavy" ] || { _heavy_on "land --express $id suite"; ex_heavy=1; }
     if [ "$k" = uat ] && [ "$ex_depth" = scoped ]; then uat_deferred_say; continue; fi
     ex_cmds="$c"; ex_selected=0
@@ -941,7 +956,7 @@ EOF
   # integrate/<date>, right after the last green, before seal/done move anything. Plus the
   # suite duration, same "<seconds> <epoch>" line qa writes, so the slow-suite hint works after
   # an express land too. Both best-effort; neither can fail the lane.
-  if [ "$ex_ran" -ge 1 ] || [ "$ex_depth_skip" -eq 1 ]; then
+  if [ "$ex_ran" -ge 1 ] || [ "$ex_depth_skip" -eq 1 ] || [ "$ex_uiskip" -eq 1 ]; then
     ex_tested="$(git rev-parse HEAD 2>/dev/null || true)"   # nothing ran ⇒ nothing proven ⇒ no carry
     # T-137 (§ 6, stamp v3): WHAT it proved, not just that it was green. `full` for every path but
     # one — selection off, no baseline, an unmapped path, or no `test:` key at all.
@@ -1006,12 +1021,15 @@ seal_burndown_row() { # seal_burndown_row <n> <date> <ids> — sprint-report.md 
   # board ref's last subject as `chore(board): done <ID>` stay true. Best-effort end to end: every
   # failure is a ⚠ note and rc 0 — a seal never fails on its own bookkeeping. Counts are the half a
   # command CAN write honestly; the closing nudge is for the half it cannot: the lesson.
-  local n="$1" date="$2" ids id tf f b col wave="" rest="" wave_ids="" done_pts remaining row sf tmp ok=1
+  local n="$1" date="$2" ids id tf f b col wave_ids="" done_pts remaining pts row sf tmp ok=1
   ids=" $(printf '%s' "${3:-}" | tr '\n\t' '  ') "
+  # walk-away § 7: the files are picked with builtins, then ONE awk reads every card's points (as
+  # fm_get reads them: first frontmatter block, " # comment" and \r stripped; no number ⇒ 0) and
+  # sums the wave apart from the rest by the card's ID — never one fork per card.
+  set --
   for id in $ids; do
-    tf="$(task_file "$id" review)" || tf="$(task_file "$id" done)" || continue
-    wave="$wave$(fm_get points "$tf")
-"
+    tf="$BOARD/review/$id.md"; [ -f "$tf" ] || tf="$BOARD/done/$id.md"; [ -f "$tf" ] || continue
+    set -- "$@" "$tf"
     wave_ids="$wave_ids${wave_ids:+ }$id"
   done
   for col in backlog ready active review; do
@@ -1020,12 +1038,23 @@ seal_burndown_row() { # seal_burndown_row <n> <date> <ids> — sprint-report.md 
       b="${f##*/}"; b="${b%.md}"
       [ "$b" = IDEAS ] && continue
       case "$ids" in *" $b "*) continue;; esac
-      rest="$rest$(fm_get points "$f")
-"
+      set -- "$@" "$f"
     done
   done
-  done_pts="$(printf '%s' "$wave" | awk '{ s += $1 + 0 } END { printf "%s", s + 0 }')"
-  remaining="$(printf '%s' "$rest" | awk '{ s += $1 + 0 } END { printf "%s", s + 0 }')"
+  pts="0 0"
+  if [ $# -gt 0 ]; then
+    pts="$(awk -v ids="$ids" '
+      FNR == 1 { fs = 0; got = 0; id = FILENAME; sub(/.*[\/\\]/, "", id); sub(/\.md$/, "", id)
+                 inw = index(ids, " " id " ") > 0 }
+      /^---[\r]?$/ { fs++; next }
+      fs == 1 && !got && index($0, "points:") == 1 {
+        s = substr($0, 8); sub(/[ \t]#.*$/, "", s); sub(/^[ \t]*/, "", s); sub(/[ \t\r]*$/, "", s)
+        split(s, p, /[ \t]+/); got = 1
+        if (inw) w += p[1] + 0; else r += p[1] + 0
+      }
+      END { printf "%s %s", w + 0, r + 0 }' "$@" 2>/dev/null)" || pts="0 0"
+  fi
+  done_pts="${pts%% *}"; remaining="${pts#* }"
   row="| $date | $done_pts | $remaining |"
   # The rewrite, one awk pass: the top section runs from the first '# SPRINT ' header to the next.
   # Its first ## Burndown opens a table = the contiguous '|' lines under it; the row is appended
@@ -1226,8 +1255,7 @@ EOF
   # surface_change_set drops, so a docs-only wave reads as depth none and costs nothing
   csf="$(mktemp)"; mf="$(mktemp)"
   rel="$(cfg reports docs/sprints)"; rel="${rel%/}"; [ -n "$rel" ] || rel="docs/sprints"
-  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
-  [ "$skip_raw" = "-" ] && skip_raw=""
+  skip_raw="$(_depth_globs skip)"                    # walk-away § 6: the one composed list (`-` → empty)
   case $- in *f*) nf=1;; *) nf=0; set -f;; esac       # the glob list is word-split unexpanded
   while IFS= read -r p; do
     [ -n "$p" ] || continue
@@ -1516,16 +1544,18 @@ $(printf '%s\n' "$subjects" | sed 's/^/- /')"
   board_changed_touch   # fold succeeded (ops/contracts/brain.md): beacon first, then the brain
   # away.md § 7: a seal inside the self-land tail, with sealed tasks still waiting for their done,
   # leaves the refresh to the last done of that tail and marks it due.
-  if [ -n "$seal_had" ] && _brain_wait_landed; then
+  local swait=""
+  [ -n "$seal_had" ] && _brain_wait_landed && swait=1
+  if [ -n "$swait" ]; then
     touch "$PRIMARY/.polaris/brain-due" 2>/dev/null || true
   else
     brain_refresh_if_present  # follows the new base — a refresh failure notes ⚠, never fails the seal
   fi
   # the layout verdict follows it too (save-hops.md § 0.5), now that the merge and the tag stand —
   # done's call, word for word; never a failed seal, and a silent no-op until `hops --due` ships —
-  # and the tune-up's verdict right after it (tune.md § 2)
-  "$SELF" hops --due >/dev/null 2>&1 || true
-  "$SELF" tune >/dev/null 2>&1 || true
+  # and the tune-up's verdict right after it (tune.md § 2). walk-away § 7: in-process, and left to
+  # the tail's last done exactly when the brain refresh is (once per landing).
+  [ -n "$swait" ] || _verdicts_refresh
   if [ -n "$oldtag" ]; then
     say "sprint $n re-sealed — integrate/$date merged into $BASE (--no-ff); sprint/$n: $old7 → $new7"
   else
@@ -1629,8 +1659,7 @@ EOF
     || note "⚠ could not delete origin integrate/$date — by hand: git push origin :refs/heads/integrate/$date"
   board_changed_touch   # the fold completed here in pr mode (ops/contracts/brain.md)
   brain_refresh_if_present  # existing brain follows the fast-forwarded base; failure = ⚠ note only
-  "$SELF" hops --due >/dev/null 2>&1 || true   # and so does the layout verdict (save-hops.md § 0.5) — never a failed sync
-  "$SELF" tune >/dev/null 2>&1 || true         # and the tune-up's (tune.md § 2)
+  _verdicts_refresh   # and so do the layout and tune-up verdicts (save-hops.md § 0.5, tune.md § 2) — in-process, never a failed sync
   [ -n "$ss_had" ] || int_off   # fold complete — free the lane before the per-task next steps
   # 5. the [<ID>]-in-$BASE gate now passes — walk each task out
   if [ -n "$ids" ]; then

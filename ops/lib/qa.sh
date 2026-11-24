@@ -129,7 +129,7 @@ EOF
   [ -z "$ddepth" ] || depth_line_say "$ddepth" "$dwhy"
   # test-depth.md § v2.4: at `ui` only lint and typecheck run; test, build and uat are skipped, said once.
   if [ "$ddepth" = ui ]; then
-    note "ui — test, build and uat skipped: lint and typecheck plus the before/after look"
+    _ui_skip_say
     scope=ui; uiskip=1
   fi
   # qa_parallel (default on; anything but `off` ⇒ on): test, lint and typecheck start together, each in
@@ -413,6 +413,153 @@ EOF
   return 0
 }
 
+_fin_gated() { # _fin_gated <armed file> <armed epoch> — walk-away § 5.1: every HUMAN-GATED item of an
+  # armed run, one line `<where><TAB><command or click><TAB><reason>`, deduped, in a fixed order:
+  # deferred.tsv and denied.tsv rows since the armed epoch · each review/ or blocked/ card of the armed
+  # plan(s) (every card when the armed file names none) with a risk: high merge (review/ only) or an
+  # `ask` scope its files_owned hits and no approved: entry for it · the stalled marker, when written
+  # since the epoch. <where> is `review:<ID>`, `blocked:<ID>` or `run`. ONE awk reads the cards (no
+  # fork per card); approved_entries runs only for a card that wants a yes. Read-only; none → silent.
+  local a="$1" e="$2" run="$PRIMARY/.polaris/run" sl="" x="" ln f id col pl rk ow want have sc rs kind pat rmsg st sr nl='
+'
+  { read -r x; IFS= read -r sl; } 2>/dev/null < "$a" || true; sl="${sl%$'\r'}"
+  {
+    [ -f "$run/deferred.tsv" ] && awk -F'\t' -v e="$e" '$1 + 0 >= e && $3 != "" { print "run\t" $3 "\t" ($2 == "" ? "deferred" : $2) }' "$run/deferred.tsv"
+    [ -f "$run/denied.tsv" ] && awk -F'\t' -v e="$e" '$1 + 0 >= e && $3 != "" { print "run\t" $3 "\t" ($2 == "" ? "a tool" : $2) " was denied — it needs a person" }' "$run/denied.tsv"
+    set --
+    for f in "$BOARD/review/"*.md "$BOARD/blocked/"*.md; do [ -f "$f" ] && set -- "$@" "$f"; done
+    if [ $# -gt 0 ]; then
+      # the ask rules, read ONCE before the card loop (no fork per card)
+      x="$(rules_lines | awk -F'	' '$2 == "ask"')"
+      # one line per card: path TAB plan TAB risk TAB files_owned items joined by TAB
+      while IFS="$POLARIS_TAB" read -r f pl rk ow; do
+        [ -n "$f" ] || continue
+        [ "$pl" = - ] && pl=""
+        if [ -n "$sl" ]; then case " $sl " in *" ${pl:-/} "*) ;; *) continue;; esac; fi
+        id="${f##*/}"; id="${id%.md}"; col="${f%/*}"; col="${col##*/}"; want=""
+        [ "$col" = review ] && [ "$rk" = high ] && want="merge"
+        while IFS="$POLARIS_TAB" read -r rs kind pat rmsg; do
+          [ "$kind" = ask ] || continue
+          while IFS= read -r pat; do
+            [ -n "$pat" ] || continue
+            if owned_match "$pat" "$rs"; then want="$want$nl$rs"; break; fi
+          done <<EOF
+$(printf '%s\n' "$ow" | tr '\t' '\n')
+EOF
+        done <<EOF
+${ow:+$x}
+EOF
+        [ -n "$want" ] || continue
+        have="$nl$(approved_entries "$f")$nl"
+        while IFS= read -r sc; do
+          [ -n "$sc" ] || continue
+          case "$have" in *"$nl$sc|"*) continue;; esac
+          if [ "$sc" = merge ]; then
+            if [ -n "$pl" ]; then printf '%s:%s\tbash ops/polaris approve --plan %s -m "why"\t%s is risk: high — it lands only with your yes\n' "$col" "$id" "$pl" "$id"
+            else printf '%s:%s\tbash ops/polaris land %s\t%s is risk: high — it lands only with your yes\n' "$col" "$id" "$id" "$id"; fi
+          else
+            printf '%s:%s\tbash ops/polaris approve %s %s -m "why"\t%s needs your yes for %s (an ask rule)\n' "$col" "$id" "$id" "$sc" "$id" "$sc"
+          fi
+        done <<EOF
+$(printf '%s\n' "$want" | awk 'NF && !seen[$0]++')
+EOF
+      done <<EOF
+$(awk '
+  function val(s) { sub(/[ \t]#.*$/, "", s); sub(/^[ \t]*/, "", s); sub(/[ \t\r]*$/, "", s); return s }
+  function out(c) { if (c != "") print c "\t" (pl == "" ? "-" : pl) "\t" (rk == "" ? "-" : rk) ow }   # "-": read folds empty TAB fields
+  FNR == 1 { out(cur); cur = FILENAME; fs = 0; pl = ""; rk = ""; ow = ""; on = 0 }
+  /^---[\r]?$/ { fs++; next }
+  fs != 1 { next }
+  index($0, "plan:") == 1 { pl = val(substr($0, 6)); on = 0; next }
+  index($0, "risk:") == 1 { rk = val(substr($0, 6)); on = 0; next }
+  index($0, "files_owned:") == 1 {
+    on = 1; s = val(substr($0, 13))
+    if (s ~ /^\[.*\]$/) { s = substr(s, 2, length(s) - 2); n = split(s, P, ",")
+      for (i = 1; i <= n; i++) { t = P[i]; sub(/^[ \t]*/, "", t); sub(/[ \t]*$/, "", t); if (t != "") ow = ow "\t" t }
+      on = 0 }
+    else if (s != "") { ow = ow "\t" s; on = 0 }
+    next
+  }
+  on && /^[ \t]*-[ \t]/ { s = $0; sub(/[ \t]#.*$/, "", s); sub(/^[ \t]*-[ \t]*/, "", s); sub(/[ \t\r]*$/, "", s); if (s != "") ow = ow "\t" s; next }
+  on && /^[A-Za-z_]/ { on = 0 }
+  END { out(cur) }' "$@" 2>/dev/null)
+EOF
+    fi
+    if [ -f "$run/stalled" ]; then
+      ln=""; IFS= read -r ln 2>/dev/null < "$run/stalled" || true; ln="${ln%$'\r'}"
+      st="${ln%%$POLARIS_TAB*}"; sr="${ln#*$POLARIS_TAB}"; [ "$sr" != "$ln" ] || sr=""
+      case "$st" in ''|*[!0-9]*) st=0;; esac
+      [ "$st" -ge "$e" ] && printf 'run\tbash ops/polaris status\tthe run stalled%s — look, then delete .polaris/run/stalled\n' "${sr:+ ($sr)}"
+    fi
+  } | awk -F'\t' '!s[$2 FS $3]++'
+  return 0
+}
+
+_fin_runline() { # _fin_runline <armed epoch> — walk-away § 5.2: the ONE `run:` line an armed run ends
+  # on. total = now − the armed epoch; checks = every finished bg job started since the epoch (live
+  # dirs, .prev slots, .archive/), end − start, plus decisions.ndjson test_depth/finish rows since the
+  # epoch that fall outside every such job (an in-process qa or express land); waiting = what the job
+  # logs say they waited (the lease's last `waited <n>s` per log + every `heavy: waited <n>m`);
+  # timeouts = the jobs with an overrun file. Durations in bg_age words. Read-only, never fails.
+  local e="$1" now d s en chk=0 to=0 q=0 w="" dq=0
+  now="$(date +%s)"; case "$e" in ''|*[!0-9]*) e="$now";; esac
+  set --
+  for d in "$PRIMARY"/.polaris/bg/*/ "$PRIMARY"/.polaris/bg/.archive/*/; do
+    [ -d "$d" ] || continue
+    s=""; read -r s 2>/dev/null < "$d/start" || true; s="${s%$'\r'}"
+    case "$s" in ''|*[!0-9]*) continue;; esac
+    [ "$s" -ge "$e" ] || continue
+    [ -f "$d/overrun" ] && to=$(( to + 1 ))
+    [ -f "$d/log" ] && set -- "$@" "$d/log"
+    [ -f "$d/rc" ] || continue
+    en=""; read -r en 2>/dev/null < "$d/end" || true; en="${en%$'\r'}"
+    case "$en" in ''|*[!0-9]*) continue;; esac
+    [ "$en" -ge "$s" ] && { chk=$(( chk + en - s )); w="$w $s:$en"; }
+  done
+  if [ $# -gt 0 ]; then
+    q="$(awk 'FNR == 1 { q += m; m = 0 }
+      { if (match($0, /waited [0-9]+s/)) { v = substr($0, RSTART + 7, RLENGTH - 8) + 0; if (v > m) m = v }
+        if (match($0, /heavy: waited [0-9]+m/)) q += substr($0, RSTART + 14, RLENGTH - 15) * 60 }
+      END { q += m; print q + 0 }' "$@" 2>/dev/null)" || q=0
+    case "$q" in ''|*[!0-9]*) q=0;; esac
+  fi
+  if [ -s "$PRIMARY/.polaris/decisions.ndjson" ]; then
+    dq="$(awk -v e="$e" -v w="$w" '
+      function num(k,   m) { m = ""; if (match($0, "\"" k "\":[0-9]+")) { m = substr($0, RSTART, RLENGTH); sub("\"" k "\":", "", m) } return m + 0 }
+      BEGIN { n = split(w, W, " ") }
+      index($0, "\"kind\":\"test_depth\"") || index($0, "\"kind\":\"finish\"") {
+        t = num("ts"); if (t < e) next
+        for (i = 1; i <= n; i++) { split(W[i], b, ":"); if (t >= b[1] + 0 && t <= b[2] + 0) next }
+        o += num("secs")
+      }
+      END { print o + 0 }' "$PRIMARY/.polaris/decisions.ndjson" 2>/dev/null)" || dq=0
+    case "$dq" in ''|*[!0-9]*) dq=0;; esac
+    chk=$(( chk + dq ))
+  fi
+  printf 'run: %s - %s in checks, %s waiting, %s timeouts\n' "$(bg_age $(( now - e )))" "$(bg_age "$chk")" "$(bg_age "$q")" "$to"
+}
+
+_fin_parked() { # _fin_parked <gated lines> <armed epoch> — walk-away § 5.1: the `finish: parked` ending.
+  # The frozen token, ≤ 5 `⛔ waiting on you:` lines (more → one `… and <m> more` note), <sid>.parked
+  # (the token and EVERY line — the file the `… more` note points at; sid = CLAUDE_CODE_SESSION_ID, else CLAUDE_SESSION_ID, else `unknown`),
+  # `notify-gate parked` once per parked state (the file's first write), every armed file removed,
+  # then the run: line. The caller exits 1 (run-finish.md v3 stands).
+  local g="$1" e="$2" n m run="$PRIMARY/.polaris/run" sid pk body
+  sid="${CLAUDE_CODE_SESSION_ID:-${CLAUDE_SESSION_ID:-unknown}}"
+  n="$(printf '%s\n' "$g" | grep -c .)" || n=0
+  body="$(printf '%s\n' "$g" | awk -F'\t' 'NF >= 3 && ++k <= 5 { print "⛔ waiting on you: " $2 " - " $3 }')"
+  printf '⛔ finish: parked - %s waiting on you\n%s\n' "$n" "$body"
+  m=$(( n - 5 )); [ "$m" -gt 0 ] && note "… and $m more — .polaris/run/"
+  pk="$run/$sid.parked"
+  mkdir -p "$run" 2>/dev/null || true
+  m=0; [ -f "$pk" ] || m=1
+  { printf 'finish: parked - %s waiting on you\n' "$n"
+    printf '%s\n' "$g" | awk -F'\t' 'NF >= 3 { print "⛔ waiting on you: " $2 " - " $3 }'; } > "$pk" 2>/dev/null || true
+  [ "$m" -eq 0 ] || ( cmd_notify_gate parked ) >/dev/null 2>&1 || true
+  rm -f "$run"/*.armed 2>/dev/null || true
+  _fin_runline "$e"
+}
+
 cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish.md). The mechanical
   # half of CONDUCTOR.md's "the run is over ONLY when" list, in ONE call: nothing building, nothing
   # waiting to land, ready/ drained per drain:, no unmerged integrate/<date>, no orphan lock, clean
@@ -431,7 +578,7 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   # lets an agent re-run finish freely while chasing pendings without muting the signal.
   local force="" PEND=0 CAV=0 CAVS="" br dr n out w it stamp key fired bl rd ib lk f line sc ssha
   local lho lag lsm
-  local fin_t0 fin_plan fin_pf
+  local fin_t0 fin_plan fin_pf fin_arm="" fin_ae="" fin_g="" fin_grev=0
   fin_t0="$(date +%s)"
   [ "${1:-}" = "--force" ] && force=1
   fin_pending() { PEND=$((PEND+1)); printf '⛔ pending: %s\n' "$1"; }
@@ -451,9 +598,33 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   # in .polaris/wt/<ID>, so it can never reach rc 0 no matter what its context talked it into.
   in_primary || die "finish runs in the primary checkout — cd \"$PRIMARY\" first (a worktree can never end the run)"
 
+  # walk-away § 5: an approved away run is ARMED. Builtins until an armed file exists — unarmed,
+  # nothing below forks for it and every line is 6.19.0's. Armed: the human-gated items (_fin_gated)
+  # are read once here; a review/ card among them is not "waiting to land" — it waits on the owner.
+  for f in "$PRIMARY"/.polaris/run/*.armed; do
+    [ -f "$f" ] || continue
+    fin_arm="$(_run_armed 2>/dev/null)" || fin_arm=""
+    break
+  done
+  if [ -n "$fin_arm" ]; then
+    read -r fin_ae 2>/dev/null < "$fin_arm" || true; fin_ae="${fin_ae%$'\r'}"
+    case "$fin_ae" in ''|*[!0-9]*) fin_ae=0;; esac
+    fin_g="$(_fin_gated "$fin_arm" "$fin_ae")"
+    [ -z "$fin_g" ] || fin_grev="$(printf '%s\n' "$fin_g" | awk -F'\t' '$1 ~ /^review:/ && !s[$1]++ { n++ } END { print n + 0 }')"
+  fi
+
   # PHASE A — board + git. Free, and every finding is accumulated: one pass paints the whole picture,
   # the same reason cmd_qa and cmd_drift never short-circuit on the first red.
   br="$(git -C "$PRIMARY" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  # walk-away § 5.3: armed, a clean tree on a branch already merged into <base> goes back to <base>
+  # here — the one raw switch the plan names. Anything else (unarmed, dirty, unmerged, detached, a
+  # refused switch) keeps today's pending line.
+  if [ -n "$fin_arm" ] && [ "$br" != "$BASE" ] && [ "$br" != HEAD ] && [ "$br" != '?' ] \
+     && [ -z "$(git -C "$PRIMARY" status --porcelain 2>/dev/null | head -1)" ] \
+     && git -C "$PRIMARY" merge-base --is-ancestor "refs/heads/$br" "refs/heads/$BASE" 2>/dev/null \
+     && git -C "$PRIMARY" switch -q "$BASE" >/dev/null 2>&1; then
+    note "switched back to $BASE (armed run)"; br="$BASE"
+  fi
   [ "$br" = "$BASE" ] || fin_pending "on branch $br, not $BASE — a run ends on the base branch (git switch $BASE)"
   # Same porcelain read cmd_qa's suite stamp uses, deliberately: if the two disagreed on "clean",
   # finish could bless a tree for which qa silently re-ran the whole suite.
@@ -463,7 +634,7 @@ cmd_finish() { # finish [--force] — is the RUN over? (ops/contracts/run-finish
   [ -z "$(git -C "$PRIMARY" status --porcelain 2>/dev/null | head -1)" ] \
     || fin_pending "uncommitted changes in the working tree — commit or discard them before calling the work done, or park it: bash ops/polaris park"
   n=$(fin_count active); [ "$n" -eq 0 ] || fin_pending "$n building — $(fin_ids active)"
-  n=$(fin_count review); [ "$n" -eq 0 ] || fin_pending "$n waiting to land — $(fin_ids review) (audit + land + seal them)"
+  n=$(fin_count review); [ "$n" -eq 0 ] || [ "$n" -le "$fin_grev" ] || fin_pending "$n waiting to land — $(fin_ids review) (audit + land + seal them)"
   _fin_landed_gate
   # drain: (ops/contracts/hands-free-knobs.md) decides whether a queued task blocks the close. Under
   # `plan` one "go" authorizes THE PLAN, not the board, so ready/ is legitimately non-empty at the
@@ -676,6 +847,13 @@ EOF
   # one task. Best-effort, never gates (decision_log swallows its own failures).
   fin_plan=""; fin_pf="$(next_dir)/plan"
   [ -f "$fin_pf" ] && fin_plan="$(tr -d ' \r\n' < "$fin_pf" 2>/dev/null)"
+  # walk-away § 5.1: armed, nothing else pending, and something only the owner can do → parked, rc 1.
+  # Any non-human-gated pending item above keeps today's ending, byte for byte.
+  if [ "$PEND" -eq 0 ] && [ -n "$fin_g" ]; then
+    decision_log finish "$fin_plan" "" "" "" "$(( $(date +%s) - fin_t0 ))" 1
+    _fin_parked "$fin_g" "$fin_ae"
+    exit 1
+  fi
   if [ "$PEND" -gt 0 ]; then
     decision_log finish "$fin_plan" "" "" "" "$(( $(date +%s) - fin_t0 ))" 1
     [ "$PEND" -eq 1 ] && { w="thing"; it="it"; } || { w="things"; it="them"; }
@@ -754,5 +932,10 @@ EOF
     mkdir -p "$PRIMARY/.polaris" 2>/dev/null || true
     printf '%s %s\n' "$key" "$(date +%s)" > "$stamp" 2>/dev/null || true
     say "finish: run complete — done signal fired"
+  fi
+  # walk-away § 5.2: an armed run ends here — the armed file goes and the run: line is the last line.
+  if [ -n "$fin_arm" ]; then
+    rm -f "$PRIMARY"/.polaris/run/*.armed 2>/dev/null || true
+    _fin_runline "$fin_ae"
   fi
 }

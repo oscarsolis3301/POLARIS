@@ -1,4 +1,4 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.19.0] -->
+<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.20.0] -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 Model-agnostic operating system for running N coding agents in parallel on this repo with zero merge
@@ -20,8 +20,8 @@ Your kickoff names your role. Read `ops/roles/<ROLE>.md` and execute it. Nothing
 | "You are the CONDUCTOR" | `ops/roles/CONDUCTOR.md` | 1 — runs the whole loop via role subagents |
 | "You are EVOLVE" | `ops/roles/EVOLVE.md` | 1, between sprints |
 
-**`triage` decides the lane — you never weigh it by hand.** It reads points, risk, `express:`,
-`publish:` and the RULES-guarded paths straight off the board and prints one word:
+**`triage` decides the lane — you never weigh it by hand.** It reads points, risk, `express:` and
+the RULES-guarded paths straight off the board and prints one word:
 
 | line 1 | you are | why |
 |---|---|---|
@@ -95,7 +95,7 @@ need one section or none.
    `files_owned` too, and outside Builder sessions. A guard rejection means hand back or ask the
    human — never work around it.
 2. **Ready gate.** A task enters `ready/` only if: ≤5 points (a chain card: up to 13, with `steps:` each ≤5),
-   every `depends_on` is in `done/`, its contract exists, and its `files_owned` overlaps NOTHING in `ready/` or `active/`.
+   every `depends_on` is in `done/`, a contract it names exists, and its `files_owned` overlaps NOTHING in `ready/` or `active/`.
 3. **Contract before code.** Contract missing or ambiguous → `blocked/` with a note. NEVER invent an
    interface.
 4. **Green before `review/`.** The card's own `verify:` checks green AND `polaris verify` green;
@@ -145,9 +145,9 @@ little as possible.
 
 - **Prefer ONE context over three.** Twenty-five subagents in a day is a failure, not diligence.
 - **Run the smallest check that proves the change** — never a full suite for a small diff.
-- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku is blocked, and Fable runs only when the owner picks it.
-- **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:
-  one command per line, never `&&` (PowerShell has no chain operators), no placeholders.
+- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku runs only the kit's job runner, and Fable runs only when the owner picks it.
+- **Long, mechanical, no judgement in it?** Run it yourself, detached: one command per line in a file, then
+  `bash ops/polaris bg run <name> --steps <file>` and collect once. 🚩 only what needs a person, only while they are here.
 - **Ask early** rather than burning tokens guessing.
 
 Added by `polaris heal`. Edit freely — it is appended once and never rewritten.

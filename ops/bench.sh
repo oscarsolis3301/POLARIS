@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# POLARIS v5 — startup + lookup benchmark.  bash ops/bench.sh [--json]
+# POLARIS v5 — startup + lookup benchmark.  bash ops/bench.sh [--json | --context | --flow | guards | hops]
 #
 # WHY THIS EXISTS
 #   Every performance claim in this kit used to be a comment written from memory, and several of
@@ -199,6 +199,212 @@ PY
   [ "$dry" = 1 ] && exit 0
   if [ "$rc" = 0 ]; then printf 'total\t%s\n' "$sum"; else printf 'total\t-\n'; fi
   exit "$rc"
+fi
+
+# --- `bench.sh --flow [--list] [--profile] [--runs <n>]`: a small change, begin → wrap, per phase ----
+# (ops/contracts/walk-away.md § 7). Before anyone builds a faster lane for one-point changes, this
+# says where the seconds of the ordinary one go. HERMETIC: a mktemp -d repo with HOME/USERPROFILE,
+# POLARIS_AWAKE_HOME and POLARIS_HEAVY_DIR inside it, `test: true`, `lint: true`, `typecheck: true`.
+# Each run builds a fresh repo and takes two 1-point cards — a look card (one .css file) and a ui card
+# (one .html file) — through the commands `begin` and `wrap` run, one CLI call per phase, so every
+# phase has its own wall clock. The edit itself is not timed. Pass `self` is the default landing:
+# handoff carries the landing tail, split at its `continuing into land` line (land = land+seal+done).
+# Pass `integrator` runs land, seal and done as the integrator does, one call each. A phase's number
+# is its best of <n> runs (default 3) of the two cards' mean; `flow:` is the best run's mean
+# begin+wrap for one card. stdout is `pass<TAB><name>`, then one `phase<TAB>seconds` line per phase,
+# then `flow: begin+wrap <s>s (best of <n>)`, per pass. The per-card totals go to stderr. --list
+# prints the pass and phase names and runs nothing (the verify proof). --profile then runs one more
+# cycle with `PS4='+ $EPOCHREALTIME <file>:<line> '` xtrace on the slowest phase and prints its 15
+# costliest lines. Measure only when `bash ops/polaris bg status` shows no heavy job.
+_flow_phases() { # _flow_phases <pass> — the phase names of one pass, space-separated
+  case "$1" in
+    self) echo "new triage claim pack handoff land next finish" ;;
+    *)    echo "new triage claim pack handoff land seal done next finish" ;;
+  esac
+}
+
+_flow_now() { # _flow_now — wall clock in seconds with a fraction; bash 3.2 falls back to date
+  if [ -n "${EPOCHREALTIME:-}" ]; then printf '%s\n' "${EPOCHREALTIME/,/.}"; return 0; fi
+  local n; n="$(date +%s%N)"
+  case "$n" in *N) date +%s ;; *) printf '%s.%s\n' "${n%?????????}" "${n#"${n%?????????}"}" ;; esac
+}
+
+_flow_rec() { # _flow_rec <phase> <t0> <t1> — one row into the current card's timing file
+  printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$_FLOW_TSV"
+}
+
+_flow_run() { # _flow_run <phase> <dir> <cmd…> — one timed CLI call; output → the log; rc is the call's
+  local ph="$1" dir="$2" t0 t1 rc=0; shift 2
+  printf '== %s: %s\n' "$ph" "$*" >>"$_FLOW_LOG"
+  t0="$(_flow_now)"
+  if [ "$ph" = "${_FLOW_TRACE:-}" ]; then
+    _flow_traced "$dir" "$@" || rc=$?
+  else
+    ( cd "$dir" && "$@" ) >>"$_FLOW_LOG" 2>&1 </dev/null || rc=$?
+  fi
+  t1="$(_flow_now)"
+  _flow_rec "$ph" "$t0" "$t1"
+  return "$rc"
+}
+
+_flow_traced() { # _flow_traced <dir> <cmd…> — the call under xtrace, every child bash too, into $_FLOW_XT
+  ( cd "$1" || exit 1; shift
+    exec 9>"$_FLOW_XT"
+    export BASH_XTRACEFD=9 PS4='+ $EPOCHREALTIME ${BASH_SOURCE##*/}:$LINENO '
+    set -x; export SHELLOPTS
+    "$@" ) >>"$_FLOW_LOG" 2>&1 </dev/null
+}
+
+_flow_repo() { # _flow_repo <dir> <landing> — the throwaway repo, board and two drafts
+  local R="$1"
+  git init -q -b main "$R" 2>/dev/null || { git init -q "$R"; git -C "$R" symbolic-ref HEAD refs/heads/main; }
+  cd "$R" || return 1
+  git config user.email t@t; git config user.name t; git config core.autocrlf false
+  mkdir -p src; echo x > src/seed.txt
+  git add -A; git commit -qm init
+  bash "$_FLOW_KIT" init-board
+  { printf 'test: true\nlint: true\ntypecheck: true\n'
+    [ "$2" = integrator ] && printf 'landing: integrator\n'; } > ops/CONVENTIONS.md
+  printf '# SPRINT 1 — flow\n' > ops/SPRINT.md
+  printf '# fixture contract\n' > ops/contracts/fix.md
+  git add -A; git commit -qm board
+  mkdir -p .polaris/drafts
+  _flow_draft 'a look change' src/a.css > .polaris/drafts/look.md
+  _flow_draft 'a ui change' src/b.html > .polaris/drafts/ui.md
+}
+
+_flow_draft() { # _flow_draft <title> <path> — a 1-point, risk: normal draft owning one file
+  printf -- '---\ntitle: %s\nplan: flow\npoints: 1\nrisk: normal\nfiles_owned:\n  - %s\ndepends_on: []\ncontract: ops/contracts/fix.md\nverify: []\n---\n## Why\nbench\n' "$1" "$2"
+}
+
+_flow_card() { # _flow_card <repo> <pass> <card> — one card begin → wrap, a phase per call; rc 1 + why
+  local R="$1" pass="$2" card="$3" id lane t0 tm t1 line nx path
+  case "$card" in look) path=src/a.css ;; *) path=src/b.html ;; esac
+  _flow_run new "$R" bash "$_FLOW_KIT" new ".polaris/drafts/$card.md" || { echo "new failed"; return 1; }
+  id="$(sed -n '/^== new:/{n;p;}' "$_FLOW_LOG" | tail -1)"; id="${id%%[ $'\t']*}"
+  case "$id" in T-[0-9]*) ;; *) echo "new printed no task id"; return 1 ;; esac
+  t0="$(_flow_now)"; lane="$(cd "$R" && bash "$_FLOW_KIT" triage "$id" 2>>"$_FLOW_LOG" | sed -n 1p)"; t1="$(_flow_now)"
+  _flow_rec triage "$t0" "$t1"
+  [ "$lane" = solo ] || { echo "triage said '$lane', not solo"; return 1; }
+  _flow_run claim "$R" bash "$_FLOW_KIT" claim "$id" || { echo "claim failed"; return 1; }
+  _flow_run pack "$R" bash "$_FLOW_KIT" pack "$id" || { echo "pack failed"; return 1; }
+  ( cd "$R/.polaris/wt/$id" && echo "$card" > "$path" && git add -A && git commit -qm "$card" ) >>"$_FLOW_LOG" 2>&1 \
+    || { echo "the edit did not commit"; return 1; }
+  if [ "$pass" = self ]; then
+    if [ "${_FLOW_TRACE:-}" = handoff ] || [ "${_FLOW_TRACE:-}" = land ]; then
+      # one call holds both: trace it whole (the profile then covers the landing tail too)
+      _FLOW_TRACE=handoff _flow_run handoff "$R/.polaris/wt/$id" bash "$_FLOW_KIT" handoff
+      line="$(awk -F'\t' '$1=="handoff"{print $3}' "$_FLOW_TSV")"; _flow_rec land "$line" "$line"
+    else
+      # the landing tail runs inside handoff: one call, split at the line that starts it
+      t0="$(_flow_now)"; tm=""
+      while IFS= read -r line; do
+        printf '%s\n' "$line" >>"$_FLOW_LOG"
+        case "$line" in *"continuing into land"*) [ -n "$tm" ] || tm="$(_flow_now)" ;; esac
+      done < <(cd "$R/.polaris/wt/$id" && bash "$_FLOW_KIT" handoff 2>&1 </dev/null)
+      t1="$(_flow_now)"; [ -n "$tm" ] || tm="$t1"
+      _flow_rec handoff "$t0" "$tm"; _flow_rec land "$tm" "$t1"
+    fi
+  else
+    _flow_run handoff "$R/.polaris/wt/$id" bash "$_FLOW_KIT" handoff || { echo "handoff failed"; return 1; }
+    _flow_run land "$R" bash "$_FLOW_KIT" land "$id" || { echo "land failed"; return 1; }
+    _flow_run seal "$R" bash "$_FLOW_KIT" seal || { echo "seal failed"; return 1; }
+    _flow_run done "$R" bash "$_FLOW_KIT" done "$id" || { echo "done failed"; return 1; }
+  fi
+  [ -f "$R/ops/board/done/$id.md" ] || { echo "$id did not reach done/"; return 1; }
+  t0="$(_flow_now)"; nx="$(cd "$R" && bash "$_FLOW_KIT" next 2>>"$_FLOW_LOG" | sed -n 1p)"; t1="$(_flow_now)"
+  _flow_rec next "$t0" "$t1"
+  printf '== next said: %s\n' "$nx" >>"$_FLOW_LOG"
+  # wrap runs finish only when next says finish; a phase that did not run counts 0
+  if [ "$nx" = finish ]; then
+    _flow_run finish "$R" bash "$_FLOW_KIT" finish || { echo "finish failed"; return 1; }
+  else
+    t0="$(_flow_now)"; _flow_rec finish "$t0" "$t0"
+  fi
+}
+
+_flow_cycle() { # _flow_cycle <pass> <run> — a fresh repo, both cards; timings under $_FLOW_W/<pass>.<run>.<card>
+  local pass="$1" r="$2" R="$_FLOW_W/$1.$2/repo" card why
+  mkdir -p "$_FLOW_W/$1.$2/home"
+  ( export HOME="$_FLOW_W/$1.$2/home" USERPROFILE="$_FLOW_W/$1.$2/home"
+    _flow_repo "$R" "$pass" ) >>"$_FLOW_W/$1.$2.log" 2>&1 || { echo "⛔ flow: the fixture repo did not build — $_FLOW_W/$1.$2.log" >&2; return 1; }
+  for card in look ui; do
+    _FLOW_TSV="$_FLOW_W/$pass.$r.$card"; _FLOW_LOG="$_FLOW_W/$pass.$r.log"; : >"$_FLOW_TSV"
+    why="$(export HOME="$_FLOW_W/$1.$2/home" USERPROFILE="$_FLOW_W/$1.$2/home"; _flow_card "$R" "$pass" "$card")" || {
+      printf '⛔ flow: %s pass, run %s, %s card: %s\n' "$pass" "$r" "$card" "$why" >&2
+      tail -15 "$_FLOW_LOG" >&2; return 1; }
+    # the traced profile cycle takes one card — the trace is the point, not the second number
+    [ -z "${_FLOW_TRACE:-}" ] || break
+  done
+}
+
+_flow_main() { # _flow_main [--list] [--profile] [--runs <n>] [--pass self|integrator]
+  local list=0 prof=0 runs=3 passes="self integrator" pass r slow
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --list) list=1 ;;
+      --profile) prof=1 ;;
+      --runs) runs="${2:-}"; shift ;;
+      --pass) passes="${2:-}"; shift ;;
+      *) printf '⛔ usage: bash ops/bench.sh --flow [--list] [--profile] [--runs <n>] [--pass self|integrator] — not understood: %s\n' "$1" >&2; return 2 ;;
+    esac
+    shift
+  done
+  case "$runs" in ''|*[!0-9]*|0) echo "⛔ --runs takes a whole number above 0" >&2; return 2 ;; esac
+  case "$passes" in "self integrator"|self|integrator) ;; *) echo "⛔ --pass is self or integrator" >&2; return 2 ;; esac
+  if [ "$list" = 1 ]; then
+    for pass in $passes; do
+      printf 'pass\t%s\n' "$pass"
+      for r in $(_flow_phases "$pass"); do printf '%s\n' "$r"; done
+    done
+    return 0
+  fi
+  _FLOW_KIT="$ROOT/ops/polaris"
+  _FLOW_W="$(mktemp -d)" || return 1
+  trap 'rm -rf "$_FLOW_W"' EXIT
+  export POLARIS_AWAKE_HOME="$_FLOW_W/awake" POLARIS_HEAVY_DIR="$_FLOW_W/heavy"
+  unset CLAUDE_PROJECT_DIR CLAUDE_PID
+  for pass in $passes; do
+    for r in $(seq 1 "$runs"); do _flow_cycle "$pass" "$r" || return 1; done
+    printf 'pass\t%s\n' "$pass"
+    # per run: each phase's mean over the two cards; a phase prints its best run, flow the best total
+    slow="$(for r in $(seq 1 "$runs"); do
+        awk -F'\t' -v r="$r" '{ s[$1] += $3 - $2 } END { for (p in s) printf "%s\t%s\t%.3f\n", r, p, s[p] / 2 }' \
+          "$_FLOW_W/$pass.$r.look" "$_FLOW_W/$pass.$r.ui"
+      done | awk -F'\t' -v order="$(_flow_phases "$pass")" -v runs="$runs" '
+        { k = $2; if (!(k in best) || $3 < best[k]) best[k] = $3; tot[$1] += $3 }
+        END {
+          n = split(order, o, " ")
+          for (i = 1; i <= n; i++) { printf "%s\t%.2f\n", o[i], best[o[i]]; if (best[o[i]] > m) { m = best[o[i]]; sp = o[i] } }
+          b = -1; for (r in tot) if (b < 0 || tot[r] < b) b = tot[r]
+          printf "flow: begin+wrap %.2fs (best of %d)\n", b, runs
+          printf "slowest\t%s\n", sp
+        }')"
+    printf '%s\n' "$slow" | grep -v '^slowest'
+    for r in $(seq 1 "$runs"); do
+      awk -F'\t' -v r="$r" -v pass="$pass" 'FNR == 1 { c = FILENAME; sub(/.*\./, "", c) } { s[c] += $3 - $2 }
+        END { printf "flow %s run %s: look %.2fs · ui %.2fs\n", pass, r, s["look"], s["ui"] }' \
+        "$_FLOW_W/$pass.$r.look" "$_FLOW_W/$pass.$r.ui" >&2
+    done
+    if [ "$prof" = 1 ]; then
+      _FLOW_TRACE="$(printf '%s\n' "$slow" | sed -n 's/^slowest\t//p')"
+      _FLOW_XT="$_FLOW_W/$pass.trace"
+      _flow_cycle "$pass" profile || { _FLOW_TRACE=""; return 1; }
+      printf 'profile\t%s\t%s (one traced look card; seconds until the next traced line, summed per line)\n' "$pass" "$_FLOW_TRACE"
+      [ -s "$_FLOW_XT" ] || { echo "⛔ flow: no trace was written for $_FLOW_TRACE" >&2; _FLOW_TRACE=""; return 1; }
+      awk '$1 ~ /^\++$/ && $2 ~ /^[0-9]+[.][0-9]+$/ {
+          if (pl != "") { d[pl] += $2 - pt; if (!(pl in c)) c[pl] = pc }
+          pt = $2; pl = $3; pc = ""; for (i = 4; i <= NF && length(pc) < 70; i++) pc = pc (pc == "" ? "" : " ") $i }
+        END { for (k in d) printf "%.3f\t%s\t%s\n", d[k], k, c[k] }' "$_FLOW_XT" | sort -t"$(printf '\t')" -k1,1 -rn | head -15
+      _FLOW_TRACE=""
+    fi
+  done
+}
+
+if [ "${1:-}" = "--flow" ]; then
+  shift
+  _flow_main "$@"
+  exit $?
 fi
 
 echo "POLARIS bench — $(sed -n 's/^version: *//p' ops/VERSION 2>/dev/null | head -1) · best of $RUNS · $(git rev-parse --short HEAD 2>/dev/null)"

@@ -58,9 +58,9 @@ as a normal ending, never as an apology. (`finish` exiting 0 at a cap means the 
 clear — then celebrate.)
 
 **Hand the remainder over, do not just stop.** A budgeted stop that leaves the human to work out what
-is left has spent the budget and delivered nothing at the end of it. So the close carries a 🚩 block
-(output style § Handing a step to the human): what landed, and ONE paste-ready block — one command per
-line, never `&&` — that picks the rest up. **Read the caps from `ops/CONVENTIONS.md`, never from the
+is left has spent the budget and delivered nothing at the end of it. So the close names what landed,
+what is left, and the one word that picks it up — `start`. Everything mechanical the run could still
+do (a land, a seal, a `qa`), it did before stopping; nothing mechanical is handed over. **Read the caps from `ops/CONVENTIONS.md`, never from the
 defaults in this file's table**: on 2026-09-15 a run stopped at 90 minutes against a repo whose actual
 ceiling was 360, because the conductor quoted the built-in default instead of reading the config, and
 the owner had to type `start` for nothing.
@@ -68,9 +68,15 @@ the owner had to type `start` for nothing.
 **Tokens are the cap this protocol cannot enforce, so you are the one enforcing them.** `run_max_*`
 bound tasks, minutes and agents — all measurable from the shell — but token spend is invisible to
 every command here. That is precisely why § TOKEN DISCIPLINE's mission is on you at every spawn: one
-context over three, the smallest check that proves the change, and a 🚩 handover for anything long,
-mechanical and judgement-free. A run that stays inside every numeric cap and still burns a weekly
-limit has failed, and no gate will have told you.
+context over three, the smallest check that proves the change, and nothing long or mechanical spent
+in a context or handed to the owner:
+
+- **Long, mechanical, no judgement in it?** Run it yourself, detached: one command per line in a file, then
+  `bash ops/polaris bg run <name> --steps <file>` and collect once. 🚩 only what needs a person, only while they are here.
+
+What needs a person is listed exhaustively in `PLANNER.md` § Needs you before I start; away, the plan
+named it before approval or it parks (`bash ops/polaris defer -m "<why>" -- <cmd…>`). A run that
+stays inside every numeric cap and still burns a weekly limit has failed, and no gate will have told you.
 
 **Context compacted mid-run?** The board is the run's memory, not your context — and
 the anchor hook already re-read the board for you the moment the compaction finished, so continue
@@ -177,6 +183,9 @@ work.
    busy lane, a taken task or another chat's work; finish through publishing. A `risk: high` task of
    the approved plan merges on the plan's yes — its handoff prints an `away:` line, and the close
    names it.
+   - **Before you present it: `bash ops/polaris preflight <slug>`** (read-only). Each `⛔ needs you:`
+     line goes into the plan gate as one of the "Needs you before I start" items (`PLANNER.md`), so
+     the human settles it now, while they are here — never three hours into an away run.
    - **One yes covers the plan.** After the go, once, in the primary checkout: `bash ops/polaris approve --plan <slug> -m "<the human's words, quoted>"`. It records every scope the approved plan named (`merge`, `need:<v>`, `ask` rules) on its tasks, so nothing the plan named asks again mid-run. Overlap with another plan's tasks is ready-gate sequencing, never an owner question (at most one caveat line). Claude Code's own auto-mode classifier may still refuse an action; POLARIS cannot lift that, so say so in one line. `autonomy: standard` keeps the per-merge stop.
    - **An unapproved `ask` scope is a human gate here, like `risk: high`.** `ask` = the same denial
      as `path`, lifted only by a human's recorded approval on the task — so a task the planner parked
@@ -188,6 +197,11 @@ work.
      behalf** — no yes, no `approve`, and the task stays parked; say so. An unapproved `ask` scope
      anywhere in the plan or the disclosed drain depth makes `plan_gate: auto` wait exactly as
      `confirm` does. Converting a rule between `path` and `ask` is a HUMAN decision, never an agent's.
+   - **Arm the pulse — away runs only** (`presence` says `away`: approved into auto mode). Right after
+     `approve --plan`: CronCreate every `pulse_minutes` (default 30) with the prompt
+     `bash ops/polaris pulse, then follow line 1`. Each fire reaps budget-dead jobs and says `ok` ·
+     `act <what next says>` · `parked` · `done`; `act` → do it. Delete it (CronDelete) at `done` or
+     `parked` (step 8) — a pulse left armed wakes a finished session for nothing.
    - `ops/CONVENTIONS.md` sets `builders: panes`? Run `bash ops/polaris fleet <N> --launch` instead
      of steps 4–6 and stop — the human chose to watch sessions in terminal panes (classic flow).
      Each pane loops itself via `bash ops/polaris next` after its handoff, so the queue drains
@@ -382,6 +396,11 @@ work.
      fix the one thing `finish` named and run it again. Two exceptions: a budget cap, above, and
      `finish` naming only human-gated work (`next` listed it as `risk: high awaiting approval:`) —
      your reply then closes with `⛔ waiting on you: approve <ID>`: no 🎉, no looping.
+   - **`finish: parked - <n> waiting on you`** (exit 1, away runs) → every item left needs a person
+     (deferred, denied, an uncovered `risk: high` or `ask`, a stall). Close with its `⛔ waiting on
+     you:` lines in plain words: no 🎉, no looping — the second legitimate ending of an away run.
+   - Away, both endings print a last line `run: <total> - <checks> in checks, <queue> waiting, <n>
+     timeouts` — quote it as where the time went — and both disarm the run: delete the pulse.
 
    Full shape in `.claude/output-styles/polaris.md` § How a session ends.
    With the queue drained and the checks green there is nothing left to offer — the next run starts
@@ -391,7 +410,13 @@ work.
 ## Cost discipline
 A conductor run spends N builders' tokens in parallel — that's the point, but stay honest: lanes are
 capped by `autolaunch_max`; builders get their classic minimal context and NOTHING extra; you read
-board summaries, never the repo; one retry per task, never loops of retries. When a run degrades
+board summaries, never the repo; one retry per task, never loops of retries. **Never spend a strong
+turn waiting:** a job of yours measured ≥ 300 s is `bg run <name> -- <cmd>` plus ONE `bg wait <name>
+--done` issued with `run_in_background: true`, then end the turn. No background wake-up in this
+harness? `bash ops/polaris route --role RUNNER` and spawn the agent it names (`agent: polaris-runner`,
+Haiku — the one place Haiku runs) with just the job name: it waits and returns `rc=` plus the last 15
+log lines. You start the job and name the command; the runner never does. No `agent:` line (`runner:
+off`, Haiku refused) → the chunked `bg wait <name> --max 540`. When a run degrades
 (you're re-reading your own summaries), say so and hand the remainder to fresh sessions via
 `ops/polaris fleet` instead of grinding on.
 

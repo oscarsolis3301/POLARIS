@@ -16,6 +16,9 @@
 #     $HOME/.claude/polaris/model-state/<sid>.approved  line 1: epoch of the approval · lines 2+: slugs
 #   away ⇔ <sid> valid AND <sid>.approved exists AND the mode is auto | bypassPermissions | dontAsk.
 #   Every other case is here, and here means no output at all.
+#   walk-away § 1, § 4.1, § 4.4: an approval also ARMS the run — <primary>/.polaris/run/<sid>.armed
+#   (epoch · the slugs · `reentries 0`), written only when absent, only where the cwd holds a board,
+#   removed when the mode turns to plan; `reentry: desktop` lets a `POLARIS re-entry:` prompt inherit it.
 #
 # FAIL-OPEN, AND FAST
 #   Any parse miss, unset HOME, bad <sid> or unreadable file ⇒ no output, exit 0. Never non-zero,
@@ -54,11 +57,77 @@ case "$PG_SID" in ''|*[!A-Za-z0-9_-]*) pg_end allow:error;; esac
 [ -n "${HOME:-}" ] || pg_end allow:error
 case "$PG_MODE" in *[!A-Za-z]*) PG_MODE='';; esac
 PG_F="$HOME/.claude/polaris/model-state/$PG_SID"
+PG_P=''
 
+# The primary (walk-away § 1): the payload's cwd when it holds a board — a worktree cwd names its
+# primary fork-free. The cwd arrives JSON-escaped (C:\\Users\\…), so \ → / and the doubled / folds.
+_pg_primary() {
+  local c='' s='//' re='"cwd": *"([^"]*)"'
+  [ -n "$PG_P" ] && return 0
+  [[ $PG_H =~ $re ]] && c="${BASH_REMATCH[1]}"
+  c="${c//\\//}"; c="${c//$s//}"
+  case "$c" in */.polaris/wt/*) c="${c%%/.polaris/wt/*}";; esac
+  [ -n "$c" ] && [ -d "$c/ops/board" ] && PG_P="$c"
+  [ -n "$PG_P" ]
+}
+_pg_cfg() { # one CONVENTIONS key of the primary: $1 key, $2 default -> REPLY. A fork, off the common path.
+  local f="$PG_P/ops/CONVENTIONS.md" v
+  REPLY="$2"; [ -f "$f" ] || return 0
+  v="$(sed -n "s/^$1:[[:space:]]*\([^#]*\).*\$/\1/p" "$f" 2>/dev/null | head -1)"
+  v="${v%"${v##*[![:space:]]}"}"
+  [ -n "$v" ] && REPLY="$v"
+  return 0
+}
+_pg_arm() { # <primary>/.polaris/run/<sid>.armed, only when absent: epoch · the approval's slugs · reentries 0
+  local a l n=0 sl='' e
+  _pg_primary || return 0
+  a="$PG_P/.polaris/run/$PG_SID.armed"
+  [ -f "$a" ] && return 0
+  e="${EPOCHSECONDS:-$(date +%s 2>/dev/null)}"
+  case "$e" in ''|*[!0-9]*) return 0;; esac
+  if [ -f "$PG_F.approved" ]; then
+    { while IFS= read -r l || [ -n "$l" ]; do
+        n=$((n + 1)); [ "$n" -ge 2 ] || continue
+        l="${l%$'\r'}"; [ -n "$l" ] && sl="${sl:+$sl }$l"
+      done < "$PG_F.approved"; } 2>/dev/null
+  fi
+  [ -d "${a%/*}" ] || mkdir -p "${a%/*}" 2>/dev/null
+  { printf '%s\n%s\nreentries 0\n' "$e" "$sl" > "$a"; } 2>/dev/null
+  return 0
+}
 pg_approve() { # line 1 of <sid>.approved, only when absent: an approval on record keeps its epoch + slugs
+  if [ ! -f "$PG_F.approved" ]; then
+    [ -d "${PG_F%/*}" ] || mkdir -p "${PG_F%/*}" 2>/dev/null
+    { printf '%s\n' "${EPOCHSECONDS:-$(date +%s 2>/dev/null)}" > "$PG_F.approved"; } 2>/dev/null
+  fi
+  _pg_arm                                     # the approval ARMS the run (walk-away § 4.1)
+  return 0
+}
+# Desktop re-entry (walk-away § 4.4, opt-in `reentry: desktop`): a fresh session whose prompt opens
+# with the fixed prefix inherits the newest armed run's approval — within reentry_hours, under
+# reentry_max. Writes <sid>.approved (now · the armed slugs) and nothing else; any doubt → nothing.
+_pg_reenter() {
+  local f e best='' be=0 l='' sl='' r='' now h mx
   [ -f "$PG_F.approved" ] && return 0
+  _pg_primary || return 0
+  _pg_cfg reentry session; [ "$REPLY" = desktop ] || return 0
+  for f in "$PG_P"/.polaris/run/*.armed; do
+    [ -f "$f" ] || continue
+    e=''; { IFS= read -r e < "$f"; } 2>/dev/null; e="${e%$'\r'}"
+    case "$e" in ''|*[!0-9]*) continue;; esac
+    [ "$e" -gt "$be" ] && { be="$e"; best="$f"; }
+  done
+  [ -n "$best" ] || return 0
+  _pg_cfg reentry_hours 12; h="$REPLY"; case "$h" in ''|*[!0-9]*) h=12;; esac
+  _pg_cfg reentry_max 3; mx="$REPLY"; case "$mx" in ''|*[!0-9]*) mx=3;; esac
+  now="${EPOCHSECONDS:-$(date +%s 2>/dev/null)}"; case "$now" in ''|*[!0-9]*) return 0;; esac
+  [ $((now - be)) -le $((h * 3600)) ] || return 0
+  { IFS= read -r l; IFS= read -r sl; IFS= read -r r; } < "$best" 2>/dev/null
+  sl="${sl%$'\r'}"; r="${r%$'\r'}"; r="${r#reentries }"
+  case "$r" in ''|*[!0-9]*) return 0;; esac
+  [ "$r" -lt "$mx" ] || return 0
   [ -d "${PG_F%/*}" ] || mkdir -p "${PG_F%/*}" 2>/dev/null
-  { printf '%s\n' "${EPOCHSECONDS:-$(date +%s 2>/dev/null)}" > "$PG_F.approved"; } 2>/dev/null
+  { printf '%s\n' "$now" > "$PG_F.approved"; [ -n "$sl" ] && printf '%s\n' $sl >> "$PG_F.approved"; } 2>/dev/null
   return 0
 }
 
@@ -73,12 +142,15 @@ if [ -n "$PG_MODE" ]; then
   fi
   if [ "$PG_MODE" = plan ]; then
     [ -f "$PG_F.approved" ] && rm -f "$PG_F.approved" 2>/dev/null
+    _pg_primary && [ -f "$PG_P/.polaris/run/$PG_SID.armed" ] && rm -f "$PG_P/.polaris/run/$PG_SID.armed" 2>/dev/null
   elif [ "$PG_WAS" = plan ]; then
     pg_approve
   fi
 else
   PG_MODE="$PG_WAS"                          # no permission_mode in this payload → the recorded one
 fi
+pg_re='"prompt": *"POLARIS re-entry:'
+[ "$PG_EV" = UserPromptSubmit ] && [[ $PG_H =~ $pg_re ]] && _pg_reenter
 
 # --- 2. ExitPlanMode went through: that is the approval ----------------------
 if [ "$PG_EV" = PostToolUse ] && [ "$PG_TOOL" = ExitPlanMode ]; then

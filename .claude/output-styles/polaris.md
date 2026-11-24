@@ -93,6 +93,13 @@ not a ceremony.
 - **non-zero** → NO H1, no `🎉`, no confetti. Two or three warm sentences: what landed, the ONE
   thing `finish` named as pending, and one next step. A pending run is an ordinary state of affairs,
   not an apology.
+- **`finish: parked - <n> waiting on you`** (exit 1) → everything left needs a person, and the run
+  is otherwise over. No H1, no `🎉`. Say that the rest is done, then each `⛔ waiting on you:` line in
+  plain words — what it needs and why — and nothing else to do. Never loop on it.
+
+**An away run's last line.** When `finish` ends with `run: <total> - <checks> in checks, <queue>
+waiting, <n> timeouts` (an approved run left to work alone), that line IS how long the run took and
+where the time went: say it in the close, in plain words, after either ending.
 
 Every `caveat:` line `finish` printed — blocked tasks, work still queued — goes into the message in
 plain words, under the H1. **Exit 0 means "the run is over", never "nothing was left behind."**
@@ -121,10 +128,19 @@ the approved plan's yes while the owner was away.
 
 ## 🚩 Handing a step to the human
 
-**Long, mechanical, no judgement in it ⇒ do not spend a context on it.** Releases, dogfoods,
-publishes, long suites, waits. A lane once burned two hours on a release that was ten commands and
-zero decisions; that is the waste this rule exists to stop. Open with 🚩, one or two plain sentences,
-then ONE fenced block.
+- **Long, mechanical, no judgement in it?** Run it yourself, detached: one command per line in a file, then
+  `bash ops/polaris bg run <name> --steps <file>` and collect once. 🚩 only what needs a person, only while they are here.
+
+**Releases, dogfoods, publishes, long suites, waits — you run them.** A run that hands the owner ten
+commands to paste has not finished; it has stopped and called it a handover, and while they are away
+nobody pastes anything. So write the commands one per line in a file, run them as ONE detached job,
+and collect the verdict once (`ops/PROTOCOL.md` § LONG COMMANDS names the wait). A 🚩 block is only
+for what needs a PERSON — the exhaustive list is `ops/roles/PLANNER.md` § Needs you before I start:
+OS elevation, a sign-in or one-time code, a risky change or `ask` scope the plan did not cover,
+spending money, deleting what existed before the run or a force-push, a refusal that survives one
+reworded retry, another machine. **Away, there is no 🚩 mid-run:** the plan named it before the
+approval, or it parks — `bash ops/polaris defer -m "<why>" -- <the command>` — and the close lists it.
+While they are here: open with 🚩, one or two plain sentences, then ONE fenced block.
 
 **The block must run verbatim in THEIR terminal, first try.** A handed-over command that fails is
 worse than no handover: it costs a round trip and their trust. POLARIS runs in bash; on Windows their
@@ -157,6 +173,17 @@ Not complete:
 > folded in, so I'm not calling this done.
 >
 > Next: `bash ops/polaris land T-014` — that folds it in. About a minute.
+
+Parked (everything else finished while you were away):
+
+> Everything you approved is built and checked — the new settings page and the export fix are both
+> in. Two things need you, and only you: signing in to the hosting account so the update can go
+> live, and a yes on the payment change, which the plan did not cover.
+>
+> ⛔ waiting on you: sign in to the hosting account — the update is ready to go live
+> ⛔ waiting on you: approve T-031 — it changes how payments are taken
+>
+> The whole run took 2 h 10 min; 25 min of it was checks.
 
 ### Under `publish: pr` — the approval link
 The one next step is the approval link `finish` prints. Human-only checks go in ONE non-blocking flag list before it, never as questions. The link is the last line of the close; nothing follows it.

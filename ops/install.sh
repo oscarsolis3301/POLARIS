@@ -301,6 +301,15 @@ if [ -f "$KIT/.claude/output-styles/polaris.md" ]; then
   mkdir -p "$TARGET/.claude/output-styles"
   cp "$KIT/.claude/output-styles/polaris.md" "$TARGET/.claude/output-styles/polaris.md"
 fi
+# Agents — the kit's own subagent definitions (walk-away § 3.2: polaris-runner, the job runner).
+# Ours by path, replaced on every install; any other agent file in the folder is the human's. Silent:
+# it rides the .claude/ line below, and a fresh install prints no extra line for it.
+for _f in "$KIT"/.claude/agents/*.md; do
+  [ -f "$_f" ] || continue
+  mkdir -p "$TARGET/.claude/agents"
+  cp "$_f" "$TARGET/.claude/agents/${_f##*/}"
+done
+unset _f
 SJ="$TARGET/.claude/settings.json"
 if [ ! -f "$SJ" ]; then
   cp "$KIT/.claude/settings.json" "$SJ"; say ".claude/ installed (skills + output style + hooks + read-only permissions)"

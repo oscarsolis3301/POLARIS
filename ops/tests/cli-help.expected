@@ -24,8 +24,9 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  being on it are listed on stderr — a builder asks for one up front.
                                  --retire <map> retires the map's old cards first (as retire --map),
                                  in the same commit, so no draft is chained to a card it replaces
-  begin <draft.md>               ONE CALL IN: new → triage → claim → pack. A task whose lane is
-                                 not solo stays in ready/ and triage's answer is printed (rc 3)
+  begin <draft.md | ->           ONE CALL IN: new → triage → claim → pack. A task whose lane is
+                                 not solo stays in ready/ and triage's answer is printed (rc 3);
+                                 - reads the draft from stdin
   wrap [ID]                      ONE CALL OUT, from the task's worktree: handoff → land --express
                                  (landing: integrator, solo task) → next; runs finish when next
                                  says finish, and exits with its code
@@ -78,8 +79,10 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
   land --express <ID>            ONE pass for a single small task, from <base>: integrate branch +
                                  audit/land + ONE full suite (red → unwind + kickback) + seal +
                                  run-verify + done + branch cleanup. Refuses: another task in
-                                 review/ · risk: high · express: off · publish: pr. Every gate of
-                                 the long path still runs; `finish` stays the finish line.
+                                 review/ · a task the plan's yes does not cover (plan_covers: risk:
+                                 high or needs: with no approve --plan entry, or a hand approval) ·
+                                 express: off. Every gate of the long path still runs; `finish`
+                                 stays the finish line.
   seal [<date>] [--no-check -m "why"]
                                  Integrator: seal the wave — merge integrate/<date> into base
                                  (--no-ff, per-task bullets) + lightweight tag sprint/<n>; a later
@@ -177,12 +180,24 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  (only test_skip paths, e.g. docs) · look (only test_look paths,
                                  e.g. css/images) · ui (only test_ui paths, in 1-2 point risk:
                                  normal tasks: lint + typecheck + a look) · scoped (every code path
-                                 mapped in ops/SURFACES.tsv) · full (anything else, risk: high, or
-                                 test_depth: full on the task). `   why:` + `   paths:` note lines
+                                 mapped in ops/SURFACES.tsv) · full (anything else, or test_depth:
+                                 full on the task; risk: high alone no longer forces it). `   why:` + `   paths:` note lines
                                  follow. With <ID>: the task's own diff off $BASE. No ID: the
                                  board's current unbounded/bounded change set. --commit <sha>: that commit's paths, and
                                  the exact commands qa would run (and the uat it would skip). Read-only
   presence                       away or here: away = a plan approved in this session AND auto mode; then a why: line
+  pulse [--reenter]              what a timer-woken session runs on an away run: reaps over-budget jobs, then
+                                 line 1 is ONE word — ok · act <next line 1> · done · parked — and notes;
+                                 rc 0 always, never kills except through a job's budget. --reenter: armed
+                                 within reentry_hours and under reentry_max → counts one re-entry and says
+                                 so; otherwise refused: <why>, rc 1
+  preflight <slug>               read-only: what needs a person before an away run of plan <slug> starts —
+                                 origin answers · gh signed in (publish: pr, or the plan names gh) ·
+                                 every risk: high card and ask scope the plan's yes does not cover ·
+                                 the measured suite time. ✅ / ⛔ needs you: lines, then preflight: clear
+                                 (rc 0) or preflight: <n> need you (rc 1)
+  defer -m "why" -- <cmd…>       park a command for the close: one line in .polaris/run/deferred.tsv;
+                                 finish lists it. No -m or no command → usage, rc 1, nothing written
   speed [--plan <slug> [<draft.md>…]]
                                  how your last 30 changes would be tested (skip / related tests / everything),
                                  your last full run time, build and land medians, build time by lanes in
@@ -205,7 +220,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  empty feat branch removed — ONE board commit. --map: one old<TAB>new
                                  pair per line. Every refusal writes nothing
   notify-gate <kind> [ID]        fire the notify: hook at a human gate, and nothing else — kinds:
-                                 plan · risk <ID> · question <ID> · done [ID]  (observe-only:
+                                 plan · risk <ID> · question <ID> · done [ID] · stall · parked  (observe-only:
                                  never writes the board, EVENTS.ndjson, or any lock)
   triage [<ID…>]                 which LANE this board's work belongs in — line 1 is one word:
                                  solo (one context, zero subagents; 1 task ≤3pts — or up to 4
@@ -260,7 +275,7 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  the changed paths map to (every changed path needs a row, else
                                  the whole suite runs); the stamp records full|scoped.
                                  --full runs test: verbatim. `finish` runs this for you at the close.
-  bg run <name> [--force] [-- <cmd…>]
+  bg run <name> [--force] [--budget <s>] [--steps <file>] [-- <cmd…>]
                                  detach a suite past the harness's 600s tool cap and keep working:
                                  a bare CONVENTIONS suite key (test test_fast lint typecheck build
                                  uat — runs in the CALLER's cwd; qa — always the PRIMARY, so its
@@ -268,14 +283,24 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  fast path) or an arbitrary command after --. Registry (runtime
                                  state, never tracked): .polaris/bg/<name>/ under the primary; a
                                  finished same-name job rotates to <name>.prev — archived, never
-                                 deleted. Never writes the board, EVENTS.ndjson, or any lock
-  bg status [<name>] | bg tail <name> [-n N] | bg wait <name> [--max <s>]
+                                 deleted. Never writes the board, EVENTS.ndjson, or any lock.
+                                 Every job has a BUDGET (--budget <s>, else 3 × its longest green
+                                 run, else its class or 3 × the last full suite; floor 300 s) and
+                                 one watchdog: past it the whole process tree is killed, retried
+                                 once (bg_retries), then the job ends timed out. --steps <file> runs
+                                 each command line of <file> in order as ONE job, stopping at the
+                                 first red
+  bg status [<name>] | bg tail <name> [-n N] | bg wait <name> [--max <s> | --done] | bg reap [<name>]
                                  collect it in bounded chunks: status is rc-file-FIRST (0 green ·
                                  1 red · 2 running · 3 unknown: dead pid + no rc — crashed, or
                                  Windows reused the pid); tail = last N (default 20) log lines;
                                  wait polls ~2s up to --max (default 300 — half the cap), prints
                                  the tail + verdict and exits 0/1, or ONE resumable `still
-                                 running` line + rc 2 — chunk-resumable, NEVER a question
+                                 running` line + rc 2 — chunk-resumable, NEVER a question.
+                                 Exit 4 = timed out: killed past its budget, one ⛔ line naming the
+                                 log and the defer command that parks it. --done waits with no
+                                 --max cap (the budget bounds it). reap = do a dead watchdog's kill
+                                 for this folder's jobs past their budget; silent when none
   finish [--force]               is the RUN over? The LAST command of every lane. Nothing building,
                                  nothing waiting to land, ready/ drained per drain:, no unmerged
                                  integrate/<date>, no orphan lock, clean tree on base, qa green.

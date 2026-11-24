@@ -546,12 +546,13 @@ _speed_plan() { # _speed_plan <slug> [<draft.md>…] — hour.md § 5: the price
 
 cmd_speed() { # speed — read-only (one-yes.md § 6 + fix wave 2): how the last 30 changes would be tested, from the
   # repo's own history. ONE git call lists every commit's paths; none/look are decided in-process with the
-  # SAME test_skip/test_look defaults as depth_for (core.sh); only commits that fall through ask cmd_depth
-  # --commit (the expensive one), newest first, under a time budget. Writes nothing, runs no suite, never
-  # edits config. rc 0 always. `speed --plan <slug> [<draft.md>…]` prices a plan instead (hour.md § 5).
+  # SAME test_skip/test_look lists as depth_for (_depth_globs, core.sh); only commits that fall through ask
+  # cmd_depth --commit (the expensive one), newest first, under a time budget — and a `ui` answer counts
+  # as skipping the test run, as none/look do (walk-away § 6). Writes nothing, runs no suite, never edits
+  # config. rc 0 always. `speed --plan <slug> [<draft.md>…]` prices a plan instead (hour.md § 5).
   [ "${1:-}" = --plan ] && { shift; _speed_plan "$@"; return; }
   local budget="${POLARIS_SPEED_BUDGET:-20}" start="$SECONDS" stopped=0 nm=0 hdr
-  local raw p cur="" sha n=0 a=0 b=0 c=0 d s="" t="" line v skip_raw look_raw k i ns=0 allskip allskl
+  local raw p cur="" sha n=0 a=0 b=0 c=0 d s="" t="" line v skip_raw look_raw k i ns=0 allskip allskl nf
   local -a SH PA
   case "$budget" in ''|*[!0-9]*) budget=20;; esac
   raw="$(git -C "$PRIMARY" log --name-only --format=%x01%h -n 30 "$BASE" 2>/dev/null || git -C "$PRIMARY" log --name-only --format=%x01%h -n 30 HEAD 2>/dev/null || true)"
@@ -566,10 +567,11 @@ cmd_speed() { # speed — read-only (one-yes.md § 6 + fix wave 2): how the last
   done <<EOF2
 $raw
 EOF2
-  skip_raw="$(cfg test_skip '*.md docs/** *.txt LICENSE*')"
-  [ "$skip_raw" = "-" ] && skip_raw=""
-  look_raw="$(cfg test_look '*.css *.scss *.less *.svg *.png *.jpg *.jpeg *.gif *.webp *.ico')"
-  [ "$look_raw" = "-" ] && look_raw=""
+  skip_raw="$(_depth_globs skip)"
+  look_raw="$(_depth_globs look)"
+  # The lists are word-split below, so no glob in them may expand against the cwd: set -f for the loop,
+  # and cmd_depth runs in its own subshell with globbing back on.
+  case $- in *f*) nf=1;; *) nf=0; set -f;; esac
   i=0
   while [ "$i" -lt "$ns" ]; do
     sha="${SH[i]}"; cur="${PA[i]}"; i=$((i+1))
@@ -590,15 +592,16 @@ EOF3
     if [ "$stopped" -eq 0 ] && [ $((SECONDS - start)) -ge "$budget" ]; then stopped=1; fi
     if [ "$stopped" -eq 1 ]; then nm=$((nm+1)); continue; fi
     [ -n "${POLARIS_SPEED_TEST_SLEEP:-}" ] && sleep "$POLARIS_SPEED_TEST_SLEEP"
-    d="$(cmd_depth --commit "$sha" 2>/dev/null | sed -n 1p || true)"
+    d="$( [ "$nf" -eq 1 ] || set +f; cmd_depth --commit "$sha" 2>/dev/null | sed -n 1p || true)"
     case "$d" in
-      none|look) a=$((a+1));;
-      scoped)    b=$((b+1));;
-      full)      c=$((c+1));;
-      *)         continue;;
+      none|look|ui) a=$((a+1));;
+      scoped)       b=$((b+1));;
+      full)         c=$((c+1));;
+      *)            continue;;
     esac
     n=$((n+1))
   done
+  [ "$nf" -eq 1 ] || set +f
   [ "$n" -gt 0 ] || [ "$nm" -gt 0 ] || { printf 'speed: no history yet\n'; return 0; }
   if [ -f "$PRIMARY/.polaris/last-suite-seconds" ]; then
     s="$(cut -d' ' -f1 < "$PRIMARY/.polaris/last-suite-seconds" 2>/dev/null || true)"
@@ -1019,7 +1022,7 @@ _kit_footprint_paths() { # stdin = `git status --porcelain`; prints the path of 
     case "$p" in \"*\") p="${p#\"}"; p="${p%\"}";; esac   # git quotes paths with odd bytes
     case "$p" in
       ops/board/*|ops/contracts/*|ops/CONVENTIONS.md|ops/MAP.md|ops/SPRINT.md|ops/RULES.tsv|ops/LAYOUT.tsv|ops/ROADMAP.md|ops/tests/*) ;;
-      ops/*|.claude/settings.json|.claude/skills/polaris/*|.claude/skills/i-have-adhd/*|.claude/output-styles/polaris.md) printf '%s\n' "$p";;
+      ops/*|.claude/settings.json|.claude/skills/polaris/*|.claude/skills/i-have-adhd/*|.claude/output-styles/polaris.md|.claude/agents/polaris-runner.md) printf '%s\n' "$p";;
       CLAUDE.md|.gitignore|.gitattributes) printf '%s\n' "$p";;
     esac
   done
@@ -1423,33 +1426,50 @@ heal_claudemd() { # append the marked efficiency section to the repo's OWN CLAUD
   # every session. A section an older kit appended keeps its old text: the marker guard above.
   local f="$PRIMARY/CLAUDE.md"
   [ -f "$f" ] || return 0
-  # THE ONE REWRITE (ops/contracts/speed.md § 2b, then minutes.md § 11.1). Three model lines older kits
-  # wrote — A "Fable and Haiku are forbidden outright", B "Fable runs only when the owner picks it", and C
-  # the short one heal itself used to append — all said "never name a model". Once `route` names a model
-  # and an effort for every helper, a project CLAUDE.md still saying that overrides CONDUCTOR.md there and
-  # silently switches the sizing off, so each becomes the one line T. Only an EXACT whole line changes,
-  # the first one found — a line its owner has edited is theirs and stays. Its line ending is kept and
-  # every other byte with it; a file holding none of them is never written. Builtins only past the one
-  # grep, so a CLAUDE.md that never had any of them costs that grep and nothing more.
+  # THE REWRITES (ops/contracts/speed.md § 2b, minutes.md § 11.1, then walk-away.md § 8.3). Lines older
+  # kits wrote into every project's efficiency section, each now wrong there because a project CLAUDE.md
+  # overrides the role files. The MODEL line: A "Fable and Haiku are forbidden outright", B "Fable runs
+  # only when the owner picks it", C the short one heal itself used to append, and O the 6.13 line saying
+  # "Haiku is blocked" — the kit's own job runner runs on Haiku since 6.20.0 — each becomes the one line
+  # T. The HAND-OFF pair (save-hops § Token efficiency, H1+H2) sent long command lists to the owner to
+  # paste, which contradicts "finish through publishing" the moment the owner leaves; it becomes the two
+  # lines N1+N2 — run it yourself, detached, collect once. Only an EXACT whole line (the pair: both lines,
+  # adjacent) changes, the first one found — a line its owner has edited is theirs and stays. Its line
+  # ending is kept and every other byte with it; a file holding none of them is never written. Builtins
+  # only past the one grep, so a CLAUDE.md that never had any of them costs that grep and nothing more.
   local ma='- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.'
   local mb='- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.'
   local mc='- **Never name a model** — every spawn inherits the session.'
-  local mn='- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku is blocked, and Fable runs only when the owner picks it.'
-  local ml='' me='' mt='' mhit=0
-  if grep -qF -e "$ma" -e "$mb" -e "$mc" -- "$f" 2>/dev/null; then
-    # `|| mhit=0`: under the CLI's set -e a failed write must neither kill heal nor leave a half copy.
+  local mo='- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku is blocked, and Fable runs only when the owner picks it.'
+  local mn='- **Size every helper** — pass the model and effort `route` prints on each spawn; Haiku runs only the kit'"'"'s job runner, and Fable runs only when the owner picks it.'
+  local h1='- **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:'
+  local h2='  one command per line, never `&&` (PowerShell has no chain operators), no placeholders.'
+  local n1='- **Long, mechanical, no judgement in it?** Run it yourself, detached: one command per line in a file, then'
+  local n2='  `bash ops/polaris bg run <name> --steps <file>` and collect once. 🚩 only what needs a person, only while they are here.'
+  local ml='' me='' mt='' mhit=0 hhit=0 hold=0 he='' ht=''
+  if grep -qF -e "$ma" -e "$mb" -e "$mc" -e "$mo" -e "$h1" -- "$f" 2>/dev/null; then
+    # `|| { mhit=0; hhit=0; }`: under the CLI's set -e a failed write must neither kill heal nor leave a half copy.
+    # hold=1: an H1 seen and not yet printed — it changes only if the very next line is H2.
     {
       while :; do
         mt=$'\n'
         IFS= read -r ml || { [ -n "$ml" ] || break; mt=''; }
         me=''
         case "$ml" in *$'\r') me=$'\r'; ml="${ml%$'\r'}";; esac
-        if [ "$mhit" = 0 ] && { [ "$ml" = "$ma" ] || [ "$ml" = "$mb" ] || [ "$ml" = "$mc" ]; }; then ml="$mn"; mhit=1; fi
+        if [ "$hold" = 1 ]; then
+          hold=0
+          if [ "$ml" = "$h2" ]; then printf '%s%s%s%s%s%s' "$n1" "$he" "$ht" "$n2" "$me" "$mt"; hhit=1; continue; fi
+          printf '%s%s%s' "$h1" "$he" "$ht"
+        fi
+        if [ "$hhit" = 0 ] && [ "$ml" = "$h1" ]; then hold=1; he="$me"; ht="$mt"; continue; fi
+        if [ "$mhit" = 0 ] && { [ "$ml" = "$ma" ] || [ "$ml" = "$mb" ] || [ "$ml" = "$mc" ] || [ "$ml" = "$mo" ]; }; then ml="$mn"; mhit=1; fi
         printf '%s%s%s' "$ml" "$me" "$mt"
-      done < "$f" > "$f.heal-tmp"
-    } 2>/dev/null || mhit=0
-    if [ "$mhit" = 1 ] && mv -f "$f.heal-tmp" "$f" 2>/dev/null; then
-      note "healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)"
+      done < "$f"
+      if [ "$hold" = 1 ]; then printf '%s%s%s' "$h1" "$he" "$ht"; fi
+    } > "$f.heal-tmp" 2>/dev/null || { mhit=0; hhit=0; }
+    if [ "$mhit$hhit" != 00 ] && mv -f "$f.heal-tmp" "$f" 2>/dev/null; then
+      if [ "$mhit" = 1 ]; then note "healed: CLAUDE.md — the model line now says helpers are sized by route (your prose untouched)"; fi
+      if [ "$hhit" = 1 ]; then note "healed: CLAUDE.md — the long-command lines now say run it yourself, detached (your prose untouched)"; fi
     else
       rm -f "$f.heal-tmp" 2>/dev/null || true
     fi
@@ -1464,8 +1484,7 @@ heal_claudemd() { # append the marked efficiency section to the repo's OWN CLAUD
     printf '%s\n' ''
     printf '%s\n' '- **Prefer ONE context over three**, and the smallest check that proves the change.'
     printf '%s\n' "$mn"
-    printf '%s\n' '- **Long, mechanical, no judgement in it?** Hand it to the human with 🚩 and ONE paste-ready block:'
-    printf '%s\n' '  one command per line, never `&&` (PowerShell has no chain operators), no placeholders.'
+    printf '%s\n' "$n1" "$n2"
     printf '%s\n' ''
     printf '%s\n' 'Added by `polaris heal`. Edit freely — it is appended once and never rewritten.'
   } >> "$f" 2>/dev/null || return 0
@@ -2029,6 +2048,8 @@ EOF
   rm -rf "$PRIMARY/.claude/skills/i-have-adhd"    # vendored by install.sh; see its SOURCE.md
   rm -f  "$PRIMARY/.claude/output-styles/polaris.md"   # ONLY ours — other styles are theirs to keep
   rmdir "$PRIMARY/.claude/output-styles" 2>/dev/null || true
+  rm -f  "$PRIMARY/.claude/agents/polaris-runner.md"   # ONLY ours (install.sh, walk-away § 3.2) — other agents are theirs
+  rmdir "$PRIMARY/.claude/agents" 2>/dev/null || true
   rmdir "$PRIMARY/.claude/skills" "$PRIMARY/.claude" 2>/dev/null || true   # only if now empty
 
   # --- the machine's keep-awake registry: THIS repo's registration, and nothing else.
