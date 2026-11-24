@@ -1344,3 +1344,5 @@
 {"ts":1795545592,"ev":"new","id":"T-325","who":"oscar@Dino","note":"backlog","pts":13}
 {"ts":1795545593,"ev":"new","id":"T-326","who":"oscar@Dino","note":"backlog","pts":5}
 {"ts":1795545593,"ev":"new","id":"T-327","who":"oscar@Dino","note":"backlog","pts":3}
+{"ts":1795545691,"ev":"retire","id":"T-323","who":"oscar@Dino","note":"→ T-328"}
+{"ts":1795545692,"ev":"new","id":"T-328","who":"oscar@Dino","note":"ready","pts":9}
