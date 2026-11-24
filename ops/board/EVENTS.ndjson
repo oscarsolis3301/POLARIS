@@ -1418,3 +1418,6 @@
 {"ts":1795549616,"ev":"done","id":"T-328","who":"oscar@Dino","note":"","pts":9}
 {"ts":1795549635,"ev":"done","id":"T-329","who":"oscar@Dino","note":"","pts":2}
 {"ts":1795549641,"ev":"done","id":"T-331","who":"oscar@Dino","note":"","pts":1}
+{"ts":1795549650,"ev":"promote","id":"T-326","who":"oscar@Dino","note":"deps done: T-322, T-328, T-318, T-321","pts":5}
+{"ts":1795549651,"ev":"promote","id":"T-324","who":"oscar@Dino","note":"deps done: T-318, T-321, T-328","pts":12}
+{"ts":1795549653,"ev":"promote","id":"T-325","who":"oscar@Dino","note":"deps done: T-318, T-321","pts":13}
