@@ -1130,8 +1130,11 @@ cmd_pack() { # pack <ID> — the whole context for one task, in ONE call. Read-o
   printf 'This is your whole context. You should not need to go hunting for more.\n'
   # smooth.md § 1.4: what touches this card's files without being on it — FIRST, so a builder short a
   # path says so in its first minute. _card_reach is T-313's (author.sh); until it is defined, or when
-  # it lists nothing, the section is omitted and every other pack stays byte-identical.
-  if command -v _card_reach >/dev/null 2>&1; then
+  # it lists nothing, the section is omitted and every other pack stays byte-identical. Under `begin`
+  # (POLARIS_BEGIN=1, walk-away § 7) new printed this very list right above, so it is not computed twice.
+  if [ "${POLARIS_BEGIN:-}" = 1 ]; then
+    printf '   reach: listed above by new\n'
+  elif command -v _card_reach >/dev/null 2>&1; then
     local reach; reach="$(_card_reach "$f" 2>/dev/null || true)"
     if [ -n "$reach" ]; then
       printf '\nFILES THAT TOUCH YOURS — not on files_owned. One you will have to change → stop now: return NEEDS PATH <path> — <why> (BUILDER.md), not after the build\n'
@@ -1363,6 +1366,22 @@ EOF_ITEMS
   else
     printf '\nthen the fast tier: (none set — verify: above is the per-task proof; the suite runs once at the wave gate)\n'
   fi
+  # 8a. walk-away § 6: how the finish will check this card, told up front so a CSS change never runs
+  # the suite by hand — only for none/look/ui, classified in-process by depth_for from files_owned.
+  # A folder entry (ending in /) cannot be classified, so it gets no forecast; neither does any other
+  # depth, which keeps every other pack byte-identical.
+  local fx fdep="" fdir=""
+  while IFS= read -r fx; do case "$fx" in */) fdir=1;; esac; done <<EOF
+$owned
+EOF
+  if [ -n "$owned" ] && [ -z "$fdir" ]; then
+    fdep="$(printf '%s\n' "$owned" | depth_for "$f" 2>/dev/null || true)"; fdep="${fdep%%$POLARIS_TAB*}"
+  fi
+  case "$fdep" in
+    ui) printf 'at the finish: ui — lint and typecheck plus the before/after look; no test, build or uat (forecast from files_owned: the files you change decide)\n';;
+    look) printf 'at the finish: look — the before/after look; no test run (forecast from files_owned: the files you change decide)\n';;
+    none) printf 'at the finish: none — no test run (forecast from files_owned: the files you change decide)\n';;
+  esac
   # 8b. a chain card's steps (ops/contracts/hour.md § 6), right after the verify list. A card with no
   # steps: prints nothing here, so every other pack stays byte-identical.
   local steps

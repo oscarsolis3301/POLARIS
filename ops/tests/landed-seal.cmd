@@ -58,9 +58,21 @@ fin() { OUT="$(bash "$KIT" finish 2>&1)"; echo "finish rc=$?"; OUT="$(strip)"
 
 echo '== a. a healthy seal: nothing new =='
 build T-1 src/1.txt y
-OUT="$(bash "$KIT" seal 2>&1)"; echo "seal rc=$?"; OUT="$(strip)"
+# walk-away § 7: every kit start during the seal is logged by verb (BASH_ENV) — the layout and
+# tune-up verdicts run in-process, so neither `hops` nor `tune` starts the kit again. The index engine
+# is a stand-in that writes the hops cache as the real one does (with none, tune re-asks for it).
+printf 'case "$0" in *ops/polaris) printf "%%s\\n" "${1:-}" >> "$POLARIS_T_LOG";; esac\n' > "$FIX/benv"
+cat > "$FIX/engine" <<'EOF'
+#!/usr/bin/env bash
+[ "$*" = "hops --due" ] || exit 3
+printf '%s\t1\t-\n' "$(git -C "$POLARIS_ROOT" rev-parse --verify -q main)" > "$POLARIS_ROOT/.polaris/hops-due"; exit 1
+EOF
+chmod +x "$FIX/engine"
+OUT="$(BASH_ENV="$FIX/benv" POLARIS_T_LOG="$FIX/starts" POLARIS_INDEX_BIN="$FIX/engine" bash "$KIT" seal 2>&1)"; echo "seal rc=$?"; OUT="$(strip)"
 echo "warnings: $(printf '%s\n' "$OUT" | grep -c '^⚠' || true)"
 echo "sealed line: $(printf '%s\n' "$OUT" | grep -c '^✅ sprint 1 sealed — ' || true)"
+printf '%s\n' "$OUT" | grep '^✅ burndown: ' | sed -E 's/burndown: [0-9-]+ /burndown: <date> /'
+echo "kit starts for hops or tune: $(grep -cxE 'hops|tune' "$FIX/starts" || true)"
 echo "[T-1] commits on main: $(landed_n T-1)"
 echo "on: $(git rev-parse --abbrev-ref HEAD)"
 

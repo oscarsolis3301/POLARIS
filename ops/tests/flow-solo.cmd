@@ -37,3 +37,14 @@ out="$(bash "$KIT" begin .polaris/drafts/b.md 2>&1)"; echo "begin rc=$?"
 printf '%s\n' "$out" | grep '^begin:'
 echo "ready: $([ -f ops/board/ready/T-002.md ] && echo yes || echo no)"
 echo "active: $([ -f ops/board/active/T-002.md ] && echo yes || echo no)"
+# walk-away § 7: `begin -` takes the draft on stdin and leaves no draft file behind; new lists what
+# touches the card's file (a tracked test naming it), and the pack under begin points at that list
+# with one line instead of computing it again.
+echo '--- begin - : the draft on stdin'
+( mkdir -p tests && printf 'reads src/crumb.txt\n' > tests/crumb.test.sh && git add tests && git commit -qm 'a test naming crumb' ) >/dev/null 2>&1
+out="$(printf -- '---\ntitle: a crumb\nplan: p\npoints: 1\nrisk: normal\nfiles_owned:\n  - src/crumb.txt\ndepends_on: []\ncontract: ops/contracts/fix.md\nverify: []\n---\n## Why\nfixture\n' | bash "$KIT" begin - 2>&1)"; echo "begin rc=$?"
+echo "pack printed: $(printf '%s\n' "$out" | grep -c '^PACK T-003')"
+printf '%s\n' "$out" | grep -e '^   T-003: ' -e '^   reach: '
+echo "pack's own reach section: $(printf '%s\n' "$out" | grep -c '^FILES THAT TOUCH YOURS')"
+echo "draft files left: $(ls -a .polaris | grep -c '^begin-draft' || true)"
+echo "active: $([ -f ops/board/active/T-003.md ] && echo yes || echo no)"

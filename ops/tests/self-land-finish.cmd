@@ -46,7 +46,22 @@ W="$R/.polaris/wt/T-1"
 [ "$(cut -d' ' -f1 .polaris/verify-stamp/T-1 2>/dev/null)" = "$(git -C "$W" rev-parse HEAD)" ] && echo 'stamp names the commit: yes' || echo 'stamp names the commit: NO'
 
 echo '== 2. handoff: the checks are not re-run, and the lane lands itself =='
-OUT="$(cd "$W" && bash "$KIT" handoff T-1 2>&1)"; echo "handoff rc=$?"
+# walk-away § 7 (read back in case 6): every kit start is logged by verb through BASH_ENV, and the
+# index engine is a wrapper that logs its calls and writes the hops cache the way the real one does.
+cat > "$FIX/benv" <<'EOF'
+case "$0" in *ops/polaris) printf '%s\n' "${1:-}" >> "$POLARIS_T_LOG/starts";; esac
+EOF
+cat > "$FIX/engine" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$POLARIS_T_LOG/engine.log"
+case "$*" in
+  "hops --due") mkdir -p "$POLARIS_ROOT/.polaris"
+    printf '%s\t1\t-\n' "$(git -C "$POLARIS_ROOT" rev-parse --verify -q main)" > "$POLARIS_ROOT/.polaris/hops-due"; exit 1;;
+esac
+exit 3
+EOF
+chmod +x "$FIX/engine"; : > "$FIX/starts"; : > "$FIX/engine.log"; export POLARIS_T_LOG="$FIX"
+OUT="$(cd "$W" && BASH_ENV="$FIX/benv" POLARIS_INDEX_BIN="$FIX/engine" bash "$KIT" handoff T-1 2>&1)"; echo "handoff rc=$?"
 echo "said proven, not re-run: $(printf '%s\n' "$OUT" | grep -c '^✅ verify: proven at [0-9a-f]\{7\} — not re-run$' || true)"
 echo "verify lines re-run: $(printf '%s\n' "$OUT" | grep -c 'verify\[1\]: ' || true)"
 echo "T-1 is in: $(col T-1)"
@@ -70,3 +85,8 @@ printf '%s\n' "$OUT" | grep -oE 'finish: run complete'
 echo "integrate branches left: $(git for-each-ref --format='%(refname:short)' 'refs/heads/integrate/*' | grep -c . || true)"
 echo "task worktrees left: $(git worktree list --porcelain | grep -c '^worktree .*/.polaris/wt/' || true)"
 echo "feat branches left: $(git for-each-ref --format='%(refname:short)' 'refs/heads/feat/*' | grep -c . || true)"
+
+echo '== 6. the landing wrote the layout and tune-up verdicts once, in-process (walk-away § 7) =='
+echo "kit starts in the tail: land $(grep -cx land "$FIX/starts" || true) · seal $(grep -cx seal "$FIX/starts" || true) · done $(grep -cx done "$FIX/starts" || true) · hops $(grep -cx hops "$FIX/starts" || true) · tune $(grep -cx tune "$FIX/starts" || true)"
+echo "layout verdict runs: $(grep -cx 'hops --due' "$FIX/engine.log" || true)"
+[ "$(cut -f1 .polaris/tune-due 2>/dev/null)" = "$(git rev-parse --verify -q main)" ] && echo 'tune-up verdict names main: yes' || echo 'tune-up verdict names main: NO'

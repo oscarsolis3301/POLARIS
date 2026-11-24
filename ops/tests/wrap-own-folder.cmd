@@ -31,8 +31,21 @@ unset POLARIS_SHA POLARIS_UPDATE_HINTS POLARIS_ROOT
 cd "$R"
 echo "installed: $([ -f ops/polaris ] && echo yes || echo no)"
 bash ops/polaris begin .polaris/drafts/a.md >/dev/null 2>&1; echo "begin rc=$?"
-( cd .polaris/wt/T-001 && echo a > src/a.txt && git add -A && git commit -qm "a small change" ) >/dev/null 2>&1
+# walk-away § 7: the edit is left UNCOMMITTED — wrap commits the card's own file and nothing else. An
+# edit to a file off the card stays out of that commit, so handoff refuses the tree; put back, the next
+# wrap ends green with nothing left to commit.
+( cd .polaris/wt/T-001 && echo a > src/a.txt && echo y > src/seed.txt ) >/dev/null 2>&1
+out="$(cd .polaris/wt/T-001 && bash ops/polaris wrap 2>&1)"; echo "wrap with an edit off the card rc=$?"
+printf '%s
+' "$out" | grep -e '^✅ wrap: ' -e '^⛔ uncommitted'
+echo "its commit: $(git log -1 --format=%s feat/T-001) · $(git diff-tree --no-commit-id --name-only -r feat/T-001 | tr '
+' ' ')"
+echo "the edit off the card: $(cd .polaris/wt/T-001 && git status --porcelain | tr -d '
+')"
+echo x > .polaris/wt/T-001/src/seed.txt
 out="$(cd .polaris/wt/T-001 && bash ops/polaris wrap 2>&1)"; echo "wrap rc=$?"
+echo "committed again: $(printf '%s
+' "$out" | grep -c '^✅ wrap: ')"
 echo "finish ran: $(printf '%s\n' "$out" | grep -c '^✅ finish: run complete')"
 echo "done: $([ -f ops/board/done/T-001.md ] && echo yes || echo no)"
 echo "file on main: $(git ls-tree --name-only main src/ | grep -c 'a\.txt')"

@@ -2,6 +2,8 @@
 seal rc=0
 warnings: 0
 sealed line: 1
+✅ burndown: <date> · sprint 1 · 1 pts landed (T-1) · 3 pts still on the board — ops/SPRINT.md
+kit starts for hops or tune: 0
 [T-1] commits on main: 1
 on: main
 == b. a path clobbered on the wave before the seal: seal re-lands it ==

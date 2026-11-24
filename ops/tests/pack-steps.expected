@@ -3,6 +3,7 @@
 bash -n src/a.txt
 
 then the fast tier: (none set — verify: above is the per-task proof; the suite runs once at the wave gate)
+at the finish: none — no test run (forecast from files_owned: the files you change decide)
 
 STEPS — one commit per step; the verify lines that cover a step are green before the next one starts
   1. 5 pts — the push key and the handoff gate
@@ -15,6 +16,7 @@ STEPS — one commit per step; the verify lines that cover a step are green befo
 bash -n src/b.txt
 
 then the fast tier: (none set — verify: above is the per-task proof; the suite runs once at the wave gate)
+at the finish: none — no test run (forecast from files_owned: the files you change decide)
 
 --- end of pack. Anything beyond this needs a one-line reason in the task Notes. ---
 == 3. the flow-list form of steps: ==
@@ -22,9 +24,15 @@ then the fast tier: (none set — verify: above is the per-task proof; the suite
 (no verify: list — add one, narrow, each under ~10s)
 
 then the fast tier: (none set — verify: above is the per-task proof; the suite runs once at the wave gate)
+at the finish: none — no test run (forecast from files_owned: the files you change decide)
 
 STEPS — one commit per step; the verify lines that cover a step are green before the next one starts
   1. 4 pts — first half
   2. 4 pts — second half
 
 --- end of pack. Anything beyond this needs a one-line reason in the task Notes. ---
+== 4. the at-the-finish forecast: look and ui say so; code and a folder say nothing ==
+T-704: at the finish: look — the before/after look; no test run (forecast from files_owned: the files you change decide)
+T-705: at the finish: ui — lint and typecheck plus the before/after look; no test, build or uat (forecast from files_owned: the files you change decide)
+T-706: (no forecast)
+T-707: (no forecast)
