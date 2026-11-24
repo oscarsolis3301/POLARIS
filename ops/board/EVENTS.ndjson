@@ -1527,3 +1527,5 @@
 {"ts":1795562013,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"ops/contracts/doc-server.md"}
 {"ts":1795562017,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"ops/tests/shots-gallery.cmd"}
 {"ts":1795562020,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"ops/tests/shots-gallery.expected"}
+{"ts":1795562671,"ev":"handoff","id":"T-340","who":"oscar@Dino","note":""}
+{"ts":1795562671,"ev":"all-review","id":"T-340","who":"oscar@Dino","note":"last lane landed — board is all review"}
