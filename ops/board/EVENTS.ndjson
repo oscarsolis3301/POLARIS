@@ -1472,3 +1472,4 @@
 {"ts":1795557294,"ev":"claim","id":"T-335","who":"oscar@Dino","note":"","pts":7}
 {"ts":1795557298,"ev":"claim","id":"T-333","who":"oscar@Dino","note":"","pts":11}
 {"ts":1795557496,"ev":"note","id":"T-336","who":"oscar@Dino","note":""}
+{"ts":1795557541,"ev":"handoff","id":"T-336","who":"oscar@Dino","note":""}
