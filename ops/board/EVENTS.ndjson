@@ -1523,3 +1523,4 @@
 {"ts":1795562001,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"ops/tests/depth-ui.expected"}
 {"ts":1795562004,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"ops/tests/express-ui.expected"}
 {"ts":1795562007,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"ops/tests/qa-parallel.expected"}
+{"ts":1795562010,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"ops/tests/pack-visual.expected"}
