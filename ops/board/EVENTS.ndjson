@@ -1348,3 +1348,4 @@
 {"ts":1795545692,"ev":"new","id":"T-328","who":"oscar@Dino","note":"ready","pts":9}
 {"ts":1795545771,"ev":"learned","id":"","who":"oscar@Dino","note":"new auto-adds a SURFACES tests glob (ops/tests/<x>.*) to a c"}
 {"ts":1795545840,"ev":"approve-plan","id":"walk-away","who":"oscar@Dino","note":""}
+{"ts":1795545914,"ev":"claim","id":"T-328","who":"oscar@Dino","note":"","pts":9}
