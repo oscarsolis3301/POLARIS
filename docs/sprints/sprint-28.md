@@ -112,7 +112,7 @@ re-runs the same recipe after D and decides from it.
 - [ ] No new public fn (api-kit) — helpers are `_flow_*`
 
 ## T-324 — "An away run always ends in one of two shapes - finish: parked with one line per thing waiting on you, or done - each with a run: line; land --express honours ui; notify knows stall and parked; metrics splits the skipped suites"
-points 12 · risk normal · landed 3f5d5fb9 (2026-11-24) · claimed 2026-11-24
+points 12 · risk normal · landed 3f5d5fb9 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/lib/integrate.sh, kit/ops/lib/observe.sh, kit/ops/lib/qa.sh, ops/tests/depth-metrics.cmd, ops/tests/depth-metrics.expected, ops/tests/express-ui.cmd, ops/tests/express-ui.expected, ops/tests/finish-parked.cmd, ops/tests/finish-parked.expected
 
 ### Why
@@ -138,7 +138,7 @@ exit codes do not change.
 - [ ] No new public fn (lib-census)
 
 ## T-325 — "The words match the run - the hand-to-the-human rule says run it yourself and park only what needs a person, heal migrates old CLAUDE.md lines, the roles teach the waits, the pulse and the two endings, speed counts ui changes, and the stale prose is fixed"
-points 13 · risk normal · landed 15dd01b8 (2026-11-24) · claimed 2026-11-24
+points 13 · risk normal · landed 15dd01b8 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/.claude/output-styles/polaris.md, kit/CLAUDE.md, kit/ops/PROTOCOL.md, kit/ops/lib/admin.sh, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md, kit/ops/templates/TASK.md, ops/tests/api-kit.expected, ops/tests/heal-design.expected, ops/tests/heal-model-line.cmd, ops/tests/heal-model-line.expected, ops/tests/output-style-installed.cmd, ops/tests/output-style-installed.expected, ops/tests/speed-report.cmd, ops/tests/speed-report.expected
 
 ### Why
@@ -159,6 +159,26 @@ the stale prose the plan lists is corrected. `kit/CLAUDE.md` is in scope by the 
 - [ ] speed counts ui commits under would-skip (speed-report)
 - [ ] Every stale line of plan section E fixed; no heading renamed; api-kit gains exactly the two § 8.3 headings
 - [ ] SOLO.md:110 and PROTOCOL.md:330 no longer contradict the background wake-up
+
+## T-327 — "Walk away on the joined tree - the away-run and runner-path drills prove the side-by-side seams together, every shared golden runs once, api-kit re-pinned, version 6.20.0 and its changelog"
+points 3 · risk normal · landed d1465cf9 (2026-11-24) · claimed 2026-11-24
+files touched: CHANGELOG.md, kit/ops/VERSION, kit/ops/hooks/model-guard.sh, kit/ops/lib/admin.sh, ops/tests/away-run.cmd, ops/tests/away-run.expected, ops/tests/model-guard-v2.cmd, ops/tests/runner-path.cmd, ops/tests/runner-path.expected, ops/tests/update-pending.cmd
+
+### Why
+Four wave-1 cards meet at seams that only exist once they are joined: the armed file (written by the
+hooks card, read by the jobs card and removed by finish), the job runner (routed by the core card,
+let through by the guard card), keep-awake calling the reaper. The 6.19.0 lesson is that such a seam
+goes red only after both sides land, so this card owns the two drills that run the real pairs —
+`away-run` (a hung job killed and parked, an armed stop blocked, finish parked, pulse parked) and
+`runner-path` (route names the runner, the guard lets only it through) — and runs every shared golden
+once on the joined tree. Then it re-pins `api-kit` to exactly the names the contract allows, bumps the
+kit to 6.20.0 and writes the changelog from measured numbers (T-322 before, T-326 after).
+
+### Acceptance
+- [ ] away-run and runner-path per walk-away § 10, green on the joined tree
+- [ ] every § 10 golden green; any re-pin is exactly the contract's joined output, otherwise hand back
+- [ ] api-kit = 6.19.0 rows + § 0's six names + § 8.3's two headings
+- [ ] VERSION 6.20.0; CHANGELOG `## 6.20.0` names every card, the before/after timing and whether the tail was built
 
 ## T-328 — "Fewer CLI starts for a small change - seal and done run the tune-up checks once, the burndown reads the board in one pass, begin reads stdin, wrap commits the card's files, the reach is computed once, and pack forecasts the check"
 points 9 · risk normal · landed 3254008f (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
