@@ -1389,3 +1389,10 @@
 {"ts":1795548116,"ev":"claim","id":"T-329","who":"oscar@Dino","note":"","pts":2}
 {"ts":1795548194,"ev":"handoff","id":"T-329","who":"oscar@Dino","note":""}
 {"ts":1795548195,"ev":"all-review","id":"T-329","who":"oscar@Dino","note":"last lane landed — board is all review"}
+{"ts":1795548665,"ev":"wave-red","id":"T-320","who":"oscar@Dino","note":"bash tools/proof.sh"}
+{"ts":1795548666,"ev":"wave-red","id":"T-319","who":"oscar@Dino","note":"bash tools/proof.sh"}
+{"ts":1795548666,"ev":"wave-red","id":"T-322","who":"oscar@Dino","note":"bash tools/proof.sh"}
+{"ts":1795548666,"ev":"wave-red","id":"T-328","who":"oscar@Dino","note":"bash tools/proof.sh"}
+{"ts":1795548667,"ev":"wave-red","id":"T-318","who":"oscar@Dino","note":"bash tools/proof.sh"}
+{"ts":1795548667,"ev":"wave-red","id":"T-321","who":"oscar@Dino","note":"bash tools/proof.sh"}
+{"ts":1795548667,"ev":"wave-red","id":"T-329","who":"oscar@Dino","note":"bash tools/proof.sh"}
