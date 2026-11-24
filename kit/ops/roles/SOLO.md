@@ -32,7 +32,7 @@ the conductor runs `finish`.
 
 **You share this checkout with other chats, and their dirt is not your question:**
 a dirty shared checkout is parked, never asked about: bash ops/polaris park
-— `bash ops/polaris unpark` puts it back, and a taken lock or a busy lane read the same way (`ops/PROTOCOL.md` § N CHATS, ONE REPO).
+— `bash ops/polaris unpark` puts it back, and a taken lock or a busy lane read the same way (`bash ops/polaris doc PROTOCOL "N CHATS, ONE REPO"`).
 
 ## Context — ONE command
 Once the task exists, `bash ops/polaris pack <ID>` returns all of it in a single call: the task, its
@@ -43,14 +43,14 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 
 ## The path
 1. **Always author the request's own task** — never pick up a leftover already sitting in `ready/`
-   just because it is there. From `ops/templates/TASK.md`, into a draft outside the board (e.g.
+   just because it is there. From `bash ops/polaris doc templates/TASK`, into a draft outside the board (e.g.
    `.polaris/drafts/<slug>.md`). Keep it honest and small:
    - `plan:` a short slug for this request · `points:` small — `bash ops/polaris triage <ID>` holds
      the budget, so run it right after authoring and let it confirm `solo` for THIS task ·
      `risk: normal` · `files_owned:` the exact paths you will touch, nothing speculative ·
      `context_files:` the nearest existing example · `contract:` only if there is a real seam — a
      change this size usually has none · `surface:` only when the change touches code that has
-     tests (grammar in `ops/templates/TASK.md`) — `done` turns each item into an `ops/SURFACES.tsv`
+     tests (grammar in `bash ops/polaris doc templates/TASK`) — `done` turns each item into an `ops/SURFACES.tsv`
      row; nobody writes that file by hand.
    - `verify:` the NARROW check that proves THIS change, each under ~10s. **Never the full suite**
      — `polaris verify` now refuses it, because `verify:` is paid up to 3× per task while the wave
@@ -106,7 +106,7 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    `handoff` in place of `wrap` — `finish` is the conductor's. That tail can wait on a busy lease, so
    detach it:
    `bash ops/polaris bg run ship-<ID> -- bash ops/polaris wrap --saw "<the after shot vs the bar>"`, then
-   collect the rc the way `ops/PROTOCOL.md` § LONG COMMANDS names for where you are. Top-level: ONE
+   collect the rc the way `bash ops/polaris doc PROTOCOL "LONG COMMANDS"` names for where you are. Top-level: ONE
    `bash ops/polaris bg wait ship-<ID> --done` issued with `run_in_background: true`, then end the
    turn — the harness wakes you once, and the rc file is the truth. A conductor's subagent: `bash
    ops/polaris bg wait ship-<ID> --max 240` repeated until the rc is not 2 (0 green · 1 red · 2 still
@@ -125,8 +125,8 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
 7. **Finish — only when `next` says so.** `wrap` already asked `next` and ran `finish` when it
    said so; by hand, `bash ops/polaris next` names the one thing this chat does
    next; anything but `finish` on line 1 (`build <ID>` · `integrate` · `promote` · `wait` · `tidy`)
-   is more work, so follow it — that hop is the next context, not a second role. `tidy` → read
-   `ops/roles/TIDY.md` and run the pass here (a board-proven hop), then `next`. Line 1 `finish` →
+   is more work, so follow it — that hop is the next context, not a second role. `tidy` → run
+   `bash ops/polaris role TIDY` and run the pass here (a board-proven hop), then `next`. Line 1 `finish` →
    `bash ops/polaris finish`. It runs `qa` for you (free when HEAD has not moved since
    an express land's green suite — since 6.3.0 an express land STAMPS `.polaris/suite-stamp` with the
    commit it proved, so a following `finish` skips the suite instead of paying it a second time; the
@@ -150,7 +150,7 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    Every close also says how long the run took and where the time went (`bash ops/polaris speed`),
    and names each task an `away:` line reported. Full shape in `.claude/output-styles/polaris.md` § How a session ends.
 
-Long command? `ops/PROTOCOL.md` § LONG COMMANDS: foreground with an explicit timeout ≥ the measured time; ≥ 300 s → `bg run`, then the wait its table names (top-level: ONE backgrounded `bg wait --done`). A subagent never ends its turn with a job still running.
+Long command? `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`: foreground with an explicit timeout ≥ the measured time; ≥ 300 s → `bg run`, then the wait its table names (top-level: ONE backgrounded `bg wait --done`). A subagent never ends its turn with a job still running.
 
 ## Hard limits — these end the session, not the gate
 - **Never spawn a subagent.** If the work turns out to need more than one, you were in the wrong
