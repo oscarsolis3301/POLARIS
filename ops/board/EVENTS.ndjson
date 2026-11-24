@@ -1407,3 +1407,4 @@
 {"ts":1795549010,"ev":"new","id":"T-331","who":"oscar@Dino","note":"backlog","pts":1}
 {"ts":1795549014,"ev":"retire","id":"T-330","who":"oscar@Dino","note":"→ T-331"}
 {"ts":1795549025,"ev":"promote","id":"T-331","who":"oscar@Dino","note":"deps done: none","pts":1}
+{"ts":1795549049,"ev":"claim","id":"T-331","who":"oscar@Dino","note":"","pts":1}
