@@ -134,8 +134,8 @@ the forecast calls `depth_for` as it is, and picks up T-321's sharper rules once
 - [ ] No new public fn (lib-census, api-kit)
 
 ## T-329 — Kit python output is UTF-8 on Windows, so the model-guard goldens pass without PYTHONUTF8
-points 2 · risk normal · landed 9731ea85 (2026-11-24) · claimed 2026-11-24
-files touched: kit/ops/hooks/model-guard.sh, ops/tests/machine-armed.cmd, ops/tests/model-guard-v2.cmd
+points 2 · risk normal · landed a6920a34 (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/hooks/model-guard.sh, ops/tests/model-guard-v2.cmd
 
 ### Why
 The wave seal of 2026-11-24 went red on model-guard-v2: on Windows, when neither PYTHONUTF8 nor
