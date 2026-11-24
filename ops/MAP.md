@@ -283,3 +283,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - "kit/ops/lib/pulse.sh — pulse, preflight, defer and _run_armed: the away run's own commands (walk-away § 2.2-2.3)"  (T-318, 2026-11-24)
 
 - "kit/ops/hooks/permission-hook.sh — PermissionRequest/PermissionDenied while an approved run is away: park, never allow (walk-away § 4.3)"  (T-319, 2026-11-24)
+
+- "kit/.claude/agents/polaris-runner.md — the Haiku job runner: waits on one bg job and reports rc + tail (walk-away § 3.2)"  (T-320, 2026-11-24)
