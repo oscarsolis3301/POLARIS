@@ -4,17 +4,17 @@ Append-only once any dependent task is claimed: breaking changes = new `## v2` s
 Plan: `plans/walk-away.md` (owner-approved 2026-11-24 — its "Owner decisions" are the yes for every
 item below; do not re-ask them). Kit release: 6.20.0. Slug: `walk-away`.
 
-Ten cards, three waves. **Wave 1**, side by side, files disjoint: **T-318** (jobs that cannot hang:
+Ten cards (T-318–T-322, T-324–T-328; T-323 was re-filed as T-328 before any claim), three waves. **Wave 1**, side by side, files disjoint: **T-318** (jobs that cannot hang:
 budgets, `pulse`, `preflight`, `defer`, stall lines, the loader, every help word) · **T-319** (the away
 hooks: arming, the Stop gate, the permission hooks, keep-awake — `risk: high`) · **T-320** (the Haiku
 job runner and its one guard exception — `risk: high`) · **T-321** (test depth in the core: globs,
 the `ui` floor, stamp words, the freshness skip, `route --role RUNNER`) · **T-322** (spike: the
-small-change timing recipe, measured BEFORE section D) · **T-323** (fewer CLI starts: seal/done
+small-change timing recipe, measured BEFORE section D) · **T-328** (fewer CLI starts: seal/done
 once, the burndown in one awk, `begin -`, `wrap` commits, the reach once, the `pack` forecast).
 **Wave 2** (after their wave-1 seams land): **T-324** (`finish: parked`, the `run:` line, notify
 kinds, metrics, and `land --express` at `ui`) · **T-325** (the words + `heal` + `speed`) · **T-326**
 (the quiet-lane tail — only if § 7's trigger is met; measured after section D, which is T-318's
-loader + T-323, both wave 1). **Wave 3**: **T-327** (the joined tree, `api-kit`, VERSION,
+loader + T-328, both wave 1). **Wave 3**: **T-327** (the joined tree, `api-kit`, VERSION,
 CHANGELOG). (v1 re-cut once by `speed --plan`: 4 waves → 3.) The release ritual itself (tag, push, `--dogfood`, `cli-help`) is the conductor's after
 `finish`, exactly as 6.19.0's was.
 
@@ -266,7 +266,7 @@ case → today's `fin_pending` line.
   (EV=waiting NOTE=run-parked SEVERITY=gate); the usage line names both.
 - `metrics` (`observe.sh:899-906`): the skipped-suite line gains `(none a · look b · ui c · scoped d)`.
 
-## § 6 Test depth in proportion (T-321 core.sh/route.sh/ownership.sh; T-323; T-325)
+## § 6 Test depth in proportion (T-321 core.sh/route.sh/ownership.sh; T-328; T-325)
 - **One glob helper** `_depth_globs <skip|look|ui>` (core.sh, private) composes the defaults once; the
   five places (`core.sh:94-117, 478`, `integrate.sh:1229`, `route.sh:412`, `admin.sh:569-571`) call it
   (core/route by T-321, integrate by T-324, admin by T-325). `test_look` default +=
@@ -288,7 +288,7 @@ case → today's `fin_pending` line.
 - **`land --express` honours `ui`** (`integrate.sh:858-944`, T-324): after `depth_line_say` set
   `ex_uiskip`, call `_ui_skip_say`, skip test/build/uat in the loop; the `:944` condition gains
   `ex_uiskip`.
-- **`pack` forecast** (`builder.sh` after `:1365`, T-323 — wave 1, so it calls today's `depth_for`
+- **`pack` forecast** (`builder.sh` after `:1365`, T-328 — wave 1, so it calls today's `depth_for`
   in-process and inherits T-321's rules when both land): only for none/look/ui, classifying owned
   entries in-process (call `depth_for` only when no entry ends in `/`):
   `at the finish: ui — lint and typecheck plus the before/after look; no test, build or uat (forecast from files_owned: the files you change decide)`;
@@ -296,13 +296,15 @@ case → today's `fin_pending` line.
   `at the finish: none — no test run (forecast from files_owned: …)`.
 - `speed` (`admin.sh:594-599`, T-325): ui commits count under "would skip the test run".
 
-## § 7 Fewer starts, and the quiet-lane tail (D: T-318 loader, T-323; F: T-322, T-326)
-- T-323: `seal` and `done` run `hops --due` and `tune` once per landing, in-process
+## § 7 Fewer starts, and the quiet-lane tail (D: T-318 loader, T-328; F: T-322, T-326)
+- T-328: `seal` and `done` run `hops --due` and `tune` once per landing, in-process
   (`integrate.sh:532-533`, `1527-1528`); `seal_burndown_row` reads every waiting card's fields in ONE
   awk (`:1017-1026`). `begin -` reads the draft from stdin (into a temp file under `.polaris/`, removed
   after). `wrap` first commits the card's own uncommitted owned files (`feat(<scope>): wip <ID>` on its
   branch — `land` squashes and takes the task's message). `begin` computes `_card_reach` once:
-  `new` writes it to `$POLARIS_REACH_CACHE` when set, `pack` reads it when it names the same task.
+  `begin` exports `POLARIS_BEGIN=1` to its `pack` child, and that `pack` prints
+  `   reach: listed above by new` in place of the section (new printed the same list right above it);
+  `author.sh` is not touched (owning it would auto-add the `new-task.*` glob — see T-328's Notes).
 - **Recipe (T-322, `kit/ops/bench.sh --flow`, private `_flow_*` fns):** fake HOME/USERPROFILE,
   throwaway repo with `test: true`, `lint: true`, `typecheck: true`; one 1-point look card and one
   1-point ui card through `begin` → `wrap`; best of 3, wall seconds per phase (`new`, `triage`,
@@ -392,7 +394,7 @@ Seams between side-by-side wave-1 cards, proven only on the joined tree, by **T-
   `speed-plan`, `new-task`, `pack-guides`, `pack-steps`, `pack-visual`, `pack-named-tests`. A red is
   re-pinned by T-327 only when the diff is exactly what this contract says the joined tree prints;
   anything else → hand back.
-- Wave-1 cards keep `lib-census` in `verify:`; T-319, T-320, T-321, T-322, T-323 also keep `api-kit` (proof
+- Wave-1 cards keep `lib-census` in `verify:`; T-319, T-320, T-321, T-322, T-328 also keep `api-kit` (proof
   they add no public name). `cli-help` is re-pinned after the dogfood. The CI self-test is the
   conductor's release ritual, not a card.
 
@@ -417,8 +419,8 @@ Seams between side-by-side wave-1 cards, proven only on the joined tree, by **T-
   `related-tests`, `change-bound` (an edited test is never small) · `verify-stamp` (freshness skip) · `api-kit` · `lib-census`.
 - T-322: `bash -n kit/ops/bench.sh` · `bash kit/ops/bench.sh --flow --runs 1` prints every phase line
   and the `flow:` line · `api-kit`. BEFORE numbers in Notes (best of 3).
-- T-323: `flow-solo`, `wrap-own-folder` (`begin -`, wrap commits owned files) · `new-task`
-  (reach cache case appended) · `pack-steps`, `pack-guides`, `pack-visual`, `pack-named-tests`
+- T-328: `flow-solo`, `wrap-own-folder` (`begin -`, wrap commits owned files, the reach line under
+  begin) · `pack-steps`, `pack-guides`, `pack-visual`, `pack-named-tests`
   (forecast only where none/look/ui) · `landed-seal`, `self-land-finish`, `hops-due`, `tune-report`
   (once per landing) · `lib-census` · `doctor --fast`.
 - T-324: NEW `finish-parked` (parked token + lines + rc 1 + armed removed; `run:` line on an armed rc
@@ -442,4 +444,5 @@ Seams between side-by-side wave-1 cards, proven only on the joined tree, by **T-
 - No PermissionRequest path ever allows on the user's behalf.
 
 ## Changelog
-- v1 2026-11-24: created for T-318–T-327 (plan walk-away, kit 6.20.0).
+- v1 2026-11-24: created for T-318–T-327 (plan walk-away, kit 6.20.0); before any claim T-323 was
+  re-filed as T-328 without author.sh (a glob-vs-glob false overlap with T-320 had chained it).
