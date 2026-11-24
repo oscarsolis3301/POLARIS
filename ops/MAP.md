@@ -285,3 +285,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - "kit/ops/hooks/permission-hook.sh — PermissionRequest/PermissionDenied while an approved run is away: park, never allow (walk-away § 4.3)"  (T-319, 2026-11-24)
 
 - "kit/.claude/agents/polaris-runner.md — the Haiku job runner: waits on one bg job and reports rc + tail (walk-away § 3.2)"  (T-320, 2026-11-24)
+
+- "kit/ops/lib/core.sh — cfg reads this computer's preferences ($POLARIS_HOME/preferences) under the repo's lines; kit_file and prefs_put live here (machine-prefs.md)"  (T-333, 2026-11-24)
