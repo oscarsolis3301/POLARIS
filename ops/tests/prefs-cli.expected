@@ -1,0 +1,153 @@
+== 1. show: the layer off · no file ==
+key	value	source	scope
+base	trunk	repo	repo
+claim	local-lock	default	seed
+voice	technical	repo	machine
+landing	self	default	machine
+drain	plan	default	machine
+autonomy	trusted	default	machine
+plan_gate	auto	default	machine
+builder_questions	default-safe	default	machine
+evolve_apply	auto-reversible	default	machine
+model_strong	opus	default	machine
+model_runner	haiku	default	machine
+notify	-	default	machine
+test	make test	repo	repo
+machine file: off (POLARIS_PREFS is empty)
+rc=0
+machine file: none — bash ops/polaris prefs --seed creates it from this repo
+rc=0
+== 2. --set: every refusal writes nothing ==
+⛔ prefs: --set takes <key>=<value> [<key>=<value> …]
+rc=1
+⛔ prefs: --set takes <key>=<value>, not 'voice'
+rc=1
+⛔ prefs: nosuch is not a key POLARIS reads — the list: bash ops/polaris doc KEYS
+rc=1
+⛔ prefs: base is per-project — set it in ops/CONVENTIONS.md
+rc=1
+⛔ prefs: voice takes standard | technical, not 'loud'
+rc=1
+⛔ prefs: claim takes local-lock | claim-branch, not 'sometimes'
+rc=1
+⛔ prefs: drain: a value cannot hold a tab, a line break or '#'
+rc=1
+⛔ prefs: drain: a value cannot hold a tab, a line break or '#'
+rc=1
+⛔ prefs: drain needs a value — to clear it: bash ops/polaris prefs --unset drain
+rc=1
+⛔ prefs: model_strong: 'claude-haiku-4-5' is a forbidden model — POLARIS never selects Fable or Haiku (core.sh model_denied)
+rc=1
+⛔ prefs: model_strong: 'Fable' is a forbidden model — POLARIS never selects Fable or Haiku (core.sh model_denied)
+rc=1
+⛔ prefs: model_runner: the job runner never runs on Fable or Opus (fixture rule)
+rc=1
+⛔ prefs: plan_gate is the autonomy dial — no agent may set the dial; set it yourself from a terminal outside Claude Code: bash ops/polaris prefs --set plan_gate=ask
+rc=1
+⛔ prefs: autonomy is the autonomy dial — no agent may set the dial; set it yourself from a terminal outside Claude Code: bash ops/polaris prefs --set autonomy=standard
+rc=1
+⛔ prefs: builder_questions is the autonomy dial — no agent may set the dial; set it yourself from a terminal outside Claude Code: bash ops/polaris prefs --unset builder_questions
+rc=1
+⛔ prefs: voice takes standard | technical, not 'loud'
+rc=1
+⛔ prefs: the machine layer is off (POLARIS_PREFS is empty) — nothing written
+rc=1
+   | (no machine file)
+== 3. --set: writes ==
+✅ prefs: drain = on (every project on this computer, unless its ops/CONVENTIONS.md says otherwise)
+✅ prefs: voice = standard (every project on this computer, unless its ops/CONVENTIONS.md says otherwise)
+rc=0
+✅ prefs: landing = integrator (every project on this computer, unless its ops/CONVENTIONS.md says otherwise)
+✅ prefs: model_runner = haiku (every project on this computer, unless its ops/CONVENTIONS.md says otherwise)
+✅ prefs: claim = claim-branch (every project on this computer, unless its ops/CONVENTIONS.md says otherwise)
+rc=0
+✅ prefs: plan_gate = ask (every project on this computer, unless its ops/CONVENTIONS.md says otherwise)
+rc=0
+✅ prefs: drain = off (every project on this computer, unless its ops/CONVENTIONS.md says otherwise)
+rc=0
+✅ prefs: drain = slices (every project on this computer, unless its ops/CONVENTIONS.md says otherwise)
+rc=0
+   | # POLARIS machine preferences — one key: value per line; a repo's ops/CONVENTIONS.md line beats this file
+   | drain: slices
+   | voice: standard
+   | landing: integrator
+   | model_runner: haiku
+   | claim: claim-branch
+   | plan_gate: ask
+== 4. show: a file · the mask · prefs == cfg ==
+key	value	source	scope
+base	trunk	repo	repo
+claim	local-lock	default	seed
+voice	technical	repo	machine
+landing	integrator	machine	machine
+drain	slices	machine	machine
+autonomy	trusted	default	machine
+plan_gate	ask	machine	machine
+builder_questions	default-safe	default	machine
+evolve_apply	auto-reversible	default	machine
+model_strong	opus	default	machine
+model_runner	haiku	machine	machine
+notify	-	default	machine
+test	make test	repo	repo
+machine file: <F>/home/.claude/polaris/preferences
+rc=0
+prefs == cfg: 13 of 13 keys
+prefs == cfg: 13 of 13 keys
+drain	slices	machine	machine
+autonomy	standard	repo	machine
+plan_gate	auto	default	machine
+prefs == cfg: 13 of 13 keys
+prefs == cfg: 13 of 13 keys
+== 5. --unset ==
+✅ prefs: plan_gate unset on this computer — each project's ops/CONVENTIONS.md line, else the default
+   prefs: notify was not set here
+rc=0
+✅ prefs: drain unset on this computer — each project's ops/CONVENTIONS.md line, else the default
+rc=0
+⛔ prefs: the machine layer is off (POLARIS_PREFS is empty) — nothing written
+rc=1
+   | # POLARIS machine preferences — one key: value per line; a repo's ops/CONVENTIONS.md line beats this file
+   | voice: standard
+   | landing: integrator
+   | model_runner: haiku
+   | claim: claim-branch
+   | base: elsewhere
+   | test: echo machine
+== 6. --seed ==
+⛔ prefs: <F>/home/.claude/polaris/preferences exists — --seed only creates it; change one key with --set
+rc=1
+   prefs: skipped the autonomy dial (autonomy · plan_gate) — no agent may set it; set it yourself from a terminal outside Claude Code
+✅ prefs: seeded 1 key(s) into <F>/home/.claude/polaris/preferences
+rc=0
+   | # POLARIS machine preferences — one key: value per line; a repo's ops/CONVENTIONS.md line beats this file
+   | voice: technical
+✅ prefs: seeded 3 key(s) into <F>/home/.claude/polaris/preferences
+rc=0
+   | # POLARIS machine preferences — one key: value per line; a repo's ops/CONVENTIONS.md line beats this file
+   | voice: technical
+   | autonomy: standard
+   | plan_gate: ask
+== 7. --yield ==
+⛔ prefs: --yield is an owner command — run it yourself from a terminal outside Claude Code
+rc=1
+yielded: voice · drain
+differs: landing (here self · machine integrator)
+rc=0
+   | base: trunk
+   | # voice: standard   # same as the machine
+   | landing: self
+   | # drain: slices
+   | plan_gate: ask
+   prefs: nothing to yield
+differs: landing (here self · machine integrator)
+rc=0
+temp files left: 0
+== 8. a KEYS.tsv without column 6 · an unknown form ==
+key	source	scope
+base	repo	repo
+claim	default	repo
+voice	default	repo
+⛔ prefs: drain is per-project — set it in ops/CONVENTIONS.md
+rc=1
+⛔ prefs: unknown form '--frobnicate' — prefs [--set <key>=<value>… | --unset <key>… | --seed | --yield]
+rc=1

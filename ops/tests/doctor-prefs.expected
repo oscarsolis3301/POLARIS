@@ -1,0 +1,13 @@
+== 1. no machine file ==
+  layer off: provenance lines 0
+   autonomy: default → plan_gate=auto · builder_questions=default-safe · evolve_apply=auto-reversible (explicit > autonomy > default · opt out: autonomy: standard)
+  path with no file: provenance lines 0
+  doctor unchanged
+== 2. a machine file ==
+  provenance lines 1
+   autonomy: default → plan_gate=auto · builder_questions=default-safe · evolve_apply=auto-reversible (explicit > autonomy > default · opt out: autonomy: standard)
+   machine preferences: <FIX>/prefs — bash ops/polaris prefs shows which keys it sets here
+  every other line unchanged
+== 3. POLARIS_PREFS unset: the default path ==
+   machine preferences: <FIX>/home/.claude/polaris/preferences — bash ops/polaris prefs shows which keys it sets here
+   machine preferences: <FIX>/cfgdir/polaris/preferences — bash ops/polaris prefs shows which keys it sets here

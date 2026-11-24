@@ -110,3 +110,44 @@ echo '== claim=local-lock needs no remote: written, and nothing is pending any m
 I --set claim=local-lock
 grep '^claim:' "$R/ops/CONVENTIONS.md"
 I --pending
+
+# ---- 6.21.0: setup answers once per computer (ops/contracts/machine-prefs.md § 8, first-run.md v2 § A)
+# Every machine-file path here is a fixture under $FIX: the owner's real preferences file is never
+# read (check.sh runs this with POLARIS_PREFS= — the layer OFF — and each case below names its own).
+PF="$FIX/prefs"
+mv "$R/ops/CONVENTIONS.md" "$FIX/conv-kept"
+
+echo '== --init, no CONVENTIONS and no machine file: every ask row is a question, nothing else, rc 0 =='
+POLARIS_PREFS="$FIX/no-such-file" I --init
+[ -f "$PF" ] && echo 'MACHINE FILE CREATED' || echo 'no machine file created'
+
+echo '== --init, the machine file answers fk_voice: ANSWERED from the machine, questions for the rest =='
+printf '# fixture machine file\r\nfk_voice: terse   # said once, on this computer\r\nadhd:\r\n' > "$PF"
+POLARIS_PREFS="$PF" I --init
+
+echo '== --init with the layer off (POLARIS_PREFS empty): the file is ignored, every row is asked =='
+POLARIS_PREFS= I --init
+
+# --remember writes through prefs_put, which records only machine/seed keys (KEYS.tsv column 6): the
+# ask rows become `machine`, the claim row `seed`, exactly as the real registry scopes them
+awk 'BEGIN { FS = OFS = "\t" } $1 == "claim" { $6 = "seed" } $1 != "claim" && $5 != "" { $6 = "machine" } { print }' "$R/ops/KEYS.tsv" > "$FIX/keys6"
+cp "$FIX/keys6" "$R/ops/KEYS.tsv"
+mv "$FIX/conv-kept" "$R/ops/CONVENTIONS.md"
+
+echo '== --remember with the layer off: the repo is written, the machine file is not, and nothing more is said =='
+cp "$PF" "$FIX/pf-before"
+POLARIS_PREFS= I --set fk_voice=warm --remember
+cmp -s "$FIX/pf-before" "$PF" && echo 'machine file untouched' || echo 'MACHINE FILE CHANGED'
+
+echo '== --remember: only the keys the machine file lacks are recorded — its fk_voice line is never overwritten =='
+POLARIS_PREFS="$PF" I --set fk_voice=warm --set adhd=on --set claim=local-lock --remember
+tr -d '\r' < "$PF"   # the fixture was written CRLF; prefs_put writes its own lines LF
+
+echo '== a machine answer counts as answered: --pending is silent with only the machine file saying fk_claim =='
+grep -v '^fk_claim:' "$R/ops/CONVENTIONS.md" > "$FIX/conv-nofk"; cp "$FIX/conv-nofk" "$R/ops/CONVENTIONS.md"
+POLARIS_PREFS= I --pending
+printf 'fk_claim: one\n' >> "$PF"
+POLARIS_PREFS="$PF" I --pending
+
+echo '== --remember without --set: refused =='
+POLARIS_PREFS="$PF" I --remember

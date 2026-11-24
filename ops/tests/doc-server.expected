@@ -1,0 +1,84 @@
+== 1. role: a small file is byte-identical ==
+role builder: byte-identical
+small file, no trailing newlinerc=0
+== 2. role: paged at ## outside fences ==
+fixture bytes: 66337
+page 1: first '# ROLE: CONDUCTOR — fixture' · bytes before the footer 21499
+— page 1 of 3 · next: bash ops/polaris role CONDUCTOR --page 2
+page 2: first '## C third' · bytes before the footer 14823
+— page 2 of 3 · next: bash ops/polaris role CONDUCTOR --page 3
+page 3: first '## E oversized' · bytes before the footer 30015
+— page 3 of 3 (end)
+pages joined: byte-identical
+— page 1 of 3 · next: bash ops/polaris role CONDUCTOR --page 2
+1
+⛔ role: CONDUCTOR has 3 page(s)
+rc=1
+⛔ role: --page takes a page number (1, 2, …)
+rc=1
+⛔ role: BUILDER has 1 page(s)
+rc=1
+⛔ role: no role nope — roles: BUILDER · CONDUCTOR · TIDY
+rc=1
+== 3. doc: sections ==
+## THE TOOL — real
+tool body
+### a sub heading stays
+sub body
+```
+## still the tool — fenced
+```
+rc=0
+### a sub heading stays
+sub body
+```
+## still the tool — fenced
+```
+rc=0
+⛔ doc: no section "no such thing" in PROTOCOL.md — whole file: bash ops/polaris doc PROTOCOL
+rc=1
+doc PROTOCOL: byte-identical
+k	1	-	-		repo
+rc=0
+# TASK template
+rc=0
+# ROLE: TIDY — fixture from the kit
+# ROLE: TIDY — fixture from the kit
+rc=0
+== 4. doc: unknown and refused ==
+⛔ doc: no kit document nope — documents: MANUAL · PROMPTS · PROTOCOL · VISUAL · KEYS · templates/<T> · roles/<R>
+rc=1
+⛔ doc: no kit document ../polaris — documents: MANUAL · PROMPTS · PROTOCOL · VISUAL · KEYS · templates/<T> · roles/<R>
+rc=1
+⛔ doc: no kit document templates/../../x — documents: MANUAL · PROMPTS · PROTOCOL · VISUAL · KEYS · templates/<T> · roles/<R>
+rc=1
+⛔ doc: no kit document /etc/passwd — documents: MANUAL · PROMPTS · PROTOCOL · VISUAL · KEYS · templates/<T> · roles/<R>
+rc=1
+⛔ doc: no kit document MANUAL — documents: MANUAL · PROMPTS · PROTOCOL · VISUAL · KEYS · templates/<T> · roles/<R>
+rc=1
+== 5. router: with and without markers ==
+# kit router — no markers
+line two
+rc=0
+# inside
+line
+rc=0
+⛔ router: CLAUDE.md has 1 page(s)
+rc=1
+⛔ router: no CLAUDE.md beside this kit (<F>/kit/ops/../CLAUDE.md)
+rc=1
+== 6. a repo copy wins · a kit-only file is served ==
+# ROLE: BUILDER — the REPO copy
+rc=0
+# ROLE: TIDY — fixture from the kit
+rc=0
+⛔ role: no role nope — roles: BUILDER · CONDUCTOR · TIDY
+== 7. doc --where ==
+kit: <F>/kit/ops
+mode: machine
+rc=0
+kit: <F>/repo/ops
+mode: vendored
+== 8. the real kit: CONDUCTOR comes in pages ==
+— page 1 of <n> · next: bash ops/polaris role CONDUCTOR --page 2
+# ROLE: BUILDER — claim one task, finish it, prove it

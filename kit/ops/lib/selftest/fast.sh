@@ -301,10 +301,10 @@ EOF
     printf '%s\t0\tlayout pass due — 3 folders scatter one change\r\n' "$ft_sha" > "$ft_hd"
     ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
     ft_assert 'due + quiet → rc 0'                                test "$ft_rc" = 0
-    ft_assert 'due + quiet → the run-it-now line, one newline'    test "$ft_out" = "▶ NEXT — tune-up (1): read ops/roles/TIDY.md and run it now${ft_nl}x"
+    ft_assert 'due + quiet → the run-it-now line, one newline'    test "$ft_out" = "▶ NEXT — tune-up (1): run bash ops/polaris role TIDY and follow it now${ft_nl}x"
     BOARD="$FT_TMP/q/ready/board"
     ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
-    ft_assert 'due + a card waiting in ready/ → still quiet, run it now' test "$ft_out" = "▶ NEXT — tune-up (1): read ops/roles/TIDY.md and run it now${ft_nl}x"
+    ft_assert 'due + a card waiting in ready/ → still quiet, run it now' test "$ft_out" = "▶ NEXT — tune-up (1): run bash ops/polaris role TIDY and follow it now${ft_nl}x"
     BOARD="$FT_TMP/q/active/board"
     ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
     ft_assert 'due + busy → rc 0'                                 test "$ft_rc" = 0
@@ -321,7 +321,7 @@ EOF
     ft_assert 'tune-due current, n = 3 → auto says (3)'           test "$ft_out" = ' · tune-up due (3)x'
     BOARD="$FT_TMP/q/empty/board"
     ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
-    ft_assert 'tune-due current, n = 3, quiet → run it now (3)'   test "$ft_out" = "▶ NEXT — tune-up (3): read ops/roles/TIDY.md and run it now${ft_nl}x"
+    ft_assert 'tune-due current, n = 3, quiet → run it now (3)'   test "$ft_out" = "▶ NEXT — tune-up (3): run bash ops/polaris role TIDY and follow it now${ft_nl}x"
     printf '%s\t1\t0\t-\n' "$ft_sha" > "$ft_td"
     ft_out="$(update_hops_hint explicit && printf x)" && ft_rc=0 || ft_rc=1
     ft_assert 'tune-due current, n = 0 → rc 1, the layout verdict unread' test "$ft_rc" = 1
@@ -649,8 +649,12 @@ EOF
   # CONV overridden: an `ask` row (column 5) is pending unless CONV answers it with a live `^key:`
   # line or a `# key:` stub; KEYS.tsv order, ` · `-joined; rc 1 and silence when nothing is. Then
   # interview_set's three write modes, proven on the file (read whole by a builtin, no fork).
-  ( FT_SEC=interview-pending; OPS="$ft_iv/ops5"; CONV="$ft_iv/c-live"
+  # The machine layer is OFF here (POLARIS_PREFS set but empty) except where a fixture file turns it
+  # on — the owner's real preferences file is never read (machine-prefs.md § 5).
+  ( FT_SEC=interview-pending; OPS="$ft_iv/ops5"; CONV="$ft_iv/c-live"; POLARIS_PREFS=
     ft_assert 'voice live → adhd · claim pending' test "$(interview_pending)" = 'adhd · claim'
+    printf 'adhd:\nadhd: on   # the machine said so\n' > "$ft_iv/m-adhd"
+    ft_assert "a machine file's non-blank adhd line answers it → claim only" test "$(POLARIS_PREFS="$ft_iv/m-adhd" interview_pending)" = 'claim'
     ft_assert 'pending → rc 0'                  interview_pending
     CONV="$ft_iv/c-stub"
     ft_assert 'a # claim: stub counts as answered' test "$(interview_pending)" = 'adhd'
@@ -666,7 +670,7 @@ EOF
     ft_assert 'CRLF lines answer; the order stays the registry order' test "$(interview_pending)" = 'adhd'
     OPS="$ft_iv/ops4"; CONV="$ft_iv/c-empty"
     ft_assert 'a 4-column registry asks nothing → rc 1' ! interview_pending
-    OPS="$ft_iv/none"
+    OPS="$ft_iv/none"; OPS_DIR="$ft_iv/none"     # kit_file: neither the repo nor the kit has one
     ft_assert 'no KEYS.tsv → rc 1'              ! interview_pending
     OPS="$ft_iv/ops5"; CONV="$ft_iv/no-such"
     ft_assert 'no CONVENTIONS → rc 1 (interview itself is what dies)' ! interview_pending

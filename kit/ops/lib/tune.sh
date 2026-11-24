@@ -205,7 +205,7 @@ EOF
     hs="${hs%$'\r'}"; hv="${hv%$'\r'}"; hm="${hm%$'\r'}"
     if [ "$hv" = 0 ] && [ -n "$hs" ] && [ "$hs" = "$sha" ] && [ "$(cfg hops on)" != off ]; then
       _tk layout; due=0
-      printf 'layout: %s\n   fix: the layout pass — read ops/roles/TIDY.md\n' "${hm#layout pass due — }"
+      printf 'layout: %s\n   fix: the layout pass — run bash ops/polaris role TIDY\n' "${hm#layout pass due — }"
     fi
   fi
 

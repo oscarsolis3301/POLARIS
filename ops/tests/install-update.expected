@@ -12,7 +12,7 @@ settings.json: byte-identical
 rc 0 · live-board · tune-up lines 1 · upgrade lines 0 · ▶ NEXT lines 1
 POLARIS <version> installed · live-board
 
-▶ NEXT — tune-up (1): read ops/roles/TIDY.md and run it now
+▶ NEXT — tune-up (1): run bash ops/polaris role TIDY and follow it now
 .claude/settings.json: hooks + permissions + output style merged (idempotent) — 1 permission rule(s)
 .claude/settings.json: AI commit attribution disabled ("includeCoAuthoredBy": false)
 every line ends CRLF
@@ -21,7 +21,7 @@ the object: the kit's own
 rc 0 · live-board · tune-up lines 1 · upgrade lines 0 · ▶ NEXT lines 1
 POLARIS <version> installed · live-board
 
-▶ NEXT — tune-up (1): read ops/roles/TIDY.md and run it now
+▶ NEXT — tune-up (1): run bash ops/polaris role TIDY and follow it now
 settings.json: byte-identical
 --- 5. a 6.18 updater: its admin.sh reads tune-due and prints its own line: none here
 admin.sh reads tune-due: yes
@@ -44,7 +44,7 @@ POLARIS <version> installed · live-board
 rc 0 · live-board · tune-up lines 1 · upgrade lines 0 · ▶ NEXT lines 1
 POLARIS <version> installed · live-board
 
-▶ NEXT — tune-up (1): read ops/roles/TIDY.md and run it now
+▶ NEXT — tune-up (1): run bash ops/polaris role TIDY and follow it now
 --- 11. a 6.19 settings.json: the four new registrations merge once, a re-run touches nothing
 rc 0 · live-board · tune-up lines 0 · upgrade lines 0 · ▶ NEXT lines 0
 .claude/settings.json: hooks + permissions + output style merged (idempotent) — added ops/hooks/handover-hook.sh, ops/hooks/permission-hook.sh

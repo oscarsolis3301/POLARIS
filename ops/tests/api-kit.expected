@@ -18,7 +18,7 @@ kit/CLAUDE.md	heading	FEWEST HOPS — the core principle
 kit/CLAUDE.md	heading	INVARIANTS — NEVER violate
 kit/CLAUDE.md	heading	POLARIS v5 — Parallel Sprint Protocol
 kit/CLAUDE.md	heading	PROGRESS FORMAT
-kit/CLAUDE.md	heading	READ THIS WHEN YOU NEED IT — `ops/PROTOCOL.md`
+kit/CLAUDE.md	heading	READ THIS WHEN YOU NEED IT — `bash ops/polaris doc PROTOCOL`
 kit/CLAUDE.md	heading	ROLE DISPATCH — do this first
 kit/CLAUDE.md	heading	STOP AND ASK THE HUMAN before
 kit/CLAUDE.md	heading	THE ONE IDEA
@@ -430,6 +430,10 @@ kit/ops/lib/core.sh	fn	test_select_for
 kit/ops/lib/core.sh	fn	tier_for
 kit/ops/lib/core.sh	fn	who
 kit/ops/lib/core.sh	fn	wt_path
+kit/ops/lib/docs.sh	fn	cmd_doc
+kit/ops/lib/docs.sh	fn	cmd_role
+kit/ops/lib/docs.sh	fn	cmd_router
+kit/ops/lib/docs.sh	fn	kit_mode
 kit/ops/lib/drift.sh	fn	cmd_drift
 kit/ops/lib/drift.sh	fn	cmd_rules
 kit/ops/lib/drift.sh	fn	cmd_surfaces
@@ -533,6 +537,7 @@ kit/ops/lib/ownership.sh	fn	plan_covers
 kit/ops/lib/ownership.sh	fn	rule_scan_content_file
 kit/ops/lib/ownership.sh	fn	rule_scan_path
 kit/ops/lib/ownership.sh	fn	run_verify_cmds
+kit/ops/lib/prefs.sh	fn	cmd_prefs
 kit/ops/lib/pulse.sh	fn	cmd_defer
 kit/ops/lib/pulse.sh	fn	cmd_preflight
 kit/ops/lib/pulse.sh	fn	cmd_pulse

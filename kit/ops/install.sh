@@ -124,8 +124,8 @@ say "ops/ installed"
 # registered twice. Root = POLARIS_AWAKE_HOME, else $HOME/.claude/polaris/awake; skipped
 # silently when $HOME/.claude does not exist and the env is unset (CI, no Claude Code).
 # Best effort and SILENT: the quiet-line count above the epilogue is a CI contract.
-if [ -n "${POLARIS_AWAKE_HOME:-}" ] || [ -d "${HOME:-/nonexistent}/.claude" ]; then
-  _AW="${POLARIS_AWAKE_HOME:-$HOME/.claude/polaris/awake}"
+if [ -n "${POLARIS_AWAKE_HOME:-}" ] || [ -d "${CLAUDE_CONFIG_DIR:-${HOME:-/nonexistent}/.claude}" ]; then
+  _AW="${POLARIS_AWAKE_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/polaris/awake}"
   _RP="$(git -C "$TARGET" rev-parse --show-toplevel 2>/dev/null)" || _RP=""
   _RK="$(printf '%s' "$_RP" | cksum 2>/dev/null)" || _RK=""; _RK="${_RK%% *}"
   case "$_RK" in ''|*[!0-9]*) _RP="";; esac       # no cksum, no entry — never a guessed name
@@ -276,9 +276,15 @@ if [ -f "$KIT/.claude/skills/i-have-adhd/SKILL.md" ]; then
   # `polaris update` would silently re-arm the flag and undo the answer, which is the worst shape
   # of bug: the preference is still sitting in the file, and it simply stopped working.
   # Applied to the COPY only; the kit's own file is never touched. ops/contracts/first-run.md § 2.
+  # The answer is read the way cfg reads it (ops/contracts/machine-prefs.md § 4): the repo's first
+  # `adhd:` line when it is non-blank, else this computer's preferences file (POLARIS_PREFS overrides
+  # its path; set but empty = off), else off. No CONVENTIONS and no machine file → no fork at all.
   _ADHD="$TARGET/.claude/skills/i-have-adhd/SKILL.md"
-  if [ -f "$_ADHD" ] && [ -f "$TARGET/ops/CONVENTIONS.md" ] \
-     && grep -q '^adhd:[[:space:]]*on' "$TARGET/ops/CONVENTIONS.md"; then
+  _AV=""; _AP="${POLARIS_PREFS-${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/preferences}"
+  _AK='{ l=$0; sub(/\r$/,"",l) } index(l, "adhd:")==1 { s=substr(l, 6); sub(/^[ \t]*/,"",s); if (s ~ /^#/) s=""; else sub(/[ \t]#.*$/,"",s); sub(/[ \t]*$/,"",s); if (s != "") { print s; exit } if (first) exit }'
+  [ -f "$TARGET/ops/CONVENTIONS.md" ] && _AV="$(awk -v first=1 "$_AK" "$TARGET/ops/CONVENTIONS.md" 2>/dev/null || true)"
+  [ -n "$_AV" ] || { [ -n "$_AP" ] && [ -f "$_AP" ] && _AV="$(awk -v first=0 "$_AK" "$_AP" 2>/dev/null || true)"; } || true
+  if [ -f "$_ADHD" ] && [ "$_AV" = on ]; then
     if sed 's/^disable-model-invocation: true$/disable-model-invocation: false/' \
          "$_ADHD" > "$_ADHD.polaris-tmp"; then
       mv "$_ADHD.polaris-tmp" "$_ADHD"
@@ -286,7 +292,7 @@ if [ -f "$KIT/.claude/skills/i-have-adhd/SKILL.md" ]; then
       rm -f "$_ADHD.polaris-tmp"
     fi
   fi
-  unset _ADHD
+  unset _ADHD _AV _AP _AK
 fi
 # Output style — the layer that binds the MAIN conversation's own voice, which is the one thing
 # CLAUDE.md cannot do: CLAUDE.md is context the model weighs, an output style is the session's
@@ -573,7 +579,7 @@ note "Claude Code will ask to trust the project hook on first use — that is th
 # is already there and differs, and runs the restore when the guard is registered. Silent and
 # fail-open: it creates no guard, registers nothing, and prints no line (CI counts them).
 if [ -n "${POLARIS_SHA+x}" ] && [ -n "${HOME:-}" ]; then
-  _MG="$HOME/.claude/polaris/model-guard.sh"; _KG="$KIT/ops/hooks/model-guard.sh"
+  _MG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/polaris/model-guard.sh"; _KG="$KIT/ops/hooks/model-guard.sh"
   if [ -f "$_MG" ] && [ -f "$_KG" ] && ! cmp -s "$_MG" "$_KG"; then
     cp "$_KG" "$_MG" 2>/dev/null && chmod +x "$_MG" 2>/dev/null || true
   fi
@@ -662,7 +668,7 @@ if [ "$UPGRADE" = 1 ] && [ -n "${POLARIS_SHA+x}" ] && [ "$PRE_HINT_FN" = 0 ] \
         if [ -f "$_f" ]; then _busy=1; fi
       done
     done
-    if [ "$_busy" = 0 ]; then printf '\n▶ NEXT — tune-up (%s): read ops/roles/TIDY.md and run it now\n' "$_n"
+    if [ "$_busy" = 0 ]; then printf '\n▶ NEXT — tune-up (%s): run bash ops/polaris role TIDY and follow it now\n' "$_n"
     else printf '\n▶ NEXT — tune-up due (%s): it runs when the work in flight lands\n' "$_n"; fi
   fi
   unset _vs _vv _vm _vk _CFG _base _sha _n _hops _busy _col _f

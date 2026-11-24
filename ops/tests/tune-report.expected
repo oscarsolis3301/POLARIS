@@ -2,7 +2,7 @@
 cards: plan tune — 3 open cards, projected about 2.3 h; 3 of them fold into 1 chain card(s)
    fix: bash ops/polaris fold T-1 T-2 T-3
 layout: ~40% fewer folders per change
-   fix: the layout pass — read ops/roles/TIDY.md
+   fix: the layout pass — run bash ops/polaris role TIDY
 landing: integration: paranoid runs the whole suite on every card — about 15 min across 3 open cards
    fix: proposal — set integration: batch in ops/CONVENTIONS.md
   rc=1
@@ -44,7 +44,7 @@ tune: nothing to slow this project down
 --- 7. a due layout verdict cached for the commit before the update's own: tune refreshes it (T-311)
   cached for commit A: A due
 layout: ~52% fewer folders per change · 4 folders of 5+ files have no guide
-   fix: the layout pass — read ops/roles/TIDY.md
+   fix: the layout pass — run bash ops/polaris role TIDY
   hops-due now: the new base due
   tune-due now: the new base due kinds layout
   next: tidy

@@ -1,7 +1,7 @@
 # Sprint 29 — Your preferences, once, for every project (6.21.0) (2026-11-24–)
 
 ## T-333 — "Your machine file under every repo - cfg reads this computer's preferences under each repo's own lines, the test harness never sees the real file, KEYS gains its scope column, and seal stops re-landing a file another card of the wave changed"
-points 11 · risk normal · landed c72fa229 (2026-11-24) · claimed 2026-11-24
+points 11 · risk normal · landed c72fa229 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/KEYS.tsv, kit/ops/lib/check.sh, kit/ops/lib/core.sh, kit/ops/lib/selftest/spine.sh, ops/tests/api-kit.expected, ops/tests/cfg-layers.cmd, ops/tests/cfg-layers.expected, ops/tests/landed-seal.cmd, ops/tests/landed-seal.expected
 
 ### Why
@@ -32,7 +32,7 @@ wave work (safe-landing v1.4 § K).
 - [ ] api-kit: exactly + `kit/ops/lib/core.sh	fn	kit_file` and `kit/ops/lib/core.sh	fn	prefs_put`
 
 ## T-334 — "The hooks read your machine file and find the kit themselves - the four state hooks fall back to this computer's preferences, every hook uses the one machine home and the repo-or-kit lookup, and the read-only gate lets role, doc, router and prefs through"
-points 8 · risk normal · landed e7197c23 (2026-11-24) · claimed 2026-11-24
+points 8 · risk normal · landed e7197c23 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/hooks/awake-hook.sh, kit/ops/hooks/handover-hook.sh, kit/ops/hooks/model-guard.sh, kit/ops/hooks/ownership-guard.sh, kit/ops/hooks/permission-hook.sh, kit/ops/hooks/presence-guard.sh, kit/ops/hooks/readonly-allow.sh, kit/ops/hooks/update-hook.sh, ops/tests/awake-hook.cmd, ops/tests/awake-hook.expected, ops/tests/handover-stop.expected, ops/tests/model-guard-v2.cmd, ops/tests/model-guard-v2.expected, ops/tests/ownership-primary.cmd, ops/tests/ownership-primary.expected, ops/tests/permission-hook.cmd, ops/tests/permission-hook.expected, ops/tests/presence-guard.cmd, ops/tests/presence-guard.expected, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected
 
 ### Why
@@ -55,7 +55,7 @@ read-only gate learns the four new read-only verbs so agents are not prompted fo
 - [ ] no new function definitions (api-kit unchanged)
 
 ## T-335 — "Role files and kit docs point at commands, not paths, and INIT asks only what this computer has not answered - every kit doc path in the prose becomes bash ops/polaris role or doc, INIT uses interview --init, and PROTOCOL says what the value in CONVENTIONS means now"
-points 7 · risk normal · landed bc6ce089 (2026-11-24) · claimed 2026-11-24
+points 7 · risk normal · landed bc6ce089 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/.claude/output-styles/polaris.md, kit/.claude/skills/polaris/SKILL.md, kit/ops/MANUAL.md, kit/ops/PROTOCOL.md, kit/ops/VISUAL.md, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/EVOLVE.md, kit/ops/roles/INIT.md, kit/ops/roles/INTEGRATOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md, kit/ops/roles/TIDY.md
 
 ### Why
@@ -84,7 +84,7 @@ does not own api-kit.
 - [ ] INIT.md: first-run v2 § B exactly, headings byte-identical
 
 ## T-336 — "The CLI's own messages name commands, not paths - next, triage, hops, drift, the verify guard and seal say bash ops/polaris role or doc where they used to say read ops/roles"
-points 3 · risk normal · landed ad40cc4d (2026-11-24) · claimed 2026-11-24
+points 3 · risk normal · landed ad40cc4d (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/index.py, kit/ops/lib/builder.sh, kit/ops/lib/drift.sh, kit/ops/lib/handover.sh, kit/ops/lib/ownership.sh, kit/ops/lib/route.sh, ops/tests/handover-route.expected, ops/tests/hops-due.expected, ops/tests/hops-map.expected, ops/tests/seal-fallback.expected, ops/tests/surfaces-scaffold.expected, ops/tests/triage-lane.expected, ops/tests/tune-hop.expected
 
 ### Why
@@ -98,3 +98,66 @@ moves.
 - [ ] every T-336 row of doc-server § 6 rendered verbatim
 - [ ] each listed golden differs from base ONLY on those lines
 - [ ] no code change beyond the strings; api-kit and lib-census unchanged
+
+## T-337 — "polaris prefs, role, doc and router - the CLI finds its own code, shows and sets your machine preferences, serves role files and kit documents in pages, and CLAUDE.md routes through commands"
+points 13 · risk normal · landed fd26cbc1 (2026-11-24) · claimed 2026-11-24
+files touched: kit/CLAUDE.md, kit/ops/lib/docs.sh, kit/ops/lib/prefs.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/doc-server.cmd, ops/tests/doc-server.expected, ops/tests/prefs-cli.cmd, ops/tests/prefs-cli.expected
+
+### Why
+This is the one card that edits the CLI's entry script, so everything the release adds to it lands
+here. Three things. (1) The CLI locates its own code from its own path (`BASH_SOURCE`), so a later
+shared kit can run it from outside any repo; in a vendored install every path is the same as today.
+(2) `polaris prefs` lets a person see, for every key, which value wins here and where it came from
+(repo, this computer, or the default), and set, unset, seed or yield the computer's file — with the
+refusals that keep an agent from ever setting the autonomy dial. (3) `role`, `doc` and `router` serve
+the kit's own role files and documents, split into pages at `##` boundaries because the harness only
+inlines about 30,000 characters and CONDUCTOR.md is larger. kit/CLAUDE.md — the router every session
+reads — switches to the command form in the same change, because its one heading with a path is an
+api-kit row and this card owns api-kit in wave 2.
+
+### Acceptance
+- [ ] doc-server golden: every case listed under its "Executable checks"
+- [ ] prefs-cli golden: every machine-prefs § 7 form and refusal, including the CLAUDECODE=1 dial refusal, and prefs value == cfg value for every key of its fixture
+- [ ] vendored install: every pre-existing golden in verify byte-identical; startup-budget unchanged (docs/prefs load only for their verbs and doctor)
+- [ ] api-kit: + docs.sh `cmd_role` `cmd_doc` `cmd_router` `kit_mode` + prefs.sh `cmd_prefs` (name any other public function in the handback) + kit/CLAUDE.md's rewritten heading row; nothing else
+- [ ] `bash kit/ops/polaris role CONDUCTOR` ends with `— page 1 of <n> · next: bash ops/polaris role CONDUCTOR --page 2`
+
+## T-338 — "Setup answers once per computer - interview --init answers from your machine file before a repo has CONVENTIONS, --remember keeps new answers for next time, and the installer and admin commands read the kit and the machine home through one lookup"
+points 8 · risk normal · landed 8e7f9fa6 (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/install.sh, kit/ops/lib/admin.sh, kit/ops/lib/selftest/fast.sh, ops/tests/adopt-stub.expected, ops/tests/install-update.expected, ops/tests/interview.cmd, ops/tests/interview.expected
+
+### Why
+Today every new repo asks the same three setup questions (how to talk to you, ADHD-shaped replies,
+one computer or several). With a machine preferences file those answers already exist on this
+computer, so `interview --init` — which works before the repo has any CONVENTIONS — prints what the
+machine file answers as `ANSWERED` lines and asks only the rest; `--remember` records a new answer in
+the machine file when it has none, so the next project asks nothing. `interview_pending` (what doctor
+and update use to nag) counts a machine answer as answered. The same file reads kit files through the
+repo state dir in a dozen places and hard-codes the machine home; both switch to the one lookup and
+the one home variable from T-333, byte-identical in a vendored install. The installer's adhd read
+gains the same machine fallback. The admin and installer messages that say "read ops/roles/…" switch
+to the command form, except the installer's INIT epilogue, which CI greps.
+
+### Acceptance
+- [ ] interview: existing lines byte-identical except doc-server § 6's one re-pinned line; appended cases: --init with no CONVENTIONS and no machine file (all questions), with a machine file answering voice (ANSWERED voice … machine, questions for the rest), --remember writing only keys the machine file lacks, POLARIS_PREFS= making --remember a silent no-op
+- [ ] no new function definitions in admin.sh (api-kit unchanged)
+- [ ] install-update and adopt-stub differ from base only on the § 6 lines
+- [ ] install.sh still prints `read ops/roles/INIT.md` (ci.yml:331, selftest-install.sh:184/293)
+
+## T-339 — "Doctor names your machine file, and the rest of the CLI finds the kit and the machine home through one lookup - status, find, keep-awake, presence, routing, heavy slots and the tune-up line"
+points 5 · risk normal · landed 415995d2 (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/lib/awake.sh, kit/ops/lib/observe.sh, kit/ops/lib/presence.sh, kit/ops/lib/route.sh, kit/ops/lib/search.sh, kit/ops/lib/tune.sh, kit/ops/lib/workspace.sh, ops/tests/doctor-prefs.cmd, ops/tests/doctor-prefs.expected, ops/tests/keys-drift.cmd, ops/tests/keys-drift.expected, ops/tests/tune-report.expected
+
+### Why
+The remaining CLI modules read kit files (VERSION, KEYS.tsv, index.py, the hooks) through the repo's
+`ops/` and hard-code `$HOME/.claude/polaris` for machine state. Both switch to T-333's `kit_file`
+and `POLARIS_HOME`, so the same code runs from a shared kit later and is byte-identical in a vendored
+install now (doc-server § 2-3). Doctor gains exactly one line, only when a machine preferences file
+exists, so a person can see that one is in play (machine-prefs § 9). The tune-up report's "read
+ops/roles/TIDY.md" becomes the command form (doc-server § 6).
+
+### Acceptance
+- [ ] doctor-prefs: no machine file → the provenance line absent and the doctor lines the golden samples unchanged; a fixture machine file (POLARIS_PREFS=<path>) → the § 9 line exactly once
+- [ ] tune-report differs from base only on the § 6 line
+- [ ] no new function definitions (api-kit, lib-census unchanged); startup-budget unchanged
+- [ ] every listed $HOME/.claude/polaris code site uses POLARIS_HOME; POLARIS_AWAKE_HOME and POLARIS_HEAVY_DIR still win
