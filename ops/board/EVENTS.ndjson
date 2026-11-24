@@ -1514,3 +1514,4 @@
 {"ts":1795561512,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"kit/ops/lib/presence.sh"}
 {"ts":1795561517,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"kit/ops/lib/builder.sh"}
 {"ts":1795561522,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"kit/ops/lib/route.sh"}
+{"ts":1795561526,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"kit/ops/lib/visual.sh"}
