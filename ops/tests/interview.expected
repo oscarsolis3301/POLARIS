@@ -1,5 +1,5 @@
 == no ops/CONVENTIONS.md: die points at INIT, never creates the file ==
-⛔ no ops/CONVENTIONS.md — INIT has never run here; the interview writes into it (ops/roles/INIT.md)
+⛔ no ops/CONVENTIONS.md — INIT has never run here; the interview writes into it (bash ops/polaris role INIT)
 rc 1
 no file created
 == plain: the one pending key as QUESTION/OPTION lines, then the tail with its default filled in ==
@@ -77,3 +77,66 @@ file untouched
 rc 0
 claim: local-lock   # fake locks stay on this machine
 rc 0
+== --init, no CONVENTIONS and no machine file: every ask row is a question, nothing else, rc 0 ==
+QUESTION	fk_voice	How should I talk to you?
+OPTION	fk_voice	warm	Warm	default
+OPTION	fk_voice	terse	Terse
+QUESTION	adhd	Want replies shaped for ADHD?
+OPTION	adhd	off	Not needed	default
+OPTION	adhd	on	Yes, always
+QUESTION	fk_claim	One computer or several?
+OPTION	fk_claim	one	One computer	default
+OPTION	fk_claim	many	Several computers
+QUESTION	claim	One computer, or several?
+OPTION	claim	local-lock	One computer	default
+OPTION	claim	claim-branch	Several computers
+rc 0
+no machine file created
+== --init, the machine file answers fk_voice: ANSWERED from the machine, questions for the rest ==
+ANSWERED	fk_voice	terse	machine
+QUESTION	adhd	Want replies shaped for ADHD?
+OPTION	adhd	off	Not needed	default
+OPTION	adhd	on	Yes, always
+QUESTION	fk_claim	One computer or several?
+OPTION	fk_claim	one	One computer	default
+OPTION	fk_claim	many	Several computers
+QUESTION	claim	One computer, or several?
+OPTION	claim	local-lock	One computer	default
+OPTION	claim	claim-branch	Several computers
+rc 0
+== --init with the layer off (POLARIS_PREFS empty): the file is ignored, every row is asked ==
+QUESTION	fk_voice	How should I talk to you?
+OPTION	fk_voice	warm	Warm	default
+OPTION	fk_voice	terse	Terse
+QUESTION	adhd	Want replies shaped for ADHD?
+OPTION	adhd	off	Not needed	default
+OPTION	adhd	on	Yes, always
+QUESTION	fk_claim	One computer or several?
+OPTION	fk_claim	one	One computer	default
+OPTION	fk_claim	many	Several computers
+QUESTION	claim	One computer, or several?
+OPTION	claim	local-lock	One computer	default
+OPTION	claim	claim-branch	Several computers
+rc 0
+== --remember with the layer off: the repo is written, the machine file is not, and nothing more is said ==
+✅ set fk_voice: warm
+   review, then commit ops/CONVENTIONS.md — nothing was committed for you
+rc 0
+machine file untouched
+== --remember: only the keys the machine file lacks are recorded — its fk_voice line is never overwritten ==
+   ⚠ .claude/skills/i-have-adhd/SKILL.md is not installed here — run: bash ops/polaris update
+✅ set fk_voice: warm · adhd: on · claim: local-lock
+   review, then commit ops/CONVENTIONS.md — nothing was committed for you
+   remembered on this computer for every new project: adhd: on · claim: local-lock
+rc 0
+# fixture machine file
+fk_voice: terse   # said once, on this computer
+adhd: on
+claim: local-lock
+== a machine answer counts as answered: --pending is silent with only the machine file saying fk_claim ==
+   preferences never set here: fk_claim — one round of questions: ops/polaris interview
+rc 1
+rc 0
+== --remember without --set: refused ==
+⛔ --remember goes with --set — usage: polaris interview [--pending | --init | --set <key>=<value> … [--remember]]
+rc 1

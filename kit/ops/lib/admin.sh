@@ -63,8 +63,8 @@ cmd_upgrade() { # idempotent v3→v4: creates what v4 adds, touches nothing that
     git -C "$PRIMARY" commit -q -m "chore(board): board moves to polaris/board"
     say "board history migrated → refs/heads/polaris/board (moved set now untracked + ignored on $BASE)"
   fi
-  chmod +x "$OPS/polaris" 2>/dev/null || true
-  [ -f "$OPS/hooks/ownership-guard.sh" ] && chmod +x "$OPS/hooks/ownership-guard.sh" 2>/dev/null || true
+  local _kf; _kf="$(kit_file polaris)"; chmod +x "$_kf" 2>/dev/null || true
+  _kf="$(kit_file hooks/ownership-guard.sh)"; [ -f "$_kf" ] && chmod +x "$_kf" 2>/dev/null || true
   # This used to recite a hardcoded "New since v4: …" list — written once, never updated, and
   # printed on every 5.x→5.x upgrade, where it was simply false. The changelog URL already lives in
   # ops/VERSION and is always right; point at it instead of maintaining a second copy that rots.
@@ -257,7 +257,7 @@ refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with wh
   # repo, update the machine" reasoning as the cached kit above. Same two-path source order (kit/
   # first, root fallback), and SILENT: fails open, and the hook's own stdout would land in the
   # quiet-line count above the ▶ NEXT epilogue.
-  local awake="$HOME/.claude/polaris"
+  local awake="$POLARIS_HOME"
   if mkdir -p "$awake" 2>/dev/null; then
     for a in awake-hook.sh awake-press.ps1; do
       for s in "$kitsrc/kit/ops/hooks/$a" "$kitsrc/ops/hooks/$a"; do
@@ -953,7 +953,7 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
   if [ ! -f "$PRIMARY/ops/CONVENTIONS.md" ]; then
     printf '\n'
     printf '▶ NEXT — to the AI agent reading this: this repo has never been set up, so the update is\n'
-    printf '  NOT the whole job. Read ops/roles/INIT.md and execute it now, in THIS chat — it\n'
+    printf '  NOT the whole job. Run bash ops/polaris role INIT and execute it now, in THIS chat — it\n'
     printf '  interviews the human (a few quick questions), then plans their first sprint. Do not\n'
     printf '  tell the human to open a new chat or hand them a kickoff phrase to type — INIT is your\n'
     printf '  job, now. This holds whatever the human asked for: an unconfigured POLARIS is not\n'
@@ -1160,7 +1160,7 @@ update_hops_hint() { # update_hops_hint <explicit|auto> — the tune-up line an 
   case "$1" in
     auto) printf ' · tune-up due (%s)' "$n";;
     explicit)
-      if board_quiescent inflight; then printf '▶ NEXT — tune-up (%s): read ops/roles/TIDY.md and run it now\n' "$n"
+      if board_quiescent inflight; then printf '▶ NEXT — tune-up (%s): run bash ops/polaris role TIDY and follow it now\n' "$n"
       else printf '▶ NEXT — tune-up due (%s): it runs when the work in flight lands\n' "$n"; fi;;
   esac
   return 0
@@ -1353,9 +1353,11 @@ EOF
 # one adopt run silences both commands forever without changing any behavior.
 
 cmd_adopt() {
+  # The registry stays on $OPS here, not kit_file: an install that predates it gets the remedy die
+  # (adopt-stub pins it), and kit_file's fallback would answer for it from the kit.
   local keys="$OPS/KEYS.tsv" marker cr added=0 total=0 key since def cost ask
   [ -f "$keys" ] || die "no ops/KEYS.tsv here — this install predates the key registry; it ships with:  ops/polaris update"
-  [ -f "$CONV" ] || die "no ops/CONVENTIONS.md — INIT has never run here, and adopt never creates it; read ops/roles/INIT.md first"
+  [ -f "$CONV" ] || die "no ops/CONVENTIONS.md — INIT has never run here, and adopt never creates it; run bash ops/polaris role INIT first"
   marker='# --- known keys not set here (polaris adopt; uncomment a line to enable it) ---'
   cr="$(printf '\r')"
   # Five variables, not four: column 5 (`ask`, 6.4.0) is the interview's question for the three
@@ -1521,6 +1523,8 @@ cmd_heal() { # heal — repair the configuration efficiency depends on. Safe to 
   # 0 — a config nicety must never be the thing that fails an install or an update. ONE `note` on the
   # run that creates it and silence forever after; `say` here would be a new stdout line on an
   # install path and would eat the quiet-line budget the CI tripwire counts.
+  # The template stays on $OPS, not kit_file: a repo whose install shipped no template is told
+  # nothing (heal-design pins that), and kit_file's fallback would answer for it from the kit.
   if [ -f "$OPS/templates/DESIGN.md" ] && [ ! -f "$OPS/DESIGN.md" ]; then
     cp "$OPS/templates/DESIGN.md" "$OPS/DESIGN.md" 2>/dev/null \
       && note "healed: ops/DESIGN.md — the design bar every screen is judged against, installed from the template; fill in its '## THIS PRODUCT' section with one sentence on the look and feel you want, in your own words"
@@ -1557,20 +1561,37 @@ interview_pending() { # stdout: the unanswered interview keys, ` · `-joined in 
   # pending; no CONVENTIONS ⇒ the same here (cmd_interview is what dies — the interview writes into
   # it). The first file is matched by NAME, never by `FNR==NR`: an empty CONVENTIONS.md would
   # otherwise hand its turn to the registry's first row.
-  local keys="$OPS/KEYS.tsv"
+  # This computer's preferences file is a THIRD input, matched by name too (machine-prefs.md § 4):
+  # an ask key it gives a non-blank value is answered — the person already said it once, here. It
+  # comes last, so the registry's rows are held and judged in END. No file → the old two-file awk.
+  local keys m="${POLARIS_PREFS-$POLARIS_HOME/preferences}"
+  keys="$(kit_file KEYS.tsv)"
   [ -f "$keys" ] && [ -f "$CONV" ] || return 1
-  awk -F'\t' '
+  [ -n "$m" ] && [ -f "$m" ] || m=""
+  awk -F'\t' -v two="${m:+1}" '
+    BEGIN { mf = two ? ARGV[ARGC-1] : "" }
     FILENAME == ARGV[1] {
       l = $0; sub(/\r$/, "", l)
       if (l ~ /^#/) sub(/^#[ \t]*/, "", l)
       if (match(l, /^[^: \t]+:/)) seen[substr(l, 1, RLENGTH - 1)] = 1
       next
     }
+    mf != "" && FILENAME == mf {
+      l = $0; sub(/\r$/, "", l)
+      if (l !~ /^#/ && match(l, /^[^: \t]+:/)) {
+        s = substr(l, RLENGTH + 1); sub(/^[ \t]*/, "", s)
+        if (s !~ /^#/) { sub(/[ \t]#.*$/, "", s); sub(/[ \t]*$/, "", s); if (s != "") seen[substr(l, 1, RLENGTH - 1)] = 1 }
+      }
+      next
+    }
     { sub(/\r$/, "") }
     $1 == "" || $1 ~ /^#/ || $5 == "" { next }
-    !($1 in seen) { out = (out == "" ? $1 : out " · " $1) }
-    END { if (out == "") exit 1; print out }
-  ' "$CONV" "$keys"
+    { row[++n] = $1 }
+    END {
+      for (i = 1; i <= n; i++) if (!(row[i] in seen)) out = (out == "" ? row[i] : out " · " row[i])
+      if (out == "") exit 1; print out
+    }
+  ' "$CONV" "$keys" ${m:+"$m"}
 }
 
 interview_set() { # interview_set <key> <value> — write ONE key into ops/CONVENTIONS.md (temp file + mv, LF kept, never sed -i)
@@ -1579,7 +1600,8 @@ interview_set() { # interview_set <key> <value> — write ONE key into ops/CONVE
   # replaced IN PLACE by a live line carrying the registry's absent-cost as its comment · neither ⇒
   # that same line is appended at the END, after one blank line (which also terminates an
   # unterminated last line, as adopt's marker does). First match wins on both counts, as cfg reads.
-  local key="$1" val="$2" keys="$OPS/KEYS.tsv" tmp="$CONV.polaris-tmp"
+  local key="$1" val="$2" keys tmp="$CONV.polaris-tmp"
+  keys="$(kit_file KEYS.tsv)"
   awk -F'\t' -v k="$key" -v v="$val" '
     FILENAME == ARGV[1] { sub(/\r$/, ""); if ($1 == k && cost == "") cost = $4; next }
     {
@@ -1601,21 +1623,59 @@ interview_set() { # interview_set <key> <value> — write ONE key into ops/CONVE
   mv -f "$tmp" "$CONV"
 }
 
-cmd_interview() { # interview [--pending | --set <key>=<value> …]
-  local keys="$OPS/KEYS.tsv" u='usage: polaris interview [--pending | --set <key>=<value> …]'
+cmd_interview() { # interview [--pending | --init | --set <key>=<value> … [--remember]]
+  local keys u='usage: polaris interview [--pending | --init | --set <key>=<value> … [--remember]]'
   local mode=plain pairs="" p key val opts o item vals ok pending x n sets setlist claimval adhdval br skill nl='
 '
+  local remember=0 m="${POLARIS_PREFS-$POLARIS_HOME/preferences}" have kept
+  keys="$(kit_file KEYS.tsv)"
+  [ -n "$m" ] && [ -f "$m" ] || m=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --pending) [ "$mode" = plain ] || die "$u"; mode=pending; shift;;
-      --set)     [ "$mode" != pending ] || die "$u"
+      --init)    [ "$mode" = plain ] || die "$u"; mode=init; shift;;
+      --remember) remember=1; shift;;
+      --set)     [ "$mode" != pending ] && [ "$mode" != init ] || die "$u"
                  [ $# -ge 2 ] || die "--set needs <key>=<value> — $u"
                  case "$2" in *=*) ;; *) die "--set needs <key>=<value>, not '$2' — $u";; esac
                  mode=set; pairs="$pairs$2$nl"; shift 2;;
       *)         die "unknown flag $1 — $u";;
     esac
   done
-  [ -f "$CONV" ] || die "no ops/CONVENTIONS.md — INIT has never run here; the interview writes into it (ops/roles/INIT.md)"
+  [ "$remember" = 0 ] || [ "$mode" = set ] || die "--remember goes with --set — $u"
+
+  if [ "$mode" = init ]; then
+    # Before a repo has any CONVENTIONS (INIT § 2a — first-run.md v2 § A, machine-prefs.md § 8): every
+    # ask row this computer's preferences file answers is an ANSWERED line, every other one is asked
+    # exactly as plain mode asks it. Nothing else — no tail, rc 0. Layer off or no file → all asked.
+    #   ANSWERED<TAB><key><TAB><value><TAB>machine
+    [ -f "$keys" ] || die "no ops/KEYS.tsv here — this install predates the key registry; it ships with:  ops/polaris update"
+    awk -F'\t' -v two="${m:+1}" '
+      BEGIN { mf = two ? ARGV[1] : "" }
+      mf != "" && FILENAME == mf {
+        l = $0; sub(/\r$/, "", l)
+        if (l !~ /^#/ && match(l, /^[^: \t]+:/)) {
+          k = substr(l, 1, RLENGTH - 1); s = substr(l, RLENGTH + 1); sub(/^[ \t]*/, "", s)
+          if (s !~ /^#/) { sub(/[ \t]#.*$/, "", s); sub(/[ \t]*$/, "", s); if (s != "" && !(k in ans)) ans[k] = s }
+        }
+        next
+      }
+      { sub(/\r$/, "") }
+      $1 == "" || $1 ~ /^#/ || $5 == "" { next }
+      $1 in ans { printf "ANSWERED\t%s\t%s\tmachine\n", $1, ans[$1]; next }
+      {
+        m = split($5, part, "|")
+        printf "QUESTION\t%s\t%s\n", $1, part[1]
+        for (i = 2; i <= m; i++) {
+          eq = index(part[i], "=")
+          printf "OPTION\t%s\t%s\t%s%s\n", $1, substr(part[i], eq + 1), substr(part[i], 1, eq - 1), (i == 2 ? "\tdefault" : "")
+        }
+      }
+    ' ${m:+"$m"} "$keys"
+    return 0
+  fi
+
+  [ -f "$CONV" ] || die "no ops/CONVENTIONS.md — INIT has never run here; the interview writes into it (bash ops/polaris role INIT)"
 
   if [ "$mode" = pending ]; then
     # the probe doctor and update print — rc 1 + the one line when anything is unanswered, else silent
@@ -1714,6 +1774,27 @@ EOF
   fi
   say "set $setlist"
   note "review, then commit ops/CONVENTIONS.md — nothing was committed for you"
+  # --remember (machine-prefs.md § 8): each answer this computer's preferences file has no non-blank
+  # line for is recorded there through prefs_put, so the next project's `interview --init` asks
+  # nothing. A line it already has is never overwritten. Layer off → nothing written, nothing said.
+  if [ "$remember" = 1 ] && [ -n "${POLARIS_PREFS-$POLARIS_HOME/preferences}" ]; then
+    have=" "
+    [ -n "$m" ] && have=" $(awk '
+      { l = $0; sub(/\r$/, "", l) }
+      l !~ /^#/ && match(l, /^[^: \t]+:/) {
+        s = substr(l, RLENGTH + 1); sub(/^[ \t]*/, "", s)
+        if (s !~ /^#/) { sub(/[ \t]#.*$/, "", s); sub(/[ \t]*$/, "", s); if (s != "") printf "%s ", substr(l, 1, RLENGTH - 1) }
+      }' "$m") "
+    kept=""
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      case "$have" in *" ${p%%=*} "*) continue;; esac
+      prefs_put "${p%%=*}" "${p#*=}" && kept="${kept:+$kept · }${p%%=*}: ${p#*=}"
+    done <<EOF
+$pairs
+EOF
+    [ -z "$kept" ] || note "remembered on this computer for every new project: $kept"
+  fi
 }
 
 # ------------------------------------------------------------------ slim (5.21.0)
@@ -1759,7 +1840,7 @@ slim_scan() { # emit one TAB line per definition: bytes<TAB>keep|drop<TAB>name<T
   local ch tmp oldifs
   ch="$(claude_home)"
   tmp="$(mktemp)" || return 1
-  cat "$OPS"/roles/*.md "$PRIMARY/CLAUDE.md" "$OPS/PROTOCOL.md" "$CONV" 2>/dev/null \
+  cat "$(kit_file roles)"/*.md "$PRIMARY/CLAUDE.md" "$(kit_file PROTOCOL.md)" "$CONV" 2>/dev/null \
     | tr '[:upper:]' '[:lower:]' > "$tmp"
   { find "$ch/skills"   -name 'SKILL.md' 2>/dev/null
     find "$ch/agents"   -name '*.md'     2>/dev/null
@@ -2056,7 +2137,7 @@ EOF
   # The daemon, the two hook scripts and every other repo's entry belong to the MACHINE, and other
   # repos are still using them (ops/contracts/keep-awake.md) — uninstalling one repo deregisters
   # one repo. `awake stop` / `awake disable` is how a human turns the machine-wide half off.
-  local awake="${POLARIS_AWAKE_HOME:-${HOME:-.}/.claude/polaris/awake}" cks
+  local awake="${POLARIS_AWAKE_HOME:-$POLARIS_HOME/awake}" cks
   cks="$(printf '%s' "$PRIMARY" | cksum)"; cks="${cks%% *}"
   case "$cks" in ''|*[!0-9]*) ;; *) rm -f "$awake/repos/$cks" 2>/dev/null || true;; esac
 

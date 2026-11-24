@@ -2,7 +2,7 @@
 ⛔ no ops/KEYS.tsv here — this install predates the key registry; it ships with:  ops/polaris update
 rc 1
 == no ops/CONVENTIONS.md: die points at INIT, never creates the file ==
-⛔ no ops/CONVENTIONS.md — INIT has never run here, and adopt never creates it; read ops/roles/INIT.md first
+⛔ no ops/CONVENTIONS.md — INIT has never run here, and adopt never creates it; run bash ops/polaris role INIT first
 rc 1
 == first run: one stub per absent key, KEYS.tsv order ==
    + # fake_alpha: on
