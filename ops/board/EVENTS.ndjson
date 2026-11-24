@@ -1492,3 +1492,4 @@
 {"ts":1795559599,"ev":"promote","id":"T-339","who":"oscar@Dino","note":"deps done: T-333, T-336, T-334","pts":5}
 {"ts":1795559663,"ev":"claim","id":"T-339","who":"oscar@Dino","note":"","pts":5}
 {"ts":1795559667,"ev":"claim","id":"T-337","who":"oscar@Dino","note":"","pts":13}
+{"ts":1795559671,"ev":"claim","id":"T-338","who":"oscar@Dino","note":"","pts":8}
