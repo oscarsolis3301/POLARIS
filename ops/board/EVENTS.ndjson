@@ -1510,3 +1510,4 @@
 {"ts":1795561020,"ev":"done","id":"T-338","who":"oscar@Dino","note":"","pts":8}
 {"ts":1795561029,"ev":"promote","id":"T-340","who":"oscar@Dino","note":"deps done: T-333, T-334, T-335, T-336, T-337, T-338, T-339","pts":4}
 {"ts":1795561091,"ev":"claim","id":"T-340","who":"oscar@Dino","note":"","pts":4}
+{"ts":1795561120,"ev":"grant","id":"T-340","who":"oscar@Dino","note":"kit/ops/selftest-install.sh"}
