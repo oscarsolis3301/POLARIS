@@ -15,6 +15,11 @@ kit/CLAUDE.md; wave-2 api-kit) · T-338 (interview --init/--remember, admin + in
 (doctor line, lib readers). Wave 3: T-340 (kit-mode + doc-refs on the joined tree, every shared
 golden, VERSION 6.21.0, CHANGELOG). After it: finish, release ritual, dogfood, re-pin cli-help.
 
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+| 2026-11-24 | 29 | 30 |
+
 # SPRINT 28 — Walk away: approve, leave, come back to finished work (6.20.0)          capacity: 100   dates: 2026-11-24–
 
 Owner ask of 2026-11-24 (plans/walk-away.md, approved): after a plan is approved in auto mode POLARIS
