@@ -10,13 +10,6 @@
 #                                    the session — or the subagent making the call — runs one
 #   PostToolUse (matcher "Agent")    a subagent that still ran on one → the parent is told to discard it
 #
-# THE ONE HOLE (ops/contracts/walk-away.md § 3.3, owner 2026-11-24 via approved plan walk-away): the
-# kit's job runner, agent `polaris-runner` with `model: haiku`, may be spawned and may run exactly ONE
-# thing: `bash ops/polaris bg wait|status|tail <name> [--max|-n N]`. The strong model starts the job;
-# the runner can only wait on it. The harness names the calling agent in `agent_type` (hooks docs,
-# "Common input fields") and the spawn's in `tool_input.subagent_type`; an exact match is the only
-# way in, and anything else (another tool, a second command, an escape) gets today's block.
-#
 # THE EFFORT CEILING (ops/contracts/effort-ceiling.md § 2, owner E1/E2) rides the same two events: a
 # main-session PreToolUse/PostToolUse records the chat's effort; a spawn asking for more than its caller
 # has (or than the chat has) is refused; a pinned subagent left above a lowered chat is NEVER blocked —
@@ -79,7 +72,7 @@ if [ "${1:-}" = "install" ]; then
   python -c pass >/dev/null 2>&1 && mg_py=python || { python3 -c pass >/dev/null 2>&1 && mg_py=python3; } || true
   [ -n "$mg_py" ] || { printf 'model-guard: no python — add the five hook entries to %s by hand (speed.md § 2)\n' "$mg_sj"; exit 0; }
   mkdir -p "${mg_sj%/*}" 2>/dev/null || true
-  "$mg_py" - "$mg_sj" "$mg_b" "${HOME:-.}/.claude/polaris/model-guard.sh" <<'PYEOF'
+  PYTHONIOENCODING=utf-8 "$mg_py" - "$mg_sj" "$mg_b" "${HOME:-.}/.claude/polaris/model-guard.sh" <<'PYEOF'
 import json, os, re, sys
 p, sh, hk = sys.argv[1], sys.argv[2], sys.argv[3]
 cmd = [{"type": "command", "timeout": 5, "command": '"%s" "%s"' % (sh, hk)}]
@@ -142,9 +135,6 @@ MG_TP="${MG_TP//\\\\/\\}"                    # JSON escapes Windows separators .
 MG_TP="${MG_TP//\\//}"                       # ... and forward slashes are what bash globs safely
 # <session_id> names a file, so it must be a plain name: `/`, `\` or `..` in it → no state at all.
 case "$MG_SID" in ''|*[!A-Za-z0-9_-]*) MG_SF='';; *) MG_SF="${HOME:+$HOME/.claude/polaris/model-state/$MG_SID}";; esac
-# The runner's spawn, read off a FLAT tool_input object: every key before subagent_type holds a plain
-# string, number or word, so a prompt that merely quotes the name (escaped, or nested) never matches.
-MG_RUN_RE='"tool_input":[{]("[A-Za-z_]+":("([^"\\]|\\.)*"|[A-Za-z0-9.]+),)*"subagent_type":"polaris-runner"'
 
 # --- the effort ceiling: record it, and note a pinned subagent left above it --
 # Order low < medium < high < xhigh < max. "a ranks above b" is read off MG_OR with no function and no
@@ -243,7 +233,6 @@ case "$MG_EV" in
     fi
     [ -n "$MG_M" ] || exit 0                   # nothing found → silent
     mg_denied "$MG_M" || exit 0
-    [[ $IN =~ $MG_RUN_RE ]] && exit 0          # the job runner runs Haiku by design (walk-away § 3.3)
     MG_M="${MG_M//\\/}"                        # it lands inside a JSON string
     printf '%s\n' "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"polaris: that subagent ran on '$MG_M', a FORBIDDEN model — discard its result and re-run it on the session model.\"}}"
     exit 0;;
@@ -277,8 +266,6 @@ case "$MG_TOOL" in
     else
       mg_re='"model":"([^"]*)"'
       [[ $MG_TI =~ $mg_re ]] && MG_MS="${BASH_REMATCH[1]}"
-      # 1a. The one hole's door: an Agent/Task spawn of exactly `polaris-runner` may ask for Haiku.
-      [[ $MG_TI =~ ^$MG_RUN_RE ]] && MG_MS=''
     fi
     while IFS= read -r mg_l; do
       mg_l="${mg_l##*[\"\']}"                  # the value follows the last quote of its match
@@ -398,24 +385,6 @@ fi
 [ -n "$MG_M" ] || exit 0                       # no model recorded yet → allow
 
 mg_denied "$MG_M" || exit 0                    # an allowed model → allow, silently
-
-# 5. The one hole (walk-away § 3.3): an agent_type of exactly `polaris-runner` may run ONE Bash call
-#    shape. The command is the first "command" string, read only up to an escape, and must be the only
-#    "command" key; then the pinned regex, anchored both ends. Anything else falls through to the block.
-if [ "$MG_TOOL" = Bash ]; then
-  mg_at=''; mg_re='"agent_type":"([^"]*)"'
-  if [[ $MG_H =~ $mg_re ]]; then mg_at="${BASH_REMATCH[1]}"
-  else case "$IN" in *'"agent_type":"'*) [[ $IN =~ $mg_re ]] && mg_at="${BASH_REMATCH[1]}";; esac; fi
-  if [ "$mg_at" = polaris-runner ]; then
-    MG_TI="${IN:${#MG_H}}"; mg_re='"command":"([^"]*)"'
-    if [[ $MG_TI =~ $mg_re ]]; then
-      mg_c="${BASH_REMATCH[1]}"
-      case "${MG_TI#*\"command\":}" in *'"command":'*) mg_c='';; esac
-      mg_re='^bash (\./)?ops/polaris bg (wait|status|tail) [A-Za-z0-9._-]+( (--max|-n) [0-9]+)?$'
-      [[ $mg_c =~ $mg_re ]] && exit 0
-    fi
-  fi
-fi
 
 # --- block -------------------------------------------------------------------
 # One line, plain, actionable. It repeats on every tool call by design: the session cannot proceed
