@@ -1,0 +1,66 @@
+== 1. unarmed, a deferred row — today's ending, byte for byte ==
+rc=0
+✅ finish: run complete — done signal fired
+last: ✅ …
+armed: 0 · parked: 
+== 2. armed, a risk: high card of another plan waits to land — today's not done ==
+rc=1
+⛔ pending: 1 waiting to land — T-5 (audit + land + seal them)
+⛔ finish: not done — 1 thing pending; fix it and run finish again
+last: ⛔ finish: not done — 1 thing pending; fix it and run finish again
+armed: 1 · parked: 
+== 3. armed, only human-gated items — parked ==
+rc=1
+⛔ finish: parked - 7 waiting on you
+⛔ waiting on you: git push origin main - push needs a token
+⛔ waiting on you: bash deploy.sh - deploy needed a person
+⛔ waiting on you: git tag v1 - the release tag
+⛔ waiting on you: rm -rf build - Bash was denied — it needs a person
+⛔ waiting on you: bash ops/polaris approve --plan walk -m "why" - T-6 is risk: high — it lands only with your yes
+   … and 2 more — .polaris/run/
+run: <total> - <s> in checks, 0s waiting, 0 timeouts
+last: run: …
+armed: 0 · parked: unknown.parked 
+parked file:
+  finish: parked - 7 waiting on you
+  ⛔ waiting on you: git push origin main - push needs a token
+  ⛔ waiting on you: bash deploy.sh - deploy needed a person
+  ⛔ waiting on you: git tag v1 - the release tag
+  ⛔ waiting on you: rm -rf build - Bash was denied — it needs a person
+  ⛔ waiting on you: bash ops/polaris approve --plan walk -m "why" - T-6 is risk: high — it lands only with your yes
+  ⛔ waiting on you: bash ops/polaris approve T-7 src/vault/ -m "why" - T-7 needs your yes for src/vault/ (an ask rule)
+  ⛔ waiting on you: bash ops/polaris status - the run stalled (no beat for 20m) — look, then delete .polaris/run/stalled
+== 4. re-armed 2h ago, every row older than the epoch — rc 0, the run: line ==
+rc=0
+✅ finish: run complete — done signal already fired
+run: <total> - 8m in checks, 3m waiting, 1 timeouts
+last: run: …
+armed: 0 · parked: 
+== 5a. unarmed, off base on a merged branch — today's pending line ==
+rc=1
+⛔ pending: on branch side, not main — a run ends on the base branch (git switch main)
+⛔ finish: not done — 1 thing pending; fix it and run finish again
+last: ⛔ finish: not done — 1 thing pending; fix it and run finish again
+armed: 0 · parked: 
+== 5b. armed, clean, merged — switched back, rc 0 ==
+rc=0
+   switched back to main (armed run)
+✅ finish: run complete — done signal already fired
+run: <total> - <s> in checks, 0s waiting, 0 timeouts
+last: run: …
+armed: 0 · parked: 
+branch: main
+== 5c. armed, a branch with a commit main does not have — today's pending line ==
+rc=1
+⛔ pending: on branch ahead, not main — a run ends on the base branch (git switch main)
+⛔ finish: not done — 1 thing pending; fix it and run finish again
+last: ⛔ finish: not done — 1 thing pending; fix it and run finish again
+armed: 1 · parked: 
+branch: ahead
+== 6. notify-gate stall and parked fire the notify: hook; the usage names both ==
+stall rc=0
+parked rc=0
+waiting run-parked gate
+waiting run-stalled gate
+⛔ usage: polaris notify-gate <plan | risk <ID> | question <ID> | done [ID] | stall | parked>
+bogus rc=1

@@ -1,0 +1,20 @@
+== 1. the first ui land: lint + typecheck only, both ui lines ==
+express rc=0
+   depth: ui — only ui paths (1) in 1-2 point work
+   ui — test, build and uat skipped: lint and typecheck plus the before/after look
+   ui — no before/after look is set up here (visual: and shot: unset): lint and typecheck are the whole check — ops/VISUAL.md
+✅ lint — green
+✅ typecheck — green
+skip line: 1
+ran: lint typecheck 
+done: yes
+== 2. the second: lint + typecheck only, the look line already said ==
+express rc=0
+   depth: ui — only ui paths (1) in 1-2 point work
+   ui — test, build and uat skipped: lint and typecheck plus the before/after look
+✅ lint — green
+✅ typecheck — green
+skip line: 1
+ran: lint typecheck 
+done: yes
+look-offered: yes
