@@ -1445,3 +1445,4 @@
 {"ts":1795551588,"ev":"grant","id":"T-327","who":"oscar@Dino","note":"kit/ops/lib/admin.sh"}
 {"ts":1795551591,"ev":"grant","id":"T-327","who":"oscar@Dino","note":"ops/tests/update-pending.cmd"}
 {"ts":1795551595,"ev":"grant","id":"T-327","who":"oscar@Dino","note":"ops/tests/update-pending.expected"}
+{"ts":1795551926,"ev":"grant","id":"T-327","who":"oscar@Dino","note":"kit/ops/hooks/model-guard.sh"}
