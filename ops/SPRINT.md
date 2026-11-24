@@ -19,6 +19,7 @@ release ritual, dogfood, re-pin cli-help.
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-11-24 | 60 | 33 |
 
 # SPRINT 27 — The smooth run: cards own their tests, waves catch their reds, re-cuts by command (6.19.0)          capacity: 50   dates: 2026-11-17–
 
