@@ -278,3 +278,6 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - "kit/ops/hooks/presence-guard.sh + kit/ops/lib/presence.sh — away/here: the session's mode and plan approval under ~/.claude/polaris/model-state/<sid>.{mode,approved}; `polaris presence` (ops/contracts/away.md)"  (T-289, 2026-11-10)
 
 - kit/ops/lib/tune.sh - the tune-up commands, tune (what still slows this project, the .polaris/tune-due verdict) and fold (a waiting chain becomes one chain card)  (T-308, 2026-11-17)
+
+- "kit/ops/lib/bgwatch.sh — every background job's budget, its watchdog (process-tree kill, one retry, exit 4) and bg reap (walk-away § 2.1)"  (T-318, 2026-11-24)
+- "kit/ops/lib/pulse.sh — pulse, preflight, defer and _run_armed: the away run's own commands (walk-away § 2.2-2.3)"  (T-318, 2026-11-24)

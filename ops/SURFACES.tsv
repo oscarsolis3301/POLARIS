@@ -15,3 +15,5 @@ kit/ops/hooks/ownership-guard.sh	ops/tests/ownership-primary.*	bash ops/polaris 
 kit/ops/lib/author.sh	ops/tests/new-task.*	bash ops/polaris check --only new-task	filing tasks — IDs, checks, the ready gate and the one board commit [T-262]
 kit/ops/lib/tune.sh	ops/tests/tune-report.*	-	the tune-up report and its verdict cache [T-308]
 tools/proof.sh	ops/tests/proof-ci.*	bash kit/ops/polaris check --only proof-ci	the repo's one-command CI proof and its await [T-316]
+kit/ops/lib/bgwatch.sh	ops/tests/bg-budget.*	bash kit/ops/polaris check --only bg-budget	job budgets, the watchdog and the reaper [T-318]
+kit/ops/lib/pulse.sh	ops/tests/pulse-run.*	bash kit/ops/polaris check --only pulse-run	pulse, preflight and defer [T-318]
