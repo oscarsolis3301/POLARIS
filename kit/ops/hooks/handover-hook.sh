@@ -30,9 +30,16 @@
 #   FILE is the portable comparison against the event's ts · 4 assistant lines carry
 #   {"type":"text","text":"..."} with the stop mark stored as raw UTF-8. `prompt` is builtins-only
 #   but for one `date +%s`: bash 3.2 has no epoch builtin and next_budget needs the file non-empty.
+#
+# THE ARMED RUN (ops/contracts/walk-away.md § 4.2, 6.20.0): with <primary>/.polaris/run/<sid>.armed
+#   on disk and the owner away, `stop` gains a FIRST rung (_hh_run) and `substop` (SubagentStop) /
+#   `stopfail` (StopFailure) answer. No armed file → every rung below is byte-for-byte 6.19.0's.
+#   Verified 2026-11-24 against code.claude.com/docs/en/hooks: Stop and SubagentStop carry
+#   `background_tasks` + `session_crons` (a cron's `prompt` key); StopFailure carries `error`.
 set -u
 TESTMODE=0
 REPLY=''
+HH_SAY='The owner approved the plan and left. Do not ask. Take the recommended option and write it down as an assumed: line; if there is no safe default, park that one piece and finish the rest.'
 # Value of "$1" from the JSON "$2" into REPLY. checkout-guard.sh's jstr — rc 1 on ANY irregularity —
 # plus one arm it does not need: a bare literal, `stop_hook_active` being a boolean.
 hh_jstr() {
@@ -168,6 +175,110 @@ _hh_away() {
   case "$m" in auto|bypassPermissions|dontAsk) return 0;; esac
   return 1
 }
+# Is the run armed? (walk-away § 1) $1 primary -> REPLY = the newest <primary>/.polaris/run/*.armed
+# whose epoch is within reentry_hours (default 12). rc 1 = not armed — and no file is the free path:
+# one glob that matches nothing, no fork. Anything unparseable is "not armed" (today's behaviour).
+_hh_armed() {
+  local f e best='' be=0 h now
+  for f in "$1"/.polaris/run/*.armed; do
+    [ -f "$f" ] || continue
+    e=''; { IFS= read -r e < "$f"; } 2>/dev/null; e="${e%$'\r'}"
+    case "$e" in ''|*[!0-9]*) continue;; esac
+    [ "$e" -gt "$be" ] && { be="$e"; best="$f"; }
+  done
+  [ -n "$best" ] || return 1
+  hh_cfg reentry_hours "$1" 12; h="$REPLY"; case "$h" in ''|*[!0-9]*) h=12;; esac
+  now="${EPOCHSECONDS:-$(date +%s 2>/dev/null)}"; case "$now" in ''|*[!0-9]*) return 1;; esac
+  [ $((now - be)) -le $((h * 3600)) ] || return 1
+  REPLY="$best"; return 0
+}
+# THE ARMED RUNG (walk-away § 4.2), first in hh_stop. $1 primary, $2 state dir. Returns only to hand
+# the stop to today's ladder: not armed, not away, `away_gate: off`, parked, finished, or a `next` that
+# printed nothing. Otherwise it decides: a background task or a real wait lets go; work left blocks;
+# the THIRD identical block (same last-event + line 1) lets go as stalled, marks it and notifies.
+# Payload fields (code.claude.com/docs/en/hooks, Stop input): `background_tasks` and `session_crons`
+# are arrays, "present when the task registry is reachable and empty when nothing is in flight" —
+# absent reads as empty, never as "allow".
+_hh_run() {
+  local p="$1" d="$2" a out l1 verb ev='' pv='' pl='' pn=0 n=1 now re cr why
+  _hh_armed "$p" || return 0
+  a="$REPLY"
+  _hh_away || return 0
+  hh_cfg away_gate "$p" on; [ "$REPLY" = off ] && return 0
+  [ -f "$p/.polaris/run/$SID.parked" ] && return 0
+  [ -f "$d/finished" ] && [ "$d/finished" -nt "$a" ] && return 0
+  re='"background_tasks"[[:space:]]*:[[:space:]]*\[[[:space:]]*([^[:space:]])'
+  [[ $IN =~ $re ]] && [ "${BASH_REMATCH[1]}" != ']' ] && hh_emit allow:bg ''
+  if [ -n "${POLARIS_HANDOVER_NEXT:-}" ]; then out="$POLARIS_HANDOVER_NEXT"
+  else out="$(cd "$p" 2>/dev/null && bash "${POLARIS_HANDOVER_CLI:-$p/ops/polaris}" next 2>/dev/null)"; fi
+  l1="${out%%$'\n'*}"; l1="${l1%$'\r'}"
+  [ -n "$l1" ] || return 0
+  case "${l1%% *}" in wait|stop) hh_emit allow:wait '';; esac
+  hh_state "$d" last-event && ev="$REPLY"
+  [ -d "$d" ] || mkdir -p "$d" 2>/dev/null
+  if [ -f "$d/run-blocks" ]; then              # <event>TAB<l1>TAB<n>; the event may be empty, so no IFS split
+    hh_state "$d" run-blocks; pv="${REPLY%%$'\t'*}"; pl="${REPLY#*$'\t'}"; pn="${pl#*$'\t'}"; pl="${pl%%$'\t'*}"
+    case "$pn" in ''|*[!0-9]*) pn=0;; esac
+    [ "$pv" = "$ev" ] && [ "$pl" = "$l1" ] && n=$((pn + 1))
+  fi
+  printf '%s\t%s\t%s\n' "$ev" "$l1" "$n" > "$d/run-blocks" 2>/dev/null
+  if [ "$n" -ge 3 ]; then
+    if [ "$n" = 3 ]; then
+      now="${EPOCHSECONDS:-$(date +%s 2>/dev/null)}"
+      printf '%s\t%s\n' "$now" "the Stop gate blocked 3 times on: next says $l1" > "$p/.polaris/run/stalled" 2>/dev/null
+      ( cd "$p" 2>/dev/null && bash "${POLARIS_HANDOVER_CLI:-$p/ops/polaris}" notify-gate stall ) </dev/null >/dev/null 2>&1 &
+    fi
+    hh_emit allow:stalled ''
+  fi
+  why="$HH_SAY Work left — next says $l1; do it."
+  re='"session_crons"[[:space:]]*:[[:space:]]*(\[.*)'
+  if [[ $IN =~ $re ]]; then
+    cr="${BASH_REMATCH[1]}"; cr="${cr%%\"background_tasks\"*}"
+    case "$cr" in *'ops/polaris pulse'*) ;; *)
+      hh_cfg pulse_minutes "$p" 30
+      why="$why Arm the pulse: CronCreate every $REPLY min, prompt \"bash ops/polaris pulse, then follow line 1\".";;
+    esac
+  fi
+  hh_emit block:run "$why"
+}
+# SubagentStop (walk-away § 4.2), armed only: an own rc-less, live job whose cwd is under the
+# subagent's cwd keeps it from ending with the job still running. Otherwise silent.
+_hh_substop() {
+  local p d n c sc pid
+  hh_primary "$CWD" || hh_emit substop:none ''
+  p="$REPLY"
+  _hh_armed "$p" || hh_emit substop:none ''
+  sc="${CWD//\\//}"; sc="${sc%/}"
+  [ -n "$sc" ] || hh_emit substop:none ''
+  for d in "$p"/.polaris/bg/*/; do
+    [ -d "$d" ] || continue
+    n="${d%/}"; n="${n##*/}"
+    case "$n" in *.prev) continue;; esac
+    [ -e "$d/rc" ] && continue
+    pid=''; [ -f "$d/pid" ] && { IFS= read -r pid < "$d/pid" 2>/dev/null || pid=''; }
+    pid="${pid%$'\r'}"; case "$pid" in ''|*[!0-9]*) ;; *) kill -0 "$pid" 2>/dev/null || continue;; esac
+    c=''; [ -f "$d/cwd" ] && { IFS= read -r c < "$d/cwd" 2>/dev/null || c=''; }
+    c="${c%$'\r'}"; c="${c//\\//}"
+    [ -n "$c" ] || continue
+    case "$c/" in "$sc"/*) ;; *) continue;; esac
+    hh_emit substop:collect "Your job $n is still running: bash ops/polaris bg wait $n --max 240 (repeat while rc 2)."
+  done
+  hh_emit substop:none ''
+}
+# StopFailure (walk-away § 4.2), armed only: the API error the turn died on, appended to
+# <primary>/.polaris/run/stopfail.tsv. The harness ignores this hook's output; it never blocks.
+_hh_stopfail() {
+  local p e='' now
+  hh_primary "$CWD" || hh_emit stopfail:none ''
+  p="$REPLY"
+  _hh_armed "$p" || hh_emit stopfail:none ''
+  hh_jstr error "$IN" && e="$REPLY"
+  case "$e" in ''|*[!A-Za-z0-9_]*) e=unknown;; esac
+  now="${EPOCHSECONDS:-$(date +%s 2>/dev/null)}"
+  [ -d "$p/.polaris/run" ] || mkdir -p "$p/.polaris/run" 2>/dev/null
+  printf '%s\t%s\n' "$now" "$e" >> "$p/.polaris/run/stopfail.tsv" 2>/dev/null
+  hh_emit stopfail:recorded ''
+}
 # THE one emitter: $1 = the --test word, $2 = the reason ('' means allow). Never returns.
 hh_emit() {
   local r="${2:-}"
@@ -182,6 +293,7 @@ hh_stop() {
   local p dir ev hop cap hops n out l1 n2 verb id ids hi job q=0 capped=0 plan=0 away=0
   hh_primary "$CWD" || hh_emit allow:no-state ''
   p="$REPLY"; dir="$p/.polaris/handover/$SID"
+  _hh_run "$p" "$dir"                        # the armed FIRST rung; returns only to today's ladder
   [ -n "$SID" ] && [ -f "$dir/last-event" ] || hh_emit allow:no-state ''
   hh_state "$dir" last-event; ev="$REPLY"
   hh_cfg handover "$p" auto; [ "$REPLY" = off ] && hh_emit allow:off ''
@@ -269,5 +381,7 @@ case "$SUB" in
   stop)   hh_stop;;
   anchor) hh_anchor;;
   prompt) hh_prompt;;
+  substop)  _hh_substop;;
+  stopfail) _hh_stopfail;;
 esac
 exit 0

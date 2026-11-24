@@ -6,3 +6,7 @@ allow:question
 allow:question
 allow:harness-cap
 block:build
+block:run
+block:run
+block:run
+block:question

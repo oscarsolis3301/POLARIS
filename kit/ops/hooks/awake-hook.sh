@@ -188,18 +188,70 @@ ah_press() { # run the presser ONCE; its one word lands in daemon/last-press and
   [ -n "$w" ] || w=pressed                     # a presser that prints nothing still pressed
   AH_WORD="$w"; printf '%s\n' "$w" > "$AWAKE/daemon/last-press"; return 0
 }
+# ---------------------------------------------------------------- the armed run (walk-away § 4.5)
+# An approved away run (<repo>/.polaris/run/*.armed within reentry_hours) is work with nobody at a
+# keyboard: it counts as active. Keep-awake only REPORTS and asks `bg reap` — only budgets kill — and
+# it never starts a model. No armed file → one glob that matches nothing, and 6.19.0's verdict.
+_ah_cfg() { # one CONVENTIONS key of repo $1: $2 key, $3 default -> REPLY
+  local f="$1/ops/CONVENTIONS.md" v
+  REPLY="$3"; [ -f "$f" ] || return 0
+  v="$(sed -n "s/^$2:[[:space:]]*\([^#]*\).*\$/\1/p" "$f" 2>/dev/null | head -1)"
+  v="${v%"${v##*[![:space:]]}"}"
+  [ -n "$v" ] && REPLY="$v"
+  return 0
+}
+_ah_armed() { # $1 repo, $2 now -> REPLY = the newest armed file; rc 1 = not armed
+  local f e be=0 best='' h
+  for f in "$1"/.polaris/run/*.armed; do
+    [ -f "$f" ] || continue
+    e=''; read -r e < "$f" 2>/dev/null || true; e="${e%$'\r'}"
+    case "$e" in ''|*[!0-9]*) continue;; esac
+    [ "$e" -gt "$be" ] && { be="$e"; best="$f"; }
+  done
+  [ -n "$best" ] || return 1
+  _ah_cfg "$1" reentry_hours 12; h="$REPLY"; case "$h" in ''|*[!0-9]*) h=12;; esac
+  [ $(( $2 - be )) -le $(( h * 3600 )) ] || return 1
+  REPLY="$best"; return 0
+}
+_ah_run() { # $1 repo, $2 now, $3 armed file: reap a job past its budget; mark a stall once
+  local p="$1" now="$2" d s b c beat m line sm
+  for d in "$p"/.polaris/bg/*/; do               # an rc-less job past its budget → `bg reap` from its cwd
+    [ -d "$d" ] && [ ! -f "${d}rc" ] && [ -f "${d}budget" ] && [ -f "${d}start" ] || continue
+    s=''; b=''; c=''
+    read -r s < "${d}start" 2>/dev/null || true; read -r b < "${d}budget" 2>/dev/null || true
+    s="${s%$'\r'}"; b="${b%$'\r'}"
+    case "$s$b" in ''|*[!0-9]*) continue;; esac
+    [ $(( now - s )) -gt "$b" ] || continue
+    read -r c < "${d}cwd" 2>/dev/null || true; c="${c%$'\r'}"; [ -d "$c" ] || c="$p"
+    ( cd "$c" 2>/dev/null && bash "$p/ops/polaris" bg reap ) </dev/null >/dev/null 2>&1 &
+  done
+  [ -f "$p/.polaris/run/stalled" ] && return 0   # once per stall: the marker stands until a person clears it
+  beat="$(ah_mtime "$3")"                        # the run's beat: the approval, or any session of this repo
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    [ "${line%%	*}" = "$p" ] || continue
+    m="${line##*	}"; [ "$m" -gt "$beat" ] && beat="$m"
+  done <<EOF
+$AH_RB
+EOF
+  _ah_cfg "$p" stall_minutes 20; sm="$REPLY"; case "$sm" in ''|*[!0-9]*) sm=20;; esac
+  [ $(( now - beat )) -ge $(( sm * 60 )) ] || return 0
+  printf '%s\t%s\n' "$now" "no beat for $sm min (keep-awake)" > "$p/.polaris/run/stalled" 2>/dev/null || return 0
+  ( cd "$p" 2>/dev/null && bash "$p/ops/polaris" notify-gate stall ) </dev/null >/dev/null 2>&1 &
+  return 0
+}
 ah_verdict() { # ONE pass over the registry → AH_VERDICT active|quiet, plus the counts for `status`.
   # A session's real beat is its transcript's mtime OR the newest <sid>/subagents/*.jsonl: the
   # top-level transcript goes stale for the whole length of a subagent run, which is exactly when
   # the machine must stay up. Dead-pid and day-old files are reaped here — nothing else cleans the
   # registry — and a detached bg suite is work with nobody at a keyboard.
-  local now f sid l1 st stamp tp pid d j m p beat
-  now="$(ah_now)"; AH_PS=''; AH_ACTIVE=0; AH_BUSY=0; AH_REPOS=0
+  local now f sid l1 st stamp tp pid rp d j m p beat
+  now="$(ah_now)"; AH_PS=''; AH_ACTIVE=0; AH_BUSY=0; AH_REPOS=0; AH_RB=''
   [ "$AH_WIN" = 1 ] && AH_PS="$(ps -W 2>/dev/null | awk 'NR>1 { printf "%s %s ", $1, $4 }')"
   for f in "$AWAKE"/sessions/*; do
     [ -f "$f" ] || continue
-    sid="${f##*/}"; l1=''; tp=''; pid=''
-    { read -r l1; read -r tp; read -r pid; } < "$f" || true
+    sid="${f##*/}"; l1=''; tp=''; pid=''; rp=''
+    { read -r l1; read -r tp; read -r pid; read -r rp; } < "$f" || true
     st="${l1%% *}"; stamp="${l1#* }"; case "$stamp" in ''|*[!0-9]*) stamp=0;; esac
     if [ -n "$pid" ] && [ "$pid" != '-' ] && ! ah_win_alive "$pid"; then rm -f "$f"; continue; fi
     [ $(( now - $(ah_mtime "$f") )) -gt 86400 ] && { rm -f "$f"; continue; }
@@ -207,6 +259,8 @@ ah_verdict() { # ONE pass over the registry → AH_VERDICT active|quiet, plus th
     for j in "${tp%/*}/$sid/subagents"/*.jsonl; do
       [ -f "$j" ] && m="$(ah_mtime "$j")" && [ "$m" -gt "$beat" ] && beat="$m"
     done
+    AH_RB="$AH_RB$rp	$beat
+"                                              # repo<TAB>beat — the armed run's stall clock reads it
     case "$st" in
       busy) AH_BUSY=$(( AH_BUSY + 1 )); [ $(( now - beat )) -lt "$AH_STALE" ] && AH_ACTIVE=$(( AH_ACTIVE + 1 ));;
       idle) [ "$beat" -gt "$stamp" ] && [ $(( now - beat )) -lt "$AH_IDLE" ] && AH_ACTIVE=$(( AH_ACTIVE + 1 ));;
@@ -217,6 +271,7 @@ ah_verdict() { # ONE pass over the registry → AH_VERDICT active|quiet, plus th
     p=''; read -r p < "$f" || true
     if [ -z "$p" ] || [ ! -d "$p" ]; then rm -f "$f"; continue; fi
     AH_REPOS=$(( AH_REPOS + 1 ))
+    if _ah_armed "$p" "$now"; then AH_ACTIVE=$(( AH_ACTIVE + 1 )); _ah_run "$p" "$now" "$REPLY"; fi
     [ "$AH_ACTIVE" -gt 0 ] && continue
     for d in "$p"/.polaris/bg/*/; do
       { [ -f "${d}rc" ] || [ ! -f "${d}pid" ]; } && continue

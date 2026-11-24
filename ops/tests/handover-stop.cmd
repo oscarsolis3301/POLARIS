@@ -138,3 +138,21 @@ printf '%s' "$J" | POLARIS_HANDOVER_NEXT=finish bash "$HOOK" stop
 #     catches a second copy drifting in beside the first — two templates, two behaviours. -------
 printf 'pinned-reason-lines: %s\n' "$(grep -c 'You are a BUILDER (hop' "$HOOK")"
 printf 'pinned-tidy-lines: %s\n' "$(grep -c 'You are TIDY (hop' "$HOOK")"
+# --- walk-away § 4.2 (T-319): `substop` (SubagentStop) and `stopfail` (StopFailure), armed only. A
+#     live job (this shell's own pid, no rc) under the subagent's cwd keeps the subagent from ending;
+#     one under another cwd, a finished one, or no armed file is silent. No HOME read on these rungs.
+SP() { printf '{"session_id":"hs-sid","transcript_path":"%s","cwd":"%s","hook_event_name":"%s","agent_id":"a1","agent_type":"general-purpose","stop_hook_active":false%s}' "$TR" "$1" "$2" "${3:-}"; }
+J9="$P/.polaris/bg/ship-T-9"; mkdir -p "$J9"
+printf '%s\n' "$P/.polaris/wt/T-9" > "$J9/cwd"; printf '%s\n' "$$" > "$J9/pid"
+SP "$P/.polaris/wt/T-9" SubagentStop | bash "$HOOK" --test substop
+SP "$P/.polaris/wt/T-9" StopFailure ',"error":"rate_limit","error_details":"429"' | bash "$HOOK" --test stopfail
+printf 'stopfail.tsv: %s\n' "$([ -f "$P/.polaris/run/stopfail.tsv" ] && echo present || echo absent)"
+mkdir -p "$P/.polaris/run"; printf '%s\nwalk-away\nreentries 0\n' "$(date +%s)" > "$P/.polaris/run/hs-sid.armed"
+SP "$P/.polaris/wt/T-9" SubagentStop | bash "$HOOK" --test substop
+SP "$P/.polaris/wt/T-8" SubagentStop | bash "$HOOK" --test substop
+SP "$P/.polaris/wt/T-9" SubagentStop | bash "$HOOK" substop
+printf '0\n' > "$J9/rc"
+SP "$P/.polaris/wt/T-9" SubagentStop | bash "$HOOK" --test substop
+SP "$P/.polaris/wt/T-9" StopFailure ',"error":"rate_limit","error_details":"429"' | bash "$HOOK" --test stopfail
+SP "$P/.polaris/wt/T-9" StopFailure ',"error":"no such type!"' | bash "$HOOK" stopfail | wc -c | tr -d ' '
+printf 'stopfail.tsv: %s\n' "$(sed 's/^[0-9][0-9]*\t/<epoch>|/' "$P/.polaris/run/stopfail.tsv" | tr '\n' ' ')"

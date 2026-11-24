@@ -46,3 +46,14 @@ bash "$KIT" next 2>&1 | sed -n 1p
 printf "drain: queue
 " >> "$P/ops/CONVENTIONS.md"; mk T-SQ2 other; rm -f ops/board/ready/T-SQ1.md
 bash "$KIT" next 2>&1 | sed -n 1p
+# walk-away § 4.2 (T-319): the armed rung comes before the caps — an approved away run is not capped
+# by run_max_tasks (its stall counter and the harness's own cap are the backstops); here, the cap stands.
+export HOME="$FIX/home" USERPROFILE="$FIX/home" POLARIS_AWAKE_HOME="$FIX/awake"   # hermetic from here: the away read
+mkdir -p "$P/.polaris/run" "$HOME/.claude/polaris/model-state"
+printf '%s\nwalk-away\nreentries 0\n' "$(date +%s)" > "$P/.polaris/run/sq-sid.armed"
+printf '1700000000\nwalk-away\n' > "$HOME/.claude/polaris/model-state/sq-sid.approved"
+printf 'auto\n' > "$HOME/.claude/polaris/model-state/sq-sid.mode"
+mk T-SQ1 plan
+capcase T-SQ2
+printf 'default\n' > "$HOME/.claude/polaris/model-state/sq-sid.mode"
+capcase T-SQ2

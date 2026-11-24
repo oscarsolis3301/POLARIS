@@ -30,3 +30,14 @@ rc=0
 --- a bad session id is no session id
 here
    why: no session id
+--- walk-away § 4.3 (T-319): the four new registrations, once each, and the fixture has the hook file
+permission hook file: installed
+SubagentStop  1 entry  bash "ops/hooks/handover-hook.sh" substop
+StopFailure  1 entry  bash "ops/hooks/handover-hook.sh" stopfail
+PermissionRequest  1 entry  bash "ops/hooks/permission-hook.sh" request
+PermissionDenied  1 entry  bash "ops/hooks/permission-hook.sh" denied
+re-install rc=0
+re-install: settings.json byte-identical
+re-install report: 0 added lines
+--- the fixture hook denies a permission prompt while the run is armed and away (a board dir makes the fixture a primary)
+1

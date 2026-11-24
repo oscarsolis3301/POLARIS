@@ -39,3 +39,20 @@ live end   rc 0  live-stdout-bytes: 0
 daemon/hook.log (the live path stderr sink): present
 daemon lock: absent
 daemon/pid: absent
+== armed: no armed file, quiet; an armed run counts as active, nothing to reap, no stall yet ==
+tick: quiet no-press
+tick: active pressed
+stalled: absent
+== armed: a stale armed file (older than reentry_hours) is not armed ==
+tick: quiet no-press
+== armed: an rc-less job past its budget asks `bg reap`; one inside its budget does not ==
+tick: active pressed
+calls "bg reap": 1
+== armed: no beat for stall_minutes → the stalled marker and ONE notify-gate stall ==
+tick: active pressed
+calls "notify-gate stall": 1
+stalled: no beat for 20 min (keep-awake)
+tick: active pressed
+calls "notify-gate stall": 1
+== it never starts a model ==
+model starts in the hook: 0

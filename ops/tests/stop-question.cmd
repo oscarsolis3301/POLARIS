@@ -37,3 +37,15 @@ rm -f "$D/hops" "$D/hopped-event"
 printf '%s' "$JT" | POLARIS_HANDOVER_NEXT="build T-SQ1" bash "$HOOK" --test stop
 tr_text "done"
 rail "build T-SQ1"
+# walk-away § 4.2 (T-319): an armed run with the owner away takes the FIRST rung — a closing question
+# with work left is a block:run there too, stop_hook_active or not; the owner here keeps today's bounce.
+mkdir -p "$P/.polaris/run" "$FIX/home/.claude/polaris/model-state"
+printf '%s\nwalk-away\nreentries 0\n' "$(date +%s)" > "$P/.polaris/run/sq-sid.armed"
+printf '1700000000\nwalk-away\n' > "$FIX/home/.claude/polaris/model-state/sq-sid.approved"
+printf 'auto\n' > "$FIX/home/.claude/polaris/model-state/sq-sid.mode"
+tr_text "continue?"
+rail "build T-SQ1"
+printf '%s' "$JT" | POLARIS_HANDOVER_NEXT="build T-SQ1" bash "$HOOK" --test stop
+rail "finish"
+printf 'default\n' > "$FIX/home/.claude/polaris/model-state/sq-sid.mode"
+rail "build T-SQ1"
