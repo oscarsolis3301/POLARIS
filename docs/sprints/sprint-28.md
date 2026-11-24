@@ -111,6 +111,55 @@ re-runs the same recipe after D and decides from it.
 - [ ] BEFORE numbers (both passes, best of 3) recorded in Notes with `bash ops/polaris note T-322 -m ...`
 - [ ] No new public fn (api-kit) — helpers are `_flow_*`
 
+## T-324 — "An away run always ends in one of two shapes - finish: parked with one line per thing waiting on you, or done - each with a run: line; land --express honours ui; notify knows stall and parked; metrics splits the skipped suites"
+points 12 · risk normal · landed 3f5d5fb9 (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/lib/integrate.sh, kit/ops/lib/observe.sh, kit/ops/lib/qa.sh, ops/tests/depth-metrics.cmd, ops/tests/depth-metrics.expected, ops/tests/express-ui.cmd, ops/tests/express-ui.expected, ops/tests/finish-parked.cmd, ops/tests/finish-parked.expected
+
+### Why
+When the owner comes back, the run must have ended in a shape they can read in ten seconds: either
+done, or parked with exactly the things only they can do, one line each with the command or click.
+Today `finish` has no parked ending — a run whose only pending work is human-gated looks the same as
+one that stalled — and nothing says where the hours went. This card adds the frozen `finish: parked`
+token and its lines (fed by T-318's `defer` file, T-319's denied-prompt file and the stalled marker),
+removes the armed file on both endings, prints a `run:` line (total, checks, queue, timeouts) on armed
+runs only, switches a clean, already-merged branch back to base itself instead of asking, teaches
+`notify-gate` the stall and parked kinds the hooks call, and splits metrics' skipped-suite count by
+depth. It also makes `land --express` honour depth `ui` (lint and typecheck only) under
+`landing: integrator`, by-hand lands and the express lane. Unarmed output is byte-identical; finish's
+exit codes do not change.
+
+### Acceptance
+- [ ] Only human-gated items pending → `finish: parked - <n> waiting on you` + one ⛔ line each, rc 1, armed file gone, <sid>.parked written (finish-parked)
+- [ ] Armed rc 0 → `run:` line last, armed file gone; unarmed → byte-identical (finish-blocked, finish-qa-red)
+- [ ] Armed, clean, merged off-base → switched with the note; anything else → today's pending line
+- [ ] `notify-gate stall|parked` fire; usage names them
+- [ ] metrics prints the depth split (depth-metrics)
+- [ ] `land --express` at ui runs lint+typecheck only and says the skip line once (express-ui); express-pr unchanged
+- [ ] No new public fn (lib-census)
+
+## T-325 — "The words match the run - the hand-to-the-human rule says run it yourself and park only what needs a person, heal migrates old CLAUDE.md lines, the roles teach the waits, the pulse and the two endings, speed counts ui changes, and the stale prose is fixed"
+points 13 · risk normal · landed 15dd01b8 (2026-11-24) · claimed 2026-11-24
+files touched: kit/.claude/output-styles/polaris.md, kit/CLAUDE.md, kit/ops/PROTOCOL.md, kit/ops/lib/admin.sh, kit/ops/roles/BUILDER.md, kit/ops/roles/CONDUCTOR.md, kit/ops/roles/PLANNER.md, kit/ops/roles/SOLO.md, kit/ops/templates/TASK.md, ops/tests/api-kit.expected, ops/tests/heal-design.expected, ops/tests/heal-model-line.cmd, ops/tests/heal-model-line.expected, ops/tests/output-style-installed.cmd, ops/tests/output-style-installed.expected, ops/tests/speed-report.cmd, ops/tests/speed-report.expected
+
+### Why
+The rule that sent the owner long command lists to paste ("hand it to the human with 🚩") lives in five
+places and has no away clause, so it contradicts "finish through publishing" the moment the owner
+leaves. This card writes the new rule in the same words everywhere — run long mechanical work yourself,
+detached, collect once; a 🚩 block only for what needs a person, and only while they are here — and
+`heal` migrates the old two lines (and the old model line, which now says Haiku runs only the kit's job
+runner) in every installed CLAUDE.md by exact match. The roles learn which wait to use (the
+detached job with one background wake-up by default, the Haiku runner second), how a conductor arms
+and deletes the pulse timer, and the two endings (`finish: parked` and done). PLANNER gains the
+exhaustive "Needs you before I start" list and `preflight`. `speed` counts ui changes as skipped, and
+the stale prose the plan lists is corrected. `kit/CLAUDE.md` is in scope by the owner's word.
+
+### Acceptance
+- [ ] No 🚩 hand-off of mechanical work left in the kit's prose (verify grep); the new two lines identical in all five homes
+- [ ] heal migrates the old two lines and the old model line, exact match only, CRLF kept, an edited line untouched (heal-model-line, heal-design)
+- [ ] speed counts ui commits under would-skip (speed-report)
+- [ ] Every stale line of plan section E fixed; no heading renamed; api-kit gains exactly the two § 8.3 headings
+- [ ] SOLO.md:110 and PROTOCOL.md:330 no longer contradict the background wake-up
+
 ## T-328 — "Fewer CLI starts for a small change - seal and done run the tune-up checks once, the burndown reads the board in one pass, begin reads stdin, wrap commits the card's files, the reach is computed once, and pack forecasts the check"
 points 9 · risk normal · landed 3254008f (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/lib/builder.sh, kit/ops/lib/flow.sh, kit/ops/lib/integrate.sh, ops/tests/flow-solo.cmd, ops/tests/flow-solo.expected, ops/tests/landed-seal.cmd, ops/tests/landed-seal.expected, ops/tests/pack-steps.cmd, ops/tests/pack-steps.expected, ops/tests/self-land-finish.cmd, ops/tests/self-land-finish.expected, ops/tests/wrap-own-folder.cmd, ops/tests/wrap-own-folder.expected
@@ -134,7 +183,7 @@ the forecast calls `depth_for` as it is, and picks up T-321's sharper rules once
 - [ ] No new public fn (lib-census, api-kit)
 
 ## T-329 — Kit python output is UTF-8 on Windows, so the model-guard goldens pass without PYTHONUTF8
-points 2 · risk normal · landed 0a44f3f5 (2026-11-24) · claimed 2026-11-24
+points 2 · risk normal · landed a6920a34 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/hooks/model-guard.sh, ops/tests/model-guard-v2.cmd
 
 ### Why
@@ -151,7 +200,7 @@ stays byte-identical: only the encoding changes. No decision of the guard change
 - [ ] every existing expected line byte-identical
 
 ## T-331 — Wave 1 seal goes green — rules-health counts the runner rule, keys-drift knows the depth-glob family
-points 1 · risk normal · landed ec49afd0 (2026-11-24) · claimed 2026-11-24
+points 1 · risk normal · landed ec49afd0 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: ops/tests/keys-drift.cmd, ops/tests/rules-health.expected
 
 ### Why
