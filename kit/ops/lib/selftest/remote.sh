@@ -918,12 +918,25 @@ drill_sharedkit() {
       return 0
     fi
     sk_d="$T/sharedkit"; rm -rf "$sk_d"; mkdir -p "$sk_d/home/.claude"
+    # The kit under test: this tree when it carries the launcher template (the source repo, a store
+    # copy); a VENDORED install carries no ops/launcher, so there the release zip beside it — the one
+    # CI installed it from — is unpacked and used. Neither → a note and a skip.
+    sk_kr="${OPS_DIR%/ops}"
+    if [ ! -f "$sk_kr/ops/launcher" ]; then
+      if [ -f "$sk_kr/polaris-v5.zip" ] && "$sk_py" -c 'import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); z.getinfo("polaris-v5/ops/launcher"); z.extractall(sys.argv[2])' \
+           "$sk_kr/polaris-v5.zip" "$sk_d/src" >/dev/null 2>&1; then
+        sk_kr="$sk_d/src/polaris-v5"
+      else
+        note "sharedkit drill skipped — this kit carries no ops/launcher and no polaris-v5.zip sits beside it"
+        rm -rf "$sk_d"; return 0
+      fi
+    fi
     ( set -e
       export HOME="$sk_d/home" USERPROFILE="$sk_d/home" CLAUDE_CONFIG_DIR="$sk_d/home/.claude"
       export POLARIS_AWAKE_HOME="$sk_d/home/.claude/polaris/awake" POLARIS_PREFS= CLAUDECODE=1
       export PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1 POLARIS_UPDATE_NO_FANOUT=1
       unset POLARIS_LAUNCHER POLARIS_LAZY POLARIS_ROOT CI POLARIS_BOOTSTRAP POLARIS_KIT_SRC POLARIS_UPDATE_REEXEC POLARIS_UPDATE_FORCE CLAUDE_PROJECT_DIR
-      sk_ph="$CLAUDE_CONFIG_DIR/polaris"; sk_kr="${OPS_DIR%/ops}"
+      sk_ph="$CLAUDE_CONFIG_DIR/polaris"
       sk_u="$sk_d"; command -v cygpath >/dev/null 2>&1 && sk_u="/$(cygpath -m "$sk_d")"
       printf '{\n  "theme": "dark"\n}\n' > "$CLAUDE_CONFIG_DIR/settings.json"
       printf '{\n  "permissions": {\n    "allow": []\n  }\n}\n' > "$CLAUDE_CONFIG_DIR/settings.local.json"
