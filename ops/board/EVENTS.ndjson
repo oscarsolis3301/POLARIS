@@ -1544,3 +1544,4 @@
 {"ts":1795565206,"ev":"new","id":"T-352","who":"oscar@Dino","note":"backlog","pts":8}
 {"ts":1795565364,"ev":"approve-plan","id":"one-kit","who":"oscar@Dino","note":""}
 {"ts":1795565402,"ev":"claim","id":"T-342","who":"oscar@Dino","note":"","pts":4}
+{"ts":1795565406,"ev":"claim","id":"T-343","who":"oscar@Dino","note":"","pts":10}
