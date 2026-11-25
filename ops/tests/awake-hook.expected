@@ -64,3 +64,6 @@ tick: quiet no-press
 tick: active pressed
 == machine prefs: a blank repo line falls through to the machine line ==
 tick: quiet no-press
+== install run by an agent: refused, nothing written ==
+rc 2 · stdout bytes 0 · needs-you lines 1
+settings.json: not created
