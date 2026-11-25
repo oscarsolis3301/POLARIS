@@ -1656,3 +1656,4 @@
 {"ts":1795576933,"ev":"grant","id":"T-352","who":"oscar@Dino","note":"ops/tests/hook-dispatch.cmd"}
 {"ts":1795576936,"ev":"grant","id":"T-352","who":"oscar@Dino","note":"ops/tests/hook-dispatch.expected"}
 {"ts":1795576939,"ev":"grant","id":"T-352","who":"oscar@Dino","note":"kit/ops/lib/observe.sh"}
+{"ts":1795578098,"ev":"note","id":"T-352","who":"oscar@Dino","note":""}
