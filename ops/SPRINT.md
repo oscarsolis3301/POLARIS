@@ -22,6 +22,7 @@ ritual, the owner's --setup click.
 ## Burndown
 | date | done pts | remaining |
 |---|---|---|
+| 2026-11-24 | 24 | 78 |
 
 # SPRINT 29 — Your preferences, once, for every project (6.21.0)          capacity: 100   dates: 2026-11-24–
 
