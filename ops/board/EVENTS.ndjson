@@ -1618,3 +1618,4 @@
 {"ts":1795573018,"ev":"promote","id":"T-349","who":"oscar@Dino","note":"deps done: T-341, T-344, T-347, T-348, T-343, T-346","pts":13}
 {"ts":1795573855,"ev":"new","id":"T-354","who":"oscar@Dino","note":"backlog","pts":1}
 {"ts":1795573869,"ev":"release","id":"T-350","who":"oscar@Dino","note":"→ backlog: held one step: T-354 (perm-tools fix for the 6.22.0 release qa) owns ops/tests/perm-tools.cmd first; T-350 builds on top of it in 7.0.0"}
+{"ts":1795573872,"ev":"amend","id":"T-354","who":"oscar@Dino","note":"deps -T-350"}
