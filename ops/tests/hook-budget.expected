@@ -1,0 +1,22 @@
+== through the shim: real PATH vs an empty one ==
+non-POLARIS dir, Read              none        empty PATH same: yes
+non-POLARIS dir, Bash              none        empty PATH same: yes
+non-POLARIS dir, Haiku session     deny-exit2  empty PATH same: yes
+vendored dir, Bash                 none        empty PATH same: yes
+vendored dir, Haiku session        deny-exit2  empty PATH same: yes
+machine project, Read              none        empty PATH same: yes
+machine project, Grep              none        empty PATH same: yes
+machine project, Haiku Grep        deny-exit2  empty PATH same: yes
+non-POLARIS dir, Stop: none
+== the shim reads kit/current: a usable kit answers (a Haiku session: deny), anything else is silent ==
+current [7.0.0]: deny-exit2
+current []: none
+current [7.0]: none
+current [7.0.0.1]: none
+current [../7.0.0]: none
+current [9.9.9]: none
+no current: none
+current with CRLF: deny-exit2
+== no fork on that path: the shim and the HOT PATH regions of dispatch.sh ==
+hot path regions: 2 · lines with $( or a backtick or a pipe: 0
+shim lines: 22 (≤ 30: yes)
