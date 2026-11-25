@@ -1660,3 +1660,5 @@
 {"ts":1795578102,"ev":"note","id":"T-352","who":"oscar@Dino","note":""}
 {"ts":1795578128,"ev":"grant","id":"T-352","who":"oscar@Dino","note":"ops/tests/awake-hook.cmd"}
 {"ts":1795578131,"ev":"grant","id":"T-352","who":"oscar@Dino","note":"ops/tests/awake-hook.expected"}
+{"ts":1795579195,"ev":"handoff","id":"T-352","who":"oscar@Dino","note":""}
+{"ts":1795579196,"ev":"all-review","id":"T-352","who":"oscar@Dino","note":"last lane landed — board is all review"}
