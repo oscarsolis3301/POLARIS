@@ -1,7 +1,37 @@
 # Sprint 30 — One kit for the whole machine (6.22.0 + 7.0.0) (2026-11-24–)
 
+## T-341 — "A fix card for a red wave is cut from the wave, and the admin groundwork for a shared kit - claim cuts a card from the open wave when it owns a path the wave changed, update --all keeps joined projects, adopt and heal read kit data through one lookup"
+points 8 · risk normal · landed 0fb3d05c (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/lib/admin.sh, kit/ops/lib/builder.sh, kit/ops/lib/core.sh, kit/ops/lib/ownership.sh, kit/ops/lib/selftest/remote.sh, kit/ops/lib/workspace.sh, ops/tests/adopt-stub.cmd, ops/tests/heal-design.cmd, ops/tests/update-registry.cmd, ops/tests/update-registry.expected, ops/tests/wave-fix-claim.cmd, ops/tests/wave-fix-claim.expected
+
+### Why
+Two things this release needs before anything else, both in files no other first-wave card touches.
+
+(1) The wave cut. Last run, a card written to fix a red wave could not change code that existed only
+on that open wave: claim always cut `feat/<ID>` from the base branch, so the squash conflicted, and a
+branch cut from `integrate/<date>` failed verify's ownership diff, which compares against the base.
+`_wave_cut <ID>` decides where a card starts: from the open wave's tip when the card owns a path the
+wave already changed, else from the base as today. `wt_add` records the cut in git config and every
+diff that judges a card's OWN change uses it. With no recorded cut, every command is byte-identical
+(safe-landing.md v2). It lands in wave 1 so any later red wave of this plan can be fixed on the wave.
+
+(2) Admin groundwork for the shared kit (shared-kit.md): `update --all` stops deleting the registry
+entry of a joined project (it has no `ops/VERSION`, only a launcher); the settings sweep `uninstall`
+does becomes a shared private helper that `migrate` will reuse; and `adopt`/`heal` read their kit data
+(`KEYS.tsv`, `templates/DESIGN.md`) through `kit_file`, the decision last run left open: in a state-only
+repo that data is always the kit's, so "no registry" only means an incomplete vendored kit, and the two
+goldens keep testing that case by running a vendored copy of the CLI in their fixture.
+
+### Acceptance
+- [ ] wave-fix-claim: every case in safe-landing v2's golden bullet (cut from the wave tip + config recorded · verify diff = only the fix · land squashes clean · a card owning no wave path cuts from $BASE with no key · release drops the key)
+- [ ] No recorded cut: landed-seal, landed-content, land-race, seal-fallback byte-identical
+- [ ] update-registry: + one case, a launcher-only entry prints `<p>: machine kit — moves with the machine update` and stays; every other line unchanged
+- [ ] adopt-stub and heal-design print byte-identical output; only their .cmd fixtures change
+- [ ] _settings_sweep is a move: cmd_uninstall's behaviour and output unchanged (drill_adopt / uninstall paths green)
+- [ ] api-kit unchanged (both new functions are private)
+
 ## T-342 — "Landing words under landing self, and one bg wait length for subagents - next says wait while lanes still build and land their own work, and the bg wait budget a subagent uses is measured once and written the same everywhere"
-points 4 · risk normal · landed 7341e7c9 (2026-11-24) · claimed 2026-11-24
+points 4 · risk normal · landed 7341e7c9 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/.claude/agents/polaris-runner.md, kit/ops/PROTOCOL.md, kit/ops/hooks/handover-hook.sh, kit/ops/lib/handover.sh, kit/ops/roles/SOLO.md, ops/tests/handover-route.cmd, ops/tests/handover-route.expected, ops/tests/handover-stop.cmd, ops/tests/handover-stop.expected, ops/tests/runner-path.cmd, ops/tests/runner-path.expected
 
 ### Why
@@ -26,7 +56,7 @@ yours this wave.
 - [ ] No new kit heading; api-kit unchanged
 
 ## T-343 — "The four pure-bash guards also run as functions - model ban, presence, checkout and read-only guards keep their standalone behaviour byte for byte and become sourceable, with unique names, for the one dispatcher"
-points 10 · risk high · landed b16c5163 (2026-11-24) · claimed 2026-11-24
+points 10 · risk high · landed b16c5163 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/hooks/checkout-guard.sh, kit/ops/hooks/model-guard.sh, kit/ops/hooks/presence-guard.sh, kit/ops/hooks/readonly-allow.sh, ops/tests/api-kit.expected, ops/tests/checkout-guard-denies.cmd, ops/tests/checkout-guard-denies.expected, ops/tests/model-guard-v2.cmd, ops/tests/model-guard-v2.expected, ops/tests/presence-guard.cmd, ops/tests/presence-guard.expected, ops/tests/readonly-allow.cmd, ops/tests/readonly-allow.expected
 
 ### Why
@@ -55,7 +85,7 @@ mapped batteries to move with their scripts).
 - [ ] api-kit: exactly the renamed rows change (old names out, cg_*/ra_* in); nothing else
 
 ## T-344 — "The store and the launcher - a versioned kit folder per computer with a current pointer, a fifteen-line project launcher that finds it with no extra processes, a pinned bootstrap for CI, and the release zip's sha256 stamped into the update channel"
-points 10 · risk normal · landed 299bc6a9 (2026-11-24) · claimed 2026-11-24
+points 10 · risk normal · landed 299bc6a9 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/launcher, kit/ops/lib/store.sh, kit/ops/pack.py, ops/tests/dogfood-bytes.cmd, ops/tests/dogfood-bytes.expected, ops/tests/store-launcher.cmd, ops/tests/store-launcher.expected
 
 ### Why
@@ -80,3 +110,82 @@ launcher in this release — `join` is 7.0.0 — so nothing a 6.x user runs chan
 - [ ] dogfood-bytes unchanged in output, or re-pinned here with the zip_sha256 line explained
 - [ ] api-kit unchanged (store.sh functions are private; kit/ops/launcher defines none)
 - [ ] kit/ops/launcher is ≤ 60 lines and its two first lines are the contract's
+
+## T-345 — "One hook process per tool call - the dispatcher folds the model ban, presence, checkout and read-only guards, runs the other hooks itself, stands down outside joined projects, asks when ops/polaris is not the real launcher, and the shim and trust tier setup will install"
+points 8 · risk high · landed bc73c3a3 (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/hooks/dispatch.sh, kit/ops/hooks/shim.sh, ops/tests/hook-budget.cmd, ops/tests/hook-budget.expected, ops/tests/hook-dispatch.cmd, ops/tests/hook-dispatch.expected
+
+### Why
+This is the fold card, the riskiest of the plan: guards fail open, so a dispatcher bug would switch
+off every guard at once. `dispatch.sh <event>` reads the hook input once and, in order, runs the
+model ban (every project, as the machine-level model guard does today), decides with builtins whether
+it stands in a joined project (a vendored project's own hooks keep doing the work, so it stands
+down there), then runs presence, the checkout deny and the read-only allow as functions in this one
+process and prints the single verdict Claude Code would have reached from the four separate hooks
+(hook-dispatch.md § 2). The edit guard, the hand-over hook and the permission hook are `exec`ed.
+
+Two security pieces ride along. The read-only allow comes from a TRUST TIER copy that only the owner's
+`--setup` writes (§ 4), so an automatic kit update can change what is denied but never widen what is
+auto-approved. And in a joined project a command that runs `ops/polaris` is answered `ask` unless that
+file is byte-for-byte the real launcher (§ 5), so a cloned repo cannot ride the pre-approved
+`bash ops/polaris` rule. `shim.sh` is the small file `--setup` will copy to `$POLARIS_HOME/hook`.
+
+The equivalence golden replays every existing guard battery through the dispatcher and must match
+them exactly — it is on this card on purpose. Nothing registers the dispatcher yet (T-350, 7.0.0).
+
+### Acceptance
+- [ ] hook-dispatch (a): readonly-allow, checkout-guard-denies, presence-guard, model-guard-v2, ownership-primary, permission-hook, handover-stop each replayed via `dispatch.sh --as <guard>` in a joined fixture prints `<battery>: identical`
+- [ ] hook-dispatch (b) merge matrix, (c) stand-down in vendored and non-POLARIS dirs, (d) no duplicate function — every case per hook-dispatch.md § 7
+- [ ] hook-budget: same verdicts with PATH emptied for the § 7 cases; no `$(`, backtick or pipe on the shim and dispatcher stand-down path
+- [ ] Genuine-launcher: a joined fixture whose ops/polaris differs from kit/ops/launcher by one byte → `ask` with the pinned reason; identical → today's allow
+- [ ] SessionStart: dispatch.sh sources kit/ops/hooks/dispatch-session.sh when present (T-346 writes it) and is silent otherwise
+- [ ] api-kit unchanged (all new functions are `_dp_*`)
+
+## T-346 — "The protocol arrives at session start - the router fits under the hook limit, a joined project gets the router, its voice and the ADHD lines at session start, a plain git project gets the one zero-touch line, and the conductor's role file pages under the harness limit"
+points 10 · risk normal · landed 4f63aba9 (2026-11-24) · claimed 2026-11-24
+files touched: kit/CLAUDE.md, kit/ops/PROTOCOL.md, kit/ops/hooks/dispatch-session.sh, kit/ops/roles/CONDUCTOR.md, ops/tests/api-kit.expected, ops/tests/doc-server.cmd, ops/tests/doc-server.expected, ops/tests/session-context.cmd, ops/tests/session-context.expected
+
+### Why
+In a joined project there is no managed protocol block in CLAUDE.md — only a three-line pointer — so the
+protocol has to arrive another way: the dispatcher's SessionStart injects it (hook-dispatch.md § 6).
+The hook output limit is 10,000 characters and today's protocol (kit/CLAUDE.md) is about 11,600, so it
+is trimmed to at most 8,000 bytes. It is one text for both layouts — vendored projects get the shorter
+block at their next update, and every session everywhere pays fewer tokens. Every heading, invariant
+number and table row stays; long explanations move into PROTOCOL.md sections the router names with
+`bash ops/polaris doc PROTOCOL "<section>"`.
+
+`dispatch-session.sh` builds the context: the router, then a one-line voice rule (the repo's value,
+else this computer's, else standard), then the five ADHD facts when adhd is on — under 9,000 bytes in
+all. In a git project without POLARIS it prints only the zero-touch line (shared-kit.md § 9).
+
+Riding along because the pager is the same problem: `role CONDUCTOR --page 2` is about 32 KB, over the
+harness's inline limit, because its Protocol section alone is bigger than a page. One new `##` heading
+at a step boundary splits it; that heading is this wave's one api-kit change, so this card owns api-kit.
+
+### Acceptance
+- [ ] router ≤ 8,000 bytes; every kit/CLAUDE.md heading byte-identical (api-kit shows no heading change for kit/CLAUDE.md); each moved explanation reachable by the doc PROTOCOL section the router names
+- [ ] session-context: every case of hook-dispatch.md § 7's session-context bullet; total ≤ 9,000 bytes printed as `≤ 9000: yes`
+- [ ] Every page of role CONDUCTOR ≤ 28,000 bytes before its footer; `## Protocol` unchanged; one new heading
+- [ ] doc-server: the new cases; every earlier case byte-identical
+- [ ] drift: no doc-overflow finding from the moved text
+
+## T-353 — The 6.22 wave seals — session context prints LF on Windows, heal-model-line's fixture is ready for kit_file
+points 2 · risk normal · landed eaa404e2 (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/hooks/dispatch-session.sh, ops/tests/heal-model-line.cmd, ops/tests/session-context.cmd, ops/tests/session-context.expected
+
+### Why
+The 2026-11-24 one-kit wave (T-341..T-346 landed on integrate/2026-11-24) did not seal. Its wave
+check (`tools/proof.sh`, run on this Windows machine) is red on:
+1. session-context (T-346): identical words, but some output lines end CR+LF where the expected file
+   has LF (first difference at byte 193). Find where the CR comes from — most likely python- or
+   Windows-native output inside kit/ops/hooks/dispatch-session.sh or the .cmd's own python — and make
+   the PRODUCT emit LF on every OS (a hook's stdout is read by the harness; CRs in injected context are
+   a real defect, not only a golden one). Do not hide it by stripping CRs only in the golden unless the
+   CR is produced by the golden's own harness code.
+2. heal-model-line: since T-341 `heal` finds templates/DESIGN.md through kit_file, so this fixture now
+   also installs ops/DESIGN.md and prints one extra `healed: ops/DESIGN.md …` line. Keep the expected
+   output byte-identical by making the fixture behave as its intent says: give it a ready ops/DESIGN.md
+   (as it does with .polaris/brain/), or run a vendored copy of the CLI as heal-design now does.
+This card's files exist only on the open wave, so it must be cut from the wave (T-341's `_wave_cut`).
+- amend: deps -T-346 — fix card for the open wave's red check; it lands on the same wave (T-341's wave cut), so it cannot wait for T-346 to reach done
+- CR source: the golden's own python print (text-mode stdout on Windows); product hardened anyway — _ds_session strips CR from router/tail text (a CRLF checkout's kit/CLAUDE.md leaked escaped \r into additionalContext); the 'facts: identical' line was missing from the expected because the CRs had broken that cmp
