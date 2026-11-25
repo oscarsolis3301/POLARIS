@@ -170,7 +170,7 @@ at a step boundary splits it; that heading is this wave's one api-kit change, so
 - [ ] drift: no doc-overflow finding from the moved text
 
 ## T-347 — "The machine update - in a joined project update fetches the next kit, checks its sha256, unpacks it beside the old one and switches every project when none is busy, with no commit anywhere; each project catches up at its next command"
-points 13 · risk normal · landed ca79f6cd (2026-11-24) · claimed 2026-11-24
+points 13 · risk normal · landed ca79f6cd (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/hooks/update-hook.sh, kit/ops/lib/admin.sh, kit/ops/lib/store.sh, kit/ops/polaris, ops/tests/machine-update.cmd, ops/tests/machine-update.expected
 
 ### Why
@@ -196,6 +196,27 @@ This card is wave 2's only owner of kit/ops/polaris and admin.sh. join and migra
 - [ ] The lazy upgrade never runs for find|show|hops|help|role|doc|router|prefs|version and never in a vendored install
 - [ ] __quiet is hidden (not in usage); cli-help-parity re-pinned here only if it must be, with the reason
 - [ ] api-kit unchanged (no new public function)
+
+## T-348 — "Release 6.22.0, proven on the joined tree - the store, launcher, dispatcher, session context and machine update all dormant behind detection, every vendored golden unchanged, version 6.22.0 and its changelog"
+points 3 · risk normal · landed 79704cca (2026-11-24) · claimed 2026-11-24
+files touched: CHANGELOG.md, kit/ops/VERSION, ops/tests/kit-mode.cmd, ops/tests/kit-mode.expected
+
+### Why
+The first of the plan's two releases. Everything wave 1 and wave 2 built — the wave cut, the landing
+words, the guard functions, the store and launcher, the dispatcher, the session context and the
+machine update — sits on main together for the first time here, so this card runs the shared goldens
+once on the joined tree and adds the one end-to-end case no single card could: a joined fixture
+project whose SessionStart goes through the dispatcher and comes back with the router, and whose
+`bash ops/polaris version` runs through the launcher.
+
+Nothing in 6.22.0 writes a launcher into any project and nothing registers the dispatcher, so for
+every existing install this is an ordinary minor release. The CHANGELOG says only what was measured.
+Tag, push, dogfood and the cli-help re-pin are the conductor's release ritual, not this card's.
+
+### Acceptance
+- [ ] kit-mode: + dispatcher SessionStart in a joined fixture (context present, ≤ 9,000 bytes) and a launcher-run `version`; earlier cases byte-identical
+- [ ] Every golden in verify green on the joined tree; api-kit strict-equal to the indexed tree
+- [ ] CHANGELOG 6.22.0: each claim has its number and where it was measured
 
 ## T-353 — The 6.22 wave seals — session context prints LF on Windows, heal-model-line's fixture is ready for kit_file
 points 2 · risk normal · landed eaa404e2 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
