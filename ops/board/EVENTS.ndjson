@@ -1612,3 +1612,4 @@
 {"ts":1795572571,"ev":"claim","id":"T-348","who":"oscar@Dino","note":"","pts":3}
 {"ts":1795572985,"ev":"handoff","id":"T-348","who":"oscar@Dino","note":""}
 {"ts":1795572985,"ev":"all-review","id":"T-348","who":"oscar@Dino","note":"last lane landed — board is all review"}
+{"ts":1795573007,"ev":"done","id":"T-348","who":"oscar@Dino","note":"","pts":3}
