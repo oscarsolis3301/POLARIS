@@ -1,3 +1,28 @@
+# SPRINT 30 — One kit for the whole machine (6.22.0 + 7.0.0)          capacity: 110   dates: 2026-11-24–
+
+Owner ask of 2026-11-24 (plans/one-kit.md, approved): one POLARIS installation for ALL projects on
+the computer, one shared kit, "hop less if possible and run commands for us". The kit lives once
+under ~/.claude/polaris/kit/<ver>/, a project keeps only its state and a launcher, one dispatcher
+hook replaces four per tool call, the protocol arrives at session start, one update moves every
+project with no commit, and only the owner's --setup writes Claude Code settings. Plan `one-kit`,
+contracts shared-kit v1 · hook-dispatch v1 · auto-update v6 · install-parity v2 · first-run v3 ·
+module-layout v12 · doc-server v2 · safe-landing v2 · role-handover v6 · walk-away v2 addendum.
+TWO releases under one slug (speed: projected about 3.6 h, 4.4 h with release checks; walk-away
+measured 5.5x its projection): 6.22.0 = everything dormant behind detection, 7.0.0 = the switch.
+
+12 tasks / 102 pts, FIVE waves. W1 side by side (32): T-341 (wave cut + admin groundwork) · T-342
+(landing words, one bg wait length) · T-343 (four guards as functions, high, W1 api-kit) · T-344
+(store + launcher + zip_sha256). W2 (31): T-345 (dispatcher + shim, high) · T-346 (session context,
+router ≤ 8,000 bytes, CONDUCTOR pages, W2 api-kit) · T-347 (machine update, sole kit/ops/polaris +
+admin.sh owner). R1: T-348 (6.22.0 joined tree). Then finish + release ritual. W3 (28): T-349 (join +
+migrate) · T-350 (--setup, no agent-run settings writes, high) · T-351 (INIT from a work request,
+two machine keys). R2: T-352 (no-self-grant, drill_sharedkit, install skill, 7.0.0). Then finish,
+ritual, the owner's --setup click.
+
+## Burndown
+| date | done pts | remaining |
+|---|---|---|
+
 # SPRINT 29 — Your preferences, once, for every project (6.21.0)          capacity: 100   dates: 2026-11-24–
 
 Owner ask of 2026-11-24 (plans/prefs.md, approved): one POLARIS installation for all projects on the
