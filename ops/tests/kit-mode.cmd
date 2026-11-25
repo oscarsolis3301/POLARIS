@@ -83,3 +83,42 @@ printf 'base: main\n' > "$V/ops/CONVENTIONS.md"
 sed "s#^kit: .*#kit: <kit>#" "$F/out" | sed 's/^/   /'
 ( cd "$V" && bash ops/polaris role BUILDER ) > "$F/out" 2>&1; echo "rc=$?"
 same "$K/roles/BUILDER.md" roles/BUILDER.md
+
+# == a JOINED project (6.22.0, ops/contracts/shared-kit.md § 1-2, hook-dispatch.md § 2 + § 6): the
+# kit unpacked once into a fixture machine store, a repo whose ops/polaris is the launcher, byte for
+# byte. `version` runs through the launcher; SessionStart through the store copy's dispatcher comes
+# back as ONE JSON object whose context opens with the router. Source `clear`: no update / model tail.
+export CLAUDE_CONFIG_DIR="$F/home/.claude" PYTHONIOENCODING=utf-8 POLARIS_PREFS=
+KV="$(sed -n 's/^version: *//p' "$K/VERSION" | head -n 1)"
+S="$CLAUDE_CONFIG_DIR/polaris/kit"
+mkdir -p "$S/$KV"
+cp -R "$W/kit/." "$S/$KV/"
+printf '0 fixture\n' > "$S/$KV/.stored"
+printf '%s\n' "$KV" > "$S/current"
+J="$F/joined"; mkrepo "$J"
+for c in backlog ready active review done blocked; do mkdir -p "$J/ops/board/$c"; done
+printf 'base: main\n' > "$J/ops/CONVENTIONS.md"
+cp "$K/launcher" "$J/ops/polaris"
+
+echo '== joined: version through the launcher =='
+( cd "$J" && bash ops/polaris version ) > "$F/out" 2>&1; echo "rc=$?"
+if head -1 "$F/out" | grep -q "POLARIS v$KV "; then echo "   version = the store's kit: yes"; else echo "   version = the store's kit: NO"; fi
+cmp -s "$J/ops/polaris" "$S/$KV/ops/launcher" && echo '   ops/polaris = the store kit'"'"'s launcher, byte-identical'
+( cd "$J" && ls -A ops ) | sed 's/^/   /'
+
+echo '== joined: SessionStart through the dispatcher =='
+printf '{"session_id":"s1","source":"clear","cwd":"%s","hook_event_name":"SessionStart"}' "$J" |
+  ( cd "$J" && CLAUDE_PROJECT_DIR="$J" bash "$S/$KV/ops/hooks/dispatch.sh" SessionStart ) > "$F/raw" 2>"$F/err"; echo "rc=$?"
+tr -d '\r' < "$S/$KV/CLAUDE.md" > "$F/router"
+python -c '
+import json, sys
+sys.stdout.reconfigure(newline="\n")
+raw = open(sys.argv[1], encoding="utf-8").read()
+o = json.loads(raw)
+h = o["hookSpecificOutput"]
+c = h["additionalContext"]
+r = open(sys.argv[2], encoding="utf-8").read().rstrip("\n")
+print("   one JSON object: " + ("yes" if list(o) == ["hookSpecificOutput"] and raw.count("\n") == 1 else "NO") + " · event " + h["hookEventName"])
+print("   context opens with the router: " + ("yes" if c.startswith(r + "\n") else "NO"))
+n = len(c.encode("utf-8"))
+print("   context <= 9000 bytes: " + ("yes" if n <= 9000 else "NO (%d)" % n))' "$F/raw" "$F/router"

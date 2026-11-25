@@ -4,6 +4,48 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 6.22.0 — 2026-11-24
+
+**One kit for the whole computer, built and switched off.**
+
+Everything a shared kit needs is in this release, and none of it runs in an existing install: nothing
+writes a launcher into a project and nothing registers the new hook, so a vendored install behaves as
+6.21.0 apart from the fixes below. 7.0.0 turns it on. Plan `one-kit`, contracts
+`ops/contracts/shared-kit.md`, `ops/contracts/hook-dispatch.md`.
+
+- **The store and the launcher (T-344).** One unpacked kit per version under
+  `~/.claude/polaris/kit/<ver>/`, a `current` pointer written by temp file and rename, and a
+  project launcher (`kit/ops/launcher`, 55 lines, shell builtins only on the normal path) that hands
+  every command to the kit `current` names. A zip whose sha256 does not match is refused before
+  anything is unpacked, and `_sha256` gives the same answer from `sha256sum`, `shasum` or python
+  (`store-launcher`). `pack.py --dogfood` stamps `zip_sha256:` into the update channel.
+- **The machine update (T-347).** In a joined project `update` downloads the next kit, checks it
+  against the channel's `zip_sha256:` (no line = not installed), unpacks it beside the old one and
+  switches only when every joined project is quiet; otherwise it waits in `kit/next`. No commit,
+  no `.claude/` write, in any project (`machine-update`).
+- **One hook process per Bash call (T-343, T-345).** The model ban, presence, checkout and read-only
+  guards run as functions inside one dispatcher: a Bash call in a joined project starts 1 hook
+  process instead of 4. Every guard battery replays byte-identical through it (`hook-dispatch`); the
+  stand-down path and unguarded tools give the same verdict with PATH emptied, and the hot path has
+  0 lines with `$(`, a backtick or a pipe (`hook-budget`).
+- **The protocol at session start (T-346).** The router (`kit/CLAUDE.md`) is 7,884 bytes, from
+  11,472 in 6.21.0, under the 10,000-character hook limit; a joined project's SessionStart carries
+  the router, the voice line and, with adhd on, the five facts, within 9,000 bytes
+  (`session-context`). `role CONDUCTOR` (40,317 bytes) comes in 2 pages of 18,812 and 21,167 bytes,
+  both under 28,000 (`doc-server` § 9, measured from an empty repo).
+- **Fix: no CRs in the session context on Windows (T-353).** A CRLF checkout's `kit/CLAUDE.md` put
+  `\r` into the injected context; `_ds_session` now strips it, and a CRLF router and tail give 0 CRs
+  (`session-context` case 5).
+- **One `bg wait` length for subagents (T-342).** Measured from a builder subagent: a 200 s
+  foreground wait was moved to the background at 180 s. Every subagent recipe now collects with
+  `bg wait --max 120`; the landing tail's `--max 300` is unchanged (`handover-stop`).
+- **A fix card for a red wave is cut from the wave (T-341).** `claim` cuts a card that owns a path
+  the open wave changed, so it lands on the same wave (`wave-fix-claim`); `update --all` keeps a
+  joined project instead of removing it (`update-registry`).
+- **Proven together.** `kit-mode` adds a joined fixture: `version` runs through the launcher and the
+  store's dispatcher answers SessionStart with one JSON object that opens with the router, within
+  9,000 bytes; its earlier cases are byte-identical.
+
 ## 6.21.0 — 2026-11-24
 
 **Your preferences, once, for every project.**
