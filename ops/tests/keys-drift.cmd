@@ -90,3 +90,8 @@ awk 'FNR==NR { if ($0 !~ /^#/ && split($0, f, "\t") >= 3) have[f[1]]=1; next }
 # 6. The sizing rows as shipped (minutes.md § 8): what a project that never set them gets — the
 #    model and the effort route names for each tier. Key and default only, in registry order.
 awk -F'\t' '$1 ~ /^(model|effort)_(strong|mid|cheap)$/ { print $1 ": " $3 }' kit/ops/KEYS.tsv
+
+# 7. The zero-touch rows as shipped (shared-kit.md § 9): auto_setup and owners. Pinned here because
+#    case 5 cannot see them — they are read by the dispatcher's SessionStart from the machine
+#    preferences file, not through `$(cfg <key>` in the kit's code. Key, default and scope only.
+awk -F'\t' '$1 == "auto_setup" || $1 == "owners" { print $1 ": " $3 " (" $6 ")" }' kit/ops/KEYS.tsv

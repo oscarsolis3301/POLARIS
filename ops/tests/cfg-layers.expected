@@ -49,6 +49,10 @@ rc=0
 drain = on
 temp files left: 0
 == 9. the allowlist literal == KEYS.tsv machine rows ==
-literal: 39 · machine rows: 39 · same: yes
+literal: 41 · machine rows: 41 · same: yes
 seed rows: claim
 rows not 6 fields: 0
+== 10. the zero-touch keys (shared-kit.md § 9) ride the machine layer ==
+auto_setup = auto
+owners = me,them
+auto_setup = ask
