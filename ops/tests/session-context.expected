@@ -27,6 +27,7 @@ adhd: on — shape every reply for a reader with ADHD (the /i-have-adhd skill ha
 3. Starting is the hardest step. The first action must be obvious, small, and doable now.
 4. Time estimates feel uniform. "A bit of work" and "a few hours" register the same. Vague estimates fail.
 5. Dopamine is scarce. Visible progress matters. Buried wins do not register.
+facts: identical to the skill
 ≤ 9000: yes
 adhd from the machine: 1
 repo off over machine on: 0
@@ -45,6 +46,7 @@ ANCHOR-STUB (anchor)
 rc=0
 voice: standard (default) — everyday words, no git or test vocabulary; ✅ lines while working, 🎉 only after finish exits 0
 ANCHOR-STUB (anchor)
+a CRLF router and tail → CRs in the context: 0
 == 6. where: a worktree cwd · vendored · vendored worktree ==
 rc=0
 one JSON object · event SessionStart

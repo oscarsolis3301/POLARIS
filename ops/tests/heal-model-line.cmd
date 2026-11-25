@@ -12,8 +12,9 @@
 #
 # HERMETIC (the heal-design pattern): a throwaway repo, and HOME and USERPROFILE point into this
 # run's mktemp -d, so the real ~/.claude can never be read or written. A ready-made .polaris/brain/
-# keeps heal from building a knowledge base this golden does not own; the marker in every fixture
-# keeps it from appending a section. ONE fixture repo, fifteen heals (~1.2 s of CLI startup each).
+# keeps heal from building a knowledge base this golden does not own, a ready ops/DESIGN.md keeps it
+# from installing the design bar (heal finds the template through kit_file since 6.22.0), and the
+# marker in every fixture keeps it from appending a section. ONE fixture repo, fifteen heals (~1.2 s of CLI startup each).
 KIT="$(pwd)/kit/ops/polaris"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
@@ -31,6 +32,7 @@ mkdir -p "$HOME"
 R="$FIX/repo"
 printf 'base: main\nvoice: standard\n' > "$R/ops/CONVENTIONS.md"
 mkdir -p "$R/.polaris/brain"
+printf '# FIXTURE BAR\n\n## THIS PRODUCT\nPlain.\n' > "$R/ops/DESIGN.md"   # ready: installing it is heal-design's
 OLD='- **Never name a model.** Fable and Haiku are forbidden outright; every spawn inherits the session.'
 OLDB='- **Never name a model.** Every spawn inherits the session; Haiku is blocked, and Fable runs only when the owner picks it.'
 OLDC='- **Never name a model** — every spawn inherits the session.'

@@ -35,6 +35,7 @@ run() { local s="$1" c="$2"; shift 2
 # ctx — the raw stdout must be ONE JSON object; its additionalContext lands in $F/ctx
 ctx() { python -c '
 import json, sys
+sys.stdout.reconfigure(newline="\n")
 raw = open(sys.argv[1], encoding="utf-8").read()
 o = json.loads(raw)
 h = o["hookSpecificOutput"]
@@ -44,6 +45,7 @@ print("one JSON object · event " + h["hookEventName"])' "$F/raw" "$F/ctx"; }
 # after — the lines after the router block
 after() { python -c '
 import sys
+sys.stdout.reconfigure(newline="\n")
 c = open(sys.argv[1], encoding="utf-8").read(); r = open(sys.argv[2], encoding="utf-8").read().rstrip("\n")
 print("router block first: " + ("yes" if c.startswith(r + "\n") else "NO"))
 sys.stdout.write(c[len(r) + 1:])' "$F/ctx" "$F/router"; }
@@ -86,6 +88,11 @@ run startup "$M" machine "$M" "MG-TEXT (model guard)"; ctx >/dev/null; after | t
 run startup "$M"; ctx >/dev/null; after | tail -n +3
 run compact "$M"; ctx >/dev/null; after | tail -n +3
 run resume "$M"; ctx >/dev/null; after | tail -n +3
+cp "$KR/CLAUDE.md" "$F/claude.lf"; printf 'CRLF line\r\n' >> "$KR/CLAUDE.md"
+printf '#!/usr/bin/env bash\nprintf "ANCHOR-CRLF\\r\\nline two\\r\\n"\n' > "$K/hooks/handover-hook.sh"
+run compact "$M" >/dev/null; ctx >/dev/null
+echo "a CRLF router and tail → CRs in the context: $(python -c 'import sys; print(open(sys.argv[1], "rb").read().count(b"\r"), end="")' "$F/ctx")"
+cp "$F/claude.lf" "$KR/CLAUDE.md"
 
 echo '== 6. where: a worktree cwd · vendored · vendored worktree =='
 run clear "$M/.polaris/wt/T-1"; ctx; after | tail -n +2

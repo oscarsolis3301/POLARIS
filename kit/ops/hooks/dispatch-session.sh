@@ -206,6 +206,7 @@ _ds_session() {
       x="$( cd "$dir" 2>/dev/null && bash "$DS_OPS/hooks/handover-hook.sh" anchor <<<"${IN:-}" 2>/dev/null )"
       [ -n "$x" ] && t="$t$x"$'\n';;
   esac
+  t="${t//$'\r'/}"   # LF on every OS: a CRLF checkout's CLAUDE.md or a Windows-native tool's output adds no CR
   _ds_json "$t"
   HOUT="{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"$REPLY\"}}"$'\n'
   return 0
