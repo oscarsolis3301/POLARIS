@@ -137,3 +137,30 @@ printf 'pinned-worktree-lines: %s\n' "$(grep -c 'a task worktree may be another 
 printf 'pinned-push-lines: %s\n' "$(grep -c 'never delete origin refs by hand' "$H")"
 printf 'pinned-kill-lines: %s\n' "$(grep -c 'never kill by name or kill the whole tree' "$H")"
 printf 'json-deny-emitter-lines: %s\n' "$(grep -c 'permissionDecision' "$H")"
+# hook-dispatch § 1 (T-343): the sourced _cg_hook says exactly what the standalone script says. Each
+# line runs once as `bash "$H" args…` and once as `. "$H"; _cg_hook args…` in a `set -u` subshell
+# whose stdin is the same payload: rc, stdout and stderr byte-compared; the payload is still unread on
+# stdin afterwards and nounset is still on.
+SRF="$(mktemp -d)"
+SR() { # SR <label> <payload> [args…]
+  local lb="$1" ij="$2"; shift 2
+  printf '%s' "$ij" > "$SRF/in"
+  bash "$H" "$@" < "$SRF/in" > "$SRF/o1" 2> "$SRF/e1"; r1=$?
+  ( set -u; . "$H"; IN="$ij"
+    { _cg_hook "$@"; left=''; IFS= read -r -d '' left; } < "$SRF/in"
+    printf '%s' "$HOUT" > "$SRF/o2"; printf '%s' "$HERR" > "$SRF/e2"
+    k=''; [ "$left" = "$ij" ] || k="$k stdin-read"; case "$-" in *u*) ;; *) k="$k nounset-lost";; esac
+    printf '%s' "$k" > "$SRF/k2"; exit "$HRC" ); r2=$?
+  v=same; cmp -s "$SRF/o1" "$SRF/o2" && cmp -s "$SRF/e1" "$SRF/e2" && [ "$r1" = "$r2" ] || v=DIFFERENT
+  o="$(head -c 60 "$SRF/o2" | tr '\n' ' ')"; o="${o% }"
+  printf 'sourced %s: rc %s/%s %s%s%s\n' "$lb" "$r1" "$r2" "$v" "$(cat "$SRF/k2")" "${o:+ · $o}"
+}
+SR 'test deny' '' --test '/tmp/fakerepo|git switch main'
+SR 'test allow' '' --test '/tmp/fakerepo|git status'
+SR 'test worktree' '' --test '/tmp/fakerepo/.polaris/wt/T-1|git switch main'
+SR 'test destroyer' '' --test '/tmp/fakerepo/.polaris/wt/T-1|rm -rf .polaris'
+SR 'json deny' '{"cwd":"/tmp/fakerepo","tool_name":"Bash","tool_input":{"command":"git switch x"}}'
+SR 'json allow' '{"cwd":"/tmp/fakerepo","tool_name":"Bash","tool_input":{"command":"ls -la"}}'
+SR 'json no command' '{"cwd":"/tmp/fakerepo","tool_name":"Read","tool_input":{"file_path":"a"}}'
+SR 'no stdin at all' ''
+rm -rf "$SRF"

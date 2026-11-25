@@ -202,3 +202,31 @@ bash ops/polaris prefs voice
 bash ops/polaris doc templates/task > ops/board/x.md
 bash ops/polaris role BUILDER; rm -rf ops
 DOCCASES
+# hook-dispatch § 1 (T-343): the sourced _ra_hook says exactly what the standalone script says. Each
+# line runs once as `bash "$H" args…` and once as `. "$H"; _ra_hook args…` in a `set -u` subshell
+# whose stdin is the same payload: rc, stdout and stderr byte-compared; the payload is still unread on
+# stdin afterwards and nounset is still on.
+SRF="$(mktemp -d)"
+SR() { # SR <label> <payload> [args…]
+  local lb="$1" ij="$2"; shift 2
+  printf '%s' "$ij" > "$SRF/in"
+  bash "$H" "$@" < "$SRF/in" > "$SRF/o1" 2> "$SRF/e1"; r1=$?
+  ( set -u; . "$H"; IN="$ij"
+    { _ra_hook "$@"; left=''; IFS= read -r -d '' left; } < "$SRF/in"
+    printf '%s' "$HOUT" > "$SRF/o2"; printf '%s' "$HERR" > "$SRF/e2"
+    k=''; [ "$left" = "$ij" ] || k="$k stdin-read"; case "$-" in *u*) ;; *) k="$k nounset-lost";; esac
+    printf '%s' "$k" > "$SRF/k2"; exit "$HRC" ); r2=$?
+  v=same; cmp -s "$SRF/o1" "$SRF/o2" && cmp -s "$SRF/e1" "$SRF/e2" && [ "$r1" = "$r2" ] || v=DIFFERENT
+  o="$(head -c 100 "$SRF/o2" | tr '\n' ' ')"; o="${o% }"
+  printf 'sourced %s: rc %s/%s %s%s%s\n' "$lb" "$r1" "$r2" "$v" "$(cat "$SRF/k2")" "${o:+ · $o}"
+}
+SR 'test allow' '' --test 'git log --oneline -5 | head -3'
+SR 'test ask' '' --test 'rm -rf x'
+SR 'test-ps allow' '' --test-ps 'Get-ChildItem | Select-Object -First 3'
+SR 'test-ps ask' '' --test-ps 'Remove-Item x'
+SR 'json Bash allow' '{"tool_name":"Bash","tool_input":{"command":"grep -rn x . | wc -l"}}'
+SR 'json PowerShell allow' '{"tool_name":"PowerShell","tool_input":{"command":"Get-Content a.txt"}}'
+SR 'json Bash ask' '{"tool_name":"Bash","tool_input":{"command":"tee out.txt"}}'
+SR 'json another tool' '{"tool_name":"Read","tool_input":{"file_path":"a"}}'
+SR 'no stdin at all' ''
+rm -rf "$SRF"

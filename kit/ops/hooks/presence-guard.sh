@@ -29,35 +29,12 @@
 #   --test as $1: print ONE word instead (deny:away · allow:here · allow:not-question · allow:error)
 #   after the SAME state writes.
 
-export LC_ALL=C
-PG_TEST=''; [ "${1:-}" = --test ] && PG_TEST=1
 PG_SAY='The owner approved the plan and left. Do not ask. Take the recommended option and write it down as an assumed: line; if there is no safe default, park that one piece and finish the rest.'
 
-pg_end() { # pg_end <word> — the test word under --test, otherwise nothing; always exit 0
-  [ -n "$PG_TEST" ] && printf '%s\n' "$1"
-  exit 0
+pg_end() { # pg_end <word> — the test word under --test (into HOUT), otherwise nothing; its caller returns 0
+  [ -n "$PG_TEST" ] && printf -v HOUT '%s\n' "$1"
+  return 0
 }
-
-# --- read the hook JSON (builtin; no fork) -----------------------------------
-IN=''
-IFS= read -r -d '' IN 2>/dev/null
-[ -n "$IN" ] || pg_end allow:error
-
-# --- the top-level fields, from the HEAD of the payload (model-guard.sh's cut) -
-PG_H="$IN"
-case "$IN" in *'"tool_input":'*) PG_H="${IN%%\"tool_input\":*}";; esac
-PG_EV=''; PG_SID=''; PG_TOOL=''; PG_MODE=''
-pg_re='"hook_event_name": *"([^"]*)"'; [[ $PG_H =~ $pg_re ]] && PG_EV="${BASH_REMATCH[1]}"
-pg_re='"session_id": *"([^"]*)"';      [[ $PG_H =~ $pg_re ]] && PG_SID="${BASH_REMATCH[1]}"
-pg_re='"tool_name": *"([^"]*)"';       [[ $PG_H =~ $pg_re ]] && PG_TOOL="${BASH_REMATCH[1]}"
-pg_re='"permission_mode": *"([^"]*)"'; [[ $PG_H =~ $pg_re ]] && PG_MODE="${BASH_REMATCH[1]}"
-[ -n "$PG_EV" ] || pg_end allow:error
-# <session_id> names a file, so it must be a plain name: `/`, `\` or `..` in it → no state at all.
-case "$PG_SID" in ''|*[!A-Za-z0-9_-]*) pg_end allow:error;; esac
-[ -n "${CLAUDE_CONFIG_DIR:-${HOME:-}}" ] || pg_end allow:error
-case "$PG_MODE" in *[!A-Za-z]*) PG_MODE='';; esac
-PG_F="${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/model-state/$PG_SID"
-PG_P=''
 
 # The primary (walk-away § 1): the payload's cwd when it holds a board — a worktree cwd names its
 # primary fork-free. The cwd arrives JSON-escaped (C:\\Users\\…), so \ → / and the doubled / folds.
@@ -138,6 +115,26 @@ _pg_reenter() {
   return 0
 }
 
+_pg_run() {
+# --- the hook JSON is in IN already (the standalone face below, or the dispatcher, read it) ---
+[ -n "$IN" ] || { pg_end allow:error; return 0; }
+
+# --- the top-level fields, from the HEAD of the payload (model-guard.sh's cut) -
+PG_H="$IN"
+case "$IN" in *'"tool_input":'*) PG_H="${IN%%\"tool_input\":*}";; esac
+PG_EV=''; PG_SID=''; PG_TOOL=''; PG_MODE=''
+pg_re='"hook_event_name": *"([^"]*)"'; [[ $PG_H =~ $pg_re ]] && PG_EV="${BASH_REMATCH[1]}"
+pg_re='"session_id": *"([^"]*)"';      [[ $PG_H =~ $pg_re ]] && PG_SID="${BASH_REMATCH[1]}"
+pg_re='"tool_name": *"([^"]*)"';       [[ $PG_H =~ $pg_re ]] && PG_TOOL="${BASH_REMATCH[1]}"
+pg_re='"permission_mode": *"([^"]*)"'; [[ $PG_H =~ $pg_re ]] && PG_MODE="${BASH_REMATCH[1]}"
+[ -n "$PG_EV" ] || { pg_end allow:error; return 0; }
+# <session_id> names a file, so it must be a plain name: `/`, `\` or `..` in it → no state at all.
+case "$PG_SID" in ''|*[!A-Za-z0-9_-]*) pg_end allow:error; return 0;; esac
+[ -n "${CLAUDE_CONFIG_DIR:-${HOME:-}}" ] || { pg_end allow:error; return 0; }
+case "$PG_MODE" in *[!A-Za-z]*) PG_MODE='';; esac
+PG_F="${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris/model-state/$PG_SID"
+PG_P=''
+
 # --- 1. record the mode; plan → other is an approval, plan itself drops the old one ---
 PG_WAS=''
 { IFS= read -r PG_WAS < "$PG_F.mode"; } 2>/dev/null
@@ -162,7 +159,7 @@ pg_re='"prompt": *"POLARIS re-entry:'
 # --- 2. ExitPlanMode went through: that is the approval ----------------------
 if [ "$PG_EV" = PostToolUse ] && [ "$PG_TOOL" = ExitPlanMode ]; then
   pg_approve
-  pg_end allow:not-question
+  pg_end allow:not-question; return 0
 fi
 
 # --- 3. the question tool, while the owner is away: refuse it, say what to do instead ---
@@ -170,13 +167,30 @@ if [ "$PG_EV" = PreToolUse ] && [ "$PG_TOOL" = AskUserQuestion ]; then
   case "$PG_MODE" in
     auto|bypassPermissions|dontAsk)
       if [ -f "$PG_F.approved" ]; then
-        [ -n "$PG_TEST" ] && pg_end deny:away
-        printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$PG_SAY" 2>/dev/null
-        exit 0
+        [ -n "$PG_TEST" ] && { pg_end deny:away; return 0; }
+        printf -v HOUT '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$PG_SAY"
+        return 0
       fi;;
   esac
-  pg_end allow:here
+  pg_end allow:here; return 0
 fi
 
 # --- 4. everything else: no opinion ------------------------------------------
-pg_end allow:not-question
+pg_end allow:not-question; return 0
+}
+
+# --- the entry function (hook-dispatch.md § 1): IN in, HOUT/HERR/HRC out; never prints, exits or
+# reads stdin. LC_ALL=C and nounset are put back exactly as found, so a sourced call leaves the caller as it was.
+_pg_hook() {
+  HOUT=''; HERR=''; HRC=0
+  PG_OPT="$-"; set +u
+  PG_LCS="${LC_ALL+x}"; PG_LCV="${LC_ALL-}"; export LC_ALL=C
+  PG_TEST=''; [ "${1:-}" = --test ] && PG_TEST=1
+  _pg_run "$@" || :
+  if [ -n "$PG_LCS" ]; then LC_ALL="$PG_LCV"; else unset LC_ALL; fi
+  case "$PG_OPT" in *u*) set -u;; esac
+  return 0
+}
+
+# --- standalone face: executed, not sourced → exactly what the script always printed, and exit 0 ---
+case "${BASH_SOURCE[0]}" in "$0") IN=''; IFS= read -r -d '' IN 2>/dev/null; _pg_hook "$@"; printf '%s' "$HOUT"; [ -z "$HERR" ] || printf '%s' "$HERR" >&2; exit "$HRC";; esac

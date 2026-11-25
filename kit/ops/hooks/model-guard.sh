@@ -73,7 +73,7 @@ mg_denied() {
 #   no `2>/dev/null || true` — keep-awake is advisory so it swallows its own failures; this hook
 #                  BLOCKS by exiting 2 with a reason on stderr, and `|| true` would discard exactly
 #                  that. Swallowing it would leave a guard that looks installed and enforces nothing.
-if [ "${1:-}" = "install" ]; then
+if [ "${1:-}" = "install" ] && [ "${BASH_SOURCE[0]}" = "$0" ]; then   # executed only: never when sourced
   mg_sj="${HOME:-.}/.claude/settings.json"; mg_b="$(command -v bash 2>/dev/null)" || mg_b=bash
   mg_py=''
   python -c pass >/dev/null 2>&1 && mg_py=python || { python3 -c pass >/dev/null 2>&1 && mg_py=python3; } || true
@@ -116,14 +116,13 @@ PYEOF
   exit 0
 fi
 
-# Bytes, not characters: every match below is on JSON keys and model ids, and a multibyte locale only
-# makes bash's matcher slower and lets a stray invalid byte defeat a match. Exported for tail/grep too.
-export LC_ALL=C
-
-# --- read the hook JSON (builtin; no fork) -----------------------------------
-IN=''
-IFS= read -r -d '' IN 2>/dev/null
-[ -n "$IN" ] || exit 0                       # no stdin at all → allow
+# --- the hook itself: IN in, HOUT/HERR/HRC out (hook-dispatch.md § 1) -----------
+# _mg_run is the body: every `return` below was an `exit` of the v2 script, every stderr line a
+# printf -v HERR. _mg_hook wraps it: LC_ALL=C (bytes, not characters — a multibyte locale only makes
+# bash's matcher slower and lets a stray invalid byte defeat a match; exported for tail/grep too)
+# and nounset off, both put back exactly as found, so a sourced call leaves the caller untouched.
+_mg_run() {
+[ -n "$IN" ] || return 0                       # no stdin at all → allow
 
 # --- the top-level fields, from the HEAD of the payload ----------------------
 # Every top-level field Claude Code sends precedes tool_input, and tool_input is the part that can be
@@ -169,23 +168,10 @@ case "$MG_EV" in
           MG_CE="$MG_EF"
         fi
         # A note left by a subagent's call is handed to the main agent on this call — only if it is
-        # allowed (a refusal's stdout is lost), so it rides the EXIT trap, which sees the final rc. The
+        # allowed (a refusal's stdout is lost), so _mg_hook emits it after the verdict (v2: the EXIT trap). The
         # mv claims it atomically: two parallel main calls never both emit it. Consume-on-read.
         if [ "$MG_EV" = PreToolUse ] && [ -f "$MG_SF.over/.pending" ]; then
-          trap 'mg_rc=$?
-            if [ "$mg_rc" = 0 ] && mv -f "$MG_SF.over/.pending" "$MG_SF.over/.pending.$$" 2>/dev/null; then
-              mg_n=""
-              while read -r mg_a mg_e mg_c; do
-                case "$mg_e" in low|medium|high|xhigh|max) ;; *) continue;; esac
-                case "$mg_c" in low|medium|high|xhigh|max) ;; *) continue;; esac
-                mg_n="$mg_n polaris: a subagent is still on $mg_e after the chat dropped to $mg_c; it will finish there — say \\\"restart it\\\" to re-run it at $mg_c."
-              done < "$MG_SF.over/.pending.$$"
-              rm -f "$MG_SF.over/.pending.$$" 2>/dev/null
-              if [ -n "$mg_n" ]; then
-                mg_n="${mg_n# } Restart only when the human says so (owner, E2) and never stop it unasked: message that subagent to write a handoff and release its claim or lock, then spawn the replacement at the new level from that handoff."
-                printf "%s\n" "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"$mg_n\"}}"
-              fi
-            fi' EXIT
+          MG_PEND=1                            # _mg_hook hands it over once the verdict is an allow
         fi
       else
         # A SUBAGENT's call is never blocked by effort (E2). A PINNED one above the ceiling is noted once
@@ -213,27 +199,27 @@ case "$MG_EV" in
   SessionStart|PostModelSwitch)
     mg_re='"model":"([^"]*)"'
     [ "$MG_EV" = PostModelSwitch ] && mg_re='"to_model":"([^"]*)"'
-    [[ $MG_H =~ $mg_re ]] || exit 0            # no model field → nothing to record
+    [[ $MG_H =~ $mg_re ]] || return 0            # no model field → nothing to record
     MG_M="${BASH_REMATCH[1]}"
-    [ -n "$MG_M" ] && [ -n "$MG_SF" ] || exit 0
-    [ -d "${MG_SF%/*}" ] || mkdir -p "${MG_SF%/*}" 2>/dev/null || exit 0
+    [ -n "$MG_M" ] && [ -n "$MG_SF" ] || return 0
+    [ -d "${MG_SF%/*}" ] || mkdir -p "${MG_SF%/*}" 2>/dev/null || return 0
     { printf '%s\n' "$MG_M" > "$MG_SF"; } 2>/dev/null
-    exit 0;;
+    return 0;;
 
   # --- PreModelSwitch: the switch itself is refused ---------------------------
   PreModelSwitch)
     mg_re='"to_model":"([^"]*)"'
-    [[ $MG_H =~ $mg_re ]] || exit 0
+    [[ $MG_H =~ $mg_re ]] || return 0
     MG_M="${BASH_REMATCH[1]}"
-    mg_denied "$MG_M" || exit 0
-    printf '%s\n' "polaris: switching to '$MG_M' is FORBIDDEN (owner, 2026-09-15) — stay on Opus, Sonnet or Fable." >&2
-    exit 2;;
+    mg_denied "$MG_M" || return 0
+    printf -v HERR '%s\n' "polaris: switching to '$MG_M' is FORBIDDEN (owner, 2026-09-15) — stay on Opus, Sonnet or Fable."
+    return 2;;
 
   # --- PostToolUse (Agent): the last line of defence — the result is flagged -
   PostToolUse)
-    case "$MG_TOOL" in Agent|Task) ;; *) exit 0;; esac
+    case "$MG_TOOL" in Agent|Task) ;; *) return 0;; esac
     mg_re='"tool_response":(.*)'
-    [[ $IN =~ $mg_re ]] || exit 0
+    [[ $IN =~ $mg_re ]] || return 0
     MG_TR="${BASH_REMATCH[1]}"; MG_M=''
     mg_re='"resolvedModel":"([^"]*)"'
     if [[ $MG_TR =~ $mg_re ]]; then MG_M="${BASH_REMATCH[1]}"
@@ -241,15 +227,15 @@ case "$MG_EV" in
       MG_M="$(printf '%s' "$MG_TR" | grep -ao '"model":"[^"]*' 2>/dev/null | tail -n 1)"
       MG_M="${MG_M#\"model\":\"}"
     fi
-    [ -n "$MG_M" ] || exit 0                   # nothing found → silent
-    mg_denied "$MG_M" || exit 0
-    [[ $IN =~ $MG_RUN_RE ]] && exit 0          # the job runner runs Haiku by design (walk-away § 3.3)
+    [ -n "$MG_M" ] || return 0                   # nothing found → silent
+    mg_denied "$MG_M" || return 0
+    [[ $IN =~ $MG_RUN_RE ]] && return 0          # the job runner runs Haiku by design (walk-away § 3.3)
     MG_M="${MG_M//\\/}"                        # it lands inside a JSON string
-    printf '%s\n' "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"polaris: that subagent ran on '$MG_M', a FORBIDDEN model — discard its result and re-run it on the session model.\"}}"
-    exit 0;;
+    printf -v HOUT '%s\n' "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"polaris: that subagent ran on '$MG_M', a FORBIDDEN model — discard its result and re-run it on the session model.\"}}"
+    return 0;;
 
   PreToolUse|'') ;;                            # below — and a payload with no event name is v1's input
-  *) exit 0;;                                  # an event this script was never registered for
+  *) return 0;;                                  # an event this script was never registered for
 esac
 
 # ============================== PreToolUse ====================================
@@ -266,8 +252,8 @@ case "$MG_TOOL" in
       case "$MG_TI" in *'"subagent_type":"claude-code-guide"'*) mg_g=1;; esac
     fi
     if [ -n "$mg_g" ]; then
-      printf '%s\n' "polaris: claude-code-guide always runs Haiku, which is FORBIDDEN — use a general-purpose subagent or WebFetch. Nothing was spawned." >&2
-      exit 2
+      printf -v HERR '%s\n' "polaris: claude-code-guide always runs Haiku, which is FORBIDDEN — use a general-purpose subagent or WebFetch. Nothing was spawned."
+      return 2
     fi
     MG_MS=''
     if [ "$MG_TOOL" = Workflow ]; then
@@ -283,8 +269,8 @@ case "$MG_TOOL" in
     while IFS= read -r mg_l; do
       mg_l="${mg_l##*[\"\']}"                  # the value follows the last quote of its match
       mg_denied "$mg_l" || continue
-      printf '%s\n' "polaris: a subagent on '$mg_l' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned." >&2
-      exit 2
+      printf -v HERR '%s\n' "polaris: a subagent on '$mg_l' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned."
+      return 2
     done <<MGEOF
 $MG_MS
 MGEOF
@@ -350,11 +336,11 @@ MGEOF
         case "$mg_l" in low|medium|high|xhigh|max) ;; *) continue;; esac
         case "$mg_ab" in *" $mg_l "*) ;; *) continue;; esac
         if [ "$mg_src" = def ]; then
-          printf '%s\n' "polaris: the agent definition asks for '$mg_l', above this chat's '$MG_LIM' (owner, E1) — pass an explicit effort: '$MG_LIM' or lower on the spawn. Nothing was spawned." >&2
+          printf -v HERR '%s\n' "polaris: the agent definition asks for '$mg_l', above this chat's '$MG_LIM' (owner, E1) — pass an explicit effort: '$MG_LIM' or lower on the spawn. Nothing was spawned."
         else
-          printf '%s\n' "polaris: effort '$mg_l' is above this chat's '$MG_LIM' (owner, E1) — spawn at effort '$MG_LIM' or lower, or drop the effort parameter to inherit. Nothing was spawned." >&2
+          printf -v HERR '%s\n' "polaris: effort '$mg_l' is above this chat's '$MG_LIM' (owner, E1) — spawn at effort '$MG_LIM' or lower, or drop the effort parameter to inherit. Nothing was spawned."
         fi
-        exit 2
+        return 2
       done <<MGEOF
 $MG_RQ
 MGEOF
@@ -365,8 +351,8 @@ esac
 # 2. A subagent's call is judged by ITS OWN transcript — never the parent's state or transcript.
 MG_M=''; MG_T=''
 if [ -n "$MG_AID" ]; then
-  case "$MG_AID" in *[!A-Za-z0-9_-]*) exit 0;; esac   # not a plain name → cannot be located → allow
-  [ -n "$MG_TP" ] || exit 0
+  case "$MG_AID" in *[!A-Za-z0-9_-]*) return 0;; esac   # not a plain name → cannot be located → allow
+  [ -n "$MG_TP" ] || return 0
   mg_b="${MG_TP%.jsonl}"
   if [ -f "$mg_b/subagents/agent-$MG_AID.jsonl" ]; then
     MG_T="$mg_b/subagents/agent-$MG_AID.jsonl"
@@ -375,13 +361,13 @@ if [ -n "$MG_AID" ]; then
       [ -f "$mg_f" ] && { MG_T="$mg_f"; break; }
     done
   fi
-  [ -n "$MG_T" ] || exit 0                     # neither exists → allow
+  [ -n "$MG_T" ] || return 0                     # neither exists → allow
 else
   # 3. The session's own call: the state file — one line, one builtin read.
   [ -n "$MG_SF" ] && { IFS= read -r MG_M < "$MG_SF"; } 2>/dev/null
   MG_M="${MG_M%$'\r'}"
   if [ -z "$MG_M" ]; then                      # absent → the transcript fallback
-    [ -n "$MG_TP" ] || exit 0                  # field absent → allow
+    [ -n "$MG_TP" ] || return 0                  # field absent → allow
     MG_T="$MG_TP"
   fi
 fi
@@ -390,14 +376,14 @@ fi
 #    just switched away from a denied model must stop being blocked at once, and its earlier lines
 #    still name the old one. No 4 KB-first hybrid: it is slower on a 64 KB Workflow line.
 if [ -n "$MG_T" ]; then
-  [ -f "$MG_T" ] || exit 0                     # not a readable file → allow
-  [ -r "$MG_T" ] || exit 0
+  [ -f "$MG_T" ] || return 0                     # not a readable file → allow
+  [ -r "$MG_T" ] || return 0
   MG_M="$(tail -c 65536 "$MG_T" 2>/dev/null | grep -ao '"model":"[^"]*' 2>/dev/null | tail -n 1)"
   MG_M="${MG_M#\"model\":\"}"
 fi
-[ -n "$MG_M" ] || exit 0                       # no model recorded yet → allow
+[ -n "$MG_M" ] || return 0                       # no model recorded yet → allow
 
-mg_denied "$MG_M" || exit 0                    # an allowed model → allow, silently
+mg_denied "$MG_M" || return 0                    # an allowed model → allow, silently
 
 # 5. The one hole (walk-away § 3.3): an agent_type of exactly `polaris-runner` may run ONE Bash call
 #    shape. The command is the first "command" string, read only up to an escape, and must be the only
@@ -412,7 +398,7 @@ if [ "$MG_TOOL" = Bash ]; then
       mg_c="${BASH_REMATCH[1]}"
       case "${MG_TI#*\"command\":}" in *'"command":'*) mg_c='';; esac
       mg_re='^bash (\./)?ops/polaris bg (wait|status|tail) [A-Za-z0-9._-]+( (--max|-n) [0-9]+)?$'
-      [[ $mg_c =~ $mg_re ]] && exit 0
+      [[ $mg_c =~ $mg_re ]] && return 0
     fi
   fi
 fi
@@ -420,5 +406,38 @@ fi
 # --- block -------------------------------------------------------------------
 # One line, plain, actionable. It repeats on every tool call by design: the session cannot proceed
 # until the human switches, and a single missable warning is what let this cost 87% of a weekly limit.
-printf '%s\n' "polaris: this session is running '$MG_M', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run." >&2
-exit 2
+printf -v HERR '%s\n' "polaris: this session is running '$MG_M', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run."
+return 2
+}
+
+# The pending note (a subagent left above a lowered chat), handed to the main agent only on an allow.
+_mg_note() {
+  mg_rc="$HRC"
+  if [ "$mg_rc" = 0 ] && mv -f "$MG_SF.over/.pending" "$MG_SF.over/.pending.$$" 2>/dev/null; then
+    mg_n=""
+    while read -r mg_a mg_e mg_c; do
+      case "$mg_e" in low|medium|high|xhigh|max) ;; *) continue;; esac
+      case "$mg_c" in low|medium|high|xhigh|max) ;; *) continue;; esac
+      mg_n="$mg_n polaris: a subagent is still on $mg_e after the chat dropped to $mg_c; it will finish there — say \\\"restart it\\\" to re-run it at $mg_c."
+    done < "$MG_SF.over/.pending.$$"
+    rm -f "$MG_SF.over/.pending.$$" 2>/dev/null
+    if [ -n "$mg_n" ]; then
+      mg_n="${mg_n# } Restart only when the human says so (owner, E2) and never stop it unasked: message that subagent to write a handoff and release its claim or lock, then spawn the replacement at the new level from that handoff."
+      printf -v HOUT "%s\n" "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"$mg_n\"}}"
+    fi
+  fi
+}
+
+_mg_hook() {
+  HOUT=''; HERR=''; HRC=0; MG_PEND=''
+  MG_OPT="$-"; set +u
+  MG_LCS="${LC_ALL+x}"; MG_LCV="${LC_ALL-}"; export LC_ALL=C
+  _mg_run "$@" || HRC=$?                         # `||`: the caller's set -e never fires inside
+  if [ "$HRC" = 0 ] && [ -n "$MG_PEND" ]; then _mg_note || :; fi
+  if [ -n "$MG_LCS" ]; then LC_ALL="$MG_LCV"; else unset LC_ALL; fi
+  case "$MG_OPT" in *u*) set -u;; esac
+  return 0
+}
+
+# --- standalone face: executed, not sourced → exactly what the v2 script printed, and its exit code ---
+case "${BASH_SOURCE[0]}" in "$0") IN=''; IFS= read -r -d '' IN 2>/dev/null; _mg_hook "$@"; printf '%s' "$HOUT"; [ -z "$HERR" ] || printf '%s' "$HERR" >&2; exit "$HRC";; esac
