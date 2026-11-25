@@ -1548,3 +1548,4 @@
 {"ts":1795565410,"ev":"claim","id":"T-344","who":"oscar@Dino","note":"","pts":10}
 {"ts":1795565414,"ev":"claim","id":"T-341","who":"oscar@Dino","note":"","pts":8}
 {"ts":1795565822,"ev":"note","id":"T-342","who":"oscar@Dino","note":""}
+{"ts":1795565938,"ev":"amend","id":"T-342","who":"oscar@Dino","note":"verify[3]"}
