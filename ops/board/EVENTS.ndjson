@@ -1645,3 +1645,4 @@
 {"ts":1795576629,"ev":"handoff","id":"T-349","who":"oscar@Dino","note":""}
 {"ts":1795576703,"ev":"handoff","id":"T-350","who":"oscar@Dino","note":""}
 {"ts":1795576704,"ev":"all-review","id":"T-350","who":"oscar@Dino","note":"last lane landed — board is all review"}
+{"ts":1795576734,"ev":"done","id":"T-349","who":"oscar@Dino","note":"","pts":13}
