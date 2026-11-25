@@ -1624,3 +1624,4 @@
 {"ts":1795573903,"ev":"claim","id":"T-354","who":"oscar@Dino","note":"","pts":1}
 {"ts":1795573919,"ev":"handoff","id":"T-354","who":"oscar@Dino","note":""}
 {"ts":1795573940,"ev":"done","id":"T-354","who":"oscar@Dino","note":"","pts":1}
+{"ts":1795573950,"ev":"promote","id":"T-350","who":"oscar@Dino","note":"deps done: T-345, T-348, T-341, T-343, T-347, T-354","pts":10}
