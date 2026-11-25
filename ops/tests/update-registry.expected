@@ -19,8 +19,10 @@ a fresh write holds: checked latest epoch
 <fix>/empty: no POLARIS here (no ops/VERSION) — registry entry removed
 <fix>/gone: gone — registry entry removed
 <fix>/self: self-hosting — skipped
-registry now: 1-proj 3-wt 6-self 
+<fix>/joined: machine kit — moves with the machine update
+registry now: 1-proj 3-wt 6-self 7-joined 
 --- 3. the same walk again: nothing left to tidy
 <fix>/proj: skipped: active: 1
 <fix>/proj-wt: a worktree — skipped
 <fix>/self: self-hosting — skipped
+<fix>/joined: machine kit — moves with the machine update

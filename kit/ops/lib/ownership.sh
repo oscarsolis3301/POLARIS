@@ -24,9 +24,10 @@ owned_match() { # owned_match <changed-path> [pattern...] — patterns as args, 
   done
   return 1
 }
-check_ownership() { # check_ownership <taskfile> <ref> — diff BASE...ref ⊆ files_owned
+check_ownership() { # check_ownership <taskfile> <ref> — diff <cut>...ref ⊆ files_owned (cut: _cut_of, else BASE)
   # HEAD must resolve in the CALLER'S worktree; named refs resolve in the shared repo.
-  local tf="$1" ref="$2" owned bad="" f list gen
+  local tf="$1" ref="$2" owned bad="" f list gen cut
+  cut="$(_cut_of "${tf##*/}")"   # safe-landing v2: the recorded cut, else $BASE
   owned="$(fm_list files_owned "$tf")"
   [ -n "$owned" ] || die "task has empty files_owned — planning bug"
   # generated: git-tracked build output the Builder can't help dirtying (it runs `build`) and doesn't
@@ -35,8 +36,8 @@ check_ownership() { # check_ownership <taskfile> <ref> — diff BASE...ref ⊆ f
   # --no-renames: git's default rename detection reports only a rename's DESTINATION, so
   # `git mv non-owned owned/` would show one owned path and hide the non-owned source's deletion
   # — an ownership + stop-and-ask violation slipping past the gate. Off, both sides are checked.
-  if [ "$ref" = "HEAD" ]; then list="$(git diff --name-only --no-renames "$BASE...HEAD")"
-  else list="$(git -C "$PRIMARY" diff --name-only --no-renames "$BASE...$ref")"; fi
+  if [ "$ref" = "HEAD" ]; then list="$(git diff --name-only --no-renames "$cut...HEAD")"
+  else list="$(git -C "$PRIMARY" diff --name-only --no-renames "$cut...$ref")"; fi
   while IFS= read -r f; do
     [ -z "$f" ] && continue
     [ -n "$gen" ] && printf '%s\n' "$gen" | owned_match "$f" && continue   # tracked build output — excluded
@@ -98,11 +99,12 @@ EOF
 map_delta_hint() { # map_delta_hint <taskfile> <ref> — warn (never block) when a handoff introduces a
   # new top-level path but map_delta is blank. MAP.md is the token-discipline substitute for reading
   # the repo; when it silently rots the cost compounds every future sprint. Cheap heuristic, not a gate.
-  local tf="$1" ref="$2" md added f top new=""
+  local tf="$1" ref="$2" md added f top new="" cut
   md="$(fm_list map_delta "$tf" 2>/dev/null || true)"
   [ -n "$md" ] && return 0                              # author already declared a delta
-  if [ "$ref" = "HEAD" ]; then added="$(git diff --name-only --no-renames --diff-filter=A "$BASE...HEAD")"
-  else added="$(git -C "$PRIMARY" diff --name-only --no-renames --diff-filter=A "$BASE...$ref")"; fi
+  cut="$(_cut_of "${tf##*/}")"
+  if [ "$ref" = "HEAD" ]; then added="$(git diff --name-only --no-renames --diff-filter=A "$cut...HEAD")"
+  else added="$(git -C "$PRIMARY" diff --name-only --no-renames --diff-filter=A "$cut...$ref")"; fi
   while IFS= read -r f; do
     [ -z "$f" ] && continue
     top="${f%%/*}"
@@ -123,12 +125,13 @@ guide_stale_hint() { # guide_stale_hint <taskfile> <ref> — map_delta_hint's tw
   # removals emptied; one ending in / names only a folder, as hops reads it. --no-renames, as in
   # check_ownership: a moved path is a removed path too.
   # Cheap first: no removal → no engine at all. No engine, one older than hops, `hops: off` → silence.
-  local tf="$1" ref="$2" gone tree eng rows pairs owned g p
+  local tf="$1" ref="$2" gone tree eng rows pairs owned g p cut
+  cut="$(_cut_of "${tf##*/}")"
   if [ "$ref" = "HEAD" ]; then
-    gone="$(git diff --name-only --no-renames --diff-filter=D "$BASE...HEAD" 2>/dev/null)" || return 0
+    gone="$(git diff --name-only --no-renames --diff-filter=D "$cut...HEAD" 2>/dev/null)" || return 0
     tree="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
   else
-    gone="$(git -C "$PRIMARY" diff --name-only --no-renames --diff-filter=D "$BASE...$ref" 2>/dev/null)" || return 0
+    gone="$(git -C "$PRIMARY" diff --name-only --no-renames --diff-filter=D "$cut...$ref" 2>/dev/null)" || return 0
     tree="$(wt_path "${ref#feat/}")"
   fi
   [ -n "$gone" ] && [ -d "$tree" ] || return 0
@@ -344,18 +347,19 @@ check_rules() { # check_rules <ref> [<ID>] — every changed path + its ADDED li
   # HEAD resolves in the caller's worktree; named refs in the shared repo (as check_ownership).
   # <ID> is the claimed task, forwarded to `ask` rules so an approval recorded on it can clear one.
   # Omitted → `-` → no approvals apply and every `ask` rule denies.
-  local ref="$1" id="${2:--}" f bad=0 stale=0 tmp list ln
+  local ref="$1" id="${2:--}" f bad=0 stale=0 tmp list ln cut
   gdiff() { if [ "$ref" = "HEAD" ]; then git "$@"; else git -C "$PRIMARY" "$@"; fi; }
   # No RULES.tsv, or no rule in it, SKIPS the RULES pass — a skip, not a return, so the freshness
   # pass below still runs. No rule and no surface row ⇒ both passes print nothing, exactly as before.
   if [ -f "$RULES" ] && rules_lines | grep -q .; then
     tmp="$(mktemp)"
     POLARIS_ASK_CLEARED=""
-    list="$(gdiff diff --name-only "$BASE...$ref" 2>/dev/null)"
+    if [ "$id" != "-" ]; then cut="$(_cut_of "$id")"; else cut="$(_cut_of "$ref")"; fi
+    list="$(gdiff diff --name-only "$cut...$ref" 2>/dev/null)"
     while IFS= read -r f; do
       [ -z "$f" ] && continue
       rule_scan_path "$f" "$id" || bad=1
-      gdiff diff -U0 "$BASE...$ref" -- "$f" 2>/dev/null \
+      gdiff diff -U0 "$cut...$ref" -- "$f" 2>/dev/null \
         | grep '^+' | grep -v '^+++' | cut -c2- > "$tmp" || : > "$tmp"
       rule_scan_content_file "$f" "$tmp" || bad=1
     done <<EOF
@@ -398,7 +402,8 @@ check_freshness() { # check_freshness <ref> [<ID>] — the stale-tests gate over
   surfaces_lines | grep -q . || return 0
   local ref="$1" id="${2:--}" rows list f surface tests rcmd rnote hit hunk added="" nl='
 '
-  local k=0 bad=0 first="" s n t ok exc ln small nf
+  local k=0 bad=0 first="" s n t ok exc ln small nf cut
+  if [ "$id" != "-" ]; then cut="$(_cut_of "$id")"; else cut="$(_cut_of "$ref")"; fi
   rows="$(surfaces_lines)"
   # walk-away § 6: a doc or style edit (test_skip + test_look, composed ONCE) is never a real change
   # to a surface; ui paths stay gated. Word-split unexpanded; an empty list never reaches owned_match
@@ -408,8 +413,8 @@ check_freshness() { # check_freshness <ref> [<ID>] — the stale-tests gate over
   set -- $small
   [ "$nf" -eq 1 ] || set +f
   # HEAD resolves in the caller's worktree; a named ref in the shared repo (as check_ownership).
-  if [ "$ref" = "HEAD" ]; then list="$(git diff --name-only "$BASE...$ref" 2>/dev/null || true)"
-  else list="$(git -C "$PRIMARY" diff --name-only "$BASE...$ref" 2>/dev/null || true)"; fi
+  if [ "$ref" = "HEAD" ]; then list="$(git diff --name-only "$cut...$ref" 2>/dev/null || true)"
+  else list="$(git -C "$PRIMARY" diff --name-only "$cut...$ref" 2>/dev/null || true)"; fi
   # 1. which changed paths carry a REAL change: under some row's surface (and not its tests), with an
   #    added line that is neither blank nor a comment. One diff per such path however many rows
   #    cover it; a path no row maps is never diffed at all.
@@ -424,8 +429,8 @@ check_freshness() { # check_freshness <ref> [<ID>] — the stale-tests gate over
 $rows
 EOF
     [ -n "$hit" ] || continue
-    if [ "$ref" = "HEAD" ]; then hunk="$(git diff -U0 "$BASE...$ref" -- "$f" 2>/dev/null || true)"
-    else hunk="$(git -C "$PRIMARY" diff -U0 "$BASE...$ref" -- "$f" 2>/dev/null || true)"; fi
+    if [ "$ref" = "HEAD" ]; then hunk="$(git diff -U0 "$cut...$ref" -- "$f" 2>/dev/null || true)"
+    else hunk="$(git -C "$PRIMARY" diff -U0 "$cut...$ref" -- "$f" 2>/dev/null || true)"; fi
     printf '%s\n' "$hunk" | grep '^+' | grep -v '^+++' | cut -c2- \
       | grep -v -e '^[[:space:]]*$' -e '^[[:space:]]*#' -e '^[[:space:]]*//' | grep -q . && added="$added$f$nl"
   done <<EOF

@@ -766,7 +766,7 @@ _release_branch_gone() { # _release_branch_gone <ID> — smooth.md § 5.2: delet
   local b="feat/$1" n
   git -C "$PRIMARY" show-ref --verify --quiet "refs/heads/$b" || return 1
   git -C "$PRIMARY" worktree list --porcelain 2>/dev/null | grep -qxF "branch refs/heads/$b" && return 1
-  n="$(git -C "$PRIMARY" rev-list --count "$BASE..$b" 2>/dev/null)" || return 1
+  n="$(git -C "$PRIMARY" rev-list --count "$(_cut_of "$1")..$b" 2>/dev/null)" || return 1   # past its cut (safe-landing v2)
   [ "$n" = "0" ] || return 1
   git -C "$PRIMARY" branch -D "$b" >/dev/null 2>&1
 }

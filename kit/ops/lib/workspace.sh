@@ -19,7 +19,8 @@ id_ok() { # id_ok <ID> — rc 0 = usable as feat/<ID>. rc 1 + ONE ⛔ line: empt
 }
 
 wt_add() { # wt_add <ID> [resume] — shared worktree-add for claim/resume: .polaris/wt/<ID> on feat/<ID>
-  # (existing branch reused, else -b from $BASE). stderr is CAPTURED to a temp file — never
+  # (existing branch reused, else -b from its cut: _wave_cut, recorded in branch.feat/<ID>.polaris-cut
+  # when it is not $BASE — safe-landing.md v2). stderr is CAPTURED to a temp file — never
   # 2>/dev/null: retry (7 × 0.3s) ONLY when it mentions index.lock (two near-simultaneous claims
   # — exactly a fleet's panes — collide on git's one index.lock, and each adds a DIFFERENT tree,
   # so a brief retry is safe); a stray ref literally named `feat` → ONE stray_feat_repair, then
@@ -34,6 +35,7 @@ wt_add() { # wt_add <ID> [resume] — shared worktree-add for claim/resume: .pol
   local repaired=0
   local created=0
   local rc
+  local cut=""
   mkdir -p "$PRIMARY/.polaris/wt"
   while :; do
     rc=0
@@ -41,10 +43,21 @@ wt_add() { # wt_add <ID> [resume] — shared worktree-add for claim/resume: .pol
       git -C "$PRIMARY" worktree add -q "$wt" "feat/$id" 2>"$errf" || rc=$?
     else
       created=1
-      git -C "$PRIMARY" worktree add -q "$wt" -b "feat/$id" "$BASE" 2>"$errf" || rc=$?
+      # safe-landing.md v2: the cut, ONCE — a recorded one first (resume reuses it), else _wave_cut
+      if [ -z "$cut" ]; then
+        cut="$(git -C "$PRIMARY" config --get "branch.feat/$id.polaris-cut" 2>/dev/null || true)"
+        if [ -z "$cut" ] || ! git -C "$PRIMARY" rev-parse -q --verify "$cut^{commit}" >/dev/null 2>&1; then
+          cut="$(_wave_cut "$id")"
+        fi
+      fi
+      git -C "$PRIMARY" worktree add -q "$wt" -b "feat/$id" "$cut" 2>"$errf" || rc=$?
     fi
     if [ "$rc" -eq 0 ]; then
       rm -f "$errf"
+      if [ "$created" -eq 1 ] && [ "$cut" != "$BASE" ]; then
+        git -C "$PRIMARY" config "branch.feat/$id.polaris-cut" "$cut"
+        note "feat/$id starts from the open wave ($(printf '%.7s' "$cut")) — it owns a path that wave changed"
+      fi
       [ "$created" -eq 1 ] && [ "$mode" = resume ] \
         && note "⚠ feat/$id did not exist — recreated from $BASE; earlier commits, if any, are on origin/feat/$id or were deleted by done/release"
       return 0

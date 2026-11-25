@@ -6,7 +6,9 @@
 # with POLARIS_UPDATE_FORCE=1, so it asks the channel even over a fresh same-day answer.
 # The walk, per entry in this order: gone → removed · the same folder as an earlier entry once case and
 # slashes are folded → removed, naming the first · a worktree (`.git` is a file) → skipped · no
-# ops/VERSION → removed · self-hosting → skipped · else the update.
+# ops/VERSION → removed · self-hosting → skipped · else the update. A joined project (a launcher:
+# ops/polaris, no ops/lib/, no ops/VERSION) is skipped and KEPT, checked before the no-ops/VERSION
+# rule that would remove it — the machine update moves it (shared-kit.md § 5).
 #
 # HERMETIC: throwaway folders under ONE mktemp -d, a fake HOME/USERPROFILE, a registry under
 # POLARIS_AWAKE_HOME and a file:// channel (curl on Windows needs file:///C:/…, hence cygpath -m). The
@@ -66,6 +68,8 @@ printf '%s\n' "$FIX/proj-wt" > "$R/3-wt"
 printf '%s\n' "$FIX/empty"   > "$R/4-empty"
 printf '%s\n' "$FIX/gone"    > "$R/5-gone"
 printf '%s\n' "$FIX/self"    > "$R/6-self"
+mkdir -p "$FIX/joined/ops"; printf '# the launcher\n' > "$FIX/joined/ops/polaris"
+printf '%s\n' "$FIX/joined"  > "$R/7-joined"     # a joined project: a launcher, no ops/lib/, no ops/VERSION
 CACHE 0.0.1 "$NOW"
 POLARIS_AWAKE_HOME="$FIX/awake" bash "$KIT" update --all 2>&1 | M
 echo "registry now: $(ls "$R" | tr '\n' ' ')"

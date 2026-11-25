@@ -9,15 +9,21 @@
 # with a fixture ops/KEYS.tsv of FAKE keys and FAKE since-versions, run from INSIDE it — polaris
 # anchors to the worktree-list primary, which becomes the fixture. So the REAL registry can grow,
 # and real kit versions can move, without ever redding this file.
-KIT="$(pwd)/kit/ops/polaris"
+# A VENDORED copy of the CLI (kit/ops/polaris + kit/ops/lib/) runs from the fixture's own ops/
+# (shared-kit.md § 14): adopt reads KEYS.tsv through kit_file, so beside the real kit the registry
+# would always be found — only an incomplete vendored kit can still lack it, and that is the case the
+# first die pins.
+SRC="$(pwd)/kit/ops"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
+KIT="$FIX/repo/ops/polaris"
 ( set -e
   git init -q -b main "$FIX/repo" 2>/dev/null || { git init -q "$FIX/repo"; git -C "$FIX/repo" symbolic-ref HEAD refs/heads/main; }
   cd "$FIX/repo"
   git config user.email t@t; git config user.name t
   echo x > a.txt; git add -A; git commit -qm init
   mkdir -p ops
+  cp "$SRC/polaris" ops/polaris; cp -R "$SRC/lib" ops/lib
 ) >/dev/null 2>&1
 A() { ( cd "$FIX/repo" && bash "$KIT" adopt 2>&1 ); printf 'rc %s\n' "$?"; }
 
