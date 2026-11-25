@@ -1648,3 +1648,4 @@
 {"ts":1795576734,"ev":"done","id":"T-349","who":"oscar@Dino","note":"","pts":13}
 {"ts":1795576739,"ev":"done","id":"T-351","who":"oscar@Dino","note":"","pts":5}
 {"ts":1795576745,"ev":"done","id":"T-350","who":"oscar@Dino","note":"","pts":10}
+{"ts":1795576754,"ev":"promote","id":"T-352","who":"oscar@Dino","note":"deps done: T-348, T-349, T-350, T-351, T-343, T-346","pts":8}
