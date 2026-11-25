@@ -1621,3 +1621,4 @@
 {"ts":1795573872,"ev":"amend","id":"T-354","who":"oscar@Dino","note":"deps -T-350"}
 {"ts":1795573875,"ev":"amend","id":"T-350","who":"oscar@Dino","note":"deps +T-354"}
 {"ts":1795573879,"ev":"promote","id":"T-354","who":"oscar@Dino","note":"deps done: none","pts":1}
+{"ts":1795573903,"ev":"claim","id":"T-354","who":"oscar@Dino","note":"","pts":1}
