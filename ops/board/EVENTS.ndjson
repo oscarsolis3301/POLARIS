@@ -1562,3 +1562,4 @@
 {"ts":1795566425,"ev":"handoff","id":"T-343","who":"oscar@Dino","note":""}
 {"ts":1795566448,"ev":"done","id":"T-342","who":"oscar@Dino","note":"","pts":4}
 {"ts":1795566453,"ev":"done","id":"T-344","who":"oscar@Dino","note":"","pts":10}
+{"ts":1795566457,"ev":"done","id":"T-343","who":"oscar@Dino","note":"","pts":10}
