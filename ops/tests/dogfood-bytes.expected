@@ -3,6 +3,9 @@ case 1 · the kit as built: rc 0
    quick-check line: 1
    ✅ POLARIS <version> installed from the published release — same bytes CI proved, and the quick check passes.
    ops/VERSION now = kit/ops/VERSION: yes
+   zip_sha256 lines: 1
+   zip_sha256 = the zip's sha256: yes
+   kit/ops/VERSION carries it: no
 case 2 · one byte changed in ops/install.sh: rc 1
    ⛔ the published kit is not this commit's kit — polaris-v5/ops/install.sh differs. Repo untouched.
       Dogfood from the commit the tag points at, or publish again.
@@ -10,3 +13,7 @@ case 2 · one byte changed in ops/install.sh: rc 1
    repo untouched: yes
 case 3 · one more commit outside kit/: rc 0
    ✅ POLARIS <version> installed from the published release — same bytes CI proved, and the quick check passes.
+stamp · a temp VERSION that already names one:
+   version: 9.9.9
+   channel: x
+   zip_sha256: abababababababababababababababababababababababababababababababab

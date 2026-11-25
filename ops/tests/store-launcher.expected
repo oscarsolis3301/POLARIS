@@ -1,0 +1,108 @@
+== _sha256: every tool that answers agrees ==
+   default = python hashlib: yes
+   with sha256sum + shasum gone: same: yes
+== _store_put: a tampered zip is refused ==
+⛔ store: <F>/tampered.zip does not match its sha256 — not installed
+   rc=1
+   kit/1.0.0 exists: no
+== _store_put: a bad version token is refused ==
+⛔ store: 1.0 is not a version — not installed
+   rc=1
+== _store_put 1.0.0 ==
+   rc=0
+   kit/1.0.0/.claude
+   kit/1.0.0/.claude/settings.json
+   kit/1.0.0/.stored
+   kit/1.0.0/CLAUDE.md
+   kit/1.0.0/__main__.py
+   kit/1.0.0/ops
+   kit/1.0.0/ops/lib
+   kit/1.0.0/ops/lib/store.sh
+   kit/1.0.0/ops/polaris
+   kit/1.0.0/polaris-v5.zip
+   .stored epoch: a number
+   .stored sha256 = the zip: yes
+   zip kept beside, byte-equal: yes
+== _store_put again: the complete kit/1.0.0 is kept ==
+   rc=0
+   kept untouched: yes
+== _store_put 1.1.0 with no python: unzip unpacks it ==
+   rc=0
+   kit/1.1.0 complete: yes
+== _store_put 2.0.0 with neither python nor unzip ==
+⛔ store: needs python or unzip to unpack the kit
+   rc=1
+   kit/1.0.0
+   kit/1.1.0
+== _store_ver / _store_flip ==
+   ver: <> (nothing flipped yet)
+   rc=0
+⛔ store: kit 2.0.0 is not complete here — not switched
+   rc=1
+   ver: 1.1.0
+   rc=0
+   current: 1.1.0
+   next left: no (it named 1.1.0)
+   current "1.1" → ver: <>
+   current "1.1.0.0" → ver: <>
+   current "v1.1.0" → ver: <>
+   current "../1.1.0" → ver: <>
+   current "1..0" → ver: <>
+   current " 1.1.0" → ver: <1.1.0>
+   current "1.1.0<CR>" → ver: <>
+   no current → ver: <>
+== _store_prune ==
+   rc=0
+   kit/.tmp-0.5.0-2
+   kit/0.10.0
+   kit/0.6.0
+   kit/0.7.0
+   kit/0.8.0
+   kit/1.1.0
+   kit/current
+   kit/next
+== the launcher: its first two lines, no $( / backtick / pipe in its code, <= 60 lines ==
+   #!/usr/bin/env bash
+   # POLARIS launcher — the kit lives once per computer (ops/contracts/shared-kit.md). Do not edit.
+   lines: 55
+   code lines with $( or a backtick or a pipe: 0
+== the real kit through the launcher: version, from a state-only repo ==
+   rc=0
+rc=0
+   version = the kit's VERSION: yes
+   ops/CONVENTIONS.md
+   ops/board
+   ops/polaris
+== a stub kit, PATH emptied: the launcher still dispatches (builtins only) ==
+   rc=0
+stub kit 1.0.0 ran: status --x
+   launcher: ops/polaris
+   sourced: yes
+rc=0
+== CLAUDE_CONFIG_DIR wins over HOME ==
+rc=0
+stub kit 1.1.0 ran: one
+== a bad current, CI unset: the not-installed line ==
+rc=127
+   POLARIS is not installed on this machine — say: install POLARIS from github.com/oscarsolis3301/POLARIS
+== no store at all ==
+rc=127
+   POLARIS is not installed on this machine — say: install POLARIS from github.com/oscarsolis3301/POLARIS
+== CI=true, no store, no ops/KIT ==
+rc=127
+   ⛔ POLARIS: this CI run needs a pinned kit — add ops/KIT (version: + sha256:)
+== CI=true, ops/KIT names a different sha256 ==
+rc=127
+   ⛔ POLARIS: the downloaded kit does not match ops/KIT's sha256
+   kit/2.0.0 exists: no
+== CI=true, ops/KIT pins 2.0.0: bootstrapped into the store, then dispatched ==
+rc=0
+   stub kit 2.0.0 ran: status
+      launcher: ops/polaris
+      sourced: yes
+   kit/2.0.0
+   kit/current
+   current: 2.0.0
+== POLARIS_BOOTSTRAP=1, CI unset, the store already holds the pin: no fetch needed ==
+rc=0
+stub kit 2.0.0 ran: again

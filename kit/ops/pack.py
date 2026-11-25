@@ -29,6 +29,7 @@ otherwise poison the archive.
 
 Kit-repo tool only: ops/install.sh's copy list is explicit, so this never ships to a target.
 """
+import hashlib
 import os
 import shutil
 import subprocess
@@ -246,6 +247,16 @@ def _first_difference(archive):
     return None
 
 
+def _stamp_zip_sha256(version_file, digest):
+    """Write `zip_sha256: <digest>` into the channel file (ROOT ops/VERSION), replacing any earlier
+    `zip_sha256:` line. The machine update refuses a zip that does not hash to it (shared-kit § 4).
+    Only --dogfood calls this, after the install: it is the one step that holds the published bytes."""
+    path = Path(version_file)
+    keep = [line for line in path.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("zip_sha256:")]
+    path.write_text("\n".join(keep + [f"zip_sha256: {digest}"]) + "\n", encoding="utf-8", newline="\n")
+
+
 def dogfood(full=False):
     """Install the PUBLISHED release into this repo, exactly as a stranger would.
 
@@ -306,6 +317,8 @@ def dogfood(full=False):
         rc = subprocess.run([sys.executable, str(archive), str(REPO)]).returncode
         if rc != 0:
             sys.exit("⛔ install failed — see above. The repo was not left half-installed.")
+        # The channel names the published zip's bytes, so a machine update can refuse any other.
+        _stamp_zip_sha256(REPO / "ops" / "VERSION", hashlib.sha256(archive.read_bytes()).hexdigest())
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

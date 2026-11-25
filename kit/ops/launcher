@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# POLARIS launcher — the kit lives once per computer (ops/contracts/shared-kit.md). Do not edit.
+# This file is all of POLARIS a project keeps. It reads which kit version this computer runs and
+# hands the command to that kit, using shell builtins only, so it costs no extra process.
+# No kit on this machine: one line on how to install it. In CI: the version ops/KIT pins.
+h="${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris"
+for _t in 1 2; do
+  v=""; read -r v 2>/dev/null < "$h/kit/current"
+  case "$v" in *[!0-9.]*|.*|*.|*..*|*.*.*.*) v="" ;; *.*.*) break ;; *) v="" ;; esac
+done
+if [ -z "$v" ] || [ ! -f "$h/kit/$v/ops/polaris" ]; then
+  if [ "${CI:-}" != true ] && [ "${POLARIS_BOOTSTRAP:-}" != 1 ]; then
+    echo "POLARIS is not installed on this machine — say: install POLARIS from github.com/oscarsolis3301/POLARIS" >&2
+    exit 127
+  fi
+  d="${0%/*}"; [ "$d" = "$0" ] && d="."
+  v="" s="" u=""
+  if [ -f "$d/KIT" ]; then
+    while read -r a b _ || [ -n "$a" ]; do
+      b="${b%$'\r'}"
+      case "$a" in version:) v="$b" ;; sha256:) s="$b" ;; url:) u="$b" ;; esac
+    done < "$d/KIT"
+  fi
+  case "$v" in *[!0-9.]*|.*|*.|*..*|*.*.*.*) v="" ;; *.*.*) ;; *) v="" ;; esac
+  if [ -z "$v" ] || [ -z "$s" ]; then
+    echo "⛔ POLARIS: this CI run needs a pinned kit — add ops/KIT (version: + sha256:)" >&2; exit 127
+  fi
+  u="${u:-https://github.com/oscarsolis3301/POLARIS/releases/download/v$v/polaris-v5.zip}"
+  z="$h/kit/.dl-$$"; mkdir -p "$h/kit" || exit 127
+  if [ -n "${POLARIS_KIT_SRC:-}" ]; then cp "$POLARIS_KIT_SRC" "$z.zip"; else curl -fsSL "$u" -o "$z.zip"; fi || {
+    rm -f "$z.zip"; echo "⛔ POLARIS: could not fetch the kit ops/KIT pins ($u)" >&2; exit 127; }
+  g=""
+  for c in sha256sum "shasum -a 256"; do
+    $c < "$z.zip" > "$z.sum" 2>/dev/null && read -r g _ < "$z.sum" && break; g=""
+  done
+  for p in python3 python; do
+    "$p" -c pass >/dev/null 2>&1 && break; p=""
+  done
+  [ -n "$g" ] || [ -z "$p" ] || { "$p" -c 'import hashlib, sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())' \
+    < "$z.zip" > "$z.sum" && read -r g _ < "$z.sum"; g="${g%$'\r'}"; }
+  if [ -z "$g" ] || [ "$g" != "$s" ]; then
+    rm -f "$z.zip" "$z.sum"; echo "⛔ POLARIS: the downloaded kit does not match ops/KIT's sha256" >&2; exit 127
+  fi
+  if [ -n "$p" ]; then
+    "$p" -c 'import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read("polaris-v5/ops/lib/store.sh"))' "$z.zip" > "$z.sh" 2>/dev/null
+  else
+    unzip -p "$z.zip" polaris-v5/ops/lib/store.sh > "$z.sh" 2>/dev/null
+  fi
+  POLARIS_HOME="$h"; r=1
+  [ -s "$z.sh" ] && . "$z.sh" && _store_put "$z.zip" "$v" "$s" && _store_flip "$v" && r=0
+  rm -f "$z.zip" "$z.sum" "$z.sh"
+  [ "$r" = 0 ] || { echo "⛔ POLARIS: the kit ops/KIT pins did not install" >&2; exit 127; }
+fi
+POLARIS_LAUNCHER="$0"; export POLARIS_LAUNCHER
+. "$h/kit/$v/ops/polaris" "$@"
