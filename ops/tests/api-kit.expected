@@ -669,6 +669,7 @@ kit/ops/roles/BUILDER.md	heading	Loop mode
 kit/ops/roles/BUILDER.md	heading	ROLE: BUILDER — claim one task, finish it, prove it
 kit/ops/roles/CONDUCTOR.md	heading	Cost discipline
 kit/ops/roles/CONDUCTOR.md	heading	Protocol
+kit/ops/roles/CONDUCTOR.md	heading	Protocol, after the gate — steps 4-8: build, snags, integrate, waves, report
 kit/ops/roles/CONDUCTOR.md	heading	ROLE: CONDUCTOR — one chat, the whole loop
 kit/ops/roles/CONDUCTOR.md	heading	The one rule that makes this legal
 kit/ops/roles/CONDUCTOR.md	heading	The second rule — a finished phase is a starting gun

@@ -3,7 +3,9 @@
 # lines outside fences (footers, --page 2, out of range, one oversized section left whole) · doc
 # sections (hit, miss, a heading inside a fence ignored) · doc unknown · router with and without the
 # POLARIS markers · a repo copy wins over the kit's · a kit-only file is served when the repo has none
-# · doc --where (machine vs vendored).
+# · doc --where (machine vs vendored) · v2: the real router ≤ 8,000 bytes with every heading kept, each
+# PROTOCOL section it names served and holding the text moved out of it, every role CONDUCTOR page
+# ≤ 28,000 bytes with `## Protocol` unchanged.
 # HERMETIC: a fixture KIT (the real polaris + core.sh + docs.sh beside FAKE documents) and a fixture
 # repo, both under mktemp -d, so the live roles growing never moves this golden. One real-kit line
 # at the end, numbers masked.
@@ -104,3 +106,23 @@ R2="$F/empty"
 # a checkout may carry CRLF role files (git autocrlf): compare the text, not the line ending
 ( cd "$R2" && bash "$W/kit/ops/polaris" role CONDUCTOR ) | tail -1 | tr -d '\r' | sed 's/of [0-9][0-9]*/of <n>/'
 ( cd "$R2" && bash "$W/kit/ops/polaris" role builder ) | head -1 | tr -d '\r'
+
+echo '== 9. the real kit: the router fits a session hook, CONDUCTOR pages fit the harness (doc-server v2) =='
+( cd "$R2" && bash "$W/kit/ops/polaris" router ) | tr -d '\r' > "$F/router"
+[ "$(wc -c < "$F/router")" -le 8000 ] && echo 'router ≤ 8000: yes' || echo "router ≤ 8000: NO ($(wc -c < "$F/router" | tr -d ' '))"
+tr -d '\r' < "$W/kit/CLAUDE.md" | grep -E '^#{1,4} ' | sed 's/^/router heading: /'
+# every section the router names is served, and the explanations it moved out are in them
+grep -o 'bash ops/polaris doc PROTOCOL "[^"]*"' "$F/router" | sed 's/.*"\(.*\)"/\1/' | LC_ALL=C sort -u | while IFS= read -r s; do
+  ( cd "$R2" && bash "$W/kit/ops/polaris" doc PROTOCOL "$s" ) > "$F/sec" 2>&1; rc=$?
+  echo "doc PROTOCOL \"$s\": rc=$rc · $(head -1 "$F/sec" | tr -d '\r')"
+done
+for m in 'LANES|The kickoff rules, in full' 'LANES|Never a menu of execution strategies' 'STATE = THE BOARD|RULES.tsv, in full' 'N CHATS, ONE REPO|Do NOT rely on runtime self-organization'; do
+  ( cd "$R2" && bash "$W/kit/ops/polaris" doc PROTOCOL "${m%%|*}" ) | grep -qF "${m#*|}" && echo "moved: ${m#*|} → ${m%%|*}" || echo "MISSING: ${m#*|} in ${m%%|*}"
+done
+n=$( ( cd "$R2" && bash "$W/kit/ops/polaris" role CONDUCTOR ) | tail -1 | tr -d '\r' | sed -n 's/.* of \([0-9][0-9]*\) .*/\1/p')
+echo "role CONDUCTOR: ${n:-1} page(s)"
+for p in $(seq 1 "${n:-1}"); do
+  b=$( ( cd "$R2" && bash "$W/kit/ops/polaris" role CONDUCTOR --page "$p" ) | sed '$d' | wc -c | tr -d ' ')
+  [ "$b" -le 28000 ] && echo "page $p ≤ 28000: yes" || echo "page $p ≤ 28000: NO ($b)"
+done
+tr -d '\r' < "$W/kit/ops/roles/CONDUCTOR.md" | grep -c '^## Protocol$'

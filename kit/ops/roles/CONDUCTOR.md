@@ -206,6 +206,8 @@ work.
      of steps 4–6 and stop — the human chose to watch sessions in terminal panes (classic flow).
      Each pane loops itself via `bash ops/polaris next` after its handoff, so the queue drains
      without `start` nudges from you. Default (`subagents` or unset) → continue.
+
+## Protocol, after the gate — steps 4-8: build, snags, integrate, waves, report
 4. **Build (parallel subagents).** Lanes = min(ready tasks, `autolaunch_max` (default 5), the
    `lanes:` value `bash ops/polaris speed` prints when it prints one — the lane count that lands the
    most cards per hour on this machine). Spawn ALL

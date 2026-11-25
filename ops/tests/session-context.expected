@@ -1,0 +1,85 @@
+== 1. the router fits ==
+router ≤ 8000: yes
+router = kit/CLAUDE.md, byte-identical
+== 2. machine project, default voice, adhd off (source clear) ==
+rc=0
+one JSON object · event SessionStart
+router block first: yes
+
+voice: standard (default) — everyday words, no git or test vocabulary; ✅ lines while working, 🎉 only after finish exits 0
+== 3. voice from the repo · from the machine · a blank repo line falls through ==
+rc=0
+one JSON object · event SessionStart
+
+voice: technical (repo) — terse and dense
+
+voice: technical (repo) — terse and dense
+
+voice: technical (machine) — terse and dense
+
+voice: standard (default) — everyday words, no git or test vocabulary; ✅ lines while working, 🎉 only after finish exits 0
+== 4. adhd on — the five facts, verbatim from the skill ==
+
+voice: standard (repo) — everyday words, no git or test vocabulary; ✅ lines while working, 🎉 only after finish exits 0
+adhd: on — shape every reply for a reader with ADHD (the /i-have-adhd skill has the rules). The five facts:
+1. Working memory is small. Anything not on screen is forgotten. Do not ask the reader to "keep in mind X."
+2. Knowing the answer is not doing the answer. The friction between "got it" and "done it" is where work dies.
+3. Starting is the hardest step. The first action must be obvious, small, and doable now.
+4. Time estimates feel uniform. "A bit of work" and "a few hours" register the same. Vague estimates fail.
+5. Dopamine is scarce. Visible progress matters. Buried wins do not register.
+≤ 9000: yes
+adhd from the machine: 1
+repo off over machine on: 0
+machine layer off, no repo line: 0
+== 5. the tail: startup · compact · resume ==
+rc=0
+voice: standard (default) — everyday words, no git or test vocabulary; ✅ lines while working, 🎉 only after finish exits 0
+MG-TEXT (model guard)
+UPDATE-STUB (startup)
+rc=0
+voice: standard (default) — everyday words, no git or test vocabulary; ✅ lines while working, 🎉 only after finish exits 0
+UPDATE-STUB (startup)
+rc=0
+voice: standard (default) — everyday words, no git or test vocabulary; ✅ lines while working, 🎉 only after finish exits 0
+ANCHOR-STUB (anchor)
+rc=0
+voice: standard (default) — everyday words, no git or test vocabulary; ✅ lines while working, 🎉 only after finish exits 0
+ANCHOR-STUB (anchor)
+== 6. where: a worktree cwd · vendored · vendored worktree ==
+rc=0
+one JSON object · event SessionStart
+
+voice: standard (default) — everyday words, no git or test vocabulary; ✅ lines while working, 🎉 only after finish exits 0
+rc=0
+bytes: 0
+rc=0
+bytes: 0
+rc=0
+bytes: 0
+== 7. zero-touch: a git repo without POLARIS ==
+-- ask (machine layer off), from a subfolder
+POLARIS is not set up in this project. If the owner's request changes it, ask once (here · all my projects · not here); here → bash "<F>/kit/ops/polaris" join · all → also bash ops/polaris prefs --set auto_setup=auto · not here → write never to .git/polaris-setup.
+-- ask, auto_setup unknown
+POLARIS is not set up in this project. If the owner's request changes it, ask once (here · all my projects · not here); here → bash "<F>/kit/ops/polaris" join · all → also bash ops/polaris prefs --set auto_setup=auto · not here → write never to .git/polaris-setup.
+-- auto, no origin
+POLARIS is not set up in this project. Before the first change the owner asks for, run bash "<F>/kit/ops/polaris" join, then bash ops/polaris role INIT (entered from a work request).
+-- auto, origin owner not in owners → ask
+POLARIS is not set up in this project. If the owner's request changes it, ask once (here · all my projects · not here); here → bash "<F>/kit/ops/polaris" join · all → also bash ops/polaris prefs --set auto_setup=auto · not here → write never to .git/polaris-setup.
+-- auto, origin owner in owners
+POLARIS is not set up in this project. Before the first change the owner asks for, run bash "<F>/kit/ops/polaris" join, then bash ops/polaris role INIT (entered from a work request).
+-- auto, ssh origin owner in owners
+POLARIS is not set up in this project. Before the first change the owner asks for, run bash "<F>/kit/ops/polaris" join, then bash ops/polaris role INIT (entered from a work request).
+-- auto, an upstream remote → ask
+POLARIS is not set up in this project. If the owner's request changes it, ask once (here · all my projects · not here); here → bash "<F>/kit/ops/polaris" join · all → also bash ops/polaris prefs --set auto_setup=auto · not here → write never to .git/polaris-setup.
+-- auto, an ops/ folder → ask
+POLARIS is not set up in this project. If the owner's request changes it, ask once (here · all my projects · not here); here → bash "<F>/kit/ops/polaris" join · all → also bash ops/polaris prefs --set auto_setup=auto · not here → write never to .git/polaris-setup.
+-- off
+(nothing)
+-- never in .git/polaris-setup
+(nothing)
+-- a linked worktree (.git is a file)
+(nothing)
+-- not a git repo
+(nothing)
+-- the same ask line with PATH emptied (no fork)
+POLARIS is not set up in this project. If the owner's request changes it, ask once (here · all my projects · not here); here → bash "<F>/kit/ops/polaris" join · all → also bash ops/polaris prefs --set auto_setup=auto · not here → write never to .git/polaris-setup.
