@@ -86,3 +86,11 @@ pinned-worktree-lines: 1
 pinned-push-lines: 1
 pinned-kill-lines: 1
 json-deny-emitter-lines: 1
+sourced test deny: rc 0/0 same · deny:switch
+sourced test allow: rc 0/0 same · allow
+sourced test worktree: rc 0/0 same · allow
+sourced test destroyer: rc 0/0 same · deny:rm-polaris
+sourced json deny: rc 0/0 same · {"hookSpecificOutput":{"hookEventName":"PreToolUse","permiss
+sourced json allow: rc 0/0 same
+sourced json no command: rc 0/0 same
+sourced no stdin at all: rc 0/0 same

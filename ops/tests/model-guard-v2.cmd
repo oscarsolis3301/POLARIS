@@ -284,3 +284,36 @@ MS c2 SessionStart ',"source":"startup","model":"claude-opus-5-5"'
 printf '%s' "$IJ" > "$FIX/in"; CLAUDE_CONFIG_DIR="$CD" bash "$H" < "$FIX/in" > /dev/null 2>&1
 printf 'SessionStart under the config dir: rc %s · state c2 %s · under HOME %s\n' "$?" \
   "$(cat "$CS/c2" 2>/dev/null || echo absent)" "$( [ -f "$ST/c2" ] && echo present || echo absent)"
+
+echo '== hook-dispatch § 1 (T-343): the sourced _mg_hook says exactly what the standalone script says =='
+# SR <label> — $IJ through `bash "$H"` and through `. "$H"; _mg_hook` in a `set -u` subshell whose
+# stdin is that same payload: rc, stdout and stderr byte-compared, the payload still unread on stdin
+# afterwards (the function never reads it), nounset still on and LC_ALL as it was. $PRE, when set,
+# runs before each side, so state one side consumes is there for the other.
+SR() {
+  printf '%s' "$IJ" > "$FIX/in"
+  [ -z "${PRE:-}" ] || eval "$PRE"
+  bash "$H" < "$FIX/in" > "$FIX/o1" 2> "$FIX/e1"; r1=$?
+  [ -z "${PRE:-}" ] || eval "$PRE"
+  ( set -u; lc="${LC_ALL-unset}"; . "$H"; IN="$IJ"
+    { _mg_hook; left=''; IFS= read -r -d '' left; } < "$FIX/in"
+    printf '%s' "$HOUT" > "$FIX/o2"; printf '%s' "$HERR" > "$FIX/e2"
+    k=''; [ "$left" = "$IJ" ] || k="$k stdin-read"; case "$-" in *u*) ;; *) k="$k nounset-lost";; esac
+    [ "${LC_ALL-unset}" = "$lc" ] || k="$k LC_ALL-changed"; printf '%s' "$k" > "$FIX/k2"; exit "$HRC" ); r2=$?
+  v=same; cmp -s "$FIX/o1" "$FIX/o2" && cmp -s "$FIX/e1" "$FIX/e2" && [ "$r1" = "$r2" ] || v=DIFFERENT
+  printf '%-58s rc %s/%s %s%s\n' "$1" "$r1" "$r2" "$v" "$(cat "$FIX/k2")"
+  while IFS= read -r l; do printf '    stderr: %s\n' "$l"; done < "$FIX/e2"
+  while IFS= read -r l; do printf '    stdout: %s\n' "$l"; done < "$FIX/o2"
+  return 0
+}
+printf '%s\n' "$HAIKU" > "$ST/sr1"; printf '%s\n' "$OPUS" > "$ST/sr2"
+J sr1 "$FIX/tx/a.jsonl" PreToolUse Read "$READ"; SR 'sourced: state says haiku'
+J sr2 "$FIX/tx/a.jsonl" PreToolUse Read "$READ"; SR 'sourced: state says opus'
+MS sr2 PreModelSwitch ',"from_model":"claude-opus-5-5","to_model":"claude-haiku-4-5"'; SR 'sourced: PreModelSwitch to haiku'
+PT Agent '{"status":"completed","resolvedModel":"claude-haiku-4-5"}'; SR 'sourced: PostToolUse, a subagent on haiku'
+J sr2 "$FIX/tx/a.jsonl" PreToolUse Agent '{"description":"d","prompt":"p","model":"haiku"}'; SR 'sourced: Agent model haiku'
+J sr3 "$FIX/tx/a.jsonl" PreToolUse Agent '{"description":"d","prompt":"p","effort":"max"}'; CLAUDE_EFFORT=high SR 'sourced: Agent effort max, chat high'
+PRE='mkdir -p "$ST/sr4.over"; printf "%s\n" "pin9 xhigh medium" > "$ST/sr4.over/.pending"; printf "%s\n" medium > "$ST/sr4.effort"'
+J sr4 "$FIX/tx/a.jsonl" PreToolUse Read "$READ"; CLAUDE_EFFORT=medium SR 'sourced: the main call that hands over a pending note'
+PRE=''
+IJ=''; SR 'sourced: no stdin at all'

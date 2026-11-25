@@ -149,3 +149,12 @@ allow:not-question
 allow:not-question
   rc=0 stderr=0
   m5.approved: absent
+--- hook-dispatch § 1 (T-343): the sourced _pg_hook says exactly what the standalone script says
+  ExitPlanMode went through: rc 0/0 same · stdout 0 bytes
+  q1.approved: present
+  approved + auto, the question tool: rc 0/0 same · stdout 298 bytes: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny",
+  the same under --test: rc 0/0 same · stdout 10 bytes: deny:away
+  here: no opinion: rc 0/0 same · stdout 0 bytes
+  here under --test: rc 0/0 same · stdout 11 bytes: allow:here
+  garbage under --test: rc 0/0 same · stdout 12 bytes: allow:error
+  no stdin at all: rc 0/0 same · stdout 0 bytes

@@ -205,3 +205,18 @@ config dir state says haiku (HOME state says opus)         rc 2
     stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
 config dir state says opus (transcript says haiku)         rc 0
 SessionStart under the config dir: rc 0 · state c2 claude-opus-5-5 · under HOME absent
+== hook-dispatch § 1 (T-343): the sourced _mg_hook says exactly what the standalone script says ==
+sourced: state says haiku                                  rc 2/2 same
+    stderr: polaris: this session is running 'claude-haiku-4-5', which is FORBIDDEN (owner, 2026-09-15) — Haiku is too weak for this work in any project. Switch with /model (Opus, Sonnet or Fable), then retry. Nothing has been read, written or run.
+sourced: state says opus                                   rc 0/0 same
+sourced: PreModelSwitch to haiku                           rc 2/2 same
+    stderr: polaris: switching to 'claude-haiku-4-5' is FORBIDDEN (owner, 2026-09-15) — stay on Opus, Sonnet or Fable.
+sourced: PostToolUse, a subagent on haiku                  rc 0/0 same
+    stdout: {"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"polaris: that subagent ran on 'claude-haiku-4-5', a FORBIDDEN model — discard its result and re-run it on the session model."}}
+sourced: Agent model haiku                                 rc 2/2 same
+    stderr: polaris: a subagent on 'haiku' is FORBIDDEN (owner, 2026-09-15) — drop the model parameter so it inherits the session model. Nothing was spawned.
+sourced: Agent effort max, chat high                       rc 2/2 same
+    stderr: polaris: effort 'max' is above this chat's 'high' (owner, E1) — spawn at effort 'high' or lower, or drop the effort parameter to inherit. Nothing was spawned.
+sourced: the main call that hands over a pending note      rc 0/0 same
+    stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"polaris: a subagent is still on xhigh after the chat dropped to medium; it will finish there — say \"restart it\" to re-run it at medium. Restart only when the human says so (owner, E2) and never stop it unasked: message that subagent to write a handoff and release its claim or lock, then spawn the replacement at the new level from that handoff."}}
+sourced: no stdin at all                                   rc 0/0 same

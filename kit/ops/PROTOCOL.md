@@ -381,7 +381,7 @@ of polling it; the Haiku runner sits between):
 | any job measured or expected < 300 s | foreground with an explicit timeout ≥ the measured time |
 | top-level session, ≥ 300 s | `bg run <name> -- <cmd>` · ONE `bg wait <name> --done` with `run_in_background: true` · end the turn; the harness wakes it once; the rc file is the truth |
 | top-level, ≥ 300 s, no background wake-up in this harness, `runner:` not `off` | spawn the runner (`route --role RUNNER` prints `agent: polaris-runner`) with the job name |
-| builder subagent | collect in-turn with `bg wait <name> --max 240` while rc 2, or hand `running: <name>` up to the caller |
+| builder subagent | collect in-turn with `bg wait <name> --max 120` while rc 2, or hand `running: <name>` up to the caller |
 | CI | `bg run proof-await -- bash tools/proof.sh --await macos-latest`, one backgrounded wait |
 | runner unavailable (Haiku refused or `runner: off`) | the chunked foreground `bg wait --max 540` |
 

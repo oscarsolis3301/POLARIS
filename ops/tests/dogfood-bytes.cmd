@@ -62,6 +62,11 @@ grep -c '^   proving the board still works:  ops/polaris doctor --fast$' "$FIX/1
 CLOSE 1 | sed 's/^/   /'
 GOT="$(sed -n 's/^version: *//p' "$FIX/c1/ops/VERSION" | head -n 1)"
 if [ "$GOT" = "$WANT" ]; then echo "   ops/VERSION now = kit/ops/VERSION: yes"; else echo "   ops/VERSION now = kit/ops/VERSION: NO"; fi
+# shared-kit § 4: the channel (root ops/VERSION) now names the installed zip's sha256, once; the kit's own VERSION never does
+ZS="$(python -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$FIX/kit.zip")"
+grep -c '^zip_sha256: ' "$FIX/c1/ops/VERSION" | sed 's/^/   zip_sha256 lines: /'
+if grep -qx "zip_sha256: $ZS" "$FIX/c1/ops/VERSION"; then echo "   zip_sha256 = the zip's sha256: yes"; else echo "   zip_sha256 = the zip's sha256: NO"; fi
+if grep -q '^zip_sha256:' "$FIX/c1/kit/ops/VERSION"; then echo "   kit/ops/VERSION carries it: YES"; else echo "   kit/ops/VERSION carries it: no"; fi
 
 printf 'case 2 · one byte changed in ops/install.sh: rc %s\n' "$(cat "$FIX/2.rc")"
 grep -e '^⛔ ' -e '^   Dogfood from' "$FIX/2.out" | sed 's/^/   /'
@@ -70,3 +75,9 @@ if [ -z "$(git -C "$FIX/c2" status --porcelain)" ]; then echo "   repo untouched
 
 printf 'case 3 · one more commit outside kit/: rc %s\n' "$(cat "$FIX/3.rc")"
 CLOSE 3 | sed 's/^/   /'
+
+# the stamp write alone, on a temp VERSION (no network, no install): an earlier zip_sha256 is replaced, in place of a second one
+printf 'version: 9.9.9\nzip_sha256: old\nchannel: x\n' > "$FIX/V"
+( cd "$C" && python -c 'import sys; sys.path.insert(0, "kit/ops"); import pack; pack._stamp_zip_sha256(sys.argv[1], "ab" * 32)' "$FIX/V" )
+echo 'stamp · a temp VERSION that already names one:'
+sed 's/^/   /' "$FIX/V"

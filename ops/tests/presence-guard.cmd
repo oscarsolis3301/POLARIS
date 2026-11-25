@@ -135,3 +135,29 @@ POLARIS_PREFS="$FIX/prefs" PA UserPromptSubmit m4 '' auto "$ESC" "POLARIS re-ent
 echo '--- machine prefs: the machine file says reentry_max: 0 — refused'
 printf 'reentry: desktop\nreentry_max: 0\n' > "$FIX/prefs"
 POLARIS_PREFS="$FIX/prefs" PA UserPromptSubmit m5 '' auto "$ESC" "POLARIS re-entry: go"; A m5
+echo '--- hook-dispatch § 1 (T-343): the sourced _pg_hook says exactly what the standalone script says'
+# SR <label> [args…] — $IJ through `bash "$H" args…` and through `. "$H"; _pg_hook args…` in a
+# `set -u` subshell whose stdin is that same payload: rc, stdout and stderr byte-compared, the payload
+# still unread on stdin afterwards, nounset still on and LC_ALL as it was.
+SR() {
+  local lb="$1"; shift
+  printf '%s' "$IJ" > "$FIX/in"
+  bash "$H" "$@" < "$FIX/in" > "$FIX/o1" 2> "$FIX/e1"; r1=$?
+  ( set -u; lc="${LC_ALL-unset}"; . "$H"; IN="$IJ"
+    { _pg_hook "$@"; left=''; IFS= read -r -d '' left; } < "$FIX/in"
+    printf '%s' "$HOUT" > "$FIX/o2"; printf '%s' "$HERR" > "$FIX/e2"
+    k=''; [ "$left" = "$IJ" ] || k="$k stdin-read"; case "$-" in *u*) ;; *) k="$k nounset-lost";; esac
+    [ "${LC_ALL-unset}" = "$lc" ] || k="$k LC_ALL-changed"; printf '%s' "$k" > "$FIX/k2"; exit "$HRC" ); r2=$?
+  v=same; cmp -s "$FIX/o1" "$FIX/o2" && cmp -s "$FIX/e1" "$FIX/e2" && [ "$r1" = "$r2" ] || v=DIFFERENT
+  o="$(head -c 80 "$FIX/o2")"
+  echo "  $lb: rc $r1/$r2 $v$(cat "$FIX/k2") · stdout $(wc -c < "$FIX/o2" | tr -d ' ') bytes${o:+: $o}"
+}
+IJ='{"session_id":"q1","permission_mode":"auto","hook_event_name":"PostToolUse","tool_name":"ExitPlanMode","tool_input":{}}'
+SR 'ExitPlanMode went through'; A q1
+IJ='{"session_id":"q1","permission_mode":"auto","hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{}}'
+SR 'approved + auto, the question tool'
+SR 'the same under --test' --test
+IJ='{"session_id":"q2","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","tool_input":{}}'
+SR 'here: no opinion'; SR 'here under --test' --test
+IJ='not json at all'; SR 'garbage under --test' --test
+IJ=''; SR 'no stdin at all'

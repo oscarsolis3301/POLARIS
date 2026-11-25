@@ -145,3 +145,12 @@ ask  bash ops/polaris prefs --yield
 ask  bash ops/polaris prefs voice
 ask  bash ops/polaris doc templates/task > ops/board/x.md
 ask  bash ops/polaris role BUILDER; rm -rf ops
+sourced test allow: rc 0/0 same · allow
+sourced test ask: rc 0/0 same · ask
+sourced test-ps allow: rc 0/0 same · allow
+sourced test-ps ask: rc 0/0 same · ask
+sourced json Bash allow: rc 0/0 same · {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecision
+sourced json PowerShell allow: rc 0/0 same · {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecision
+sourced json Bash ask: rc 0/0 same
+sourced json another tool: rc 0/0 same
+sourced no stdin at all: rc 0/0 same
