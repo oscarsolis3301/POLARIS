@@ -1582,3 +1582,9 @@
 {"ts":1795567874,"ev":"handoff","id":"T-345","who":"oscar@Dino","note":""}
 {"ts":1795568332,"ev":"handoff","id":"T-341","who":"oscar@Dino","note":""}
 {"ts":1795568333,"ev":"all-review","id":"T-341","who":"oscar@Dino","note":"last lane landed — board is all review"}
+{"ts":1795569060,"ev":"wave-red","id":"T-342","who":"oscar@Dino","note":"bash tools/proof.sh"}
+{"ts":1795569060,"ev":"wave-red","id":"T-344","who":"oscar@Dino","note":"bash tools/proof.sh"}
+{"ts":1795569061,"ev":"wave-red","id":"T-343","who":"oscar@Dino","note":"bash tools/proof.sh"}
+{"ts":1795569061,"ev":"wave-red","id":"T-346","who":"oscar@Dino","note":"bash tools/proof.sh"}
+{"ts":1795569061,"ev":"wave-red","id":"T-345","who":"oscar@Dino","note":"bash tools/proof.sh"}
+{"ts":1795569062,"ev":"wave-red","id":"T-341","who":"oscar@Dino","note":"bash tools/proof.sh"}
