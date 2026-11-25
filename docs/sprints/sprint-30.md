@@ -1,7 +1,7 @@
 # Sprint 30 — One kit for the whole machine (6.22.0 + 7.0.0) (2026-11-24–)
 
 ## T-341 — "A fix card for a red wave is cut from the wave, and the admin groundwork for a shared kit - claim cuts a card from the open wave when it owns a path the wave changed, update --all keeps joined projects, adopt and heal read kit data through one lookup"
-points 8 · risk normal · landed 0fb3d05c (2026-11-24) · claimed 2026-11-24
+points 8 · risk normal · landed 0fb3d05c (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/lib/admin.sh, kit/ops/lib/builder.sh, kit/ops/lib/core.sh, kit/ops/lib/ownership.sh, kit/ops/lib/selftest/remote.sh, kit/ops/lib/workspace.sh, ops/tests/adopt-stub.cmd, ops/tests/heal-design.cmd, ops/tests/update-registry.cmd, ops/tests/update-registry.expected, ops/tests/wave-fix-claim.cmd, ops/tests/wave-fix-claim.expected
 
 ### Why
@@ -112,7 +112,7 @@ launcher in this release — `join` is 7.0.0 — so nothing a 6.x user runs chan
 - [ ] kit/ops/launcher is ≤ 60 lines and its two first lines are the contract's
 
 ## T-345 — "One hook process per tool call - the dispatcher folds the model ban, presence, checkout and read-only guards, runs the other hooks itself, stands down outside joined projects, asks when ops/polaris is not the real launcher, and the shim and trust tier setup will install"
-points 8 · risk high · landed bc73c3a3 (2026-11-24) · claimed 2026-11-24
+points 8 · risk high · landed bc73c3a3 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/hooks/dispatch.sh, kit/ops/hooks/shim.sh, ops/tests/hook-budget.cmd, ops/tests/hook-budget.expected, ops/tests/hook-dispatch.cmd, ops/tests/hook-dispatch.expected
 
 ### Why
@@ -142,7 +142,7 @@ them exactly — it is on this card on purpose. Nothing registers the dispatcher
 - [ ] api-kit unchanged (all new functions are `_dp_*`)
 
 ## T-346 — "The protocol arrives at session start - the router fits under the hook limit, a joined project gets the router, its voice and the ADHD lines at session start, a plain git project gets the one zero-touch line, and the conductor's role file pages under the harness limit"
-points 10 · risk normal · landed 4f63aba9 (2026-11-24) · claimed 2026-11-24
+points 10 · risk normal · landed 4f63aba9 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/CLAUDE.md, kit/ops/PROTOCOL.md, kit/ops/hooks/dispatch-session.sh, kit/ops/roles/CONDUCTOR.md, ops/tests/api-kit.expected, ops/tests/doc-server.cmd, ops/tests/doc-server.expected, ops/tests/session-context.cmd, ops/tests/session-context.expected
 
 ### Why
@@ -169,8 +169,36 @@ at a step boundary splits it; that heading is this wave's one api-kit change, so
 - [ ] doc-server: the new cases; every earlier case byte-identical
 - [ ] drift: no doc-overflow finding from the moved text
 
+## T-347 — "The machine update - in a joined project update fetches the next kit, checks its sha256, unpacks it beside the old one and switches every project when none is busy, with no commit anywhere; each project catches up at its next command"
+points 13 · risk normal · landed ca79f6cd (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/hooks/update-hook.sh, kit/ops/lib/admin.sh, kit/ops/lib/store.sh, kit/ops/polaris, ops/tests/machine-update.cmd, ops/tests/machine-update.expected
+
+### Why
+Today every project updates itself: `update` downloads a tarball, runs the installer into the repo and
+commits the result. With one kit per computer an update is a MACHINE operation instead
+(shared-kit.md §§ 3, 5; auto-update.md v6): fetch the release zip the channel names, refuse it unless
+its sha256 matches the channel's `zip_sha256:`, unpack it beside the running version, and switch
+`current` once no registered joined project has work in flight — else stage it in `kit/next` and say
+which project is busy. Nothing is committed, parked or installed into any repo.
+
+Each joined project then catches up lazily: the first command after a switch notices its
+`.polaris/kit-seen` is behind and runs `upgrade` + `heal` quietly (board folders, configuration), so a
+kit change never needs a commit in your projects. Machine mode is recognised with zero forks by the
+variable the launcher sets; a vendored install takes none of these branches, so every vendored
+command is byte-identical (startup-budget unchanged).
+
+This card is wave 2's only owner of kit/ops/polaris and admin.sh. join and migrate come in 7.0.0
+(T-349), so in 6.22.0 the machine path is reached only from test fixtures.
+
+### Acceptance
+- [ ] machine-update: every case of auto-update.md v6's golden bullet (two joined fixture projects move with one update and no commit or dirty path · kit-seen written once each · busy → kit/next, later --auto flips · tampered zip refused · no zip_sha256 refused · prune keeps current + previous)
+- [ ] Vendored: update-registry, update-pending, update-waiting, update-arms, install-update, startup-budget byte-identical
+- [ ] The lazy upgrade never runs for find|show|hops|help|role|doc|router|prefs|version and never in a vendored install
+- [ ] __quiet is hidden (not in usage); cli-help-parity re-pinned here only if it must be, with the reason
+- [ ] api-kit unchanged (no new public function)
+
 ## T-353 — The 6.22 wave seals — session context prints LF on Windows, heal-model-line's fixture is ready for kit_file
-points 2 · risk normal · landed eaa404e2 (2026-11-24) · claimed 2026-11-24
+points 2 · risk normal · landed eaa404e2 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/hooks/dispatch-session.sh, ops/tests/heal-model-line.cmd, ops/tests/session-context.cmd, ops/tests/session-context.expected
 
 ### Why
