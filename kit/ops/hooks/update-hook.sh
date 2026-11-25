@@ -85,17 +85,25 @@ uh_main() {
   case "$pl" in /*|?:*) ;; *) pl="$PWD/$pl";; esac   # the run below cds first
   [ -e "$p/ops/polaris" ] || [ -f "$p/ops/CONVENTIONS.md" ] || exit 0   # a copy, or POLARIS state
   [ -f "$p/kit/ops/pack.py" ] && exit 0        # self-hosting: this repo never self-updates
+  # A joined project (a launcher: ops/polaris, no ops/lib/) has no ops/VERSION and no cache of its
+  # own: its version is the kit's (vf above) and its cache the machine's (shared-kit.md § 3). A
+  # staged kit/next skips the cheap check — `update --auto` re-asks the projects for it, no network.
+  local uc="$p/.polaris/update-cache" ph="${CLAUDE_CONFIG_DIR:-${HOME:-.}/.claude}/polaris"
+  if [ -e "$p/ops/polaris" ] && [ ! -d "$p/ops/lib" ]; then
+    uc="$ph/update-cache"
+    [ -f "$ph/kit/next" ] && uc=""
+  fi
   # Today in LOCAL time, as the cache writes it (`date +%Y-%m-%d`). bash < 4.2 has no %(…)T: one
   # `date` there is still far cheaper than two CLI starts.
   printf -v today '%(%Y-%m-%d)T' -1 2>/dev/null || today="$(date +%Y-%m-%d 2>/dev/null)" || today=''
-  if [ -f "$p/.polaris/update-cache" ] && [ -f "$vf" ]; then
+  if [ -n "$uc" ] && [ -f "$uc" ] && [ -f "$vf" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
       line="${line//[[:space:]]/}"
       case "$line" in
         checked:*) [ -n "$checked" ] || checked="${line#checked:}";;
         latest:*)  [ -n "$latest" ]  || latest="${line#latest:}";;
       esac
-    done < "$p/.polaris/update-cache"
+    done < "$uc"
     while IFS= read -r line || [ -n "$line" ]; do
       case "$line" in version:*) line="${line#version:}"; line="${line%%#*}"; cur="${line//[[:space:]]/}"; break;; esac
     done < "$vf"
