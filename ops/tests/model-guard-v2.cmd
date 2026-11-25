@@ -218,8 +218,14 @@ SJ="$HOME/.claude/settings.json"
 printf '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"mine.sh"}]}],"SessionStart":[{"hooks":[{"type":"command","command":"mine-too.sh"}]}]}}\n' > "$SJ"
 # python prints CRLF on Windows and every .expected is LF (.gitattributes): \r goes on the way out
 # PYTHONIOENCODING=utf-8: the `·` below in UTF-8, never the Windows locale codepage
-bash "$H" install | tr -d '\r' | sed "s#written to .*#written to <settings>#"
-bash "$H" install | tr -d '\r' | sed "s#written to .*#written to <settings>#"
+# Run by an agent (CLAUDECODE set) the install is refused, rc 2, and settings.json is not touched
+# (shared-kit.md § 11) — so the two human runs below set it empty, explicitly.
+cp "$SJ" "$FIX/sj.before"
+CLAUDECODE=1 bash "$H" install > "$FIX/out" 2>&1; rc=$?
+printf 'agent install: rc %s · %s\n' "$rc" "$(tr -d '\r' < "$FIX/out" | sed "s#python \"$HOME/#python \"<home>/#")"
+cmp -s "$FIX/sj.before" "$SJ" && echo 'agent install: settings.json byte-identical' || echo 'agent install: SETTINGS.JSON REWRITTEN'
+CLAUDECODE= bash "$H" install | tr -d '\r' | sed "s#written to .*#written to <settings>#"
+CLAUDECODE= bash "$H" install | tr -d '\r' | sed "s#written to .*#written to <settings>#"
 PYTHONIOENCODING=utf-8 python - "$SJ" <<'PY' | tr -d '\r'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))["hooks"]

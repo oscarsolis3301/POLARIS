@@ -9,6 +9,12 @@ makes polaris-v5.zip a Python zipapp — so the whole install is one command, no
     python polaris-v5.zip --no-machine-setup # install into the repo ONLY; ~/.claude untouched
     python polaris-v5.zip --claude-skill     # arm the machine ONLY; install into no repo
                           --no-permissions   #   ...without touching ~/.claude/settings.json
+    python polaris-v5.zip --setup            # the OWNER's setup, in their own terminal: the arm above
+                                             #   plus the kit store and the one hook dispatcher
+
+RUN BY AN AGENT (CLAUDECODE set), nothing here writes Claude Code's permission rules, auto-mode keys
+or hooks: every install acts as --no-permissions and prints one `⛔ needs you:` line, and --setup
+refuses outright. Granting permissions is the owner's own step (ops/contracts/shared-kit.md §§ 10-11).
 
 ARMING THE MACHINE is what makes the SECOND install — and every one after it, in any repo —
 free. It writes five things to ~/.claude/: the polaris-install skill (so Claude Code knows the
@@ -235,8 +241,8 @@ def merge_permissions(settings):
     # read the repo freely to plan, and the ownership guard / RULES / verify still bind (auto mode
     # decides only whether to PROMPT, never whether hooks run). Set-if-absent, so a user who
     # deliberately chose a stricter defaultMode keeps it; useAutoModeDuringPlan is already the
-    # default true, set explicitly so plan mode stays seamless if that default ever changes. The
-    # update path (ops/lib/admin.sh::refresh_machine_kit) arms the same keys — keep the two in step.
+    # default true, set explicitly so plan mode stays seamless if that default ever changes. Only an
+    # owner-run arm gets here: the update path writes no permission config (shared-kit.md § 11).
     auto_changed = False
     if "defaultMode" not in perms:
         perms["defaultMode"] = "auto"
@@ -358,7 +364,7 @@ def _restore_fable_once():
     return changed
 
 
-def merge_model_guard(archive, bash_path, register=True):
+def merge_model_guard(archive, bash_path, register=True, fold=False):
     """Land model-guard.sh under ~/.claude/polaris/, register its five hooks, and give Fable back once.
 
     Owner decision 2026-09-15: Haiku is forbidden in every project. core.sh's model_denied stops
@@ -383,6 +389,10 @@ def merge_model_guard(archive, bash_path, register=True):
 
     Fails OPEN with one ⚠ line, exactly like keep-awake: an install that died over a machine-level
     extra is worse than the extra being missing, and the kit-code ban applies either way.
+
+    fold=True is --setup's form (hook-dispatch.md § 3): the one dispatcher runs the ban in-process, so
+    the script is copied and Fable restored once, but no entry of its own is registered — _setup_hooks
+    removes any it finds.
     """
     if register and _restore_fable_once():
         settings = os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
@@ -402,6 +412,9 @@ def merge_model_guard(archive, bash_path, register=True):
             with open(hook, "wb") as fh:
                 fh.write(z.read(f"{PREFIX}ops/hooks/model-guard.sh"))
         os.chmod(hook, 0o755)
+        if fold:
+            out(f"✅ model guard copied:    {hook} — the dispatcher runs it, no entry of its own")
+            return
         if not register:
             out(f"   model-guard copied (not registered): {hook}")
             return
@@ -450,7 +463,7 @@ def arm_file(z, member, dest):
     return True
 
 
-def arm_machine(archive, permissions=True):
+def arm_machine(archive, permissions=True, setup=False):
     """Teach Claude Code, on THIS machine, how to install POLARIS into ANY repo.
 
     The project skill (.claude/skills/polaris/) only exists once POLARIS is installed, so it
@@ -554,9 +567,14 @@ def arm_machine(archive, permissions=True):
     # forever — the same mistake the cmp guard above exists to undo.
     if permissions:
         merge_awake_hooks(archive, find_bash())
-        merge_model_guard(archive, find_bash())
+        merge_model_guard(archive, find_bash(), fold=setup)
         if merge_permissions(os.path.join(os.path.expanduser("~"), ".claude", "settings.json")):
             changed = True
+    elif _agent_run():
+        # Run by an agent (shared-kit.md § 11): the settings file is the owner's to grant, so no rule
+        # block to paste either — an agent handed one would paste it. ONE line, always printed.
+        merge_model_guard(archive, find_bash(), register=False)
+        print(_NEEDS_YOU.format(zip=archive))
     else:
         out("   --no-permissions: ~/.claude/settings.json not touched (keep-awake included).")
         # The Haiku ban is the owner's rule, but --no-permissions is a documented promise about
@@ -575,7 +593,223 @@ def arm_machine(archive, permissions=True):
     return changed
 
 
-FLAGS = ("--claude-skill", "--no-permissions", "--no-machine-setup", "--verbose")
+FLAGS = ("--claude-skill", "--no-permissions", "--no-machine-setup", "--verbose", "--setup")
+
+# shared-kit.md §§ 10-11 — the two lines an agent-run call prints, byte-exact.
+_SETUP_REFUSED = ("⛔ --setup changes Claude Code's own settings — run it in your own terminal, "
+                  "not through an agent")
+_NEEDS_YOU = ('⛔ needs you: python "{zip}" --setup in your own terminal '
+              "(permissions and hooks are yours to grant)")
+
+# hook-dispatch.md § 3: one dispatcher entry per event — (event, matcher, timeout, first). The two
+# refusing events go FIRST, where the model-guard entries they fold sat.
+_DISPATCH = (("PreToolUse", "*", 20, True), ("PostToolUse", "Agent|ExitPlanMode", 10, False),
+             ("SessionStart", None, 120, False), ("PreModelSwitch", None, 10, True),
+             ("PostModelSwitch", None, 10, False), ("UserPromptSubmit", None, 10, False),
+             ("Stop", None, 30, False), ("SubagentStop", None, 10, False),
+             ("StopFailure", None, 10, False), ("PermissionRequest", None, 10, False),
+             ("PermissionDenied", None, 10, False))
+
+
+def _agent_run():
+    """True when an agent runs us: Claude Code sets CLAUDECODE in every shell it starts."""
+    return bool(os.environ.get("CLAUDECODE"))
+
+
+def _polaris_home():
+    """$POLARIS_HOME, the shell's resolution (core.sh): ${CLAUDE_CONFIG_DIR:-~/.claude}/polaris."""
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
+    return os.path.join(base, "polaris")
+
+
+def _write_atomic(path, data):
+    """Bytes to <path> through a temp file + os.replace: never a half-written file."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.polaris-tmp-{os.getpid()}"
+    with open(tmp, "wb") as fh:
+        fh.write(data)
+    os.replace(tmp, path)
+
+
+def _setup_store(archive):
+    """Store THIS zip as $POLARIS_HOME/kit/<ver> and make it `current` (shared-kit.md § 1, in python).
+
+    The zip verbatim with its polaris-v5/ folder hoisted, the zip itself beside it as polaris-v5.zip,
+    `.stored` (<epoch> <sha256>) written LAST — its presence is what "complete" means, and a complete
+    kit/<ver> is kept as found. Then `current` (temp + replace); a `next` naming <ver> is spent.
+    Returns (<ver>, <kit dir>).
+    """
+    import hashlib
+    import time
+    with zipfile.ZipFile(archive) as z:
+        try:
+            body = z.read(f"{PREFIX}ops/VERSION").decode("utf-8", "replace")
+        except KeyError:
+            die("this archive carries no ops/VERSION — rebuild it with ops/pack.py")
+    ver = ""
+    for line in body.splitlines():
+        if line.startswith("version:"):
+            ver = line.split(":", 1)[1].strip()
+            break
+    parts = ver.split(".")
+    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+        die(f"this archive's ops/VERSION names no version token ({ver or 'none'})")
+    kit = os.path.join(_polaris_home(), "kit")
+    dest = os.path.join(kit, ver)
+    if not os.path.isfile(os.path.join(dest, ".stored")):
+        with open(archive, "rb") as fh:
+            sha = hashlib.sha256(fh.read()).hexdigest()
+        tmp = os.path.join(kit, f".tmp-{ver}-{os.getpid()}")
+        shutil.rmtree(tmp, ignore_errors=True)
+        os.makedirs(tmp)
+        try:
+            with zipfile.ZipFile(archive) as z:
+                for info in z.infolist():
+                    got = z.extract(info, tmp)
+                    mode = (info.external_attr >> 16) & 0o777
+                    if mode and not info.is_dir():
+                        os.chmod(got, mode)
+            inner = os.path.join(tmp, PREFIX.rstrip("/"))
+            if os.path.isdir(inner):
+                for name in os.listdir(inner):
+                    os.rename(os.path.join(inner, name), os.path.join(tmp, name))
+                os.rmdir(inner)
+            shutil.copyfile(archive, os.path.join(tmp, ZIP_NAME))
+            if os.path.isdir(dest):            # an incomplete one: a put that died before `.stored`
+                shutil.rmtree(dest)
+            os.rename(tmp, dest)
+        except BaseException:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
+        _write_atomic(os.path.join(dest, ".stored"), f"{int(time.time())} {sha}\n".encode())
+    _write_atomic(os.path.join(kit, "current"), f"{ver}\n".encode())
+    nxt = os.path.join(kit, "next")
+    try:
+        with open(nxt, encoding="utf-8") as fh:
+            spent = fh.readline().strip() == ver
+        if spent:
+            os.unlink(nxt)
+    except OSError:
+        pass
+    return ver, dest
+
+
+def _setup_hooks(archive, settings):
+    """The shim, the trust tier and the dispatcher registration (hook-dispatch.md §§ 3-4).
+
+    $POLARIS_HOME/hook ← the kit's shim.sh; $POLARIS_HOME/trust/readonly-allow.sh ← the kit's
+    readonly-allow.sh (this is the trust tier's only writer). Then one entry per event in <settings>,
+    command `bash "<POLARIS_HOME>/hook" <event>`, merged BY SCRIPT IDENTITY: ours replaced in place,
+    the user-level model-guard entries it folds removed, keep-awake's and every other entry left as
+    found. Written only when something changed, so a second run is byte-identical. Fails OPEN like
+    merge_permissions: a settings file it cannot read is never rewritten — the entries are printed.
+    """
+    import re
+    home = _polaris_home()
+    shim_dest = os.path.join(home, "hook")
+    trust_dest = os.path.join(home, "trust", "readonly-allow.sh")
+    with zipfile.ZipFile(archive) as z:
+        for member, dest in ((f"{PREFIX}ops/hooks/shim.sh", shim_dest),
+                             (f"{PREFIX}ops/hooks/readonly-allow.sh", trust_dest)):
+            if member not in z.namelist():
+                die(f"this archive carries no {member[len(PREFIX):]} — rebuild it with ops/pack.py")
+            arm_file(z, member, dest)
+    os.chmod(shim_dest, 0o755)
+    out(f"✅ hook shim:             {shim_dest}")
+    out(f"✅ trust tier:            {trust_dest}")
+
+    shim = shim_dest.replace("\\", "/")
+    ents = []
+    for ev, matcher, timeout, first in _DISPATCH:
+        hook = {"type": "command", "command": f'bash "{shim}" {ev}', "timeout": timeout}
+        ents.append((ev, {"matcher": matcher, "hooks": [hook]} if matcher else {"hooks": [hook]}, first))
+
+    def _bail(why):
+        print(f"⚠ {settings} {why} — left untouched. Add these hook entries by hand:")
+        for ev, ent, _ in ents:
+            print(f"     {ev}: {json.dumps(ent)}")
+        return False
+
+    data = {}
+    if os.path.isfile(settings):
+        try:
+            with open(settings, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError) as exc:
+            return _bail(f"could not be read ({exc})")
+    if not isinstance(data, dict):
+        return _bail("is not a JSON object")
+    hooks = data.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        return _bail('has a non-object "hooks"')
+    for ev, _, _ in ents:
+        if not isinstance(hooks.get(ev, []), list):
+            return _bail(f'has a non-list "{ev}"')
+    ours = re.compile(r'polaris/hook(?:"|\s|$)')
+    guard = re.compile(r"polaris/model-guard\.sh")
+    cmd = lambda h: str(h.get("command", "")).replace("\\", "/") if isinstance(h, dict) else ""
+    mine = lambda e: isinstance(e, dict) and any(ours.search(cmd(h)) for h in (e.get("hooks") or []))
+    n = 0
+    for name, have in list(hooks.items()):     # the folded model-guard entries go, by script identity
+        if not isinstance(have, list):
+            continue
+        keep = []
+        for e in have:
+            hs = e.get("hooks") if isinstance(e, dict) else None
+            if isinstance(hs, list) and any(guard.search(cmd(h)) for h in hs):
+                n += 1
+                rest = [h for h in hs if not guard.search(cmd(h))]
+                if not rest:
+                    continue
+                e = dict(e, hooks=rest)
+            keep.append(e)
+        hooks[name] = keep
+    for ev, ent, first in ents:
+        have = hooks.setdefault(ev, [])
+        at = [i for i, e in enumerate(have) if mine(e)]
+        if not at:
+            if first:
+                have.insert(0, ent)
+            else:
+                have.append(ent)
+            n += 1
+            continue
+        if have[at[0]] != ent:
+            have[at[0]] = ent
+            n += 1
+        for i in reversed(at[1:]):           # one entry per event, never two
+            del have[i]
+            n += 1
+    if n:
+        # Text mode, the platform's own line ends — exactly how merge_permissions and the keep-awake
+        # install write this file, so a second --setup (which re-runs them) changes not one byte.
+        tmp = settings + ".polaris-tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as fh:
+                fh.write(json.dumps(data, indent=2) + "\n")
+            os.replace(tmp, settings)
+        except OSError as exc:
+            return _bail(f"could not be written ({exc})")
+    out(f"✅ dispatcher registered: {len(ents)} events in {settings}"
+        f"{'' if n else ' — already current'}")
+    return bool(n)
+
+
+def _setup(archive):
+    """`--setup` (shared-kit.md § 10) — the ONE owner-run writer of Claude Code's own settings.
+
+    Refused under CLAUDECODE (rc 2, nothing written). Otherwise: today's --claude-skill arm with
+    permissions (skill, cached zip, voice, keep-awake, rules, auto-mode keys; the model guard copied
+    but folded), then the store (this zip as `current`), the shim, the trust tier and the dispatcher
+    registration. Idempotent: a second run writes nothing.
+    """
+    if _agent_run():
+        print(_SETUP_REFUSED, file=sys.stderr)
+        sys.exit(2)
+    arm_machine(archive, permissions=True, setup=True)
+    ver, dest = _setup_store(archive)
+    out(f"✅ kit stored:            {dest} (current: {ver})")
+    _setup_hooks(archive, os.path.join(os.path.expanduser("~"), ".claude", "settings.json"))
 
 
 def main():
@@ -593,10 +827,19 @@ def main():
     if unknown:
         die(f"unknown flag: {unknown[0]}\n"
             "   python polaris-v5.zip [target-repo] [--verbose] [--no-machine-setup]\n"
-            "   python polaris-v5.zip --claude-skill [--no-permissions]")
+            "   python polaris-v5.zip --claude-skill [--no-permissions]\n"
+            "   python polaris-v5.zip --setup")
 
     VERBOSE = "--verbose" in args
-    permissions = "--no-permissions" not in args
+    # An agent never grants Claude Code permissions or hooks (shared-kit.md § 11): under CLAUDECODE
+    # every path is --no-permissions, whatever the flags. A human and CI (which never sets it) get
+    # exactly the behaviour they had before 7.0.0.
+    permissions = "--no-permissions" not in args and not _agent_run()
+
+    if "--setup" in args:
+        VERBOSE = True
+        _setup(archive)
+        return
 
     # --claude-skill: arm the machine and install into NO repo. Still an explicit, standalone
     # command (and still what a blocked install prescribes) — it just isn't the only way in any more.

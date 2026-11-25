@@ -1,7 +1,8 @@
 # prefs-cli — `polaris prefs` (ops/contracts/machine-prefs.md § 7, "Executable checks"): show (the
 # layer off, no file, a file, the autonomy mask, a KEYS.tsv without column 6), every --set form and
 # refusal (all-or-nothing, not a key, per-project, ask options, tab/#, forbidden models, the RULES
-# content ban, the autonomy dial under CLAUDECODE=1, the layer off), --unset, --seed, --yield — and
+# content ban, the autonomy dial under CLAUDECODE=1, the layer off), --unset, --seed (+ owners: from the
+# registered projects' origins, shared-kit.md § 9), --yield — and
 # the prefs value == the cfg value for every key of the fixture.
 # HERMETIC: a fixture repo whose ops/ plants its OWN KEYS.tsv (kit_file: the repo copy wins), RULES
 # and CONVENTIONS, and a machine file under mktemp -d — never the owner's real preferences.
@@ -10,7 +11,7 @@ F="$(mktemp -d)"
 trap 'rm -rf "$F"' EXIT
 W="$(pwd)"
 export HOME="$F/home" USERPROFILE="$F/home"
-unset CLAUDE_CONFIG_DIR CLAUDECODE
+unset CLAUDE_CONFIG_DIR CLAUDECODE POLARIS_AWAKE_HOME
 R="$F/repo"
 ( git init -q -b main "$R" 2>/dev/null || { git init -q "$R"; git -C "$R" symbolic-ref HEAD refs/heads/main; }
   cd "$R" && git config user.email t@t && git config user.name t && echo x > a && git add a && git commit -qm init ) >/dev/null 2>&1
@@ -124,3 +125,24 @@ awk -F'\t' '/^#/ { print; next } { print $1 "\t" $2 "\t" $3 "\t" $4 }' "$R/ops/K
 P | cut -f1,3,4 | head -4
 P --set drain=on
 P --frobnicate
+
+echo '== 9. --seed fills owners: from the registered projects, and leaves a repo-set one =='
+# Its own fixture: a KEYS.tsv WITH an owners machine row (the fixture KEYS.tsv above has none, so cases 1-8
+# never see it), and a registry of four projects — https and scp origins, a repeat, one without origin.
+R9="$F/r9"; G="$F/reg"; mkdir -p "$R9/ops" "$G/repos"
+( git init -q "$R9"; cd "$R9" && git config user.email t@t && git config user.name t && echo x > a && git add a && git commit -qm init ) >/dev/null 2>&1
+{ printf 'voice\t1\tstandard\tcost\t\tmachine\n'; printf 'owners\t1\t\tcost\t\tmachine\n'; } > "$R9/ops/KEYS.tsv"
+i=0
+for u in https://github.com/alice/one.git git@github.com:bob/two.git https://gitlab.example/alice/three ''; do
+  i=$((i + 1)); git init -q "$F/p$i"
+  [ -z "$u" ] || git -C "$F/p$i" remote add origin "$u"
+  printf '%s\n' "$F/p$i" > "$G/repos/$i"
+done
+printf '%s\n' "$F/gone" > "$G/repos/9"
+M9="$F/m9/preferences"
+S9() { ( cd "$R9" && POLARIS_PREFS="$M9" POLARIS_AWAKE_HOME="$G" bash "$W/kit/ops/polaris" prefs --seed 2>&1; echo "rc=$?" ) | sed "s#$F#<F>#g"; }
+show9() { tr -d '\r' < "$M9" | grep -v '^#' | sed 's/^/   | /'; }
+printf 'voice: technical\n' > "$R9/ops/CONVENTIONS.md"
+S9; show9
+rm -f "$M9"; printf 'voice: technical\nowners: carol\n' > "$R9/ops/CONVENTIONS.md"
+S9; show9

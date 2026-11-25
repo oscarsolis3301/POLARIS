@@ -41,6 +41,10 @@ agent: the human's own file kept
 rc 0
 agent: a third install changes nothing
 agent: no output line names it
+--- 7. the update's machine refresh writes nothing to settings.json, agent or human (shared-kit § 11)
+CLAUDECODE=1: settings.json byte-identical
+CLAUDECODE=<empty>: settings.json byte-identical
+keep-awake script: refreshed to the kit's bytes
 --- the install output gains no line
 guard refreshed vs nothing armed: same line count
 no updater vs updater: same line count

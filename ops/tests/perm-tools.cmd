@@ -25,10 +25,12 @@ for pair in "settings.json|$S" "bootstrap.py PERMS|$B"; do
   done
   printf '%s:%s → %s of 7\n' "$label" "$found" "$n"
 done
+# bootstrap.py: only the PERMS list counts — --setup's dispatcher matcher `Agent|ExitPlanMode` (hook-dispatch.md § 3)
+# is a hook matcher, not a rule.
 # settings.json: only its permission RULES count — the presence hook (away.md § 2.1) must name both tools as matchers, and a matcher is not a rule.
 printf 'gates absent (ExitPlanMode AskUserQuestion): settings.json %s · bootstrap.py %s\n' \
   "$(python -c 'import json,sys; p=json.load(open(sys.argv[1],encoding="utf-8")).get("permissions") or {}; print(sum(1 for v in p.values() if isinstance(v,list) for r in v if isinstance(r,str) for g in ("ExitPlanMode","AskUserQuestion") if g in r))' "$S" | tr -d '\r')" \
-  "$(( $(grep -c 'ExitPlanMode' "$B") + $(grep -c 'AskUserQuestion' "$B") ))"
+  "$(awk '/^PERMS = \[/ { f = 1 } f { n += gsub(/ExitPlanMode|AskUserQuestion/, "") } f && /^\]/ { exit } END { print n + 0 }' "$B")"
 printf 'union blocks intact: bootstrap.py %s · admin.sh %s\n' \
   "$(grep -c 'added = \[rule for rule in PERMS' "$B")" \
   "$(grep -c 'for rule in rules:' kit/ops/lib/admin.sh)"

@@ -252,11 +252,12 @@ refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with wh
   done
 
   # The keep-awake hook and its presser ride the same tarball, and the MACHINE is where they live:
-  # one keep-awake owner per box, hooked into ~/.claude/settings.json (ops/contracts/keep-awake.md).
-  # `update` has to arm them too, or a box armed before 6.2.0 never gets them — the same "update the
-  # repo, update the machine" reasoning as the cached kit above. Same two-path source order (kit/
-  # first, root fallback), and SILENT: fails open, and the hook's own stdout would land in the
-  # quiet-line count above the ▶ NEXT epilogue.
+  # one keep-awake owner per box (ops/contracts/keep-awake.md). `update` refreshes the two FILES, so a
+  # box whose hooks are registered runs the new script — the same "update the repo, update the
+  # machine" reasoning as the cached kit above. Same two-path source order (kit/ first, root
+  # fallback), SILENT and fail-open. It never REGISTERS them: an update is agent-run as often as not,
+  # and a hook entry in ~/.claude/settings.json is the owner's grant (shared-kit.md § 11) — the
+  # registration is `python polaris-v5.zip --setup`, run in the owner's own terminal.
   local awake="$POLARIS_HOME"
   if mkdir -p "$awake" 2>/dev/null; then
     for a in awake-hook.sh awake-press.ps1; do
@@ -264,10 +265,7 @@ refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with wh
         [ -f "$s" ] && { cp "$s" "$awake/$a" 2>/dev/null; break; }
       done
     done
-    if [ -f "$awake/awake-hook.sh" ]; then
-      chmod +x "$awake/awake-hook.sh" 2>/dev/null || true
-      bash "$awake/awake-hook.sh" install >/dev/null 2>&1 || true
-    fi
+    [ -f "$awake/awake-hook.sh" ] && chmod +x "$awake/awake-hook.sh" 2>/dev/null || true
   fi
 
   # The zip cannot be rebuilt here (Git Bash ships no `zip`, and ops/pack.py is never shipped), so
@@ -307,10 +305,10 @@ refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with wh
     note "  Re-run  ops/polaris update  shortly, or:  python polaris-v5.zip --claude-skill"
   fi
 
-  # No permission rules or auto-mode keys are written into Claude Code's own settings
-  # here (shared-kit.md § 11, 6.22.0): before this, every update armed `defaultMode: auto`, the two
-  # auto-mode keys and the repo's read-only rules in ~/.claude/settings.json — an agent running
-  # `update` granted itself permissions. Granting them is the owner's own step: python polaris-v5.zip --setup.
+  # Nothing in this function writes Claude Code's own settings.json, in either mode (shared-kit.md
+  # § 11): no permission rule, no auto-mode key (gone since 6.22.0 — every update used to arm
+  # `defaultMode: auto` and the repo's read-only rules there, an agent granting itself permissions),
+  # and since 7.0.0 no hook entry. Granting them is the owner's own step: python polaris-v5.zip --setup.
 }
 
 _speed_ev() { # _speed_ev report|plan — the landing and lanes read of `speed` (minutes.md § 5.3, hour.md § 4):
