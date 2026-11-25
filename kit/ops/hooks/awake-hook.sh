@@ -396,6 +396,12 @@ case "$AH_SUB" in
     ah_register_repo "${1:-}"; ah_spawn; exit 0;;
   daemon)  ah_daemon; exit 0;;
   tick)    ah_tick; [ "$AH_TEST" = 1 ] && printf 'tick: %s %s\n' "$AH_VERDICT" "$AH_WORD"; exit 0;;
-  install) ah_install; exit 0;;
+  install) # registering hooks is the owner's grant (shared-kit.md § 11): an agent is refused, rc 2
+    if [ -n "${CLAUDECODE:-}" ]; then
+      printf '⛔ needs you: python "%s" --setup in your own terminal (permissions and hooks are yours to grant)\n' \
+        "${HOME:-~}/.claude/skills/polaris-install/polaris-v5.zip" >&2
+      exit 2
+    fi
+    ah_install; exit 0;;
   *)       printf 'usage: awake-hook.sh [--test] start|busy|idle|end|ensure|daemon|tick|install\n' >&2; exit 0;;
 esac

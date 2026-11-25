@@ -14,6 +14,8 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/mp/ops" "$T/vend/ops/lib" "$T/none" "$T/fake/ops" "$T/home"
 cp kit/ops/launcher "$T/mp/ops/polaris"; cp kit/ops/launcher "$T/vend/ops/polaris"
 { cat kit/ops/launcher; printf '#'; } > "$T/fake/ops/polaris"        # one byte more than the launcher
+mkdir -p "$T/mp/sub/ops" "$T/mp/gsub/ops" "$T/mp/plain"           # nested: a fake copy, a genuine one, none
+cp "$T/fake/ops/polaris" "$T/mp/sub/ops/polaris"; cp kit/ops/launcher "$T/mp/gsub/ops/polaris"
 unset DP_TRUST CLAUDE_EFFORT
 
 echo '== (a) replay: every guard battery through dispatch.sh --as <guard> =='
@@ -90,6 +92,18 @@ mx 'not-genuine launcher + mixed allow' fake "$(pj op fake Bash 'git log -1 && b
 mx 'nothing' mp "$(pj op mp Bash 'rm x')"
 mx 'trust tier consulted (allows rm)' mp "$(pj op mp Bash 'rm x')" "$T/allow-all.sh"
 mx 'trust tier missing: the kit copy' mp "$(pj op mp Bash 'rm x')" "$T/no-such-trust.sh"
+# A `cd` moves where a relative `bash ops/polaris` lands: every target's copy must be genuine too (§ 5).
+mx 'cd into a nested fake launcher' mp "$(pj op mp Bash 'cd sub && bash ops/polaris find x')"
+mx 'subshell cd into a nested fake launcher' mp "$(pj op mp Bash '(cd sub && bash ops/polaris status)')"
+mx 'pushd into a nested fake launcher' mp "$(pj op mp Bash 'pushd sub && bash ops/polaris status')"
+mx 'second line cd into a nested fake' mp "$(pj op mp Bash 'git log -1\ncd sub && bash ops/polaris find x')"
+mx 'cd then cd into a nested fake' mp "$(pj op mp Bash 'cd plain && cd ../sub && bash ops/polaris find x')"
+mx 'cd into a nested genuine launcher' mp "$(pj op mp Bash 'cd gsub && bash ops/polaris find x')"
+mx 'cd into a dir with no launcher' mp "$(pj op mp Bash 'cd plain && bash ops/polaris find x')"
+mx 'cd target unresolvable (quoted)' mp "$(pj op mp Bash 'cd \"gsub\" && bash ops/polaris find x')"
+mx 'cd target unresolvable (dash)' mp "$(pj op mp Bash 'cd - && bash ops/polaris find x')"
+mx 'bare cd' mp "$(pj op mp Bash 'cd && bash ops/polaris find x')"
+mx 'cd into a nested fake + other allow' mp "$(pj op mp Bash 'cd sub && git log -1')"
 dsp fake PreToolUse "$(pj op fake Bash 'bash ops/polaris find x')"
 r="${DO#*permissionDecisionReason\":\"}"; echo "ask reason: ${r%%\"*}"
 # model-guard's pending effort note rides INSIDE the one verdict object (two objects would not parse)

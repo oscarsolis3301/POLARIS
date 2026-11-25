@@ -1301,7 +1301,7 @@ drill_awake() {
         '      {"hooks": [{"type": "command", "timeout": 99, "command": "\"bash\" \"/old/polaris/awake-hook.sh\" idle 2>/dev/null || true"}]}' \
         '    ]' '  }' '}' > "$T/aw/home/.claude/settings.json"
       aw_sj="$T/aw/home/.claude/settings.json"
-      HOME="$T/aw/home" bash "$aw_hook" install > "$T/aw/inst.out" 2>&1 || { cat "$T/aw/inst.out"; echo "AWAKE INSTALL RC FAIL"; exit 1; }
+      CLAUDECODE= HOME="$T/aw/home" bash "$aw_hook" install > "$T/aw/inst.out" 2>&1 || { cat "$T/aw/inst.out"; echo "AWAKE INSTALL RC FAIL"; exit 1; }
       grep -q 'foreign-stop' "$aw_sj" || { cat "$aw_sj"; echo "AWAKE INSTALL FOREIGN FAIL (someone else's Stop hook is theirs — never rewritten)"; exit 1; }
       grep -q '/old/polaris/awake-hook.sh' "$aw_sj" && { cat "$aw_sj"; echo "AWAKE INSTALL STALE FAIL (an entry running OUR script is replaced wholesale)"; exit 1; }
       [ "$(grep -c 'awake-hook' "$aw_sj")" = 4 ] || { cat "$aw_sj"; echo "AWAKE INSTALL COUNT FAIL (exactly four entries, never a fifth on re-run)"; exit 1; }
