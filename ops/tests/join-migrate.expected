@@ -1,0 +1,159 @@
+== join: a fresh repo (a CLAUDE.md of its own, a .gitignore with no last newline) ==
+   rc=0
+   ✅ joined this computer's POLARIS kit (<ver>) — the project keeps only ops/polaris and its state
+   installed · fresh
+   lines: 2 · last: installed · fresh
+   INIT kickoff phrase: none
+   repo files written:
+   + .git/hooks/commit-msg
+   + .gitattributes
+   + .gitignore
+   + CLAUDE.md
+   + ops/polaris
+   machine files written:
+   + polaris/awake/repos/<cksum>
+   registry entry: install.sh formula, names the repo
+   .claude/: none
+   commit: none
+   ops/polaris = the store kit's launcher, byte-identical
+   ops/polaris: executable
+   commit-msg hook is POLARIS's: 1
+   CLAUDE.md:
+   | <!-- POLARIS:BEGIN pointer -->
+   | This project runs POLARIS from the kit on this computer; the protocol arrives at session start. Missing? Run `bash ops/polaris router` and follow it.
+   | <!-- POLARIS:END -->
+   | 
+   | ---
+   | 
+   | # mine
+   | 
+   | my rule
+   .gitattributes:
+   | ops/polaris text eol=lf
+   | ops/VERSION text eol=lf
+   | *.sh text eol=lf
+   | ops/hooks/commit-msg text eol=lf
+   | docs/screens/**/*.png -text
+   .gitignore:
+   | node_modules/
+   | polaris-v5/
+   | polaris-v5.zip
+   | .polaris/
+   install.sh: never run
+== join: the launcher answers ==
+   version: rc=0 · ✅ POLARIS v<ver>  ·  board protocol v5
+   status: rc=0 · POLARIS board — base: main · claim: local-lock
+   role BUILDER: rc=0 · # ROLE: BUILDER — claim one task, finish it, prove it
+   doc PROTOCOL: rc=0 · # POLARIS v5 — PROTOCOL reference
+   role BUILDER = the store kit's roles/BUILDER.md, byte-identical
+   .claude/ after the launcher ran: none
+   settings files outside the kit store: 0
+== join: a live board, a CLAUDE.md that carries a POLARIS block ==
+   rc=0
+   ✅ joined this computer's POLARIS kit (<ver>) — the project keeps only ops/polaris and its state
+   installed · live-board
+   | top
+   | <!-- POLARIS:BEGIN pointer -->
+   | This project runs POLARIS from the kit on this computer; the protocol arrives at session start. Missing? Run `bash ops/polaris router` and follow it.
+   | <!-- POLARIS:END -->
+   | below
+== join: refusals ==
+-- not a git repository: rc=1
+   ⛔ join: <F>/plain is not a git repository
+   wrote nothing: yes
+-- a linked worktree: rc=1
+   ⛔ join: <F>/linked is a linked worktree — run join in the primary checkout
+   wrote nothing: yes
+-- already joined: rc=1
+   ⛔ join: <F>/fresh already runs POLARIS (machine)
+   wrote nothing: yes
+-- already vendored: rc=1
+   ⛔ join: <F>/vend0 already runs POLARIS (vendored)
+   wrote nothing: yes
+-- the POLARIS repo: rc=1
+   ⛔ join: <F>/polaris is the POLARIS repo — it stays vendored (its ops/ is the update channel)
+   wrote nothing: yes
+-- no kit on this machine: rc=1
+   ⛔ join: this machine has no POLARIS kit — run: python polaris-v5.zip --setup
+   wrote nothing: yes
+== migrate: the vendored fixture ==
+   install rc=0
+   before: POLARIS hook entries: yes · outputStyle: polaris · foreign hook: yes · Bash(make:*) allowed: yes
+   tracked before: ops/lib/core.sh
+   tracked before: ops/hooks/ownership-guard.sh
+   tracked before: ops/VERSION
+   tracked before: ops/KEYS.tsv
+   tracked before: .claude/skills/polaris/SKILL.md
+   tracked before: .claude/output-styles/polaris.md
+== migrate: refusals ==
+-- a busy board: rc=1
+   ⛔ migrate: active: 1 — finish or park the work first
+   wrote nothing: yes
+-- the POLARIS repo: rc=1
+   ⛔ migrate: the POLARIS repo stays vendored — its ops/ is the update channel
+   wrote nothing: yes
+-- no kit on this machine: rc=1
+   ⛔ migrate: this machine has no POLARIS kit — run: python polaris-v5.zip --setup
+   wrote nothing: yes
+-- an older kit: rc=1
+   ⛔ migrate: this machine's kit (0.0.1) is older than this project's (<ver>) — update the machine first
+   wrote nothing: yes
+-- kit files with uncommitted changes: rc=1
+   ⛔ migrate: uncommitted changes inside the kit's files (ops/PROTOCOL.md) — commit or park them first
+   wrote nothing: yes
+-- a staged index: rc=1
+   ⛔ migrate: changes are staged in the index — commit or unstage them first
+   wrote nothing: yes
+   after every refusal: HEAD unchanged, tree clean
+== migrate ==
+   rc=0
+   ✅ migrated to this computer's POLARIS kit (<ver>) — one commit, <sha>; undo: git revert <sha>
+      .claude/settings.json: POLARIS's hook entries and output style removed (permission rules kept)
+   ▶ yours: bash ops/polaris prefs --yield
+   new commits: 1 · subject: chore(polaris): migrate to the machine kit (<ver>)
+   tree: clean
+   tracked after:
+   | .claude/settings.json
+   | .claude/skills/mine/SKILL.md
+   | .gitattributes
+   | .gitignore
+   | CLAUDE.md
+   | a
+   | ops/CONVENTIONS.md
+   | ops/DESIGN.md
+   | ops/MAP.md
+   | ops/ROADMAP.md
+   | ops/RULES.tsv
+   | ops/SURFACES.tsv
+   | ops/contracts/c.md
+   | ops/polaris
+   | ops/tests/t.cmd
+   ops/polaris = the store kit's launcher, byte-identical
+   ops/polaris mode: 100755
+   after: POLARIS hook entries: none · outputStyle: None · hooks left: bash tools/my-hook.sh
+   after: permissions: the same as before
+   after: every other key: as before
+   CLAUDE.md:
+   | <!-- POLARIS:BEGIN pointer -->
+   | This project runs POLARIS from the kit on this computer; the protocol arrives at session start. Missing? Run `bash ops/polaris router` and follow it.
+   | <!-- POLARIS:END -->
+   | 
+   | ---
+   | 
+   | # mine
+   | 
+   | my rule
+   kit-seen: <ver>
+   machine files written:
+   registry entry: present, names the repo
+   version through the launcher: rc=0 · ✅ POLARIS v<ver>  ·  board protocol v5
+-- already joined: rc=1
+   ⛔ migrate: <F>/vend already runs the machine kit
+   wrote nothing: yes
+== git revert of the migrate commit ==
+   revert rc=0
+   git diff <before> HEAD: empty
+   tree: identical to <before>
+   index: every mode and blob as before
+   tree: clean
+   every tracked file on disk: the <before> bytes

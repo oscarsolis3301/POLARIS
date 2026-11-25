@@ -123,8 +123,28 @@ _prefs_unset() { # --unset <k> … — remove each key's live line(s); temp file
   done
 }
 
-_prefs_seed() { # --seed — create the machine file from this repo's machine/seed lines
-  local m k v n=0 skipped=""
+_prefs_owners() { # the `origin` owners of the registered projects, comma-joined, first seen first
+  # (shared-kit.md § 9). Owner = the url's path segment before the repo name, for both
+  # https://host/<owner>/<repo>(.git) and git@host:<owner>/<repo>(.git). The registry is
+  # $POLARIS_HOME/awake/repos/* (POLARIS_AWAKE_HOME is the drills' seam), one project path per file.
+  local reg="${POLARIS_AWAKE_HOME:-$POLARIS_HOME/awake}/repos" f p u o list=","
+  for f in "$reg"/*; do
+    [ -f "$f" ] || continue
+    p=""; { read -r p < "$f" || :; } 2>/dev/null; p="${p%$'\r'}"
+    [ -n "$p" ] && [ -d "$p" ] || continue
+    u="$(git -C "$p" config --get remote.origin.url 2>/dev/null)" || continue
+    u="${u%$'\r'}"; u="${u%/}"; u="${u%.git}"; u="${u//:/\/}"
+    case "$u" in */*/*) ;; *) continue;; esac
+    o="${u%/*}"; o="${o##*/}"
+    case "$o" in ''|*[!A-Za-z0-9._-]*) continue;; esac
+    case "$list" in *",$o,"*) ;; *) list="$list$o,";; esac
+  done
+  list="${list#,}"; printf '%s' "${list%,}"
+}
+
+_prefs_seed() { # --seed — create the machine file from this repo's machine/seed lines; `owners:` from
+  # the registered projects' origins when the repo's lines left it unset (shared-kit.md § 9)
+  local m k v n=0 skipped="" own=""
   _prefs_off_refuse
   m="$(_prefs_path)"
   [ -e "$m" ] && die "prefs: $m exists — --seed only creates it; change one key with --set"
@@ -133,7 +153,7 @@ _prefs_seed() { # --seed — create the machine file from this repo's machine/se
     [ -n "$k" ] || continue
     if _prefs_agent && _prefs_dial "$k"; then skipped="$skipped${skipped:+ · }$k"; continue; fi
     prefs_put "$k" "$v" || die "prefs: could not write $k into $m"
-    n=$((n + 1))
+    n=$((n + 1)); [ "$k" = owners ] && own=1
   done <<EOF
 $(awk "$_PREFS_VAL"'
   FILENAME == ARGV[1] { sub(/\r$/, ""); if ($0 ~ /^#/) next
@@ -142,6 +162,11 @@ $(awk "$_PREFS_VAL"'
     if ((k in E) && !(k in R)) R[k] = val(substr($0, p + 1)) }
   END { for (i = 1; i <= c; i++) if (R[O[i]] != "") print O[i] "\t" R[O[i]] }' "$(kit_file KEYS.tsv)" "$CONV")
 EOF
+  # prefs_put refuses a key KEYS.tsv has no machine row for, so a kit without `owners` writes nothing
+  if [ -z "$own" ]; then
+    v="$(_prefs_owners)"
+    [ -n "$v" ] && prefs_put owners "$v" && n=$((n + 1))
+  fi
   [ -n "$skipped" ] && note "prefs: skipped the autonomy dial ($skipped) — no agent may set it; set it yourself from a terminal outside Claude Code"
   say "prefs: seeded $n key(s) into $m"
 }

@@ -14,6 +14,7 @@
 # install) → nothing happens. Then: the install output gains no line — every first install prints
 # the same number of lines whether or not anything was re-armed. Case 6 (walk-away § 3.2, T-320): the
 # kit's agent file lands in <repo>/.claude/agents, replaced on update, a human's own file kept, silently.
+# Case 7 (shared-kit § 11, T-350): the update's refresh_machine_kit leaves settings.json byte-identical.
 #
 # HERMETIC: one mktemp -d. Every case gets its OWN fake home with HOME and USERPROFILE pointed at it
 # together (Python's expanduser reads USERPROFILE on Windows, so a HOME-only fake would reach the real
@@ -121,9 +122,26 @@ name: mine
   grep -qiE 'polaris-runner|agents/' "$H.out" "$H.err" && echo 'OUTPUT NAMES THE AGENT' || echo 'agent: no output line names it'
 }
 
-for n in 1 3 4 5 6; do ( "c$n" ) > "$FIX/report$n" 2>/dev/null & done
+c7() { home 7
+  echo '--- 7. the update'"'"'s machine refresh writes nothing to settings.json, agent or human (shared-kit § 11)'
+  # refresh_machine_kit is what `polaris update` runs after the repo install. It refreshes the machine's
+  # FILES — the installer skill, the voice, the keep-awake scripts — and since 7.0.0 registers no hook:
+  # the keep-awake registration is --setup's. No zip: URL, so it stops before any download.
+  printf '{\n  "hooks": {}\n}\n' > "$SJ"; cp "$SJ" "$FIX/sj7"
+  for cc in 1 ''; do
+    ( export HOME="$H" USERPROFILE="$H" CLAUDECODE="$cc"; unset CLAUDE_CONFIG_DIR
+      . "$KIT_DIR/ops/lib/core.sh"; . "$KIT_DIR/ops/lib/admin.sh"
+      refresh_machine_kit "$KIT_DIR/.." "" ) >/dev/null 2>&1
+    printf 'CLAUDECODE=%s: ' "${cc:-<empty>}"
+    if cmp -s "$SJ" "$FIX/sj7"; then echo 'settings.json byte-identical'; else echo 'settings.json REWRITTEN'; fi
+  done
+  cmp -s "$H/.claude/polaris/awake-hook.sh" "$KIT_DIR/ops/hooks/awake-hook.sh" \
+    && echo "keep-awake script: refreshed to the kit's bytes" || echo 'keep-awake script: NOT REFRESHED'
+}
+
+for n in 1 3 4 5 6 7; do ( "c$n" ) > "$FIX/report$n" 2>/dev/null & done
 wait
-for n in 1 3 4 5 6; do cat "$FIX/report$n"; done
+for n in 1 3 4 5 6 7; do cat "$FIX/report$n"; done
 
 echo '--- the install output gains no line'
 # Every case's FIRST install met a fresh repo, so each printed the same lines whatever was re-armed:

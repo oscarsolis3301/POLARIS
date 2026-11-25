@@ -27,6 +27,12 @@
 #               plus two hooks the human added — one of them sharing our basename — is merged:
 #               our entry is replaced with the kit's shipped fields, theirs come out untouched,
 #               and a second install changes not one byte
+#   setup       `--setup` (install-parity v2): refused under CLAUDECODE=1 with settings.json
+#               byte-identical; in a fake home it stores the kit as `current`, copies the shim and
+#               the trust tier, registers one dispatcher entry per event, folds the old model-guard
+#               entries, keeps keep-awake's and the human's, and a second run changes not one byte
+#   agent-install  a plain install under CLAUDECODE=1 leaves ~/.claude/settings.json byte-identical
+#               and says `⛔ needs you` once; `polaris awake install` refuses the same way
 #   uninstall   `polaris uninstall --yes` removes ops/, the managed block and the guard hook,
 #               keeps the user's own CLAUDE.md content and hooks
 #   repo-clean  this repo is left byte-identical (everything ran in mktemp dirs)
@@ -390,6 +396,101 @@ PYEOF
   ! grep -q 'updated ops/hooks/' "$WORK/hookmerge/.polaris/install.log"
 }
 
+_fake_home() { # _fake_home <dir> <cmd…> — run <cmd> with every home seam inside <dir>, never the real ~/.claude
+  local h="$1"; shift
+  env HOME="$h" USERPROFILE="$h" CLAUDE_CONFIG_DIR="$h/.claude" POLARIS_AWAKE_HOME="$h/.claude/polaris/awake" \
+    PYTHONIOENCODING=utf-8 "$@"
+}
+
+_drill_setup() {
+  # install-parity v2 / shared-kit.md § 10: --setup is the ONE writer of Claude Code's own settings,
+  # and only the owner runs it. The fake machine is one an older kit armed: the user-level model
+  # guard registered (the dispatcher folds it), keep-awake registered, and one hook of the human's.
+  H="$WORK/setuphome"; C="$H/.claude"; PH="$C/polaris"
+  mkdir -p "$PH"
+  cat > "$C/settings.json" <<JSONEOF
+{"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "timeout": 5, "command": "\"/bin/bash\" \"$PH/model-guard.sh\""}]},
+  {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo MY_OWN_HOOK"}]}],
+ "SessionStart": [{"hooks": [{"type": "command", "timeout": 5, "command": "\"/bin/bash\" \"$PH/model-guard.sh\""}]},
+  {"hooks": [{"type": "command", "timeout": 5, "command": "\"/bin/bash\" \"$PH/awake-hook.sh\" start 2>/dev/null || true"}]}]}}
+JSONEOF
+  cp "$C/settings.json" "$WORK/setup.pre"
+  # 1. run by an agent: refused, rc 2, nothing written anywhere
+  rc=0; _fake_home "$H" CLAUDECODE=1 "$PY" "$ZIP" --setup > "$WORK/setup0.out" 2>&1 || rc=$?
+  cat "$WORK/setup0.out"
+  [ "$rc" = 2 ]
+  grep -q -- "--setup changes Claude Code's own settings — run it in your own terminal, not through an agent" "$WORK/setup0.out"
+  cmp "$WORK/setup.pre" "$C/settings.json"
+  # one test per line: set -e skips a failure anywhere but last in an && list, and after a `!`
+  [ ! -e "$PH/kit" ]
+  [ ! -e "$PH/hook" ]
+  [ ! -e "$PH/trust" ]
+  # 2. the owner: the store, the shim, the trust tier, the registration
+  _fake_home "$H" CLAUDECODE= "$PY" "$ZIP" --setup > "$WORK/setup1.out" 2>&1
+  cat "$WORK/setup1.out"
+  v="$(sed -n 's/^version: *//p' "$KIT/ops/VERSION" | tr -d '\r')"
+  [ "$(tr -d '\r' < "$PH/kit/current")" = "$v" ]
+  [ -f "$PH/kit/$v/.stored" ]
+  [ -f "$PH/kit/$v/ops/polaris" ]
+  [ -f "$PH/kit/$v/polaris-v5.zip" ]
+  cmp "$PH/hook" "$KIT/ops/hooks/shim.sh"
+  cmp "$PH/trust/readonly-allow.sh" "$KIT/ops/hooks/readonly-allow.sh"
+  "$PY" - "$C/settings.json" <<'PYEOF'
+import json, re, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+hooks = d["hooks"]
+cmds = lambda e: [str(h.get("command", "")).replace("\\", "/") for h in e.get("hooks", [])]
+EVENTS = ("PreToolUse PostToolUse SessionStart PreModelSwitch PostModelSwitch UserPromptSubmit Stop "
+          "SubagentStop StopFailure PermissionRequest PermissionDenied").split()
+for ev in EVENTS:
+    ours = [e for e in hooks.get(ev, []) if any(re.search(r'polaris/hook" %s$' % ev, c) for c in cmds(e))]
+    if len(ours) != 1:
+        sys.exit("%s: %d dispatcher entries, want 1" % (ev, len(ours)))
+if hooks["PreToolUse"][0].get("matcher") != "*" or "polaris/hook" not in cmds(hooks["PreToolUse"][0])[0]:
+    sys.exit("PreToolUse: the dispatcher is not first with matcher *")
+left = [c for es in hooks.values() for e in es for c in cmds(e) if "polaris/model-guard.sh" in c]
+if left:
+    sys.exit("a folded model-guard entry survived: %s" % left)
+for ev in ("SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"):
+    n = sum(1 for e in hooks.get(ev, []) for c in cmds(e) if "polaris/awake-hook.sh" in c)
+    if n != 1:
+        sys.exit("%s: %d keep-awake entries, want 1" % (ev, n))
+if not any("MY_OWN_HOOK" in c for e in hooks["PreToolUse"] for c in cmds(e)):
+    sys.exit("the human's own hook was lost")
+if "Bash(bash ops/polaris:*)" not in d.get("permissions", {}).get("allow", []):
+    sys.exit("the --claude-skill half of --setup did not run (no permission rules)")
+PYEOF
+  cp "$C/settings.json" "$WORK/setup.after1"
+  ( cd "$C" && find . -type f | sort | xargs cksum ) > "$WORK/setup.tree1"
+  # 3. a second run, and one from the stored zip itself: not one byte changes
+  _fake_home "$H" CLAUDECODE= "$PY" "$ZIP" --setup > "$WORK/setup2.out" 2>&1
+  _fake_home "$H" CLAUDECODE= "$PY" "$PH/kit/$v/polaris-v5.zip" --setup > "$WORK/setup3.out" 2>&1
+  cmp "$WORK/setup.after1" "$C/settings.json"
+  ( cd "$C" && find . -type f | sort | xargs cksum ) | cmp "$WORK/setup.tree1" -
+}
+
+_drill_agent_install() {
+  # shared-kit.md § 11: an install an agent runs writes no permission, mode or hook — it arms the
+  # rest of the machine, says `⛔ needs you` ONCE, and the routing marker still lands.
+  new_target "$WORK/agentinst"
+  H="$WORK/agenthome"; mkdir -p "$H/.claude"
+  printf '{"permissions":{"allow":[]}}\n' > "$H/.claude/settings.json"
+  cp "$H/.claude/settings.json" "$WORK/agent.pre"
+  ( cd "$WORK/agentinst" && _fake_home "$H" CLAUDECODE=1 "$PY" "$ZIP" ) > "$WORK/agent1.out" 2>&1
+  cat "$WORK/agent1.out"
+  grep -q 'installed · fresh' "$WORK/agent1.out"
+  [ "$(grep -c '⛔ needs you: python .* --setup in your own terminal (permissions and hooks are yours to grant)' "$WORK/agent1.out")" = 1 ]
+  if grep -q 'permissions.allow' "$WORK/agent1.out"; then exit 1; fi   # no rule block handed to the agent
+  cmp "$WORK/agent.pre" "$H/.claude/settings.json"
+  [ -f "$H/.claude/skills/polaris-install/polaris-v5.zip" ]   # the rest of the arm still happened
+  # the keep-awake registration refuses the same way, from the installed project
+  rc=0; ( cd "$WORK/agentinst" && _fake_home "$H" CLAUDECODE=1 bash ops/polaris awake install ) > "$WORK/agent2.out" 2>&1 || rc=$?
+  cat "$WORK/agent2.out"
+  [ "$rc" = 2 ]
+  grep -q '⛔ needs you:' "$WORK/agent2.out"
+  cmp "$WORK/agent.pre" "$H/.claude/settings.json"
+}
+
 drill_uninstall() {
   [ -f "$T_FRESH/ops/polaris" ]      # depends on drill fresh
   ( cd "$T_FRESH" && bash ops/polaris uninstall --yes ) > "$WORK/uninstall.out"
@@ -424,6 +525,9 @@ drill old-client  drill_old_client
 drill live-board  drill_live_board
 # Builds its own target, like the heal drills — independent of every other drill.
 drill hookmerge   drill_hookmerge
+# Both build their own fake home and target — independent of every other drill.
+drill setup         _drill_setup
+drill agent-install _drill_agent_install
 drill uninstall   drill_uninstall
 drill repo-clean  drill_repo_clean
 

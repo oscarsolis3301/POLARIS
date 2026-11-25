@@ -98,3 +98,10 @@ awk -F'\t' '!/^#/ && NF > 0 && $6 == "machine" { print $1 }' kit/ops/KEYS.tsv | 
 echo "literal: $(grep -c . "$F/lit") · machine rows: $(grep -c . "$F/rows") · same: $(cmp -s "$F/lit" "$F/rows" && echo yes || echo no)"
 echo "seed rows: $(awk -F'\t' '!/^#/ && NF > 0 && $6 == "seed" { printf "%s%s", sep, $1; sep = " " }' kit/ops/KEYS.tsv)"
 echo "rows not 6 fields: $(awk -F'\t' '!/^#/ && NF > 0 && NF != 6' kit/ops/KEYS.tsv | grep -c . || true)"
+
+echo '== 10. the zero-touch keys (shared-kit.md § 9) ride the machine layer =='
+printf 'auto_setup: auto\nowners: me,them\n' > "$F/zt"
+printf 'voice: technical\n' > "$F/conv"
+POLARIS_PREFS="$F/zt" CONV="$F/conv" c auto_setup ask
+POLARIS_PREFS="$F/zt" CONV="$F/conv" c owners ''
+POLARIS_PREFS= CONV="$F/conv" c auto_setup ask

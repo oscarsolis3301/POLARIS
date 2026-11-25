@@ -29,6 +29,7 @@ kit/README.md	heading	POLARIS v5 — parallel-sprint protocol
 kit/README.md	heading	The one idea
 kit/README.md	heading	The pieces
 kit/ops/KEYS.tsv	key	adhd
+kit/ops/KEYS.tsv	key	auto_setup
 kit/ops/KEYS.tsv	key	auto_update
 kit/ops/KEYS.tsv	key	autolaunch
 kit/ops/KEYS.tsv	key	autolaunch_max
@@ -61,6 +62,7 @@ kit/ops/KEYS.tsv	key	lint
 kit/ops/KEYS.tsv	key	model_cheap
 kit/ops/KEYS.tsv	key	model_mid
 kit/ops/KEYS.tsv	key	model_runner
+kit/ops/KEYS.tsv	key	owners
 kit/ops/KEYS.tsv	key	model_strong
 kit/ops/KEYS.tsv	key	notify
 kit/ops/KEYS.tsv	key	plan_gate
@@ -473,6 +475,8 @@ kit/ops/lib/integrate.sh	fn	seal_burndown_row
 kit/ops/lib/integrate.sh	fn	seal_sync
 kit/ops/lib/integrate.sh	fn	suite_stamp_carry
 kit/ops/lib/integrate.sh	fn	tag_push_recovery_note
+kit/ops/lib/join.sh	fn	cmd_join
+kit/ops/lib/join.sh	fn	cmd_migrate
 kit/ops/lib/knowledge.sh	fn	all_sprint_numbers
 kit/ops/lib/knowledge.sh	fn	board_changed_touch
 kit/ops/lib/knowledge.sh	fn	brain_board

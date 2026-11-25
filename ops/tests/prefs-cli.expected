@@ -151,3 +151,12 @@ voice	default	repo
 rc=1
 ⛔ prefs: unknown form '--frobnicate' — prefs [--set <key>=<value>… | --unset <key>… | --seed | --yield]
 rc=1
+== 9. --seed fills owners: from the registered projects, and leaves a repo-set one ==
+✅ prefs: seeded 2 key(s) into <F>/m9/preferences
+rc=0
+   | voice: technical
+   | owners: alice,bob
+✅ prefs: seeded 2 key(s) into <F>/m9/preferences
+rc=0
+   | voice: technical
+   | owners: carol

@@ -30,7 +30,7 @@ cfg() { # cfg <key> <default>  — repo ops/CONVENTIONS.md > this machine's pref
     function val(s) { sub(/\r$/,"",s); sub(/^[ \t]*/,"",s); if (s ~ /^#/) return ""
                       sub(/[ \t]#.*$/,"",s); sub(/[ \t]*$/,"",s); return s }
     BEGIN { mf = two ? ARGV[ARGC-1] : ""
-            ok = index(" voice adhd autolaunch autolaunch_max builders model_strong model_mid model_cheap effort_strong effort_mid effort_cheap autonomy plan_gate builder_questions evolve_apply drain drain_slices run_max_tasks run_max_minutes run_max_agents run_fix_waves qa_scout qa_parallel landing handover express auto_update notify heavy_slots target_minutes runner model_runner stall_minutes pulse_minutes reentry reentry_hours reentry_max away_gate bg_retries ", " " k " ")
+            ok = index(" voice adhd autolaunch autolaunch_max builders model_strong model_mid model_cheap effort_strong effort_mid effort_cheap autonomy plan_gate builder_questions evolve_apply drain drain_slices run_max_tasks run_max_minutes run_max_agents run_fix_waves qa_scout qa_parallel landing handover express auto_update notify heavy_slots target_minutes runner model_runner stall_minutes pulse_minutes reentry reentry_hours reentry_max away_gate bg_retries auto_setup owners ", " " k " ")
             trio = index(" plan_gate builder_questions evolve_apply ", " " k " ") }
     mf != "" && FILENAME == mf {
       if (!ok || mask) exit

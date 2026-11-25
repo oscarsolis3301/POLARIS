@@ -20,10 +20,12 @@
 #     (`adhd:`), applied to the repo's copy by install.sh.
 #   - no ~/.claude/settings.json is created. A machine-wide outputStyle would restyle every
 #     non-POLARIS repo on the machine; selection stays per repo or per session.
+# This pins the HUMAN's arm: under CLAUDECODE every arm acts as --no-permissions (shared-kit.md § 11),
+# so each run below sets it empty, explicitly — an agent session running this golden must not leak it in.
 python kit/ops/pack.py --allow-dirty >/dev/null 2>&1 || echo "PACK FAILED — nothing below proves anything"
 FIX="$(mktemp -d)"
 C="$FIX/.claude"
-HOME="$FIX" USERPROFILE="$FIX" python polaris-v5.zip --claude-skill --no-permissions >/dev/null 2>&1
+CLAUDECODE= HOME="$FIX" USERPROFILE="$FIX" python polaris-v5.zip --claude-skill --no-permissions >/dev/null 2>&1
 for f in skills/polaris-install/SKILL.md skills/polaris-install/polaris-v5.zip \
          output-styles/polaris.md \
          skills/i-have-adhd/SKILL.md skills/i-have-adhd/LICENSE skills/i-have-adhd/SOURCE.md; do
@@ -40,7 +42,7 @@ grep -q '^disable-model-invocation: true$' "$C/skills/i-have-adhd/SKILL.md" 2>/d
   && echo "FABLE MARKER WRITTEN under --no-permissions — that flag promises nothing is" \
   || echo "no Fable marker written"
 cp -R "$C" "$FIX/first"
-HOME="$FIX" USERPROFILE="$FIX" python polaris-v5.zip --claude-skill --no-permissions >/dev/null 2>&1
+CLAUDECODE= HOME="$FIX" USERPROFILE="$FIX" python polaris-v5.zip --claude-skill --no-permissions >/dev/null 2>&1
 diff -r "$FIX/first" "$C" >/dev/null 2>&1 \
   && echo "a second run rewrites nothing" || echo "SECOND RUN REWROTE FILES — the machine-armed line will nag forever"
 rm -rf "$FIX"
@@ -57,7 +59,7 @@ rm -rf "$FIX"
 # POLARIS_AWAKE_HOME all point into the mktemp -d, so the real ~/.claude is never read or written.
 FIX="$(mktemp -d)"
 SJ="$FIX/.claude/settings.json"; MK="$FIX/.claude/polaris/fable-restored"
-arm() { HOME="$FIX" USERPROFILE="$FIX" POLARIS_AWAKE_HOME="$FIX/awake" python polaris-v5.zip --claude-skill "$@" 2>/dev/null; }
+arm() { CLAUDECODE= HOME="$FIX" USERPROFILE="$FIX" POLARIS_AWAKE_HOME="$FIX/awake" python polaris-v5.zip --claude-skill "$@" 2>/dev/null; }
 # The ✅ line the restore prints under --verbose, its path made portable; nothing at all when it is silent.
 said() { tr -d '\r' | grep -a '^✅ availableModels:' | sed 's# in .* — # in <settings> — #'; }
 show() { # python prints CRLF on Windows; every .expected is LF

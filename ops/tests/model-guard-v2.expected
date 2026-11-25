@@ -148,6 +148,8 @@ the next allowed main PreToolUse                           rc 0
     stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"polaris: a subagent is still on xhigh after the chat dropped to low; it will finish there — say \"restart it\" to re-run it at low. Restart only when the human says so (owner, E2) and never stop it unasked: message that subagent to write a handoff and release its claim or lock, then spawn the replacement at the new level from that handoff."}}
     .pending after: removed
 == the install branch: five entries, merged, never clobbering, idempotent ==
+agent install: rc 2 · ⛔ needs you: python "<home>/.claude/skills/polaris-install/polaris-v5.zip" --setup in your own terminal (permissions and hooks are yours to grant)
+agent install: settings.json byte-identical
 model-guard: 5 of 5 hook entries written to <settings>
 model-guard: 0 of 5 hook entries written to <settings>
   PreToolUse       model-guard[*] · mine.sh[Bash]

@@ -7,3 +7,5 @@ per-rule-match-pipes 0
 selftest-modules-doctor-list 9
 selftest-modules-every-other-command 0
 bgwatch-pulse-after-bg 2
+join-migrate-need-scoped 1
+join-before-env 1

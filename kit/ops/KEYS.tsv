@@ -93,3 +93,5 @@ reentry_hours	6.20.0	12	an approved away run stays armed for 12 hours; after tha
 reentry_max	6.20.0	3	a stopped away run is re-entered at most 3 times, then it parks for you		machine
 runner	6.20.0	on	a long wait in a session with no background wake-up is handed to the kit's small job runner; off waits in chunked foreground calls (bg wait --max 540)		machine
 model_runner	6.20.0	haiku	the job runner waits on Haiku, the cheapest model, and runs nothing but bg wait/status/tail; sonnet or inherit to change it (Opus and Fable are refused)		machine
+auto_setup	7.0.0	ask	a project without POLARIS asks once, at the first request that would change it, whether to set it up; auto sets it up without asking for your own projects (see owners), off never mentions it		machine
+owners	7.0.0	<names or omit>	no account counts as yours, so auto_setup: auto only sets up projects with no origin remote; name the accounts that own your repos, comma-separated		machine

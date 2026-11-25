@@ -413,6 +413,15 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  so a 5.x install is reached too; --major applies MAJOR bumps as
                                  well. Also re-caches the kit into ~/.claude so the NEXT repo you
                                  install into gets it too; --repo-only skips that.
+  join [<dir>]                   set a git project up against THIS COMPUTER's kit: only ops/polaris
+                                 (the launcher), the .gitattributes/.gitignore lines, the commit-msg
+                                 hook, the machine registry entry and a 3-line pointer in CLAUDE.md —
+                                 no .claude/ file, no settings, no commit. Last line: installed · fresh
+  migrate                        a VENDORED project moves to this computer's kit in ONE commit (kit
+                                 files out, launcher in, POLARIS's hooks + output style out of
+                                 .claude/settings.json, the block becomes the pointer); git revert
+                                 of it restores the project byte for byte. Refuses on a busy board,
+                                 in the POLARIS repo, and when this computer's kit is older
   uninstall --yes                remove POLARIS from this repo (keeps your CLAUDE.md + hooks)
 EOF
 }
@@ -432,9 +441,10 @@ case "${1:-}" in
   _match|_rules|_guard) _mods="core ownership" ;;
   role|doc|router) _mods="core docs" ;;
   prefs)         _mods="core ownership prefs" ;;
-  doctor)        _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg bgwatch pulse awake handover presence skills author tune flow docs prefs store
+  doctor)        _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg bgwatch pulse awake handover presence skills author tune flow docs prefs store join
                         selftest/spine selftest/board selftest/history selftest/report
                         selftest/brain selftest/policy selftest/remote selftest/fast selftest/hops" ;;
+  join|migrate)  _mods="core ownership admin bg store join" ;;   # shared-kit §§ 6-7 (module-layout v12; bg: board_quiescent's bg_alive)
   *)             _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg bgwatch pulse awake handover presence skills author tune flow" ;;
 esac
 # The kit store (shared-kit.md § 1, § 5) rides only the verbs that reach it: `update` (the machine
@@ -448,6 +458,10 @@ for _m in $_mods; do
   . "$OPS_DIR/lib/$_m.sh"
 done
 unset _m _mods
+
+# `join` runs where there is no ops/ at all, and may be pointed at a folder that is not a repo yet:
+# it answers here, before the environment below requires a live board (module-layout v12).
+case "${1:-}" in join) shift; cmd_join "$@"; exit ;; esac
 
 # ---------------------------------------------------------------- resolve env
 # Traced 2026-07-25 (Windows/Git Bash): this block cost ~2.2s on EVERY invocation — `cfg base` 683ms,
@@ -603,6 +617,7 @@ case "${1:-}" in
   router)     shift; cmd_router "$@";;   # (ops/contracts/doc-server.md § 1)
   prefs)      shift; cmd_prefs "$@";;
   update)     shift; cmd_update "$@";;
+  migrate)    shift; cmd_migrate "$@";;   # shared-kit § 7 — one commit, undone by git revert
   __quiet)    _store_quiet;;              # hidden: the machine update's quiescence probe (shared-kit § 5)
   uninstall)  shift; cmd_uninstall "$@";;
   _match)     shift; cmd_match "$@";;
