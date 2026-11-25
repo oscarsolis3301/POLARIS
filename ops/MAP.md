@@ -290,3 +290,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 
 - "kit/ops/lib/docs.sh — role / doc / router: the kit serves its own role files and documents, paged at  (T-337, 2026-11-24)
 - "kit/ops/lib/prefs.sh — polaris prefs: show, set, unset, seed and yield this computer's preferences file (machine-prefs.md § 7)"  (T-337, 2026-11-24)
+
+- "kit/ops/hooks/dispatch.sh + shim.sh — the one user-level hook: folds model/presence/checkout/read-only guards in-process, execs the rest, stands down outside joined projects (hook-dispatch.md)"  (T-345, 2026-11-24)

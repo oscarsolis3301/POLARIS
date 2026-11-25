@@ -23,3 +23,5 @@ kit/ops/hooks/awake-hook.sh	ops/tests/awake-hook.*	bash kit/ops/polaris check --
 kit/ops/lib/flow.sh	ops/tests/flow-solo.*	bash kit/ops/polaris check --only flow-solo	begin and wrap, one call in and one call out [T-328]
 kit/ops/lib/docs.sh	ops/tests/doc-server.*	bash kit/ops/polaris check --only doc-server	role, doc and router [T-337]
 kit/ops/lib/prefs.sh	ops/tests/prefs-cli.*	bash kit/ops/polaris check --only prefs-cli	the machine preferences command [T-337]
+kit/ops/hooks/dispatch.sh	ops/tests/hook-dispatch.*	bash kit/ops/polaris check --only hook-dispatch	the one hook dispatcher, proven equal to the separate guards [T-345]
+kit/ops/hooks/shim.sh	ops/tests/hook-budget.*	bash kit/ops/polaris check --only hook-budget	the setup-installed shim and the no-fork path [T-345]
