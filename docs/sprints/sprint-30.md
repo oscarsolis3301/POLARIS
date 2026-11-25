@@ -218,6 +218,86 @@ Tag, push, dogfood and the cli-help re-pin are the conductor's release ritual, n
 - [ ] Every golden in verify green on the joined tree; api-kit strict-equal to the indexed tree
 - [ ] CHANGELOG 6.22.0: each claim has its number and where it was measured
 
+## T-349 — "join and migrate - a git project joins the machine kit with only a launcher and its state, and a vendored project converts in one commit that git revert undoes byte for byte"
+points 13 · risk normal · landed b17b116f (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/lib/join.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/join-migrate.cmd, ops/tests/join-migrate.expected, ops/tests/startup-budget.cmd, ops/tests/startup-budget.expected
+
+### Why
+The switch to machine mode starts here (7.0.0). `join` sets a git project up against this computer's
+kit: it writes only the launcher, the attribute and ignore lines the installer adds today, the
+commit-message hook, the machine registry entry and a three-line version-free pointer in CLAUDE.md —
+no `.claude/` folder, no settings, no kit code, no commit (shared-kit.md § 6). It prints
+`installed · fresh` so the agent runs INIT next, exactly as after today's quiet install.
+
+`migrate` converts an existing vendored project in ONE commit: kit files out, launcher in, POLARIS's
+own hook entries and output style swept out of the project's `.claude/settings.json` with the same
+helper `uninstall` uses (permission rules are left alone), the managed block replaced by the pointer
+(§ 7). It refuses on a busy board, in the POLARIS repo (its `ops/` is the update channel), and when this
+computer's kit is older than the project's. `git revert` of that commit restores the vendored project
+byte for byte — the golden proves it. The owner's yield of repo preferences to the machine file is
+printed as their step, never done for them.
+
+No project of the owner's is migrated by this work; only test fixtures are.
+
+### Acceptance
+- [ ] join-migrate: join in a fresh fixture writes exactly the § 6 set and nothing under .claude/; every `bash ops/polaris version|status|role BUILDER|doc PROTOCOL` works through the launcher; each refusal prints its pinned line and writes nothing
+- [ ] join-migrate: migrate of a vendored fixture is one commit with the § 7 content; `git revert` → `git diff <before> HEAD` empty; each refusal pinned
+- [ ] Last line of join is `installed · fresh` (or `installed · live-board`), ≤ 2 lines above it, no INIT kickoff phrase
+- [ ] api-kit: + cmd_join, cmd_migrate only; startup-budget unchanged for every other verb
+- [ ] join never runs install.sh and never writes a settings file
+
+## T-350 — "Only the owner's setup writes Claude Code settings - python polaris-v5.zip --setup stores the kit, installs the shim and trust tier and registers the one dispatcher, and every agent-run install, update or guard install writes no permission, mode or hook"
+points 10 · risk high · landed 1d37882d (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/bootstrap.py, kit/ops/hooks/model-guard.sh, kit/ops/lib/admin.sh, kit/ops/lib/awake.sh, kit/ops/lib/prefs.sh, kit/ops/selftest-install.sh, ops/tests/machine-armed.cmd, ops/tests/model-guard-v2.cmd, ops/tests/model-guard-v2.expected, ops/tests/perm-tools.cmd, ops/tests/prefs-cli.cmd, ops/tests/prefs-cli.expected, ops/tests/update-arms.cmd, ops/tests/update-arms.expected
+
+### Why
+The owner's decision for 7.0.0: only the setup command they run themselves writes Claude Code's
+permission rules, auto mode or hooks. Today four agent-run paths do it silently (the installer, the
+update's machine refresh, the guard installer, an INIT instruction). This card adds the one owner path
+and closes the agent ones (shared-kit.md §§ 10-11, install-parity.md v2).
+
+`python polaris-v5.zip --setup` does what `--claude-skill` does today and also stores the kit, installs
+the shim and the trust tier the dispatcher reads its read-only approvals from, and registers the one
+dispatcher per event in place of the machine-level model guard it folds. It refuses when run by an
+agent (`CLAUDECODE` set). Under `CLAUDECODE`, every install acts as `--no-permissions` and prints one
+line asking the owner to run `--setup`; `model-guard.sh install` and `polaris awake install` refuse the
+same way; and the update's permission block is deleted outright. A human (and CI, which never sets
+`CLAUDECODE`) sees today's behaviour, which keeps ci.yml's settings checks green without touching
+`.github/`. `prefs --seed` also fills `owners:`, which zero-touch uses to decide whose projects set
+themselves up without asking.
+
+### Acceptance
+- [ ] selftest-install.sh: every install-parity v2 assert (--setup refused under CLAUDECODE=1 with settings byte-identical · --setup in a fake home → current, hook, trust copy, one dispatcher entry per event, folded model-guard entries gone, keep-awake kept, second run byte-identical · a plain install under CLAUDECODE=1 leaves ~/.claude/settings.json byte-identical)
+- [ ] model-guard-v2: + `install` under CLAUDECODE=1 refused with the needs-you line; every earlier case byte-identical
+- [ ] prefs-cli: + --seed fills owners: when unset, leaves it when set
+- [ ] Without CLAUDECODE every bootstrap path is byte-identical to 6.22 (ci.yml 250-295, 339, 497 unaffected)
+- [ ] refresh_machine_kit writes nothing to settings.json in any mode; update-arms re-pinned only for that
+
+## T-351 — "A project sets itself up from a work request - INIT skips what a joined project's request already answers and authors the request as the first task, INIT no longer writes permission rules, and the two zero-touch keys join the registry"
+points 5 · risk normal · landed 3f4a4b75 (2026-11-24) · claimed 2026-11-24
+files touched: kit/ops/KEYS.tsv, kit/ops/lib/core.sh, kit/ops/roles/INIT.md, ops/tests/cfg-layers.cmd, ops/tests/cfg-layers.expected, ops/tests/keys-drift.cmd, ops/tests/keys-drift.expected
+
+### Why
+With zero-touch, the owner's first request in a project without POLARIS can set the project up
+(shared-kit.md § 9): the session-start line tells the agent to `join`, then run INIT "entered from a
+work request". INIT then has less to ask: when this computer's preferences answer every question,
+interaction 1 is skipped; the request itself is the goal, so the goal question is skipped too; the
+safety questions stay; and the request becomes the first task, routed by `triage` (first-run.md v3).
+No new heading — bold lead-ins only — so the api-kit golden does not move.
+
+INIT also stops telling the agent to add a `shot:` command to `.claude/settings.json`
+`permissions.allow` — the owner's rule is that no agent writes permission rules (shared-kit § 11).
+
+`auto_setup` (ask | auto | off) and `owners` live only in the machine preferences file; they join
+KEYS.tsv with scope `machine` and the allowlist in core.sh, so `prefs` shows them and the registry
+golden ties stay honest.
+
+### Acceptance
+- [ ] INIT.md: the § 0 lead-in and its four rules per first-run v3; the shot: allow paragraph gone; no heading added or changed (api-kit unchanged)
+- [ ] KEYS.tsv: auto_setup (default ask) and owners (default empty), scope machine; core.sh allowlist +2 in the same order; cfg-layers allowlist tie green
+- [ ] keys-drift re-pinned for exactly the two rows (read by the dispatcher, not cfg — say so in the expected's reason if the golden carries one)
+- [ ] interview and doc-refs unchanged
+
 ## T-353 — The 6.22 wave seals — session context prints LF on Windows, heal-model-line's fixture is ready for kit_file
 points 2 · risk normal · landed eaa404e2 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/hooks/dispatch-session.sh, ops/tests/heal-model-line.cmd, ops/tests/session-context.cmd, ops/tests/session-context.expected
@@ -240,7 +320,7 @@ This card's files exist only on the open wave, so it must be cut from the wave (
 - CR source: the golden's own python print (text-mode stdout on Windows); product hardened anyway — _ds_session strips CR from router/tail text (a CRLF checkout's kit/CLAUDE.md leaked escaped \r into additionalContext); the 'facts: identical' line was missing from the expected because the CRs had broken that cmp
 
 ## T-354 — perm-tools asserts the update path writes no permission rules (admin.sh union block gone)
-points 1 · risk normal · landed 7389b605 (2026-11-24) · claimed 2026-11-24
+points 1 · risk normal · landed 7389b605 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: ops/tests/perm-tools.cmd, ops/tests/perm-tools.expected
 
 ### Why
