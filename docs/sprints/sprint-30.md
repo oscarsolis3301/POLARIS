@@ -198,7 +198,7 @@ This card is wave 2's only owner of kit/ops/polaris and admin.sh. join and migra
 - [ ] api-kit unchanged (no new public function)
 
 ## T-348 — "Release 6.22.0, proven on the joined tree - the store, launcher, dispatcher, session context and machine update all dormant behind detection, every vendored golden unchanged, version 6.22.0 and its changelog"
-points 3 · risk normal · landed 79704cca (2026-11-24) · claimed 2026-11-24
+points 3 · risk normal · landed 79704cca (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: CHANGELOG.md, kit/ops/VERSION, ops/tests/kit-mode.cmd, ops/tests/kit-mode.expected
 
 ### Why
@@ -238,3 +238,17 @@ check (`tools/proof.sh`, run on this Windows machine) is red on:
 This card's files exist only on the open wave, so it must be cut from the wave (T-341's `_wave_cut`).
 - amend: deps -T-346 — fix card for the open wave's red check; it lands on the same wave (T-341's wave cut), so it cannot wait for T-346 to reach done
 - CR source: the golden's own python print (text-mode stdout on Windows); product hardened anyway — _ds_session strips CR from router/tail text (a CRLF checkout's kit/CLAUDE.md leaked escaped \r into additionalContext); the 'facts: identical' line was missing from the expected because the CRs had broken that cmp
+
+## T-354 — perm-tools asserts the update path writes no permission rules (admin.sh union block gone)
+points 1 · risk normal · landed 7389b605 (2026-11-24) · claimed 2026-11-24
+files touched: ops/tests/perm-tools.cmd, ops/tests/perm-tools.expected
+
+### Why
+The 6.22.0 final qa (7f99ba4) is red only on perm-tools: it counts the permission "union block" in
+kit/ops/lib/admin.sh (refresh_machine_kit) and expects 1, but T-347 deleted that block on purpose —
+plans/one-kit.md and shared-kit.md: "refresh_machine_kit's permission block is DELETED in both modes"
+(an agent-run update must never write permission rules). Turn the admin.sh half of that line into the
+new invariant: the update path holds NO permission union (`admin.sh 0`), and say so in the .cmd's
+comment. bootstrap.py's union (the owner-run installer) stays asserted as 1. Every other expected line
+byte-identical.
+- amend: deps -T-350 — 6.22.0 must ship before 7.0.0's T-350; T-350 was moved back to backlog and now follows this card

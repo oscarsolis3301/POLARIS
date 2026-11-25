@@ -12,7 +12,9 @@
 # two human gates — the plan approval and the question — and line 3 stops being 0: those two clicks
 # are the ones POLARIS keeps forever, and an allow rule for either must never land quietly.
 # Line 4 watches the set-if-absent merges that carry the names to a real machine: no code change was
-# needed for that, and this is how we find out if someone rewrites one. See
+# needed for that, and this is how we find out if someone rewrites one. admin.sh is pinned at 0: the
+# update path (refresh_machine_kit) holds NO permission union — an agent-run update never writes
+# permission rules (shared-kit.md); only the owner-run installer (bootstrap.py) unions. See
 # ops/contracts/permission-rules.md.
 S=kit/.claude/settings.json
 B=kit/ops/bootstrap.py
