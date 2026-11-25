@@ -1,0 +1,80 @@
+== each joined project, first command on kit 0.0.1: upgraded once, then committed as its owner would ==
+   rc=0
+   kit-seen: 0.0.1
+   rc=0
+   kit-seen: 0.0.1
+== update 0.0.1 → 0.0.2: every project quiet, current flips ==
+   rc=0
+   kit 0.0.1 → 0.0.2 — 2 project(s) move with it
+   current: 0.0.2
+   kit/: 0.0.1 0.0.2 current 
+   a: no new commit · dirty paths: 0
+   b: no new commit · dirty paths: 0
+   a kit-seen before its next command: 0.0.1
+   b kit-seen before its next command: 0.0.1
+== each project catches up at its next command, once ==
+   rc=0
+   a kit-seen: 0.0.2 · install.log: written
+   rc=0
+   a again: install.log not written (no second upgrade)
+   rc=0
+   a version: ✅ POLARIS v0.0.2
+   rc=0
+   b kit-seen: 0.0.2 · install.log: written
+   rc=0
+   b again: install.log not written (no second upgrade)
+   rc=0
+   b version: ✅ POLARIS v0.0.2
+   a: no new commit · dirty paths: 0
+   b: no new commit · dirty paths: 0
+== update again: up to date ==
+   rc=0
+   up to date (0.0.2)
+== 0.0.3 while b has a card in flight: staged in kit/next ==
+   rc=0
+   kit 0.0.3 is ready — it switches when <F>/b is quiet (active: 1)
+   current: 0.0.2 · next: 0.0.3
+== --auto with the channel gone: only the projects are asked again ==
+   rc=0
+   kit 0.0.3 is ready — it switches when <F>/b is quiet (active: 1)
+== the card lands, but b has a live task worktree ==
+   rc=0
+   kit 0.0.3 is ready — it switches when <F>/b is quiet (worktree live: T-9)
+== b quiet, the trust tier no longer matches: --auto flips, prunes, and names the owner step ==
+   rc=0
+   kit 0.0.2 → 0.0.3 — 2 project(s) move with it
+   ⛔ needs you: this kit approves new read-only commands — run in your own terminal: python "<F>/cfg/polaris/kit/0.0.3/polaris-v5.zip" --setup
+   current: 0.0.3 · next: none
+   kit/: 0.0.2 0.0.3 current 
+   a: no new commit · dirty paths: 0
+   b: no new commit · dirty paths: 0
+== a tampered zip: refused, nothing stored, current unchanged ==
+   rc=1
+   ⛔ store: <F>/cfg/polaris/kit/.tmp-dl-0.0.4-<pid>.zip does not match its sha256 — not installed
+   current: 0.0.3
+   kit/: 0.0.2 0.0.3 current 
+== a channel with no zip_sha256: refused ==
+   rc=1
+   ⛔ update: the channel names no zip_sha256 — not installed
+   current: 0.0.3
+== a MAJOR on the channel: asks, never moves ==
+   rc=0
+   ⬆ POLARIS 1.0.0 is a MAJOR update (you have 0.0.3) — it will not apply itself; when you want it: bash ops/polaris update --major
+   current: 0.0.3
+== the lazy upgrade never runs for the read-only verbs ==
+   after version role doc router prefs help find show hops: kit-seen absent
+   rc=0
+   after board-fm: kit-seen 0.0.3
+== a vendored install never takes it ==
+   rc=0
+   vendored kit-seen: absent
+== __quiet is hidden ==
+   help lines naming __quiet: 0
+== an agent-run update wrote no settings anywhere ==
+   a: no new commit · dirty paths: 0
+   b: no new commit · dirty paths: 0
+   Claude Code settings.json: byte-identical
+   projects' .claude/settings.json: byte-identical
+   Claude Code settings.local.json: byte-identical
+   projects' .claude/settings.local.json: byte-identical
+   $HOME/.claude: absent

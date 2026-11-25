@@ -307,65 +307,10 @@ refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with wh
     note "  Re-run  ops/polaris update  shortly, or:  python polaris-v5.zip --claude-skill"
   fi
 
-  # Arm auto mode in the user's OWN settings, exactly as a fresh install does — so `update` makes
-  # THIS machine seamless too, not just the next fresh repo. Sibling of bootstrap.py::merge_permissions;
-  # keep the key set in step. Set-if-absent (an explicit stricter defaultMode is respected) and SILENT
-  # (no say/note — the quiet-line count above the ▶ NEXT epilogue is load-bearing). Fails OPEN under
-  # `set -eu`: a settings hiccup must never fail an update that already succeeded, so it is guarded and
-  # `|| true`. A present-but-malformed settings.json is left untouched; only an ABSENT one is created.
-  # It also unions the repo's read-only permission rules into the user's settings. Before 5.20.0
-  # this armed the three auto-mode keys and nothing else, so a machine installed BEFORE a rule was
-  # added never received it — new rules only ever reached brand-new installs. The rules are read
-  # from the repo's own .claude/settings.json (which the refresh above just updated) rather than
-  # duplicated here: one list, in the kit, is the only way the two paths cannot drift.
-  local SJ="$HOME/.claude/settings.json" RJ="$PRIMARY/.claude/settings.json" PY=""
-  python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
-  if [ -n "$PY" ]; then
-    "$PY" - "$SJ" "$RJ" <<'AUTOMODE' || true
-import json, os, sys
-p = sys.argv[1]
-repo = sys.argv[2] if len(sys.argv) > 2 else ""
-if os.path.exists(p):
-    try:
-        with open(p, encoding="utf-8") as fh:
-            d = json.load(fh)
-    except (OSError, ValueError):
-        sys.exit(0)                      # present but unreadable/malformed → never overwrite
-else:
-    d = {}
-if not isinstance(d, dict):
-    sys.exit(0)                          # someone else's non-object config — leave it be
-changed = False
-perms = d.get("permissions")
-if isinstance(perms, dict):
-    if "defaultMode" not in perms:
-        perms["defaultMode"] = "auto"; changed = True
-elif perms is None:
-    perms = d["permissions"] = {"defaultMode": "auto"}; changed = True
-for k in ("skipAutoPermissionPrompt", "useAutoModeDuringPlan"):
-    if k not in d:
-        d[k] = True; changed = True
-if isinstance(perms, dict) and repo and os.path.exists(repo):
-    try:
-        with open(repo, encoding="utf-8") as fh:
-            rules = (json.load(fh).get("permissions") or {}).get("allow") or []
-    except (OSError, ValueError, AttributeError):
-        rules = []
-    allow = perms.get("allow")
-    if allow is None:
-        allow = perms["allow"] = []
-    if isinstance(allow, list):
-        for rule in rules:
-            if rule not in allow:
-                allow.append(rule); changed = True
-if changed:
-    os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
-    tmp = p + ".polaris-tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps(d, indent=2) + "\n")
-    os.replace(tmp, p)
-AUTOMODE
-  fi
+  # No permission rules or auto-mode keys are written into Claude Code's own settings
+  # here (shared-kit.md § 11, 6.22.0): before this, every update armed `defaultMode: auto`, the two
+  # auto-mode keys and the repo's read-only rules in ~/.claude/settings.json — an agent running
+  # `update` granted itself permissions. Granting them is the owner's own step: python polaris-v5.zip --setup.
 }
 
 _speed_ev() { # _speed_ev report|plan — the landing and lanes read of `speed` (minutes.md § 5.3, hour.md § 4):
@@ -653,6 +598,23 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
       *) die "update: unknown flag ${a} (only --auto, --say, --all, --repo-only, --major)";;
     esac
   done
+
+  # MACHINE MODE (POLARIS_LAUNCHER set — ops/contracts/shared-kit.md § 3, § 5; auto-update.md v6):
+  # `update` and `update --auto` are machine operations — the store gets the next kit, checked
+  # against the channel's zip_sha256, and every joined project moves when all are quiet. This
+  # project's tree is never touched: no re-exec (nothing overwrites the running kit, which stays in
+  # the store beside the new one), no park, no install.sh, no commit, no settings write.
+  # `--repo-only` has no meaning here and is ignored. `--all` stays the vendored registry walk, so
+  # the launcher mark is dropped before it and the walk's children run as vendored kits.
+  if [ -n "${POLARIS_LAUNCHER:-}" ]; then
+    if [ "$all" = 1 ]; then
+      unset POLARIS_LAUNCHER
+    else
+      [ "$auto" = 1 ] || [ "$say_" = 0 ] || die "update: --say belongs to --auto (update --auto --say)"
+      _store_update "$auto" "$say_" "$major" || return $?
+      return 0
+    fi
+  fi
 
   # Self-hosting repo (kit/ops/pack.py is the tell — ops/contracts/self-hosting.md): ops/ here
   # is an INSTALLATION and main's tarball serves that same installation, so update would install
@@ -1172,6 +1134,8 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionS
   # non-zero, never prints more than one line: a hook must never fail the session or flood it.
   local say_="${1:-0}" repo_only="${2:-0}" major="${3:-0}" cur latest mode log rc new
   local wy wf we wl ww ws wd now f
+  # 0. machine mode (shared-kit.md § 5): the session-start update is the machine's, never this repo's
+  if [ -n "${POLARIS_LAUNCHER:-}" ]; then _store_update 1 "$say_" "$major" || :; return 0; fi
   # 1. self-hosting — this repo never self-updates (cmd_update exits before the re-exec; kept here
   #    so the function stands alone for anyone who calls it directly)
   if [ -f "$PRIMARY/kit/ops/pack.py" ]; then
