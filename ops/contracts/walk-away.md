@@ -446,3 +446,17 @@ Seams between side-by-side wave-1 cards, proven only on the joined tree, by **T-
 ## Changelog
 - v1 2026-11-24: created for T-318–T-327 (plan walk-away, kit 6.20.0); before any claim T-323 was
   re-filed as T-328 without author.sh (a glob-vs-glob false overlap with T-320 had chained it).
+
+## v2 addendum — one `bg wait --max` for subagents (2026-11-24, plan one-kit, 6.22.0 — T-342)
+IDEAS 2026-11-24: § 3.1 pinned `bg wait --max 240` for a builder subagent while BUILDER.md step 5 keeps
+`--max 120` ("a subagent's foreground call is moved to the background at about 180 s", unmeasured).
+T-342 MEASURES it first: in its own (subagent) context, one foreground `sleep 200; echo done` with a
+300000 ms timeout — returned inline, or moved to the background (and at about which second).
+- Moved before 240 s (or not measurable) ⇒ **120** everywhere: `kit/.claude/agents/polaris-runner.md`,
+  `kit/ops/hooks/handover-hook.sh` substop:collect line, `kit/ops/PROTOCOL.md` subagent row,
+  `kit/ops/roles/SOLO.md`; BUILDER.md / INTEGRATOR.md unchanged.
+- Returned inline at 200 s ⇒ **240** everywhere: the same four files unchanged, and BUILDER.md /
+  INTEGRATOR.md's `--max 120` become 240 (T-342 then owns both).
+The measured answer and second go in T-342's Notes and the CHANGELOG; goldens `handover-stop`,
+`runner-path` re-pin with it (T-342). `--max 300` for the landing tail (role-handover) is not a
+subagent foreground call and is unchanged.

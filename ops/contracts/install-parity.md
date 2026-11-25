@@ -51,3 +51,19 @@ CLI boots. (The update path on a real live board is the testbed proof — conduc
 
 ## Changelog
 - v1 2026-07-21: created for T-039 (plan: many-hands)
+
+## v2 — `--setup` is the one writer of Claude Code settings; an agent-run install writes none (2026-11-24, plan one-kit, 7.0.0 — T-350)
+- `python polaris-v5.zip --setup` (owner, own terminal): today's `--claude-skill` arm plus the store,
+  the shim + trust tier and the dispatcher registration (`shared-kit.md` § 10, `hook-dispatch.md` §§ 3-4).
+  Under `CLAUDECODE` it refuses, rc 2, writing nothing.
+- Under `CLAUDECODE`, every install path behaves as `--no-permissions` for `~/.claude/settings.json`
+  and prints ONE `⛔ needs you:` line naming `--setup` (`shared-kit.md` § 11). Without `CLAUDECODE`
+  (a human, CI) every path is byte-identical to v1 — ci.yml's settings asserts (250-295, 339, 497)
+  run without it.
+- The two tripwires stand: the `--quiet` line count (the `⛔ needs you` line is printed ONLY when
+  `CLAUDECODE` is set, which CI never sets) and no INIT kickoff phrase in any output.
+- `kit/ops/selftest-install.sh` gains (T-350): `--setup` under `CLAUDECODE=1` → rc 2, settings
+  byte-identical; `--setup` without it in a fake home → store `current`, `$POLARIS_HOME/hook`, trust
+  copy, one dispatcher entry per event, the folded model-guard entries gone, keep-awake kept, a
+  second run byte-identical; a plain install under `CLAUDECODE=1` → `~/.claude/settings.json`
+  byte-identical.

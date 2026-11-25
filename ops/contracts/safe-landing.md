@@ -264,3 +264,26 @@ lost T-320's change until T-327 restored the union.
 - v1.2 2026-11-09 (conductor): rider e — the wait for the board mutex no longer kills the command when the holder releases mid-read (found by T-221; folded into T-222, which owns core.sh).
 - v1.3 2026-11-10 (conductor): § J — at finish a path is missing only when no later landed task commit touched it; a done task with no landed commit counts every differing path (asked by T-225's builder, with the false alarms it measured on this run).
 - v1.4 2026-11-24 (plan prefs): § K — landed_content_ok drops a path another task of the wave changed after this task forked (EVOLVE finding 1, sprint 28).
+
+## v2 — a wave-red fix card is cut from the open wave (2026-11-24, plan one-kit, 6.22.0 — T-341)
+EVOLVE walk-away finding 3 / IDEAS 2026-11-24: a fix card for a red wave could not change code that
+existed only on the open wave — claim cut `feat/<ID>` from `$BASE`, the squash conflicted, and a branch
+cut from `integrate/<date>` failed verify's ownership diff (`$BASE...feat`).
+- `_wave_cut <ID>` (core.sh, private): prints the ref `feat/<ID>` is cut from. When an open wave
+  branch `integrate/<date>` exists (the one `seal`/`land` use) AND the card's `files_owned` overlap
+  (`pat_overlap`) any path `git diff --name-only $BASE...integrate/<date>` lists ⇒ that wave branch's
+  tip SHA; else `$BASE`. One `git diff` call, only at claim/resume.
+- `wt_add` (workspace.sh) creates `feat/<ID>` from `_wave_cut <ID>` and records the cut:
+  `git config branch.feat/<ID>.polaris-cut <sha>` (only when it is not `$BASE`); resume reuses the
+  recorded value.
+- ownership.sh: the five `$BASE...<ref>` diffs (check_ownership, the added-file and deleted-file
+  checks, the RULES content scan, the SURFACES scan) and any other `$BASE...feat/<ID>` diff that judges
+  a card's OWN change (builder.sh verify/handoff, integrate.sh) use `<cut>...<ref>` where
+  `<cut>` = the recorded `branch.feat/<ID>.polaris-cut`, else `$BASE`. With no recorded cut every
+  command is byte-identical to v1.
+- `land` squashes such a card onto the wave branch it was cut from as usual; `release`/`sweep` remove
+  the config key with the branch.
+- Golden `ops/tests/wave-fix-claim.{cmd,expected}` (new, T-341): a fixture with a landed wave card
+  changing `f`, a fix card owning `f` → claim cuts from the wave tip (config recorded), `verify` passes
+  with a diff of exactly the fix, `land` squashes clean; a card NOT owning a wave path → cut from
+  `$BASE`, no config key; `release` drops the key.

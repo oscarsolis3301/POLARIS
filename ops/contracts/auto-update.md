@@ -287,3 +287,20 @@ never touches the board, and nothing is running that the new files could pull ou
 
 ### Changelog
 - v5 2026-11-09: waiting tasks no longer hold an update back; the fan-out line counts one right; the install skill's update paragraph is brought up to date (T-288, plan safe-landing).
+
+## v6 — a machine update moves every joined project, with no commit (2026-11-24, plan one-kit, 6.22.0 — T-347 · T-341)
+In machine mode (`POLARIS_LAUNCHER` set) `update` and `update --auto` are machine operations:
+fetch the channel's `zip:`, check it against the channel's `zip_sha256:`, unpack beside the old
+version, flip `current` when every registered joined project is quiet, else stage `kit/next`; the
+machine cache `$POLARIS_HOME/update-cache` replaces the per-repo one. No repo commit, no park, no
+`install.sh`. Each project upgrades lazily at its first CLI call after the flip (`.polaris/kit-seen`).
+Full spec: `ops/contracts/shared-kit.md` §§ 3-5. Vendored repos: v1-v5 unchanged, except `update --all`
+no longer removes a registry entry that holds a launcher (it prints `<p>: machine kit — moves with the
+machine update`; golden `update-registry`, T-341). The SessionStart update in a joined project is the
+dispatcher's (`hook-dispatch.md` § 6 d).
+- Golden `ops/tests/machine-update.{cmd,expected}` (new, T-347): a fake home with a store at 0.0.1,
+  two joined fixture projects, a local channel at 0.0.2 with a fixture zip and its sha → one `update`
+  flips `current`, neither project gains a commit or a dirty path, each runs `version` at 0.0.2 and
+  writes `kit-seen` once; a busy project → `kit/next` staged, the next `--auto` flips after it goes
+  quiet; a tampered zip → refused, `current` unchanged; a channel with no `zip_sha256:` → refused;
+  prune keeps current + previous.

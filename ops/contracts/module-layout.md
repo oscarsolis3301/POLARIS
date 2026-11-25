@@ -405,3 +405,15 @@ New modules `kit/ops/lib/docs.sh` (≤300 lines; `cmd_role`, `cmd_doc`, `cmd_rou
 `docs prefs` before the selftest modules); every other command's list is unchanged, so
 `startup-budget` is unchanged. They do not join `lib-census` (it pins the observe split). Entry
 line 8 / SELF / VER: `ops/contracts/doc-server.md` § 1 (T-337).
+
+## v12 — store.sh and join.sh, need-scoped (2026-11-24, plan one-kit, 6.22.0 / 7.0.0)
+- `kit/ops/lib/store.sh` (T-344 creates it, W1 — loaded by nothing yet; T-347 wires it, W2):
+  private `_store_*` / `_sha256` only (shared-kit.md § 1, § 5). Loader rows (T-347): `update` and
+  the hidden `__quiet` add `store` after `admin`; `doctor` adds it before the selftest modules.
+- `kit/ops/lib/join.sh` (T-349, W3): `cmd_join`, `cmd_migrate` (api-kit rows, T-349 owns api-kit in
+  W3). Loader rows: `join|migrate) _mods="core ownership admin store join"`; `doctor` adds it.
+- `join` and the hidden `__quiet` must run where the repo has no `ops/CONVENTIONS.md`
+  (`join`: no `ops/` at all) — dispatched before anything that requires a live board.
+- Every other command's list is unchanged: `startup-budget` unchanged. Neither joins `lib-census`.
+- `kit/ops/launcher` (T-344) and `kit/ops/hooks/{dispatch,dispatch-session,shim}.sh` (T-345, T-346)
+  are kit files shipped by pack.py's `git ls-files` walk with no packer change.

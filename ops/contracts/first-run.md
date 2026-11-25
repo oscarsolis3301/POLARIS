@@ -261,3 +261,20 @@ the machine file answers, and the v1 QUESTION/OPTION lines for the rest; nothing
 `ops/tests/doc-refs` (T-340) covers INIT.md; `ops/tests/kit-mode` (T-340) runs `interview --init` from a kit outside the repo.
 ### Changelog
 - v2 2026-11-24: interview --init / --remember; INIT asks only what the machine file does not answer.
+
+## v3 — a project sets itself up from a work request (2026-11-24, plan one-kit, 7.0.0 — T-351 · T-346 · T-349 · T-352)
+- Zero-touch line (dispatcher SessionStart, T-346) and `auto_setup` / `owners` (machine keys, T-351):
+  `ops/contracts/shared-kit.md` § 9.
+- INIT.md (T-351 — no new heading: bold lead-ins only, so no api-kit row): § 0 (Preconditions) gains
+  **Entered from a work request** (the plan's "INIT § 0b") — `interview --init` printed no QUESTION line → skip interaction 1;
+  the request IS the goal → skip interaction 2 (§ 2c's goal question); the safety questions (claim, anything `ask` the machine
+  file does not answer) stay; step 4 authors the request as a task with a `plan:` slug and runs
+  `bash ops/polaris triage <ID>`. The 6.21 `shot:` allow-rule line (~110-112) is removed: INIT never
+  writes permission rules (`shared-kit.md` § 11).
+- Skill `kit/.claude/skills/polaris-install/SKILL.md` (T-352, the R2 api-kit owner — its two new headings are api-kit rows): a `## Join` section — on a machine
+  with a store (`$POLARIS_HOME/kit/current`), "install POLARIS" in a project means
+  `bash "<POLARIS_HOME>/kit/<current>/ops/polaris" join`, then INIT; rung 1 of its ladder becomes
+  join; the zip install stays for machines without a store and for CI. `## Migrate` — only when the
+  owner names the project; `bash ops/polaris migrate`, then the printed owner step.
+- `prefs --seed` (T-350) also fills `owners:` from the `origin` owners of registered repos (only
+  when `owners:` is unset).

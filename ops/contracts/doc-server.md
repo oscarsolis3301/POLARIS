@@ -154,3 +154,14 @@ The joined-tree sweep (`doc-refs`) found eight printed kit doc paths § 6 did no
 `ops/CONVENTIONS.md` mentions stay (repo state, not a kit file). Also: `lib/presence.sh` resolves the
 machine home as `${POLARIS_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/polaris}`, so it works sourced
 alone under `set -eu` (presence-guard), byte-identical whenever core.sh has set `POLARIS_HOME`.
+
+## v2 — the router fits a session hook; CONDUCTOR.md pages fit the harness (2026-11-24, plan one-kit, 6.22.0 — T-346)
+- `router` output (kit/CLAUDE.md between its markers, or whole) is ≤ 8,000 bytes: T-346 trims
+  kit/CLAUDE.md's BODY. Every heading line stays byte-identical (api-kit), every invariant keeps its
+  number and its rule, every table keeps its rows; explanations move to `PROTOCOL.md` sections the
+  router names with `bash ops/polaris doc PROTOCOL "<section>"`. Vendored managed blocks get the
+  shorter text at their next update (normal kit evolution). `hook-dispatch.md` § 6 injects it.
+- CONDUCTOR.md: `## Protocol` (~32 KB, one section over PAGE_MAX) is split by inserting ONE new
+  `## ` heading at a step boundary so every page of `role CONDUCTOR` is ≤ 28,000 bytes. The existing
+  `## Protocol` heading is unchanged; the new one is an api-kit row (T-346 owns api-kit in W2).
+- Golden `doc-server` gains: `role CONDUCTOR` page count and every page ≤ 28,000 bytes; `router | wc -c` ≤ 8000.

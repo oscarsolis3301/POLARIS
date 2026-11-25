@@ -436,3 +436,16 @@ gains a FIRST rung read only when the run is armed (`block:run`, `allow:bg`, `al
 `allow:stalled` on the third block); unarmed, the ladder is byte-identical. New subcommands
 `substop` (SubagentStop) and `stopfail` (StopFailure). Full spec: `ops/contracts/walk-away.md`
 § 2.4 (T-318) and § 4.2 (T-319).
+
+## v6 — `landing: self` with lanes still building says `wait` (2026-11-24, plan one-kit, 6.22.0 — T-342)
+IDEAS 2026-11-24: under `landing: self` the Stop hook told a conductor "You are the INTEGRATOR — land …"
+while lanes were still building, because row 1 fires under both landing modes.
+- Row **1a**, checked before row 1: `landing` resolves `self` AND `active/` holds at least one task
+  whose lock is live (the worktree-liveness predicate `status` and `next` already use) AND `review/`
+  holds a landable task ⇒ line 1 `wait`, notes `   review/: <IDs> — landing: self, each lane lands its own`
+  then one `   active: <IDs>` line. With no live lane left, row 1 fires as before (a queued self-land
+  tail is never stranded). `landing: integrator` ⇒ byte-identical to v5.
+- `hh_stop` treats this `wait` exactly as every other `wait` (`allow:wait`; armed: the v5 rung) — it
+  never emits `block:integrate` for it.
+- Goldens: `handover-route` gains the row-1a case and its `landing: integrator` twin (unchanged
+  line 1 `integrate`); `handover-stop` gains the Stop-hook case. Owner T-342.
