@@ -26,6 +26,7 @@ ritual, the owner's --setup click.
 | 2026-11-24 | 28 | 52 |
 | 2026-11-24 | 13 | 39 |
 | 2026-11-24 | 3 | 36 |
+| 2026-11-24 | 1 | 36 |
 
 # SPRINT 29 — Your preferences, once, for every project (6.21.0)          capacity: 100   dates: 2026-11-24–
 
