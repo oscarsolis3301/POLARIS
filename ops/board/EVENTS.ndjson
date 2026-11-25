@@ -1613,3 +1613,6 @@
 {"ts":1795572985,"ev":"handoff","id":"T-348","who":"oscar@Dino","note":""}
 {"ts":1795572985,"ev":"all-review","id":"T-348","who":"oscar@Dino","note":"last lane landed — board is all review"}
 {"ts":1795573007,"ev":"done","id":"T-348","who":"oscar@Dino","note":"","pts":3}
+{"ts":1795573016,"ev":"promote","id":"T-351","who":"oscar@Dino","note":"deps done: T-348, T-341","pts":5}
+{"ts":1795573017,"ev":"promote","id":"T-350","who":"oscar@Dino","note":"deps done: T-345, T-348, T-341, T-343, T-347","pts":10}
+{"ts":1795573018,"ev":"promote","id":"T-349","who":"oscar@Dino","note":"deps done: T-341, T-344, T-347, T-348, T-343, T-346","pts":13}
