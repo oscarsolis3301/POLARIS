@@ -4,6 +4,70 @@ Versions here are the **kit version** (`kit/ops/VERSION`), not the board protoco
 A bump in `version:` is what notifies every installed kit on its next daily check — routine
 commits to `main` deliberately do not.
 
+## 7.0.0 — 2026-11-24
+
+**One kit for the whole computer, switched on — and nothing an agent runs grants itself a permission.**
+
+**MAJOR.** An installed project never moves to 7.0.0 by itself: the session-start update prints one
+`⬆ POLARIS 7.0.0 is a MAJOR update` line and waits for `bash ops/polaris update`. A vendored project
+that updates keeps working exactly as before — it stays vendored until its owner asks for `migrate`.
+What changes for everyone is who may write Claude Code's own settings: only the owner, in their own
+terminal. Plan `one-kit`, contracts `ops/contracts/shared-kit.md`, `ops/contracts/hook-dispatch.md`,
+`ops/contracts/first-run.md` v3.
+
+**BREAKING — stated plainly:**
+
+- **An agent-run install, update or hook install writes no permission rule, auto-mode key or hook
+  (T-350).** Under `CLAUDECODE` the installer acts as `--no-permissions` and prints one `⛔ needs you:
+  python "<zip>" --setup in your own terminal` line; `--setup`, `model-guard.sh install`,
+  `polaris awake install` and now `awake-hook.sh install` (T-352) refuse with rc 2 and write nothing.
+  The update's machine refresh no longer arms auto mode in any mode. A human (and CI, which never sets
+  `CLAUDECODE`) gets the 6.22 behaviour.
+- **`python polaris-v5.zip --setup` is the owner's one writer (T-350).** It does what `--claude-skill`
+  did, and also stores the kit, installs the hook shim and the trust tier, and registers the one
+  dispatcher in place of the machine-level model guard it folds.
+
+**What is new:**
+
+- **`join` (T-349).** On a machine with a kit, a git project joins it: in a fresh fixture `join`
+  writes 5 files (`ops/polaris`, `.gitattributes`, `.gitignore`, the commit-msg hook, a three-line
+  pointer in `CLAUDE.md`) plus one registry entry — nothing under `.claude/`, no settings, no
+  commit — and prints 2 lines, the last `installed · fresh` (`join-migrate`).
+- **`migrate` (T-349).** A vendored project becomes ONE commit: kit code out, launcher in, POLARIS's
+  own hook entries and output style swept from `.claude/settings.json`, permission rules left alone.
+  `git revert` of it gives `git diff <before> HEAD` empty and every index mode and blob as before
+  (`join-migrate`). It runs only when the owner names the project.
+- **Zero-touch (T-346, T-351).** In a git repo without POLARIS the dispatcher's SessionStart prints
+  one line telling the agent to ask once (here · all my projects · not here), or, under
+  `auto_setup: auto` for an owner listed in `owners:`, to join and run INIT from the request
+  (`session-context` case 7; the two machine keys in `cfg-layers`). INIT.md § 0 then skips the
+  questions the request already answers.
+- **The install skill (T-352).** `## Join` is rung 1 on a machine with a kit; the zip install stays
+  for a machine without one and for CI. `## Migrate` runs only for a project the owner names.
+
+**Proven:**
+
+- **`no-self-grant` (new, T-352).** 12 agent-run paths with `CLAUDECODE=1` in fake machines —
+  vendored `update` and `update --auto`, the lazy upgrade, the machine `update`, `join`,
+  `interview --init`, `migrate`, the bootstrap install, `--setup` and the three hook installs —
+  give 34 byte-identical verdicts over the two user settings files (and the project's two, for the
+  machine paths); `migrate`'s project `settings.json` reads "nothing granted" (every key, rule and
+  hook after was there before). The same bootstrap install without `CLAUDECODE` changes the user
+  `settings.json`, so the golden can see a write. 31 s on Windows.
+- **The dispatcher checks every `cd` target (T-352).** `cd sub && bash ops/polaris …` ran `sub/ops/polaris`
+  unchecked; now each `cd`/`pushd` target's launcher must be byte-identical to the kit's, and a
+  target the hook cannot resolve (quoted, `-`, a bare `cd`) is answered `ask`. 11 new
+  `hook-dispatch` cases (the 7 that name a nested fake or an unresolvable target ask); every earlier
+  row byte-identical.
+- **`drill_sharedkit` (new, T-352)** in `doctor --selftest`: join two projects, a command through each
+  launcher, SessionStart through the store's dispatcher, one update moving both with no commit and
+  no dirty path, migrate and its revert, in a fake machine — 1 minute for `--only sharedkit` on
+  Windows (spine included). It rides CI on Linux, macOS and Windows without touching `.github/`.
+- **`kit-mode` (+ a joined testbed, T-352).** A project made by `join` holds the pointer block only;
+  13 everyday verbs answer rc 0 through the launcher (`find` of a missing name answers rc 1, as it
+  should); `role BUILDER` and `router` are the store's bytes; afterwards no kit file and no `.claude/`
+  is in the project. Every earlier case byte-identical.
+
 ## 6.22.0 — 2026-11-24
 
 **One kit for the whole computer, built and switched off.**

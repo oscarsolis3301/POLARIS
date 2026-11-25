@@ -1,0 +1,60 @@
+== vendored: update (file:// tarball) ==
+   rc=0 · now 7.0.1
+   update                 user settings.json:       byte-identical
+   update                 user settings.local.json: byte-identical
+== vendored: update --auto (a channel one minor ahead) ==
+   rc=0 · now 7.0.2
+   update --auto          user settings.json:       byte-identical
+   update --auto          user settings.local.json: byte-identical
+== machine: the lazy upgrade (a joined project's first command) ==
+   rc=0 · kit-seen: written
+   lazy upgrade           user settings.json:       byte-identical
+   lazy upgrade           user settings.local.json: byte-identical
+   lazy upgrade           repo settings.json:       byte-identical
+   lazy upgrade           repo settings.local.json: byte-identical
+== machine: update (file:// channel + zip_sha256) ==
+   rc=0 · current: 0.0.2
+   machine update         user settings.json:       byte-identical
+   machine update         user settings.local.json: byte-identical
+   machine update         repo settings.json:       byte-identical
+   machine update         repo settings.local.json: byte-identical
+== machine: join ==
+   rc=0 · launcher: written
+   join                   user settings.json:       byte-identical
+   join                   user settings.local.json: byte-identical
+   join                   repo settings.json:       byte-identical
+   join                   repo settings.local.json: byte-identical
+== machine: interview --init (a joined project) ==
+   rc=0
+   interview --init       user settings.json:       byte-identical
+   interview --init       user settings.local.json: byte-identical
+   interview --init       repo settings.json:       byte-identical
+   interview --init       repo settings.local.json: byte-identical
+== machine: migrate ==
+   rc=0 · launcher: in
+   migrate                user settings.json:       byte-identical
+   migrate                user settings.local.json: byte-identical
+   migrate                repo settings.json:       nothing granted
+   migrate                repo settings.local.json: byte-identical
+== install: python polaris-v5.zip (CLAUDECODE=1) ==
+   rc=0 · ops/polaris: installed
+   bootstrap install      user settings.json:       byte-identical
+   bootstrap install      user settings.local.json: byte-identical
+== install: python polaris-v5.zip --setup (CLAUDECODE=1) ==
+   rc=2
+   --setup                user settings.json:       byte-identical
+   --setup                user settings.local.json: byte-identical
+== the hook registrations, run directly (CLAUDECODE=1) ==
+   awake-hook.sh install: rc=2 · 1 needs-you line
+   awake-hook.sh install  user settings.json:       byte-identical
+   awake-hook.sh install  user settings.local.json: byte-identical
+   model-guard.sh install: rc=2 · 1 needs-you line
+   model-guard.sh install user settings.json:       byte-identical
+   model-guard.sh install user settings.local.json: byte-identical
+   polaris awake install: rc=2 · 1 needs-you line
+   awake install          user settings.json:       byte-identical
+   awake install          user settings.local.json: byte-identical
+== the same install WITHOUT CLAUDECODE: the golden can see a write ==
+   rc=0
+   bootstrap, a human     user settings.json:       CHANGED
+   bootstrap, a human     user settings.local.json: byte-identical

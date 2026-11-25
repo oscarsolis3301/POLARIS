@@ -21,15 +21,35 @@ tell them to open a new chat. See § After the install, which is the important h
 | "update POLARIS" · "upgrade POLARIS" · "is there a new version" | **§ Update.** `upgrade` and `update` are one letter apart and unrelated — `update` fetches a newer kit, `upgrade` only migrates an old board and downloads nothing. They almost always mean **`update`**. |
 | "install POLARIS" (already installed) | `bash ops/polaris version`, report it in one line, stop — **but only if `ops/CONVENTIONS.md` exists.** Missing → installed-but-unconfigured → § After the install, now. |
 | "uninstall / remove POLARIS" | **§ Uninstall.** |
+| "move <this project> to the shared kit" · "migrate <this project>" | **§ Migrate** — only for the project they named. |
 | anything about tasks, the board, planning, building | **Not your job** — the project's own `polaris` skill governs. Stand down. |
 
-`ops/polaris` does **not** exist → **§ Install.**
+`ops/polaris` does **not** exist → **§ Install** (its first rung is **§ Join**).
 
 One more check, because it decides what you say next: **`ops/CONVENTIONS.md` is the only test for
 whether INIT has run.** INIT writes it; nothing else does. Kit installed but that file missing →
 the repo is installed-but-unconfigured → go straight to § After the install and set it up now.
 Never test `ops/board/` for this: older installers shipped the six empty columns, so `ops/board/`
 can exist in a repo where INIT never ran.
+
+## Join
+
+**This machine already has a kit** when `"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/polaris/kit/current"`
+exists and names a version. Then "install POLARIS" in a project means **join**: the project keeps
+only a launcher and its own state, and every command runs the one kit on this computer.
+
+```bash
+h="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/polaris"; bash "$h/kit/$(cat "$h/kit/current")/ops/polaris" join
+```
+
+It writes `ops/polaris` (the launcher), a three-line pointer block at the top of `CLAUDE.md`, the
+`.gitattributes` and `.gitignore` lines, the commit-msg hook and this machine's registry entry —
+and nothing under `.claude/`, no settings file, no commit. Its last line is the same marker the
+installer prints, so the same table applies: `installed · fresh` → § After the install, now, in this
+session · `installed · live-board` → report in one line. A refusal prints one `⛔ join:` line; report
+it and stop (an already-installed repo is § First, not a second join).
+
+The zip install below stays for a machine with no kit, and for CI.
 
 ## Install
 
@@ -38,16 +58,18 @@ running `git init` — never initialise a repo they didn't ask for.
 
 Work down this ladder, stop at the first rung that applies:
 
-**1. Cached kit** — `~/.claude/skills/polaris-install/polaris-v5.zip`. The normal path on any
+**1. This machine has a kit** → **§ Join.** Nothing below runs.
+
+**2. Cached kit** — `~/.claude/skills/polaris-install/polaris-v5.zip`. The normal path on any
 machine that has installed POLARIS even once. Local file, no network:
 
 ```bash
 cp ~/.claude/skills/polaris-install/polaris-v5.zip . && python polaris-v5.zip
 ```
 
-**2. `polaris-v5.zip` already in the repo root** (they dragged it in): `python polaris-v5.zip`
+**3. `polaris-v5.zip` already in the repo root** (they dragged it in): `python polaris-v5.zip`
 
-**3. Neither** — the kit must be downloaded, and this is the one rung that can get blocked. **Do
+**4. None of these** — the kit must be downloaded, and this is the one rung that can get blocked. **Do
 not just run `curl`.** Claude Code's permission classifier denies fetching code from a source the
 user never named, so a silent download dies half-way and looks like a broken installer. Ask in one
 line and let them name it:
@@ -61,18 +83,21 @@ curl -fsSLO https://github.com/oscarsolis3301/POLARIS/releases/latest/download/p
 python polaris-v5.zip
 ```
 
-This rung only ever runs **once per machine**: a normal install also arms the machine (caches the
-kit into `~/.claude/skills/polaris-install/`, puts the POLARIS output style and the `/i-have-adhd`
-skill under `~/.claude/` so a fresh machine has them before any repo does, lands the **keep-awake
-hooks** in `~/.claude/polaris/` so one owner per box keeps it awake while any session is still
-working, and pre-authorizes the commands in `~/.claude/settings.json`), so every install after this
-one takes rung 1 — offline, no prompt.
+This rung only ever runs **once per machine**: a normal install also caches the kit into
+`~/.claude/skills/polaris-install/` and puts the POLARIS output style and the `/i-have-adhd` skill
+under `~/.claude/`, so every install after this one takes rung 2 — offline.
 `--no-machine-setup` opts out; `--verbose` prints the full install log instead of the result.
+
+Run by you (an agent), no install writes a permission rule, an auto-mode key or a hook into Claude
+Code's settings: it prints ONE `⛔ needs you: python "<zip>" --setup in your own terminal …` line
+instead. That step is the owner's — pass the line on once, as written, and never run `--setup`
+yourself (it refuses an agent anyway). `--setup` is also what gives this machine a kit, so every
+project after it takes rung 1.
 
 No `python`? Fall back to `unzip polaris-v5.zip && bash polaris-v5/ops/install.sh`.
 
 **If a permission denial happens anyway**, do not hand-roll an install or work around the guard.
-Report it plainly and prescribe the cure: `python polaris-v5.zip --claude-skill`.
+Report it plainly and prescribe the cure, in their own terminal: `python polaris-v5.zip --setup`.
 
 ### What the installer prints
 
@@ -192,6 +217,27 @@ Two traps worth knowing, because both have already caused a bad install:
   genuinely expected, check `git ls-remote` or the releases API rather than assuming.
 
 `--repo-only` updates the repo without touching `~/.claude` — only if they ask for it.
+
+**A joined project** (`ops/polaris` with no `ops/lib/` beside it) has no kit of its own: there the
+same `update` is the machine's. It moves every joined project on this computer at once, commits
+nothing in any of them, and waits in `kit/next` while one of them is busy. Report its one line.
+
+## Migrate
+
+Only when the owner names the project — "move this project to the shared kit". Never on your own
+initiative, never as part of an update, and never for a project they did not name.
+
+```bash
+bash ops/polaris migrate
+```
+
+Run it from the vendored project's main checkout. It becomes ONE commit — `chore(polaris): migrate
+to the machine kit (<version>)`: the kit's code leaves the project, the launcher takes its place, the
+project's state (board, `CONVENTIONS.md`, `RULES.tsv`, contracts, tests) stays, and POLARIS's own
+hook entries leave `.claude/settings.json` (its permission rules stay). `git revert` of that commit
+restores the project byte for byte — say so in the one line you report. A busy board, a machine kit
+older than the project's, or uncommitted edits inside the kit's files → one `⛔ migrate:` line;
+report it and stop. Its last line is the owner's step (`▶ yours: …`): pass it on, never run it.
 
 ## Uninstall
 

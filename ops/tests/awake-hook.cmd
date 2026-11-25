@@ -133,3 +133,11 @@ echo '== machine prefs: a blank repo line falls through to the machine line =='
 printf 'reentry_hours:   # unset here\n' > "$R/ops/CONVENTIONS.md"
 POLARIS_PREFS="$FIX/prefs" bash "$H" --test tick
 rm -f "$R/ops/CONVENTIONS.md"
+# --- shared-kit § 11 (T-352): registering the four hooks is the owner's grant. Run by an agent
+#     (CLAUDECODE set), `install` refuses with rc 2 and the needs-you line, and writes no settings.json.
+echo '== install run by an agent: refused, nothing written =='
+mkdir -p "$FIX/agenthome"
+ir=0; HOME="$FIX/agenthome" USERPROFILE="$FIX/agenthome" CLAUDECODE=1 bash "$H" install > "$FIX/inst.out" 2> "$FIX/inst.err" || ir=$?
+printf 'rc %s · stdout bytes %s · needs-you lines %s\n' "$ir" "$(wc -c < "$FIX/inst.out" | tr -d ' ')" \
+  "$(grep -c '^⛔ needs you: python ".*" --setup in your own terminal (permissions and hooks are yours to grant)$' "$FIX/inst.err")"
+[ -e "$FIX/agenthome/.claude/settings.json" ] && echo 'settings.json: WRITTEN' || echo 'settings.json: not created'
