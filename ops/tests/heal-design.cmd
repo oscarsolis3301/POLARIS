@@ -20,15 +20,20 @@
 # on a second run from any board state.
 #
 # ONE fixture repo, eleven states (the 5.21.0 lesson): ~0.7s of CLI startup per call is real money.
-KIT="$(pwd)/kit/ops/polaris"
+# A VENDORED copy of the CLI (kit/ops/polaris + kit/ops/lib/) runs from the fixture's own ops/
+# (shared-kit.md § 14): heal reads templates/DESIGN.md through kit_file, so beside the real kit a
+# template would always be found — only an incomplete vendored kit can still lack one (state 0).
+SRC="$(pwd)/kit/ops"
 FIX="$(mktemp -d)"
 trap 'rm -rf "$FIX"' EXIT
+KIT="$FIX/repo/ops/polaris"
 ( set -e
   git init -q -b main "$FIX/repo" 2>/dev/null || { git init -q "$FIX/repo"; git -C "$FIX/repo" symbolic-ref HEAD refs/heads/main; }
   cd "$FIX/repo"
   git config user.email t@t; git config user.name t
   mkdir -p web; echo x > web/a.txt
   git add -A; git commit -qm init
+  mkdir -p ops; cp "$SRC/polaris" ops/polaris; cp -R "$SRC/lib" ops/lib
   bash "$KIT" init-board
   git add -A; git commit -qm board
 ) >/dev/null 2>&1

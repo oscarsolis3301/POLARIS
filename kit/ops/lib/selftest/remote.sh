@@ -464,9 +464,13 @@ drill_adopt() {
     [ -f "$OPS_DIR/KEYS.tsv" ] || { echo "ADOPT REGISTRY MISSING (kit/ops/KEYS.tsv must ship)"; exit 1; }
     # the two refusals, first: no registry → die naming the remedy · no CONVENTIONS.md (INIT never
     # ran) → die, and NEVER create the file it was asked to extend
+    # adopt reads KEYS.tsv through kit_file (shared-kit.md § 14): beside this kit the registry is always
+    # found, so the refusal is drilled with a VENDORED copy of the CLI whose kit lacks it — the one case left.
     rm -f ops/KEYS.tsv
     printf 'voice: plain\n' > ops/CONVENTIONS.md
-    "$SELF" adopt > "$T/ad-nokeys.out" 2>&1 && { echo "ADOPT REGISTRY RC FAIL (no KEYS.tsv must die)"; exit 1; }
+    rm -rf "$T/ad-kit"; mkdir -p "$T/ad-kit/ops"; cp "$OPS_DIR/polaris" "$T/ad-kit/ops/polaris"; cp -R "$OPS_DIR/lib" "$T/ad-kit/ops/lib"
+    bash "$T/ad-kit/ops/polaris" adopt > "$T/ad-nokeys.out" 2>&1 && { echo "ADOPT REGISTRY RC FAIL (no KEYS.tsv must die)"; exit 1; }
+    rm -rf "$T/ad-kit"
     grep -q 'polaris update' "$T/ad-nokeys.out" || { echo "ADOPT REGISTRY REMEDY FAIL (the refusal must name the remedy)"; exit 1; }
     cp "$OPS_DIR/KEYS.tsv" ops/KEYS.tsv
     rm -f ops/CONVENTIONS.md

@@ -82,3 +82,27 @@ mode: vendored
 == 8. the real kit: CONDUCTOR comes in pages ==
 — page 1 of <n> · next: bash ops/polaris role CONDUCTOR --page 2
 # ROLE: BUILDER — claim one task, finish it, prove it
+== 9. the real kit: the router fits a session hook, CONDUCTOR pages fit the harness (doc-server v2) ==
+router ≤ 8000: yes
+router heading: # POLARIS v5 — Parallel Sprint Protocol
+router heading: ## ROLE DISPATCH — do this first
+router heading: ## FEWEST HOPS — the core principle
+router heading: ## THE ONE IDEA
+router heading: ## THE TOOL — `ops/polaris`
+router heading: ## READ THIS WHEN YOU NEED IT — `bash ops/polaris doc PROTOCOL`
+router heading: ## INVARIANTS — NEVER violate
+router heading: ## STOP AND ASK THE HUMAN before
+router heading: ## PROGRESS FORMAT
+doc PROTOCOL "LANES": rc=0 · ## LANES — why the lane is a command, and why a role never does two jobs
+doc PROTOCOL "N CHATS, ONE REPO": rc=0 · ## N CHATS, ONE REPO — who waits, who parks, who queues
+doc PROTOCOL "SAVE HOPS": rc=0 · ## SAVE HOPS — fewest lookups, ask first, then finish
+doc PROTOCOL "STATE = THE BOARD": rc=0 · ## STATE = THE BOARD (git-tracked, human-readable)
+doc PROTOCOL "THE TOOL": rc=0 · ## THE TOOL — `ops/polaris`
+moved: The kickoff rules, in full → LANES
+moved: Never a menu of execution strategies → LANES
+moved: RULES.tsv, in full → STATE = THE BOARD
+moved: Do NOT rely on runtime self-organization → N CHATS, ONE REPO
+role CONDUCTOR: 2 page(s)
+page 1 ≤ 28000: yes
+page 2 ≤ 28000: yes
+1

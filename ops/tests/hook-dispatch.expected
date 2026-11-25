@@ -1,0 +1,65 @@
+== (a) replay: every guard battery through dispatch.sh --as <guard> ==
+readonly-allow: identical
+checkout-guard-denies: identical
+presence-guard: identical
+model-guard-v2: identical
+ownership-primary: identical
+permission-hook: identical
+handover-stop: identical
+== (b) merge: the dispatcher vs the separate scripts (deny > ask > allow) ==
+presence deny (away, the question tool)      dispatcher=deny       separate=deny
+presence away + read-only allow              dispatcher=allow      separate=allow
+checkout deny + allow (trust tier allows all) dispatcher=deny       separate=deny
+checkout deny alone                          dispatcher=deny       separate=deny
+model deny + read-only allow                 dispatcher=deny-exit2 separate=deny-exit2
+read-only allow                              dispatcher=allow      separate=allow
+genuine launcher + ops/polaris allow         dispatcher=allow      separate=allow
+not-genuine launcher + ops/polaris allow     dispatcher=ask        separate=allow
+not-genuine launcher + other allow           dispatcher=allow      separate=allow
+not-genuine launcher + mixed allow           dispatcher=ask        separate=allow
+nothing                                      dispatcher=none       separate=none
+trust tier consulted (allows rm)             dispatcher=allow      separate=allow
+trust tier missing: the kit copy             dispatcher=none       separate=none
+ask reason: ops/polaris in this project is not the POLARIS launcher — approve this run yourself
+note + allow: allow · objects: 1, decision allow, context yes
+Edit → ownership-guard: same
+PostToolUse ExitPlanMode → presence: same
+UserPromptSubmit → handover prompt, presence: same
+Stop → handover stop: same
+SubagentStop → handover substop: same
+PermissionRequest → permission-hook request: same
+PermissionDenied → permission-hook denied: same
+PreModelSwitch to Haiku: deny-exit2
+an unknown event: none rc 0
+== (c) stand-down: vendored and non-POLARIS dirs → model-guard only ==
+vend  op Bash git switch main      none
+vend  op AskUserQuestion           none
+vend  aw AskUserQuestion           none
+vend  hk Read                      deny-exit2
+vend  op Read                      none
+vend  Stop                         none
+vend  PermissionRequest            none
+vend  UserPromptSubmit             none
+vend  Edit                         none rc 0
+none  op Bash git switch main      none
+none  op AskUserQuestion           none
+none  aw AskUserQuestion           none
+none  hk Read                      deny-exit2
+none  op Read                      none
+none  Stop                         none
+none  PermissionRequest            none
+none  UserPromptSubmit             none
+none  Edit                         none rc 0
+== (d) name hygiene ==
+functions defined by the four guards: 36 · duplicates: 0
+sourced into one shell: the same set
+dispatcher functions: 12 · not _dp_*: 0 · shared with a guard: 0
+== (e) SessionStart ==
+no dispatch-session.sh: [] rc 0 · model recorded: claude-opus-5-5
+session: machine mp [] seed-rc=0
+  (mp) rc 0
+session: vendored vend [] seed-rc=0
+  (vend) rc 0
+session: auto none [] seed-rc=0
+  (none) rc 0
+a broken dispatch-session.sh: [] rc 0

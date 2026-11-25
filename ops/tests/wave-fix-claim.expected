@@ -1,0 +1,26 @@
+== a. T-1 lands on the open wave ==
+land rc=0
+T-1 cut key: (none)
+== b. T-2 owns f, a path the wave changed ==
+claim rc=0
+cut note: 1
+cut from the wave tip: yes
+key = wave tip: yes
+diff from the cut: f 
+diff from main: f g 
+verify rc=0
+handoff rc=0
+land rc=0
+squash conflicts: 0
+wave has the fix: yes
+wave keeps T-1's g: yes
+== c. T-3 owns h, no wave path ==
+claim rc=0
+cut from main: yes
+T-3 cut key: (none)
+== d. T-4 owns g: cut from the wave, release drops the key ==
+claim rc=0
+key recorded: yes
+release rc=0
+branch gone: yes
+T-4 cut key: (none)
