@@ -65,6 +65,22 @@ rm -rf "$L/T-HR1"; rm -f ops/board/active/T-HR1.md
 mk review T-HR2 5 normal src/b.txt
 mk review T-HR3 5 high src/b.txt
 route
+# --- row 1a (role-handover.md v6): under `landing: self` (the default) a lane still building — an
+#     active card whose lock holds a live beat — lands its own card, so the same review/ work is
+#     `wait` with its two pinned notes, never an INTEGRATOR. Its `landing: integrator` twin is
+#     row 1 byte-for-byte. A lock with no live beat is no lane: row 1 again. ------------------
+mk active T-HRA 5 normal src/c.txt
+mkdir -p "$L/T-HRA"; printf '%s\nsomeone\nT-HRA\nother-sid\n-\n' "$(date +%s)" > "$L/T-HRA/meta"
+GW="$(cd "$(git rev-parse --git-common-dir)" && pwd)/worktrees/T-HRA"
+mkdir -p "$GW"; date +%s > "$GW/polaris-beat"
+route
+printf '%s\n' "$OUT" | sed -n '2,$p'
+printf 'landing: integrator\n' > ops/CONVENTIONS.md
+route
+rm -f ops/CONVENTIONS.md
+echo 1 > "$GW/polaris-beat"
+route
+rm -rf "$L/T-HRA" "$GW"; rm -f ops/board/active/T-HRA.md
 # --- row 6, contract v3 (supersedes v1.1's `wait`): human-gated review work ALONE is `finish`, its
 #     note naming what waits on the human — a task only a human can merge no longer holds a run open
 #     mid-way, and its merge still needs that human's yes. A DUE layout verdict sits on disk here on

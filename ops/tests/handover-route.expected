@@ -10,6 +10,17 @@ resume T-HR1
 integrate
 1
 2
+wait
+1
+2
+   review/: T-HR2 — landing: self, each lane lands its own
+   active: T-HRA
+integrate
+1
+2
+integrate
+1
+2
 finish
 1
 1

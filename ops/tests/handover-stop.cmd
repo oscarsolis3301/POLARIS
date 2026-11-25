@@ -128,6 +128,18 @@ tr_text "done"
 rm -f "$D/hops" "$D/hopped-event"
 printf -- '---\nid: T-HS1\ntitle: fixture T-HS1\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: ready\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/a.txt\nverify: []\n---\n' > "$P/ops/board/ready/T-HS1.md"
 printf '%s' "$J" | POLARIS_HANDOVER_CLI="$KIT" bash "$HOOK" --test stop
+# --- row 1a (role-handover.md v6), un-stubbed: landable review/ work while another lane still builds
+#     under `landing: self` is `wait` off the real router, so the hook allows — never block:integrate,
+#     which would make a conductor land cards its own lanes are about to land. -----------------
+rm -f "$D/hops" "$D/hopped-event"
+mv "$P/ops/board/ready/T-HS1.md" "$P/ops/board/review/T-HS1.md"
+printf -- '---\nid: T-HS2\ntitle: fixture T-HS2\ntype: feature\npoints: 1\nwsjf: 5\nrisk: normal\nowner: null\nbranch: null\nstatus: active\ncontract: ops/contracts/fix.md\nfiles_owned:\n  - src/b.txt\nverify: []\n---\n' > "$P/ops/board/active/T-HS2.md"
+GC="$(cd "$P" && cd "$(git rev-parse --git-common-dir)" && pwd)"
+mkdir -p "$GC/polaris-locks/T-HS2" "$GC/worktrees/T-HS2"
+printf '%s\nsomeone\nT-HS2\nother-sid\n-\n' "$(date +%s)" > "$GC/polaris-locks/T-HS2/meta"
+date +%s > "$GC/worktrees/T-HS2/polaris-beat"
+printf '%s' "$J" | POLARIS_HANDOVER_CLI="$KIT" bash "$HOOK" --test stop
+rm -rf "$GC/polaris-locks/T-HS2" "$GC/worktrees/T-HS2"; rm -f "$P/ops/board/active/T-HS2.md" "$P/ops/board/review/T-HS1.md"
 # --- and ONE raw invocation, no --test: the shipped block shape, verbatim. A top-level `decision`
 #     with a `reason` is what the harness reads for a Stop hook; stdout that does not start with `{`
 #     is treated as plain text and the decision is silently dropped, so this is load-bearing bytes.

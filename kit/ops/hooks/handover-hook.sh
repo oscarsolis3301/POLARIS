@@ -269,7 +269,7 @@ _hh_substop() {
     c="${c%$'\r'}"; c="${c//\\//}"
     [ -n "$c" ] || continue
     case "$c/" in "$sc"/*) ;; *) continue;; esac
-    hh_emit substop:collect "Your job $n is still running: bash ops/polaris bg wait $n --max 240 (repeat while rc 2)."
+    hh_emit substop:collect "Your job $n is still running: bash ops/polaris bg wait $n --max 120 (repeat while rc 2)."
   done
   hh_emit substop:none ''
 }

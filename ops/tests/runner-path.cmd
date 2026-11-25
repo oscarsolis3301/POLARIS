@@ -50,9 +50,9 @@ G() { # G <label> <tool> <tool_input JSON> [extra top-level fields] — the hook
   while IFS= read -r l; do printf '      %s\n' "$l"; done < "$FIX/out"
 }
 G 'spawn polaris-runner, model haiku' Agent '{"description":"d","prompt":"wait on x","subagent_type":"polaris-runner","model":"haiku"}'
-G 'runner: bg wait x --max 240' Bash '{"command":"bash ops/polaris bg wait x --max 240"}' "$RUNNER"
+G 'runner: bg wait x --max 120' Bash '{"command":"bash ops/polaris bg wait x --max 120"}' "$RUNNER"
 G 'runner: ls' Bash '{"command":"ls"}' "$RUNNER"
-G 'general-purpose on haiku: bg wait' Bash '{"command":"bash ops/polaris bg wait x --max 240"}' ',"agent_id":"r1","agent_type":"general-purpose"'
+G 'general-purpose on haiku: bg wait' Bash '{"command":"bash ops/polaris bg wait x --max 120"}' ',"agent_id":"r1","agent_type":"general-purpose"'
 
 echo "== 3. the agent's two commands, on a green job and a red one =="
 # The body's commands, read off the agent file itself — a reworded body reds this golden.

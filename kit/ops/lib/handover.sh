@@ -355,6 +355,20 @@ next_route() { # next_route — the decision table (role-handover.md), first mat
   fi
   # 1 — landable review/ work and an open lane (absent · stale · mine), under both landing modes
   if next_landable; then
+    # 1a (role-handover.md v6) — under `landing: self` each lane lands its own card, so while any
+    # active/ card still holds a lock with a live beat (beat_live, the one liveness test) the answer
+    # is `wait`. Once no lane is live row 1 fires as before: a queued self-land tail is never stranded.
+    if [ "$(cfg landing self)" = self ]; then
+      al=""
+      for f in "$BOARD/active/"*.md; do [ -e "$f" ] || break
+        id="${f##*/}"; id="${id%.md}"
+        if [ -d "$LOCKS/$id" ] && beat_live "$id"; then al="${al:+$al }$id"; fi
+      done
+      if [ -n "$al" ]; then
+        printf 'wait\n'; note "review/: $NX_REV_OK — landing: self, each lane lands its own"; note "active: $al"
+        return 0
+      fi
+    fi
     printf 'integrate\n'; note "review/: $NX_REV_OK"
     [ -n "$NX_REV_HUMAN" ] && note "risk: high, human approves: $NX_REV_HUMAN"
     [ -n "$NX_REV_HELD" ] && note "held for a yes: $NX_REV_HELD"
