@@ -901,3 +901,137 @@ AUGIT
     [ "$(git status --porcelain)" = "$au_st" ] || { echo "entry:"; printf '%s
 ' "$au_st"; echo "now:"; git status --porcelain; echo "AUTOUPDATE HERMETIC FAIL (the drill must leave the tree exactly as it found it)"; exit 1; }
 }
+drill_sharedkit() {
+    # ---- T-352 sharedkit drill (ops/contracts/shared-kit.md §§ 1-8, hook-dispatch.md § 6) — the whole
+    # life of a joined project, in a FAKE machine under $T (HOME, USERPROFILE, CLAUDE_CONFIG_DIR and
+    # POLARIS_AWAKE_HOME all inside it; POLARIS_PREFS= ; CLAUDECODE=1, as an agent runs it). The kit
+    # under test is zipped twice in the release shape (0.0.1, 0.0.2) and the store holds 0.0.1. Then:
+    # join two projects · a command through each launcher · the store's dispatcher answers SessionStart
+    # with one JSON object · ONE `update` (a file:// channel naming the 0.0.2 zip and its zip_sha256)
+    # moves both projects with no commit and no dirty path · a vendored project migrates as ONE commit
+    # and `git revert` of it restores the tree byte for byte. Every user settings file is byte-identical
+    # at the end (§ 11). It never reads or writes the spine's repo. No python → a note and a skip.
+    sk_py=python3
+    "$sk_py" -c pass >/dev/null 2>&1 || sk_py=python
+    if ! "$sk_py" -c pass >/dev/null 2>&1; then
+      note "sharedkit drill skipped — no python here, and the fixture zips need it"
+      return 0
+    fi
+    sk_d="$T/sharedkit"; rm -rf "$sk_d"; mkdir -p "$sk_d/home/.claude"
+    # The kit under test: this tree when it carries the launcher template (the source repo, a store
+    # copy); a VENDORED install carries no ops/launcher, so there the release zip beside it — the one
+    # CI installed it from — is unpacked and used. Neither → a note and a skip.
+    sk_kr="${OPS_DIR%/ops}"
+    if [ ! -f "$sk_kr/ops/launcher" ]; then
+      if [ -f "$sk_kr/polaris-v5.zip" ] && "$sk_py" -c 'import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); z.getinfo("polaris-v5/ops/launcher"); z.extractall(sys.argv[2])' \
+           "$sk_kr/polaris-v5.zip" "$sk_d/src" >/dev/null 2>&1; then
+        sk_kr="$sk_d/src/polaris-v5"
+      else
+        note "sharedkit drill skipped — this kit carries no ops/launcher and no polaris-v5.zip sits beside it"
+        rm -rf "$sk_d"; return 0
+      fi
+    fi
+    ( set -e
+      export HOME="$sk_d/home" USERPROFILE="$sk_d/home" CLAUDE_CONFIG_DIR="$sk_d/home/.claude"
+      export POLARIS_AWAKE_HOME="$sk_d/home/.claude/polaris/awake" POLARIS_PREFS= CLAUDECODE=1
+      export PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1 POLARIS_UPDATE_NO_FANOUT=1
+      unset POLARIS_LAUNCHER POLARIS_LAZY POLARIS_ROOT CI POLARIS_BOOTSTRAP POLARIS_KIT_SRC POLARIS_UPDATE_REEXEC POLARIS_UPDATE_FORCE CLAUDE_PROJECT_DIR
+      sk_ph="$CLAUDE_CONFIG_DIR/polaris"
+      sk_u="$sk_d"; command -v cygpath >/dev/null 2>&1 && sk_u="/$(cygpath -m "$sk_d")"
+      printf '{\n  "theme": "dark"\n}\n' > "$CLAUDE_CONFIG_DIR/settings.json"
+      printf '{\n  "permissions": {\n    "allow": []\n  }\n}\n' > "$CLAUDE_CONFIG_DIR/settings.local.json"
+      cp "$CLAUDE_CONFIG_DIR/settings.json" "$sk_d/sj0"; cp "$CLAUDE_CONFIG_DIR/settings.local.json" "$sk_d/slj0"
+      [ -f "$sk_kr/ops/launcher" ] || { echo "SHAREDKIT KIT FAIL (the kit under test has no ops/launcher)"; exit 1; }
+      # the kit under test, LF, in the release shape — kit code only (a dogfooded root's state stays out)
+      for sk_v in 0.0.1 0.0.2; do
+        "$sk_py" - "$sk_kr" "$sk_d/k-$sk_v.zip" "$sk_v" "file://$sk_u/chan" <<'PY'
+import os, sys, zipfile
+kr, out, ver, chan = sys.argv[1:5]
+skip = ("ops/board", "ops/tests", "ops/contracts", ".claude/worktrees")
+def blob(p, rel):
+    b = open(p, "rb").read()
+    if b"\0" not in b:
+        b = b.replace(b"\r\n", b"\n")
+    if rel == "ops/VERSION":
+        b = ("version: %s\nchannel: %s\nchangelog: none\n" % (ver, chan)).encode()
+    return b
+names = []
+if os.path.isfile(os.path.join(kr, "CLAUDE.md")):
+    names.append("CLAUDE.md")
+for top in ("ops", ".claude"):
+    for root, dirs, fs in os.walk(os.path.join(kr, top)):
+        rr = os.path.relpath(root, kr).replace(os.sep, "/")
+        dirs[:] = [d for d in dirs if d != "__pycache__" and (rr + "/" + d) not in skip]
+        names += [rr + "/" + f for f in fs]
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for rel in sorted(names):
+        i = zipfile.ZipInfo("polaris-v5/" + rel, date_time=(2026, 1, 1, 0, 0, 0))
+        i.create_system = 3
+        i.external_attr = (0o100000 | (0o755 if rel in ("ops/polaris", "ops/install.sh") else 0o644)) << 16
+        z.writestr(i, blob(os.path.join(kr, rel), rel))
+PY
+      done
+      sk_sha() { POLARIS_HOME="$sk_ph" bash -c ". \"$OPS_DIR/lib/store.sh\"; _sha256 \"\$1\"" _ "$1"; }
+      POLARIS_HOME="$sk_ph" bash -c ". \"$OPS_DIR/lib/store.sh\"; _store_put \"\$1\" 0.0.1 \"\$2\" && _store_flip 0.0.1" _ \
+        "$sk_d/k-0.0.1.zip" "$(sk_sha "$sk_d/k-0.0.1.zip")" > "$sk_d/put.out" 2>&1 \
+        || { cat "$sk_d/put.out"; echo "SHAREDKIT STORE FAIL (_store_put + _store_flip 0.0.1)"; exit 1; }
+      [ "$(cat "$sk_ph/kit/current")" = 0.0.1 ] || { echo "SHAREDKIT STORE FAIL (current must name 0.0.1)"; exit 1; }
+      sk_kit="$sk_ph/kit/0.0.1/ops/polaris"
+      sk_repo() {
+        git init -q -b main "$1" 2>/dev/null || { git init -q "$1"; git -C "$1" symbolic-ref HEAD refs/heads/main; }
+        ( cd "$1" && git config user.email t@t && git config user.name t && git config core.autocrlf false && echo x > a && git add a && git commit -qm init )
+      }
+      # (1) join two projects: the launcher, the pointer, `installed · fresh`, no .claude/, no commit
+      for sk_p in p1 p2; do
+        sk_repo "$sk_d/$sk_p" >/dev/null 2>&1
+        sk_h0="$(git -C "$sk_d/$sk_p" rev-parse HEAD)"
+        ( cd "$sk_d/$sk_p" && bash "$sk_kit" join ) > "$sk_d/join.out" 2>&1 || { cat "$sk_d/join.out"; echo "SHAREDKIT JOIN FAIL ($sk_p)"; exit 1; }
+        [ "$(tail -n 1 "$sk_d/join.out")" = 'installed · fresh' ] || { cat "$sk_d/join.out"; echo "SHAREDKIT JOIN LINE FAIL (last line must be: installed · fresh)"; exit 1; }
+        cmp -s "$sk_d/$sk_p/ops/polaris" "$sk_ph/kit/0.0.1/ops/launcher" || { echo "SHAREDKIT JOIN LAUNCHER FAIL (ops/polaris must be the store's launcher, byte for byte)"; exit 1; }
+        grep -qx '<!-- POLARIS:BEGIN pointer -->' "$sk_d/$sk_p/CLAUDE.md" || { echo "SHAREDKIT JOIN POINTER FAIL"; exit 1; }
+        [ ! -e "$sk_d/$sk_p/.claude" ] || { echo "SHAREDKIT JOIN CLAUDE FAIL (join writes no .claude/)"; exit 1; }
+        [ "$(git -C "$sk_d/$sk_p" rev-parse HEAD)" = "$sk_h0" ] || { echo "SHAREDKIT JOIN COMMIT FAIL (join commits nothing)"; exit 1; }
+        # (2) a command through the launcher: the store's kit answers
+        ( cd "$sk_d/$sk_p" && bash ops/polaris version ) > "$sk_d/ver.out" 2>&1 || { cat "$sk_d/ver.out"; echo "SHAREDKIT LAUNCHER FAIL ($sk_p version)"; exit 1; }
+        grep -q 'POLARIS v0\.0\.1 ' "$sk_d/ver.out" || { cat "$sk_d/ver.out"; echo "SHAREDKIT LAUNCHER FAIL (version must read the store's 0.0.1)"; exit 1; }
+        ( cd "$sk_d/$sk_p" && git add -A && git commit -qm joined ) >/dev/null 2>&1   # the owner commits the join
+      done
+      # (3) SessionStart through the store's dispatcher: ONE JSON object carrying the context
+      printf '{"session_id":"s1","source":"clear","cwd":"%s","hook_event_name":"SessionStart"}' "$sk_d/p1" \
+        | ( cd "$sk_d/p1" && CLAUDE_PROJECT_DIR="$sk_d/p1" bash "$sk_ph/kit/0.0.1/ops/hooks/dispatch.sh" SessionStart ) > "$sk_d/ss.out" 2> "$sk_d/ss.err" \
+        || { cat "$sk_d/ss.out" "$sk_d/ss.err"; echo "SHAREDKIT SESSIONSTART RC FAIL"; exit 1; }
+      "$sk_py" -c 'import json, sys; o = json.load(open(sys.argv[1], encoding="utf-8")); h = o["hookSpecificOutput"]; sys.exit(0 if list(o) == ["hookSpecificOutput"] and h["hookEventName"] == "SessionStart" and h.get("additionalContext") else 1)' "$sk_d/ss.out" \
+        || { cat "$sk_d/ss.out"; echo "SHAREDKIT SESSIONSTART FAIL (one JSON object with additionalContext)"; exit 1; }
+      sk_a1="$(git -C "$sk_d/p1" rev-parse HEAD)"; sk_a2="$(git -C "$sk_d/p2" rev-parse HEAD)"
+      # (4) ONE update moves both projects: current → 0.0.2, no commit, no dirty path, each reads 0.0.2
+      printf 'version: 0.0.2\nzip: file://%s/k-0.0.2.zip\nzip_sha256: %s\n' "$sk_u" "$(sk_sha "$sk_d/k-0.0.2.zip")" > "$sk_d/chan"
+      ( cd "$sk_d/p1" && bash ops/polaris update ) > "$sk_d/up.out" 2>&1 || { cat "$sk_d/up.out"; echo "SHAREDKIT UPDATE RC FAIL"; exit 1; }
+      [ "$(cat "$sk_ph/kit/current")" = 0.0.2 ] || { cat "$sk_d/up.out"; echo "SHAREDKIT UPDATE FAIL (current must move to 0.0.2)"; exit 1; }
+      grep -q 'kit 0\.0\.1 → 0\.0\.2 — 2 project(s) move with it' "$sk_d/up.out" || { cat "$sk_d/up.out"; echo "SHAREDKIT UPDATE LINE FAIL (both joined projects move)"; exit 1; }
+      for sk_p in "p1:$sk_a1" "p2:$sk_a2"; do
+        sk_q="$sk_d/${sk_p%%:*}"
+        [ "$(git -C "$sk_q" rev-parse HEAD)" = "${sk_p#*:}" ] || { echo "SHAREDKIT UPDATE COMMIT FAIL (${sk_p%%:*}: the machine update commits nothing)"; exit 1; }
+        [ -z "$(git -C "$sk_q" status --porcelain)" ] || { git -C "$sk_q" status --porcelain; echo "SHAREDKIT UPDATE DIRT FAIL (${sk_p%%:*}: no dirty path)"; exit 1; }
+        ( cd "$sk_q" && bash ops/polaris version ) > "$sk_d/ver.out" 2>&1
+        grep -q 'POLARIS v0\.0\.2 ' "$sk_d/ver.out" || { cat "$sk_d/ver.out"; echo "SHAREDKIT MOVE FAIL (${sk_p%%:*} must now run 0.0.2)"; exit 1; }
+      done
+      # (5) migrate a vendored project: ONE commit, the launcher in; (6) git revert restores it byte for byte
+      sk_v="$sk_d/vend"; sk_repo "$sk_v" >/dev/null 2>&1
+      bash "$sk_ph/kit/0.0.2/ops/install.sh" --quiet "$sk_v" > "$sk_d/inst.out" 2>&1 || { cat "$sk_d/inst.out"; echo "SHAREDKIT VENDORED INSTALL FAIL"; exit 1; }
+      printf 'base: main\n' > "$sk_v/ops/CONVENTIONS.md"
+      ( cd "$sk_v" && git add -A && git commit -qm vendored ) >/dev/null 2>&1
+      sk_b="$(git -C "$sk_v" rev-parse HEAD)"
+      ( cd "$sk_v" && bash ops/polaris migrate ) > "$sk_d/mig.out" 2>&1 || { cat "$sk_d/mig.out"; echo "SHAREDKIT MIGRATE FAIL"; exit 1; }
+      [ "$(git -C "$sk_v" rev-list --count "$sk_b..HEAD")" = 1 ] || { echo "SHAREDKIT MIGRATE COMMIT FAIL (exactly ONE commit)"; exit 1; }
+      cmp -s "$sk_v/ops/polaris" "$sk_ph/kit/0.0.2/ops/launcher" || { echo "SHAREDKIT MIGRATE LAUNCHER FAIL"; exit 1; }
+      [ ! -d "$sk_v/ops/lib" ] || { echo "SHAREDKIT MIGRATE KIT FAIL (kit code must leave the project)"; exit 1; }
+      [ -z "$(git -C "$sk_v" status --porcelain)" ] || { git -C "$sk_v" status --porcelain; echo "SHAREDKIT MIGRATE DIRT FAIL"; exit 1; }
+      git -C "$sk_v" revert --no-edit HEAD > "$sk_d/rev.out" 2>&1 || { cat "$sk_d/rev.out"; echo "SHAREDKIT REVERT FAIL"; exit 1; }
+      [ -z "$(git -C "$sk_v" diff "$sk_b" HEAD)" ] || { echo "SHAREDKIT REVERT DIFF FAIL (git diff <before> HEAD must be empty)"; exit 1; }
+      git -C "$sk_v" diff --quiet "$sk_b" -- || { echo "SHAREDKIT REVERT TREE FAIL (every tracked file back to its <before> bytes)"; exit 1; }
+      # § 11: an agent ran every step above, and no user settings file moved
+      cmp -s "$CLAUDE_CONFIG_DIR/settings.json" "$sk_d/sj0" && cmp -s "$CLAUDE_CONFIG_DIR/settings.local.json" "$sk_d/slj0" \
+        || { echo "SHAREDKIT NO-SELF-GRANT FAIL (a user settings file changed under CLAUDECODE=1)"; exit 1; }
+    ) || exit 1
+    rm -rf "$sk_d"
+}

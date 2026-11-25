@@ -729,10 +729,10 @@ cmd_doctor() {
     note "⚠ .claude/settings.json does not wire readonly-allow.sh — reads through Bash will prompt. Re-run: bash ops/install.sh"
   fi
   # Auto mode lives in the USER's settings, not the repo's, so a new machine starts prompting again
-  # even in a repo that is wired correctly. `ops/polaris update` arms it (admin.sh::refresh_machine_kit).
+  # even in a repo that is wired correctly. Only the owner's `--setup` arms it since 7.0.0 (shared-kit § 11).
   if [ -f "$HOME/.claude/settings.json" ] \
      && ! grep -q '"useAutoModeDuringPlan"' "$HOME/.claude/settings.json" 2>/dev/null; then
-    note "⚠ ~/.claude/settings.json has no auto-mode keys — plan mode will prompt. Arm this machine: ops/polaris update"
+    note "⚠ ~/.claude/settings.json has no auto-mode keys — plan mode will prompt. In your own terminal: python polaris-v5.zip --setup"
   fi
   # The output style is what binds the MAIN conversation's voice and its closing 🎉 — the layer
   # CLAUDE.md cannot supply. Three ways to be half-installed, and all three look identical from the

@@ -10,6 +10,8 @@ kit/.claude/skills/polaris-install/SKILL.md	heading	Do not
 kit/.claude/skills/polaris-install/SKILL.md	heading	First: what are they actually asking for?
 kit/.claude/skills/polaris-install/SKILL.md	heading	Install
 kit/.claude/skills/polaris-install/SKILL.md	heading	Installing POLARIS
+kit/.claude/skills/polaris-install/SKILL.md	heading	Join
+kit/.claude/skills/polaris-install/SKILL.md	heading	Migrate
 kit/.claude/skills/polaris-install/SKILL.md	heading	Say exactly this, and nothing else
 kit/.claude/skills/polaris-install/SKILL.md	heading	Uninstall
 kit/.claude/skills/polaris-install/SKILL.md	heading	Update
@@ -62,9 +64,9 @@ kit/ops/KEYS.tsv	key	lint
 kit/ops/KEYS.tsv	key	model_cheap
 kit/ops/KEYS.tsv	key	model_mid
 kit/ops/KEYS.tsv	key	model_runner
-kit/ops/KEYS.tsv	key	owners
 kit/ops/KEYS.tsv	key	model_strong
 kit/ops/KEYS.tsv	key	notify
+kit/ops/KEYS.tsv	key	owners
 kit/ops/KEYS.tsv	key	plan_gate
 kit/ops/KEYS.tsv	key	port_base
 kit/ops/KEYS.tsv	key	publish
@@ -591,6 +593,7 @@ kit/ops/lib/selftest/remote.sh	fn	drill_autoupdate
 kit/ops/lib/selftest/remote.sh	fn	drill_notify
 kit/ops/lib/selftest/remote.sh	fn	drill_pushdegrade
 kit/ops/lib/selftest/remote.sh	fn	drill_remote
+kit/ops/lib/selftest/remote.sh	fn	drill_sharedkit
 kit/ops/lib/selftest/remote.sh	fn	drill_syncrace
 kit/ops/lib/selftest/remote.sh	fn	drill_upgrade
 kit/ops/lib/selftest/report.sh	fn	drill_brief

@@ -20,6 +20,17 @@ not-genuine launcher + mixed allow           dispatcher=ask        separate=allo
 nothing                                      dispatcher=none       separate=none
 trust tier consulted (allows rm)             dispatcher=allow      separate=allow
 trust tier missing: the kit copy             dispatcher=none       separate=none
+cd into a nested fake launcher               dispatcher=ask        separate=allow
+subshell cd into a nested fake launcher      dispatcher=none       separate=none
+pushd into a nested fake launcher            dispatcher=ask        separate=allow
+second line cd into a nested fake            dispatcher=ask        separate=allow
+cd then cd into a nested fake                dispatcher=ask        separate=allow
+cd into a nested genuine launcher            dispatcher=allow      separate=allow
+cd into a dir with no launcher               dispatcher=allow      separate=allow
+cd target unresolvable (quoted)              dispatcher=ask        separate=allow
+cd target unresolvable (dash)                dispatcher=ask        separate=allow
+bare cd                                      dispatcher=ask        separate=allow
+cd into a nested fake + other allow          dispatcher=allow      separate=allow
 ask reason: ops/polaris in this project is not the POLARIS launcher — approve this run yourself
 note + allow: allow · objects: 1, decision allow, context yes
 Edit → ownership-guard: same

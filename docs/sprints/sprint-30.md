@@ -219,7 +219,7 @@ Tag, push, dogfood and the cli-help re-pin are the conductor's release ritual, n
 - [ ] CHANGELOG 6.22.0: each claim has its number and where it was measured
 
 ## T-349 — "join and migrate - a git project joins the machine kit with only a launcher and its state, and a vendored project converts in one commit that git revert undoes byte for byte"
-points 13 · risk normal · landed b17b116f (2026-11-24) · claimed 2026-11-24
+points 13 · risk normal · landed b17b116f (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/lib/join.sh, kit/ops/polaris, ops/tests/api-kit.expected, ops/tests/join-migrate.cmd, ops/tests/join-migrate.expected, ops/tests/startup-budget.cmd, ops/tests/startup-budget.expected
 
 ### Why
@@ -247,7 +247,7 @@ No project of the owner's is migrated by this work; only test fixtures are.
 - [ ] join never runs install.sh and never writes a settings file
 
 ## T-350 — "Only the owner's setup writes Claude Code settings - python polaris-v5.zip --setup stores the kit, installs the shim and trust tier and registers the one dispatcher, and every agent-run install, update or guard install writes no permission, mode or hook"
-points 10 · risk high · landed 1d37882d (2026-11-24) · claimed 2026-11-24
+points 10 · risk high · landed 1d37882d (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/bootstrap.py, kit/ops/hooks/model-guard.sh, kit/ops/lib/admin.sh, kit/ops/lib/awake.sh, kit/ops/lib/prefs.sh, kit/ops/selftest-install.sh, ops/tests/machine-armed.cmd, ops/tests/model-guard-v2.cmd, ops/tests/model-guard-v2.expected, ops/tests/perm-tools.cmd, ops/tests/prefs-cli.cmd, ops/tests/prefs-cli.expected, ops/tests/update-arms.cmd, ops/tests/update-arms.expected
 
 ### Why
@@ -274,7 +274,7 @@ themselves up without asking.
 - [ ] refresh_machine_kit writes nothing to settings.json in any mode; update-arms re-pinned only for that
 
 ## T-351 — "A project sets itself up from a work request - INIT skips what a joined project's request already answers and authors the request as the first task, INIT no longer writes permission rules, and the two zero-touch keys join the registry"
-points 5 · risk normal · landed 3f4a4b75 (2026-11-24) · claimed 2026-11-24
+points 5 · risk normal · landed 3f4a4b75 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
 files touched: kit/ops/KEYS.tsv, kit/ops/lib/core.sh, kit/ops/roles/INIT.md, ops/tests/cfg-layers.cmd, ops/tests/cfg-layers.expected, ops/tests/keys-drift.cmd, ops/tests/keys-drift.expected
 
 ### Why
@@ -297,6 +297,32 @@ golden ties stay honest.
 - [ ] KEYS.tsv: auto_setup (default ask) and owners (default empty), scope machine; core.sh allowlist +2 in the same order; cfg-layers allowlist tie green
 - [ ] keys-drift re-pinned for exactly the two rows (read by the dispatcher, not cfg — say so in the expected's reason if the golden carries one)
 - [ ] interview and doc-refs unchanged
+
+## T-352 — "Release 7.0.0, one kit for the whole machine - nothing an agent runs grants itself a permission, a joined project works end to end, the install skill joins on a machine with a kit, version 7.0.0 and its changelog"
+points 8 · risk normal · landed 6630207f (2026-11-24) · claimed 2026-11-24
+files touched: CHANGELOG.md, kit/.claude/skills/polaris-install/SKILL.md, kit/ops/VERSION, kit/ops/hooks/awake-hook.sh, kit/ops/hooks/dispatch.sh, kit/ops/lib/observe.sh, kit/ops/lib/selftest/policy.sh, kit/ops/lib/selftest/remote.sh, kit/ops/lib/selftest/spine.sh, ops/tests/api-kit.expected, ops/tests/awake-hook.cmd, ops/tests/awake-hook.expected, ops/tests/hook-dispatch.cmd, ops/tests/hook-dispatch.expected, ops/tests/kit-mode.cmd, ops/tests/kit-mode.expected, ops/tests/no-self-grant.cmd, ops/tests/no-self-grant.expected
+
+### Why
+The second release and the plan's DONE line. Everything is on main; this card proves it on the
+joined tree. `no-self-grant` runs every agent-run path with `CLAUDECODE=1` against a fake home and
+proves none of them changes a settings file (shared-kit.md § 11) — the owner's condition for this
+release. `drill_sharedkit` walks the whole life of a joined project in a fake home — join, a command
+through the launcher, the dispatcher's session start, one update moving two projects with no commit,
+migrate, and the revert — inside `doctor --selftest`, so it runs on Linux, macOS bash 3.2 and Windows CI
+without touching `.github/`.
+
+The install skill learns the new first rung: on a machine with a kit, "install POLARIS" in a project
+means `join`, then INIT; the zip install stays for machines without one and for CI. Migrating one of the
+owner's projects happens only when the owner names it. 7.0.0 is a MAJOR, so installs on other machines
+ask before moving. Tag, push, dogfood, cli-help and the owner's `--setup` click are the conductor's
+release ritual and close.
+
+### Acceptance
+- [ ] no-self-grant: every path in step 2 → `byte-identical` per file; the same run WITHOUT CLAUDECODE for the bootstrap install still merges (proves the golden can see a write)
+- [ ] drill_sharedkit green locally (doctor --selftest --only sharedkit via bg run) and named in spine.sh
+- [ ] kit-mode: + the joined-testbed cases; earlier cases byte-identical
+- [ ] SKILL.md: ## Join, ## Migrate, rung 1 = join; skill-budget/skill-install re-pinned only if they move; api-kit + exactly those two headings
+- [ ] CHANGELOG 7.0.0: MAJOR notice, each claim measured
 
 ## T-353 — The 6.22 wave seals — session context prints LF on Windows, heal-model-line's fixture is ready for kit_file
 points 2 · risk normal · landed eaa404e2 (2026-11-24) · claimed 2026-11-24 → done 2026-11-24
