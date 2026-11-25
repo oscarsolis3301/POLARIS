@@ -294,3 +294,5 @@ files — arm_machine and the hooks write it, never a hand) · `polaris-v5.zip`
 - "kit/ops/hooks/dispatch.sh + shim.sh — the one user-level hook: folds model/presence/checkout/read-only guards in-process, execs the rest, stands down outside joined projects (hook-dispatch.md)"  (T-345, 2026-11-24)
 
 - "kit/ops/hooks/dispatch-session.sh — SessionStart context for joined projects (router, voice, ADHD) and the zero-touch line (hook-dispatch.md § 6)"  (T-346, 2026-11-24)
+
+- "kit/ops/lib/store.sh — the per-computer kit store and the machine update: put/flip/prune, sha256 against the channel, switch when every joined project is quiet (shared-kit.md)"  (T-347, 2026-11-24)
