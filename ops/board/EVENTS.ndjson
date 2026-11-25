@@ -1653,3 +1653,4 @@
 {"ts":1795576924,"ev":"grant","id":"T-352","who":"oscar@Dino","note":"kit/ops/hooks/awake-hook.sh"}
 {"ts":1795576927,"ev":"grant","id":"T-352","who":"oscar@Dino","note":"kit/ops/lib/selftest/policy.sh"}
 {"ts":1795576930,"ev":"grant","id":"T-352","who":"oscar@Dino","note":"kit/ops/hooks/dispatch.sh"}
+{"ts":1795576933,"ev":"grant","id":"T-352","who":"oscar@Dino","note":"ops/tests/hook-dispatch.cmd"}
