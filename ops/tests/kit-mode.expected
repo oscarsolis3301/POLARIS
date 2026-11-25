@@ -42,3 +42,15 @@ rc=0
    mode: vendored
 rc=0
    byte-identical to the kit's roles/BUILDER.md
+== joined: version through the launcher ==
+rc=0
+   version = the store's kit: yes
+   ops/polaris = the store kit's launcher, byte-identical
+   CONVENTIONS.md
+   board
+   polaris
+== joined: SessionStart through the dispatcher ==
+rc=0
+   one JSON object: yes · event SessionStart
+   context opens with the router: yes
+   context <= 9000 bytes: yes
