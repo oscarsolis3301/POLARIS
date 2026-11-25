@@ -742,6 +742,48 @@ task_file() { # task_file <ID> [column] — path of the task file, searched or s
 }
 task_col() { task_file "$1" >/dev/null || return 1; dirname "$(task_file "$1")" | xargs basename; }
 
+_wave_cut() { # _wave_cut <ID> — safe-landing.md v2: the ref feat/<ID> is cut from. The open wave is
+  # today's integrate/<date> (the one land's wave_on uses), else the ONE local integrate/* whose tip is
+  # not yet in $BASE (seal's midnight rule). When the card's files_owned overlap (pat_overlap) a path
+  # `$BASE...<wave>` changed ⇒ that wave's tip SHA, so a fix card for a red wave can change code that
+  # exists only there; anything else (no wave, no overlap, no task file) ⇒ $BASE, exactly as before.
+  # Called only by wt_add when it creates feat/<ID> (claim/resume) — one git diff, off every hot path.
+  local id="$1" tf br ref k=0 list owned p pat
+  tf="$(task_file "$id")" || { printf '%s\n' "$BASE"; return 0; }
+  br="integrate/$(date +%F)"
+  if ! git -C "$PRIMARY" rev-parse -q --verify "refs/heads/$br" >/dev/null 2>&1; then
+    br=""
+    for ref in $(git -C "$PRIMARY" for-each-ref --format='%(refname)' 'refs/heads/integrate/' 2>/dev/null); do
+      git -C "$PRIMARY" merge-base --is-ancestor "$ref" "$BASE" 2>/dev/null && continue
+      br="${ref#refs/heads/}"; k=$((k+1))
+    done
+    [ "$k" -eq 1 ] || br=""
+  fi
+  [ -n "$br" ] || { printf '%s\n' "$BASE"; return 0; }
+  list="$(git -C "$PRIMARY" diff --name-only --no-renames "$BASE...$br" 2>/dev/null | tr -d '\r')" || list=""
+  owned="$(fm_list files_owned "$tf")"
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    while IFS= read -r pat; do
+      [ -n "$pat" ] || continue
+      if pat_overlap "$pat" "$p"; then git -C "$PRIMARY" rev-parse "refs/heads/$br"; return 0; fi
+    done <<EOF
+$owned
+EOF
+  done <<EOF
+$list
+EOF
+  printf '%s\n' "$BASE"
+}
+
+_cut_of() { # _cut_of <ID|feat/ID|ID.md|-> — the ref a card's OWN change is judged from (safe-landing.md v2):
+  # the cut wt_add recorded in branch.feat/<ID>.polaris-cut, else $BASE. No recorded cut (every card
+  # cut from $BASE) ⇒ "$BASE", so every `<cut>...<ref>` diff is byte-identical to v1's `$BASE...<ref>`.
+  local id="${1#feat/}" c=""; id="${id%.md}"
+  [ -n "$id" ] && [ "$id" != "-" ] && c="$(git -C "$PRIMARY" config --get "branch.feat/$id.polaris-cut" 2>/dev/null || true)"
+  printf '%s\n' "${c:-$BASE}"
+}
+
 # --------------------------------------------------- board mutex + commit ops
 mutex_off() { # release the board mutex if OURS (the $MUTEX/pid mutex_on wrote matches this
   # process); foreign, missing or unreadable pid → silent no-op, exactly as int_off treats a lease

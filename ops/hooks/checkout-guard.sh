@@ -31,7 +31,7 @@
 #
 #   It is NOT wired into ops/hooks/readonly-allow.sh, and must never be: that hook's safety
 #   contract is that it only ever ALLOWS, so its worst bug costs a prompt that would have happened
-#   anyway. Deny lives in its own file. The two never disagree — readonly-allow's git_ok
+#   anyway. Deny lives in its own file. The two never disagree — readonly-allow's ra_git_ok
 #   whitelists read verbs only, and every verb denied here falls through its final `*) return 1`
 #   and produces nothing. (`git stash list`/`show` ARE read-only, so they are excluded below.)
 #
@@ -52,24 +52,23 @@
 # TESTING
 #   `checkout-guard.sh --test '<cwd>|<command>'` prints `deny:<class>` or `allow` and skips
 #   the JSON layer, mirroring readonly-allow.sh --test. Goldens ride on that (drill checkoutguard).
-set -u
 
-HIT=''                    # set by the parsers: the class that fired (--test only)
+CG_HIT=''                    # set by the parsers: the class that fired (--test only)
 # Pinned by ops/contracts/shared-checkout.md § v2.1 / § v2.5 — ONE LINE each, byte-exact, greppable.
-MSG="the primary checkout is shared by every session — never switch it: work in your task's worktree (bash ops/polaris claim, then cd .polaris/wt/<ID>); a dirty tree is parked (bash ops/polaris park), never switched around"
-MSG_WT="a task worktree may be another session's whole working state — never remove, prune, move or clean one by hand: bash ops/polaris sweep --fix reaps idle worktrees safely, and done/release archive dirty ones"
-MSG_PUSH="a remote feat/<ID> may still be a live worktree's base — never delete origin refs by hand: done and sweep --fix delete landed branches with proof"
-MSG_KILL="never kill by name or kill the whole tree — five sessions share this machine and their suites: kill one pid you own (kill <pid> · taskkill /PID <pid> · Stop-Process -Id <pid>)"
-TESTMODE=0
+CG_MSG="the primary checkout is shared by every session — never switch it: work in your task's worktree (bash ops/polaris claim, then cd .polaris/wt/<ID>); a dirty tree is parked (bash ops/polaris park), never switched around"
+CG_MSG_WT="a task worktree may be another session's whole working state — never remove, prune, move or clean one by hand: bash ops/polaris sweep --fix reaps idle worktrees safely, and done/release archive dirty ones"
+CG_MSG_PUSH="a remote feat/<ID> may still be a live worktree's base — never delete origin refs by hand: done and sweep --fix delete landed branches with proof"
+CG_MSG_KILL="never kill by name or kill the whole tree — five sessions share this machine and their suites: kill one pid you own (kill <pid> · taskkill /PID <pid> · Stop-Process -Id <pid>)"
+CG_TESTMODE=0
 
 # ---------------------------------------------------------------- the refusal
-# Emits the PreToolUse decision on stdout and never returns. $1 = the class that fired, used only
-# by --test so a golden can say WHICH rule caught a line. $2 = the refusal text: ONE emitter, the
+# Leaves the PreToolUse decision in HOUT; its caller returns at once. $1 = the class that fired, used
+# only by --test so a golden can say WHICH rule caught a line. $2 = the refusal text: ONE emitter, the
 # message a variable, so a new class costs a pinned string and nothing else.
-deny() {
-  if [ "$TESTMODE" = 1 ]; then printf 'deny:%s\n' "$1"; exit 0; fi
-  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$2"
-  exit 0
+cg_deny() {
+  if [ "$CG_TESTMODE" = 1 ]; then printf -v HOUT 'deny:%s\n' "$1"; return 0; fi
+  printf -v HOUT '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$2"
+  return 0
 }
 
 # ---------------------------------------------------------------- JSON string read
@@ -77,7 +76,7 @@ deny() {
 # Returns 1 on ANY irregularity — a missing key, an escape we do not decode, or a closing quote
 # that is not followed by , or } . That last check is what makes a truncated read impossible:
 # without it a mis-parse could hand back `grep foo` from `grep foo > /etc/passwd` and allow it.
-jstr() {
+cg_jstr() {
   local key="$1" s="$2" rest ch out='' i=0 len after
   rest="${s#*\"$key\"}"
   [ "$rest" = "$s" ] && return 1
@@ -116,7 +115,7 @@ jstr() {
 }
 
 # ---------------------------------------------------------------- the parse
-# rc 0 = "$1" contains a checkout-mutating git invocation; HIT names its subcommand.
+# rc 0 = "$1" contains a checkout-mutating git invocation; CG_HIT names its subcommand.
 # rc 1 = it does not, or we could not read it confidently — and those two are deliberately the
 # same answer. A false negative here costs nothing (verify/handoff still see the diff); a false
 # positive blocks work that was never wrong. So every doubt resolves to 1.
@@ -131,9 +130,9 @@ jstr() {
 # invocation. The entry
 # block has already turned every separator INSIDE quotes into `_`, so none of these ever split a
 # quoted argument.
-mutating_git() {
+cg_mutating_git() {
   local cmd="$1" tok sub nxt cmdpos=1 wasglob=0 dry st wt
-  HIT=''
+  CG_HIT=''
   case "$-" in *f*) wasglob=1;; esac
   set -f
   local IFS=$' \t\n'
@@ -169,7 +168,7 @@ mutating_git() {
                cmdpos=0;;
           esac
           case "$sub" in
-            switch|checkout|reset|merge|rebase|cherry-pick) HIT="$sub"; return 0;;
+            switch|checkout|reset|merge|rebase|cherry-pick) CG_HIT="$sub"; return 0;;
             # restore rewrites the working tree unless it is told to touch the index alone:
             # --staged/-S WITHOUT --worktree/-W is the one form that leaves every file in place
             restore)  st=0; wt=0
@@ -184,16 +183,16 @@ mutating_git() {
                         esac
                         shift
                       done
-                      [ "$st" = 1 ] && [ "$wt" = 0 ] || { HIT=restore; return 0; };;
+                      [ "$st" = 1 ] && [ "$wt" = 0 ] || { CG_HIT=restore; return 0; };;
             # list/show are the two read-only stash forms — the same two readonly-allow.sh allows
-            stash)    case "$nxt" in list|show) ;; *) HIT=stash; return 0;; esac;;
+            stash)    case "$nxt" in list|show) ;; *) CG_HIT=stash; return 0;; esac;;
             # `list` is the read-only worktree form and stays silent; the other three END another
             # session's working state, so they are denied from EVERY checkout (see the entry block).
             worktree) case "$nxt" in
-                        add)    HIT=worktree; return 0;;
-                        remove) HIT=worktree-remove; return 0;;
-                        prune)  HIT=worktree-prune; return 0;;
-                        move)   HIT=worktree-move; return 0;;
+                        add)    CG_HIT=worktree; return 0;;
+                        remove) CG_HIT=worktree-remove; return 0;;
+                        prune)  CG_HIT=worktree-prune; return 0;;
+                        move)   CG_HIT=worktree-move; return 0;;
                       esac;;
             clean)    dry=0                            # -n/--dry-run anywhere in THIS invocation
                       while [ $# -gt 0 ]; do
@@ -205,12 +204,12 @@ mutating_git() {
                         esac
                         shift
                       done
-                      [ "$dry" = 1 ] || { HIT=clean; return 0; };;
+                      [ "$dry" = 1 ] || { CG_HIT=clean; return 0; };;
             push)     while [ $# -gt 0 ]; do           # --delete/-d/:ref anywhere in THIS invocation
                         case "$1" in
                           *[\;\|\&]*)   break;;
-                          --delete|-d)  HIT=push-delete; return 0;;
-                          :*)           HIT=push-delete; return 0;;
+                          --delete|-d)  CG_HIT=push-delete; return 0;;
+                          :*)           CG_HIT=push-delete; return 0;;
                         esac
                         shift
                       done;;
@@ -219,7 +218,7 @@ mutating_git() {
             branch)   while [ $# -gt 0 ]; do
                         case "$1" in
                           *[\;\|\&]*) break;;
-                          -D|-m|-M)   HIT=branch; return 0;;
+                          -D|-m|-M)   CG_HIT=branch; return 0;;
                         esac
                         shift
                       done;;
@@ -241,12 +240,12 @@ mutating_git() {
 # The destroyers that are not git: recursive deletes aimed at .polaris (which holds EVERY session's
 # worktree, index and bg logs) and process kills that select by NAME rather than by pid (the "port
 # 8001 instance vanished" incident — a launcher reclaiming a port killed whoever held it).
-# Same rc contract, same tokenizer, same bias as mutating_git: every doubt resolves to 1. You may
+# Same rc contract, same tokenizer, same bias as cg_mutating_git: every doubt resolves to 1. You may
 # always kill what you started — `kill <pid>`, `taskkill /PID <pid>`, `Stop-Process -Id <pid>` — and
 # you may always delete something that is not .polaris.
-mutating_other() {
+cg_mutating_other() {
   local cmd="$1" tok cmdpos=1 wasglob=0 rec pol
-  HIT=''
+  CG_HIT=''
   case "$-" in *f*) wasglob=1;; esac
   set -f
   local IFS=$' \t\n'
@@ -272,7 +271,7 @@ mutating_other() {
             case "$1" in *.polaris*) pol=1;; esac
             shift
           done
-          [ "$rec" = 1 ] && [ "$pol" = 1 ] && { HIT=rm-polaris; return 0; }
+          [ "$rec" = 1 ] && [ "$pol" = 1 ] && { CG_HIT=rm-polaris; return 0; }
           continue;;
         Remove-Item|remove-item)
           rec=0; pol=0
@@ -284,13 +283,13 @@ mutating_other() {
             case "$1" in *.polaris*) pol=1;; esac
             shift
           done
-          [ "$rec" = 1 ] && [ "$pol" = 1 ] && { HIT=rm-polaris; return 0; }
+          [ "$rec" = 1 ] && [ "$pol" = 1 ] && { CG_HIT=rm-polaris; return 0; }
           continue;;
         taskkill|taskkill.exe|*/taskkill)              # /IM selects by image name; /PID is yours
           while [ $# -gt 0 ]; do
             case "$1" in
               *[\;\|\&]*)             break;;
-              /[Ii][Mm]|/[Ii][Mm]:*)  HIT=kill-broad; return 0;;
+              /[Ii][Mm]|/[Ii][Mm]:*)  CG_HIT=kill-broad; return 0;;
             esac
             shift
           done
@@ -304,14 +303,14 @@ mutating_other() {
             esac
             shift
           done
-          [ "$rec" = 1 ] || { HIT=kill-broad; return 0; }
+          [ "$rec" = 1 ] || { CG_HIT=kill-broad; return 0; }
           continue;;
-        pkill|killall|*/pkill|*/killall) HIT=kill-broad; return 0;;
+        pkill|killall|*/pkill|*/killall) CG_HIT=kill-broad; return 0;;
         kill|*/kill)                                   # `kill -9 -1` is the whole session tree
           while [ $# -gt 0 ]; do
             case "$1" in
               *[\;\|\&]*) break;;
-              -1)         HIT=kill-broad; return 0;;
+              -1)         CG_HIT=kill-broad; return 0;;
             esac
             shift
           done
@@ -320,9 +319,9 @@ mutating_other() {
           while [ $# -gt 0 ]; do
             case "$1" in
               *[\;\|\&]*) break;;
-              --kill)     HIT=kill-broad; return 0;;
+              --kill)     CG_HIT=kill-broad; return 0;;
               --*)        ;;
-              -*k*)       HIT=kill-broad; return 0;;
+              -*k*)       CG_HIT=kill-broad; return 0;;
             esac
             shift
           done
@@ -331,7 +330,7 @@ mutating_other() {
           while [ $# -gt 0 ]; do
             case "$1" in
               *[\;\|\&]*) break;;
-              kill-port)  HIT=kill-broad; return 0;;
+              kill-port)  CG_HIT=kill-broad; return 0;;
             esac
             shift
           done
@@ -345,34 +344,37 @@ mutating_other() {
     fi
     cmdpos=0
   done
-  HIT=''
+  CG_HIT=''
   return 1
 }
 
 # ---------------------------------------------------------------- entry
+# The body of _cg_hook (below): IN holds the payload, HOUT gets the verdict, and every `return` was
+# an `exit` of the standalone script. Top-level names carry CG_ so the four guards can share a shell.
+_cg_run() {
+CG_TESTMODE=0; CG_HIT=''
 if [ "${1:-}" = "--test" ]; then
-  TESTMODE=1
-  ARG="${2:-}"
-  CWD="${ARG%%|*}"
-  CMD="${ARG#*|}"
-  [ "$CMD" = "$ARG" ] && CMD=''            # no `|` in the argument: nothing to judge
+  CG_TESTMODE=1
+  CG_ARG="${2:-}"
+  CG_CWD="${CG_ARG%%|*}"
+  CG_CMD="${CG_ARG#*|}"
+  [ "$CG_CMD" = "$CG_ARG" ] && CG_CMD=''            # no `|` in the argument: nothing to judge
 else
-  IN="$(cat)"
   # No tool_name test: the settings.json matcher is `Bash|PowerShell`, both tools carry their line
   # in tool_input.command, and a payload with no tool_input.command is not a command line
   # whatever tool sent it.
-  jstr command "${IN#*\"tool_input\"}" || exit 0
-  CMD="$REPLY"
-  CWD=''
-  jstr cwd "$IN" && CWD="$REPLY"
+  cg_jstr command "${IN#*\"tool_input\"}" || return 0
+  CG_CMD="$REPLY"
+  CG_CWD=''
+  cg_jstr cwd "$IN" && CG_CWD="$REPLY"
 fi
 
 # One-shot block: every `break` is an allow, and the only way out the bottom is a deny.
 while : ; do
-  [ -n "$CMD" ] || break
+  [ -n "$CG_CMD" ] || break
   # gate 1: no forks. Nothing here can be one of our classes, so nothing else runs.
-  case "$CMD" in *git*|*rm*|*Remove-Item*|*kill*|*Stop-Process*|*fuser*) ;; *) break;; esac
-  [ -n "$CWD" ] || CWD="$(pwd)"
+  case "$CG_CMD" in *git*|*rm*|*Remove-Item*|*kill*|*Stop-Process*|*fuser*) ;; *) break;; esac
+  [ -n "$CG_CWD" ] || CG_CWD="$(pwd)"
   # gate 2: still no forks. A /.polaris/wt/ segment in cwd IS proof of a task worktree — every
   # one of them lives at <primary>/.polaris/wt/<ID> (wt_path(), ops/lib/core.sh), so no probe can
   # tell us anything the path has not already said. Backslashes fold to slashes first, because
@@ -383,52 +385,69 @@ while : ; do
   # effort, before any verdict — a missing dir is silently skipped and the answer never changes.
   # `2>/dev/null` sits BEFORE the `>`: redirections are applied left to right, so the contract's
   # literal order suppresses nothing and a missing worktrees dir would print on every Bash call.
-  case "${CWD//\\//}" in
+  case "${CG_CWD//\\//}" in
     */.polaris/wt/*)
-      _p="${CWD//\\//}"; _w="${_p##*/.polaris/wt/}"; _w="${_w%%/*}"; : 2>/dev/null > "${_p%%/.polaris/wt/*}/.git/worktrees/$_w/polaris-beat" || true
-      case "$CMD" in *worktree*|*rm*|*Remove-Item*|*kill*|*Stop-Process*|*fuser*) ;; *) break;; esac;;
+      CG_P="${CG_CWD//\\//}"; CG_W="${CG_P##*/.polaris/wt/}"; CG_W="${CG_W%%/*}"; : 2>/dev/null > "${CG_P%%/.polaris/wt/*}/.git/worktrees/$CG_W/polaris-beat" || true
+      case "$CG_CMD" in *worktree*|*rm*|*Remove-Item*|*kill*|*Stop-Process*|*fuser*) ;; *) break;; esac;;
   esac
-  # gate 3: no forks — the two pure-bash parses. Either one sets HIT. A separator INSIDE quotes is
+  # gate 3: no forks — the two pure-bash parses. Either one sets CG_HIT. A separator INSIDE quotes is
   # data, never a split: `-m "tidy ; git switch x"` is one argument. So every ; | & { between a
   # pair of quotes turns into _ first — the quotes themselves stay, so the stretch still reads as
   # opaque. A \" never closes a stretch; an unclosed quote runs to the end of the line. One
   # expansion per quote, no per-character loop: this path sees long commit messages.
-  _s="${CMD//\\\"/__}"; _o=''
+  CG_S="${CG_CMD//\\\"/__}"; CG_O=''
   while : ; do
-    _h="${_s%%[\"\']*}"                                 # everything up to the next quote
-    [ "$_h" = "$_s" ] && { _o="$_o$_s"; break; }
-    _q="${_s:${#_h}:1}"; _s="${_s:${#_h}+1}"; _o="$_o$_h$_q"
-    _h="${_s%%"$_q"*}"                                  # the quoted stretch itself
-    _o="$_o${_h//[;|&\{]/_}"
-    [ "$_h" = "$_s" ] && break
-    _o="$_o$_q"; _s="${_s:${#_h}+1}"
+    CG_H="${CG_S%%[\"\']*}"                                 # everything up to the next quote
+    [ "$CG_H" = "$CG_S" ] && { CG_O="$CG_O$CG_S"; break; }
+    CG_Q="${CG_S:${#CG_H}:1}"; CG_S="${CG_S:${#CG_H}+1}"; CG_O="$CG_O$CG_H$CG_Q"
+    CG_H="${CG_S%%"$CG_Q"*}"                                  # the quoted stretch itself
+    CG_O="$CG_O${CG_H//[;|&\{]/_}"
+    [ "$CG_H" = "$CG_S" ] && break
+    CG_O="$CG_O$CG_Q"; CG_S="${CG_S:${#CG_H}+1}"
   done
-  mutating_git "$_o" || mutating_other "$_o" || break
+  cg_mutating_git "$CG_O" || cg_mutating_other "$CG_O" || break
   # gate 4: placement. Some classes end another session's work from ANY checkout — there is no
   # cwd where removing a worktree, deleting .polaris or killing by name is the right move — so
   # they skip the probe entirely and cost nothing.
-  case "$HIT" in
+  case "$CG_HIT" in
     worktree-remove|worktree-prune|worktree-move|rm-polaris|kill-broad) ;;
     *)
       # Only now is a fork worth paying for. In the primary, --git-dir and --git-common-dir are the
       # same directory; in a linked worktree --git-dir is <common>/worktrees/<name>. Unreadable (not
       # a repo, no git, an ancient git) fails CLOSED: a checkout-mutating command we cannot place is
       # refused, because the cost of being wrong runs the other way here.
-      GD="$(git -C "$CWD" rev-parse --git-common-dir --git-dir 2>/dev/null)" || GD=''
-      if [ -n "$GD" ]; then
-        case "$GD" in
-          *$'\n'*) [ "${GD%%$'\n'*}" = "${GD#*$'\n'}" ] || break;; # differ → linked worktree → allow
+      CG_GD="$(git -C "$CG_CWD" rev-parse --git-common-dir --git-dir 2>/dev/null)" || CG_GD=''
+      if [ -n "$CG_GD" ]; then
+        case "$CG_GD" in
+          *$'\n'*) [ "${CG_GD%%$'\n'*}" = "${CG_GD#*$'\n'}" ] || break;; # differ → linked worktree → allow
           *) ;;                                                    # one line only → cannot tell → deny
         esac
       fi;;
   esac
-  case "$HIT" in
-    worktree-remove|worktree-prune|worktree-move|clean|rm-polaris) deny "$HIT" "$MSG_WT";;
-    push-delete)                                                   deny "$HIT" "$MSG_PUSH";;
-    kill-broad)                                                    deny "$HIT" "$MSG_KILL";;
-    *)                                                             deny "$HIT" "$MSG";;
+  case "$CG_HIT" in
+    worktree-remove|worktree-prune|worktree-move|clean|rm-polaris) cg_deny "$CG_HIT" "$CG_MSG_WT";;
+    push-delete)                                                   cg_deny "$CG_HIT" "$CG_MSG_PUSH";;
+    kill-broad)                                                    cg_deny "$CG_HIT" "$CG_MSG_KILL";;
+    *)                                                             cg_deny "$CG_HIT" "$CG_MSG";;
   esac
+  return 0                                  # cg_deny left the verdict in HOUT
 done
 
-[ "$TESTMODE" = 1 ] && echo allow
-exit 0
+[ "$CG_TESTMODE" = 1 ] && printf -v HOUT '%s\n' allow
+return 0
+}
+
+# ---------------------------------------------------------------- the entry function
+# hook-dispatch.md § 1: IN in, HOUT/HERR/HRC out; never prints, exits or reads stdin. The standalone
+# script always ran under `set -u`, so the body does too, and the caller's nounset is put back as found.
+_cg_hook() {
+  HOUT=''; HERR=''; HRC=0
+  CG_OPT="$-"; set -u
+  _cg_run ${1+"$@"} || :
+  case "$CG_OPT" in *u*) ;; *) set +u;; esac
+  return 0
+}
+
+# --- standalone face: executed, not sourced → exactly what the script always printed, and exit 0.
+#     --test never read stdin, and still does not.
+case "${BASH_SOURCE[0]}" in "$0") IN=''; [ "${1:-}" = --test ] || IFS= read -r -d '' IN 2>/dev/null; _cg_hook "$@"; printf '%s' "$HOUT"; [ -z "$HERR" ] || printf '%s' "$HERR" >&2; exit "$HRC";; esac

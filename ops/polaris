@@ -432,11 +432,14 @@ case "${1:-}" in
   _match|_rules|_guard) _mods="core ownership" ;;
   role|doc|router) _mods="core docs" ;;
   prefs)         _mods="core ownership prefs" ;;
-  doctor)        _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg bgwatch pulse awake handover presence skills author tune flow docs prefs
+  doctor)        _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg bgwatch pulse awake handover presence skills author tune flow docs prefs store
                         selftest/spine selftest/board selftest/history selftest/report
                         selftest/brain selftest/policy selftest/remote selftest/fast selftest/hops" ;;
   *)             _mods="core ownership workspace surfaces visual builder integrate knowledge search observe drift check route qa admin bg bgwatch pulse awake handover presence skills author tune flow" ;;
 esac
+# The kit store (shared-kit.md § 1, § 5) rides only the verbs that reach it: `update` (the machine
+# update) and the hidden `__quiet` (the quiescence probe the machine update runs in each project).
+case "${1:-}" in update|__quiet) _mods="$_mods store" ;; esac
 for _m in $_mods; do
   if [ ! -f "$OPS_DIR/lib/$_m.sh" ]; then
     printf '⛔ POLARIS: ops/lib/%s.sh is missing — this kit is incomplete. Re-run the installer (bash ops/install.sh) or fetch a fresh kit: ops/polaris update\n' "$_m" >&2
@@ -489,6 +492,31 @@ BOARD_REF="refs/heads/polaris/board"
 # opened the file while stderr was still the terminal and printed "No such file or directory" on
 # every call from a worktree whose git worktrees dir does not exist yet. Best-effort, never fatal.
 case "$PWD" in */.polaris/wt/*) _w="${PWD##*/.polaris/wt/}"; _w="${_w%%/*}"; : 2>/dev/null > "$GCD/worktrees/$_w/polaris-beat" || true;; esac
+
+# --- machine mode: the lazy per-project upgrade (ops/contracts/shared-kit.md § 3) ---------------
+# Machine mode = POLARIS_LAUNCHER set (the launcher sets it; one `[` to test, zero forks), so a
+# vendored install takes none of this. A kit switch commits nothing into any project: instead the
+# first command after it notices .polaris/kit-seen names another kit and runs upgrade + heal
+# quietly (board folders, configuration; output to .polaris/install.log), then records the kit.
+# Never on the fast and read-only verbs, never on `update` (a machine operation) or the hidden and
+# internal verbs, and never inside its own run: heal starts this CLI again (brain, hops, tune), and
+# POLARIS_LAZY stops that child from starting the same upgrade a second time.
+if [ -n "${POLARIS_LAUNCHER:-}" ] && [ -z "${POLARIS_LAZY:-}" ]; then
+  case "${1:-}" in
+    find|show|hops|help|-h|--help|''|role|doc|router|prefs|version|update|_*) ;;
+    *)
+      _kv="" _ks=""
+      while read -r _a _b _c; do [ "$_a" = version: ] && { _kv="${_b%$'\r'}"; break; }; done 2>/dev/null < "$OPS_DIR/VERSION" || :
+      read -r _ks 2>/dev/null < "$PRIMARY/.polaris/kit-seen" || :
+      if [ -n "$_kv" ] && [ "${_ks%$'\r'}" != "$_kv" ]; then
+        mkdir -p "$PRIMARY/.polaris" 2>/dev/null || :
+        if ( POLARIS_LAZY=1; export POLARIS_LAZY; POLARIS_FROM_UPDATE=1 cmd_upgrade && cmd_heal ) > "$PRIMARY/.polaris/install.log" 2>&1; then
+          { printf '%s\n' "$_kv" > "$PRIMARY/.polaris/kit-seen.$$" && mv -f "$PRIMARY/.polaris/kit-seen.$$" "$PRIMARY/.polaris/kit-seen"; } 2>/dev/null || :
+        fi
+      fi
+      unset _kv _ks _a _b _c ;;
+  esac
+fi
 
 # ------------------------------------------------------------------- dispatch
 # update_check_maybe is wired ONLY into the human-facing commands below — deliberately not
@@ -575,6 +603,7 @@ case "${1:-}" in
   router)     shift; cmd_router "$@";;   # (ops/contracts/doc-server.md § 1)
   prefs)      shift; cmd_prefs "$@";;
   update)     shift; cmd_update "$@";;
+  __quiet)    _store_quiet;;              # hidden: the machine update's quiescence probe (shared-kit § 5)
   uninstall)  shift; cmd_uninstall "$@";;
   _match)     shift; cmd_match "$@";;
   _guard)     shift; cmd_guard "$@";;

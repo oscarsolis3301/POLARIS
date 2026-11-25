@@ -36,17 +36,16 @@
 #   `readonly-allow.sh --test '<command>'` prints `allow` or `ask` and skips the JSON layer.
 #   ops/tests/readonly-allow.cmd feeds it a fixed battery of allow AND refuse cases and diffs the
 #   verdicts, so `polaris check` re-proves this parser on every run, for zero tokens.
-set -u
 
-SEP=$'\001'          # token separator: a control char no real command contains
-VERDICT=ask          # deny by default; only an exhaustive proof flips this
+RA_SEP=$'\001'          # token separator: a control char no real command contains
+RA_VERDICT=ask          # deny by default; only an exhaustive proof flips this
 
 # ---------------------------------------------------------------- JSON string read
 # Extract a complete JSON string value for "$1" from "$2" into REPLY.
 # Returns 1 on ANY irregularity — a missing key, an escape we do not decode, or a closing quote
 # that is not followed by , or } . That last check is what makes a truncated read impossible:
 # without it a mis-parse could hand back `grep foo` from `grep foo > /etc/passwd` and allow it.
-jstr() {
+ra_jstr() {
   local key="$1" s="$2" rest ch out='' i=0 len after
   rest="${s#*\"$key\"}"
   [ "$rest" = "$s" ] && return 1
@@ -91,21 +90,21 @@ jstr() {
 # `-exec` is the ONE that is only conditionally a door: `find . -name '*.md' -exec wc -l {} +` is
 # among the most common ways an agent reads a repo, and refusing it outright cost a prompt on pure
 # reads (measured: it is what stopped a plan-mode session on 2026-07-26). So -exec RECURSES into
-# verb_ok, exactly as xargs_ok does below and for exactly the same reason — a launcher is precisely
+# ra_verb_ok, exactly as ra_xargs_ok does below and for exactly the same reason — a launcher is precisely
 # as safe as the thing it launches. Deny-by-default survives untouched: an unrecognised verb after
-# -exec falls through verb_ok's final `*) return 1` and still prompts.
+# -exec falls through ra_verb_ok's final `*) return 1` and still prompts.
 #   -execdir/-ok/-okdir stay refused: -ok/-okdir prompt on a tty we do not have, and -execdir
 #   changes the working directory per match, so the command a human reads is not the one that runs.
 # The outer loop deliberately keeps scanning AFTER the recursion, so a tail like
 # `-exec wc -l {} + -o -delete` is still caught by the -delete arm.
-find_ok() {
+ra_find_ok() {
   while [ $# -gt 0 ]; do
     case "$1" in
       -execdir|-ok|-okdir|-delete|-fls|-fprint|-fprintf) return 1;;
       -exec)
         shift
         [ $# -gt 0 ] || return 1          # `-exec` with nothing after it is not something we parsed
-        verb_ok "$@" || return 1;;
+        ra_verb_ok "$@" || return 1;;
     esac
     shift
   done
@@ -115,30 +114,30 @@ find_ok() {
 # sed(1): -i rewrites in place; the `w`/`W` commands and the s///w flag open a file for writing;
 # the `e` command and the s///e flag execute the pattern space as a shell command.
 # Patterns live in variables: bash 3.2 mis-parses escapes written inline inside [[ =~ ]].
-SED_WRITE_CMD='(^|[;{}!]|[[:space:]])[wW][[:space:]]'
-SED_EXEC_CMD='(^|[;{}!]|[[:space:]])e([[:space:]]|$)'
-SED_BAD_FLAG='/[a-zA-Z0-9]*[we]([;}]|[[:space:]]|$)'
-sed_ok() {
+RA_SED_WRITE_CMD='(^|[;{}!]|[[:space:]])[wW][[:space:]]'
+RA_SED_EXEC_CMD='(^|[;{}!]|[[:space:]])e([[:space:]]|$)'
+RA_SED_BAD_FLAG='/[a-zA-Z0-9]*[we]([;}]|[[:space:]]|$)'
+ra_sed_ok() {
   local a
   for a in "$@"; do
     case "$a" in
       -i|--in-place|-i*) return 1;;
     esac
-    [[ "$a" =~ $SED_WRITE_CMD ]] && return 1
-    [[ "$a" =~ $SED_EXEC_CMD ]]  && return 1
-    [[ "$a" =~ $SED_BAD_FLAG ]]  && return 1
+    [[ "$a" =~ $RA_SED_WRITE_CMD ]] && return 1
+    [[ "$a" =~ $RA_SED_EXEC_CMD ]]  && return 1
+    [[ "$a" =~ $RA_SED_BAD_FLAG ]]  && return 1
   done
   return 0
 }
 
 # awk(1): comparisons like `$1 > 5` are legitimate, so `>` cannot be banned outright — we ban the
 # constructs that actually leave the process: redirect-to-file, pipe-to-command, and system().
-AWK_REDIR='(print|printf)[^;}]*>'
-AWK_REDIR2='>[[:space:]]*"'
-AWK_SYSTEM='system[[:space:]]*\('
-AWK_PIPECMD='\|[[:space:]]*"'
-AWK_CLOSE='close[[:space:]]*\('
-awk_ok() {
+RA_AWK_REDIR='(print|printf)[^;}]*>'
+RA_AWK_REDIR2='>[[:space:]]*"'
+RA_AWK_SYSTEM='system[[:space:]]*\('
+RA_AWK_PIPECMD='\|[[:space:]]*"'
+RA_AWK_CLOSE='close[[:space:]]*\('
+ra_awk_ok() {
   local a skip=0 seen_prog=0
   for a in "$@"; do
     if [ "$skip" = 1 ]; then skip=0; continue; fi
@@ -148,18 +147,18 @@ awk_ok() {
     esac
     [ "$seen_prog" = 1 ] && continue
     seen_prog=1
-    [[ "$a" =~ $AWK_REDIR ]]   && return 1
-    [[ "$a" =~ $AWK_REDIR2 ]]  && return 1
-    [[ "$a" =~ $AWK_SYSTEM ]]  && return 1
-    [[ "$a" =~ $AWK_PIPECMD ]] && return 1
-    [[ "$a" =~ $AWK_CLOSE ]]   && return 1
+    [[ "$a" =~ $RA_AWK_REDIR ]]   && return 1
+    [[ "$a" =~ $RA_AWK_REDIR2 ]]  && return 1
+    [[ "$a" =~ $RA_AWK_SYSTEM ]]  && return 1
+    [[ "$a" =~ $RA_AWK_PIPECMD ]] && return 1
+    [[ "$a" =~ $RA_AWK_CLOSE ]]   && return 1
   done
   return 0
 }
 
 # git(1): read plumbing and porcelain only. Subcommands that mutate refs, the index, the worktree
 # or a remote are absent by omission; the four that are read-only ONLY in some forms are gated.
-git_ok() {
+ra_git_ok() {
   while [ $# -gt 0 ]; do                             # skip pre-subcommand options
     case "$1" in
       -C|-c|--git-dir|--work-tree|--namespace) shift 2>/dev/null || return 1; shift 2>/dev/null || return 1; continue;;
@@ -206,7 +205,7 @@ git_ok() {
 # `route` joins the plain readers: it derives a tier from task frontmatter and CONVENTIONS and
 # writes nothing at all. `depth` (T-195/T-197) joins them too: `depth` and `depth <ID>` only read
 # the board and print a number — bare or with an ID, both pass.
-polaris_ok() {
+ra_polaris_ok() {
   case "${1:-}" in
     find|show|board-fm|status|brain|metrics|why|drift|rules|version|help|history|report|triage|pack|route|--help|-h|'') return 0;;
     # `role`, `doc` and `router` only print kit documents (doc-server § 4): every form is a read.
@@ -221,7 +220,7 @@ polaris_ok() {
              '') [ $# -le 1 ] && return 0 || return 1;;
              --plan) case "${3:-}" in ''|-*|*[!A-Za-z0-9._-]*) return 1;; esac
                      shift 3
-                     for _sp in "$@"; do case "$_sp" in -*|*[!A-Za-z0-9._/:~-]*) return 1;; esac; done
+                     for RA_SP in "$@"; do case "$RA_SP" in -*|*[!A-Za-z0-9._/:~-]*) return 1;; esac; done
                      return 0;;
              *) return 1;;
            esac;;
@@ -273,7 +272,7 @@ polaris_ok() {
 
 # xargs(1) is a launcher: it is exactly as safe as the command it launches, so recurse.
 # With no command it defaults to echo.
-xargs_ok() {
+ra_xargs_ok() {
   while [ $# -gt 0 ]; do
     case "$1" in
       -I|-i|-n|-P|-d|-s|-L|-a|-E|--max-args|--max-procs|--delimiter|--replace|--arg-file)
@@ -283,11 +282,11 @@ xargs_ok() {
     esac
   done
   [ $# -gt 0 ] || return 0
-  verb_ok "$@"
+  ra_verb_ok "$@"
 }
 
 # ---------------------------------------------------------------- the verb gate
-verb_ok() {
+ra_verb_ok() {
   local v="$1"; shift
   case "$v" in
     # Pure readers. No flag of theirs writes a file or runs a program.
@@ -298,15 +297,15 @@ verb_ok() {
     printenv|locale|tty|uptime|ps|pgrep|which|type|command|cd|pushd|popd|dirs|sleep|wait)
       return 0;;
     sort)   while [ $# -gt 0 ]; do case "$1" in -o|--output|-o*|--output=*) return 1;; esac; shift; done; return 0;;
-    find)   find_ok "$@";;
-    sed)    sed_ok "$@";;
-    awk|gawk|mawk|nawk) awk_ok "$@";;
-    git)    git_ok "$@";;
-    xargs)  xargs_ok "$@";;
-    ops/polaris|./ops/polaris) polaris_ok "$@";;
+    find)   ra_find_ok "$@";;
+    sed)    ra_sed_ok "$@";;
+    awk|gawk|mawk|nawk) ra_awk_ok "$@";;
+    git)    ra_git_ok "$@";;
+    xargs)  ra_xargs_ok "$@";;
+    ops/polaris|./ops/polaris) ra_polaris_ok "$@";;
     bash|sh) # only as the documented launcher for our own read commands
       case "${1:-}" in
-        ops/polaris|./ops/polaris) shift; polaris_ok "$@";;
+        ops/polaris|./ops/polaris) shift; ra_polaris_ok "$@";;
         *) return 1;;
       esac;;
     # Everything else — including python, node, tee, cp, mv, rm — falls through to a prompt.
@@ -315,10 +314,10 @@ verb_ok() {
 }
 
 # ---------------------------------------------------------------- segment check
-check_segment() {
+ra_check_segment() {
   local toks="$1" OLDIFS="$IFS"
   [ -n "$toks" ] || return 0
-  IFS="$SEP"
+  IFS="$RA_SEP"
   # shellcheck disable=SC2086
   set -- $toks
   IFS="$OLDIFS"
@@ -334,14 +333,14 @@ check_segment() {
     esac
   done
   [ $# -gt 0 ] || return 0
-  verb_ok "$@"
+  ra_verb_ok "$@"
 }
 
 # ---------------------------------------------------------------- the scanner
 # ONE pass over the command. Tracks quoting, refuses every construct that can reach a shell
 # (substitution, subshell, background, process substitution), validates each redirection, and
-# hands finished segments to check_segment. Returns 1 the moment anything is not understood.
-scan() {
+# hands finished segments to ra_check_segment. Returns 1 the moment anything is not understood.
+ra_scan() {
   local cmd="$1"                 # separate statement: `local a=$1 b=${#a}` is not portable
   local len=${#cmd}
   local i=0 c n st=none tok='' toks='' target
@@ -376,8 +375,8 @@ scan() {
       '(' | ')' | '}') return 1;;                            # subshells and groups: not parsed
       '&')
         if [ "$n" = "&" ]; then                              # && — segment boundary
-          [ -n "$tok" ] && toks="$toks$SEP$tok"; tok=''
-          check_segment "${toks#$SEP}" || return 1
+          [ -n "$tok" ] && toks="$toks$RA_SEP$tok"; tok=''
+          ra_check_segment "${toks#$RA_SEP}" || return 1
           toks=''; i=$((i + 2))
         elif [ "$n" = ">" ]; then                            # &> — redirect, handled below
           i=$((i + 1))
@@ -393,18 +392,18 @@ scan() {
           return 1                                           # backgrounding
         fi;;
       '|')
-        [ -n "$tok" ] && toks="$toks$SEP$tok"; tok=''
-        check_segment "${toks#$SEP}" || return 1
+        [ -n "$tok" ] && toks="$toks$RA_SEP$tok"; tok=''
+        ra_check_segment "${toks#$RA_SEP}" || return 1
         toks=''
         if [ "$n" = "|" ]; then i=$((i + 2)); else i=$((i + 1)); fi;;
       ';' | $'\n')
-        [ -n "$tok" ] && toks="$toks$SEP$tok"; tok=''
-        check_segment "${toks#$SEP}" || return 1
+        [ -n "$tok" ] && toks="$toks$RA_SEP$tok"; tok=''
+        ra_check_segment "${toks#$RA_SEP}" || return 1
         toks=''; i=$((i + 1));;
       '<')
         [ "$n" = "<" ] && return 1                           # heredoc / herestring
         [ "$n" = "(" ] && return 1                           # process substitution
-        [ -n "$tok" ] && { toks="$toks$SEP$tok"; tok=''; }
+        [ -n "$tok" ] && { toks="$toks$RA_SEP$tok"; tok=''; }
         i=$((i + 1))
         while [ "${cmd:i:1}" = " " ]; do i=$((i + 1)); done
         while [ "$i" -lt "$len" ]; do                        # consume the source file
@@ -413,7 +412,7 @@ scan() {
         done;;
       '>')
         # A file descriptor prefix (the 2 of `2>`) is part of the redirect, not a token.
-        case "$tok" in ''|*[!0-9]*) [ -n "$tok" ] && { toks="$toks$SEP$tok"; tok=''; };; *) tok='';; esac
+        case "$tok" in ''|*[!0-9]*) [ -n "$tok" ] && { toks="$toks$RA_SEP$tok"; tok=''; };; *) tok='';; esac
         i=$((i + 1))
         [ "${cmd:i:1}" = ">" ] && i=$((i + 1))               # >>
         if [ "${cmd:i:1}" = "&" ]; then                      # >&1 / >&2 — no file is written
@@ -427,28 +426,28 @@ scan() {
         done
         case "$target" in /dev/null|/dev/stdout|/dev/stderr) ;; *) return 1;; esac;;
       ' ' | '	')
-        [ -n "$tok" ] && { toks="$toks$SEP$tok"; tok=''; }
+        [ -n "$tok" ] && { toks="$toks$RA_SEP$tok"; tok=''; }
         i=$((i + 1));;
       *) tok="$tok$c"; i=$((i + 1));;
     esac
   done
   [ "$st" = none ] || return 1                               # unterminated quote
-  [ -n "$tok" ] && toks="$toks$SEP$tok"
-  check_segment "${toks#$SEP}" || return 1
+  [ -n "$tok" ] && toks="$toks$RA_SEP$tok"
+  ra_check_segment "${toks#$RA_SEP}" || return 1
   return 0
 }
 
 # ---------------------------------------------------------------- PowerShell: deny by default
 # PowerShell is the primary shell on Windows, so plan mode's reads arrive as `tool_name
 # "PowerShell"` just as often as `"Bash"`. This is a SEPARATE, PURE-BASH parser — it never shells
-# out to powershell.exe — proving the same "read-only, token by token" property scan() proves for
+# out to powershell.exe — proving the same "read-only, token by token" property ra_scan() proves for
 # Bash, over PowerShell's own grammar. Same corollary as above: any doubt is NO OUTPUT AT ALL.
 #
 # Allowed cmdlets (case-insensitive) and their common aliases, per ops/contracts/readonly-powershell.md.
-ps_lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+ra_ps_lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
-ps_verb_ok() {
-  case "$(ps_lc "$1")" in
+ra_ps_verb_ok() {
+  case "$(ra_ps_lc "$1")" in
     get-childitem|gci|ls|dir)       return 0;;
     get-content|gc|cat|type)        return 0;;
     get-item|gi)                    return 0;;
@@ -478,16 +477,16 @@ ps_verb_ok() {
 
 # Only these four take a trailing `{ … }` script block (the contract's own list — Measure-Object
 # is an allowed verb but not a script-block one).
-ps_sb_verb() {
-  case "$(ps_lc "$1")" in
+ra_ps_sb_verb() {
+  case "$(ra_ps_lc "$1")" in
     where-object|where|'?'|select-object|select|sort-object|sort|group-object|group) return 0;;
     *) return 1;;
   esac
 }
 
 # Finds the `}` matching the `{` whose contents start at index $2 in $1, tracking quotes so a
-# brace inside a string does not end the block early. Index comes back in REPLY_IDX.
-ps_find_close_brace() {
+# brace inside a string does not end the block early. Index comes back in RA_REPLY_IDX.
+ra_ps_find_close_brace() {
   local cmd="$1" i="$2"
   local len=${#cmd} depth=1 c st=none
   while [ "$i" -lt "$len" ]; do
@@ -502,7 +501,7 @@ ps_find_close_brace() {
       "'") st=single;;
       '"') st=double;;
       '{') depth=$((depth + 1));;
-      '}') depth=$((depth - 1)); [ "$depth" -eq 0 ] && { REPLY_IDX="$i"; return 0; };;
+      '}') depth=$((depth - 1)); [ "$depth" -eq 0 ] && { RA_REPLY_IDX="$i"; return 0; };;
     esac
     i=$((i + 1))
   done
@@ -511,10 +510,10 @@ ps_find_close_brace() {
 
 # One pipeline segment (or one script-block segment — `$_`/`$PSItem` reads pass the same gate
 # as a verb, since a script block is just a tiny expression, not a command).
-ps_check_segment() {
+ra_ps_check_segment() {
   local toks="$1" OLDIFS="$IFS" v
   [ -n "$toks" ] || return 0
-  IFS="$SEP"
+  IFS="$RA_SEP"
   # shellcheck disable=SC2086
   set -- $toks
   IFS="$OLDIFS"
@@ -522,20 +521,20 @@ ps_check_segment() {
   v="$1"; shift
   case "$v" in
     '$'*) return 0;;                    # $_, $PSItem, $_.Prop — a read, never a command
-    git)  git_ok "$@";;
+    git)  ra_git_ok "$@";;
     bash)
       case "${1:-}" in
-        ops/polaris|./ops/polaris) shift; polaris_ok "$@";;
+        ops/polaris|./ops/polaris) shift; ra_polaris_ok "$@";;
         *) return 1;;
       esac;;
-    ops/polaris|./ops/polaris) polaris_ok "$@";;
-    *)    ps_verb_ok "$v";;
+    ops/polaris|./ops/polaris) ra_polaris_ok "$@";;
+    *)    ra_ps_verb_ok "$v";;
   esac
 }
 
-# ONE pass over a PowerShell command string. Mirrors scan()'s shape and the same fail-closed
+# ONE pass over a PowerShell command string. Mirrors ra_scan()'s shape and the same fail-closed
 # rule: the moment anything is not fully understood, return 1 and the normal prompt runs.
-ps_scan() {
+ra_ps_scan() {
   local cmd="$1"                 # separate statement: `local a=$1 b=${#a}` is not portable
   local len=${#cmd}
   local i=0 c n st=none tok='' toks='' prevtok='' closeidx inner
@@ -574,11 +573,11 @@ ps_scan() {
       '&')  return 1;;                                    # call operator
       '(' | ')') return 1;;                               # not parsed outside a script block
       '{')
-        if [ -z "$tok" ] && ps_sb_verb "$prevtok"; then
-          ps_find_close_brace "$cmd" "$((i + 1))" || return 1
-          closeidx="$REPLY_IDX"
+        if [ -z "$tok" ] && ra_ps_sb_verb "$prevtok"; then
+          ra_ps_find_close_brace "$cmd" "$((i + 1))" || return 1
+          closeidx="$RA_REPLY_IDX"
           inner="${cmd:i+1:closeidx-i-1}"
-          ps_scan "$inner" || return 1                    # recurse: same rules apply inside
+          ra_ps_scan "$inner" || return 1                    # recurse: same rules apply inside
           tok='{}'; i=$((closeidx + 1))
         else
           return 1
@@ -590,12 +589,12 @@ ps_scan() {
           *)  return 1;;                                  # an assignment
         esac;;
       ';' | $'\n')
-        [ -n "$tok" ] && { toks="$toks$SEP$tok"; prevtok="$tok"; tok=''; }
-        ps_check_segment "${toks#$SEP}" || return 1
+        [ -n "$tok" ] && { toks="$toks$RA_SEP$tok"; prevtok="$tok"; tok=''; }
+        ra_ps_check_segment "${toks#$RA_SEP}" || return 1
         toks=''; prevtok=''; i=$((i + 1));;
       '|')
-        [ -n "$tok" ] && { toks="$toks$SEP$tok"; prevtok="$tok"; tok=''; }
-        ps_check_segment "${toks#$SEP}" || return 1
+        [ -n "$tok" ] && { toks="$toks$RA_SEP$tok"; prevtok="$tok"; tok=''; }
+        ra_ps_check_segment "${toks#$RA_SEP}" || return 1
         toks=''; prevtok=''; i=$((i + 1));;
       '<')  return 1;;                                    # not a construct this parser proves
       '>')
@@ -613,42 +612,61 @@ ps_scan() {
         else return 1
         fi;;
       ' ' | '	')
-        [ -n "$tok" ] && { toks="$toks$SEP$tok"; prevtok="$tok"; tok=''; }
+        [ -n "$tok" ] && { toks="$toks$RA_SEP$tok"; prevtok="$tok"; tok=''; }
         i=$((i + 1));;
       *) tok="$tok$c"; i=$((i + 1));;
     esac
   done
   [ "$st" = none ] || return 1                              # unterminated quote
-  [ -n "$tok" ] && toks="$toks$SEP$tok"
-  ps_check_segment "${toks#$SEP}" || return 1
+  [ -n "$tok" ] && toks="$toks$RA_SEP$tok"
+  ra_ps_check_segment "${toks#$RA_SEP}" || return 1
   return 0
 }
 
 # ---------------------------------------------------------------- entry
+# The body of _ra_hook (below): IN holds the payload, HOUT gets the verdict, and every `return` was
+# an `exit` of the standalone script. Every name here carries ra_/RA_ so the four guards share a shell.
+_ra_run() {
+RA_VERDICT=ask
 if [ "${1:-}" = "--test" ]; then
-  scan "${2:-}" && echo allow || echo ask
-  exit 0
+  if ra_scan "${2:-}"; then printf -v HOUT '%s\n' allow; else printf -v HOUT '%s\n' ask; fi
+  return 0
 fi
 if [ "${1:-}" = "--test-ps" ]; then
-  ps_scan "${2:-}" && echo allow || echo ask
-  exit 0
+  if ra_ps_scan "${2:-}"; then printf -v HOUT '%s\n' allow; else printf -v HOUT '%s\n' ask; fi
+  return 0
 fi
 
-IN="$(cat)"
-jstr tool_name "$IN" || exit 0
+ra_jstr tool_name "$IN" || return 0
 case "$REPLY" in
-  Bash)       SCANNER=scan;    REASON="every segment proven read-only";;
-  PowerShell) SCANNER=ps_scan; REASON="every PowerShell segment proven read-only";;
-  *)          exit 0;;
+  Bash)       RA_SCANNER=ra_scan;    RA_REASON="every segment proven read-only";;
+  PowerShell) RA_SCANNER=ra_ps_scan; RA_REASON="every PowerShell segment proven read-only";;
+  *)          return 0;;
 esac
-jstr command "${IN#*\"tool_input\"}" || exit 0
-CMD="$REPLY"
-[ -n "$CMD" ] || exit 0
+ra_jstr command "${IN#*\"tool_input\"}" || return 0
+RA_CMD="$REPLY"
+[ -n "$RA_CMD" ] || return 0
 
-"$SCANNER" "$CMD" || exit 0
-VERDICT=allow
+"$RA_SCANNER" "$RA_CMD" || return 0
+RA_VERDICT=allow
 
 # Claude Code reads this and skips the prompt. Any other output shape is ignored, which is
 # another reason a bug here degrades to "ask" rather than to "allow".
-printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"%s","permissionDecisionReason":"POLARIS: %s"}}\n' "$VERDICT" "$REASON"
-exit 0
+printf -v HOUT '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"%s","permissionDecisionReason":"POLARIS: %s"}}\n' "$RA_VERDICT" "$RA_REASON"
+return 0
+}
+
+# ---------------------------------------------------------------- the entry function
+# hook-dispatch.md § 1: IN in, HOUT/HERR/HRC out; never prints, exits or reads stdin. The standalone
+# script always ran under `set -u`, so the body does too, and the caller's nounset is put back as found.
+_ra_hook() {
+  HOUT=''; HERR=''; HRC=0
+  RA_OPT="$-"; set -u
+  _ra_run ${1+"$@"} || :
+  case "$RA_OPT" in *u*) ;; *) set +u;; esac
+  return 0
+}
+
+# --- standalone face: executed, not sourced → exactly what the script always printed, and exit 0.
+#     --test and --test-ps never read stdin, and still do not.
+case "${BASH_SOURCE[0]}" in "$0") IN=''; case "${1:-}" in --test|--test-ps) ;; *) IFS= read -r -d '' IN 2>/dev/null;; esac; _ra_hook "$@"; printf '%s' "$HOUT"; [ -z "$HERR" ] || printf '%s' "$HERR" >&2; exit "$HRC";; esac

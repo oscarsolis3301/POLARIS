@@ -109,7 +109,7 @@ Do not read `ops/board/**` in bulk; `board-fm` exists for that.
    collect the rc the way `bash ops/polaris doc PROTOCOL "LONG COMMANDS"` names for where you are. Top-level: ONE
    `bash ops/polaris bg wait ship-<ID> --done` issued with `run_in_background: true`, then end the
    turn — the harness wakes you once, and the rc file is the truth. A conductor's subagent: `bash
-   ops/polaris bg wait ship-<ID> --max 240` repeated until the rc is not 2 (0 green · 1 red · 2 still
+   ops/polaris bg wait ship-<ID> --max 120` repeated until the rc is not 2 (0 green · 1 red · 2 still
    running · 3 unknown · 4 timed out) — never a foreground wait that can cross the 600s cap, because
    a background notification never reaches a subagent. A `queued:` line (rc 3) means the lane stayed busy: report queued and
    retry at the next wave boundary. `risk: high` and STOP-AND-ASK work never reaches SOLO, so the

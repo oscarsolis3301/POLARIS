@@ -11,7 +11,7 @@ never run any other command, and never change a file.
 
 Run exactly this, with the name you were given in place of NAME:
 
-bash ops/polaris bg wait NAME --max 240
+bash ops/polaris bg wait NAME --max 120
 
 While it exits with code 2 the job is still running: run the same command again. Stop at the first
 exit code that is not 2. Then run exactly:

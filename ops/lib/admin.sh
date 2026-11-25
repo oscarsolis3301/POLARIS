@@ -307,65 +307,10 @@ refresh_machine_kit() { # keep ~/.claude/skills/polaris-install/ in step with wh
     note "  Re-run  ops/polaris update  shortly, or:  python polaris-v5.zip --claude-skill"
   fi
 
-  # Arm auto mode in the user's OWN settings, exactly as a fresh install does — so `update` makes
-  # THIS machine seamless too, not just the next fresh repo. Sibling of bootstrap.py::merge_permissions;
-  # keep the key set in step. Set-if-absent (an explicit stricter defaultMode is respected) and SILENT
-  # (no say/note — the quiet-line count above the ▶ NEXT epilogue is load-bearing). Fails OPEN under
-  # `set -eu`: a settings hiccup must never fail an update that already succeeded, so it is guarded and
-  # `|| true`. A present-but-malformed settings.json is left untouched; only an ABSENT one is created.
-  # It also unions the repo's read-only permission rules into the user's settings. Before 5.20.0
-  # this armed the three auto-mode keys and nothing else, so a machine installed BEFORE a rule was
-  # added never received it — new rules only ever reached brand-new installs. The rules are read
-  # from the repo's own .claude/settings.json (which the refresh above just updated) rather than
-  # duplicated here: one list, in the kit, is the only way the two paths cannot drift.
-  local SJ="$HOME/.claude/settings.json" RJ="$PRIMARY/.claude/settings.json" PY=""
-  python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
-  if [ -n "$PY" ]; then
-    "$PY" - "$SJ" "$RJ" <<'AUTOMODE' || true
-import json, os, sys
-p = sys.argv[1]
-repo = sys.argv[2] if len(sys.argv) > 2 else ""
-if os.path.exists(p):
-    try:
-        with open(p, encoding="utf-8") as fh:
-            d = json.load(fh)
-    except (OSError, ValueError):
-        sys.exit(0)                      # present but unreadable/malformed → never overwrite
-else:
-    d = {}
-if not isinstance(d, dict):
-    sys.exit(0)                          # someone else's non-object config — leave it be
-changed = False
-perms = d.get("permissions")
-if isinstance(perms, dict):
-    if "defaultMode" not in perms:
-        perms["defaultMode"] = "auto"; changed = True
-elif perms is None:
-    perms = d["permissions"] = {"defaultMode": "auto"}; changed = True
-for k in ("skipAutoPermissionPrompt", "useAutoModeDuringPlan"):
-    if k not in d:
-        d[k] = True; changed = True
-if isinstance(perms, dict) and repo and os.path.exists(repo):
-    try:
-        with open(repo, encoding="utf-8") as fh:
-            rules = (json.load(fh).get("permissions") or {}).get("allow") or []
-    except (OSError, ValueError, AttributeError):
-        rules = []
-    allow = perms.get("allow")
-    if allow is None:
-        allow = perms["allow"] = []
-    if isinstance(allow, list):
-        for rule in rules:
-            if rule not in allow:
-                allow.append(rule); changed = True
-if changed:
-    os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
-    tmp = p + ".polaris-tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps(d, indent=2) + "\n")
-    os.replace(tmp, p)
-AUTOMODE
-  fi
+  # No permission rules or auto-mode keys are written into Claude Code's own settings
+  # here (shared-kit.md § 11, 6.22.0): before this, every update armed `defaultMode: auto`, the two
+  # auto-mode keys and the repo's read-only rules in ~/.claude/settings.json — an agent running
+  # `update` granted itself permissions. Granting them is the owner's own step: python polaris-v5.zip --setup.
 }
 
 _speed_ev() { # _speed_ev report|plan — the landing and lanes read of `speed` (minutes.md § 5.3, hour.md § 4):
@@ -653,6 +598,23 @@ cmd_update() { # update [--repo-only] · update --auto [--say] [--repo-only] [--
       *) die "update: unknown flag ${a} (only --auto, --say, --all, --repo-only, --major)";;
     esac
   done
+
+  # MACHINE MODE (POLARIS_LAUNCHER set — ops/contracts/shared-kit.md § 3, § 5; auto-update.md v6):
+  # `update` and `update --auto` are machine operations — the store gets the next kit, checked
+  # against the channel's zip_sha256, and every joined project moves when all are quiet. This
+  # project's tree is never touched: no re-exec (nothing overwrites the running kit, which stays in
+  # the store beside the new one), no park, no install.sh, no commit, no settings write.
+  # `--repo-only` has no meaning here and is ignored. `--all` stays the vendored registry walk, so
+  # the launcher mark is dropped before it and the walk's children run as vendored kits.
+  if [ -n "${POLARIS_LAUNCHER:-}" ]; then
+    if [ "$all" = 1 ]; then
+      unset POLARIS_LAUNCHER
+    else
+      [ "$auto" = 1 ] || [ "$say_" = 0 ] || die "update: --say belongs to --auto (update --auto --say)"
+      _store_update "$auto" "$say_" "$major" || return $?
+      return 0
+    fi
+  fi
 
   # Self-hosting repo (kit/ops/pack.py is the tell — ops/contracts/self-hosting.md): ops/ here
   # is an INSTALLATION and main's tarball serves that same installation, so update would install
@@ -1172,6 +1134,8 @@ cmd_update_auto() { # cmd_update_auto <say> <repo_only> [major] — the SessionS
   # non-zero, never prints more than one line: a hook must never fail the session or flood it.
   local say_="${1:-0}" repo_only="${2:-0}" major="${3:-0}" cur latest mode log rc new
   local wy wf we wl ww ws wd now f
+  # 0. machine mode (shared-kit.md § 5): the session-start update is the machine's, never this repo's
+  if [ -n "${POLARIS_LAUNCHER:-}" ]; then _store_update 1 "$say_" "$major" || :; return 0; fi
   # 1. self-hosting — this repo never self-updates (cmd_update exits before the re-exec; kept here
   #    so the function stands alone for anyone who calls it directly)
   if [ -f "$PRIMARY/kit/ops/pack.py" ]; then
@@ -1324,6 +1288,9 @@ cmd_update_all() { # cmd_update_all <repo_only> [major] — walk the machine reg
     if [ -n "${k#*"$POLARIS_TAB"}" ]; then rm -f "$f"; printf '%s: same project as %s — registry entry removed\n' "$p" "${k#*"$POLARIS_TAB"}"; continue; fi
     seen="$seen${seen:+$'\n'}${k%"$POLARIS_TAB"*}$POLARIS_TAB$p"
     if [ -f "$p/.git" ]; then printf '%s: a worktree — skipped\n' "$p"; continue; fi
+    # shared-kit.md § 5: a joined project holds a launcher (ops/polaris, no ops/lib/) and no ops/VERSION —
+    # the machine update moves it, so its entry is skipped, never removed by the rule below.
+    if [ -f "$p/ops/polaris" ] && [ ! -d "$p/ops/lib" ]; then printf '%s: machine kit — moves with the machine update\n' "$p"; continue; fi
     if [ ! -f "$p/ops/VERSION" ]; then rm -f "$f"; printf '%s: no POLARIS here (no ops/VERSION) — registry entry removed\n' "$p"; continue; fi
     if [ -f "$p/kit/ops/pack.py" ]; then printf '%s: self-hosting — skipped\n' "$p"; continue; fi
     # shellcheck disable=SC2086
@@ -1353,9 +1320,11 @@ EOF
 # one adopt run silences both commands forever without changing any behavior.
 
 cmd_adopt() {
-  # The registry stays on $OPS here, not kit_file: an install that predates it gets the remedy die
-  # (adopt-stub pins it), and kit_file's fallback would answer for it from the kit.
-  local keys="$OPS/KEYS.tsv" marker cr added=0 total=0 key since def cost ask
+  # KEYS.tsv is KIT data (shared-kit.md § 14): kit_file — a repo copy still wins, else the kit beside
+  # the CLI, so a state-only repo reads the machine kit's registry. Missing from both can only mean an
+  # incomplete vendored kit: the remedy die (adopt-stub pins it with a vendored copy of the CLI).
+  local keys marker cr added=0 total=0 key since def cost ask
+  keys="$(kit_file KEYS.tsv)"
   [ -f "$keys" ] || die "no ops/KEYS.tsv here — this install predates the key registry; it ships with:  ops/polaris update"
   [ -f "$CONV" ] || die "no ops/CONVENTIONS.md — INIT has never run here, and adopt never creates it; run bash ops/polaris role INIT first"
   marker='# --- known keys not set here (polaris adopt; uncomment a line to enable it) ---'
@@ -1523,10 +1492,12 @@ cmd_heal() { # heal — repair the configuration efficiency depends on. Safe to 
   # 0 — a config nicety must never be the thing that fails an install or an update. ONE `note` on the
   # run that creates it and silence forever after; `say` here would be a new stdout line on an
   # install path and would eat the quiet-line budget the CI tripwire counts.
-  # The template stays on $OPS, not kit_file: a repo whose install shipped no template is told
-  # nothing (heal-design pins that), and kit_file's fallback would answer for it from the kit.
-  if [ -f "$OPS/templates/DESIGN.md" ] && [ ! -f "$OPS/DESIGN.md" ]; then
-    cp "$OPS/templates/DESIGN.md" "$OPS/DESIGN.md" 2>/dev/null \
+  # The template is KIT data (shared-kit.md § 14): kit_file — a repo copy still wins, else the kit's.
+  # No template anywhere can only mean an incomplete vendored kit, which is told nothing (heal-design
+  # pins that with a vendored copy of the CLI).
+  local dtpl; dtpl="$(kit_file templates/DESIGN.md)"
+  if [ -f "$dtpl" ] && [ ! -f "$OPS/DESIGN.md" ]; then
+    cp "$dtpl" "$OPS/DESIGN.md" 2>/dev/null \
       && note "healed: ops/DESIGN.md — the design bar every screen is judged against, installed from the template; fill in its '## THIS PRODUCT' section with one sentence on the look and feel you want, in your own words"
   fi
   # THE LAYOUT VERDICT (save-hops § 0.5). Refresh .polaris/hops-due, the one file `next`, `triage` and
@@ -1996,6 +1967,48 @@ EOF
   note "restart your agent session for the smaller system prompt to take effect"
 }
 
+_settings_sweep() { # _settings_sweep <settings.json> — sweep POLARIS out of one Claude Code settings file:
+  # every hook entry whose command names ops/hooks/ (every event) and `outputStyle: polaris`; every
+  # foreign entry is kept, a file left with nothing is removed. Moved out of cmd_uninstall unchanged
+  # (shared-kit.md § 7) so `migrate` sweeps with the SAME code. Prints what uninstall always printed.
+  local SJ="$1" PY=""
+  python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
+  # Widened past `ownership-guard` in 5.23.0: a repo whose guard entry was already gone would
+  # otherwise keep a dangling "outputStyle" pointing at a style this command just deleted.
+  # Widened again in 6.2.0, past PreToolUse: POLARIS now ships Stop, SessionStart and
+  # UserPromptSubmit hooks too, and a Stop entry left pointing at the deleted ops/hooks/ would
+  # error on EVERY turn in that repo, forever. Identity is the `ops/hooks/` PATH — exactly what
+  # install.sh merges by (install.sh:293-306) — so every event is swept and every foreign entry,
+  # whatever it runs, is kept.
+  if [ -f "$SJ" ] && grep -qE 'ops[/\]hooks|"outputStyle"' "$SJ" 2>/dev/null; then
+    if [ -n "$PY" ]; then
+      "$PY" - "$SJ" <<'EOF'
+import json, re, sys
+p = sys.argv[1]
+d = json.load(open(p))
+ours = re.compile(r"ops/hooks/")                          # PATH, never a basename — install.sh's rule
+mine = lambda e: isinstance(e, dict) and any(
+    isinstance(c, dict) and ours.search(str(c.get("command", "")).replace("\\", "/"))
+    for c in (e.get("hooks") or []))                      # backslashes folded: Windows commands match too
+h = d.get("hooks", {})
+if isinstance(h, dict):
+    for ev in list(h):                                    # EVERY event: Stop, SessionStart, PreToolUse …
+        keep = [e for e in h[ev] if not mine(e)] if isinstance(h[ev], list) else h[ev]
+        if keep: h[ev] = keep                             # keep every hook that isn't ours
+        else:    h.pop(ev, None)                          # an event with nothing left goes too
+if not h: d.pop("hooks", None)
+if d.get("outputStyle") == "polaris":
+    d.pop("outputStyle", None)                            # only OUR value — a style they chose is theirs
+if d: open(p, "w").write(json.dumps(d, indent=2) + "\n")
+else: __import__("os").remove(p)                          # the file held nothing but our hook
+EOF
+      say ".claude/settings.json: guard hook + output style removed (your other hooks kept)"
+    else
+      note "⚠ python unavailable — remove the ownership-guard hook from .claude/settings.json by hand"
+    fi
+  fi
+}
+
 cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and reversible only by git.
   # Re-exec from a copy FIRST: we are about to delete ops/polaris, and on Windows you cannot
   # unlink a file that is currently open — bash reads its script lazily, so removing ops/
@@ -2089,42 +2102,7 @@ cmd_uninstall() { # remove POLARIS from this repo. Destructive, explicit, and re
   fi
 
   # --- .claude/: guard hook out of settings.json (mirror of install.sh's merge-in), skill dir
-  local SJ="$PRIMARY/.claude/settings.json" PY=""
-  python3 -c pass >/dev/null 2>&1 && PY=python3 || { python -c pass >/dev/null 2>&1 && PY=python; } || true
-  # Widened past `ownership-guard` in 5.23.0: a repo whose guard entry was already gone would
-  # otherwise keep a dangling "outputStyle" pointing at a style this command just deleted.
-  # Widened again in 6.2.0, past PreToolUse: POLARIS now ships Stop, SessionStart and
-  # UserPromptSubmit hooks too, and a Stop entry left pointing at the deleted ops/hooks/ would
-  # error on EVERY turn in that repo, forever. Identity is the `ops/hooks/` PATH — exactly what
-  # install.sh merges by (install.sh:293-306) — so every event is swept and every foreign entry,
-  # whatever it runs, is kept.
-  if [ -f "$SJ" ] && grep -qE 'ops[/\]hooks|"outputStyle"' "$SJ" 2>/dev/null; then
-    if [ -n "$PY" ]; then
-      "$PY" - "$SJ" <<'EOF'
-import json, re, sys
-p = sys.argv[1]
-d = json.load(open(p))
-ours = re.compile(r"ops/hooks/")                          # PATH, never a basename — install.sh's rule
-mine = lambda e: isinstance(e, dict) and any(
-    isinstance(c, dict) and ours.search(str(c.get("command", "")).replace("\\", "/"))
-    for c in (e.get("hooks") or []))                      # backslashes folded: Windows commands match too
-h = d.get("hooks", {})
-if isinstance(h, dict):
-    for ev in list(h):                                    # EVERY event: Stop, SessionStart, PreToolUse …
-        keep = [e for e in h[ev] if not mine(e)] if isinstance(h[ev], list) else h[ev]
-        if keep: h[ev] = keep                             # keep every hook that isn't ours
-        else:    h.pop(ev, None)                          # an event with nothing left goes too
-if not h: d.pop("hooks", None)
-if d.get("outputStyle") == "polaris":
-    d.pop("outputStyle", None)                            # only OUR value — a style they chose is theirs
-if d: open(p, "w").write(json.dumps(d, indent=2) + "\n")
-else: __import__("os").remove(p)                          # the file held nothing but our hook
-EOF
-      say ".claude/settings.json: guard hook + output style removed (your other hooks kept)"
-    else
-      note "⚠ python unavailable — remove the ownership-guard hook from .claude/settings.json by hand"
-    fi
-  fi
+  _settings_sweep "$PRIMARY/.claude/settings.json"
   rm -rf "$PRIMARY/.claude/skills/polaris"
   rm -rf "$PRIMARY/.claude/skills/i-have-adhd"    # vendored by install.sh; see its SOURCE.md
   rm -f  "$PRIMARY/.claude/output-styles/polaris.md"   # ONLY ours — other styles are theirs to keep

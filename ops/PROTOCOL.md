@@ -1,8 +1,8 @@
 # POLARIS v5 — PROTOCOL reference
 
 The half of the protocol that only SOME sessions need. `CLAUDE.md` is the router every session pays
-for (the harness injects it into the conductor and into every subagent); this file is what you open
-when you actually need it. Read the section you need, not the file.
+for (the harness injects it into the conductor and into every subagent, so each of its bytes is paid
+6-8 times a run); this file is what you open when you actually need it. Read the section you need, not the file.
 
 | you need | section |
 |---|---|
@@ -99,6 +99,16 @@ A task's state is the folder its file sits in; moving it (via the script) is the
 
 Wherever a role file says "the value in ops/CONVENTIONS.md", it means the effective value: this repo's line, else this computer's preferences file, else the kit default — bash ops/polaris prefs shows all three and which one wins.
 
+**RULES.tsv, in full (Invariant 11 — owner decision, 2026-07-25).** The file is policy as DATA:
+add, edit and remove lines as the work requires, each change carrying a `#` comment naming WHO
+decided and WHY. `path` and `content` deny outright; `ask` is the same denial as `path`, lifted only
+by a human's recorded approval on the task — you never run `approve` yourself, so an `ask` denial
+means hand back for the human's yes. One thing this does NOT license: deleting a rule because it
+blocked you — that is the one motive the file exists to resist. Blocked and the rule looks wrong →
+say so and ask; blocked and it looks right → hand the task back. `.github/` needs a human's word
+before you touch it: an agent editing the tests that gate its own work is the sharpest version of the
+same problem. Converting a rule between `path` and `ask` is a HUMAN decision for that same reason.
+
 ## LANES — why the lane is a command, and why a role never does two jobs
 
 **The phases were never the expense. The CONTEXTS were.** Measured 2026-07-25/26: `qa`, `verify`,
@@ -168,6 +178,30 @@ never CHECKS: every gate runs exactly as before, and **a hop consumes exactly on
 event** (the hook licenses it by string equality, so a hop can never fire twice on the same event).
 `handover: off` restores one task per session.
 
+**The kickoff rules, in full** (the router's ROLE DISPATCH bullets, with their reasons):
+- **`start` is the everyday kickoff.** It means "take the next piece of work". Empty board → the
+  triage answer routes you to PLANNER instead of erroring.
+- **An approved plan is a kickoff, not a report.** The approval is the go for the whole run, in the
+  same chat; closing with "open a new chat and say…" is the exact failure that row exists to end.
+- **Scope guard:** `start` fires only when the message *is* a start phrase. "start the dev server",
+  "go fix the header" name an object — they are ordinary requests, not kickoffs.
+- **Unprompted work request.** No role named, not a start phrase, but the message asks to *change
+  the product* (add / build / create / implement / improve / redesign / refactor / fix / remove) →
+  author the task with a `plan:` slug, `triage <ID>`, claim that ID. A ready task is never picked up
+  just because it sits there. Never guess SOLO-vs-CONDUCTOR — the command is free; describe what you
+  want, POLARIS routes it.
+- **Guard:** a question about existing code ("what/why/how does X work", "where is…"), an
+  operational command ("run the tests", "deploy"), or POLARIS meta ("update POLARIS", "status") is
+  NOT a work request — handle it normally. The discriminant is intent to *change* the repo vs.
+  intent to *understand or operate* it. Genuinely unclear → ask in one line.
+- **"Use REA to…"** → skill `reverse-engineer-anything` gathers evidence first; then answer a
+  question, or send a build request to `triage` with it.
+- **INIT.** No role given and `ops/CONVENTIONS.md` does NOT exist → INIT has never run → you are
+  INIT. That file is the ONLY "has INIT run?" test; an `ops/board/` from an older installer proves nothing.
+- **Never a menu of execution strategies.** How many builders, one chat or several, board or no
+  board, which lane — these are `triage`'s answer, never a question. The interview (0b) is about the
+  PRODUCT; a question about how POLARIS itself will run was already answered by the CLI.
+
 ## N CHATS, ONE REPO — who waits, who parks, who queues
 Several chats, one checkout. The second session finds the task locked, the integration lane held, or
 somebody else's edits in the tree — and none of that is a question for the human:
@@ -208,6 +242,7 @@ the board mutex, never while holding it.
 **Plan and build as if you were alone.** Disjoint ownership is still the Planner's guarantee — but a
 second planner can file a task between your board read and your claim, and the claim-time
 disjointness gate is the backstop that blocks the loser rather than letting two chats edit one file.
+Do NOT rely on runtime self-organization: coordination is front-loaded into the Planner (THE ONE IDEA).
 
 ## SAVE HOPS — fewest lookups, ask first, then finish
 A hop is one lookup — a file opened, a search run — and each costs tokens and minutes. A Builder
@@ -381,7 +416,7 @@ of polling it; the Haiku runner sits between):
 | any job measured or expected < 300 s | foreground with an explicit timeout ≥ the measured time |
 | top-level session, ≥ 300 s | `bg run <name> -- <cmd>` · ONE `bg wait <name> --done` with `run_in_background: true` · end the turn; the harness wakes it once; the rc file is the truth |
 | top-level, ≥ 300 s, no background wake-up in this harness, `runner:` not `off` | spawn the runner (`route --role RUNNER` prints `agent: polaris-runner`) with the job name |
-| builder subagent | collect in-turn with `bg wait <name> --max 240` while rc 2, or hand `running: <name>` up to the caller |
+| builder subagent | collect in-turn with `bg wait <name> --max 120` while rc 2, or hand `running: <name>` up to the caller |
 | CI | `bg run proof-await -- bash tools/proof.sh --await macos-latest`, one backgrounded wait |
 | runner unavailable (Haiku refused or `runner: off`) | the chunked foreground `bg wait --max 540` |
 
