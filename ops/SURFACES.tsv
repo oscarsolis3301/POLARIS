@@ -26,3 +26,4 @@ kit/ops/lib/prefs.sh	ops/tests/prefs-cli.*	bash kit/ops/polaris check --only pre
 kit/ops/hooks/dispatch.sh	ops/tests/hook-dispatch.*	bash kit/ops/polaris check --only hook-dispatch	the one hook dispatcher, proven equal to the separate guards [T-345]
 kit/ops/hooks/shim.sh	ops/tests/hook-budget.*	bash kit/ops/polaris check --only hook-budget	the setup-installed shim and the no-fork path [T-345]
 kit/ops/hooks/dispatch-session.sh	ops/tests/session-context.*	bash kit/ops/polaris check --only session-context	the protocol, voice and ADHD lines at session start, and the zero-touch line [T-346]
+kit/ops/lib/join.sh	ops/tests/join-migrate.*	bash kit/ops/polaris check --only join-migrate	join and migrate, and the revert that undoes a migrate [T-349]
