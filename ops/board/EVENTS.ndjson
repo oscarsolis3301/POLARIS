@@ -1589,3 +1589,4 @@
 {"ts":1795569061,"ev":"wave-red","id":"T-345","who":"oscar@Dino","note":"bash tools/proof.sh"}
 {"ts":1795569062,"ev":"wave-red","id":"T-341","who":"oscar@Dino","note":"bash tools/proof.sh"}
 {"ts":1795570030,"ev":"new","id":"T-353","who":"oscar@Dino","note":"backlog","pts":2}
+{"ts":1795570040,"ev":"amend","id":"T-353","who":"oscar@Dino","note":"deps -T-346"}
