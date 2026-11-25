@@ -1600,3 +1600,4 @@
 {"ts":1795571158,"ev":"done","id":"T-346","who":"oscar@Dino","note":"","pts":10}
 {"ts":1795571163,"ev":"done","id":"T-353","who":"oscar@Dino","note":"","pts":2}
 {"ts":1795571173,"ev":"promote","id":"T-347","who":"oscar@Dino","note":"deps done: T-341, T-344","pts":13}
+{"ts":1795571235,"ev":"claim","id":"T-347","who":"oscar@Dino","note":"","pts":13}
