@@ -1530,3 +1530,15 @@
 {"ts":1795562671,"ev":"handoff","id":"T-340","who":"oscar@Dino","note":""}
 {"ts":1795562671,"ev":"all-review","id":"T-340","who":"oscar@Dino","note":"last lane landed — board is all review"}
 {"ts":1795562695,"ev":"done","id":"T-340","who":"oscar@Dino","note":"","pts":4}
+{"ts":1795565201,"ev":"new","id":"T-341","who":"oscar@Dino","note":"ready","pts":8}
+{"ts":1795565201,"ev":"new","id":"T-342","who":"oscar@Dino","note":"ready","pts":4}
+{"ts":1795565202,"ev":"new","id":"T-343","who":"oscar@Dino","note":"ready","pts":10}
+{"ts":1795565202,"ev":"new","id":"T-344","who":"oscar@Dino","note":"ready","pts":10}
+{"ts":1795565203,"ev":"new","id":"T-345","who":"oscar@Dino","note":"backlog","pts":8}
+{"ts":1795565203,"ev":"new","id":"T-346","who":"oscar@Dino","note":"backlog","pts":10}
+{"ts":1795565204,"ev":"new","id":"T-347","who":"oscar@Dino","note":"backlog","pts":13}
+{"ts":1795565204,"ev":"new","id":"T-348","who":"oscar@Dino","note":"backlog","pts":3}
+{"ts":1795565205,"ev":"new","id":"T-349","who":"oscar@Dino","note":"backlog","pts":13}
+{"ts":1795565205,"ev":"new","id":"T-350","who":"oscar@Dino","note":"backlog","pts":10}
+{"ts":1795565206,"ev":"new","id":"T-351","who":"oscar@Dino","note":"backlog","pts":5}
+{"ts":1795565206,"ev":"new","id":"T-352","who":"oscar@Dino","note":"backlog","pts":8}
