@@ -122,3 +122,35 @@ print("   one JSON object: " + ("yes" if list(o) == ["hookSpecificOutput"] and r
 print("   context opens with the router: " + ("yes" if c.startswith(r + "\n") else "NO"))
 n = len(c.encode("utf-8"))
 print("   context <= 9000 bytes: " + ("yes" if n <= 9000 else "NO (%d)" % n))' "$F/raw" "$F/router"
+
+# == a JOINED testbed (7.0.0, shared-kit.md §§ 6, 8): made by `join` itself, run by an agent
+# (CLAUDECODE=1). CLAUDE.md is the pointer block and nothing else; every everyday verb answers through
+# the launcher; role and router come from the store, byte for byte; afterwards the project still holds
+# only its launcher and state — no kit file, no .claude/, and the pointer was never expanded.
+export CLAUDECODE=1
+B="$F/testbed"; mkrepo "$B"
+echo '== joined testbed: join =='
+( cd "$B" && bash "$S/$KV/ops/polaris" join ) > "$F/out" 2>&1; echo "rc=$?"
+tail -n 1 "$F/out" | sed 's/^/   /'
+printf '<!-- POLARIS:BEGIN pointer -->\n%s\n<!-- POLARIS:END -->\n' \
+  'This project runs POLARIS from the kit on this computer; the protocol arrives at session start. Missing? Run `bash ops/polaris router` and follow it.' > "$F/pointer"
+cmp -s "$B/CLAUDE.md" "$F/pointer" && echo '   CLAUDE.md = the pointer block only' || echo '   CLAUDE.md: NOT the pointer block'
+echo '== joined testbed: every everyday verb through the launcher =='
+for v in version status help 'role BUILDER' 'doc PROTOCOL' 'doc --where' router prefs 'interview --init' next triage 'find x' check doctor; do
+  ( cd "$B" && bash ops/polaris $v ) > "$F/out.$$" 2>&1; printf '   %-17s rc=%s\n' "$v" "$?"
+  case "$v" in
+    'role BUILDER') cp "$F/out.$$" "$F/role";;
+    router) cp "$F/out.$$" "$F/rt";;
+    'doc --where') cp "$F/out.$$" "$F/where";;
+  esac
+done
+cmp -s "$F/role" "$S/$KV/ops/roles/BUILDER.md" && echo "   role BUILDER = the store kit's roles/BUILDER.md, byte-identical" || echo '   role BUILDER: NOT the store copy'
+tr -d '\r' < "$F/rt" | cmp -s - "$F/router" && echo "   router = the store kit's CLAUDE.md" || echo '   router: NOT the store copy'
+sed -n 's/^mode: /   mode: /p' "$F/where"
+[ "$(cd "$(sed -n 's/^kit: //p' "$F/where")" 2>/dev/null && pwd -P)" = "$(cd "$S/$KV/ops" && pwd -P)" ] \
+  && echo '   kit = the store copy: yes' || echo '   kit = the store copy: NO'
+echo '== joined testbed: afterwards =='
+cmp -s "$B/CLAUDE.md" "$F/pointer" && echo '   CLAUDE.md: still the pointer block only' || echo '   CLAUDE.md: CHANGED'
+( cd "$B/ops" && ls -A ) | sed 's/^/   ops\/ /'
+[ -e "$B/.claude" ] && echo '   .claude/: PRESENT' || echo '   .claude/: none'
+cmp -s "$B/ops/polaris" "$S/$KV/ops/launcher" && echo "   ops/polaris: still the store kit's launcher"

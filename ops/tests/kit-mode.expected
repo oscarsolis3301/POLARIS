@@ -54,3 +54,35 @@ rc=0
    one JSON object: yes · event SessionStart
    context opens with the router: yes
    context <= 9000 bytes: yes
+== joined testbed: join ==
+rc=0
+   installed · fresh
+   CLAUDE.md = the pointer block only
+== joined testbed: every everyday verb through the launcher ==
+   version           rc=0
+   status            rc=0
+   help              rc=0
+   role BUILDER      rc=0
+   doc PROTOCOL      rc=0
+   doc --where       rc=0
+   router            rc=0
+   prefs             rc=0
+   interview --init  rc=0
+   next              rc=0
+   triage            rc=0
+   find x            rc=1
+   check             rc=0
+   doctor            rc=0
+   role BUILDER = the store kit's roles/BUILDER.md, byte-identical
+   router = the store kit's CLAUDE.md
+   mode: machine
+   kit = the store copy: yes
+== joined testbed: afterwards ==
+   CLAUDE.md: still the pointer block only
+   ops/ RULES.tsv
+   ops/ SURFACES.tsv
+   ops/ board
+   ops/ contracts
+   ops/ polaris
+   .claude/: none
+   ops/polaris: still the store kit's launcher
