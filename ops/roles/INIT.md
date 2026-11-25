@@ -5,6 +5,20 @@ The point is that a human says "install polaris" once and ends up ready to build
 
 ## 0. Preconditions
 - **Has INIT already run?** The test is `ops/CONVENTIONS.md` — INIT writes it and nothing else does. It exists → say so and offer only (a) refresh MAP.md, (b) re-run the interview, (c) abort; NEVER re-initialize over a live board. It does NOT exist → this repo has never been initialized; proceed, and do not ask. An `ops/board/` with no `ops/CONVENTIONS.md` is a bare install from an older kit, not a live board — ignore it, `init-board` in step 3 is idempotent.
+- **Entered from a work request** — you arrived with the owner's own request in hand ("add a login
+  page"), not "install polaris": the session-start line sent you here after `join`. Four rules
+  change, nothing else does:
+  1. `bash ops/polaris interview --init` (2a) printed no `QUESTION` line → skip interaction 1; this
+     computer already answered it.
+  2. The request IS the goal → skip interaction 2's goal question (2c). Take it in their words.
+  3. The safety questions stay: every `QUESTION` line `interview --init` did print (`claim` is one —
+     one computer or several), and interaction 3's danger-zone question when the survey left a
+     candidate it could not classify. Never default those to save a round.
+  4. Step 4 authors the request as ONE task instead of a Planner pass — the one task INIT writes: a
+     draft from `bash ops/polaris doc templates/TASK` carrying a `plan:` slug, filed with
+     `bash ops/polaris new <draft>`, then `bash ops/polaris triage <ID>`; its line 1 names the lane
+     and you follow it, exactly as CLAUDE.md's dispatch table says. The lane decides solo or the full
+     loop, never you.
 - `chmod +x ops/polaris ops/hooks/ownership-guard.sh` (once). If the kit's `.claude/` folder is present, tell the human: Claude Code will ask to trust the project hook on first use — that hook is the write-time ownership guard, approving it is expected.
 - Run `bash ops/polaris doctor`. On a machine's first POLARIS use, also run `bash ops/polaris doctor --selftest` (throwaway repo; it runs for MINUTES, not seconds — give it an explicit timeout well above the measured time, and past your harness's cap follow `bash ops/polaris doc PROTOCOL "LONG COMMANDS"`). Windows: run everything in **Git Bash** (ships with Git for Windows) — PowerShell is not supported.
 
@@ -110,10 +124,6 @@ IN THEIR VOICE — under `voice: standard` you MUST translate, never make a huma
    Multi-select, **pre-ticked with the candidates from 2b**, plus a free-text escape. Each answer
    becomes an armed `path` line in `ops/RULES.tsv` — machine-enforced, not prose. If they name
    forbidden *content* (secret patterns, banned APIs), that is a `content` rule.
-
-**Derived a `shot:` command?** Add its command prefix to `.claude/settings.json` `permissions.allow`
-as one more line — `readonly-allow.sh` never auto-approves `python …`, so without it every capture
-stops for a click.
 
 Everything else INIT used to ask — suite duration, DoD extras, capacity, cadence, past scars — is
 either derivable, defaultable, or EVOLVE's job once there is real data. Do not ask it. A human who
@@ -284,6 +294,7 @@ git config alias.clean-log "log --first-parent --invert-grep --grep=^chore(board
 ```
 
 ## 4. Chain straight into the PLANNER — same session, no restart, no handoff message
+**Entered from a work request?** § 0 rule 4 replaces this step: author the request as one task and `triage <ID>`.
 Do **not** tell them to open a new session. Run `bash ops/polaris role PLANNER` and execute it now, with the goal from 2c as the idea to groom. This is the ONE sanctioned two-role session (see CLAUDE.md § ROLE DISPATCH): it runs before any Builder exists, on the base branch, and writes zero feature code. Every other session stays single-role.
 
 The Planner's board commit is separate from yours — plan, place, commit as `chore(board): plan <goal>`, exactly as PLANNER.md says.

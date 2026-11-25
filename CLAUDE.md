@@ -1,4 +1,4 @@
-<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 6.22.0] -->
+<!-- POLARIS:BEGIN — managed block, replaced by `ops/polaris update`. Put your own rules BELOW the END marker. [kit 7.0.0] -->
 # POLARIS v5 — Parallel Sprint Protocol
 
 N coding agents, one repo, zero merge conflicts.

@@ -145,14 +145,30 @@ _dp_same() {
 }
 
 # _dp_genuine — rc 0 when every ops/polaris a relative `bash ops/polaris` could reach here is this
-# kit's launcher: the project root's, and the payload cwd's when it has its own (§ 5).
+# kit's launcher: the project root's, the payload cwd's when it has its own, and the one under every
+# `cd`/`pushd` target the command names (§ 5) — `cd sub && bash ops/polaris …` runs sub's copy. A
+# target that cannot be resolved without running the shell (`$`, backtick, `~`, a glob, a quote or
+# backslash, `-`, a bare `cd`) fails closed. Builtins only.
 _dp_genuine() {
-  local c=''
+  local c='' s='' d='' re
   _dp_same "$DP_ROOT/ops/polaris" "$DP_KIT/ops/launcher" || return 1
   DP_RE='"cwd": *"([^"]*)"'
   [[ $DP_HEAD =~ $DP_RE ]] && c="${BASH_REMATCH[1]}"
   c="${c//\\\\/\\}"; c="${c//\\//}"
   if [ -n "$c" ] && [ -f "$c/ops/polaris" ]; then _dp_same "$c/ops/polaris" "$DP_KIT/ops/launcher" || return 1; fi
+  re='"command": *"(.*)'
+  [[ $IN =~ $re ]] && s="${BASH_REMATCH[1]}"
+  # A bare cd ($HOME's copy) or one followed by a JSON escape (\t, \") fails closed; \n is a break.
+  re='(^|[^A-Za-z0-9_./-]|\\[nrt])(cd|pushd)([[:space:]]*$|[[:space:]]*[;&|)"\\])'
+  [[ $s =~ $re ]] && return 1
+  [ -n "$c" ] || c="$DP_ROOT"
+  re='(^|[^A-Za-z0-9_./-]|\\[nrt])(cd|pushd)[[:space:]]+([^;&|()"[:space:]]+)'
+  while [[ $s =~ $re ]]; do
+    d="${BASH_REMATCH[3]}"; s="${s#*"${BASH_REMATCH[0]}"}"
+    case "$d" in *'$'*|*'`'*|'~'*|*'*'*|*'?'*|*'['*|*'"'*|*\'*|*'\'*|-*) return 1;; esac
+    case "$d" in /*|[A-Za-z]:/*) c="$d";; *) c="$c/$d";; esac
+    if [ -f "$c/ops/polaris" ]; then _dp_same "$c/ops/polaris" "$DP_KIT/ops/launcher" || return 1; fi
+  done
   return 0
 }
 

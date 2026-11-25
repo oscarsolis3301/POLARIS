@@ -150,6 +150,13 @@ cmd_awake() { # polaris awake [status|start|stop|disable|enable|install] — the
       say "keep-awake enabled"
       note "$(awake_status_line)" ;;
     install)
+      # Registering hooks is the owner's grant (shared-kit.md § 11): an agent (CLAUDECODE set) is
+      # refused, rc 2, nothing written — the owner's path is --setup.
+      if [ -n "${CLAUDECODE:-}" ]; then
+        printf '⛔ needs you: python "%s" --setup in your own terminal (permissions and hooks are yours to grant)\n' \
+          "${HOME:-~}/.claude/skills/polaris-install/polaris-v5.zip" >&2
+        exit 2
+      fi
       [ -f "$hook" ] || die "no awake-hook.sh on this machine or in this kit — re-run the installer (bash ops/install.sh)"
       exec bash "$hook" install ;;
     *)

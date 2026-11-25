@@ -1,7 +1,7 @@
 # POLARIS kit version + update channel. Machine-read by `ops/polaris version|update`.
 # The comparison key is `version:` — a semver bump here is what notifies installed kits.
 # Routine commits to main do NOT nag anyone; only an intentional bump does.
-version: 6.22.0
+version: 7.0.0
 channel: https://raw.githubusercontent.com/oscarsolis3301/POLARIS/main/ops/VERSION
 changelog: https://github.com/oscarsolis3301/POLARIS/blob/main/CHANGELOG.md
 tarball: https://codeload.github.com/oscarsolis3301/POLARIS/tar.gz/refs/heads/main
@@ -12,6 +12,6 @@ repo: https://github.com/oscarsolis3301/POLARIS.git
 zip: https://github.com/oscarsolis3301/POLARIS/releases/latest/download/polaris-v5.zip
 # `commit:` and `built:` are appended by ops/pack.py (into the zip) and by ops/install.sh
 # (into the target) — never committed here, or stamping the sha would change the sha.
-commit: 8a21d55
+commit: 4db9bad
 built: 2026-11-24
-zip_sha256: 3b67e776735bd1a20ca2fe35ef3843ed0efae1d5f97cc6e4d852ef11bb65ff4b
+zip_sha256: 4c8ccfa85f3633f4958be12c75cf8680157d2ee80f67b8b939f8fb91dbd76e25

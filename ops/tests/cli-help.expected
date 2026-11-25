@@ -387,4 +387,13 @@ polaris — POLARIS board CLI (run from anywhere inside the repo)
                                  so a 5.x install is reached too; --major applies MAJOR bumps as
                                  well. Also re-caches the kit into ~/.claude so the NEXT repo you
                                  install into gets it too; --repo-only skips that.
+  join [<dir>]                   set a git project up against THIS COMPUTER's kit: only ops/polaris
+                                 (the launcher), the .gitattributes/.gitignore lines, the commit-msg
+                                 hook, the machine registry entry and a 3-line pointer in CLAUDE.md —
+                                 no .claude/ file, no settings, no commit. Last line: installed · fresh
+  migrate                        a VENDORED project moves to this computer's kit in ONE commit (kit
+                                 files out, launcher in, POLARIS's hooks + output style out of
+                                 .claude/settings.json, the block becomes the pointer); git revert
+                                 of it restores the project byte for byte. Refuses on a busy board,
+                                 in the POLARIS repo, and when this computer's kit is older
   uninstall --yes                remove POLARIS from this repo (keeps your CLAUDE.md + hooks)

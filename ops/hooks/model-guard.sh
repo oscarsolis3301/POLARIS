@@ -74,6 +74,13 @@ mg_denied() {
 #                  BLOCKS by exiting 2 with a reason on stderr, and `|| true` would discard exactly
 #                  that. Swallowing it would leave a guard that looks installed and enforces nothing.
 if [ "${1:-}" = "install" ] && [ "${BASH_SOURCE[0]}" = "$0" ]; then   # executed only: never when sourced
+  # Run by an agent (CLAUDECODE set), registering a hook is the owner's grant, never the agent's own
+  # (shared-kit.md § 11): refused, rc 2, nothing written. The owner's path is --setup.
+  if [ -n "${CLAUDECODE:-}" ]; then
+    printf '⛔ needs you: python "%s" --setup in your own terminal (permissions and hooks are yours to grant)\n' \
+      "${HOME:-~}/.claude/skills/polaris-install/polaris-v5.zip" >&2
+    exit 2
+  fi
   mg_sj="${HOME:-.}/.claude/settings.json"; mg_b="$(command -v bash 2>/dev/null)" || mg_b=bash
   mg_py=''
   python -c pass >/dev/null 2>&1 && mg_py=python || { python3 -c pass >/dev/null 2>&1 && mg_py=python3; } || true
