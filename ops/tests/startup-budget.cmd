@@ -29,3 +29,7 @@ printf 'selftest-modules-doctor-list %s\n' "$(awk '/^  doctor\) +_mods="/ { on =
 printf 'selftest-modules-every-other-command %s\n' "$(awk '/^  \*\) +_mods="/ { on = 1 } on { n += gsub(/selftest\//, "") } on && /" ;;$/ { on = 0 } END { print n + 0 }' kit/ops/polaris)"
 # bgwatch and pulse load right after bg, in both lists.
 printf 'bgwatch-pulse-after-bg %s\n' "$(grep -c ' bg bgwatch pulse awake ' kit/ops/polaris | tr -d ' ')"
+# join and migrate load only what they use (module-layout v12; bg for board_quiescent's bg_alive), and
+# join answers above the environment block, so it runs where there is no ops/ at all.
+printf 'join-migrate-need-scoped %s\n' "$(grep -c '^  join|migrate)  _mods="core ownership admin bg store join" ;;' kit/ops/polaris | tr -d ' ')"
+printf 'join-before-env %s\n' "$(sed -n '/^# ---------------------------------------------------------------- resolve env/q;p' kit/ops/polaris | grep -c 'join) shift; cmd_join "\$@"; exit' | tr -d ' ')"
